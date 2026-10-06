@@ -78,11 +78,12 @@ what the layer holds.
 
 The answers compose:
 
-* `Input` (wires → value) and `Output` (value → wires) carry an expression
+* `Input` (wires → value) and `Output` (value → wires) carry a conversion
   and a `Form`: the tree recording how each layer of the value crosses, whose
-  leaves are the wires, typed by the adapter's own `WireType` enum. A
-  fallible expression uses `?` on `Result<_, String>`; whoever places it
-  decides where the error goes.
+  leaves are the wires, typed by the adapter's own `WireType` enum. An input's
+  expression reads its wires; an output converts whatever value the template
+  hands it (`Output::apply`, `Output::bind`). A fallible conversion uses `?`
+  on `Result<_, String>`; whoever places it decides where the error goes.
 * `Input::wire`, `via`, `record`, `optional`, `sum`, `seq` and `parts` (and
   their `Output` counterparts) build one layer each. `via` wraps the
   representation's `Input` or `Output` in a declared conversion (`convert!`:

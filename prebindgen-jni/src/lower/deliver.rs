@@ -83,14 +83,13 @@ impl Plan<'_> {
         (!identity).then_some(e)
     }
 
-    /// Deliver `value` (of `ty`) as parameters named under `name`, with raw
+    /// Deliver a value of `ty` as parameters named under `name`, with raw
     /// leaves under `root`. `gates` are the presence flags every parameter
     /// hangs on; `inline` spreads a data class's fields.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn deliver(
         &self,
         ty: &TypeRef,
-        value: TokenStream,
         root: &str,
         name: &str,
         explicit: Option<&ExpandReturnDecl>,
@@ -103,10 +102,15 @@ impl Plan<'_> {
             return Ok(Delivery {
                 params: Vec::new(),
                 leaves: Vec::new(),
-                output: Output::unit(ty, value),
+                output: Output::unit(ty),
             });
         }
-        let (core, v, borrowed) = peel(ty, value.clone());
+        let (core, _, borrowed) = peel(ty, TokenStream::new());
+        // The deliveries below read the value under its borrows and boxes.
+        let peeled = |d: Delivery| Delivery {
+            output: d.output.before(|v| peel(ty, v.clone()).1),
+            ..d
+        };
         // An optional value whose inner type expands: one presence gate.
         if let TypeKind::Optional(inner) = core.kind() {
             let (inner_core, _, _) = peel(inner, quote!(__unused));
@@ -116,10 +120,10 @@ impl Plan<'_> {
                 let x_value = if borrowed { quote!(&#x) } else { quote!(#x) };
                 let mut g = gates.to_vec();
                 g.push(raw_name(&present));
-                let inner_d =
-                    self.deliver(inner, x_value, root, name, explicit, &g, false, depth + 1)?;
-                let defaults = inner_d.leaves.iter().map(Leaf::rs_default);
-                let bind = inner_d.output.bind();
+                let inner_d = self.deliver(inner, root, name, explicit, &g, false, depth + 1)?;
+                let defaults: Vec<TokenStream> =
+                    inner_d.leaves.iter().map(Leaf::rs_default).collect();
+                let bind = inner_d.output.bind(x_value);
                 let names: Vec<syn::Ident> = inner_d
                     .output
                     .wires()
@@ -127,32 +131,40 @@ impl Plan<'_> {
                     .map(|w| w.name.clone())
                     .collect();
                 let presence = Wire::new(leaf_ident(root, "_present"), present.clone());
-                let scrutinee = if borrowed { quote!(#v.as_ref()) } else { v };
-                let output = Output {
-                    expr: quote!(match #scrutinee {
-                        ::core::option::Option::Some(#x) => { #bind (1u8, #(#names),*) }
-                        ::core::option::Option::None => (0u8, #(#defaults),*),
-                    }),
-                    fallible: inner_d.output.fallible,
-                    form: Form {
-                        ty: core.clone(),
-                        kind: FormKind::Optional {
-                            presence: Some(presence),
-                            inner: Box::new(inner_d.output.form),
-                        },
+                let fallible = inner_d.output.fallible;
+                let form = Form {
+                    ty: core.clone(),
+                    kind: FormKind::Optional {
+                        presence: Some(presence),
+                        inner: Box::new(inner_d.output.form),
                     },
                 };
+                let mut output = Output::new(form, |v| {
+                    let scrutinee = if borrowed {
+                        quote!(#v.as_ref())
+                    } else {
+                        v.clone()
+                    };
+                    quote!(match #scrutinee {
+                        ::core::option::Option::Some(#x) => { #bind (1u8, #(#names),*) }
+                        ::core::option::Option::None => (0u8, #(#defaults),*),
+                    })
+                });
+                if fallible {
+                    output = output.mark_fallible();
+                }
                 let mut leaves = vec![present];
                 leaves.extend(inner_d.leaves);
-                return Ok(Delivery {
+                return Ok(peeled(Delivery {
                     params: inner_d.params,
                     leaves,
                     output,
-                });
+                }));
             }
         }
         if let Some(e) = self.expansion(core, explicit) {
-            return self.expanded(core, e, v, borrowed, root, name, gates, depth);
+            let d = self.expanded(core, e, borrowed, root, name, gates, depth)?;
+            return Ok(peeled(d));
         }
         if inline {
             if let Shape::Declared {
@@ -161,16 +173,16 @@ impl Plan<'_> {
             } = self.shape(core)?
             {
                 if let ClassKind::Data = c.kind {
-                    let v = if borrowed {
-                        quote!(::core::clone::Clone::clone(#v))
-                    } else {
-                        v
-                    };
-                    return self.fields_of(self.struct_of(c)?, None, v, root, name, gates, depth);
+                    let mut d =
+                        self.fields_of(self.struct_of(c)?, None, root, name, gates, depth)?;
+                    if borrowed {
+                        d.output = d.output.before(|v| quote!(::core::clone::Clone::clone(#v)));
+                    }
+                    return Ok(peeled(d));
                 }
             }
         }
-        self.plain(ty, value, root, name, gates, depth)
+        self.plain(ty, root, name, gates, depth)
     }
 
     /// Whether `ty` is an enum (`Some(false)`) or an optional enum
@@ -197,7 +209,6 @@ impl Plan<'_> {
     fn plain(
         &self,
         ty: &TypeRef,
-        value: TokenStream,
         root: &str,
         name: &str,
         gates: &[String],
@@ -239,7 +250,7 @@ impl Plan<'_> {
                 close,
             }],
             leaves,
-            output: self.rs_encode(ty, value, root, depth)?,
+            output: self.rs_encode(ty, root, depth)?,
         })
     }
 
@@ -250,7 +261,6 @@ impl Plan<'_> {
         &self,
         s: &Struct,
         form: Option<&FieldsDecl>,
-        value: TokenStream,
         root: &str,
         name: &str,
         gates: &[String],
@@ -271,7 +281,6 @@ impl Plan<'_> {
             };
             let d = self.deliver(
                 &f.ty,
-                b.to_token_stream(),
                 &join(root, &seg),
                 &pname,
                 explicit,
@@ -279,11 +288,11 @@ impl Plan<'_> {
                 true,
                 depth + 1,
             )?;
-            parts.push((Seg::field(f), d));
+            parts.push((Seg::field(f), b.to_token_stream(), d));
         }
         Ok(concat(
             s.type_ref(),
-            quote!(let #pat = #value;),
+            |v| quote!(let #pat = #v;),
             parts,
             Vec::new(),
         ))
@@ -295,7 +304,6 @@ impl Plan<'_> {
         &self,
         ty: &TypeRef,
         e: &ExpandReturnDecl,
-        value: TokenStream,
         borrowed: bool,
         root: &str,
         name: &str,
@@ -307,7 +315,8 @@ impl Plan<'_> {
         let type_snake = names::snake(&type_name);
         let mut parts = Vec::new();
         let mut deferred = Vec::new();
-        let mut prelude = quote!(let #v = #value;);
+        // Bound first, from the value; the value forms' calls follow.
+        let mut forms = TokenStream::new();
         for field in &e.fields {
             match field {
                 ReturnField::Getter(g) => {
@@ -333,11 +342,11 @@ impl Plan<'_> {
                     let field = Seg::Field(seg.clone());
                     parts.push((
                         field,
+                        quote!(#callee(#arg)),
                         if core_name(&func.ret).as_deref() == Some(type_name.as_str()) {
-                            self.plain(&func.ret, quote!(#callee(#arg)), &r, &n, gates, depth + 1)?
+                            self.plain(&func.ret, &r, &n, gates, depth + 1)?
                         } else {
-                            let call = quote!(#callee(#arg));
-                            self.deliver(&func.ret, call, &r, &n, None, gates, false, depth + 1)?
+                            self.deliver(&func.ret, &r, &n, None, gates, false, depth + 1)?
                         },
                     ));
                 }
@@ -349,8 +358,8 @@ impl Plan<'_> {
                     };
                     let (r, n) = (join(root, "handle"), join(name, "handle"));
                     deferred.push(parts.len());
-                    let d = self.plain(ty, handle, &r, &n, gates, depth + 1)?;
-                    parts.push((Seg::Field("handle".into()), d));
+                    let d = self.plain(ty, &r, &n, gates, depth + 1)?;
+                    parts.push((Seg::Field("handle".into()), handle, d));
                 }
                 ReturnField::Form { form, consume } => {
                     let fun = &form.fun;
@@ -372,35 +381,28 @@ impl Plan<'_> {
                         _ => return err(format!("value form `{fun}` must return a struct")),
                     };
                     let sv = format_ident!("__s{}", depth);
-                    prelude.extend(quote!(let #sv = #callee(#arg);));
-                    let d = self.fields_of(
-                        s,
-                        Some(form),
-                        sv.to_token_stream(),
-                        root,
-                        name,
-                        gates,
-                        depth + 1,
-                    )?;
+                    forms.extend(quote!(let #sv = #callee(#arg);));
+                    let d = self.fields_of(s, Some(form), root, name, gates, depth + 1)?;
                     // The value form stands in for the value: its fields.
-                    parts.push((Seg::Repr, d));
+                    parts.push((Seg::Repr, sv.to_token_stream(), d));
                 }
             }
         }
+        let prelude = |value: &TokenStream| quote!(let #v = #value; #forms);
         Ok(concat(ty, prelude, parts, deferred))
     }
 
     // ── callbacks ───────────────────────────────────────────────────────
 
-    /// The deliveries of a callback's arguments, bound to `__a0`, `__a1`, …
+    /// The deliveries of a callback's arguments, in order.
     pub(crate) fn callback_args(&self, args: &[TypeRef]) -> Res<Vec<Delivery>> {
         args.iter()
             .enumerate()
-            .map(|(i, a)| self.callback_arg(i, a, &format_ident!("__a{}", i).to_token_stream()))
+            .map(|(i, a)| self.callback_arg(i, a))
             .collect()
     }
 
-    fn callback_arg(&self, i: usize, ty: &TypeRef, value: &TokenStream) -> Res<Delivery> {
+    fn callback_arg(&self, i: usize, ty: &TypeRef) -> Res<Delivery> {
         let name = match self.shape(ty) {
             Ok(Shape::Declared { ty, .. }) => super::declared_name(ty)
                 .map(names::snake)
@@ -408,16 +410,7 @@ impl Plan<'_> {
             Ok(Shape::Scalar(k)) => k.as_str().to_string(),
             _ => format!("arg{i}"),
         };
-        self.deliver(
-            ty,
-            value.clone(),
-            &format!("a{i}"),
-            &name,
-            None,
-            &[],
-            false,
-            1,
-        )
+        self.deliver(ty, &format!("a{i}"), &name, None, &[], false, 1)
     }
 
     fn callback_base(&self, ty: &TypeRef) -> Res<String> {
@@ -475,14 +468,10 @@ impl Plan<'_> {
         let tys = prebindgen_tools::callback_arg_types(self.flat, args);
         let outs = args
             .iter()
-            .zip(&names)
             .enumerate()
-            .map(|(i, (ty, n))| {
-                self.callback_arg(i, ty, &n.to_token_stream())
-                    .map(|d| d.output)
-            })
+            .map(|(i, ty)| self.callback_arg(i, ty).map(|d| d.output))
             .collect::<Res<Vec<_>>>()?;
-        let binds: TokenStream = outs.iter().map(Output::bind).collect();
+        let binds: TokenStream = outs.iter().zip(&names).map(|(o, n)| o.bind(n)).collect();
         let values = outs
             .iter()
             .flat_map(|o| o.wires())
@@ -549,28 +538,30 @@ fn core_name(ty: &TypeRef) -> Option<String> {
     }
 }
 
-/// Deliveries side by side, bound in order except `deferred` (bound last —
-/// they consume the value the others read), wires in declaration order.
+/// Deliveries side by side, each converting its own value — an expression
+/// valid after `prelude`, which reads the whole value. Parts are bound in
+/// order except `deferred` (bound last — they consume the value the others
+/// read); wires come in declaration order.
 fn concat(
     ty: &TypeRef,
-    prelude: TokenStream,
-    parts: Vec<(Seg, Delivery)>,
+    prelude: impl FnOnce(&TokenStream) -> TokenStream,
+    parts: Vec<(Seg, TokenStream, Delivery)>,
     deferred: Vec<usize>,
 ) -> Delivery {
-    let fallible = parts.iter().any(|(_, p)| p.output.fallible);
+    let fallible = parts.iter().any(|(_, _, p)| p.output.fallible);
     let mut binds = Vec::new();
     let mut late = Vec::new();
-    for (i, (_, p)) in parts.iter().enumerate() {
+    for (i, (_, value, p)) in parts.iter().enumerate() {
         if deferred.contains(&i) {
-            late.push(p.output.bind());
+            late.push(p.output.bind(value));
         } else {
-            binds.push(p.output.bind());
+            binds.push(p.output.bind(value));
         }
     }
     let mut params = Vec::new();
     let mut leaves = Vec::new();
     let mut forms = Vec::new();
-    for (seg, p) in parts {
+    for (seg, _, p) in parts {
         // A handle delivered as a field of a larger value is the receiver's
         // to keep; only a whole delivered value is closed after a callback.
         params.extend(p.params.into_iter().map(|p| DParam { close: None, ..p }));
@@ -588,14 +579,16 @@ fn concat(
     } else {
         quote!((#(#names),*))
     };
-    let expr = quote!({ #prelude #(#binds)* #(#late)* #tuple });
+    let mut output = Output::new(form, |v| {
+        let prelude = prelude(v);
+        quote!({ #prelude #(#binds)* #(#late)* #tuple })
+    });
+    if fallible {
+        output = output.mark_fallible();
+    }
     Delivery {
         params,
         leaves,
-        output: Output {
-            form,
-            expr,
-            fallible,
-        },
+        output,
     }
 }

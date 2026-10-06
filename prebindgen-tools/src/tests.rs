@@ -78,16 +78,16 @@ fn conversions_resolve_both_directions() {
         "{let__repr=w;src_crate::millis_from(__repr)}"
     );
 
-    let output = Output::via(&conv, &quote!(v), |r, e| {
-        Ok::<_, String>(Output::wire(r, wire(), e))
+    let output = Output::via(&conv, |r| {
+        Ok::<_, String>(Output::wire(r, wire(), |v| quote!(#v)))
     })
     .unwrap();
     assert!(output.fallible, "a Result-returning function is fallible");
     assert_eq!(output.form.ty.key(), millis.key());
+    let applied = norm(output.apply(quote!(v)));
     assert!(
-        norm(output.expr.clone()).starts_with("{let__repr=src_crate::millis_to(&v)"),
-        "{}",
-        output.expr
+        applied.starts_with("{let__v=v;{let__v=src_crate::millis_to(&__v)"),
+        "{applied}"
     );
     assert_eq!(
         conv.functions()
@@ -101,8 +101,8 @@ fn conversions_resolve_both_directions() {
         .input(crate::fun!(millis_from))
         .resolve(&flat)
         .unwrap();
-    let e = Output::via(&one_way, &quote!(v), |r, e| {
-        Ok::<_, String>(Output::wire(r, wire(), e))
+    let e = Output::via(&one_way, |r| {
+        Ok::<_, String>(Output::wire(r, wire(), |v| quote!(#v)))
     })
     .expect_err("no output declared");
     assert!(e.contains("declares no output"), "{e}");

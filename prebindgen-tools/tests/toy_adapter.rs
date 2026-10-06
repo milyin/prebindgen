@@ -144,20 +144,21 @@ impl Adapter<'_> {
         })
     }
 
-    fn output(&self, ty: &TypeRef, place: &Place, v: &TokenStream) -> Result<Output<Toy>, String> {
+    fn output(&self, ty: &TypeRef, place: &Place) -> Result<Output<Toy>, String> {
         let w = place.ident();
         let wire = |t: Toy| Wire::new(w.clone(), t);
         Ok(match shape(ty, |t| self.decls.get(place, t))? {
-            Shape::Unit => Output::unit(ty, v),
-            Shape::Scalar(ScalarKind::I32) => Output::wire(ty, wire(Toy::Int), v),
-            Shape::Scalar(ScalarKind::U64) => {
-                Output::wire(ty, wire(Toy::Long { unsigned: true }), quote!((#v as i64)))
-            }
+            Shape::Unit => Output::unit(ty),
+            Shape::Scalar(ScalarKind::I32) => Output::wire(ty, wire(Toy::Int), |v| quote!(#v)),
+            Shape::Scalar(ScalarKind::U64) => Output::wire(
+                ty,
+                wire(Toy::Long { unsigned: true }),
+                |v| quote!((#v as i64)),
+            ),
             Shape::Option(inner) => {
                 let p = Wire::new(place.ident_with_suffix("present"), Toy::Flag);
-                Output::optional(ty, Some((p, quote!(1))), v, |x| {
-                    self.output(inner, &place.at(Seg::Some), &x)
-                })?
+                let inner = self.output(inner, &place.at(Seg::Some))?;
+                Output::optional(ty, Some((p, quote!(1))), inner)
             }
             Shape::Declared {
                 ty: dty,
@@ -168,15 +169,13 @@ impl Adapter<'_> {
                     Decl::Handle => Output::wire(
                         ty,
                         wire(Toy::Handle(name)),
-                        quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut ::core::ffi::c_void),
+                        |v| quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut ::core::ffi::c_void),
                     ),
                     Decl::Record => {
                         let Some(Type::Struct(s)) = self.flat.declared_type(name.as_str()) else {
                             return Err(format!("`{name}` is not a struct"));
                         };
-                        Output::record(s, v, |f, b| {
-                            self.output(&f.ty, &place.at(Seg::field(f)), &b)
-                        })?
+                        Output::record(s, |f| self.output(&f.ty, &place.at(Seg::field(f))))?
                     }
                     Decl::Sum => {
                         let Some(Type::Variant(sum)) = self.flat.declared_type(name.as_str())
@@ -184,13 +183,13 @@ impl Adapter<'_> {
                             return Err(format!("`{name}` is not a sum"));
                         };
                         let tag = Wire::new(place.ident_with_suffix("tag"), Toy::Int);
-                        Output::sum(sum, tag, v, |a, f, b| {
+                        Output::sum(sum, tag, |a, f| {
                             let at = place.at(Seg::Alt(names::bare(&a.name)));
-                            self.output(&f.ty, &at.at(Seg::field(f)), &b)
+                            self.output(&f.ty, &at.at(Seg::field(f)))
                         })?
                     }
                     Decl::Convert(c) => {
-                        Output::via(c, v, |repr, r| self.output(repr, &place.at(Seg::Repr), &r))?
+                        Output::via(c, |repr| self.output(repr, &place.at(Seg::Repr)))?
                     }
                 }
             }
@@ -208,15 +207,16 @@ impl Adapter<'_> {
             params.extend(input.wires().iter().map(|w| w.decl()));
             args.push(input.expr);
         }
-        let out = self.output(&f.ret, &el.at(Seg::Return), &quote!(__ret))?;
+        let out = self.output(&f.ret, &el.at(Seg::Return))?;
         let ret_tys = out.wires().iter().map(|w| w.ty.rust()).collect::<Vec<_>>();
         // The wrapper is defined under the function's own name, and calls the
-        // source function by its qualified one.
-        let (name, callee, e) = (f.name.ident(), &f.name, &out.expr);
+        // source function by its qualified one; the output converts the
+        // call's result.
+        let (name, callee) = (f.name.ident(), &f.name);
+        let result = out.apply(quote!(#callee(#(#args),*)));
         Ok(quote! {
             pub unsafe fn #name(#(#params),*) -> ::core::result::Result<(#(#ret_tys,)*), ::std::string::String> {
-                let __ret = #callee(#(#args),*);
-                ::core::result::Result::Ok(#e)
+                ::core::result::Result::Ok(#result)
             }
         })
     }
@@ -398,7 +398,6 @@ fn results_leave_by_their_decisions() {
         a.output(
             &flat.function(f).unwrap().ret,
             &Place::new(f).at(Seg::Return),
-            &quote!(v),
         )
         .unwrap()
     };
@@ -422,9 +421,10 @@ fn results_leave_by_their_decisions() {
         foreign(&r.form),
         r#"Reading of [] | [Point(Field("x")=Int, Field("y")=ULong)] | [ULong, ULong]"#
     );
-    syn::parse2::<syn::Expr>(r.expr.clone()).expect("a Rust expression");
+    syn::parse2::<syn::Expr>(r.apply(quote!(v))).expect("a Rust expression");
     // The taken alternative fills its wires; the others hold placeholders.
-    assert!(norm(&r.expr).contains("(0,0,0,0,0)"), "{}", r.expr);
+    let e = r.apply(quote!(v));
+    assert!(norm(&e).contains("(0,0,0,0,0)"), "{e}");
 
     // An optional converted value.
     let o = ret("send_raw");
@@ -436,7 +436,7 @@ fn results_leave_by_their_decisions() {
         ]
     );
     assert_eq!(foreign(&o.form), "ULong?");
-    syn::parse2::<syn::Expr>(o.expr).expect("a Rust expression");
+    syn::parse2::<syn::Expr>(o.apply(quote!(v))).expect("a Rust expression");
 }
 
 #[test]

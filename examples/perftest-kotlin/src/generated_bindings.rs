@@ -102,7 +102,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_tokenValue<'
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -140,7 +143,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_tokenNew<'a>
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -201,7 +207,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_tokenGcValue
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -239,7 +248,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_tokenGcNew<'
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -672,7 +684,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_largeFlatInp
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -708,7 +723,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageNew<'
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -757,45 +775,72 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGet<'
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__present, r_id, r_seq, r_value, r_flag, r_label) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (r_id, r_seq, r_value, r_flag, r_label) = {
-                    let perftest_flat::Payload {
-                        id: __f0,
-                        seq: __f1,
-                        value: __f2,
-                        flag: __f3,
-                        label: __f4,
-                    } = __some;
-                    let r_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let r_seq = (__f1 as ::prebindgen_jni_runtime::jni::sys::jint);
-                    let r_value = (__f2 as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                    let r_flag = (__f3 as u8);
-                    let r_label = match __f4 {
-                        ::core::option::Option::Some(__some) => {
-                            let r_label = ::prebindgen_jni_runtime::new_string(
-                                env,
-                                ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                            )?;
-                            r_label
-                        }
-                        ::core::option::Option::None => {
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let (r__present, r_id, r_seq, r_value, r_flag, r_label) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (r_id, r_seq, r_value, r_flag, r_label) = {
+                        let __v = __some;
+                        {
+                            let perftest_flat::Payload {
+                                id: __f0,
+                                seq: __f1,
+                                value: __f2,
+                                flag: __f3,
+                                label: __f4,
+                            } = __v;
+                            let r_id = {
+                                let __v = __f0;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
+                            let r_seq = {
+                                let __v = __f1;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                            };
+                            let r_value = {
+                                let __v = __f2;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                            };
+                            let r_flag = {
+                                let __v = __f3;
+                                (__v as u8)
+                            };
+                            let r_label = {
+                                let __v = __f4;
+                                match __v {
+                                    ::core::option::Option::Some(__some) => {
+                                        let r_label = {
+                                            let __v = __some;
+                                            {
+                                                let __v = (*__v);
+                                                ::prebindgen_jni_runtime::new_string(
+                                                    env,
+                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                )?
+                                            }
+                                        };
+                                        r_label
+                                    }
+                                    ::core::option::Option::None => {
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                    }
+                                }
+                            };
+                            (r_id, r_seq, r_value, r_flag, r_label)
                         }
                     };
-                    (r_id, r_seq, r_value, r_flag, r_label)
-                };
-                (1u8, r_id, r_seq, r_value, r_flag, r_label)
-            }
-            ::core::option::Option::None => {
-                (
-                    0,
-                    0,
-                    0,
-                    0.0f64,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                )
+                    (1u8, r_id, r_seq, r_value, r_flag, r_label)
+                }
+                ::core::option::Option::None => {
+                    (
+                        0,
+                        0,
+                        0,
+                        0.0f64,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                    )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -1019,33 +1064,57 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadHandl
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
                         let (a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
-                            let perftest_flat::Payload {
-                                id: __f0,
-                                seq: __f1,
-                                value: __f2,
-                                flag: __f3,
-                                label: __f4,
-                            } = ::core::clone::Clone::clone(__a0);
-                            let a0_id = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                            let a0_seq = (__f1
-                                as ::prebindgen_jni_runtime::jni::sys::jint);
-                            let a0_value = (__f2
-                                as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                            let a0_flag = (__f3 as u8);
-                            let a0_label = match __f4 {
-                                ::core::option::Option::Some(__some) => {
-                                    let a0_label = ::prebindgen_jni_runtime::new_string(
-                                        env,
-                                        ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                    )?;
-                                    a0_label
+                            let __v = __a0;
+                            {
+                                let __v = ::core::clone::Clone::clone(__v);
+                                {
+                                    let perftest_flat::Payload {
+                                        id: __f0,
+                                        seq: __f1,
+                                        value: __f2,
+                                        flag: __f3,
+                                        label: __f4,
+                                    } = __v;
+                                    let a0_id = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    let a0_seq = {
+                                        let __v = __f1;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                    };
+                                    let a0_value = {
+                                        let __v = __f2;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                    };
+                                    let a0_flag = {
+                                        let __v = __f3;
+                                        (__v as u8)
+                                    };
+                                    let a0_label = {
+                                        let __v = __f4;
+                                        match __v {
+                                            ::core::option::Option::Some(__some) => {
+                                                let a0_label = {
+                                                    let __v = __some;
+                                                    {
+                                                        let __v = (*__v);
+                                                        ::prebindgen_jni_runtime::new_string(
+                                                            env,
+                                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                        )?
+                                                    }
+                                                };
+                                                a0_label
+                                            }
+                                            ::core::option::Option::None => {
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                            }
+                                        }
+                                    };
+                                    (a0_id, a0_seq, a0_value, a0_flag, a0_label)
                                 }
-                                ::core::option::Option::None => {
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                }
-                            };
-                            (a0_id, a0_seq, a0_value, a0_flag, a0_label)
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -1080,7 +1149,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadHandl
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -1286,81 +1358,117 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGetVe
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
-                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                            __some,
-                        )
-                        .collect();
-                    let __n = __items.len();
-                    let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
-                    let mut __c2_1 = ::std::vec::Vec::with_capacity(__n);
-                    let mut __c2_2 = ::std::vec::Vec::with_capacity(__n);
-                    let mut __c2_3 = ::std::vec::Vec::with_capacity(__n);
-                    let __c2_4 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-                    for (__i, __x2) in __items.into_iter().enumerate() {
-                        let (__e2_id, __e2_seq, __e2_value, __e2_flag, __e2_label) = {
-                            let perftest_flat::Payload {
-                                id: __f0,
-                                seq: __f1,
-                                value: __f2,
-                                flag: __f3,
-                                label: __f4,
-                            } = __x2;
-                            let __e2_id = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                            let __e2_seq = (__f1
-                                as ::prebindgen_jni_runtime::jni::sys::jint);
-                            let __e2_value = (__f2
-                                as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                            let __e2_flag = (__f3 as u8);
-                            let __e2_label = match __f4 {
-                                ::core::option::Option::Some(__some) => {
-                                    let __e2_label = ::prebindgen_jni_runtime::new_string(
-                                        env,
-                                        ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                    )?;
-                                    __e2_label
-                                }
-                                ::core::option::Option::None => {
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                }
-                            };
-                            (__e2_id, __e2_seq, __e2_value, __e2_flag, __e2_label)
-                        };
-                        __c2_0.push(__e2_id);
-                        __c2_1.push(__e2_seq);
-                        __c2_2.push(__e2_value);
-                        __c2_3.push(__e2_flag);
-                        ::prebindgen_jni_runtime::object_array_set(
-                            env,
-                            &__c2_4,
-                            __i,
-                            __e2_label,
-                        )?;
-                    }
+        let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
+                        let __v = __some;
+                        {
+                            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                                    __v,
+                                )
+                                .collect();
+                            let __n = __items.len();
+                            let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
+                            let mut __c2_1 = ::std::vec::Vec::with_capacity(__n);
+                            let mut __c2_2 = ::std::vec::Vec::with_capacity(__n);
+                            let mut __c2_3 = ::std::vec::Vec::with_capacity(__n);
+                            let __c2_4 = ::prebindgen_jni_runtime::new_object_array(
+                                env,
+                                __n,
+                            )?;
+                            for (__i, __x2) in __items.into_iter().enumerate() {
+                                let (
+                                    __e2_id,
+                                    __e2_seq,
+                                    __e2_value,
+                                    __e2_flag,
+                                    __e2_label,
+                                ) = {
+                                    let __v = __x2;
+                                    {
+                                        let perftest_flat::Payload {
+                                            id: __f0,
+                                            seq: __f1,
+                                            value: __f2,
+                                            flag: __f3,
+                                            label: __f4,
+                                        } = __v;
+                                        let __e2_id = {
+                                            let __v = __f0;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
+                                        let __e2_seq = {
+                                            let __v = __f1;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                        };
+                                        let __e2_value = {
+                                            let __v = __f2;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                        };
+                                        let __e2_flag = {
+                                            let __v = __f3;
+                                            (__v as u8)
+                                        };
+                                        let __e2_label = {
+                                            let __v = __f4;
+                                            match __v {
+                                                ::core::option::Option::Some(__some) => {
+                                                    let __e2_label = {
+                                                        let __v = __some;
+                                                        {
+                                                            let __v = (*__v);
+                                                            ::prebindgen_jni_runtime::new_string(
+                                                                env,
+                                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                            )?
+                                                        }
+                                                    };
+                                                    __e2_label
+                                                }
+                                                ::core::option::Option::None => {
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                                }
+                                            }
+                                        };
+                                        (__e2_id, __e2_seq, __e2_value, __e2_flag, __e2_label)
+                                    }
+                                };
+                                __c2_0.push(__e2_id);
+                                __c2_1.push(__e2_seq);
+                                __c2_2.push(__e2_value);
+                                __c2_3.push(__e2_flag);
+                                ::prebindgen_jni_runtime::object_array_set(
+                                    env,
+                                    &__c2_4,
+                                    __i,
+                                    __e2_label,
+                                )?;
+                            }
+                            (
+                                __n as i32,
+                                ::prebindgen_jni_runtime::write_longs(env, &__c2_0)?,
+                                ::prebindgen_jni_runtime::write_ints(env, &__c2_1)?,
+                                ::prebindgen_jni_runtime::write_doubles(env, &__c2_2)?,
+                                ::prebindgen_jni_runtime::write_booleans(env, &__c2_3)?,
+                                __c2_4,
+                            )
+                        }
+                    };
+                    (1u8, r__n, r_id, r_seq, r_value, r_flag, r_label)
+                }
+                ::core::option::Option::None => {
                     (
-                        __n as i32,
-                        ::prebindgen_jni_runtime::write_longs(env, &__c2_0)?,
-                        ::prebindgen_jni_runtime::write_ints(env, &__c2_1)?,
-                        ::prebindgen_jni_runtime::write_doubles(env, &__c2_2)?,
-                        ::prebindgen_jni_runtime::write_booleans(env, &__c2_3)?,
-                        __c2_4,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                     )
-                };
-                (1u8, r__n, r_id, r_seq, r_value, r_flag, r_label)
-            }
-            ::core::option::Option::None => {
-                (
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -1441,74 +1549,98 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadVecHa
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
                         let (a0__n, a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
-                            let __items: ::std::vec::Vec<_> = __a0
-                                .iter()
-                                .cloned()
-                                .collect();
-                            let __n = __items.len();
-                            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-                            let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
-                            let mut __c1_2 = ::std::vec::Vec::with_capacity(__n);
-                            let mut __c1_3 = ::std::vec::Vec::with_capacity(__n);
-                            let __c1_4 = ::prebindgen_jni_runtime::new_object_array(
-                                env,
-                                __n,
-                            )?;
-                            for (__i, __x1) in __items.into_iter().enumerate() {
-                                let (
-                                    __e1_id,
-                                    __e1_seq,
-                                    __e1_value,
-                                    __e1_flag,
-                                    __e1_label,
-                                ) = {
-                                    let perftest_flat::Payload {
-                                        id: __f0,
-                                        seq: __f1,
-                                        value: __f2,
-                                        flag: __f3,
-                                        label: __f4,
-                                    } = __x1;
-                                    let __e1_id = (__f0
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let __e1_seq = (__f1
-                                        as ::prebindgen_jni_runtime::jni::sys::jint);
-                                    let __e1_value = (__f2
-                                        as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                    let __e1_flag = (__f3 as u8);
-                                    let __e1_label = match __f4 {
-                                        ::core::option::Option::Some(__some) => {
-                                            let __e1_label = ::prebindgen_jni_runtime::new_string(
-                                                env,
-                                                ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                            )?;
-                                            __e1_label
-                                        }
-                                        ::core::option::Option::None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                            let __v = __a0;
+                            {
+                                let __items: ::std::vec::Vec<_> = __v
+                                    .iter()
+                                    .cloned()
+                                    .collect();
+                                let __n = __items.len();
+                                let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                                let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
+                                let mut __c1_2 = ::std::vec::Vec::with_capacity(__n);
+                                let mut __c1_3 = ::std::vec::Vec::with_capacity(__n);
+                                let __c1_4 = ::prebindgen_jni_runtime::new_object_array(
+                                    env,
+                                    __n,
+                                )?;
+                                for (__i, __x1) in __items.into_iter().enumerate() {
+                                    let (
+                                        __e1_id,
+                                        __e1_seq,
+                                        __e1_value,
+                                        __e1_flag,
+                                        __e1_label,
+                                    ) = {
+                                        let __v = __x1;
+                                        {
+                                            let perftest_flat::Payload {
+                                                id: __f0,
+                                                seq: __f1,
+                                                value: __f2,
+                                                flag: __f3,
+                                                label: __f4,
+                                            } = __v;
+                                            let __e1_id = {
+                                                let __v = __f0;
+                                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                            };
+                                            let __e1_seq = {
+                                                let __v = __f1;
+                                                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                            };
+                                            let __e1_value = {
+                                                let __v = __f2;
+                                                (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                            };
+                                            let __e1_flag = {
+                                                let __v = __f3;
+                                                (__v as u8)
+                                            };
+                                            let __e1_label = {
+                                                let __v = __f4;
+                                                match __v {
+                                                    ::core::option::Option::Some(__some) => {
+                                                        let __e1_label = {
+                                                            let __v = __some;
+                                                            {
+                                                                let __v = (*__v);
+                                                                ::prebindgen_jni_runtime::new_string(
+                                                                    env,
+                                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                )?
+                                                            }
+                                                        };
+                                                        __e1_label
+                                                    }
+                                                    ::core::option::Option::None => {
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                                    }
+                                                }
+                                            };
+                                            (__e1_id, __e1_seq, __e1_value, __e1_flag, __e1_label)
                                         }
                                     };
-                                    (__e1_id, __e1_seq, __e1_value, __e1_flag, __e1_label)
-                                };
-                                __c1_0.push(__e1_id);
-                                __c1_1.push(__e1_seq);
-                                __c1_2.push(__e1_value);
-                                __c1_3.push(__e1_flag);
-                                ::prebindgen_jni_runtime::object_array_set(
-                                    env,
-                                    &__c1_4,
-                                    __i,
-                                    __e1_label,
-                                )?;
+                                    __c1_0.push(__e1_id);
+                                    __c1_1.push(__e1_seq);
+                                    __c1_2.push(__e1_value);
+                                    __c1_3.push(__e1_flag);
+                                    ::prebindgen_jni_runtime::object_array_set(
+                                        env,
+                                        &__c1_4,
+                                        __i,
+                                        __e1_label,
+                                    )?;
+                                }
+                                (
+                                    __n as i32,
+                                    ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?,
+                                    ::prebindgen_jni_runtime::write_ints(env, &__c1_1)?,
+                                    ::prebindgen_jni_runtime::write_doubles(env, &__c1_2)?,
+                                    ::prebindgen_jni_runtime::write_booleans(env, &__c1_3)?,
+                                    __c1_4,
+                                )
                             }
-                            (
-                                __n as i32,
-                                ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?,
-                                ::prebindgen_jni_runtime::write_ints(env, &__c1_1)?,
-                                ::prebindgen_jni_runtime::write_doubles(env, &__c1_2)?,
-                                ::prebindgen_jni_runtime::write_booleans(env, &__c1_3)?,
-                                __c1_4,
-                            )
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -1546,7 +1678,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadVecHa
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {

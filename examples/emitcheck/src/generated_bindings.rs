@@ -96,96 +96,148 @@ pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_JNINative_zSampleSub<
                             a0_text_boxed,
                             a0_text_cow,
                         ) = {
-                            let __v1 = __a0;
-                            let __s1 = myflat::z_sample_to_struct(&__v1);
-                            let (
-                                a0_opt_plain__present,
-                                a0_opt_plain_z_keyexpr_as_str,
-                                a0_opt_boxed__present,
-                                a0_opt_boxed_z_keyexpr_as_str,
-                                a0_seq_plain,
-                                a0_seq_cow,
-                                a0_text_plain,
-                                a0_text_boxed,
-                                a0_text_cow,
-                            ) = {
-                                let myflat::ZSampleStruct {
-                                    opt_plain: __f2_0,
-                                    opt_boxed: __f2_1,
-                                    seq_plain: __f2_2,
-                                    seq_cow: __f2_3,
-                                    text_plain: __f2_4,
-                                    text_boxed: __f2_5,
-                                    text_cow: __f2_6,
-                                } = __s1;
+                            let __v = __a0;
+                            {
+                                let __v1 = __v;
+                                let __s1 = myflat::z_sample_to_struct(&__v1);
                                 let (
                                     a0_opt_plain__present,
                                     a0_opt_plain_z_keyexpr_as_str,
-                                ) = match __f2_0 {
-                                    ::core::option::Option::Some(__x3) => {
-                                        let a0_opt_plain_z_keyexpr_as_str = {
-                                            let __v4 = __x3;
-                                            let a0_opt_plain_z_keyexpr_as_str = ::prebindgen_jni_runtime::new_string(
-                                                env,
-                                                ::core::convert::AsRef::<
-                                                    str,
-                                                >::as_ref(&myflat::z_keyexpr_as_str(&__v4)),
-                                            )?;
-                                            a0_opt_plain_z_keyexpr_as_str
-                                        };
-                                        (1u8, a0_opt_plain_z_keyexpr_as_str)
-                                    }
-                                    ::core::option::Option::None => {
-                                        (
-                                            0u8,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        )
-                                    }
-                                };
-                                let (
                                     a0_opt_boxed__present,
                                     a0_opt_boxed_z_keyexpr_as_str,
-                                ) = match (*__f2_1) {
-                                    ::core::option::Option::Some(__x3) => {
-                                        let a0_opt_boxed_z_keyexpr_as_str = {
-                                            let __v4 = __x3;
-                                            let a0_opt_boxed_z_keyexpr_as_str = ::prebindgen_jni_runtime::new_string(
-                                                env,
-                                                ::core::convert::AsRef::<
-                                                    str,
-                                                >::as_ref(&myflat::z_keyexpr_as_str(&__v4)),
-                                            )?;
-                                            a0_opt_boxed_z_keyexpr_as_str
+                                    a0_seq_plain,
+                                    a0_seq_cow,
+                                    a0_text_plain,
+                                    a0_text_boxed,
+                                    a0_text_cow,
+                                ) = {
+                                    let __v = __s1;
+                                    {
+                                        let myflat::ZSampleStruct {
+                                            opt_plain: __f2_0,
+                                            opt_boxed: __f2_1,
+                                            seq_plain: __f2_2,
+                                            seq_cow: __f2_3,
+                                            text_plain: __f2_4,
+                                            text_boxed: __f2_5,
+                                            text_cow: __f2_6,
+                                        } = __v;
+                                        let (
+                                            a0_opt_plain__present,
+                                            a0_opt_plain_z_keyexpr_as_str,
+                                        ) = {
+                                            let __v = __f2_0;
+                                            match __v {
+                                                ::core::option::Option::Some(__x3) => {
+                                                    let a0_opt_plain_z_keyexpr_as_str = {
+                                                        let __v = __x3;
+                                                        {
+                                                            let __v4 = __v;
+                                                            let a0_opt_plain_z_keyexpr_as_str = {
+                                                                let __v = myflat::z_keyexpr_as_str(&__v4);
+                                                                ::prebindgen_jni_runtime::new_string(
+                                                                    env,
+                                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                )?
+                                                            };
+                                                            a0_opt_plain_z_keyexpr_as_str
+                                                        }
+                                                    };
+                                                    (1u8, a0_opt_plain_z_keyexpr_as_str)
+                                                }
+                                                ::core::option::Option::None => {
+                                                    (
+                                                        0u8,
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                    )
+                                                }
+                                            }
                                         };
-                                        (1u8, a0_opt_boxed_z_keyexpr_as_str)
-                                    }
-                                    ::core::option::Option::None => {
+                                        let (
+                                            a0_opt_boxed__present,
+                                            a0_opt_boxed_z_keyexpr_as_str,
+                                        ) = {
+                                            let __v = __f2_1;
+                                            {
+                                                let __v = (*__v);
+                                                match __v {
+                                                    ::core::option::Option::Some(__x3) => {
+                                                        let a0_opt_boxed_z_keyexpr_as_str = {
+                                                            let __v = __x3;
+                                                            {
+                                                                let __v4 = __v;
+                                                                let a0_opt_boxed_z_keyexpr_as_str = {
+                                                                    let __v = myflat::z_keyexpr_as_str(&__v4);
+                                                                    ::prebindgen_jni_runtime::new_string(
+                                                                        env,
+                                                                        ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                    )?
+                                                                };
+                                                                a0_opt_boxed_z_keyexpr_as_str
+                                                            }
+                                                        };
+                                                        (1u8, a0_opt_boxed_z_keyexpr_as_str)
+                                                    }
+                                                    ::core::option::Option::None => {
+                                                        (
+                                                            0u8,
+                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        };
+                                        let a0_seq_plain = {
+                                            let __v = __f2_2;
+                                            ::prebindgen_jni_runtime::write_u8s(
+                                                env,
+                                                ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                                            )?
+                                        };
+                                        let a0_seq_cow = {
+                                            let __v = __f2_3;
+                                            ::prebindgen_jni_runtime::write_u8s(
+                                                env,
+                                                ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                                            )?
+                                        };
+                                        let a0_text_plain = {
+                                            let __v = __f2_4;
+                                            ::prebindgen_jni_runtime::new_string(
+                                                env,
+                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                            )?
+                                        };
+                                        let a0_text_boxed = {
+                                            let __v = __f2_5;
+                                            {
+                                                let __v = (*__v);
+                                                ::prebindgen_jni_runtime::new_string(
+                                                    env,
+                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                )?
+                                            }
+                                        };
+                                        let a0_text_cow = {
+                                            let __v = __f2_6;
+                                            ::prebindgen_jni_runtime::new_string(
+                                                env,
+                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                            )?
+                                        };
                                         (
-                                            0u8,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            a0_opt_plain__present,
+                                            a0_opt_plain_z_keyexpr_as_str,
+                                            a0_opt_boxed__present,
+                                            a0_opt_boxed_z_keyexpr_as_str,
+                                            a0_seq_plain,
+                                            a0_seq_cow,
+                                            a0_text_plain,
+                                            a0_text_boxed,
+                                            a0_text_cow,
                                         )
                                     }
                                 };
-                                let a0_seq_plain = ::prebindgen_jni_runtime::write_u8s(
-                                    env,
-                                    ::core::convert::AsRef::<[u8]>::as_ref(&__f2_2),
-                                )?;
-                                let a0_seq_cow = ::prebindgen_jni_runtime::write_u8s(
-                                    env,
-                                    ::core::convert::AsRef::<[u8]>::as_ref(&__f2_3),
-                                )?;
-                                let a0_text_plain = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f2_4),
-                                )?;
-                                let a0_text_boxed = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&(*__f2_5)),
-                                )?;
-                                let a0_text_cow = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f2_6),
-                                )?;
                                 (
                                     a0_opt_plain__present,
                                     a0_opt_plain_z_keyexpr_as_str,
@@ -197,18 +249,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_JNINative_zSampleSub<
                                     a0_text_boxed,
                                     a0_text_cow,
                                 )
-                            };
-                            (
-                                a0_opt_plain__present,
-                                a0_opt_plain_z_keyexpr_as_str,
-                                a0_opt_boxed__present,
-                                a0_opt_boxed_z_keyexpr_as_str,
-                                a0_seq_plain,
-                                a0_seq_cow,
-                                a0_text_plain,
-                                a0_text_boxed,
-                                a0_text_cow,
-                            )
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![

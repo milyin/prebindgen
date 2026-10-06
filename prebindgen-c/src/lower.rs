@@ -167,54 +167,50 @@ impl<'f> Plan<'f> {
         })
     }
 
-    /// A value of `ty` (the expression `v`) → a value slot `w`.
-    pub(crate) fn value_out(
-        &self,
-        ty: &TypeRef,
-        v: &TokenStream,
-        w: &syn::Ident,
-    ) -> Res<Output<CWire>> {
-        let one = |t: CWire, e: TokenStream| Output::wire(ty, Wire::new(w.clone(), t), e);
+    /// A value of `ty` → a value slot `w`.
+    pub(crate) fn value_out(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Output<CWire>> {
+        let one = |t: CWire, e: &dyn Fn(&TokenStream) -> TokenStream| {
+            Output::wire(ty, Wire::new(w.clone(), t), e)
+        };
         Ok(match self.shape(ty)? {
-            Shape::Scalar(ScalarKind::Bool) => {
-                one(CWire::BoolSlot, quote!(::core::mem::MaybeUninit::new(#v)))
-            }
-            Shape::Scalar(k) => one(CWire::Scalar(k), v.clone()),
+            Shape::Scalar(ScalarKind::Bool) => one(
+                CWire::BoolSlot,
+                &|v| quote!(::core::mem::MaybeUninit::new(#v)),
+            ),
+            Shape::Scalar(k) => one(CWire::Scalar(k), &|v| v.clone()),
             Shape::Str {
                 kind: TextKind::String,
                 access: Access::Owned,
             } => {
                 self.require_free()?;
-                one(CWire::c_str(true), quote!(__cbg_alloc_cstr(#v)))
+                one(CWire::c_str(true), &|v| quote!(__cbg_alloc_cstr(#v)))
             }
-            Shape::Boxed(inner) => self.value_out(inner, &quote!((*#v)), w)?,
+            Shape::Boxed(inner) => self.value_out(inner, w)?.before(|v| quote!((*#v))),
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
-                    Setting::Converted(c) => {
-                        Output::via(c, v, |repr, r| self.value_out(repr, &r, w))?
-                    }
+                    Setting::Converted(c) => Output::via(c, |repr| self.value_out(repr, w))?,
                     Setting::Type(t) => {
                         let (c, fout) = (&t.c, format_ident!("__cbg_out_{}", t.rust));
                         match &t.kind {
                             Kind::Enum => one(
                                 CWire::Uninit(c.clone()),
-                                quote!(::core::mem::MaybeUninit::new(#fout(#v))),
+                                &|v| quote!(::core::mem::MaybeUninit::new(#fout(#v))),
                             ),
-                            Kind::Union => one(CWire::Uninit(c.clone()), quote!(#fout(#v))),
-                            Kind::Data => one(CWire::Struct(c.clone()), quote!(#fout(#v))),
+                            Kind::Union => one(CWire::Uninit(c.clone()), &|v| quote!(#fout(#v))),
+                            Kind::Data => one(CWire::Struct(c.clone()), &|v| quote!(#fout(#v))),
                             Kind::Opaque => one(
                                 CWire::ptr(true, CWire::Struct(c.clone())),
-                                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
+                                &|v| quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
                             ),
                             Kind::ReprC { .. } => one(
                                 CWire::Struct(c.clone()),
-                                quote!(<#c as ::prebindgen_c_runtime::Transmute>::from_rust(#v)),
+                                &|v| quote!(<#c as ::prebindgen_c_runtime::Transmute>::from_rust(#v)),
                             ),
                             Kind::Error { .. } => {
                                 self.require_free()?;
                                 let _ = name;
-                                one(CWire::c_str(true), quote!(#fout(#v)))
+                                one(CWire::c_str(true), &|v| quote!(#fout(#v)))
                             }
                         }
                     }
@@ -690,14 +686,14 @@ impl<'f> Plan<'f> {
         if let Some(p) = self.pointer_out(ty, v)? {
             return Ok(p);
         }
-        let out = self.value_out(ty, v, &format_ident!("__w"))?;
+        let out = self.value_out(ty, &format_ident!("__w"))?;
         if out.fallible {
             return err(format!(
                 "`{ty}`: a fallible output conversion needs a Result return"
             ));
         }
         let wire = out.wires()[0].ty.clone();
-        Ok((wire, out.expr))
+        Ok((wire, out.apply(v)))
     }
 
     fn plain_ret(&self, ty: &TypeRef) -> Res<Return> {
@@ -800,12 +796,7 @@ impl<'f> Plan<'f> {
     // ── callbacks ───────────────────────────────────────────────────────
 
     /// Argument `index` of a C callback, of type `ty`, held in `value`.
-    pub(crate) fn callback_arg(
-        &self,
-        index: usize,
-        ty: &TypeRef,
-        value: &TokenStream,
-    ) -> Res<Output<CWire>> {
+    pub(crate) fn callback_arg(&self, index: usize, ty: &TypeRef) -> Res<Output<CWire>> {
         let n = format_ident!("__w{}", index);
         match self.shape(ty)? {
             Shape::Seq {
@@ -822,7 +813,7 @@ impl<'f> Plan<'f> {
                         Wire::new(len, CWire::Scalar(ScalarKind::Usize)),
                     ],
                     in_place(elem, c),
-                    quote!((#value.as_ptr() as *const #c, #value.len())),
+                    |v| quote!((#v.as_ptr() as *const #c, #v.len())),
                 ))
             }
             Shape::Declared {
@@ -839,12 +830,17 @@ impl<'f> Plan<'f> {
                 Ok(Output::wire(
                     ty,
                     Wire::new(n, CWire::ptr(false, CWire::Struct(c.clone()))),
-                    quote!(#value as *const #src as *const #c),
+                    |v| quote!(#v as *const #src as *const #c),
                 ))
             }
             _ => {
-                let (wire, e) = self.ret_value(ty, value)?;
-                Ok(Output::wire(ty, Wire::new(n, wire), e))
+                // Delivered like a by-value result, over the argument.
+                let (wire, e) = self.ret_value(ty, &quote!(__arg))?;
+                Ok(Output::wire(
+                    ty,
+                    Wire::new(n, wire),
+                    |v| quote!({ let __arg = #v; #e }),
+                ))
             }
         }
     }
@@ -873,11 +869,10 @@ impl<'f> Plan<'f> {
         let tys = prebindgen_tools::callback_arg_types(self.flat, args);
         let outs = args
             .iter()
-            .zip(&names)
             .enumerate()
-            .map(|(i, (ty, n))| self.callback_arg(i, ty, &n.to_token_stream()))
+            .map(|(i, ty)| self.callback_arg(i, ty))
             .collect::<Res<Vec<_>>>()?;
-        let binds: TokenStream = outs.iter().map(Output::bind).collect();
+        let binds: TokenStream = outs.iter().zip(&names).map(|(o, n)| o.bind(n)).collect();
         let values: Vec<syn::Ident> = outs
             .iter()
             .flat_map(|o| o.wires().into_iter().map(|w| w.name.clone()))

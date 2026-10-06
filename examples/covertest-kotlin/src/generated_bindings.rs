@@ -79,15 +79,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadLabe
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -183,7 +189,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampSecs<'
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -225,7 +234,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampNanos<
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -275,10 +287,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageErro
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -339,7 +354,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryCoun
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -387,7 +405,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTota
         ::prebindgen_jni_runtime::jni::sys::jdouble,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -437,7 +458,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryScal
         ::prebindgen_jni_runtime::jni::sys::jdouble,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -485,7 +509,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryMean
         ::prebindgen_jni_runtime::jni::sys::jdouble,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -525,7 +552,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryNew<
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -566,7 +596,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryFrom
         ::std::string::String,
     > = (|| match __result {
         ::core::result::Result::Ok(__ok) => {
-            let r = ::prebindgen_jni_runtime::new_handle(__ok);
+            let r = {
+                let __v = __ok;
+                ::prebindgen_jni_runtime::new_handle(__v)
+            };
             ::core::result::Result::Ok(r)
         }
         ::core::result::Result::Err(__e) => {
@@ -644,7 +677,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageLen<
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -694,7 +730,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageCont
         ::prebindgen_jni_runtime::jni::sys::jboolean,
         ::std::string::String,
     > = (|| {
-        let r = (__result as u8);
+        let r = {
+            let __v = __result;
+            (__v as u8)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -760,7 +799,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageWith
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -850,7 +892,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_constGetCov
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -888,10 +933,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_constGetCov
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -927,10 +975,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_coverTagRun
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -968,10 +1019,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_constGetCov
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -1015,10 +1069,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_constGetCov
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -1068,7 +1125,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_escape_1pro
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -1106,7 +1166,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_escapeProbe
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -1183,11 +1246,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadPrio
         ::prebindgen_jni_runtime::jni::sys::jint,
         ::std::string::String,
     > = (|| {
-        let r = (match __result {
-            perftest_flat::Priority::Low => 0,
-            perftest_flat::Priority::Normal => 1,
-            perftest_flat::Priority::High => 2,
-        } as i32);
+        let r = {
+            let __v = __result;
+            (match __v {
+                perftest_flat::Priority::Low => 0,
+                perftest_flat::Priority::Normal => 1,
+                perftest_flat::Priority::High => 2,
+            } as i32)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -1244,7 +1310,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_priorityWei
         ::prebindgen_jni_runtime::jni::sys::jint,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jint);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -1329,11 +1398,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_priorityOr<
         ::prebindgen_jni_runtime::jni::sys::jint,
         ::std::string::String,
     > = (|| {
-        let r = (match __result {
-            perftest_flat::Priority::Low => 0,
-            perftest_flat::Priority::Normal => 1,
-            perftest_flat::Priority::High => 2,
-        } as i32);
+        let r = {
+            let __v = __result;
+            (match __v {
+                perftest_flat::Priority::Low => 0,
+                perftest_flat::Priority::Normal => 1,
+                perftest_flat::Priority::High => 2,
+            } as i32)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -1375,10 +1447,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampNew<'a
         ::std::string::String,
     > = (|| {
         let (r_secs, r_nanos) = {
-            let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __result;
-            let r_secs = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_nanos = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            (r_secs, r_nanos)
+            let __v = __result;
+            {
+                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                let r_secs = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_nanos = {
+                    let __v = __f1;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                (r_secs, r_nanos)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -1436,28 +1517,40 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampSeries
         ::std::string::String,
     > = (|| {
         let (r__n, r_secs, r_nanos) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result,
+            let __v = __result;
+            {
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __v,
+                    )
+                    .collect();
+                let __n = __items.len();
+                let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
+                for (__i, __x1) in __items.into_iter().enumerate() {
+                    let (__e1_secs, __e1_nanos) = {
+                        let __v = __x1;
+                        {
+                            let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                            let __e1_secs = {
+                                let __v = __f0;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
+                            let __e1_nanos = {
+                                let __v = __f1;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
+                            (__e1_secs, __e1_nanos)
+                        }
+                    };
+                    __c1_0.push(__e1_secs);
+                    __c1_1.push(__e1_nanos);
+                }
+                (
+                    __n as i32,
+                    ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?,
+                    ::prebindgen_jni_runtime::write_longs(env, &__c1_1)?,
                 )
-                .collect();
-            let __n = __items.len();
-            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-            let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let (__e1_secs, __e1_nanos) = {
-                    let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __x1;
-                    let __e1_secs = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let __e1_nanos = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    (__e1_secs, __e1_nanos)
-                };
-                __c1_0.push(__e1_secs);
-                __c1_1.push(__e1_nanos);
             }
-            (
-                __n as i32,
-                ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?,
-                ::prebindgen_jni_runtime::write_longs(env, &__c1_1)?,
-            )
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -1520,10 +1613,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_celsiusDoub
         ::std::string::String,
     > = (|| {
         let r = {
-            let __repr = <perftest_flat::Celsius as ::core::convert::Into<
-                i32,
-            >>::into(__result);
-            (__repr as ::prebindgen_jni_runtime::jni::sys::jint)
+            let __v = __result;
+            {
+                let __v = <perftest_flat::Celsius as ::core::convert::Into<
+                    i32,
+                >>::into(__v);
+                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+            }
         };
         ::core::result::Result::Ok(r)
     })();
@@ -1577,9 +1673,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_percentScal
         ::std::string::String,
     > = (|| {
         let r = {
-            let __repr = crate::percent_out(__result)
-                .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-            (__repr as ::prebindgen_jni_runtime::jni::sys::jint)
+            let __v = __result;
+            {
+                let __v = crate::percent_out(__v)
+                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+            }
         };
         ::core::result::Result::Ok(r)
     })();
@@ -1639,19 +1738,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_percentOpti
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jint(
-                    env,
-                    {
-                        let __repr = crate::percent_out(__x1)
-                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                        (__repr as ::prebindgen_jni_runtime::jni::sys::jint)
-                    },
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jint(
+                        env,
+                        {
+                            let __v = __x1;
+                            {
+                                let __v = crate::percent_out(__v)
+                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                            }
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -1691,19 +1796,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_percentInva
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jint(
-                    env,
-                    {
-                        let __repr = crate::percent_out(__x1)
-                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                        (__repr as ::prebindgen_jni_runtime::jni::sys::jint)
-                    },
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jint(
+                        env,
+                        {
+                            let __v = __x1;
+                            {
+                                let __v = crate::percent_out(__v)
+                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                            }
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -1756,11 +1867,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_labelRevers
         ::std::string::String,
     > = (|| {
         let r = {
-            let __repr = crate::label_out(__result);
-            ::prebindgen_jni_runtime::new_string(
-                env,
-                ::core::convert::AsRef::<str>::as_ref(&__repr),
-            )?
+            let __v = __result;
+            {
+                let __v = crate::label_out(__v);
+                ::prebindgen_jni_runtime::new_string(
+                    env,
+                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                )?
+            }
         };
         ::core::result::Result::Ok(r.into_raw())
     })();
@@ -1830,23 +1944,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_labelSeries
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result,
-                )
-                .collect();
-            let __n = __items.len();
-            let __c1_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let __e1 = {
-                    let __repr = crate::label_out(__x1);
-                    ::prebindgen_jni_runtime::new_string(
-                        env,
-                        ::core::convert::AsRef::<str>::as_ref(&__repr),
-                    )?
-                };
-                ::prebindgen_jni_runtime::object_array_set(env, &__c1_0, __i, __e1)?;
+            let __v = __result;
+            {
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __v,
+                    )
+                    .collect();
+                let __n = __items.len();
+                let __c1_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
+                for (__i, __x1) in __items.into_iter().enumerate() {
+                    let __e1 = {
+                        let __v = __x1;
+                        {
+                            let __v = crate::label_out(__v);
+                            ::prebindgen_jni_runtime::new_string(
+                                env,
+                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                            )?
+                        }
+                    };
+                    ::prebindgen_jni_runtime::object_array_set(env, &__c1_0, __i, __e1)?;
+                }
+                (__n as i32, __c1_0)
             }
-            (__n as i32, __c1_0)
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -1979,41 +2099,206 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedNe
             r_ttl,
             r_priority,
         ) = {
-            let perftest_flat::Annotated {
-                payload: __f0,
-                alternate: __f1,
-                ttl: __f2,
-                priority: __f3,
-            } = __result;
-            let (
-                r_payload_id,
-                r_payload_seq,
-                r_payload_value,
-                r_payload_flag,
-                r_payload_label,
-            ) = {
-                let perftest_flat::Payload {
-                    id: __f0,
-                    seq: __f1,
-                    value: __f2,
-                    flag: __f3,
-                    label: __f4,
-                } = __f0;
-                let r_payload_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_payload_seq = (__f1 as ::prebindgen_jni_runtime::jni::sys::jint);
-                let r_payload_value = (__f2
-                    as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                let r_payload_flag = (__f3 as u8);
-                let r_payload_label = match __f4 {
-                    ::core::option::Option::Some(__some) => {
-                        let r_payload_label = ::prebindgen_jni_runtime::new_string(
-                            env,
-                            ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                        )?;
-                        r_payload_label
+            let __v = __result;
+            {
+                let perftest_flat::Annotated {
+                    payload: __f0,
+                    alternate: __f1,
+                    ttl: __f2,
+                    priority: __f3,
+                } = __v;
+                let (
+                    r_payload_id,
+                    r_payload_seq,
+                    r_payload_value,
+                    r_payload_flag,
+                    r_payload_label,
+                ) = {
+                    let __v = __f0;
+                    {
+                        let perftest_flat::Payload {
+                            id: __f0,
+                            seq: __f1,
+                            value: __f2,
+                            flag: __f3,
+                            label: __f4,
+                        } = __v;
+                        let r_payload_id = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let r_payload_seq = {
+                            let __v = __f1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                        };
+                        let r_payload_value = {
+                            let __v = __f2;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                        };
+                        let r_payload_flag = {
+                            let __v = __f3;
+                            (__v as u8)
+                        };
+                        let r_payload_label = {
+                            let __v = __f4;
+                            match __v {
+                                ::core::option::Option::Some(__some) => {
+                                    let r_payload_label = {
+                                        let __v = __some;
+                                        {
+                                            let __v = (*__v);
+                                            ::prebindgen_jni_runtime::new_string(
+                                                env,
+                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                            )?
+                                        }
+                                    };
+                                    r_payload_label
+                                }
+                                ::core::option::Option::None => {
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                }
+                            }
+                        };
+                        (
+                            r_payload_id,
+                            r_payload_seq,
+                            r_payload_value,
+                            r_payload_flag,
+                            r_payload_label,
+                        )
                     }
-                    ::core::option::Option::None => {
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                };
+                let (
+                    r_alternate__present,
+                    r_alternate_id,
+                    r_alternate_seq,
+                    r_alternate_value,
+                    r_alternate_flag,
+                    r_alternate_label,
+                ) = {
+                    let __v = __f1;
+                    match __v {
+                        ::core::option::Option::Some(__some) => {
+                            let (
+                                r_alternate_id,
+                                r_alternate_seq,
+                                r_alternate_value,
+                                r_alternate_flag,
+                                r_alternate_label,
+                            ) = {
+                                let __v = __some;
+                                {
+                                    let perftest_flat::Payload {
+                                        id: __f0,
+                                        seq: __f1,
+                                        value: __f2,
+                                        flag: __f3,
+                                        label: __f4,
+                                    } = __v;
+                                    let r_alternate_id = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    let r_alternate_seq = {
+                                        let __v = __f1;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                    };
+                                    let r_alternate_value = {
+                                        let __v = __f2;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                    };
+                                    let r_alternate_flag = {
+                                        let __v = __f3;
+                                        (__v as u8)
+                                    };
+                                    let r_alternate_label = {
+                                        let __v = __f4;
+                                        match __v {
+                                            ::core::option::Option::Some(__some) => {
+                                                let r_alternate_label = {
+                                                    let __v = __some;
+                                                    {
+                                                        let __v = (*__v);
+                                                        ::prebindgen_jni_runtime::new_string(
+                                                            env,
+                                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                        )?
+                                                    }
+                                                };
+                                                r_alternate_label
+                                            }
+                                            ::core::option::Option::None => {
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                            }
+                                        }
+                                    };
+                                    (
+                                        r_alternate_id,
+                                        r_alternate_seq,
+                                        r_alternate_value,
+                                        r_alternate_flag,
+                                        r_alternate_label,
+                                    )
+                                }
+                            };
+                            (
+                                1u8,
+                                r_alternate_id,
+                                r_alternate_seq,
+                                r_alternate_value,
+                                r_alternate_flag,
+                                r_alternate_label,
+                            )
+                        }
+                        ::core::option::Option::None => {
+                            (
+                                0,
+                                0,
+                                0,
+                                0.0f64,
+                                0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            )
+                        }
+                    }
+                };
+                let r_ttl = {
+                    let __v = __f2;
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
+                            ::prebindgen_jni_runtime::box_jlong(
+                                env,
+                                {
+                                    let __v = __x2;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                },
+                            )?
+                        }
+                        ::core::option::Option::None => {
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        }
+                    }
+                };
+                let r_priority = {
+                    let __v = __f3;
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
+                            ::prebindgen_jni_runtime::box_jint(
+                                env,
+                                {
+                                    let __v = __x2;
+                                    (match __v {
+                                        perftest_flat::Priority::Low => 0,
+                                        perftest_flat::Priority::Normal => 1,
+                                        perftest_flat::Priority::High => 2,
+                                    } as i32)
+                                },
+                            )?
+                        }
+                        ::core::option::Option::None => {
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        }
                     }
                 };
                 (
@@ -2022,119 +2307,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedNe
                     r_payload_value,
                     r_payload_flag,
                     r_payload_label,
+                    r_alternate__present,
+                    r_alternate_id,
+                    r_alternate_seq,
+                    r_alternate_value,
+                    r_alternate_flag,
+                    r_alternate_label,
+                    r_ttl,
+                    r_priority,
                 )
-            };
-            let (
-                r_alternate__present,
-                r_alternate_id,
-                r_alternate_seq,
-                r_alternate_value,
-                r_alternate_flag,
-                r_alternate_label,
-            ) = match __f1 {
-                ::core::option::Option::Some(__some) => {
-                    let (
-                        r_alternate_id,
-                        r_alternate_seq,
-                        r_alternate_value,
-                        r_alternate_flag,
-                        r_alternate_label,
-                    ) = {
-                        let perftest_flat::Payload {
-                            id: __f0,
-                            seq: __f1,
-                            value: __f2,
-                            flag: __f3,
-                            label: __f4,
-                        } = __some;
-                        let r_alternate_id = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        let r_alternate_seq = (__f1
-                            as ::prebindgen_jni_runtime::jni::sys::jint);
-                        let r_alternate_value = (__f2
-                            as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                        let r_alternate_flag = (__f3 as u8);
-                        let r_alternate_label = match __f4 {
-                            ::core::option::Option::Some(__some) => {
-                                let r_alternate_label = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                )?;
-                                r_alternate_label
-                            }
-                            ::core::option::Option::None => {
-                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                            }
-                        };
-                        (
-                            r_alternate_id,
-                            r_alternate_seq,
-                            r_alternate_value,
-                            r_alternate_flag,
-                            r_alternate_label,
-                        )
-                    };
-                    (
-                        1u8,
-                        r_alternate_id,
-                        r_alternate_seq,
-                        r_alternate_value,
-                        r_alternate_flag,
-                        r_alternate_label,
-                    )
-                }
-                ::core::option::Option::None => {
-                    (
-                        0,
-                        0,
-                        0,
-                        0.0f64,
-                        0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    )
-                }
-            };
-            let r_ttl = match __f2 {
-                ::core::option::Option::Some(__x2) => {
-                    ::prebindgen_jni_runtime::box_jlong(
-                        env,
-                        (__x2 as ::prebindgen_jni_runtime::jni::sys::jlong),
-                    )?
-                }
-                ::core::option::Option::None => {
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                }
-            };
-            let r_priority = match __f3 {
-                ::core::option::Option::Some(__x2) => {
-                    ::prebindgen_jni_runtime::box_jint(
-                        env,
-                        (match __x2 {
-                            perftest_flat::Priority::Low => 0,
-                            perftest_flat::Priority::Normal => 1,
-                            perftest_flat::Priority::High => 2,
-                        } as i32),
-                    )?
-                }
-                ::core::option::Option::None => {
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                }
-            };
-            (
-                r_payload_id,
-                r_payload_seq,
-                r_payload_value,
-                r_payload_flag,
-                r_payload_label,
-                r_alternate__present,
-                r_alternate_id,
-                r_alternate_seq,
-                r_alternate_value,
-                r_alternate_flag,
-                r_alternate_label,
-                r_ttl,
-                r_priority,
-            )
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -2306,15 +2488,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedAl
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jdouble(
-                    env,
-                    (__x1 as ::prebindgen_jni_runtime::jni::sys::jdouble),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jdouble(
+                        env,
+                        {
+                            let __v = __x1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -2435,15 +2623,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedTt
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -2566,19 +2760,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedPr
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jint(
-                    env,
-                    (match __x1 {
-                        perftest_flat::Priority::Low => 0,
-                        perftest_flat::Priority::Normal => 1,
-                        perftest_flat::Priority::High => 2,
-                    } as i32),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jint(
+                        env,
+                        {
+                            let __v = __x1;
+                            (match __v {
+                                perftest_flat::Priority::Low => 0,
+                                perftest_flat::Priority::Normal => 1,
+                                perftest_flat::Priority::High => 2,
+                            } as i32)
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -2701,7 +2901,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedPa
         ::prebindgen_jni_runtime::jni::sys::jdouble,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -2761,107 +2964,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_observation
             r_fallback_companion_v0,
             r_note,
         ) = {
-            let perftest_flat::Observation {
-                id: __f0,
-                reading: __f1,
-                fallback: __f2,
-                note: __f3,
-            } = __result;
-            let r_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let (
-                r_reading__tag,
-                r_reading_exact_v0,
-                r_reading_range_low,
-                r_reading_range_high,
-                r_reading_labeled_v0,
-                r_reading_labeled_v1,
-                r_reading_companion_v0,
-            ) = match __f1 {
-                perftest_flat::Reading::Missing => {
-                    (
-                        0,
-                        0,
-                        0,
-                        0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        0,
-                        0,
-                    )
-                }
-                perftest_flat::Reading::Exact(__f0) => {
-                    let r_reading_exact_v0 = (__f0
-                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    (
-                        1,
-                        r_reading_exact_v0,
-                        0,
-                        0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        0,
-                        0,
-                    )
-                }
-                perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                    let r_reading_range_low = (__f0
-                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let r_reading_range_high = (__f1
-                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    (
-                        2,
-                        0,
-                        r_reading_range_low,
-                        r_reading_range_high,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        0,
-                        0,
-                    )
-                }
-                perftest_flat::Reading::Labeled(__f0, __f1) => {
-                    let r_reading_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                        env,
-                        ::core::convert::AsRef::<str>::as_ref(&__f0),
-                    )?;
-                    let r_reading_labeled_v1 = (match __f1 {
-                        perftest_flat::Priority::Low => 0,
-                        perftest_flat::Priority::Normal => 1,
-                        perftest_flat::Priority::High => 2,
-                    } as i32);
-                    (3, 0, 0, 0, r_reading_labeled_v0, r_reading_labeled_v1, 0)
-                }
-                perftest_flat::Reading::Companion(__f0) => {
-                    let r_reading_companion_v0 = (__f0
-                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    (
-                        4,
-                        0,
-                        0,
-                        0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        0,
-                        r_reading_companion_v0,
-                    )
-                }
-            };
-            let (
-                r_fallback__present,
-                r_fallback__tag,
-                r_fallback_exact_v0,
-                r_fallback_range_low,
-                r_fallback_range_high,
-                r_fallback_labeled_v0,
-                r_fallback_labeled_v1,
-                r_fallback_companion_v0,
-            ) = match __f2 {
-                ::core::option::Option::Some(__some) => {
-                    let (
-                        r_fallback__tag,
-                        r_fallback_exact_v0,
-                        r_fallback_range_low,
-                        r_fallback_range_high,
-                        r_fallback_labeled_v0,
-                        r_fallback_labeled_v1,
-                        r_fallback_companion_v0,
-                    ) = match __some {
+            let __v = __result;
+            {
+                let perftest_flat::Observation {
+                    id: __f0,
+                    reading: __f1,
+                    fallback: __f2,
+                    note: __f3,
+                } = __v;
+                let r_id = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let (
+                    r_reading__tag,
+                    r_reading_exact_v0,
+                    r_reading_range_low,
+                    r_reading_range_high,
+                    r_reading_labeled_v0,
+                    r_reading_labeled_v1,
+                    r_reading_companion_v0,
+                ) = {
+                    let __v = __f1;
+                    match __v {
                         perftest_flat::Reading::Missing => {
                             (
                                 0,
@@ -2874,11 +2999,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_observation
                             )
                         }
                         perftest_flat::Reading::Exact(__f0) => {
-                            let r_fallback_exact_v0 = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
+                            let r_reading_exact_v0 = {
+                                let __v = __f0;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
                             (
                                 1,
-                                r_fallback_exact_v0,
+                                r_reading_exact_v0,
                                 0,
                                 0,
                                 ::prebindgen_jni_runtime::jni::objects::JObject::null(),
@@ -2887,35 +3014,47 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_observation
                             )
                         }
                         perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                            let r_fallback_range_low = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                            let r_fallback_range_high = (__f1
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
+                            let r_reading_range_low = {
+                                let __v = __f0;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
+                            let r_reading_range_high = {
+                                let __v = __f1;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
                             (
                                 2,
                                 0,
-                                r_fallback_range_low,
-                                r_fallback_range_high,
+                                r_reading_range_low,
+                                r_reading_range_high,
                                 ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                                 0,
                                 0,
                             )
                         }
                         perftest_flat::Reading::Labeled(__f0, __f1) => {
-                            let r_fallback_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                                env,
-                                ::core::convert::AsRef::<str>::as_ref(&__f0),
-                            )?;
-                            let r_fallback_labeled_v1 = (match __f1 {
-                                perftest_flat::Priority::Low => 0,
-                                perftest_flat::Priority::Normal => 1,
-                                perftest_flat::Priority::High => 2,
-                            } as i32);
-                            (3, 0, 0, 0, r_fallback_labeled_v0, r_fallback_labeled_v1, 0)
+                            let r_reading_labeled_v0 = {
+                                let __v = __f0;
+                                ::prebindgen_jni_runtime::new_string(
+                                    env,
+                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                )?
+                            };
+                            let r_reading_labeled_v1 = {
+                                let __v = __f1;
+                                (match __v {
+                                    perftest_flat::Priority::Low => 0,
+                                    perftest_flat::Priority::Normal => 1,
+                                    perftest_flat::Priority::High => 2,
+                                } as i32)
+                            };
+                            (3, 0, 0, 0, r_reading_labeled_v0, r_reading_labeled_v1, 0)
                         }
                         perftest_flat::Reading::Companion(__f0) => {
-                            let r_fallback_companion_v0 = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
+                            let r_reading_companion_v0 = {
+                                let __v = __f0;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
                             (
                                 4,
                                 0,
@@ -2923,57 +3062,175 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_observation
                                 0,
                                 ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                                 0,
+                                r_reading_companion_v0,
+                            )
+                        }
+                    }
+                };
+                let (
+                    r_fallback__present,
+                    r_fallback__tag,
+                    r_fallback_exact_v0,
+                    r_fallback_range_low,
+                    r_fallback_range_high,
+                    r_fallback_labeled_v0,
+                    r_fallback_labeled_v1,
+                    r_fallback_companion_v0,
+                ) = {
+                    let __v = __f2;
+                    match __v {
+                        ::core::option::Option::Some(__some) => {
+                            let (
+                                r_fallback__tag,
+                                r_fallback_exact_v0,
+                                r_fallback_range_low,
+                                r_fallback_range_high,
+                                r_fallback_labeled_v0,
+                                r_fallback_labeled_v1,
+                                r_fallback_companion_v0,
+                            ) = {
+                                let __v = __some;
+                                match __v {
+                                    perftest_flat::Reading::Missing => {
+                                        (
+                                            0,
+                                            0,
+                                            0,
+                                            0,
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            0,
+                                            0,
+                                        )
+                                    }
+                                    perftest_flat::Reading::Exact(__f0) => {
+                                        let r_fallback_exact_v0 = {
+                                            let __v = __f0;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
+                                        (
+                                            1,
+                                            r_fallback_exact_v0,
+                                            0,
+                                            0,
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            0,
+                                            0,
+                                        )
+                                    }
+                                    perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                                        let r_fallback_range_low = {
+                                            let __v = __f0;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
+                                        let r_fallback_range_high = {
+                                            let __v = __f1;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
+                                        (
+                                            2,
+                                            0,
+                                            r_fallback_range_low,
+                                            r_fallback_range_high,
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            0,
+                                            0,
+                                        )
+                                    }
+                                    perftest_flat::Reading::Labeled(__f0, __f1) => {
+                                        let r_fallback_labeled_v0 = {
+                                            let __v = __f0;
+                                            ::prebindgen_jni_runtime::new_string(
+                                                env,
+                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                            )?
+                                        };
+                                        let r_fallback_labeled_v1 = {
+                                            let __v = __f1;
+                                            (match __v {
+                                                perftest_flat::Priority::Low => 0,
+                                                perftest_flat::Priority::Normal => 1,
+                                                perftest_flat::Priority::High => 2,
+                                            } as i32)
+                                        };
+                                        (
+                                            3,
+                                            0,
+                                            0,
+                                            0,
+                                            r_fallback_labeled_v0,
+                                            r_fallback_labeled_v1,
+                                            0,
+                                        )
+                                    }
+                                    perftest_flat::Reading::Companion(__f0) => {
+                                        let r_fallback_companion_v0 = {
+                                            let __v = __f0;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
+                                        (
+                                            4,
+                                            0,
+                                            0,
+                                            0,
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            0,
+                                            r_fallback_companion_v0,
+                                        )
+                                    }
+                                }
+                            };
+                            (
+                                1u8,
+                                r_fallback__tag,
+                                r_fallback_exact_v0,
+                                r_fallback_range_low,
+                                r_fallback_range_high,
+                                r_fallback_labeled_v0,
+                                r_fallback_labeled_v1,
                                 r_fallback_companion_v0,
                             )
                         }
-                    };
-                    (
-                        1u8,
-                        r_fallback__tag,
-                        r_fallback_exact_v0,
-                        r_fallback_range_low,
-                        r_fallback_range_high,
-                        r_fallback_labeled_v0,
-                        r_fallback_labeled_v1,
-                        r_fallback_companion_v0,
-                    )
-                }
-                ::core::option::Option::None => {
-                    (
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        0,
-                        0,
-                    )
-                }
-            };
-            let r_note = ::prebindgen_jni_runtime::new_string(
-                env,
-                ::core::convert::AsRef::<str>::as_ref(&__f3),
-            )?;
-            (
-                r_id,
-                r_reading__tag,
-                r_reading_exact_v0,
-                r_reading_range_low,
-                r_reading_range_high,
-                r_reading_labeled_v0,
-                r_reading_labeled_v1,
-                r_reading_companion_v0,
-                r_fallback__present,
-                r_fallback__tag,
-                r_fallback_exact_v0,
-                r_fallback_range_low,
-                r_fallback_range_high,
-                r_fallback_labeled_v0,
-                r_fallback_labeled_v1,
-                r_fallback_companion_v0,
-                r_note,
-            )
+                        ::core::option::Option::None => {
+                            (
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                0,
+                                0,
+                            )
+                        }
+                    }
+                };
+                let r_note = {
+                    let __v = __f3;
+                    ::prebindgen_jni_runtime::new_string(
+                        env,
+                        ::core::convert::AsRef::<str>::as_ref(&__v),
+                    )?
+                };
+                (
+                    r_id,
+                    r_reading__tag,
+                    r_reading_exact_v0,
+                    r_reading_range_low,
+                    r_reading_range_high,
+                    r_reading_labeled_v0,
+                    r_reading_labeled_v1,
+                    r_reading_companion_v0,
+                    r_fallback__present,
+                    r_fallback__tag,
+                    r_fallback_exact_v0,
+                    r_fallback_range_low,
+                    r_fallback_range_high,
+                    r_fallback_labeled_v0,
+                    r_fallback_labeled_v1,
+                    r_fallback_companion_v0,
+                    r_note,
+                )
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -3209,7 +3466,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_observation
         ::prebindgen_jni_runtime::jni::sys::jint,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jint);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -3249,32 +3509,47 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_taggedNew<'
         ::std::string::String,
     > = (|| {
         let (r_id, r_marker__tag, r_marker_ranked_v0) = {
-            let perftest_flat::Tagged { id: __f0, marker: __f1 } = __result;
-            let r_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let (r_marker__tag, r_marker_ranked_v0) = match __f1 {
-                perftest_flat::Marker::None_ => {
-                    (0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
-                }
-                perftest_flat::Marker::Ranked(__f0) => {
-                    let r_marker_ranked_v0 = match __f0 {
-                        ::core::option::Option::Some(__x3) => {
-                            ::prebindgen_jni_runtime::box_jint(
-                                env,
-                                (match __x3 {
-                                    perftest_flat::Priority::Low => 0,
-                                    perftest_flat::Priority::Normal => 1,
-                                    perftest_flat::Priority::High => 2,
-                                } as i32),
-                            )?
+            let __v = __result;
+            {
+                let perftest_flat::Tagged { id: __f0, marker: __f1 } = __v;
+                let r_id = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let (r_marker__tag, r_marker_ranked_v0) = {
+                    let __v = __f1;
+                    match __v {
+                        perftest_flat::Marker::None_ => {
+                            (0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
                         }
-                        ::core::option::Option::None => {
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        perftest_flat::Marker::Ranked(__f0) => {
+                            let r_marker_ranked_v0 = {
+                                let __v = __f0;
+                                match __v {
+                                    ::core::option::Option::Some(__x3) => {
+                                        ::prebindgen_jni_runtime::box_jint(
+                                            env,
+                                            {
+                                                let __v = __x3;
+                                                (match __v {
+                                                    perftest_flat::Priority::Low => 0,
+                                                    perftest_flat::Priority::Normal => 1,
+                                                    perftest_flat::Priority::High => 2,
+                                                } as i32)
+                                            },
+                                        )?
+                                    }
+                                    ::core::option::Option::None => {
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                    }
+                                }
+                            };
+                            (1, r_marker_ranked_v0)
                         }
-                    };
-                    (1, r_marker_ranked_v0)
-                }
-            };
-            (r_id, r_marker__tag, r_marker_ranked_v0)
+                    }
+                };
+                (r_id, r_marker__tag, r_marker_ranked_v0)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -3382,7 +3657,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_taggedRank<
         ::prebindgen_jni_runtime::jni::sys::jint,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jint);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -3421,27 +3699,36 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_markerOf<'a
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__tag, r_ranked_v0) = match __result {
-            perftest_flat::Marker::None_ => {
-                (0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
-            }
-            perftest_flat::Marker::Ranked(__f0) => {
-                let r_ranked_v0 = match __f0 {
-                    ::core::option::Option::Some(__x2) => {
-                        ::prebindgen_jni_runtime::box_jint(
-                            env,
-                            (match __x2 {
-                                perftest_flat::Priority::Low => 0,
-                                perftest_flat::Priority::Normal => 1,
-                                perftest_flat::Priority::High => 2,
-                            } as i32),
-                        )?
-                    }
-                    ::core::option::Option::None => {
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                    }
-                };
-                (1, r_ranked_v0)
+        let (r__tag, r_ranked_v0) = {
+            let __v = __result;
+            match __v {
+                perftest_flat::Marker::None_ => {
+                    (0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
+                }
+                perftest_flat::Marker::Ranked(__f0) => {
+                    let r_ranked_v0 = {
+                        let __v = __f0;
+                        match __v {
+                            ::core::option::Option::Some(__x2) => {
+                                ::prebindgen_jni_runtime::box_jint(
+                                    env,
+                                    {
+                                        let __v = __x2;
+                                        (match __v {
+                                            perftest_flat::Priority::Low => 0,
+                                            perftest_flat::Priority::Normal => 1,
+                                            perftest_flat::Priority::High => 2,
+                                        } as i32)
+                                    },
+                                )?
+                            }
+                            ::core::option::Option::None => {
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                            }
+                        }
+                    };
+                    (1, r_ranked_v0)
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -3507,66 +3794,87 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingOf<'
             r_labeled_v0,
             r_labeled_v1,
             r_companion_v0,
-        ) = match __result {
-            perftest_flat::Reading::Missing => {
-                (
-                    0,
-                    0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
-            }
-            perftest_flat::Reading::Exact(__f0) => {
-                let r_exact_v0 = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (
-                    1,
-                    r_exact_v0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
-            }
-            perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                let r_range_low = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_range_high = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (
-                    2,
-                    0,
-                    r_range_low,
-                    r_range_high,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
-            }
-            perftest_flat::Reading::Labeled(__f0, __f1) => {
-                let r_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<str>::as_ref(&__f0),
-                )?;
-                let r_labeled_v1 = (match __f1 {
-                    perftest_flat::Priority::Low => 0,
-                    perftest_flat::Priority::Normal => 1,
-                    perftest_flat::Priority::High => 2,
-                } as i32);
-                (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
-            }
-            perftest_flat::Reading::Companion(__f0) => {
-                let r_companion_v0 = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (
-                    4,
-                    0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    r_companion_v0,
-                )
+        ) = {
+            let __v = __result;
+            match __v {
+                perftest_flat::Reading::Missing => {
+                    (
+                        0,
+                        0,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                        0,
+                    )
+                }
+                perftest_flat::Reading::Exact(__f0) => {
+                    let r_exact_v0 = {
+                        let __v = __f0;
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    };
+                    (
+                        1,
+                        r_exact_v0,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                        0,
+                    )
+                }
+                perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                    let r_range_low = {
+                        let __v = __f0;
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    };
+                    let r_range_high = {
+                        let __v = __f1;
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    };
+                    (
+                        2,
+                        0,
+                        r_range_low,
+                        r_range_high,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                        0,
+                    )
+                }
+                perftest_flat::Reading::Labeled(__f0, __f1) => {
+                    let r_labeled_v0 = {
+                        let __v = __f0;
+                        ::prebindgen_jni_runtime::new_string(
+                            env,
+                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                        )?
+                    };
+                    let r_labeled_v1 = {
+                        let __v = __f1;
+                        (match __v {
+                            perftest_flat::Priority::Low => 0,
+                            perftest_flat::Priority::Normal => 1,
+                            perftest_flat::Priority::High => 2,
+                        } as i32)
+                    };
+                    (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
+                }
+                perftest_flat::Reading::Companion(__f0) => {
+                    let r_companion_v0 = {
+                        let __v = __f0;
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    };
+                    (
+                        4,
+                        0,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                        r_companion_v0,
+                    )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -3648,104 +3956,124 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingMayb
             r_labeled_v0,
             r_labeled_v1,
             r_companion_v0,
-        ) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (
-                    r__tag,
-                    r_exact_v0,
-                    r_range_low,
-                    r_range_high,
-                    r_labeled_v0,
-                    r_labeled_v1,
-                    r_companion_v0,
-                ) = match __some {
-                    perftest_flat::Reading::Missing => {
-                        (
-                            0,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Exact(__f0) => {
-                        let r_exact_v0 = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            1,
-                            r_exact_v0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                        let r_range_low = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        let r_range_high = (__f1
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            2,
-                            0,
-                            r_range_low,
-                            r_range_high,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Labeled(__f0, __f1) => {
-                        let r_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                            env,
-                            ::core::convert::AsRef::<str>::as_ref(&__f0),
-                        )?;
-                        let r_labeled_v1 = (match __f1 {
-                            perftest_flat::Priority::Low => 0,
-                            perftest_flat::Priority::Normal => 1,
-                            perftest_flat::Priority::High => 2,
-                        } as i32);
-                        (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
-                    }
-                    perftest_flat::Reading::Companion(__f0) => {
-                        let r_companion_v0 = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            4,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            r_companion_v0,
-                        )
-                    }
-                };
-                (
-                    1u8,
-                    r__tag,
-                    r_exact_v0,
-                    r_range_low,
-                    r_range_high,
-                    r_labeled_v0,
-                    r_labeled_v1,
-                    r_companion_v0,
-                )
-            }
-            ::core::option::Option::None => {
-                (
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
+        ) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (
+                        r__tag,
+                        r_exact_v0,
+                        r_range_low,
+                        r_range_high,
+                        r_labeled_v0,
+                        r_labeled_v1,
+                        r_companion_v0,
+                    ) = {
+                        let __v = __some;
+                        match __v {
+                            perftest_flat::Reading::Missing => {
+                                (
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    0,
+                                )
+                            }
+                            perftest_flat::Reading::Exact(__f0) => {
+                                let r_exact_v0 = {
+                                    let __v = __f0;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                (
+                                    1,
+                                    r_exact_v0,
+                                    0,
+                                    0,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    0,
+                                )
+                            }
+                            perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                                let r_range_low = {
+                                    let __v = __f0;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                let r_range_high = {
+                                    let __v = __f1;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                (
+                                    2,
+                                    0,
+                                    r_range_low,
+                                    r_range_high,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    0,
+                                )
+                            }
+                            perftest_flat::Reading::Labeled(__f0, __f1) => {
+                                let r_labeled_v0 = {
+                                    let __v = __f0;
+                                    ::prebindgen_jni_runtime::new_string(
+                                        env,
+                                        ::core::convert::AsRef::<str>::as_ref(&__v),
+                                    )?
+                                };
+                                let r_labeled_v1 = {
+                                    let __v = __f1;
+                                    (match __v {
+                                        perftest_flat::Priority::Low => 0,
+                                        perftest_flat::Priority::Normal => 1,
+                                        perftest_flat::Priority::High => 2,
+                                    } as i32)
+                                };
+                                (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
+                            }
+                            perftest_flat::Reading::Companion(__f0) => {
+                                let r_companion_v0 = {
+                                    let __v = __f0;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                (
+                                    4,
+                                    0,
+                                    0,
+                                    0,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    r_companion_v0,
+                                )
+                            }
+                        }
+                    };
+                    (
+                        1u8,
+                        r__tag,
+                        r_exact_v0,
+                        r_range_low,
+                        r_range_high,
+                        r_labeled_v0,
+                        r_labeled_v1,
+                        r_companion_v0,
+                    )
+                }
+                ::core::option::Option::None => {
+                    (
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                        0,
+                    )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -3831,116 +4159,136 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingSeri
             r_labeled_v1,
             r_companion_v0,
         ) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result,
+            let __v = __result;
+            {
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __v,
+                    )
+                    .collect();
+                let __n = __items.len();
+                let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
+                let mut __c1_2 = ::std::vec::Vec::with_capacity(__n);
+                let mut __c1_3 = ::std::vec::Vec::with_capacity(__n);
+                let __c1_4 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
+                let mut __c1_5 = ::std::vec::Vec::with_capacity(__n);
+                let mut __c1_6 = ::std::vec::Vec::with_capacity(__n);
+                for (__i, __x1) in __items.into_iter().enumerate() {
+                    let (
+                        __e1__tag,
+                        __e1_exact_v0,
+                        __e1_range_low,
+                        __e1_range_high,
+                        __e1_labeled_v0,
+                        __e1_labeled_v1,
+                        __e1_companion_v0,
+                    ) = {
+                        let __v = __x1;
+                        match __v {
+                            perftest_flat::Reading::Missing => {
+                                (
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    0,
+                                )
+                            }
+                            perftest_flat::Reading::Exact(__f0) => {
+                                let __e1_exact_v0 = {
+                                    let __v = __f0;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                (
+                                    1,
+                                    __e1_exact_v0,
+                                    0,
+                                    0,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    0,
+                                )
+                            }
+                            perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                                let __e1_range_low = {
+                                    let __v = __f0;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                let __e1_range_high = {
+                                    let __v = __f1;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                (
+                                    2,
+                                    0,
+                                    __e1_range_low,
+                                    __e1_range_high,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    0,
+                                )
+                            }
+                            perftest_flat::Reading::Labeled(__f0, __f1) => {
+                                let __e1_labeled_v0 = {
+                                    let __v = __f0;
+                                    ::prebindgen_jni_runtime::new_string(
+                                        env,
+                                        ::core::convert::AsRef::<str>::as_ref(&__v),
+                                    )?
+                                };
+                                let __e1_labeled_v1 = {
+                                    let __v = __f1;
+                                    (match __v {
+                                        perftest_flat::Priority::Low => 0,
+                                        perftest_flat::Priority::Normal => 1,
+                                        perftest_flat::Priority::High => 2,
+                                    } as i32)
+                                };
+                                (3, 0, 0, 0, __e1_labeled_v0, __e1_labeled_v1, 0)
+                            }
+                            perftest_flat::Reading::Companion(__f0) => {
+                                let __e1_companion_v0 = {
+                                    let __v = __f0;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                (
+                                    4,
+                                    0,
+                                    0,
+                                    0,
+                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    0,
+                                    __e1_companion_v0,
+                                )
+                            }
+                        }
+                    };
+                    __c1_0.push(__e1__tag);
+                    __c1_1.push(__e1_exact_v0);
+                    __c1_2.push(__e1_range_low);
+                    __c1_3.push(__e1_range_high);
+                    ::prebindgen_jni_runtime::object_array_set(
+                        env,
+                        &__c1_4,
+                        __i,
+                        __e1_labeled_v0,
+                    )?;
+                    __c1_5.push(__e1_labeled_v1);
+                    __c1_6.push(__e1_companion_v0);
+                }
+                (
+                    __n as i32,
+                    ::prebindgen_jni_runtime::write_ints(env, &__c1_0)?,
+                    ::prebindgen_jni_runtime::write_longs(env, &__c1_1)?,
+                    ::prebindgen_jni_runtime::write_longs(env, &__c1_2)?,
+                    ::prebindgen_jni_runtime::write_longs(env, &__c1_3)?,
+                    __c1_4,
+                    ::prebindgen_jni_runtime::write_ints(env, &__c1_5)?,
+                    ::prebindgen_jni_runtime::write_longs(env, &__c1_6)?,
                 )
-                .collect();
-            let __n = __items.len();
-            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-            let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
-            let mut __c1_2 = ::std::vec::Vec::with_capacity(__n);
-            let mut __c1_3 = ::std::vec::Vec::with_capacity(__n);
-            let __c1_4 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-            let mut __c1_5 = ::std::vec::Vec::with_capacity(__n);
-            let mut __c1_6 = ::std::vec::Vec::with_capacity(__n);
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let (
-                    __e1__tag,
-                    __e1_exact_v0,
-                    __e1_range_low,
-                    __e1_range_high,
-                    __e1_labeled_v0,
-                    __e1_labeled_v1,
-                    __e1_companion_v0,
-                ) = match __x1 {
-                    perftest_flat::Reading::Missing => {
-                        (
-                            0,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Exact(__f0) => {
-                        let __e1_exact_v0 = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            1,
-                            __e1_exact_v0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                        let __e1_range_low = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        let __e1_range_high = (__f1
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            2,
-                            0,
-                            __e1_range_low,
-                            __e1_range_high,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Labeled(__f0, __f1) => {
-                        let __e1_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                            env,
-                            ::core::convert::AsRef::<str>::as_ref(&__f0),
-                        )?;
-                        let __e1_labeled_v1 = (match __f1 {
-                            perftest_flat::Priority::Low => 0,
-                            perftest_flat::Priority::Normal => 1,
-                            perftest_flat::Priority::High => 2,
-                        } as i32);
-                        (3, 0, 0, 0, __e1_labeled_v0, __e1_labeled_v1, 0)
-                    }
-                    perftest_flat::Reading::Companion(__f0) => {
-                        let __e1_companion_v0 = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            4,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            __e1_companion_v0,
-                        )
-                    }
-                };
-                __c1_0.push(__e1__tag);
-                __c1_1.push(__e1_exact_v0);
-                __c1_2.push(__e1_range_low);
-                __c1_3.push(__e1_range_high);
-                ::prebindgen_jni_runtime::object_array_set(
-                    env,
-                    &__c1_4,
-                    __i,
-                    __e1_labeled_v0,
-                )?;
-                __c1_5.push(__e1_labeled_v1);
-                __c1_6.push(__e1_companion_v0);
             }
-            (
-                __n as i32,
-                ::prebindgen_jni_runtime::write_ints(env, &__c1_0)?,
-                ::prebindgen_jni_runtime::write_longs(env, &__c1_1)?,
-                ::prebindgen_jni_runtime::write_longs(env, &__c1_2)?,
-                ::prebindgen_jni_runtime::write_longs(env, &__c1_3)?,
-                __c1_4,
-                ::prebindgen_jni_runtime::write_ints(env, &__c1_5)?,
-                ::prebindgen_jni_runtime::write_longs(env, &__c1_6)?,
-            )
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -4030,70 +4378,87 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingEach
                             a0_labeled_v0,
                             a0_labeled_v1,
                             a0_companion_v0,
-                        ) = match __a0 {
-                            perftest_flat::Reading::Missing => {
-                                (
-                                    0,
-                                    0,
-                                    0,
-                                    0,
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    0,
-                                    0,
-                                )
-                            }
-                            perftest_flat::Reading::Exact(__f0) => {
-                                let a0_exact_v0 = (__f0
-                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                (
-                                    1,
-                                    a0_exact_v0,
-                                    0,
-                                    0,
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    0,
-                                    0,
-                                )
-                            }
-                            perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                                let a0_range_low = (__f0
-                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                let a0_range_high = (__f1
-                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                (
-                                    2,
-                                    0,
-                                    a0_range_low,
-                                    a0_range_high,
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    0,
-                                    0,
-                                )
-                            }
-                            perftest_flat::Reading::Labeled(__f0, __f1) => {
-                                let a0_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                )?;
-                                let a0_labeled_v1 = (match __f1 {
-                                    perftest_flat::Priority::Low => 0,
-                                    perftest_flat::Priority::Normal => 1,
-                                    perftest_flat::Priority::High => 2,
-                                } as i32);
-                                (3, 0, 0, 0, a0_labeled_v0, a0_labeled_v1, 0)
-                            }
-                            perftest_flat::Reading::Companion(__f0) => {
-                                let a0_companion_v0 = (__f0
-                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                (
-                                    4,
-                                    0,
-                                    0,
-                                    0,
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    0,
-                                    a0_companion_v0,
-                                )
+                        ) = {
+                            let __v = __a0;
+                            match __v {
+                                perftest_flat::Reading::Missing => {
+                                    (
+                                        0,
+                                        0,
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        0,
+                                    )
+                                }
+                                perftest_flat::Reading::Exact(__f0) => {
+                                    let a0_exact_v0 = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    (
+                                        1,
+                                        a0_exact_v0,
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        0,
+                                    )
+                                }
+                                perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                                    let a0_range_low = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    let a0_range_high = {
+                                        let __v = __f1;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    (
+                                        2,
+                                        0,
+                                        a0_range_low,
+                                        a0_range_high,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        0,
+                                    )
+                                }
+                                perftest_flat::Reading::Labeled(__f0, __f1) => {
+                                    let a0_labeled_v0 = {
+                                        let __v = __f0;
+                                        ::prebindgen_jni_runtime::new_string(
+                                            env,
+                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                        )?
+                                    };
+                                    let a0_labeled_v1 = {
+                                        let __v = __f1;
+                                        (match __v {
+                                            perftest_flat::Priority::Low => 0,
+                                            perftest_flat::Priority::Normal => 1,
+                                            perftest_flat::Priority::High => 2,
+                                        } as i32)
+                                    };
+                                    (3, 0, 0, 0, a0_labeled_v0, a0_labeled_v1, 0)
+                                }
+                                perftest_flat::Reading::Companion(__f0) => {
+                                    let a0_companion_v0 = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    (
+                                        4,
+                                        0,
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        a0_companion_v0,
+                                    )
+                                }
                             }
                         };
                         ::core::result::Result::Ok(
@@ -4171,20 +4536,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_lookupOf<'a
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__tag, r_found_v0, r_failed_v0) = match __result {
-            perftest_flat::Lookup::Absent => {
-                (0, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
-            }
-            perftest_flat::Lookup::Found(__f0) => {
-                let r_found_v0 = ::prebindgen_jni_runtime::new_handle(__f0);
-                (1, r_found_v0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
-            }
-            perftest_flat::Lookup::Failed(__f0) => {
-                let r_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<str>::as_ref(&__f0),
-                )?;
-                (2, 0, r_failed_v0)
+        let (r__tag, r_found_v0, r_failed_v0) = {
+            let __v = __result;
+            match __v {
+                perftest_flat::Lookup::Absent => {
+                    (0, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
+                }
+                perftest_flat::Lookup::Found(__f0) => {
+                    let r_found_v0 = {
+                        let __v = __f0;
+                        ::prebindgen_jni_runtime::new_handle(__v)
+                    };
+                    (
+                        1,
+                        r_found_v0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                    )
+                }
+                perftest_flat::Lookup::Failed(__f0) => {
+                    let r_failed_v0 = {
+                        let __v = __f0;
+                        ::prebindgen_jni_runtime::new_string(
+                            env,
+                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                        )?
+                    };
+                    (2, 0, r_failed_v0)
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -4254,30 +4632,37 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_lookupEach<
             move |__a0: perftest_flat::Lookup| {
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
-                        let (a0__tag, a0_found_v0, a0_failed_v0) = match __a0 {
-                            perftest_flat::Lookup::Absent => {
-                                (
-                                    0,
-                                    0,
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                )
-                            }
-                            perftest_flat::Lookup::Found(__f0) => {
-                                let a0_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                    __f0,
-                                );
-                                (
-                                    1,
-                                    a0_found_v0,
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                )
-                            }
-                            perftest_flat::Lookup::Failed(__f0) => {
-                                let a0_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                )?;
-                                (2, 0, a0_failed_v0)
+                        let (a0__tag, a0_found_v0, a0_failed_v0) = {
+                            let __v = __a0;
+                            match __v {
+                                perftest_flat::Lookup::Absent => {
+                                    (
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    )
+                                }
+                                perftest_flat::Lookup::Found(__f0) => {
+                                    let a0_found_v0 = {
+                                        let __v = __f0;
+                                        ::prebindgen_jni_runtime::new_handle(__v)
+                                    };
+                                    (
+                                        1,
+                                        a0_found_v0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                    )
+                                }
+                                perftest_flat::Lookup::Failed(__f0) => {
+                                    let a0_failed_v0 = {
+                                        let __v = __f0;
+                                        ::prebindgen_jni_runtime::new_string(
+                                            env,
+                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                        )?
+                                    };
+                                    (2, 0, a0_failed_v0)
+                                }
                             }
                         };
                         ::core::result::Result::Ok(
@@ -4352,29 +4737,48 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_verdictNew<
         ::std::string::String,
     > = (|| {
         let (r_id, r_outcome__tag, r_outcome_found_v0, r_outcome_failed_v0) = {
-            let perftest_flat::Verdict { id: __f0, outcome: __f1 } = __result;
-            let r_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let (r_outcome__tag, r_outcome_found_v0, r_outcome_failed_v0) = match __f1 {
-                perftest_flat::Lookup::Absent => {
-                    (0, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
-                }
-                perftest_flat::Lookup::Found(__f0) => {
-                    let r_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(__f0);
-                    (
-                        1,
-                        r_outcome_found_v0,
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    )
-                }
-                perftest_flat::Lookup::Failed(__f0) => {
-                    let r_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                        env,
-                        ::core::convert::AsRef::<str>::as_ref(&__f0),
-                    )?;
-                    (2, 0, r_outcome_failed_v0)
-                }
-            };
-            (r_id, r_outcome__tag, r_outcome_found_v0, r_outcome_failed_v0)
+            let __v = __result;
+            {
+                let perftest_flat::Verdict { id: __f0, outcome: __f1 } = __v;
+                let r_id = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let (r_outcome__tag, r_outcome_found_v0, r_outcome_failed_v0) = {
+                    let __v = __f1;
+                    match __v {
+                        perftest_flat::Lookup::Absent => {
+                            (
+                                0,
+                                0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            )
+                        }
+                        perftest_flat::Lookup::Found(__f0) => {
+                            let r_outcome_found_v0 = {
+                                let __v = __f0;
+                                ::prebindgen_jni_runtime::new_handle(__v)
+                            };
+                            (
+                                1,
+                                r_outcome_found_v0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            )
+                        }
+                        perftest_flat::Lookup::Failed(__f0) => {
+                            let r_outcome_failed_v0 = {
+                                let __v = __f0;
+                                ::prebindgen_jni_runtime::new_string(
+                                    env,
+                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                )?
+                            };
+                            (2, 0, r_outcome_failed_v0)
+                        }
+                    }
+                };
+                (r_id, r_outcome__tag, r_outcome_found_v0, r_outcome_failed_v0)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -4444,15 +4848,30 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_dossierNew<
         ::std::string::String,
     > = (|| {
         let (r_note, r_holder_tag, r_holder_summary) = {
-            let perftest_flat::Dossier { note: __f0, holder: __f1 } = __result;
-            let r_note = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let (r_holder_tag, r_holder_summary) = {
-                let perftest_flat::Holder { tag: __f0, summary: __f1 } = __f1;
-                let r_holder_tag = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_holder_summary = ::prebindgen_jni_runtime::new_handle(__f1);
-                (r_holder_tag, r_holder_summary)
-            };
-            (r_note, r_holder_tag, r_holder_summary)
+            let __v = __result;
+            {
+                let perftest_flat::Dossier { note: __f0, holder: __f1 } = __v;
+                let r_note = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let (r_holder_tag, r_holder_summary) = {
+                    let __v = __f1;
+                    {
+                        let perftest_flat::Holder { tag: __f0, summary: __f1 } = __v;
+                        let r_holder_tag = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let r_holder_summary = {
+                            let __v = __f1;
+                            ::prebindgen_jni_runtime::new_handle(__v)
+                        };
+                        (r_holder_tag, r_holder_summary)
+                    }
+                };
+                (r_note, r_holder_tag, r_holder_summary)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -4532,92 +4951,145 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_reportEach<
                             a0_outcome_failed_v0,
                             a0_label,
                         ) = {
-                            let __v1 = __a0;
-                            let __s1 = perftest_flat::report_into_struct(__v1);
-                            let (
-                                a0_summary_count,
-                                a0_summary_total,
-                                a0_taken__present,
-                                a0_taken_secs,
-                                a0_taken_nanos,
-                                a0_origin_secs,
-                                a0_origin_nanos,
-                                a0_outcome__tag,
-                                a0_outcome_found_v0,
-                                a0_outcome_failed_v0,
-                                a0_label,
-                            ) = {
-                                let perftest_flat::ReportStruct {
-                                    summary: __f2_0,
-                                    taken: __f2_1,
-                                    origin: __f2_2,
-                                    outcome: __f2_3,
-                                    label: __f2_4,
-                                } = __s1;
-                                let (a0_summary_count, a0_summary_total) = {
-                                    let __v3 = __f2_0;
-                                    let a0_summary_count = (perftest_flat::summary_count(&__v3)
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let a0_summary_total = (perftest_flat::summary_total(&__v3)
-                                        as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                    (a0_summary_count, a0_summary_total)
-                                };
-                                let (a0_taken__present, a0_taken_secs, a0_taken_nanos) = match __f2_1 {
-                                    ::core::option::Option::Some(__some) => {
-                                        let (a0_taken_secs, a0_taken_nanos) = {
-                                            let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __some;
-                                            let a0_taken_secs = (__f0
-                                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                            let a0_taken_nanos = (__f1
-                                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                            (a0_taken_secs, a0_taken_nanos)
-                                        };
-                                        (1u8, a0_taken_secs, a0_taken_nanos)
-                                    }
-                                    ::core::option::Option::None => (0, 0, 0),
-                                };
-                                let (a0_origin_secs, a0_origin_nanos) = {
-                                    let perftest_flat::Stamp { secs: __f3_0, nanos: __f3_1 } = __f2_2;
-                                    let a0_origin_secs = (__f3_0
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let a0_origin_nanos = (__f3_1
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    (a0_origin_secs, a0_origin_nanos)
-                                };
+                            let __v = __a0;
+                            {
+                                let __v1 = __v;
+                                let __s1 = perftest_flat::report_into_struct(__v1);
                                 let (
+                                    a0_summary_count,
+                                    a0_summary_total,
+                                    a0_taken__present,
+                                    a0_taken_secs,
+                                    a0_taken_nanos,
+                                    a0_origin_secs,
+                                    a0_origin_nanos,
                                     a0_outcome__tag,
                                     a0_outcome_found_v0,
                                     a0_outcome_failed_v0,
-                                ) = match __f2_3 {
-                                    perftest_flat::Lookup::Absent => {
-                                        (
-                                            0,
-                                            0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        )
-                                    }
-                                    perftest_flat::Lookup::Found(__f0) => {
-                                        let a0_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                            __f0,
-                                        );
-                                        (
-                                            1,
+                                    a0_label,
+                                ) = {
+                                    let __v = __s1;
+                                    {
+                                        let perftest_flat::ReportStruct {
+                                            summary: __f2_0,
+                                            taken: __f2_1,
+                                            origin: __f2_2,
+                                            outcome: __f2_3,
+                                            label: __f2_4,
+                                        } = __v;
+                                        let (a0_summary_count, a0_summary_total) = {
+                                            let __v = __f2_0;
+                                            {
+                                                let __v3 = __v;
+                                                let a0_summary_count = {
+                                                    let __v = perftest_flat::summary_count(&__v3);
+                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                };
+                                                let a0_summary_total = {
+                                                    let __v = perftest_flat::summary_total(&__v3);
+                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                                };
+                                                (a0_summary_count, a0_summary_total)
+                                            }
+                                        };
+                                        let (a0_taken__present, a0_taken_secs, a0_taken_nanos) = {
+                                            let __v = __f2_1;
+                                            match __v {
+                                                ::core::option::Option::Some(__some) => {
+                                                    let (a0_taken_secs, a0_taken_nanos) = {
+                                                        let __v = __some;
+                                                        {
+                                                            let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                                                            let a0_taken_secs = {
+                                                                let __v = __f0;
+                                                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                            };
+                                                            let a0_taken_nanos = {
+                                                                let __v = __f1;
+                                                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                            };
+                                                            (a0_taken_secs, a0_taken_nanos)
+                                                        }
+                                                    };
+                                                    (1u8, a0_taken_secs, a0_taken_nanos)
+                                                }
+                                                ::core::option::Option::None => (0, 0, 0),
+                                            }
+                                        };
+                                        let (a0_origin_secs, a0_origin_nanos) = {
+                                            let __v = __f2_2;
+                                            {
+                                                let perftest_flat::Stamp { secs: __f3_0, nanos: __f3_1 } = __v;
+                                                let a0_origin_secs = {
+                                                    let __v = __f3_0;
+                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                };
+                                                let a0_origin_nanos = {
+                                                    let __v = __f3_1;
+                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                };
+                                                (a0_origin_secs, a0_origin_nanos)
+                                            }
+                                        };
+                                        let (
+                                            a0_outcome__tag,
                                             a0_outcome_found_v0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            a0_outcome_failed_v0,
+                                        ) = {
+                                            let __v = __f2_3;
+                                            match __v {
+                                                perftest_flat::Lookup::Absent => {
+                                                    (
+                                                        0,
+                                                        0,
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                    )
+                                                }
+                                                perftest_flat::Lookup::Found(__f0) => {
+                                                    let a0_outcome_found_v0 = {
+                                                        let __v = __f0;
+                                                        ::prebindgen_jni_runtime::new_handle(__v)
+                                                    };
+                                                    (
+                                                        1,
+                                                        a0_outcome_found_v0,
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                    )
+                                                }
+                                                perftest_flat::Lookup::Failed(__f0) => {
+                                                    let a0_outcome_failed_v0 = {
+                                                        let __v = __f0;
+                                                        ::prebindgen_jni_runtime::new_string(
+                                                            env,
+                                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                        )?
+                                                    };
+                                                    (2, 0, a0_outcome_failed_v0)
+                                                }
+                                            }
+                                        };
+                                        let a0_label = {
+                                            let __v = __f2_4;
+                                            ::prebindgen_jni_runtime::new_string(
+                                                env,
+                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                            )?
+                                        };
+                                        (
+                                            a0_summary_count,
+                                            a0_summary_total,
+                                            a0_taken__present,
+                                            a0_taken_secs,
+                                            a0_taken_nanos,
+                                            a0_origin_secs,
+                                            a0_origin_nanos,
+                                            a0_outcome__tag,
+                                            a0_outcome_found_v0,
+                                            a0_outcome_failed_v0,
+                                            a0_label,
                                         )
-                                    }
-                                    perftest_flat::Lookup::Failed(__f0) => {
-                                        let a0_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                            env,
-                                            ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                        )?;
-                                        (2, 0, a0_outcome_failed_v0)
                                     }
                                 };
-                                let a0_label = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f2_4),
-                                )?;
                                 (
                                     a0_summary_count,
                                     a0_summary_total,
@@ -4631,20 +5103,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_reportEach<
                                     a0_outcome_failed_v0,
                                     a0_label,
                                 )
-                            };
-                            (
-                                a0_summary_count,
-                                a0_summary_total,
-                                a0_taken__present,
-                                a0_taken_secs,
-                                a0_taken_nanos,
-                                a0_origin_secs,
-                                a0_origin_nanos,
-                                a0_outcome__tag,
-                                a0_outcome_found_v0,
-                                a0_outcome_failed_v0,
-                                a0_label,
-                            )
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -4733,16 +5192,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeNew<'a
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (
-                r_seq,
-                r_outcome__present,
-                r_outcome__tag,
-                r_outcome_found_v0,
-                r_outcome_failed_v0,
-            ) = {
-                let __v1 = __x;
+        let (
+            r_seq,
+            r_outcome__present,
+            r_outcome__tag,
+            r_outcome_found_v0,
+            r_outcome_failed_v0,
+        ) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
                 let __s1 = perftest_flat::probe_to_struct(&__v1);
                 let (
                     r_seq,
@@ -4751,68 +5210,87 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeNew<'a
                     r_outcome_found_v0,
                     r_outcome_failed_v0,
                 ) = {
-                    let perftest_flat::ProbeStruct { seq: __f2_0, outcome: __f2_1 } = __s1;
-                    let r_seq = (__f2_0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let (
-                        r_outcome__present,
-                        r_outcome__tag,
-                        r_outcome_found_v0,
-                        r_outcome_failed_v0,
-                    ) = match __f2_1 {
-                        ::core::option::Option::Some(__some) => {
-                            let (
-                                r_outcome__tag,
-                                r_outcome_found_v0,
-                                r_outcome_failed_v0,
-                            ) = match __some {
-                                perftest_flat::Lookup::Absent => {
-                                    (
-                                        0,
-                                        0,
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    )
-                                }
-                                perftest_flat::Lookup::Found(__f0) => {
-                                    let r_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                        __f0,
-                                    );
-                                    (
-                                        1,
+                    let __v = __s1;
+                    {
+                        let perftest_flat::ProbeStruct {
+                            seq: __f2_0,
+                            outcome: __f2_1,
+                        } = __v;
+                        let r_seq = {
+                            let __v = __f2_0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let (
+                            r_outcome__present,
+                            r_outcome__tag,
+                            r_outcome_found_v0,
+                            r_outcome_failed_v0,
+                        ) = {
+                            let __v = __f2_1;
+                            match __v {
+                                ::core::option::Option::Some(__some) => {
+                                    let (
+                                        r_outcome__tag,
                                         r_outcome_found_v0,
+                                        r_outcome_failed_v0,
+                                    ) = {
+                                        let __v = __some;
+                                        match __v {
+                                            perftest_flat::Lookup::Absent => {
+                                                (
+                                                    0,
+                                                    0,
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                )
+                                            }
+                                            perftest_flat::Lookup::Found(__f0) => {
+                                                let r_outcome_found_v0 = {
+                                                    let __v = __f0;
+                                                    ::prebindgen_jni_runtime::new_handle(__v)
+                                                };
+                                                (
+                                                    1,
+                                                    r_outcome_found_v0,
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                )
+                                            }
+                                            perftest_flat::Lookup::Failed(__f0) => {
+                                                let r_outcome_failed_v0 = {
+                                                    let __v = __f0;
+                                                    ::prebindgen_jni_runtime::new_string(
+                                                        env,
+                                                        ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                    )?
+                                                };
+                                                (2, 0, r_outcome_failed_v0)
+                                            }
+                                        }
+                                    };
+                                    (
+                                        1u8,
+                                        r_outcome__tag,
+                                        r_outcome_found_v0,
+                                        r_outcome_failed_v0,
+                                    )
+                                }
+                                ::core::option::Option::None => {
+                                    (
+                                        0,
+                                        0,
+                                        0,
                                         ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                                     )
                                 }
-                                perftest_flat::Lookup::Failed(__f0) => {
-                                    let r_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                        env,
-                                        ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                    )?;
-                                    (2, 0, r_outcome_failed_v0)
-                                }
-                            };
-                            (
-                                1u8,
-                                r_outcome__tag,
-                                r_outcome_found_v0,
-                                r_outcome_failed_v0,
-                            )
-                        }
-                        ::core::option::Option::None => {
-                            (
-                                0,
-                                0,
-                                0,
-                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            )
-                        }
-                    };
-                    (
-                        r_seq,
-                        r_outcome__present,
-                        r_outcome__tag,
-                        r_outcome_found_v0,
-                        r_outcome_failed_v0,
-                    )
+                            }
+                        };
+                        (
+                            r_seq,
+                            r_outcome__present,
+                            r_outcome__tag,
+                            r_outcome_found_v0,
+                            r_outcome_failed_v0,
+                        )
+                    }
                 };
                 (
                     r_seq,
@@ -4821,35 +5299,35 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeNew<'a
                     r_outcome_found_v0,
                     r_outcome_failed_v0,
                 )
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/model/ProbeBuilderRaw",
-                    "run",
-                    "(JZIJLjava/lang/String;)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_seq,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            z: r_outcome__present,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: r_outcome__tag,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_outcome_found_v0,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_outcome_failed_v0.as_raw(),
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/model/ProbeBuilderRaw",
+                "run",
+                "(JZIJLjava/lang/String;)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_seq,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        z: r_outcome__present,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        i: r_outcome__tag,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_outcome_found_v0,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_outcome_failed_v0.as_raw(),
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -4903,71 +5381,96 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeEach<'
                             a0_outcome_found_v0,
                             a0_outcome_failed_v0,
                         ) = {
-                            let __v1 = __a0;
-                            let __s1 = perftest_flat::probe_to_struct(&__v1);
-                            let (
-                                a0_seq,
-                                a0_outcome__present,
-                                a0_outcome__tag,
-                                a0_outcome_found_v0,
-                                a0_outcome_failed_v0,
-                            ) = {
-                                let perftest_flat::ProbeStruct {
-                                    seq: __f2_0,
-                                    outcome: __f2_1,
-                                } = __s1;
-                                let a0_seq = (__f2_0
-                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
+                            let __v = __a0;
+                            {
+                                let __v1 = __v;
+                                let __s1 = perftest_flat::probe_to_struct(&__v1);
                                 let (
+                                    a0_seq,
                                     a0_outcome__present,
                                     a0_outcome__tag,
                                     a0_outcome_found_v0,
                                     a0_outcome_failed_v0,
-                                ) = match __f2_1 {
-                                    ::core::option::Option::Some(__some) => {
+                                ) = {
+                                    let __v = __s1;
+                                    {
+                                        let perftest_flat::ProbeStruct {
+                                            seq: __f2_0,
+                                            outcome: __f2_1,
+                                        } = __v;
+                                        let a0_seq = {
+                                            let __v = __f2_0;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
                                         let (
+                                            a0_outcome__present,
                                             a0_outcome__tag,
                                             a0_outcome_found_v0,
                                             a0_outcome_failed_v0,
-                                        ) = match __some {
-                                            perftest_flat::Lookup::Absent => {
-                                                (
-                                                    0,
-                                                    0,
-                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                                )
-                                            }
-                                            perftest_flat::Lookup::Found(__f0) => {
-                                                let a0_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                                    __f0,
-                                                );
-                                                (
-                                                    1,
-                                                    a0_outcome_found_v0,
-                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                                )
-                                            }
-                                            perftest_flat::Lookup::Failed(__f0) => {
-                                                let a0_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                                    env,
-                                                    ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                                )?;
-                                                (2, 0, a0_outcome_failed_v0)
+                                        ) = {
+                                            let __v = __f2_1;
+                                            match __v {
+                                                ::core::option::Option::Some(__some) => {
+                                                    let (
+                                                        a0_outcome__tag,
+                                                        a0_outcome_found_v0,
+                                                        a0_outcome_failed_v0,
+                                                    ) = {
+                                                        let __v = __some;
+                                                        match __v {
+                                                            perftest_flat::Lookup::Absent => {
+                                                                (
+                                                                    0,
+                                                                    0,
+                                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                                )
+                                                            }
+                                                            perftest_flat::Lookup::Found(__f0) => {
+                                                                let a0_outcome_found_v0 = {
+                                                                    let __v = __f0;
+                                                                    ::prebindgen_jni_runtime::new_handle(__v)
+                                                                };
+                                                                (
+                                                                    1,
+                                                                    a0_outcome_found_v0,
+                                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                                )
+                                                            }
+                                                            perftest_flat::Lookup::Failed(__f0) => {
+                                                                let a0_outcome_failed_v0 = {
+                                                                    let __v = __f0;
+                                                                    ::prebindgen_jni_runtime::new_string(
+                                                                        env,
+                                                                        ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                    )?
+                                                                };
+                                                                (2, 0, a0_outcome_failed_v0)
+                                                            }
+                                                        }
+                                                    };
+                                                    (
+                                                        1u8,
+                                                        a0_outcome__tag,
+                                                        a0_outcome_found_v0,
+                                                        a0_outcome_failed_v0,
+                                                    )
+                                                }
+                                                ::core::option::Option::None => {
+                                                    (
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                    )
+                                                }
                                             }
                                         };
                                         (
-                                            1u8,
+                                            a0_seq,
+                                            a0_outcome__present,
                                             a0_outcome__tag,
                                             a0_outcome_found_v0,
                                             a0_outcome_failed_v0,
-                                        )
-                                    }
-                                    ::core::option::Option::None => {
-                                        (
-                                            0,
-                                            0,
-                                            0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                                         )
                                     }
                                 };
@@ -4978,14 +5481,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeEach<'
                                     a0_outcome_found_v0,
                                     a0_outcome_failed_v0,
                                 )
-                            };
-                            (
-                                a0_seq,
-                                a0_outcome__present,
-                                a0_outcome__tag,
-                                a0_outcome_found_v0,
-                                a0_outcome_failed_v0,
-                            )
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -5092,130 +5588,201 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerEach<
                             a0_archived_outcome_failed_v0,
                             a0_archived_label,
                         ) = {
-                            let __v1 = __a0;
-                            let (
-                                a0_filed__present,
-                                a0_filed_summary_count,
-                                a0_filed_summary_total,
-                                a0_filed_taken__present,
-                                a0_filed_taken_secs,
-                                a0_filed_taken_nanos,
-                                a0_filed_origin_secs,
-                                a0_filed_origin_nanos,
-                                a0_filed_outcome__tag,
-                                a0_filed_outcome_found_v0,
-                                a0_filed_outcome_failed_v0,
-                                a0_filed_label,
-                            ) = match perftest_flat::ledger_filed(&__v1) {
-                                ::core::option::Option::Some(__x2) => {
-                                    let (
-                                        a0_filed_summary_count,
-                                        a0_filed_summary_total,
-                                        a0_filed_taken__present,
-                                        a0_filed_taken_secs,
-                                        a0_filed_taken_nanos,
-                                        a0_filed_origin_secs,
-                                        a0_filed_origin_nanos,
-                                        a0_filed_outcome__tag,
-                                        a0_filed_outcome_found_v0,
-                                        a0_filed_outcome_failed_v0,
-                                        a0_filed_label,
-                                    ) = {
-                                        let __v3 = __x2;
-                                        let __s3 = perftest_flat::report_into_struct(
-                                            ::core::clone::Clone::clone(__v3),
-                                        );
-                                        let (
-                                            a0_filed_summary_count,
-                                            a0_filed_summary_total,
-                                            a0_filed_taken__present,
-                                            a0_filed_taken_secs,
-                                            a0_filed_taken_nanos,
-                                            a0_filed_origin_secs,
-                                            a0_filed_origin_nanos,
-                                            a0_filed_outcome__tag,
-                                            a0_filed_outcome_found_v0,
-                                            a0_filed_outcome_failed_v0,
-                                            a0_filed_label,
-                                        ) = {
-                                            let perftest_flat::ReportStruct {
-                                                summary: __f4_0,
-                                                taken: __f4_1,
-                                                origin: __f4_2,
-                                                outcome: __f4_3,
-                                                label: __f4_4,
-                                            } = __s3;
-                                            let (a0_filed_summary_count, a0_filed_summary_total) = {
-                                                let __v5 = __f4_0;
-                                                let a0_filed_summary_count = (perftest_flat::summary_count(
-                                                    &__v5,
-                                                ) as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                let a0_filed_summary_total = (perftest_flat::summary_total(
-                                                    &__v5,
-                                                ) as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                                (a0_filed_summary_count, a0_filed_summary_total)
-                                            };
+                            let __v = __a0;
+                            {
+                                let __v1 = __v;
+                                let (
+                                    a0_filed__present,
+                                    a0_filed_summary_count,
+                                    a0_filed_summary_total,
+                                    a0_filed_taken__present,
+                                    a0_filed_taken_secs,
+                                    a0_filed_taken_nanos,
+                                    a0_filed_origin_secs,
+                                    a0_filed_origin_nanos,
+                                    a0_filed_outcome__tag,
+                                    a0_filed_outcome_found_v0,
+                                    a0_filed_outcome_failed_v0,
+                                    a0_filed_label,
+                                ) = {
+                                    let __v = perftest_flat::ledger_filed(&__v1);
+                                    match __v {
+                                        ::core::option::Option::Some(__x2) => {
                                             let (
+                                                a0_filed_summary_count,
+                                                a0_filed_summary_total,
                                                 a0_filed_taken__present,
                                                 a0_filed_taken_secs,
                                                 a0_filed_taken_nanos,
-                                            ) = match __f4_1 {
-                                                ::core::option::Option::Some(__some) => {
-                                                    let (a0_filed_taken_secs, a0_filed_taken_nanos) = {
-                                                        let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __some;
-                                                        let a0_filed_taken_secs = (__f0
-                                                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                        let a0_filed_taken_nanos = (__f1
-                                                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                        (a0_filed_taken_secs, a0_filed_taken_nanos)
-                                                    };
-                                                    (1u8, a0_filed_taken_secs, a0_filed_taken_nanos)
-                                                }
-                                                ::core::option::Option::None => (0, 0, 0),
-                                            };
-                                            let (a0_filed_origin_secs, a0_filed_origin_nanos) = {
-                                                let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __f4_2;
-                                                let a0_filed_origin_secs = (__f5_0
-                                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                let a0_filed_origin_nanos = (__f5_1
-                                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                (a0_filed_origin_secs, a0_filed_origin_nanos)
-                                            };
-                                            let (
+                                                a0_filed_origin_secs,
+                                                a0_filed_origin_nanos,
                                                 a0_filed_outcome__tag,
                                                 a0_filed_outcome_found_v0,
                                                 a0_filed_outcome_failed_v0,
-                                            ) = match __f4_3 {
-                                                perftest_flat::Lookup::Absent => {
-                                                    (
-                                                        0,
-                                                        0,
-                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                                    )
-                                                }
-                                                perftest_flat::Lookup::Found(__f0) => {
-                                                    let a0_filed_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                                        __f0,
+                                                a0_filed_label,
+                                            ) = {
+                                                let __v = __x2;
+                                                {
+                                                    let __v3 = __v;
+                                                    let __s3 = perftest_flat::report_into_struct(
+                                                        ::core::clone::Clone::clone(__v3),
                                                     );
-                                                    (
-                                                        1,
+                                                    let (
+                                                        a0_filed_summary_count,
+                                                        a0_filed_summary_total,
+                                                        a0_filed_taken__present,
+                                                        a0_filed_taken_secs,
+                                                        a0_filed_taken_nanos,
+                                                        a0_filed_origin_secs,
+                                                        a0_filed_origin_nanos,
+                                                        a0_filed_outcome__tag,
                                                         a0_filed_outcome_found_v0,
-                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        a0_filed_outcome_failed_v0,
+                                                        a0_filed_label,
+                                                    ) = {
+                                                        let __v = __s3;
+                                                        {
+                                                            let perftest_flat::ReportStruct {
+                                                                summary: __f4_0,
+                                                                taken: __f4_1,
+                                                                origin: __f4_2,
+                                                                outcome: __f4_3,
+                                                                label: __f4_4,
+                                                            } = __v;
+                                                            let (a0_filed_summary_count, a0_filed_summary_total) = {
+                                                                let __v = __f4_0;
+                                                                {
+                                                                    let __v5 = __v;
+                                                                    let a0_filed_summary_count = {
+                                                                        let __v = perftest_flat::summary_count(&__v5);
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    };
+                                                                    let a0_filed_summary_total = {
+                                                                        let __v = perftest_flat::summary_total(&__v5);
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                                                    };
+                                                                    (a0_filed_summary_count, a0_filed_summary_total)
+                                                                }
+                                                            };
+                                                            let (
+                                                                a0_filed_taken__present,
+                                                                a0_filed_taken_secs,
+                                                                a0_filed_taken_nanos,
+                                                            ) = {
+                                                                let __v = __f4_1;
+                                                                match __v {
+                                                                    ::core::option::Option::Some(__some) => {
+                                                                        let (a0_filed_taken_secs, a0_filed_taken_nanos) = {
+                                                                            let __v = __some;
+                                                                            {
+                                                                                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                                                                                let a0_filed_taken_secs = {
+                                                                                    let __v = __f0;
+                                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                                };
+                                                                                let a0_filed_taken_nanos = {
+                                                                                    let __v = __f1;
+                                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                                };
+                                                                                (a0_filed_taken_secs, a0_filed_taken_nanos)
+                                                                            }
+                                                                        };
+                                                                        (1u8, a0_filed_taken_secs, a0_filed_taken_nanos)
+                                                                    }
+                                                                    ::core::option::Option::None => (0, 0, 0),
+                                                                }
+                                                            };
+                                                            let (a0_filed_origin_secs, a0_filed_origin_nanos) = {
+                                                                let __v = __f4_2;
+                                                                {
+                                                                    let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __v;
+                                                                    let a0_filed_origin_secs = {
+                                                                        let __v = __f5_0;
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    };
+                                                                    let a0_filed_origin_nanos = {
+                                                                        let __v = __f5_1;
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    };
+                                                                    (a0_filed_origin_secs, a0_filed_origin_nanos)
+                                                                }
+                                                            };
+                                                            let (
+                                                                a0_filed_outcome__tag,
+                                                                a0_filed_outcome_found_v0,
+                                                                a0_filed_outcome_failed_v0,
+                                                            ) = {
+                                                                let __v = __f4_3;
+                                                                match __v {
+                                                                    perftest_flat::Lookup::Absent => {
+                                                                        (
+                                                                            0,
+                                                                            0,
+                                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                                        )
+                                                                    }
+                                                                    perftest_flat::Lookup::Found(__f0) => {
+                                                                        let a0_filed_outcome_found_v0 = {
+                                                                            let __v = __f0;
+                                                                            ::prebindgen_jni_runtime::new_handle(__v)
+                                                                        };
+                                                                        (
+                                                                            1,
+                                                                            a0_filed_outcome_found_v0,
+                                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                                        )
+                                                                    }
+                                                                    perftest_flat::Lookup::Failed(__f0) => {
+                                                                        let a0_filed_outcome_failed_v0 = {
+                                                                            let __v = __f0;
+                                                                            ::prebindgen_jni_runtime::new_string(
+                                                                                env,
+                                                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                            )?
+                                                                        };
+                                                                        (2, 0, a0_filed_outcome_failed_v0)
+                                                                    }
+                                                                }
+                                                            };
+                                                            let a0_filed_label = {
+                                                                let __v = __f4_4;
+                                                                ::prebindgen_jni_runtime::new_string(
+                                                                    env,
+                                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                )?
+                                                            };
+                                                            (
+                                                                a0_filed_summary_count,
+                                                                a0_filed_summary_total,
+                                                                a0_filed_taken__present,
+                                                                a0_filed_taken_secs,
+                                                                a0_filed_taken_nanos,
+                                                                a0_filed_origin_secs,
+                                                                a0_filed_origin_nanos,
+                                                                a0_filed_outcome__tag,
+                                                                a0_filed_outcome_found_v0,
+                                                                a0_filed_outcome_failed_v0,
+                                                                a0_filed_label,
+                                                            )
+                                                        }
+                                                    };
+                                                    (
+                                                        a0_filed_summary_count,
+                                                        a0_filed_summary_total,
+                                                        a0_filed_taken__present,
+                                                        a0_filed_taken_secs,
+                                                        a0_filed_taken_nanos,
+                                                        a0_filed_origin_secs,
+                                                        a0_filed_origin_nanos,
+                                                        a0_filed_outcome__tag,
+                                                        a0_filed_outcome_found_v0,
+                                                        a0_filed_outcome_failed_v0,
+                                                        a0_filed_label,
                                                     )
-                                                }
-                                                perftest_flat::Lookup::Failed(__f0) => {
-                                                    let a0_filed_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                                        env,
-                                                        ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                                    )?;
-                                                    (2, 0, a0_filed_outcome_failed_v0)
                                                 }
                                             };
-                                            let a0_filed_label = ::prebindgen_jni_runtime::new_string(
-                                                env,
-                                                ::core::convert::AsRef::<str>::as_ref(&__f4_4),
-                                            )?;
                                             (
+                                                1u8,
                                                 a0_filed_summary_count,
                                                 a0_filed_summary_total,
                                                 a0_filed_taken__present,
@@ -5228,177 +5795,218 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerEach<
                                                 a0_filed_outcome_failed_v0,
                                                 a0_filed_label,
                                             )
-                                        };
-                                        (
-                                            a0_filed_summary_count,
-                                            a0_filed_summary_total,
-                                            a0_filed_taken__present,
-                                            a0_filed_taken_secs,
-                                            a0_filed_taken_nanos,
-                                            a0_filed_origin_secs,
-                                            a0_filed_origin_nanos,
-                                            a0_filed_outcome__tag,
-                                            a0_filed_outcome_found_v0,
-                                            a0_filed_outcome_failed_v0,
-                                            a0_filed_label,
-                                        )
-                                    };
-                                    (
-                                        1u8,
-                                        a0_filed_summary_count,
-                                        a0_filed_summary_total,
-                                        a0_filed_taken__present,
-                                        a0_filed_taken_secs,
-                                        a0_filed_taken_nanos,
-                                        a0_filed_origin_secs,
-                                        a0_filed_origin_nanos,
-                                        a0_filed_outcome__tag,
-                                        a0_filed_outcome_found_v0,
-                                        a0_filed_outcome_failed_v0,
-                                        a0_filed_label,
-                                    )
-                                }
-                                ::core::option::Option::None => {
-                                    (
-                                        0u8,
-                                        0,
-                                        0.0f64,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    )
-                                }
-                            };
-                            let (
-                                a0_archived__present,
-                                a0_archived_summary_count,
-                                a0_archived_summary_total,
-                                a0_archived_taken__present,
-                                a0_archived_taken_secs,
-                                a0_archived_taken_nanos,
-                                a0_archived_origin_secs,
-                                a0_archived_origin_nanos,
-                                a0_archived_outcome__tag,
-                                a0_archived_outcome_found_v0,
-                                a0_archived_outcome_failed_v0,
-                                a0_archived_label,
-                            ) = match perftest_flat::ledger_archived(&__v1) {
-                                ::core::option::Option::Some(__x2) => {
-                                    let (
-                                        a0_archived_summary_count,
-                                        a0_archived_summary_total,
-                                        a0_archived_taken__present,
-                                        a0_archived_taken_secs,
-                                        a0_archived_taken_nanos,
-                                        a0_archived_origin_secs,
-                                        a0_archived_origin_nanos,
-                                        a0_archived_outcome__tag,
-                                        a0_archived_outcome_found_v0,
-                                        a0_archived_outcome_failed_v0,
-                                        a0_archived_label,
-                                    ) = {
-                                        let __v3 = __x2;
-                                        let __s3 = perftest_flat::report_into_struct(__v3);
-                                        let (
-                                            a0_archived_summary_count,
-                                            a0_archived_summary_total,
-                                            a0_archived_taken__present,
-                                            a0_archived_taken_secs,
-                                            a0_archived_taken_nanos,
-                                            a0_archived_origin_secs,
-                                            a0_archived_origin_nanos,
-                                            a0_archived_outcome__tag,
-                                            a0_archived_outcome_found_v0,
-                                            a0_archived_outcome_failed_v0,
-                                            a0_archived_label,
-                                        ) = {
-                                            let perftest_flat::ReportStruct {
-                                                summary: __f4_0,
-                                                taken: __f4_1,
-                                                origin: __f4_2,
-                                                outcome: __f4_3,
-                                                label: __f4_4,
-                                            } = __s3;
+                                        }
+                                        ::core::option::Option::None => {
+                                            (
+                                                0u8,
+                                                0,
+                                                0.0f64,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            )
+                                        }
+                                    }
+                                };
+                                let (
+                                    a0_archived__present,
+                                    a0_archived_summary_count,
+                                    a0_archived_summary_total,
+                                    a0_archived_taken__present,
+                                    a0_archived_taken_secs,
+                                    a0_archived_taken_nanos,
+                                    a0_archived_origin_secs,
+                                    a0_archived_origin_nanos,
+                                    a0_archived_outcome__tag,
+                                    a0_archived_outcome_found_v0,
+                                    a0_archived_outcome_failed_v0,
+                                    a0_archived_label,
+                                ) = {
+                                    let __v = perftest_flat::ledger_archived(&__v1);
+                                    match __v {
+                                        ::core::option::Option::Some(__x2) => {
                                             let (
                                                 a0_archived_summary_count,
                                                 a0_archived_summary_total,
-                                            ) = {
-                                                let __v5 = __f4_0;
-                                                let a0_archived_summary_count = (perftest_flat::summary_count(
-                                                    &__v5,
-                                                ) as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                let a0_archived_summary_total = (perftest_flat::summary_total(
-                                                    &__v5,
-                                                ) as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                                (a0_archived_summary_count, a0_archived_summary_total)
-                                            };
-                                            let (
                                                 a0_archived_taken__present,
                                                 a0_archived_taken_secs,
                                                 a0_archived_taken_nanos,
-                                            ) = match __f4_1 {
-                                                ::core::option::Option::Some(__some) => {
-                                                    let (a0_archived_taken_secs, a0_archived_taken_nanos) = {
-                                                        let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __some;
-                                                        let a0_archived_taken_secs = (__f0
-                                                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                        let a0_archived_taken_nanos = (__f1
-                                                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                        (a0_archived_taken_secs, a0_archived_taken_nanos)
-                                                    };
-                                                    (1u8, a0_archived_taken_secs, a0_archived_taken_nanos)
-                                                }
-                                                ::core::option::Option::None => (0, 0, 0),
-                                            };
-                                            let (a0_archived_origin_secs, a0_archived_origin_nanos) = {
-                                                let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __f4_2;
-                                                let a0_archived_origin_secs = (__f5_0
-                                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                let a0_archived_origin_nanos = (__f5_1
-                                                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                                (a0_archived_origin_secs, a0_archived_origin_nanos)
-                                            };
-                                            let (
+                                                a0_archived_origin_secs,
+                                                a0_archived_origin_nanos,
                                                 a0_archived_outcome__tag,
                                                 a0_archived_outcome_found_v0,
                                                 a0_archived_outcome_failed_v0,
-                                            ) = match __f4_3 {
-                                                perftest_flat::Lookup::Absent => {
-                                                    (
-                                                        0,
-                                                        0,
-                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                                    )
-                                                }
-                                                perftest_flat::Lookup::Found(__f0) => {
-                                                    let a0_archived_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                                        __f0,
-                                                    );
-                                                    (
-                                                        1,
+                                                a0_archived_label,
+                                            ) = {
+                                                let __v = __x2;
+                                                {
+                                                    let __v3 = __v;
+                                                    let __s3 = perftest_flat::report_into_struct(__v3);
+                                                    let (
+                                                        a0_archived_summary_count,
+                                                        a0_archived_summary_total,
+                                                        a0_archived_taken__present,
+                                                        a0_archived_taken_secs,
+                                                        a0_archived_taken_nanos,
+                                                        a0_archived_origin_secs,
+                                                        a0_archived_origin_nanos,
+                                                        a0_archived_outcome__tag,
                                                         a0_archived_outcome_found_v0,
-                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        a0_archived_outcome_failed_v0,
+                                                        a0_archived_label,
+                                                    ) = {
+                                                        let __v = __s3;
+                                                        {
+                                                            let perftest_flat::ReportStruct {
+                                                                summary: __f4_0,
+                                                                taken: __f4_1,
+                                                                origin: __f4_2,
+                                                                outcome: __f4_3,
+                                                                label: __f4_4,
+                                                            } = __v;
+                                                            let (
+                                                                a0_archived_summary_count,
+                                                                a0_archived_summary_total,
+                                                            ) = {
+                                                                let __v = __f4_0;
+                                                                {
+                                                                    let __v5 = __v;
+                                                                    let a0_archived_summary_count = {
+                                                                        let __v = perftest_flat::summary_count(&__v5);
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    };
+                                                                    let a0_archived_summary_total = {
+                                                                        let __v = perftest_flat::summary_total(&__v5);
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                                                    };
+                                                                    (a0_archived_summary_count, a0_archived_summary_total)
+                                                                }
+                                                            };
+                                                            let (
+                                                                a0_archived_taken__present,
+                                                                a0_archived_taken_secs,
+                                                                a0_archived_taken_nanos,
+                                                            ) = {
+                                                                let __v = __f4_1;
+                                                                match __v {
+                                                                    ::core::option::Option::Some(__some) => {
+                                                                        let (a0_archived_taken_secs, a0_archived_taken_nanos) = {
+                                                                            let __v = __some;
+                                                                            {
+                                                                                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                                                                                let a0_archived_taken_secs = {
+                                                                                    let __v = __f0;
+                                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                                };
+                                                                                let a0_archived_taken_nanos = {
+                                                                                    let __v = __f1;
+                                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                                };
+                                                                                (a0_archived_taken_secs, a0_archived_taken_nanos)
+                                                                            }
+                                                                        };
+                                                                        (1u8, a0_archived_taken_secs, a0_archived_taken_nanos)
+                                                                    }
+                                                                    ::core::option::Option::None => (0, 0, 0),
+                                                                }
+                                                            };
+                                                            let (a0_archived_origin_secs, a0_archived_origin_nanos) = {
+                                                                let __v = __f4_2;
+                                                                {
+                                                                    let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __v;
+                                                                    let a0_archived_origin_secs = {
+                                                                        let __v = __f5_0;
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    };
+                                                                    let a0_archived_origin_nanos = {
+                                                                        let __v = __f5_1;
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    };
+                                                                    (a0_archived_origin_secs, a0_archived_origin_nanos)
+                                                                }
+                                                            };
+                                                            let (
+                                                                a0_archived_outcome__tag,
+                                                                a0_archived_outcome_found_v0,
+                                                                a0_archived_outcome_failed_v0,
+                                                            ) = {
+                                                                let __v = __f4_3;
+                                                                match __v {
+                                                                    perftest_flat::Lookup::Absent => {
+                                                                        (
+                                                                            0,
+                                                                            0,
+                                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                                        )
+                                                                    }
+                                                                    perftest_flat::Lookup::Found(__f0) => {
+                                                                        let a0_archived_outcome_found_v0 = {
+                                                                            let __v = __f0;
+                                                                            ::prebindgen_jni_runtime::new_handle(__v)
+                                                                        };
+                                                                        (
+                                                                            1,
+                                                                            a0_archived_outcome_found_v0,
+                                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                                        )
+                                                                    }
+                                                                    perftest_flat::Lookup::Failed(__f0) => {
+                                                                        let a0_archived_outcome_failed_v0 = {
+                                                                            let __v = __f0;
+                                                                            ::prebindgen_jni_runtime::new_string(
+                                                                                env,
+                                                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                            )?
+                                                                        };
+                                                                        (2, 0, a0_archived_outcome_failed_v0)
+                                                                    }
+                                                                }
+                                                            };
+                                                            let a0_archived_label = {
+                                                                let __v = __f4_4;
+                                                                ::prebindgen_jni_runtime::new_string(
+                                                                    env,
+                                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                )?
+                                                            };
+                                                            (
+                                                                a0_archived_summary_count,
+                                                                a0_archived_summary_total,
+                                                                a0_archived_taken__present,
+                                                                a0_archived_taken_secs,
+                                                                a0_archived_taken_nanos,
+                                                                a0_archived_origin_secs,
+                                                                a0_archived_origin_nanos,
+                                                                a0_archived_outcome__tag,
+                                                                a0_archived_outcome_found_v0,
+                                                                a0_archived_outcome_failed_v0,
+                                                                a0_archived_label,
+                                                            )
+                                                        }
+                                                    };
+                                                    (
+                                                        a0_archived_summary_count,
+                                                        a0_archived_summary_total,
+                                                        a0_archived_taken__present,
+                                                        a0_archived_taken_secs,
+                                                        a0_archived_taken_nanos,
+                                                        a0_archived_origin_secs,
+                                                        a0_archived_origin_nanos,
+                                                        a0_archived_outcome__tag,
+                                                        a0_archived_outcome_found_v0,
+                                                        a0_archived_outcome_failed_v0,
+                                                        a0_archived_label,
                                                     )
-                                                }
-                                                perftest_flat::Lookup::Failed(__f0) => {
-                                                    let a0_archived_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                                        env,
-                                                        ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                                    )?;
-                                                    (2, 0, a0_archived_outcome_failed_v0)
                                                 }
                                             };
-                                            let a0_archived_label = ::prebindgen_jni_runtime::new_string(
-                                                env,
-                                                ::core::convert::AsRef::<str>::as_ref(&__f4_4),
-                                            )?;
                                             (
+                                                1u8,
                                                 a0_archived_summary_count,
                                                 a0_archived_summary_total,
                                                 a0_archived_taken__present,
@@ -5411,79 +6019,52 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerEach<
                                                 a0_archived_outcome_failed_v0,
                                                 a0_archived_label,
                                             )
-                                        };
-                                        (
-                                            a0_archived_summary_count,
-                                            a0_archived_summary_total,
-                                            a0_archived_taken__present,
-                                            a0_archived_taken_secs,
-                                            a0_archived_taken_nanos,
-                                            a0_archived_origin_secs,
-                                            a0_archived_origin_nanos,
-                                            a0_archived_outcome__tag,
-                                            a0_archived_outcome_found_v0,
-                                            a0_archived_outcome_failed_v0,
-                                            a0_archived_label,
-                                        )
-                                    };
-                                    (
-                                        1u8,
-                                        a0_archived_summary_count,
-                                        a0_archived_summary_total,
-                                        a0_archived_taken__present,
-                                        a0_archived_taken_secs,
-                                        a0_archived_taken_nanos,
-                                        a0_archived_origin_secs,
-                                        a0_archived_origin_nanos,
-                                        a0_archived_outcome__tag,
-                                        a0_archived_outcome_found_v0,
-                                        a0_archived_outcome_failed_v0,
-                                        a0_archived_label,
-                                    )
-                                }
-                                ::core::option::Option::None => {
-                                    (
-                                        0u8,
-                                        0,
-                                        0.0f64,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                    )
-                                }
-                            };
-                            (
-                                a0_filed__present,
-                                a0_filed_summary_count,
-                                a0_filed_summary_total,
-                                a0_filed_taken__present,
-                                a0_filed_taken_secs,
-                                a0_filed_taken_nanos,
-                                a0_filed_origin_secs,
-                                a0_filed_origin_nanos,
-                                a0_filed_outcome__tag,
-                                a0_filed_outcome_found_v0,
-                                a0_filed_outcome_failed_v0,
-                                a0_filed_label,
-                                a0_archived__present,
-                                a0_archived_summary_count,
-                                a0_archived_summary_total,
-                                a0_archived_taken__present,
-                                a0_archived_taken_secs,
-                                a0_archived_taken_nanos,
-                                a0_archived_origin_secs,
-                                a0_archived_origin_nanos,
-                                a0_archived_outcome__tag,
-                                a0_archived_outcome_found_v0,
-                                a0_archived_outcome_failed_v0,
-                                a0_archived_label,
-                            )
+                                        }
+                                        ::core::option::Option::None => {
+                                            (
+                                                0u8,
+                                                0,
+                                                0.0f64,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            )
+                                        }
+                                    }
+                                };
+                                (
+                                    a0_filed__present,
+                                    a0_filed_summary_count,
+                                    a0_filed_summary_total,
+                                    a0_filed_taken__present,
+                                    a0_filed_taken_secs,
+                                    a0_filed_taken_nanos,
+                                    a0_filed_origin_secs,
+                                    a0_filed_origin_nanos,
+                                    a0_filed_outcome__tag,
+                                    a0_filed_outcome_found_v0,
+                                    a0_filed_outcome_failed_v0,
+                                    a0_filed_label,
+                                    a0_archived__present,
+                                    a0_archived_summary_count,
+                                    a0_archived_summary_total,
+                                    a0_archived_taken__present,
+                                    a0_archived_taken_secs,
+                                    a0_archived_taken_nanos,
+                                    a0_archived_origin_secs,
+                                    a0_archived_origin_nanos,
+                                    a0_archived_outcome__tag,
+                                    a0_archived_outcome_found_v0,
+                                    a0_archived_outcome_failed_v0,
+                                    a0_archived_label,
+                                )
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -5600,92 +6181,120 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_spanHolderN
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (r_span__present, r_span_required, r_span_delay) = {
-                let __v1 = __x;
-                let (r_span__present, r_span_required, r_span_delay) = match perftest_flat::span_holder_span(
-                    &__v1,
-                ) {
-                    ::core::option::Option::Some(__x2) => {
-                        let (r_span_required, r_span_delay) = {
-                            let __v3 = __x2;
-                            let __s3 = perftest_flat::span_to_struct(__v3);
+        let (r_span__present, r_span_required, r_span_delay) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
+                let (r_span__present, r_span_required, r_span_delay) = {
+                    let __v = perftest_flat::span_holder_span(&__v1);
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
                             let (r_span_required, r_span_delay) = {
-                                let perftest_flat::SpanStruct {
-                                    required: __f4_0,
-                                    delay: __f4_1,
-                                } = __s3;
-                                let r_span_required = {
-                                    let __repr = crate::duration_to_millis(__f4_0)
-                                        .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                                    ({
-                                        let __repr = ::prebindgen_jni_runtime::check_domain(
-                                            __repr,
-                                            0u128,
-                                            86400000u128,
-                                            "Duration",
-                                        )?;
-                                        __repr
-                                    } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                                };
-                                let r_span_delay = match __f4_1 {
-                                    ::core::option::Option::Some(__x5) => {
-                                        ::prebindgen_jni_runtime::box_jlong(
-                                            env,
-                                            {
-                                                let __repr = crate::duration_to_millis(__x5)
-                                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                                                ({
-                                                    let __repr = ::prebindgen_jni_runtime::check_domain(
-                                                        __repr,
-                                                        0u128,
-                                                        86400000u128,
-                                                        "Duration",
-                                                    )?;
-                                                    __repr
-                                                } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                                            },
-                                        )?
-                                    }
-                                    ::core::option::Option::None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
-                                (r_span_required, r_span_delay)
+                                let __v = __x2;
+                                {
+                                    let __v3 = __v;
+                                    let __s3 = perftest_flat::span_to_struct(__v3);
+                                    let (r_span_required, r_span_delay) = {
+                                        let __v = __s3;
+                                        {
+                                            let perftest_flat::SpanStruct {
+                                                required: __f4_0,
+                                                delay: __f4_1,
+                                            } = __v;
+                                            let r_span_required = {
+                                                let __v = __f4_0;
+                                                {
+                                                    let __v = crate::duration_to_millis(__v)
+                                                        .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                                    {
+                                                        let __v = {
+                                                            let __checked = __v;
+                                                            let __checked = ::prebindgen_jni_runtime::check_domain(
+                                                                __checked,
+                                                                0u128,
+                                                                86400000u128,
+                                                                "Duration",
+                                                            )?;
+                                                            __checked
+                                                        };
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    }
+                                                }
+                                            };
+                                            let r_span_delay = {
+                                                let __v = __f4_1;
+                                                match __v {
+                                                    ::core::option::Option::Some(__x5) => {
+                                                        ::prebindgen_jni_runtime::box_jlong(
+                                                            env,
+                                                            {
+                                                                let __v = __x5;
+                                                                {
+                                                                    let __v = crate::duration_to_millis(__v)
+                                                                        .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                                                    {
+                                                                        let __v = {
+                                                                            let __checked = __v;
+                                                                            let __checked = ::prebindgen_jni_runtime::check_domain(
+                                                                                __checked,
+                                                                                0u128,
+                                                                                86400000u128,
+                                                                                "Duration",
+                                                                            )?;
+                                                                            __checked
+                                                                        };
+                                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                    }
+                                                                }
+                                                            },
+                                                        )?
+                                                    }
+                                                    ::core::option::Option::None => {
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                                    }
+                                                }
+                                            };
+                                            (r_span_required, r_span_delay)
+                                        }
+                                    };
+                                    (r_span_required, r_span_delay)
+                                }
                             };
-                            (r_span_required, r_span_delay)
-                        };
-                        (1u8, r_span_required, r_span_delay)
-                    }
-                    ::core::option::Option::None => {
-                        (0u8, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
+                            (1u8, r_span_required, r_span_delay)
+                        }
+                        ::core::option::Option::None => {
+                            (
+                                0u8,
+                                0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            )
+                        }
                     }
                 };
                 (r_span__present, r_span_required, r_span_delay)
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/model/SpanHolderBuilderRaw",
-                    "run",
-                    "(ZJLjava/lang/Long;)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            z: r_span__present,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_span_required,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_span_delay.as_raw(),
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/model/SpanHolderBuilderRaw",
+                "run",
+                "(ZJLjava/lang/Long;)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        z: r_span__present,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_span_required,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_span_delay.as_raw(),
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -5740,16 +6349,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedNoteEc
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match (*(*__result)) {
-            ::core::option::Option::Some(__some) => {
-                let r = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<str>::as_ref(&__some),
-                )?;
-                r
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            {
+                let __v = (*__v);
+                {
+                    let __v = (*__v);
+                    match __v {
+                        ::core::option::Option::Some(__some) => {
+                            let r = {
+                                let __v = __some;
+                                ::prebindgen_jni_runtime::new_string(
+                                    env,
+                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                )?
+                            };
+                            r
+                        }
+                        ::core::option::Option::None => {
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        }
+                    }
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -5805,16 +6426,22 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_plainNoteEc
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__some) => {
-                let r = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<str>::as_ref(&__some),
-                )?;
-                r
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let r = {
+                        let __v = __some;
+                        ::prebindgen_jni_runtime::new_string(
+                            env,
+                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                        )?
+                    };
+                    r
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -5906,7 +6533,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_wrappedFiel
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -5967,7 +6597,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_holderTagOr
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6033,7 +6666,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedPayloa
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6108,7 +6744,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedOptPay
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6180,7 +6819,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedOptPri
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6271,7 +6913,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedElemId
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6362,7 +7007,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedRunIdS
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6451,7 +7099,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_sliceIdSum<
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6540,7 +7191,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_refVecIdSum
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -6590,35 +7244,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedLatest
         ::std::string::String,
     > = (|| match (*__result) {
         ::core::option::Option::Some(__some) => {
-            let __x = __some;
-            {
-                let (r_count, r_total) = {
-                    let __v1 = __x;
-                    let r_count = (perftest_flat::summary_count(&__v1)
-                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let r_total = (perftest_flat::summary_total(&__v1)
-                        as ::prebindgen_jni_runtime::jni::sys::jdouble);
+            let (r_count, r_total) = {
+                let __v = __some;
+                {
+                    let __v1 = __v;
+                    let r_count = {
+                        let __v = perftest_flat::summary_count(&__v1);
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    };
+                    let r_total = {
+                        let __v = perftest_flat::summary_total(&__v1);
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                    };
                     (r_count, r_total)
-                };
-                static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-                let __o = __S
-                    .call_object(
-                        env,
-                        "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
-                        "run",
-                        "(JD)Ljava/lang/Object;",
-                        &__sink,
-                        &[
-                            ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                j: r_count,
-                            },
-                            ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                d: r_total,
-                            },
-                        ],
-                    )?;
-                ::core::result::Result::Ok(__o.into_raw())
-            }
+                }
+            };
+            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+            let __o = __S
+                .call_object(
+                    env,
+                    "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
+                    "run",
+                    "(JD)Ljava/lang/Object;",
+                    &__sink,
+                    &[
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            j: r_count,
+                        },
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            d: r_total,
+                        },
+                    ],
+                )?;
+            ::core::result::Result::Ok(__o.into_raw())
         }
         ::core::option::Option::None => {
             ::core::result::Result::Ok(::core::ptr::null_mut())
@@ -6660,35 +7318,35 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (
-                r_filed__present,
-                r_filed_summary_count,
-                r_filed_summary_total,
-                r_filed_taken__present,
-                r_filed_taken_secs,
-                r_filed_taken_nanos,
-                r_filed_origin_secs,
-                r_filed_origin_nanos,
-                r_filed_outcome__tag,
-                r_filed_outcome_found_v0,
-                r_filed_outcome_failed_v0,
-                r_filed_label,
-                r_archived__present,
-                r_archived_summary_count,
-                r_archived_summary_total,
-                r_archived_taken__present,
-                r_archived_taken_secs,
-                r_archived_taken_nanos,
-                r_archived_origin_secs,
-                r_archived_origin_nanos,
-                r_archived_outcome__tag,
-                r_archived_outcome_found_v0,
-                r_archived_outcome_failed_v0,
-                r_archived_label,
-            ) = {
-                let __v1 = __x;
+        let (
+            r_filed__present,
+            r_filed_summary_count,
+            r_filed_summary_total,
+            r_filed_taken__present,
+            r_filed_taken_secs,
+            r_filed_taken_nanos,
+            r_filed_origin_secs,
+            r_filed_origin_nanos,
+            r_filed_outcome__tag,
+            r_filed_outcome_found_v0,
+            r_filed_outcome_failed_v0,
+            r_filed_label,
+            r_archived__present,
+            r_archived_summary_count,
+            r_archived_summary_total,
+            r_archived_taken__present,
+            r_archived_taken_secs,
+            r_archived_taken_nanos,
+            r_archived_origin_secs,
+            r_archived_origin_nanos,
+            r_archived_outcome__tag,
+            r_archived_outcome_found_v0,
+            r_archived_outcome_failed_v0,
+            r_archived_label,
+        ) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
                 let (
                     r_filed__present,
                     r_filed_summary_count,
@@ -6702,25 +7360,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                     r_filed_outcome_found_v0,
                     r_filed_outcome_failed_v0,
                     r_filed_label,
-                ) = match perftest_flat::ledger_filed(&__v1) {
-                    ::core::option::Option::Some(__x2) => {
-                        let (
-                            r_filed_summary_count,
-                            r_filed_summary_total,
-                            r_filed_taken__present,
-                            r_filed_taken_secs,
-                            r_filed_taken_nanos,
-                            r_filed_origin_secs,
-                            r_filed_origin_nanos,
-                            r_filed_outcome__tag,
-                            r_filed_outcome_found_v0,
-                            r_filed_outcome_failed_v0,
-                            r_filed_label,
-                        ) = {
-                            let __v3 = __x2;
-                            let __s3 = perftest_flat::report_into_struct(
-                                ::core::clone::Clone::clone(__v3),
-                            );
+                ) = {
+                    let __v = perftest_flat::ledger_filed(&__v1);
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
                             let (
                                 r_filed_summary_count,
                                 r_filed_summary_total,
@@ -6734,98 +7377,168 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                                 r_filed_outcome_failed_v0,
                                 r_filed_label,
                             ) = {
-                                let perftest_flat::ReportStruct {
-                                    summary: __f4_0,
-                                    taken: __f4_1,
-                                    origin: __f4_2,
-                                    outcome: __f4_3,
-                                    label: __f4_4,
-                                } = __s3;
-                                let (r_filed_summary_count, r_filed_summary_total) = {
-                                    let __v5 = __f4_0;
-                                    let r_filed_summary_count = (perftest_flat::summary_count(
-                                        &__v5,
-                                    ) as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let r_filed_summary_total = (perftest_flat::summary_total(
-                                        &__v5,
-                                    ) as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                    (r_filed_summary_count, r_filed_summary_total)
-                                };
-                                let (
-                                    r_filed_taken__present,
-                                    r_filed_taken_secs,
-                                    r_filed_taken_nanos,
-                                ) = match __f4_1 {
-                                    ::core::option::Option::Some(__some) => {
-                                        let (r_filed_taken_secs, r_filed_taken_nanos) = {
-                                            let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __some;
-                                            let r_filed_taken_secs = (__f0
-                                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                            let r_filed_taken_nanos = (__f1
-                                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                            (r_filed_taken_secs, r_filed_taken_nanos)
-                                        };
-                                        (1u8, r_filed_taken_secs, r_filed_taken_nanos)
-                                    }
-                                    ::core::option::Option::None => (0, 0, 0),
-                                };
-                                let (r_filed_origin_secs, r_filed_origin_nanos) = {
-                                    let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __f4_2;
-                                    let r_filed_origin_secs = (__f5_0
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let r_filed_origin_nanos = (__f5_1
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    (r_filed_origin_secs, r_filed_origin_nanos)
-                                };
-                                let (
-                                    r_filed_outcome__tag,
-                                    r_filed_outcome_found_v0,
-                                    r_filed_outcome_failed_v0,
-                                ) = match __f4_3 {
-                                    perftest_flat::Lookup::Absent => {
-                                        (
-                                            0,
-                                            0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        )
-                                    }
-                                    perftest_flat::Lookup::Found(__f0) => {
-                                        let r_filed_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                            __f0,
-                                        );
-                                        (
-                                            1,
-                                            r_filed_outcome_found_v0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        )
-                                    }
-                                    perftest_flat::Lookup::Failed(__f0) => {
-                                        let r_filed_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                            env,
-                                            ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                        )?;
-                                        (2, 0, r_filed_outcome_failed_v0)
-                                    }
-                                };
-                                let r_filed_label = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f4_4),
-                                )?;
-                                (
-                                    r_filed_summary_count,
-                                    r_filed_summary_total,
-                                    r_filed_taken__present,
-                                    r_filed_taken_secs,
-                                    r_filed_taken_nanos,
-                                    r_filed_origin_secs,
-                                    r_filed_origin_nanos,
-                                    r_filed_outcome__tag,
-                                    r_filed_outcome_found_v0,
-                                    r_filed_outcome_failed_v0,
-                                    r_filed_label,
-                                )
+                                let __v = __x2;
+                                {
+                                    let __v3 = __v;
+                                    let __s3 = perftest_flat::report_into_struct(
+                                        ::core::clone::Clone::clone(__v3),
+                                    );
+                                    let (
+                                        r_filed_summary_count,
+                                        r_filed_summary_total,
+                                        r_filed_taken__present,
+                                        r_filed_taken_secs,
+                                        r_filed_taken_nanos,
+                                        r_filed_origin_secs,
+                                        r_filed_origin_nanos,
+                                        r_filed_outcome__tag,
+                                        r_filed_outcome_found_v0,
+                                        r_filed_outcome_failed_v0,
+                                        r_filed_label,
+                                    ) = {
+                                        let __v = __s3;
+                                        {
+                                            let perftest_flat::ReportStruct {
+                                                summary: __f4_0,
+                                                taken: __f4_1,
+                                                origin: __f4_2,
+                                                outcome: __f4_3,
+                                                label: __f4_4,
+                                            } = __v;
+                                            let (r_filed_summary_count, r_filed_summary_total) = {
+                                                let __v = __f4_0;
+                                                {
+                                                    let __v5 = __v;
+                                                    let r_filed_summary_count = {
+                                                        let __v = perftest_flat::summary_count(&__v5);
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    };
+                                                    let r_filed_summary_total = {
+                                                        let __v = perftest_flat::summary_total(&__v5);
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                                    };
+                                                    (r_filed_summary_count, r_filed_summary_total)
+                                                }
+                                            };
+                                            let (
+                                                r_filed_taken__present,
+                                                r_filed_taken_secs,
+                                                r_filed_taken_nanos,
+                                            ) = {
+                                                let __v = __f4_1;
+                                                match __v {
+                                                    ::core::option::Option::Some(__some) => {
+                                                        let (r_filed_taken_secs, r_filed_taken_nanos) = {
+                                                            let __v = __some;
+                                                            {
+                                                                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                                                                let r_filed_taken_secs = {
+                                                                    let __v = __f0;
+                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                };
+                                                                let r_filed_taken_nanos = {
+                                                                    let __v = __f1;
+                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                };
+                                                                (r_filed_taken_secs, r_filed_taken_nanos)
+                                                            }
+                                                        };
+                                                        (1u8, r_filed_taken_secs, r_filed_taken_nanos)
+                                                    }
+                                                    ::core::option::Option::None => (0, 0, 0),
+                                                }
+                                            };
+                                            let (r_filed_origin_secs, r_filed_origin_nanos) = {
+                                                let __v = __f4_2;
+                                                {
+                                                    let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __v;
+                                                    let r_filed_origin_secs = {
+                                                        let __v = __f5_0;
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    };
+                                                    let r_filed_origin_nanos = {
+                                                        let __v = __f5_1;
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    };
+                                                    (r_filed_origin_secs, r_filed_origin_nanos)
+                                                }
+                                            };
+                                            let (
+                                                r_filed_outcome__tag,
+                                                r_filed_outcome_found_v0,
+                                                r_filed_outcome_failed_v0,
+                                            ) = {
+                                                let __v = __f4_3;
+                                                match __v {
+                                                    perftest_flat::Lookup::Absent => {
+                                                        (
+                                                            0,
+                                                            0,
+                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        )
+                                                    }
+                                                    perftest_flat::Lookup::Found(__f0) => {
+                                                        let r_filed_outcome_found_v0 = {
+                                                            let __v = __f0;
+                                                            ::prebindgen_jni_runtime::new_handle(__v)
+                                                        };
+                                                        (
+                                                            1,
+                                                            r_filed_outcome_found_v0,
+                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        )
+                                                    }
+                                                    perftest_flat::Lookup::Failed(__f0) => {
+                                                        let r_filed_outcome_failed_v0 = {
+                                                            let __v = __f0;
+                                                            ::prebindgen_jni_runtime::new_string(
+                                                                env,
+                                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                            )?
+                                                        };
+                                                        (2, 0, r_filed_outcome_failed_v0)
+                                                    }
+                                                }
+                                            };
+                                            let r_filed_label = {
+                                                let __v = __f4_4;
+                                                ::prebindgen_jni_runtime::new_string(
+                                                    env,
+                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                )?
+                                            };
+                                            (
+                                                r_filed_summary_count,
+                                                r_filed_summary_total,
+                                                r_filed_taken__present,
+                                                r_filed_taken_secs,
+                                                r_filed_taken_nanos,
+                                                r_filed_origin_secs,
+                                                r_filed_origin_nanos,
+                                                r_filed_outcome__tag,
+                                                r_filed_outcome_found_v0,
+                                                r_filed_outcome_failed_v0,
+                                                r_filed_label,
+                                            )
+                                        }
+                                    };
+                                    (
+                                        r_filed_summary_count,
+                                        r_filed_summary_total,
+                                        r_filed_taken__present,
+                                        r_filed_taken_secs,
+                                        r_filed_taken_nanos,
+                                        r_filed_origin_secs,
+                                        r_filed_origin_nanos,
+                                        r_filed_outcome__tag,
+                                        r_filed_outcome_found_v0,
+                                        r_filed_outcome_failed_v0,
+                                        r_filed_label,
+                                    )
+                                }
                             };
                             (
+                                1u8,
                                 r_filed_summary_count,
                                 r_filed_summary_total,
                                 r_filed_taken__present,
@@ -6838,37 +7551,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                                 r_filed_outcome_failed_v0,
                                 r_filed_label,
                             )
-                        };
-                        (
-                            1u8,
-                            r_filed_summary_count,
-                            r_filed_summary_total,
-                            r_filed_taken__present,
-                            r_filed_taken_secs,
-                            r_filed_taken_nanos,
-                            r_filed_origin_secs,
-                            r_filed_origin_nanos,
-                            r_filed_outcome__tag,
-                            r_filed_outcome_found_v0,
-                            r_filed_outcome_failed_v0,
-                            r_filed_label,
-                        )
-                    }
-                    ::core::option::Option::None => {
-                        (
-                            0u8,
-                            0,
-                            0.0f64,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        )
+                        }
+                        ::core::option::Option::None => {
+                            (
+                                0u8,
+                                0,
+                                0.0f64,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            )
+                        }
                     }
                 };
                 let (
@@ -6884,23 +7583,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                     r_archived_outcome_found_v0,
                     r_archived_outcome_failed_v0,
                     r_archived_label,
-                ) = match perftest_flat::ledger_archived(&__v1) {
-                    ::core::option::Option::Some(__x2) => {
-                        let (
-                            r_archived_summary_count,
-                            r_archived_summary_total,
-                            r_archived_taken__present,
-                            r_archived_taken_secs,
-                            r_archived_taken_nanos,
-                            r_archived_origin_secs,
-                            r_archived_origin_nanos,
-                            r_archived_outcome__tag,
-                            r_archived_outcome_found_v0,
-                            r_archived_outcome_failed_v0,
-                            r_archived_label,
-                        ) = {
-                            let __v3 = __x2;
-                            let __s3 = perftest_flat::report_into_struct(__v3);
+                ) = {
+                    let __v = perftest_flat::ledger_archived(&__v1);
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
                             let (
                                 r_archived_summary_count,
                                 r_archived_summary_total,
@@ -6914,98 +7600,166 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                                 r_archived_outcome_failed_v0,
                                 r_archived_label,
                             ) = {
-                                let perftest_flat::ReportStruct {
-                                    summary: __f4_0,
-                                    taken: __f4_1,
-                                    origin: __f4_2,
-                                    outcome: __f4_3,
-                                    label: __f4_4,
-                                } = __s3;
-                                let (r_archived_summary_count, r_archived_summary_total) = {
-                                    let __v5 = __f4_0;
-                                    let r_archived_summary_count = (perftest_flat::summary_count(
-                                        &__v5,
-                                    ) as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let r_archived_summary_total = (perftest_flat::summary_total(
-                                        &__v5,
-                                    ) as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                    (r_archived_summary_count, r_archived_summary_total)
-                                };
-                                let (
-                                    r_archived_taken__present,
-                                    r_archived_taken_secs,
-                                    r_archived_taken_nanos,
-                                ) = match __f4_1 {
-                                    ::core::option::Option::Some(__some) => {
-                                        let (r_archived_taken_secs, r_archived_taken_nanos) = {
-                                            let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __some;
-                                            let r_archived_taken_secs = (__f0
-                                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                            let r_archived_taken_nanos = (__f1
-                                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                            (r_archived_taken_secs, r_archived_taken_nanos)
-                                        };
-                                        (1u8, r_archived_taken_secs, r_archived_taken_nanos)
-                                    }
-                                    ::core::option::Option::None => (0, 0, 0),
-                                };
-                                let (r_archived_origin_secs, r_archived_origin_nanos) = {
-                                    let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __f4_2;
-                                    let r_archived_origin_secs = (__f5_0
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let r_archived_origin_nanos = (__f5_1
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    (r_archived_origin_secs, r_archived_origin_nanos)
-                                };
-                                let (
-                                    r_archived_outcome__tag,
-                                    r_archived_outcome_found_v0,
-                                    r_archived_outcome_failed_v0,
-                                ) = match __f4_3 {
-                                    perftest_flat::Lookup::Absent => {
-                                        (
-                                            0,
-                                            0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        )
-                                    }
-                                    perftest_flat::Lookup::Found(__f0) => {
-                                        let r_archived_outcome_found_v0 = ::prebindgen_jni_runtime::new_handle(
-                                            __f0,
-                                        );
-                                        (
-                                            1,
-                                            r_archived_outcome_found_v0,
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                                        )
-                                    }
-                                    perftest_flat::Lookup::Failed(__f0) => {
-                                        let r_archived_outcome_failed_v0 = ::prebindgen_jni_runtime::new_string(
-                                            env,
-                                            ::core::convert::AsRef::<str>::as_ref(&__f0),
-                                        )?;
-                                        (2, 0, r_archived_outcome_failed_v0)
-                                    }
-                                };
-                                let r_archived_label = ::prebindgen_jni_runtime::new_string(
-                                    env,
-                                    ::core::convert::AsRef::<str>::as_ref(&__f4_4),
-                                )?;
-                                (
-                                    r_archived_summary_count,
-                                    r_archived_summary_total,
-                                    r_archived_taken__present,
-                                    r_archived_taken_secs,
-                                    r_archived_taken_nanos,
-                                    r_archived_origin_secs,
-                                    r_archived_origin_nanos,
-                                    r_archived_outcome__tag,
-                                    r_archived_outcome_found_v0,
-                                    r_archived_outcome_failed_v0,
-                                    r_archived_label,
-                                )
+                                let __v = __x2;
+                                {
+                                    let __v3 = __v;
+                                    let __s3 = perftest_flat::report_into_struct(__v3);
+                                    let (
+                                        r_archived_summary_count,
+                                        r_archived_summary_total,
+                                        r_archived_taken__present,
+                                        r_archived_taken_secs,
+                                        r_archived_taken_nanos,
+                                        r_archived_origin_secs,
+                                        r_archived_origin_nanos,
+                                        r_archived_outcome__tag,
+                                        r_archived_outcome_found_v0,
+                                        r_archived_outcome_failed_v0,
+                                        r_archived_label,
+                                    ) = {
+                                        let __v = __s3;
+                                        {
+                                            let perftest_flat::ReportStruct {
+                                                summary: __f4_0,
+                                                taken: __f4_1,
+                                                origin: __f4_2,
+                                                outcome: __f4_3,
+                                                label: __f4_4,
+                                            } = __v;
+                                            let (r_archived_summary_count, r_archived_summary_total) = {
+                                                let __v = __f4_0;
+                                                {
+                                                    let __v5 = __v;
+                                                    let r_archived_summary_count = {
+                                                        let __v = perftest_flat::summary_count(&__v5);
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    };
+                                                    let r_archived_summary_total = {
+                                                        let __v = perftest_flat::summary_total(&__v5);
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                                    };
+                                                    (r_archived_summary_count, r_archived_summary_total)
+                                                }
+                                            };
+                                            let (
+                                                r_archived_taken__present,
+                                                r_archived_taken_secs,
+                                                r_archived_taken_nanos,
+                                            ) = {
+                                                let __v = __f4_1;
+                                                match __v {
+                                                    ::core::option::Option::Some(__some) => {
+                                                        let (r_archived_taken_secs, r_archived_taken_nanos) = {
+                                                            let __v = __some;
+                                                            {
+                                                                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                                                                let r_archived_taken_secs = {
+                                                                    let __v = __f0;
+                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                };
+                                                                let r_archived_taken_nanos = {
+                                                                    let __v = __f1;
+                                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                                };
+                                                                (r_archived_taken_secs, r_archived_taken_nanos)
+                                                            }
+                                                        };
+                                                        (1u8, r_archived_taken_secs, r_archived_taken_nanos)
+                                                    }
+                                                    ::core::option::Option::None => (0, 0, 0),
+                                                }
+                                            };
+                                            let (r_archived_origin_secs, r_archived_origin_nanos) = {
+                                                let __v = __f4_2;
+                                                {
+                                                    let perftest_flat::Stamp { secs: __f5_0, nanos: __f5_1 } = __v;
+                                                    let r_archived_origin_secs = {
+                                                        let __v = __f5_0;
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    };
+                                                    let r_archived_origin_nanos = {
+                                                        let __v = __f5_1;
+                                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                    };
+                                                    (r_archived_origin_secs, r_archived_origin_nanos)
+                                                }
+                                            };
+                                            let (
+                                                r_archived_outcome__tag,
+                                                r_archived_outcome_found_v0,
+                                                r_archived_outcome_failed_v0,
+                                            ) = {
+                                                let __v = __f4_3;
+                                                match __v {
+                                                    perftest_flat::Lookup::Absent => {
+                                                        (
+                                                            0,
+                                                            0,
+                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        )
+                                                    }
+                                                    perftest_flat::Lookup::Found(__f0) => {
+                                                        let r_archived_outcome_found_v0 = {
+                                                            let __v = __f0;
+                                                            ::prebindgen_jni_runtime::new_handle(__v)
+                                                        };
+                                                        (
+                                                            1,
+                                                            r_archived_outcome_found_v0,
+                                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                        )
+                                                    }
+                                                    perftest_flat::Lookup::Failed(__f0) => {
+                                                        let r_archived_outcome_failed_v0 = {
+                                                            let __v = __f0;
+                                                            ::prebindgen_jni_runtime::new_string(
+                                                                env,
+                                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                            )?
+                                                        };
+                                                        (2, 0, r_archived_outcome_failed_v0)
+                                                    }
+                                                }
+                                            };
+                                            let r_archived_label = {
+                                                let __v = __f4_4;
+                                                ::prebindgen_jni_runtime::new_string(
+                                                    env,
+                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                )?
+                                            };
+                                            (
+                                                r_archived_summary_count,
+                                                r_archived_summary_total,
+                                                r_archived_taken__present,
+                                                r_archived_taken_secs,
+                                                r_archived_taken_nanos,
+                                                r_archived_origin_secs,
+                                                r_archived_origin_nanos,
+                                                r_archived_outcome__tag,
+                                                r_archived_outcome_found_v0,
+                                                r_archived_outcome_failed_v0,
+                                                r_archived_label,
+                                            )
+                                        }
+                                    };
+                                    (
+                                        r_archived_summary_count,
+                                        r_archived_summary_total,
+                                        r_archived_taken__present,
+                                        r_archived_taken_secs,
+                                        r_archived_taken_nanos,
+                                        r_archived_origin_secs,
+                                        r_archived_origin_nanos,
+                                        r_archived_outcome__tag,
+                                        r_archived_outcome_found_v0,
+                                        r_archived_outcome_failed_v0,
+                                        r_archived_label,
+                                    )
+                                }
                             };
                             (
+                                1u8,
                                 r_archived_summary_count,
                                 r_archived_summary_total,
                                 r_archived_taken__present,
@@ -7018,37 +7772,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                                 r_archived_outcome_failed_v0,
                                 r_archived_label,
                             )
-                        };
-                        (
-                            1u8,
-                            r_archived_summary_count,
-                            r_archived_summary_total,
-                            r_archived_taken__present,
-                            r_archived_taken_secs,
-                            r_archived_taken_nanos,
-                            r_archived_origin_secs,
-                            r_archived_origin_nanos,
-                            r_archived_outcome__tag,
-                            r_archived_outcome_found_v0,
-                            r_archived_outcome_failed_v0,
-                            r_archived_label,
-                        )
-                    }
-                    ::core::option::Option::None => {
-                        (
-                            0u8,
-                            0,
-                            0.0f64,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                        )
+                        }
+                        ::core::option::Option::None => {
+                            (
+                                0u8,
+                                0,
+                                0.0f64,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            )
+                        }
                     }
                 };
                 (
@@ -7077,92 +7817,92 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'
                     r_archived_outcome_failed_v0,
                     r_archived_label,
                 )
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/LedgerBuilderRaw",
-                    "run",
-                    "(ZJDZJJJJIJLjava/lang/String;Ljava/lang/String;ZJDZJJJJIJLjava/lang/String;Ljava/lang/String;)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            z: r_filed__present,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_filed_summary_count,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            d: r_filed_summary_total,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            z: r_filed_taken__present,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_filed_taken_secs,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_filed_taken_nanos,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_filed_origin_secs,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_filed_origin_nanos,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: r_filed_outcome__tag,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_filed_outcome_found_v0,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_filed_outcome_failed_v0.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_filed_label.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            z: r_archived__present,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_archived_summary_count,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            d: r_archived_summary_total,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            z: r_archived_taken__present,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_archived_taken_secs,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_archived_taken_nanos,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_archived_origin_secs,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_archived_origin_nanos,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: r_archived_outcome__tag,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_archived_outcome_found_v0,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_archived_outcome_failed_v0.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_archived_label.as_raw(),
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/LedgerBuilderRaw",
+                "run",
+                "(ZJDZJJJJIJLjava/lang/String;Ljava/lang/String;ZJDZJJJJIJLjava/lang/String;Ljava/lang/String;)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        z: r_filed__present,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_filed_summary_count,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        d: r_filed_summary_total,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        z: r_filed_taken__present,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_filed_taken_secs,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_filed_taken_nanos,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_filed_origin_secs,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_filed_origin_nanos,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        i: r_filed_outcome__tag,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_filed_outcome_found_v0,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_filed_outcome_failed_v0.as_raw(),
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_filed_label.as_raw(),
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        z: r_archived__present,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_archived_summary_count,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        d: r_archived_summary_total,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        z: r_archived_taken__present,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_archived_taken_secs,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_archived_taken_nanos,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_archived_origin_secs,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_archived_origin_nanos,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        i: r_archived_outcome__tag,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_archived_outcome_found_v0,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_archived_outcome_failed_v0.as_raw(),
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_archived_label.as_raw(),
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -7267,66 +8007,90 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_archiveRead
             r_labeled_v0,
             r_labeled_v1,
             r_companion_v0,
-        ) = match ::core::clone::Clone::clone(__result) {
-            perftest_flat::Reading::Missing => {
-                (
-                    0,
-                    0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
-            }
-            perftest_flat::Reading::Exact(__f0) => {
-                let r_exact_v0 = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (
-                    1,
-                    r_exact_v0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
-            }
-            perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                let r_range_low = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_range_high = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (
-                    2,
-                    0,
-                    r_range_low,
-                    r_range_high,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
-            }
-            perftest_flat::Reading::Labeled(__f0, __f1) => {
-                let r_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<str>::as_ref(&__f0),
-                )?;
-                let r_labeled_v1 = (match __f1 {
-                    perftest_flat::Priority::Low => 0,
-                    perftest_flat::Priority::Normal => 1,
-                    perftest_flat::Priority::High => 2,
-                } as i32);
-                (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
-            }
-            perftest_flat::Reading::Companion(__f0) => {
-                let r_companion_v0 = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (
-                    4,
-                    0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    r_companion_v0,
-                )
+        ) = {
+            let __v = __result;
+            {
+                let __v = ::core::clone::Clone::clone(__v);
+                match __v {
+                    perftest_flat::Reading::Missing => {
+                        (
+                            0,
+                            0,
+                            0,
+                            0,
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            0,
+                            0,
+                        )
+                    }
+                    perftest_flat::Reading::Exact(__f0) => {
+                        let r_exact_v0 = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        (
+                            1,
+                            r_exact_v0,
+                            0,
+                            0,
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            0,
+                            0,
+                        )
+                    }
+                    perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                        let r_range_low = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let r_range_high = {
+                            let __v = __f1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        (
+                            2,
+                            0,
+                            r_range_low,
+                            r_range_high,
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            0,
+                            0,
+                        )
+                    }
+                    perftest_flat::Reading::Labeled(__f0, __f1) => {
+                        let r_labeled_v0 = {
+                            let __v = __f0;
+                            ::prebindgen_jni_runtime::new_string(
+                                env,
+                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                            )?
+                        };
+                        let r_labeled_v1 = {
+                            let __v = __f1;
+                            (match __v {
+                                perftest_flat::Priority::Low => 0,
+                                perftest_flat::Priority::Normal => 1,
+                                perftest_flat::Priority::High => 2,
+                            } as i32)
+                        };
+                        (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
+                    }
+                    perftest_flat::Reading::Companion(__f0) => {
+                        let r_companion_v0 = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        (
+                            4,
+                            0,
+                            0,
+                            0,
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            0,
+                            r_companion_v0,
+                        )
+                    }
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -7420,104 +8184,127 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_archiveRead
             r_labeled_v0,
             r_labeled_v1,
             r_companion_v0,
-        ) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (
-                    r__tag,
-                    r_exact_v0,
-                    r_range_low,
-                    r_range_high,
-                    r_labeled_v0,
-                    r_labeled_v1,
-                    r_companion_v0,
-                ) = match ::core::clone::Clone::clone(__some) {
-                    perftest_flat::Reading::Missing => {
-                        (
-                            0,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Exact(__f0) => {
-                        let r_exact_v0 = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            1,
-                            r_exact_v0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
-                        let r_range_low = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        let r_range_high = (__f1
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            2,
-                            0,
-                            r_range_low,
-                            r_range_high,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            0,
-                        )
-                    }
-                    perftest_flat::Reading::Labeled(__f0, __f1) => {
-                        let r_labeled_v0 = ::prebindgen_jni_runtime::new_string(
-                            env,
-                            ::core::convert::AsRef::<str>::as_ref(&__f0),
-                        )?;
-                        let r_labeled_v1 = (match __f1 {
-                            perftest_flat::Priority::Low => 0,
-                            perftest_flat::Priority::Normal => 1,
-                            perftest_flat::Priority::High => 2,
-                        } as i32);
-                        (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
-                    }
-                    perftest_flat::Reading::Companion(__f0) => {
-                        let r_companion_v0 = (__f0
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        (
-                            4,
-                            0,
-                            0,
-                            0,
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                            0,
-                            r_companion_v0,
-                        )
-                    }
-                };
-                (
-                    1u8,
-                    r__tag,
-                    r_exact_v0,
-                    r_range_low,
-                    r_range_high,
-                    r_labeled_v0,
-                    r_labeled_v1,
-                    r_companion_v0,
-                )
-            }
-            ::core::option::Option::None => {
-                (
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    0,
-                    0,
-                )
+        ) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (
+                        r__tag,
+                        r_exact_v0,
+                        r_range_low,
+                        r_range_high,
+                        r_labeled_v0,
+                        r_labeled_v1,
+                        r_companion_v0,
+                    ) = {
+                        let __v = __some;
+                        {
+                            let __v = ::core::clone::Clone::clone(__v);
+                            match __v {
+                                perftest_flat::Reading::Missing => {
+                                    (
+                                        0,
+                                        0,
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        0,
+                                    )
+                                }
+                                perftest_flat::Reading::Exact(__f0) => {
+                                    let r_exact_v0 = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    (
+                                        1,
+                                        r_exact_v0,
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        0,
+                                    )
+                                }
+                                perftest_flat::Reading::Range { low: __f0, high: __f1 } => {
+                                    let r_range_low = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    let r_range_high = {
+                                        let __v = __f1;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    (
+                                        2,
+                                        0,
+                                        r_range_low,
+                                        r_range_high,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        0,
+                                    )
+                                }
+                                perftest_flat::Reading::Labeled(__f0, __f1) => {
+                                    let r_labeled_v0 = {
+                                        let __v = __f0;
+                                        ::prebindgen_jni_runtime::new_string(
+                                            env,
+                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                        )?
+                                    };
+                                    let r_labeled_v1 = {
+                                        let __v = __f1;
+                                        (match __v {
+                                            perftest_flat::Priority::Low => 0,
+                                            perftest_flat::Priority::Normal => 1,
+                                            perftest_flat::Priority::High => 2,
+                                        } as i32)
+                                    };
+                                    (3, 0, 0, 0, r_labeled_v0, r_labeled_v1, 0)
+                                }
+                                perftest_flat::Reading::Companion(__f0) => {
+                                    let r_companion_v0 = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    (
+                                        4,
+                                        0,
+                                        0,
+                                        0,
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        0,
+                                        r_companion_v0,
+                                    )
+                                }
+                            }
+                        }
+                    };
+                    (
+                        1u8,
+                        r__tag,
+                        r_exact_v0,
+                        r_range_low,
+                        r_range_high,
+                        r_labeled_v0,
+                        r_labeled_v1,
+                        r_companion_v0,
+                    )
+                }
+                ::core::option::Option::None => {
+                    (
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                        0,
+                    )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -7628,23 +8415,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_holdEcho<'a
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__tag, r_for_v0) = match __result {
-            perftest_flat::Hold::Indefinite => (0, 0),
-            perftest_flat::Hold::For(__f0) => {
-                let r_for_v0 = {
-                    let __repr = crate::duration_to_millis(__f0)
-                        .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                    ({
-                        let __repr = ::prebindgen_jni_runtime::check_domain(
-                            __repr,
-                            0u128,
-                            86400000u128,
-                            "Duration",
-                        )?;
-                        __repr
-                    } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                };
-                (1, r_for_v0)
+        let (r__tag, r_for_v0) = {
+            let __v = __result;
+            match __v {
+                perftest_flat::Hold::Indefinite => (0, 0),
+                perftest_flat::Hold::For(__f0) => {
+                    let r_for_v0 = {
+                        let __v = __f0;
+                        {
+                            let __v = crate::duration_to_millis(__v)
+                                .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                            {
+                                let __v = {
+                                    let __checked = __v;
+                                    let __checked = ::prebindgen_jni_runtime::check_domain(
+                                        __checked,
+                                        0u128,
+                                        86400000u128,
+                                        "Duration",
+                                    )?;
+                                    __checked
+                                };
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            }
+                        }
+                    };
+                    (1, r_for_v0)
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -7778,52 +8575,84 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_holdPolicyE
             r_grace__tag,
             r_grace_for_v0,
         ) = {
-            let perftest_flat::HoldPolicy { hold: __f0, grace: __f1 } = __result;
-            let (r_hold__tag, r_hold_for_v0) = match __f0 {
-                perftest_flat::Hold::Indefinite => (0, 0),
-                perftest_flat::Hold::For(__f0) => {
-                    let r_hold_for_v0 = {
-                        let __repr = crate::duration_to_millis(__f0)
-                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                        ({
-                            let __repr = ::prebindgen_jni_runtime::check_domain(
-                                __repr,
-                                0u128,
-                                86400000u128,
-                                "Duration",
-                            )?;
-                            __repr
-                        } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                    };
-                    (1, r_hold_for_v0)
-                }
-            };
-            let (r_grace__present, r_grace__tag, r_grace_for_v0) = match __f1 {
-                ::core::option::Option::Some(__some) => {
-                    let (r_grace__tag, r_grace_for_v0) = match __some {
+            let __v = __result;
+            {
+                let perftest_flat::HoldPolicy { hold: __f0, grace: __f1 } = __v;
+                let (r_hold__tag, r_hold_for_v0) = {
+                    let __v = __f0;
+                    match __v {
                         perftest_flat::Hold::Indefinite => (0, 0),
                         perftest_flat::Hold::For(__f0) => {
-                            let r_grace_for_v0 = {
-                                let __repr = crate::duration_to_millis(__f0)
-                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                                ({
-                                    let __repr = ::prebindgen_jni_runtime::check_domain(
-                                        __repr,
-                                        0u128,
-                                        86400000u128,
-                                        "Duration",
-                                    )?;
-                                    __repr
-                                } as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            let r_hold_for_v0 = {
+                                let __v = __f0;
+                                {
+                                    let __v = crate::duration_to_millis(__v)
+                                        .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                    {
+                                        let __v = {
+                                            let __checked = __v;
+                                            let __checked = ::prebindgen_jni_runtime::check_domain(
+                                                __checked,
+                                                0u128,
+                                                86400000u128,
+                                                "Duration",
+                                            )?;
+                                            __checked
+                                        };
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    }
+                                }
                             };
-                            (1, r_grace_for_v0)
+                            (1, r_hold_for_v0)
                         }
-                    };
-                    (1u8, r_grace__tag, r_grace_for_v0)
-                }
-                ::core::option::Option::None => (0, 0, 0),
-            };
-            (r_hold__tag, r_hold_for_v0, r_grace__present, r_grace__tag, r_grace_for_v0)
+                    }
+                };
+                let (r_grace__present, r_grace__tag, r_grace_for_v0) = {
+                    let __v = __f1;
+                    match __v {
+                        ::core::option::Option::Some(__some) => {
+                            let (r_grace__tag, r_grace_for_v0) = {
+                                let __v = __some;
+                                match __v {
+                                    perftest_flat::Hold::Indefinite => (0, 0),
+                                    perftest_flat::Hold::For(__f0) => {
+                                        let r_grace_for_v0 = {
+                                            let __v = __f0;
+                                            {
+                                                let __v = crate::duration_to_millis(__v)
+                                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                                {
+                                                    let __v = {
+                                                        let __checked = __v;
+                                                        let __checked = ::prebindgen_jni_runtime::check_domain(
+                                                            __checked,
+                                                            0u128,
+                                                            86400000u128,
+                                                            "Duration",
+                                                        )?;
+                                                        __checked
+                                                    };
+                                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                                }
+                                            }
+                                        };
+                                        (1, r_grace_for_v0)
+                                    }
+                                }
+                            };
+                            (1u8, r_grace__tag, r_grace_for_v0)
+                        }
+                        ::core::option::Option::None => (0, 0, 0),
+                    }
+                };
+                (
+                    r_hold__tag,
+                    r_hold_for_v0,
+                    r_grace__present,
+                    r_grace__tag,
+                    r_grace_for_v0,
+                )
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -7926,7 +8755,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cacheConfig
         ::prebindgen_jni_runtime::jni::sys::jint,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jint);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -8020,29 +8852,50 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedRou
         ::std::string::String,
     > = (|| {
         let (r_byte, r_short, r_int, r_long, r_maybe_long) = {
-            let perftest_flat::Unsigned {
-                byte: __f0,
-                short: __f1,
-                int: __f2,
-                long: __f3,
-                maybe_long: __f4,
-            } = __result;
-            let r_byte = (__f0 as ::prebindgen_jni_runtime::jni::sys::jint);
-            let r_short = (__f1 as ::prebindgen_jni_runtime::jni::sys::jint);
-            let r_int = (__f2 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_long = (__f3 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_maybe_long = match __f4 {
-                ::core::option::Option::Some(__x2) => {
-                    ::prebindgen_jni_runtime::box_jlong(
-                        env,
-                        (__x2 as ::prebindgen_jni_runtime::jni::sys::jlong),
-                    )?
-                }
-                ::core::option::Option::None => {
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                }
-            };
-            (r_byte, r_short, r_int, r_long, r_maybe_long)
+            let __v = __result;
+            {
+                let perftest_flat::Unsigned {
+                    byte: __f0,
+                    short: __f1,
+                    int: __f2,
+                    long: __f3,
+                    maybe_long: __f4,
+                } = __v;
+                let r_byte = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                };
+                let r_short = {
+                    let __v = __f1;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                };
+                let r_int = {
+                    let __v = __f2;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_long = {
+                    let __v = __f3;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_maybe_long = {
+                    let __v = __f4;
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
+                            ::prebindgen_jni_runtime::box_jlong(
+                                env,
+                                {
+                                    let __v = __x2;
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                },
+                            )?
+                        }
+                        ::core::option::Option::None => {
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        }
+                    }
+                };
+                (r_byte, r_short, r_int, r_long, r_maybe_long)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -8114,15 +8967,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedOpt
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -8190,15 +9049,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedDat
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -8246,7 +9111,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedEmi
             move |__a0: u64| {
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
-                        let a0 = (__a0 as ::prebindgen_jni_runtime::jni::sys::jlong);
+                        let a0 = {
+                            let __v = __a0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
                         ::core::result::Result::Ok(
                             ::std::vec![
                                 ::prebindgen_jni_runtime::jni::sys::jvalue { j : a0 }
@@ -8310,17 +9178,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedSer
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result,
-                )
-                .collect();
-            let __n = __items.len();
-            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let __e1 = (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                __c1_0.push(__e1);
+            let __v = __result;
+            {
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __v,
+                    )
+                    .collect();
+                let __n = __items.len();
+                let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                for (__i, __x1) in __items.into_iter().enumerate() {
+                    let __e1 = {
+                        let __v = __x1;
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    };
+                    __c1_0.push(__e1);
+                }
+                (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
             }
-            (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -8417,34 +9291,63 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_blobValueNe
         ::std::string::String,
     > = (|| {
         let (r_stamp_secs, r_stamp_nanos, r_id, r_chunks__n, r_chunks) = {
-            let perftest_flat::BlobValue { stamp: __f0, id: __f1, chunks: __f2 } = __result;
-            let (r_stamp_secs, r_stamp_nanos) = {
-                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __f0;
-                let r_stamp_secs = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_stamp_nanos = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (r_stamp_secs, r_stamp_nanos)
-            };
-            let r_id = ::prebindgen_jni_runtime::write_u8s(
-                env,
-                ::core::convert::AsRef::<[u8]>::as_ref(&__f1),
-            )?;
-            let (r_chunks__n, r_chunks) = {
-                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                        __f2,
-                    )
-                    .collect();
-                let __n = __items.len();
-                let __c2_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-                for (__i, __x2) in __items.into_iter().enumerate() {
-                    let __e2 = ::prebindgen_jni_runtime::write_u8s(
+            let __v = __result;
+            {
+                let perftest_flat::BlobValue { stamp: __f0, id: __f1, chunks: __f2 } = __v;
+                let (r_stamp_secs, r_stamp_nanos) = {
+                    let __v = __f0;
+                    {
+                        let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                        let r_stamp_secs = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let r_stamp_nanos = {
+                            let __v = __f1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        (r_stamp_secs, r_stamp_nanos)
+                    }
+                };
+                let r_id = {
+                    let __v = __f1;
+                    ::prebindgen_jni_runtime::write_u8s(
                         env,
-                        ::core::convert::AsRef::<[u8]>::as_ref(&__x2),
-                    )?;
-                    ::prebindgen_jni_runtime::object_array_set(env, &__c2_0, __i, __e2)?;
-                }
-                (__n as i32, __c2_0)
-            };
-            (r_stamp_secs, r_stamp_nanos, r_id, r_chunks__n, r_chunks)
+                        ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                    )?
+                };
+                let (r_chunks__n, r_chunks) = {
+                    let __v = __f2;
+                    {
+                        let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                                __v,
+                            )
+                            .collect();
+                        let __n = __items.len();
+                        let __c2_0 = ::prebindgen_jni_runtime::new_object_array(
+                            env,
+                            __n,
+                        )?;
+                        for (__i, __x2) in __items.into_iter().enumerate() {
+                            let __e2 = {
+                                let __v = __x2;
+                                ::prebindgen_jni_runtime::write_u8s(
+                                    env,
+                                    ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                                )?
+                            };
+                            ::prebindgen_jni_runtime::object_array_set(
+                                env,
+                                &__c2_0,
+                                __i,
+                                __e2,
+                            )?;
+                        }
+                        (__n as i32, __c2_0)
+                    }
+                };
+                (r_stamp_secs, r_stamp_nanos, r_id, r_chunks__n, r_chunks)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -8548,34 +9451,63 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_blobValueEc
         ::std::string::String,
     > = (|| {
         let (r_stamp_secs, r_stamp_nanos, r_id, r_chunks__n, r_chunks) = {
-            let perftest_flat::BlobValue { stamp: __f0, id: __f1, chunks: __f2 } = __result;
-            let (r_stamp_secs, r_stamp_nanos) = {
-                let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __f0;
-                let r_stamp_secs = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_stamp_nanos = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                (r_stamp_secs, r_stamp_nanos)
-            };
-            let r_id = ::prebindgen_jni_runtime::write_u8s(
-                env,
-                ::core::convert::AsRef::<[u8]>::as_ref(&__f1),
-            )?;
-            let (r_chunks__n, r_chunks) = {
-                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                        __f2,
-                    )
-                    .collect();
-                let __n = __items.len();
-                let __c2_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-                for (__i, __x2) in __items.into_iter().enumerate() {
-                    let __e2 = ::prebindgen_jni_runtime::write_u8s(
+            let __v = __result;
+            {
+                let perftest_flat::BlobValue { stamp: __f0, id: __f1, chunks: __f2 } = __v;
+                let (r_stamp_secs, r_stamp_nanos) = {
+                    let __v = __f0;
+                    {
+                        let perftest_flat::Stamp { secs: __f0, nanos: __f1 } = __v;
+                        let r_stamp_secs = {
+                            let __v = __f0;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let r_stamp_nanos = {
+                            let __v = __f1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        (r_stamp_secs, r_stamp_nanos)
+                    }
+                };
+                let r_id = {
+                    let __v = __f1;
+                    ::prebindgen_jni_runtime::write_u8s(
                         env,
-                        ::core::convert::AsRef::<[u8]>::as_ref(&__x2),
-                    )?;
-                    ::prebindgen_jni_runtime::object_array_set(env, &__c2_0, __i, __e2)?;
-                }
-                (__n as i32, __c2_0)
-            };
-            (r_stamp_secs, r_stamp_nanos, r_id, r_chunks__n, r_chunks)
+                        ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                    )?
+                };
+                let (r_chunks__n, r_chunks) = {
+                    let __v = __f2;
+                    {
+                        let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                                __v,
+                            )
+                            .collect();
+                        let __n = __items.len();
+                        let __c2_0 = ::prebindgen_jni_runtime::new_object_array(
+                            env,
+                            __n,
+                        )?;
+                        for (__i, __x2) in __items.into_iter().enumerate() {
+                            let __e2 = {
+                                let __v = __x2;
+                                ::prebindgen_jni_runtime::write_u8s(
+                                    env,
+                                    ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                                )?
+                            };
+                            ::prebindgen_jni_runtime::object_array_set(
+                                env,
+                                &__c2_0,
+                                __i,
+                                __e2,
+                            )?;
+                        }
+                        (__n as i32, __c2_0)
+                    }
+                };
+                (r_stamp_secs, r_stamp_nanos, r_id, r_chunks__n, r_chunks)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -8720,62 +9652,93 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_arraysEcho<
         ::std::string::String,
     > = (|| {
         let (r_bytes, r_shorts, r_ints, r_longs, r_doubles, r_flags, r_raw) = {
-            let perftest_flat::Arrays {
-                bytes: __f0,
-                shorts: __f1,
-                ints: __f2,
-                longs: __f3,
-                doubles: __f4,
-                flags: __f5,
-                raw: __f6,
-            } = __result;
-            let r_bytes = ::prebindgen_jni_runtime::write_bytes(
-                env,
-                &__f0
-                    .iter()
-                    .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jbyte)
-                    .collect::<::std::vec::Vec<_>>(),
-            )?;
-            let r_shorts = ::prebindgen_jni_runtime::write_shorts(
-                env,
-                &__f1
-                    .iter()
-                    .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jshort)
-                    .collect::<::std::vec::Vec<_>>(),
-            )?;
-            let r_ints = ::prebindgen_jni_runtime::write_ints(
-                env,
-                &__f2
-                    .iter()
-                    .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jint)
-                    .collect::<::std::vec::Vec<_>>(),
-            )?;
-            let r_longs = ::prebindgen_jni_runtime::write_longs(
-                env,
-                &__f3
-                    .iter()
-                    .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jlong)
-                    .collect::<::std::vec::Vec<_>>(),
-            )?;
-            let r_doubles = ::prebindgen_jni_runtime::write_doubles(
-                env,
-                &__f4
-                    .iter()
-                    .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jdouble)
-                    .collect::<::std::vec::Vec<_>>(),
-            )?;
-            let r_flags = ::prebindgen_jni_runtime::write_booleans(
-                env,
-                &__f5.iter().map(|__x| u8::from(*__x)).collect::<::std::vec::Vec<_>>(),
-            )?;
-            let r_raw = ::prebindgen_jni_runtime::write_longs(
-                env,
-                &__f6
-                    .iter()
-                    .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jlong)
-                    .collect::<::std::vec::Vec<_>>(),
-            )?;
-            (r_bytes, r_shorts, r_ints, r_longs, r_doubles, r_flags, r_raw)
+            let __v = __result;
+            {
+                let perftest_flat::Arrays {
+                    bytes: __f0,
+                    shorts: __f1,
+                    ints: __f2,
+                    longs: __f3,
+                    doubles: __f4,
+                    flags: __f5,
+                    raw: __f6,
+                } = __v;
+                let r_bytes = {
+                    let __v = __f0;
+                    ::prebindgen_jni_runtime::write_bytes(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jbyte)
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                let r_shorts = {
+                    let __v = __f1;
+                    ::prebindgen_jni_runtime::write_shorts(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| {
+                                *__x as ::prebindgen_jni_runtime::jni::sys::jshort
+                            })
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                let r_ints = {
+                    let __v = __f2;
+                    ::prebindgen_jni_runtime::write_ints(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jint)
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                let r_longs = {
+                    let __v = __f3;
+                    ::prebindgen_jni_runtime::write_longs(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                let r_doubles = {
+                    let __v = __f4;
+                    ::prebindgen_jni_runtime::write_doubles(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| {
+                                *__x as ::prebindgen_jni_runtime::jni::sys::jdouble
+                            })
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                let r_flags = {
+                    let __v = __f5;
+                    ::prebindgen_jni_runtime::write_booleans(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| u8::from(*__x))
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                let r_raw = {
+                    let __v = __f6;
+                    ::prebindgen_jni_runtime::write_longs(
+                        env,
+                        &__v
+                            .iter()
+                            .map(|__x| *__x as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            .collect::<::std::vec::Vec<_>>(),
+                    )?
+                };
+                (r_bytes, r_shorts, r_ints, r_longs, r_doubles, r_flags, r_raw)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -8875,27 +9838,37 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationOpt
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    {
-                        let __repr = crate::duration_to_millis(__x1)
-                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                        ({
-                            let __repr = ::prebindgen_jni_runtime::check_domain(
-                                __repr,
-                                0u128,
-                                86400000u128,
-                                "Duration",
-                            )?;
-                            __repr
-                        } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                    },
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            {
+                                let __v = crate::duration_to_millis(__v)
+                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                {
+                                    let __v = {
+                                        let __checked = __v;
+                                        let __checked = ::prebindgen_jni_runtime::check_domain(
+                                            __checked,
+                                            0u128,
+                                            86400000u128,
+                                            "Duration",
+                                        )?;
+                                        __checked
+                                    };
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                }
+                            }
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -8960,17 +9933,27 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedDurati
         ::std::string::String,
     > = (|| {
         let r = {
-            let __repr = crate::duration_to_millis((*__result))
-                .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-            ({
-                let __repr = ::prebindgen_jni_runtime::check_domain(
-                    __repr,
-                    0u128,
-                    86400000u128,
-                    "Duration",
-                )?;
-                __repr
-            } as ::prebindgen_jni_runtime::jni::sys::jlong)
+            let __v = __result;
+            {
+                let __v = (*__v);
+                {
+                    let __v = crate::duration_to_millis(__v)
+                        .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                    {
+                        let __v = {
+                            let __checked = __v;
+                            let __checked = ::prebindgen_jni_runtime::check_domain(
+                                __checked,
+                                0u128,
+                                86400000u128,
+                                "Duration",
+                            )?;
+                            __checked
+                        };
+                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                    }
+                }
+            }
         };
         ::core::result::Result::Ok(r)
     })();
@@ -9054,44 +10037,64 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationBou
         ::std::string::String,
     > = (|| {
         let (r_required, r_delay) = {
-            let perftest_flat::DurationBoundary { required: __f0, delay: __f1 } = __result;
-            let r_required = {
-                let __repr = crate::duration_to_millis(__f0)
-                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                ({
-                    let __repr = ::prebindgen_jni_runtime::check_domain(
-                        __repr,
-                        0u128,
-                        86400000u128,
-                        "Duration",
-                    )?;
-                    __repr
-                } as ::prebindgen_jni_runtime::jni::sys::jlong)
-            };
-            let r_delay = match __f1 {
-                ::core::option::Option::Some(__x2) => {
-                    ::prebindgen_jni_runtime::box_jlong(
-                        env,
+            let __v = __result;
+            {
+                let perftest_flat::DurationBoundary { required: __f0, delay: __f1 } = __v;
+                let r_required = {
+                    let __v = __f0;
+                    {
+                        let __v = crate::duration_to_millis(__v)
+                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
                         {
-                            let __repr = crate::duration_to_millis(__x2)
-                                .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                            ({
-                                let __repr = ::prebindgen_jni_runtime::check_domain(
-                                    __repr,
+                            let __v = {
+                                let __checked = __v;
+                                let __checked = ::prebindgen_jni_runtime::check_domain(
+                                    __checked,
                                     0u128,
                                     86400000u128,
                                     "Duration",
                                 )?;
-                                __repr
-                            } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                        },
-                    )?
-                }
-                ::core::option::Option::None => {
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                }
-            };
-            (r_required, r_delay)
+                                __checked
+                            };
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        }
+                    }
+                };
+                let r_delay = {
+                    let __v = __f1;
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
+                            ::prebindgen_jni_runtime::box_jlong(
+                                env,
+                                {
+                                    let __v = __x2;
+                                    {
+                                        let __v = crate::duration_to_millis(__v)
+                                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                        {
+                                            let __v = {
+                                                let __checked = __v;
+                                                let __checked = ::prebindgen_jni_runtime::check_domain(
+                                                    __checked,
+                                                    0u128,
+                                                    86400000u128,
+                                                    "Duration",
+                                                )?;
+                                                __checked
+                                            };
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        }
+                                    }
+                                },
+                            )?
+                        }
+                        ::core::option::Option::None => {
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        }
+                    }
+                };
+                (r_required, r_delay)
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -9275,385 +10278,763 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_copyEdgeNew
             r_f123,
             r_last,
         ) = {
-            let perftest_flat::CopyEdge {
-                f0: __f0,
-                f1: __f1,
-                f2: __f2,
-                f3: __f3,
-                f4: __f4,
-                f5: __f5,
-                f6: __f6,
-                f7: __f7,
-                f8: __f8,
-                f9: __f9,
-                f10: __f10,
-                f11: __f11,
-                f12: __f12,
-                f13: __f13,
-                f14: __f14,
-                f15: __f15,
-                f16: __f16,
-                f17: __f17,
-                f18: __f18,
-                f19: __f19,
-                f20: __f20,
-                f21: __f21,
-                f22: __f22,
-                f23: __f23,
-                f24: __f24,
-                f25: __f25,
-                f26: __f26,
-                f27: __f27,
-                f28: __f28,
-                f29: __f29,
-                f30: __f30,
-                f31: __f31,
-                f32: __f32,
-                f33: __f33,
-                f34: __f34,
-                f35: __f35,
-                f36: __f36,
-                f37: __f37,
-                f38: __f38,
-                f39: __f39,
-                f40: __f40,
-                f41: __f41,
-                f42: __f42,
-                f43: __f43,
-                f44: __f44,
-                f45: __f45,
-                f46: __f46,
-                f47: __f47,
-                f48: __f48,
-                f49: __f49,
-                f50: __f50,
-                f51: __f51,
-                f52: __f52,
-                f53: __f53,
-                f54: __f54,
-                f55: __f55,
-                f56: __f56,
-                f57: __f57,
-                f58: __f58,
-                f59: __f59,
-                f60: __f60,
-                f61: __f61,
-                f62: __f62,
-                f63: __f63,
-                f64: __f64,
-                f65: __f65,
-                f66: __f66,
-                f67: __f67,
-                f68: __f68,
-                f69: __f69,
-                f70: __f70,
-                f71: __f71,
-                f72: __f72,
-                f73: __f73,
-                f74: __f74,
-                f75: __f75,
-                f76: __f76,
-                f77: __f77,
-                f78: __f78,
-                f79: __f79,
-                f80: __f80,
-                f81: __f81,
-                f82: __f82,
-                f83: __f83,
-                f84: __f84,
-                f85: __f85,
-                f86: __f86,
-                f87: __f87,
-                f88: __f88,
-                f89: __f89,
-                f90: __f90,
-                f91: __f91,
-                f92: __f92,
-                f93: __f93,
-                f94: __f94,
-                f95: __f95,
-                f96: __f96,
-                f97: __f97,
-                f98: __f98,
-                f99: __f99,
-                f100: __f100,
-                f101: __f101,
-                f102: __f102,
-                f103: __f103,
-                f104: __f104,
-                f105: __f105,
-                f106: __f106,
-                f107: __f107,
-                f108: __f108,
-                f109: __f109,
-                f110: __f110,
-                f111: __f111,
-                f112: __f112,
-                f113: __f113,
-                f114: __f114,
-                f115: __f115,
-                f116: __f116,
-                f117: __f117,
-                f118: __f118,
-                f119: __f119,
-                f120: __f120,
-                f121: __f121,
-                f122: __f122,
-                f123: __f123,
-                last: __f124,
-            } = __result;
-            let r_f0 = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f1 = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f2 = (__f2 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f3 = (__f3 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f4 = (__f4 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f5 = (__f5 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f6 = (__f6 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f7 = (__f7 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f8 = (__f8 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f9 = (__f9 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f10 = (__f10 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f11 = (__f11 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f12 = (__f12 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f13 = (__f13 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f14 = (__f14 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f15 = (__f15 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f16 = (__f16 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f17 = (__f17 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f18 = (__f18 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f19 = (__f19 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f20 = (__f20 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f21 = (__f21 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f22 = (__f22 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f23 = (__f23 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f24 = (__f24 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f25 = (__f25 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f26 = (__f26 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f27 = (__f27 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f28 = (__f28 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f29 = (__f29 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f30 = (__f30 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f31 = (__f31 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f32 = (__f32 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f33 = (__f33 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f34 = (__f34 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f35 = (__f35 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f36 = (__f36 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f37 = (__f37 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f38 = (__f38 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f39 = (__f39 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f40 = (__f40 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f41 = (__f41 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f42 = (__f42 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f43 = (__f43 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f44 = (__f44 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f45 = (__f45 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f46 = (__f46 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f47 = (__f47 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f48 = (__f48 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f49 = (__f49 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f50 = (__f50 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f51 = (__f51 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f52 = (__f52 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f53 = (__f53 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f54 = (__f54 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f55 = (__f55 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f56 = (__f56 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f57 = (__f57 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f58 = (__f58 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f59 = (__f59 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f60 = (__f60 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f61 = (__f61 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f62 = (__f62 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f63 = (__f63 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f64 = (__f64 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f65 = (__f65 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f66 = (__f66 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f67 = (__f67 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f68 = (__f68 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f69 = (__f69 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f70 = (__f70 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f71 = (__f71 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f72 = (__f72 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f73 = (__f73 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f74 = (__f74 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f75 = (__f75 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f76 = (__f76 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f77 = (__f77 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f78 = (__f78 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f79 = (__f79 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f80 = (__f80 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f81 = (__f81 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f82 = (__f82 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f83 = (__f83 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f84 = (__f84 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f85 = (__f85 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f86 = (__f86 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f87 = (__f87 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f88 = (__f88 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f89 = (__f89 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f90 = (__f90 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f91 = (__f91 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f92 = (__f92 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f93 = (__f93 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f94 = (__f94 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f95 = (__f95 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f96 = (__f96 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f97 = (__f97 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f98 = (__f98 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f99 = (__f99 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f100 = (__f100 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f101 = (__f101 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f102 = (__f102 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f103 = (__f103 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f104 = (__f104 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f105 = (__f105 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f106 = (__f106 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f107 = (__f107 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f108 = (__f108 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f109 = (__f109 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f110 = (__f110 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f111 = (__f111 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f112 = (__f112 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f113 = (__f113 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f114 = (__f114 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f115 = (__f115 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f116 = (__f116 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f117 = (__f117 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f118 = (__f118 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f119 = (__f119 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f120 = (__f120 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f121 = (__f121 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f122 = (__f122 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_f123 = (__f123 as ::prebindgen_jni_runtime::jni::sys::jlong);
-            let r_last = (__f124 as ::prebindgen_jni_runtime::jni::sys::jint);
-            (
-                r_f0,
-                r_f1,
-                r_f2,
-                r_f3,
-                r_f4,
-                r_f5,
-                r_f6,
-                r_f7,
-                r_f8,
-                r_f9,
-                r_f10,
-                r_f11,
-                r_f12,
-                r_f13,
-                r_f14,
-                r_f15,
-                r_f16,
-                r_f17,
-                r_f18,
-                r_f19,
-                r_f20,
-                r_f21,
-                r_f22,
-                r_f23,
-                r_f24,
-                r_f25,
-                r_f26,
-                r_f27,
-                r_f28,
-                r_f29,
-                r_f30,
-                r_f31,
-                r_f32,
-                r_f33,
-                r_f34,
-                r_f35,
-                r_f36,
-                r_f37,
-                r_f38,
-                r_f39,
-                r_f40,
-                r_f41,
-                r_f42,
-                r_f43,
-                r_f44,
-                r_f45,
-                r_f46,
-                r_f47,
-                r_f48,
-                r_f49,
-                r_f50,
-                r_f51,
-                r_f52,
-                r_f53,
-                r_f54,
-                r_f55,
-                r_f56,
-                r_f57,
-                r_f58,
-                r_f59,
-                r_f60,
-                r_f61,
-                r_f62,
-                r_f63,
-                r_f64,
-                r_f65,
-                r_f66,
-                r_f67,
-                r_f68,
-                r_f69,
-                r_f70,
-                r_f71,
-                r_f72,
-                r_f73,
-                r_f74,
-                r_f75,
-                r_f76,
-                r_f77,
-                r_f78,
-                r_f79,
-                r_f80,
-                r_f81,
-                r_f82,
-                r_f83,
-                r_f84,
-                r_f85,
-                r_f86,
-                r_f87,
-                r_f88,
-                r_f89,
-                r_f90,
-                r_f91,
-                r_f92,
-                r_f93,
-                r_f94,
-                r_f95,
-                r_f96,
-                r_f97,
-                r_f98,
-                r_f99,
-                r_f100,
-                r_f101,
-                r_f102,
-                r_f103,
-                r_f104,
-                r_f105,
-                r_f106,
-                r_f107,
-                r_f108,
-                r_f109,
-                r_f110,
-                r_f111,
-                r_f112,
-                r_f113,
-                r_f114,
-                r_f115,
-                r_f116,
-                r_f117,
-                r_f118,
-                r_f119,
-                r_f120,
-                r_f121,
-                r_f122,
-                r_f123,
-                r_last,
-            )
+            let __v = __result;
+            {
+                let perftest_flat::CopyEdge {
+                    f0: __f0,
+                    f1: __f1,
+                    f2: __f2,
+                    f3: __f3,
+                    f4: __f4,
+                    f5: __f5,
+                    f6: __f6,
+                    f7: __f7,
+                    f8: __f8,
+                    f9: __f9,
+                    f10: __f10,
+                    f11: __f11,
+                    f12: __f12,
+                    f13: __f13,
+                    f14: __f14,
+                    f15: __f15,
+                    f16: __f16,
+                    f17: __f17,
+                    f18: __f18,
+                    f19: __f19,
+                    f20: __f20,
+                    f21: __f21,
+                    f22: __f22,
+                    f23: __f23,
+                    f24: __f24,
+                    f25: __f25,
+                    f26: __f26,
+                    f27: __f27,
+                    f28: __f28,
+                    f29: __f29,
+                    f30: __f30,
+                    f31: __f31,
+                    f32: __f32,
+                    f33: __f33,
+                    f34: __f34,
+                    f35: __f35,
+                    f36: __f36,
+                    f37: __f37,
+                    f38: __f38,
+                    f39: __f39,
+                    f40: __f40,
+                    f41: __f41,
+                    f42: __f42,
+                    f43: __f43,
+                    f44: __f44,
+                    f45: __f45,
+                    f46: __f46,
+                    f47: __f47,
+                    f48: __f48,
+                    f49: __f49,
+                    f50: __f50,
+                    f51: __f51,
+                    f52: __f52,
+                    f53: __f53,
+                    f54: __f54,
+                    f55: __f55,
+                    f56: __f56,
+                    f57: __f57,
+                    f58: __f58,
+                    f59: __f59,
+                    f60: __f60,
+                    f61: __f61,
+                    f62: __f62,
+                    f63: __f63,
+                    f64: __f64,
+                    f65: __f65,
+                    f66: __f66,
+                    f67: __f67,
+                    f68: __f68,
+                    f69: __f69,
+                    f70: __f70,
+                    f71: __f71,
+                    f72: __f72,
+                    f73: __f73,
+                    f74: __f74,
+                    f75: __f75,
+                    f76: __f76,
+                    f77: __f77,
+                    f78: __f78,
+                    f79: __f79,
+                    f80: __f80,
+                    f81: __f81,
+                    f82: __f82,
+                    f83: __f83,
+                    f84: __f84,
+                    f85: __f85,
+                    f86: __f86,
+                    f87: __f87,
+                    f88: __f88,
+                    f89: __f89,
+                    f90: __f90,
+                    f91: __f91,
+                    f92: __f92,
+                    f93: __f93,
+                    f94: __f94,
+                    f95: __f95,
+                    f96: __f96,
+                    f97: __f97,
+                    f98: __f98,
+                    f99: __f99,
+                    f100: __f100,
+                    f101: __f101,
+                    f102: __f102,
+                    f103: __f103,
+                    f104: __f104,
+                    f105: __f105,
+                    f106: __f106,
+                    f107: __f107,
+                    f108: __f108,
+                    f109: __f109,
+                    f110: __f110,
+                    f111: __f111,
+                    f112: __f112,
+                    f113: __f113,
+                    f114: __f114,
+                    f115: __f115,
+                    f116: __f116,
+                    f117: __f117,
+                    f118: __f118,
+                    f119: __f119,
+                    f120: __f120,
+                    f121: __f121,
+                    f122: __f122,
+                    f123: __f123,
+                    last: __f124,
+                } = __v;
+                let r_f0 = {
+                    let __v = __f0;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f1 = {
+                    let __v = __f1;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f2 = {
+                    let __v = __f2;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f3 = {
+                    let __v = __f3;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f4 = {
+                    let __v = __f4;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f5 = {
+                    let __v = __f5;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f6 = {
+                    let __v = __f6;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f7 = {
+                    let __v = __f7;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f8 = {
+                    let __v = __f8;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f9 = {
+                    let __v = __f9;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f10 = {
+                    let __v = __f10;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f11 = {
+                    let __v = __f11;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f12 = {
+                    let __v = __f12;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f13 = {
+                    let __v = __f13;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f14 = {
+                    let __v = __f14;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f15 = {
+                    let __v = __f15;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f16 = {
+                    let __v = __f16;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f17 = {
+                    let __v = __f17;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f18 = {
+                    let __v = __f18;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f19 = {
+                    let __v = __f19;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f20 = {
+                    let __v = __f20;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f21 = {
+                    let __v = __f21;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f22 = {
+                    let __v = __f22;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f23 = {
+                    let __v = __f23;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f24 = {
+                    let __v = __f24;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f25 = {
+                    let __v = __f25;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f26 = {
+                    let __v = __f26;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f27 = {
+                    let __v = __f27;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f28 = {
+                    let __v = __f28;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f29 = {
+                    let __v = __f29;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f30 = {
+                    let __v = __f30;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f31 = {
+                    let __v = __f31;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f32 = {
+                    let __v = __f32;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f33 = {
+                    let __v = __f33;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f34 = {
+                    let __v = __f34;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f35 = {
+                    let __v = __f35;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f36 = {
+                    let __v = __f36;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f37 = {
+                    let __v = __f37;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f38 = {
+                    let __v = __f38;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f39 = {
+                    let __v = __f39;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f40 = {
+                    let __v = __f40;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f41 = {
+                    let __v = __f41;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f42 = {
+                    let __v = __f42;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f43 = {
+                    let __v = __f43;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f44 = {
+                    let __v = __f44;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f45 = {
+                    let __v = __f45;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f46 = {
+                    let __v = __f46;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f47 = {
+                    let __v = __f47;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f48 = {
+                    let __v = __f48;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f49 = {
+                    let __v = __f49;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f50 = {
+                    let __v = __f50;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f51 = {
+                    let __v = __f51;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f52 = {
+                    let __v = __f52;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f53 = {
+                    let __v = __f53;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f54 = {
+                    let __v = __f54;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f55 = {
+                    let __v = __f55;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f56 = {
+                    let __v = __f56;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f57 = {
+                    let __v = __f57;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f58 = {
+                    let __v = __f58;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f59 = {
+                    let __v = __f59;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f60 = {
+                    let __v = __f60;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f61 = {
+                    let __v = __f61;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f62 = {
+                    let __v = __f62;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f63 = {
+                    let __v = __f63;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f64 = {
+                    let __v = __f64;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f65 = {
+                    let __v = __f65;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f66 = {
+                    let __v = __f66;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f67 = {
+                    let __v = __f67;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f68 = {
+                    let __v = __f68;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f69 = {
+                    let __v = __f69;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f70 = {
+                    let __v = __f70;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f71 = {
+                    let __v = __f71;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f72 = {
+                    let __v = __f72;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f73 = {
+                    let __v = __f73;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f74 = {
+                    let __v = __f74;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f75 = {
+                    let __v = __f75;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f76 = {
+                    let __v = __f76;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f77 = {
+                    let __v = __f77;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f78 = {
+                    let __v = __f78;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f79 = {
+                    let __v = __f79;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f80 = {
+                    let __v = __f80;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f81 = {
+                    let __v = __f81;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f82 = {
+                    let __v = __f82;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f83 = {
+                    let __v = __f83;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f84 = {
+                    let __v = __f84;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f85 = {
+                    let __v = __f85;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f86 = {
+                    let __v = __f86;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f87 = {
+                    let __v = __f87;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f88 = {
+                    let __v = __f88;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f89 = {
+                    let __v = __f89;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f90 = {
+                    let __v = __f90;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f91 = {
+                    let __v = __f91;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f92 = {
+                    let __v = __f92;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f93 = {
+                    let __v = __f93;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f94 = {
+                    let __v = __f94;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f95 = {
+                    let __v = __f95;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f96 = {
+                    let __v = __f96;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f97 = {
+                    let __v = __f97;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f98 = {
+                    let __v = __f98;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f99 = {
+                    let __v = __f99;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f100 = {
+                    let __v = __f100;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f101 = {
+                    let __v = __f101;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f102 = {
+                    let __v = __f102;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f103 = {
+                    let __v = __f103;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f104 = {
+                    let __v = __f104;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f105 = {
+                    let __v = __f105;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f106 = {
+                    let __v = __f106;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f107 = {
+                    let __v = __f107;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f108 = {
+                    let __v = __f108;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f109 = {
+                    let __v = __f109;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f110 = {
+                    let __v = __f110;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f111 = {
+                    let __v = __f111;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f112 = {
+                    let __v = __f112;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f113 = {
+                    let __v = __f113;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f114 = {
+                    let __v = __f114;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f115 = {
+                    let __v = __f115;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f116 = {
+                    let __v = __f116;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f117 = {
+                    let __v = __f117;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f118 = {
+                    let __v = __f118;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f119 = {
+                    let __v = __f119;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f120 = {
+                    let __v = __f120;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f121 = {
+                    let __v = __f121;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f122 = {
+                    let __v = __f122;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_f123 = {
+                    let __v = __f123;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_last = {
+                    let __v = __f124;
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                };
+                (
+                    r_f0,
+                    r_f1,
+                    r_f2,
+                    r_f3,
+                    r_f4,
+                    r_f5,
+                    r_f6,
+                    r_f7,
+                    r_f8,
+                    r_f9,
+                    r_f10,
+                    r_f11,
+                    r_f12,
+                    r_f13,
+                    r_f14,
+                    r_f15,
+                    r_f16,
+                    r_f17,
+                    r_f18,
+                    r_f19,
+                    r_f20,
+                    r_f21,
+                    r_f22,
+                    r_f23,
+                    r_f24,
+                    r_f25,
+                    r_f26,
+                    r_f27,
+                    r_f28,
+                    r_f29,
+                    r_f30,
+                    r_f31,
+                    r_f32,
+                    r_f33,
+                    r_f34,
+                    r_f35,
+                    r_f36,
+                    r_f37,
+                    r_f38,
+                    r_f39,
+                    r_f40,
+                    r_f41,
+                    r_f42,
+                    r_f43,
+                    r_f44,
+                    r_f45,
+                    r_f46,
+                    r_f47,
+                    r_f48,
+                    r_f49,
+                    r_f50,
+                    r_f51,
+                    r_f52,
+                    r_f53,
+                    r_f54,
+                    r_f55,
+                    r_f56,
+                    r_f57,
+                    r_f58,
+                    r_f59,
+                    r_f60,
+                    r_f61,
+                    r_f62,
+                    r_f63,
+                    r_f64,
+                    r_f65,
+                    r_f66,
+                    r_f67,
+                    r_f68,
+                    r_f69,
+                    r_f70,
+                    r_f71,
+                    r_f72,
+                    r_f73,
+                    r_f74,
+                    r_f75,
+                    r_f76,
+                    r_f77,
+                    r_f78,
+                    r_f79,
+                    r_f80,
+                    r_f81,
+                    r_f82,
+                    r_f83,
+                    r_f84,
+                    r_f85,
+                    r_f86,
+                    r_f87,
+                    r_f88,
+                    r_f89,
+                    r_f90,
+                    r_f91,
+                    r_f92,
+                    r_f93,
+                    r_f94,
+                    r_f95,
+                    r_f96,
+                    r_f97,
+                    r_f98,
+                    r_f99,
+                    r_f100,
+                    r_f101,
+                    r_f102,
+                    r_f103,
+                    r_f104,
+                    r_f105,
+                    r_f106,
+                    r_f107,
+                    r_f108,
+                    r_f109,
+                    r_f110,
+                    r_f111,
+                    r_f112,
+                    r_f113,
+                    r_f114,
+                    r_f115,
+                    r_f116,
+                    r_f117,
+                    r_f118,
+                    r_f119,
+                    r_f120,
+                    r_f121,
+                    r_f122,
+                    r_f123,
+                    r_last,
+                )
+            }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -10328,7 +11709,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_copyEdgeSum
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -10395,17 +11779,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationEmi
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
                         let a0 = {
-                            let __repr = crate::duration_to_millis(__a0)
-                                .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                            ({
-                                let __repr = ::prebindgen_jni_runtime::check_domain(
-                                    __repr,
-                                    0u128,
-                                    86400000u128,
-                                    "Duration",
-                                )?;
-                                __repr
-                            } as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            let __v = __a0;
+                            {
+                                let __v = crate::duration_to_millis(__v)
+                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                {
+                                    let __v = {
+                                        let __checked = __v;
+                                        let __checked = ::prebindgen_jni_runtime::check_domain(
+                                            __checked,
+                                            0u128,
+                                            86400000u128,
+                                            "Duration",
+                                        )?;
+                                        __checked
+                                    };
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                }
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -10470,27 +11861,37 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationOut
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    {
-                        let __repr = crate::duration_to_millis(__x1)
-                            .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
-                        ({
-                            let __repr = ::prebindgen_jni_runtime::check_domain(
-                                __repr,
-                                0u128,
-                                86400000u128,
-                                "Duration",
-                            )?;
-                            __repr
-                        } as ::prebindgen_jni_runtime::jni::sys::jlong)
-                    },
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            {
+                                let __v = crate::duration_to_millis(__v)
+                                    .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
+                                {
+                                    let __v = {
+                                        let __checked = __v;
+                                        let __checked = ::prebindgen_jni_runtime::check_domain(
+                                            __checked,
+                                            0u128,
+                                            86400000u128,
+                                            "Duration",
+                                        )?;
+                                        __checked
+                                    };
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                }
+                            }
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -10541,35 +11942,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (r_count, r_total) = {
-                let __v1 = __x;
-                let r_count = (perftest_flat::summary_count(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_total = (perftest_flat::summary_total(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let (r_count, r_total) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
+                let r_count = {
+                    let __v = perftest_flat::summary_count(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_total = {
+                    let __v = perftest_flat::summary_total(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                };
                 (r_count, r_total)
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
-                    "run",
-                    "(JD)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_count,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            d: r_total,
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
+                "run",
+                "(JD)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_count,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        d: r_total,
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -10668,10 +12073,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryDesc
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -10707,7 +12115,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_sizeOfAsI64
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -10815,7 +12226,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageMatc
         ::prebindgen_jni_runtime::jni::sys::jboolean,
         ::std::string::String,
     > = (|| {
-        let r = (__result as u8);
+        let r = {
+            let __v = __result;
+            (__v as u8)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -10865,7 +12279,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -10913,7 +12330,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTota
         ::prebindgen_jni_runtime::jni::sys::jdouble,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -10964,39 +12384,46 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (r_count, r_total, r_handle) = {
-                let __v1 = __x;
-                let r_count = (perftest_flat::summary_count(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_total = (perftest_flat::summary_total(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                let r_handle = ::prebindgen_jni_runtime::new_handle(__v1);
+        let (r_count, r_total, r_handle) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
+                let r_count = {
+                    let __v = perftest_flat::summary_count(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_total = {
+                    let __v = perftest_flat::summary_total(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                };
+                let r_handle = {
+                    let __v = __v1;
+                    ::prebindgen_jni_runtime::new_handle(__v)
+                };
                 (r_count, r_total, r_handle)
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/analytics/SummaryStorageSummaryFullBuilderRaw",
-                    "run",
-                    "(JDJ)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_count,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            d: r_total,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_handle,
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/analytics/SummaryStorageSummaryFullBuilderRaw",
+                "run",
+                "(JDJ)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_count,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        d: r_total,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_handle,
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -11046,51 +12473,61 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (r_count, r_total, r_handle) = {
-                let __v1 = __x;
-                let r_count = (perftest_flat::summary_count(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_total = (perftest_flat::summary_total(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                let r_handle = match crate::summary_if_nonempty(&__v1) {
-                    ::core::option::Option::Some(__x2) => {
-                        ::prebindgen_jni_runtime::box_jlong(
-                            env,
-                            ::prebindgen_jni_runtime::new_handle(
-                                ::core::clone::Clone::clone(__x2),
-                            ),
-                        )?
-                    }
-                    ::core::option::Option::None => {
-                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let (r_count, r_total, r_handle) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
+                let r_count = {
+                    let __v = perftest_flat::summary_count(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_total = {
+                    let __v = perftest_flat::summary_total(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                };
+                let r_handle = {
+                    let __v = crate::summary_if_nonempty(&__v1);
+                    match __v {
+                        ::core::option::Option::Some(__x2) => {
+                            ::prebindgen_jni_runtime::box_jlong(
+                                env,
+                                {
+                                    let __v = __x2;
+                                    ::prebindgen_jni_runtime::new_handle(
+                                        ::core::clone::Clone::clone(__v),
+                                    )
+                                },
+                            )?
+                        }
+                        ::core::option::Option::None => {
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                        }
                     }
                 };
                 (r_count, r_total, r_handle)
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/analytics/SummaryStorageSummaryProbeBuilderRaw",
-                    "run",
-                    "(JDLjava/lang/Long;)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_count,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            d: r_total,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_handle.as_raw(),
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/analytics/SummaryStorageSummaryProbeBuilderRaw",
+                "run",
+                "(JDLjava/lang/Long;)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_count,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        d: r_total,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_handle.as_raw(),
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -11197,7 +12634,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageExpe
         ::prebindgen_jni_runtime::jni::sys::jboolean,
         ::std::string::String,
     > = (|| {
-        let r = (__result as u8);
+        let r = {
+            let __v = __result;
+            (__v as u8)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -11349,7 +12789,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryPref
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -11502,35 +12945,39 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryMerg
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (r_count, r_total) = {
-                let __v1 = __x;
-                let r_count = (perftest_flat::summary_count(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jlong);
-                let r_total = (perftest_flat::summary_total(&__v1)
-                    as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let (r_count, r_total) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
+                let r_count = {
+                    let __v = perftest_flat::summary_count(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                };
+                let r_total = {
+                    let __v = perftest_flat::summary_total(&__v1);
+                    (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                };
                 (r_count, r_total)
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
-                    "run",
-                    "(JD)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_count,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            d: r_total,
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
+                "run",
+                "(JD)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_count,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        d: r_total,
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -11632,7 +13079,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTota
         ::prebindgen_jni_runtime::jni::sys::jdouble,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -11673,21 +13123,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summarySeri
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(__result)
-            .collect();
-        {
-            let (__cn, __colw0, __colw1) = {
-                let __n = __items.len();
+        let (__cn, __colw0, __colw1) = {
+            let __v = ::core::iter::IntoIterator::into_iter(__result)
+                .collect::<::std::vec::Vec<_>>();
+            {
+                let __n = __v.len();
                 let mut __col0 = ::std::vec::Vec::with_capacity(__n);
                 let mut __col1 = ::std::vec::Vec::with_capacity(__n);
-                for (__i, __x) in __items.into_iter().enumerate() {
+                for (__i, __x) in __v.into_iter().enumerate() {
                     let (r_count, r_total) = {
-                        let __v1 = __x;
-                        let r_count = (perftest_flat::summary_count(&__v1)
-                            as ::prebindgen_jni_runtime::jni::sys::jlong);
-                        let r_total = (perftest_flat::summary_total(&__v1)
-                            as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                        (r_count, r_total)
+                        let __v = __x;
+                        {
+                            let __v1 = __v;
+                            let r_count = {
+                                let __v = perftest_flat::summary_count(&__v1);
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
+                            let r_total = {
+                                let __v = perftest_flat::summary_total(&__v1);
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                            };
+                            (r_count, r_total)
+                        }
                     };
                     __col0.push(r_count);
                     __col1.push(r_total);
@@ -11697,29 +13154,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summarySeri
                     ::prebindgen_jni_runtime::write_longs(env, &__col0)?,
                     ::prebindgen_jni_runtime::write_doubles(env, &__col1)?,
                 )
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/analytics/SummaryFolderColumns",
-                    "run",
-                    "(I[J[D)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            i: __cn,
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __colw0.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: __colw1.as_raw(),
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/analytics/SummaryFolderColumns",
+                "run",
+                "(I[J[D)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        i: __cn,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: __colw0.as_raw(),
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: __colw1.as_raw(),
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -11762,23 +13219,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summarySeri
         ::std::string::String,
     > = (|| match __result {
         ::core::option::Option::Some(__some) => {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __some,
-                )
-                .collect();
-            {
-                let (__cn, __colw0, __colw1) = {
-                    let __n = __items.len();
+            let (__cn, __colw0, __colw1) = {
+                let __v = ::core::iter::IntoIterator::into_iter(__some)
+                    .collect::<::std::vec::Vec<_>>();
+                {
+                    let __n = __v.len();
                     let mut __col0 = ::std::vec::Vec::with_capacity(__n);
                     let mut __col1 = ::std::vec::Vec::with_capacity(__n);
-                    for (__i, __x) in __items.into_iter().enumerate() {
+                    for (__i, __x) in __v.into_iter().enumerate() {
                         let (r_count, r_total) = {
-                            let __v1 = __x;
-                            let r_count = (perftest_flat::summary_count(&__v1)
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                            let r_total = (perftest_flat::summary_total(&__v1)
-                                as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                            (r_count, r_total)
+                            let __v = __x;
+                            {
+                                let __v1 = __v;
+                                let r_count = {
+                                    let __v = perftest_flat::summary_count(&__v1);
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                };
+                                let r_total = {
+                                    let __v = perftest_flat::summary_total(&__v1);
+                                    (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                };
+                                (r_count, r_total)
+                            }
                         };
                         __col0.push(r_count);
                         __col1.push(r_total);
@@ -11788,29 +13250,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summarySeri
                         ::prebindgen_jni_runtime::write_longs(env, &__col0)?,
                         ::prebindgen_jni_runtime::write_doubles(env, &__col1)?,
                     )
-                };
-                static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-                let __o = __S
-                    .call_object(
-                        env,
-                        "io/prebindgen/covertest/analytics/SummaryFolderColumns",
-                        "run",
-                        "(I[J[D)Ljava/lang/Object;",
-                        &__sink,
-                        &[
-                            ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                i: __cn,
-                            },
-                            ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                l: __colw0.as_raw(),
-                            },
-                            ::prebindgen_jni_runtime::jni::sys::jvalue {
-                                l: __colw1.as_raw(),
-                            },
-                        ],
-                    )?;
-                ::core::result::Result::Ok(__o.into_raw())
-            }
+                }
+            };
+            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+            let __o = __S
+                .call_object(
+                    env,
+                    "io/prebindgen/covertest/analytics/SummaryFolderColumns",
+                    "run",
+                    "(I[J[D)Ljava/lang/Object;",
+                    &__sink,
+                    &[
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            i: __cn,
+                        },
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            l: __colw0.as_raw(),
+                        },
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            l: __colw1.as_raw(),
+                        },
+                    ],
+                )?;
+            ::core::result::Result::Ok(__o.into_raw())
         }
         ::core::option::Option::None => {
             ::core::result::Result::Ok(::core::ptr::null_mut())
@@ -11849,7 +13311,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_archiveNew<
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -11998,17 +13463,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_archiveLate
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = match __result {
-            ::core::option::Option::Some(__x1) => {
-                ::prebindgen_jni_runtime::box_jlong(
-                    env,
-                    ::prebindgen_jni_runtime::new_handle(
-                        ::core::clone::Clone::clone(__x1),
-                    ),
-                )?
-            }
-            ::core::option::Option::None => {
-                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let r = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__x1) => {
+                    ::prebindgen_jni_runtime::box_jlong(
+                        env,
+                        {
+                            let __v = __x1;
+                            ::prebindgen_jni_runtime::new_handle(
+                                ::core::clone::Clone::clone(__v),
+                            )
+                        },
+                    )?
+                }
+                ::core::option::Option::None => {
+                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                }
             }
         };
         ::core::result::Result::Ok(r.into_raw())
@@ -12046,7 +13517,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageNew<
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -12095,45 +13569,72 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageGet<
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__present, r_id, r_seq, r_value, r_flag, r_label) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (r_id, r_seq, r_value, r_flag, r_label) = {
-                    let perftest_flat::Payload {
-                        id: __f0,
-                        seq: __f1,
-                        value: __f2,
-                        flag: __f3,
-                        label: __f4,
-                    } = __some;
-                    let r_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let r_seq = (__f1 as ::prebindgen_jni_runtime::jni::sys::jint);
-                    let r_value = (__f2 as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                    let r_flag = (__f3 as u8);
-                    let r_label = match __f4 {
-                        ::core::option::Option::Some(__some) => {
-                            let r_label = ::prebindgen_jni_runtime::new_string(
-                                env,
-                                ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                            )?;
-                            r_label
-                        }
-                        ::core::option::Option::None => {
-                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+        let (r__present, r_id, r_seq, r_value, r_flag, r_label) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (r_id, r_seq, r_value, r_flag, r_label) = {
+                        let __v = __some;
+                        {
+                            let perftest_flat::Payload {
+                                id: __f0,
+                                seq: __f1,
+                                value: __f2,
+                                flag: __f3,
+                                label: __f4,
+                            } = __v;
+                            let r_id = {
+                                let __v = __f0;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                            };
+                            let r_seq = {
+                                let __v = __f1;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                            };
+                            let r_value = {
+                                let __v = __f2;
+                                (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                            };
+                            let r_flag = {
+                                let __v = __f3;
+                                (__v as u8)
+                            };
+                            let r_label = {
+                                let __v = __f4;
+                                match __v {
+                                    ::core::option::Option::Some(__some) => {
+                                        let r_label = {
+                                            let __v = __some;
+                                            {
+                                                let __v = (*__v);
+                                                ::prebindgen_jni_runtime::new_string(
+                                                    env,
+                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                )?
+                                            }
+                                        };
+                                        r_label
+                                    }
+                                    ::core::option::Option::None => {
+                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                    }
+                                }
+                            };
+                            (r_id, r_seq, r_value, r_flag, r_label)
                         }
                     };
-                    (r_id, r_seq, r_value, r_flag, r_label)
-                };
-                (1u8, r_id, r_seq, r_value, r_flag, r_label)
-            }
-            ::core::option::Option::None => {
-                (
-                    0,
-                    0,
-                    0,
-                    0.0f64,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                )
+                    (1u8, r_id, r_seq, r_value, r_flag, r_label)
+                }
+                ::core::option::Option::None => {
+                    (
+                        0,
+                        0,
+                        0,
+                        0.0f64,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                    )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -12461,81 +13962,117 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageGetV
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
-                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                            __some,
-                        )
-                        .collect();
-                    let __n = __items.len();
-                    let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
-                    let mut __c2_1 = ::std::vec::Vec::with_capacity(__n);
-                    let mut __c2_2 = ::std::vec::Vec::with_capacity(__n);
-                    let mut __c2_3 = ::std::vec::Vec::with_capacity(__n);
-                    let __c2_4 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-                    for (__i, __x2) in __items.into_iter().enumerate() {
-                        let (__e2_id, __e2_seq, __e2_value, __e2_flag, __e2_label) = {
-                            let perftest_flat::Payload {
-                                id: __f0,
-                                seq: __f1,
-                                value: __f2,
-                                flag: __f3,
-                                label: __f4,
-                            } = __x2;
-                            let __e2_id = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                            let __e2_seq = (__f1
-                                as ::prebindgen_jni_runtime::jni::sys::jint);
-                            let __e2_value = (__f2
-                                as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                            let __e2_flag = (__f3 as u8);
-                            let __e2_label = match __f4 {
-                                ::core::option::Option::Some(__some) => {
-                                    let __e2_label = ::prebindgen_jni_runtime::new_string(
-                                        env,
-                                        ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                    )?;
-                                    __e2_label
-                                }
-                                ::core::option::Option::None => {
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                }
-                            };
-                            (__e2_id, __e2_seq, __e2_value, __e2_flag, __e2_label)
-                        };
-                        __c2_0.push(__e2_id);
-                        __c2_1.push(__e2_seq);
-                        __c2_2.push(__e2_value);
-                        __c2_3.push(__e2_flag);
-                        ::prebindgen_jni_runtime::object_array_set(
-                            env,
-                            &__c2_4,
-                            __i,
-                            __e2_label,
-                        )?;
-                    }
+        let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
+                        let __v = __some;
+                        {
+                            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                                    __v,
+                                )
+                                .collect();
+                            let __n = __items.len();
+                            let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
+                            let mut __c2_1 = ::std::vec::Vec::with_capacity(__n);
+                            let mut __c2_2 = ::std::vec::Vec::with_capacity(__n);
+                            let mut __c2_3 = ::std::vec::Vec::with_capacity(__n);
+                            let __c2_4 = ::prebindgen_jni_runtime::new_object_array(
+                                env,
+                                __n,
+                            )?;
+                            for (__i, __x2) in __items.into_iter().enumerate() {
+                                let (
+                                    __e2_id,
+                                    __e2_seq,
+                                    __e2_value,
+                                    __e2_flag,
+                                    __e2_label,
+                                ) = {
+                                    let __v = __x2;
+                                    {
+                                        let perftest_flat::Payload {
+                                            id: __f0,
+                                            seq: __f1,
+                                            value: __f2,
+                                            flag: __f3,
+                                            label: __f4,
+                                        } = __v;
+                                        let __e2_id = {
+                                            let __v = __f0;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                        };
+                                        let __e2_seq = {
+                                            let __v = __f1;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                        };
+                                        let __e2_value = {
+                                            let __v = __f2;
+                                            (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                        };
+                                        let __e2_flag = {
+                                            let __v = __f3;
+                                            (__v as u8)
+                                        };
+                                        let __e2_label = {
+                                            let __v = __f4;
+                                            match __v {
+                                                ::core::option::Option::Some(__some) => {
+                                                    let __e2_label = {
+                                                        let __v = __some;
+                                                        {
+                                                            let __v = (*__v);
+                                                            ::prebindgen_jni_runtime::new_string(
+                                                                env,
+                                                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                            )?
+                                                        }
+                                                    };
+                                                    __e2_label
+                                                }
+                                                ::core::option::Option::None => {
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                                }
+                                            }
+                                        };
+                                        (__e2_id, __e2_seq, __e2_value, __e2_flag, __e2_label)
+                                    }
+                                };
+                                __c2_0.push(__e2_id);
+                                __c2_1.push(__e2_seq);
+                                __c2_2.push(__e2_value);
+                                __c2_3.push(__e2_flag);
+                                ::prebindgen_jni_runtime::object_array_set(
+                                    env,
+                                    &__c2_4,
+                                    __i,
+                                    __e2_label,
+                                )?;
+                            }
+                            (
+                                __n as i32,
+                                ::prebindgen_jni_runtime::write_longs(env, &__c2_0)?,
+                                ::prebindgen_jni_runtime::write_ints(env, &__c2_1)?,
+                                ::prebindgen_jni_runtime::write_doubles(env, &__c2_2)?,
+                                ::prebindgen_jni_runtime::write_booleans(env, &__c2_3)?,
+                                __c2_4,
+                            )
+                        }
+                    };
+                    (1u8, r__n, r_id, r_seq, r_value, r_flag, r_label)
+                }
+                ::core::option::Option::None => {
                     (
-                        __n as i32,
-                        ::prebindgen_jni_runtime::write_longs(env, &__c2_0)?,
-                        ::prebindgen_jni_runtime::write_ints(env, &__c2_1)?,
-                        ::prebindgen_jni_runtime::write_doubles(env, &__c2_2)?,
-                        ::prebindgen_jni_runtime::write_booleans(env, &__c2_3)?,
-                        __c2_4,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                     )
-                };
-                (1u8, r__n, r_id, r_seq, r_value, r_flag, r_label)
-            }
-            ::core::option::Option::None => {
-                (
-                    0,
-                    0,
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                )
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -12616,33 +14153,57 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadHand
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
                         let (a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
-                            let perftest_flat::Payload {
-                                id: __f0,
-                                seq: __f1,
-                                value: __f2,
-                                flag: __f3,
-                                label: __f4,
-                            } = ::core::clone::Clone::clone(__a0);
-                            let a0_id = (__f0
-                                as ::prebindgen_jni_runtime::jni::sys::jlong);
-                            let a0_seq = (__f1
-                                as ::prebindgen_jni_runtime::jni::sys::jint);
-                            let a0_value = (__f2
-                                as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                            let a0_flag = (__f3 as u8);
-                            let a0_label = match __f4 {
-                                ::core::option::Option::Some(__some) => {
-                                    let a0_label = ::prebindgen_jni_runtime::new_string(
-                                        env,
-                                        ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                    )?;
-                                    a0_label
+                            let __v = __a0;
+                            {
+                                let __v = ::core::clone::Clone::clone(__v);
+                                {
+                                    let perftest_flat::Payload {
+                                        id: __f0,
+                                        seq: __f1,
+                                        value: __f2,
+                                        flag: __f3,
+                                        label: __f4,
+                                    } = __v;
+                                    let a0_id = {
+                                        let __v = __f0;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                    };
+                                    let a0_seq = {
+                                        let __v = __f1;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                    };
+                                    let a0_value = {
+                                        let __v = __f2;
+                                        (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                    };
+                                    let a0_flag = {
+                                        let __v = __f3;
+                                        (__v as u8)
+                                    };
+                                    let a0_label = {
+                                        let __v = __f4;
+                                        match __v {
+                                            ::core::option::Option::Some(__some) => {
+                                                let a0_label = {
+                                                    let __v = __some;
+                                                    {
+                                                        let __v = (*__v);
+                                                        ::prebindgen_jni_runtime::new_string(
+                                                            env,
+                                                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                        )?
+                                                    }
+                                                };
+                                                a0_label
+                                            }
+                                            ::core::option::Option::None => {
+                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                            }
+                                        }
+                                    };
+                                    (a0_id, a0_seq, a0_value, a0_flag, a0_label)
                                 }
-                                ::core::option::Option::None => {
-                                    ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                }
-                            };
-                            (a0_id, a0_seq, a0_value, a0_flag, a0_label)
+                            }
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -12677,7 +14238,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadHand
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -12783,74 +14347,98 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadVecH
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
                         let (a0__n, a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
-                            let __items: ::std::vec::Vec<_> = __a0
-                                .iter()
-                                .cloned()
-                                .collect();
-                            let __n = __items.len();
-                            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-                            let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
-                            let mut __c1_2 = ::std::vec::Vec::with_capacity(__n);
-                            let mut __c1_3 = ::std::vec::Vec::with_capacity(__n);
-                            let __c1_4 = ::prebindgen_jni_runtime::new_object_array(
-                                env,
-                                __n,
-                            )?;
-                            for (__i, __x1) in __items.into_iter().enumerate() {
-                                let (
-                                    __e1_id,
-                                    __e1_seq,
-                                    __e1_value,
-                                    __e1_flag,
-                                    __e1_label,
-                                ) = {
-                                    let perftest_flat::Payload {
-                                        id: __f0,
-                                        seq: __f1,
-                                        value: __f2,
-                                        flag: __f3,
-                                        label: __f4,
-                                    } = __x1;
-                                    let __e1_id = (__f0
-                                        as ::prebindgen_jni_runtime::jni::sys::jlong);
-                                    let __e1_seq = (__f1
-                                        as ::prebindgen_jni_runtime::jni::sys::jint);
-                                    let __e1_value = (__f2
-                                        as ::prebindgen_jni_runtime::jni::sys::jdouble);
-                                    let __e1_flag = (__f3 as u8);
-                                    let __e1_label = match __f4 {
-                                        ::core::option::Option::Some(__some) => {
-                                            let __e1_label = ::prebindgen_jni_runtime::new_string(
-                                                env,
-                                                ::core::convert::AsRef::<str>::as_ref(&(*__some)),
-                                            )?;
-                                            __e1_label
-                                        }
-                                        ::core::option::Option::None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                            let __v = __a0;
+                            {
+                                let __items: ::std::vec::Vec<_> = __v
+                                    .iter()
+                                    .cloned()
+                                    .collect();
+                                let __n = __items.len();
+                                let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                                let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
+                                let mut __c1_2 = ::std::vec::Vec::with_capacity(__n);
+                                let mut __c1_3 = ::std::vec::Vec::with_capacity(__n);
+                                let __c1_4 = ::prebindgen_jni_runtime::new_object_array(
+                                    env,
+                                    __n,
+                                )?;
+                                for (__i, __x1) in __items.into_iter().enumerate() {
+                                    let (
+                                        __e1_id,
+                                        __e1_seq,
+                                        __e1_value,
+                                        __e1_flag,
+                                        __e1_label,
+                                    ) = {
+                                        let __v = __x1;
+                                        {
+                                            let perftest_flat::Payload {
+                                                id: __f0,
+                                                seq: __f1,
+                                                value: __f2,
+                                                flag: __f3,
+                                                label: __f4,
+                                            } = __v;
+                                            let __e1_id = {
+                                                let __v = __f0;
+                                                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                                            };
+                                            let __e1_seq = {
+                                                let __v = __f1;
+                                                (__v as ::prebindgen_jni_runtime::jni::sys::jint)
+                                            };
+                                            let __e1_value = {
+                                                let __v = __f2;
+                                                (__v as ::prebindgen_jni_runtime::jni::sys::jdouble)
+                                            };
+                                            let __e1_flag = {
+                                                let __v = __f3;
+                                                (__v as u8)
+                                            };
+                                            let __e1_label = {
+                                                let __v = __f4;
+                                                match __v {
+                                                    ::core::option::Option::Some(__some) => {
+                                                        let __e1_label = {
+                                                            let __v = __some;
+                                                            {
+                                                                let __v = (*__v);
+                                                                ::prebindgen_jni_runtime::new_string(
+                                                                    env,
+                                                                    ::core::convert::AsRef::<str>::as_ref(&__v),
+                                                                )?
+                                                            }
+                                                        };
+                                                        __e1_label
+                                                    }
+                                                    ::core::option::Option::None => {
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
+                                                    }
+                                                }
+                                            };
+                                            (__e1_id, __e1_seq, __e1_value, __e1_flag, __e1_label)
                                         }
                                     };
-                                    (__e1_id, __e1_seq, __e1_value, __e1_flag, __e1_label)
-                                };
-                                __c1_0.push(__e1_id);
-                                __c1_1.push(__e1_seq);
-                                __c1_2.push(__e1_value);
-                                __c1_3.push(__e1_flag);
-                                ::prebindgen_jni_runtime::object_array_set(
-                                    env,
-                                    &__c1_4,
-                                    __i,
-                                    __e1_label,
-                                )?;
+                                    __c1_0.push(__e1_id);
+                                    __c1_1.push(__e1_seq);
+                                    __c1_2.push(__e1_value);
+                                    __c1_3.push(__e1_flag);
+                                    ::prebindgen_jni_runtime::object_array_set(
+                                        env,
+                                        &__c1_4,
+                                        __i,
+                                        __e1_label,
+                                    )?;
+                                }
+                                (
+                                    __n as i32,
+                                    ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?,
+                                    ::prebindgen_jni_runtime::write_ints(env, &__c1_1)?,
+                                    ::prebindgen_jni_runtime::write_doubles(env, &__c1_2)?,
+                                    ::prebindgen_jni_runtime::write_booleans(env, &__c1_3)?,
+                                    __c1_4,
+                                )
                             }
-                            (
-                                __n as i32,
-                                ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?,
-                                ::prebindgen_jni_runtime::write_ints(env, &__c1_1)?,
-                                ::prebindgen_jni_runtime::write_doubles(env, &__c1_2)?,
-                                ::prebindgen_jni_runtime::write_booleans(env, &__c1_3)?,
-                                __c1_4,
-                            )
                         };
                         ::core::result::Result::Ok(
                             ::std::vec![
@@ -12888,7 +14476,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadVecH
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -12999,20 +14590,30 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageTryW
         ::std::string::String,
     > = (|| match __result {
         ::core::result::Result::Ok(__ok) => {
-            let r = ::prebindgen_jni_runtime::new_handle(__ok);
+            let r = {
+                let __v = __ok;
+                ::prebindgen_jni_runtime::new_handle(__v)
+            };
             ::core::result::Result::Ok(r)
         }
         ::core::result::Result::Err(__e) => {
             let (e_message, e_handle) = {
-                let __v1 = __e;
-                let e_message = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<
-                        str,
-                    >::as_ref(&perftest_flat::storage_error_message(&__v1)),
-                )?;
-                let e_handle = ::prebindgen_jni_runtime::new_handle(__v1);
-                (e_message, e_handle)
+                let __v = __e;
+                {
+                    let __v1 = __v;
+                    let e_message = {
+                        let __v = perftest_flat::storage_error_message(&__v1);
+                        ::prebindgen_jni_runtime::new_string(
+                            env,
+                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                        )?
+                    };
+                    let e_handle = {
+                        let __v = __v1;
+                        ::prebindgen_jni_runtime::new_handle(__v)
+                    };
+                    (e_message, e_handle)
+                }
             };
             static __D: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
             __D.call_void(
@@ -13096,20 +14697,30 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageTryF
         ::std::string::String,
     > = (|| match __result {
         ::core::result::Result::Ok(__ok) => {
-            let r = ::prebindgen_jni_runtime::new_handle(__ok);
+            let r = {
+                let __v = __ok;
+                ::prebindgen_jni_runtime::new_handle(__v)
+            };
             ::core::result::Result::Ok(r)
         }
         ::core::result::Result::Err(__e) => {
             let (e_message, e_handle) = {
-                let __v1 = __e;
-                let e_message = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<
-                        str,
-                    >::as_ref(&perftest_flat::storage_error_message(&__v1)),
-                )?;
-                let e_handle = ::prebindgen_jni_runtime::new_handle(__v1);
-                (e_message, e_handle)
+                let __v = __e;
+                {
+                    let __v1 = __v;
+                    let e_message = {
+                        let __v = perftest_flat::storage_error_message(&__v1);
+                        ::prebindgen_jni_runtime::new_string(
+                            env,
+                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                        )?
+                    };
+                    let e_handle = {
+                        let __v = __v1;
+                        ::prebindgen_jni_runtime::new_handle(__v)
+                    };
+                    (e_message, e_handle)
+                }
             };
             static __D: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
             __D.call_void(
@@ -13169,17 +14780,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageShar
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result,
-                )
-                .collect();
-            let __n = __items.len();
-            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let __e1 = ::prebindgen_jni_runtime::new_handle(__x1);
-                __c1_0.push(__e1);
+            let __v = __result;
+            {
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __v,
+                    )
+                    .collect();
+                let __n = __items.len();
+                let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                for (__i, __x1) in __items.into_iter().enumerate() {
+                    let __e1 = {
+                        let __v = __x1;
+                        ::prebindgen_jni_runtime::new_handle(__v)
+                    };
+                    __c1_0.push(__e1);
+                }
+                (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
             }
-            (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -13240,25 +14857,37 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageShar
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let (r__present, r__n, r) = match __result {
-            ::core::option::Option::Some(__some) => {
-                let (r__n, r) = {
-                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                            __some,
-                        )
-                        .collect();
-                    let __n = __items.len();
-                    let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
-                    for (__i, __x2) in __items.into_iter().enumerate() {
-                        let __e2 = ::prebindgen_jni_runtime::new_handle(__x2);
-                        __c2_0.push(__e2);
-                    }
-                    (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c2_0)?)
-                };
-                (1u8, r__n, r)
-            }
-            ::core::option::Option::None => {
-                (0, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
+        let (r__present, r__n, r) = {
+            let __v = __result;
+            match __v {
+                ::core::option::Option::Some(__some) => {
+                    let (r__n, r) = {
+                        let __v = __some;
+                        {
+                            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                                    __v,
+                                )
+                                .collect();
+                            let __n = __items.len();
+                            let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
+                            for (__i, __x2) in __items.into_iter().enumerate() {
+                                let __e2 = {
+                                    let __v = __x2;
+                                    ::prebindgen_jni_runtime::new_handle(__v)
+                                };
+                                __c2_0.push(__e2);
+                            }
+                            (
+                                __n as i32,
+                                ::prebindgen_jni_runtime::write_longs(env, &__c2_0)?,
+                            )
+                        }
+                    };
+                    (1u8, r__n, r)
+                }
+                ::core::option::Option::None => {
+                    (0, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null())
+                }
             }
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
@@ -13326,7 +14955,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageHand
             move |__a0: perftest_flat::Storage| {
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
-                        let a0 = ::prebindgen_jni_runtime::new_handle(__a0);
+                        let a0 = {
+                            let __v = __a0;
+                            ::prebindgen_jni_runtime::new_handle(__v)
+                        };
                         ::core::result::Result::Ok(
                             ::std::vec![
                                 ::prebindgen_jni_runtime::jni::sys::jvalue { j : a0 }
@@ -13355,7 +14987,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageHand
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_handle(__v)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -13474,7 +15109,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageTota
         ::prebindgen_jni_runtime::jni::sys::jlong,
         ::std::string::String,
     > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        let r = {
+            let __v = __result;
+            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -13524,20 +15162,26 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageLabe
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result,
-                )
-                .collect();
-            let __n = __items.len();
-            let __c1_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let __e1 = ::prebindgen_jni_runtime::new_string(
-                    env,
-                    ::core::convert::AsRef::<str>::as_ref(&__x1),
-                )?;
-                ::prebindgen_jni_runtime::object_array_set(env, &__c1_0, __i, __e1)?;
+            let __v = __result;
+            {
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __v,
+                    )
+                    .collect();
+                let __n = __items.len();
+                let __c1_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
+                for (__i, __x1) in __items.into_iter().enumerate() {
+                    let __e1 = {
+                        let __v = __x1;
+                        ::prebindgen_jni_runtime::new_string(
+                            env,
+                            ::core::convert::AsRef::<str>::as_ref(&__v),
+                        )?
+                    };
+                    ::prebindgen_jni_runtime::object_array_set(env, &__c1_0, __i, __e1)?;
+                }
+                (__n as i32, __c1_0)
             }
-            (__n as i32, __c1_0)
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -13638,7 +15282,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storagePutO
         ::prebindgen_jni_runtime::jni::sys::jboolean,
         ::std::string::String,
     > = (|| {
-        let r = (__result as u8);
+        let r = {
+            let __v = __result;
+            (__v as u8)
+        };
         ::core::result::Result::Ok(r)
     })();
     match __r {
@@ -13685,8 +15332,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'
         ::std::string::String,
     > = (|| {
         let r = {
-            let __repr = cov_helpers::millis_value(&__result);
-            (__repr as ::prebindgen_jni_runtime::jni::sys::jlong)
+            let __v = __result;
+            {
+                let __v = cov_helpers::millis_value(&__v);
+                (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+            }
         };
         ::core::result::Result::Ok(r)
     })();
@@ -13733,10 +15383,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stringNew<'
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -13802,10 +15455,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagDescribe
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -13869,10 +15525,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagDescribe
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -13928,10 +15587,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagDefaultO
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -14004,10 +15666,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagWithOpt<
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -14054,48 +15719,58 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagPick<'a>
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let __x = __result;
-        {
-            let (r_label, r_size) = {
-                let __v1 = __x;
+        let (r_label, r_size) = {
+            let __v = __result;
+            {
+                let __v1 = __v;
                 let __s1 = cov_helpers::tag_parts(&__v1);
                 let (r_label, r_size) = {
-                    let cov_helpers::TagParts {
-                        label: __f2_0,
-                        size: __f2_1,
-                        note: __f2_2,
-                    } = __s1;
-                    let r_label = ::prebindgen_jni_runtime::new_string(
-                        env,
-                        ::core::convert::AsRef::<str>::as_ref(&__f2_0),
-                    )?;
-                    let r_size = (__f2_1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                    let () = {
-                        let _ = __f2_2;
-                    };
-                    (r_label, r_size)
+                    let __v = __s1;
+                    {
+                        let cov_helpers::TagParts {
+                            label: __f2_0,
+                            size: __f2_1,
+                            note: __f2_2,
+                        } = __v;
+                        let r_label = {
+                            let __v = __f2_0;
+                            ::prebindgen_jni_runtime::new_string(
+                                env,
+                                ::core::convert::AsRef::<str>::as_ref(&__v),
+                            )?
+                        };
+                        let r_size = {
+                            let __v = __f2_1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        let () = {
+                            let __v = __f2_2;
+                            ()
+                        };
+                        (r_label, r_size)
+                    }
                 };
                 (r_label, r_size)
-            };
-            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
-            let __o = __S
-                .call_object(
-                    env,
-                    "io/prebindgen/covertest/tags/TagTagPickBuilderRaw",
-                    "run",
-                    "(Ljava/lang/String;J)Ljava/lang/Object;",
-                    &__sink,
-                    &[
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            l: r_label.as_raw(),
-                        },
-                        ::prebindgen_jni_runtime::jni::sys::jvalue {
-                            j: r_size,
-                        },
-                    ],
-                )?;
-            ::core::result::Result::Ok(__o.into_raw())
-        }
+            }
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/tags/TagTagPickBuilderRaw",
+                "run",
+                "(Ljava/lang/String;J)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r_label.as_raw(),
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_size,
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
     })();
     match __r {
         ::core::result::Result::Ok(__v) => __v,
@@ -14144,10 +15819,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowText<'a>
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::new_string(
+                env,
+                ::core::convert::AsRef::<str>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -14197,10 +15875,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowBytes<'a
         ::prebindgen_jni_runtime::jni::sys::jobject,
         ::std::string::String,
     > = (|| {
-        let r = ::prebindgen_jni_runtime::write_u8s(
-            env,
-            ::core::convert::AsRef::<[u8]>::as_ref(&__result),
-        )?;
+        let r = {
+            let __v = __result;
+            ::prebindgen_jni_runtime::write_u8s(
+                env,
+                ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+            )?
+        };
         ::core::result::Result::Ok(r.into_raw())
     })();
     match __r {
@@ -14266,17 +15947,26 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowNumbers<
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                    __result.into_owned(),
-                )
-                .collect();
-            let __n = __items.len();
-            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
-            for (__i, __x1) in __items.into_iter().enumerate() {
-                let __e1 = (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong);
-                __c1_0.push(__e1);
+            let __v = __result;
+            {
+                let __v = __v.into_owned();
+                {
+                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                            __v,
+                        )
+                        .collect();
+                    let __n = __items.len();
+                    let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+                    for (__i, __x1) in __items.into_iter().enumerate() {
+                        let __e1 = {
+                            let __v = __x1;
+                            (__v as ::prebindgen_jni_runtime::jni::sys::jlong)
+                        };
+                        __c1_0.push(__e1);
+                    }
+                    (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
+                }
             }
-            (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
         };
         static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         let __o = __S
@@ -14343,12 +16033,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowBytesBox
         ::std::string::String,
     > = (|| {
         let r_bytes = {
-            let perftest_flat::CowBytes { bytes: __f0 } = __result;
-            let r_bytes = ::prebindgen_jni_runtime::write_u8s(
-                env,
-                ::core::convert::AsRef::<[u8]>::as_ref(&__f0),
-            )?;
-            r_bytes
+            let __v = __result;
+            {
+                let perftest_flat::CowBytes { bytes: __f0 } = __v;
+                let r_bytes = {
+                    let __v = __f0;
+                    ::prebindgen_jni_runtime::write_u8s(
+                        env,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&__v),
+                    )?
+                };
+                r_bytes
+            }
         };
         ::core::result::Result::Ok(r_bytes.into_raw())
     })();

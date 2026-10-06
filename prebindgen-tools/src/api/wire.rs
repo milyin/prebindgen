@@ -299,97 +299,112 @@ impl<W: WireType> Input<W> {
 /// A source value → wires: a return value, a callback argument, a field
 /// leaving for the foreign side.
 ///
-/// `expr` evaluates to the wire value, or a tuple of them in [`Self::wires`]
-/// order when there are several (`()` for none). Fallibility as for [`Input`].
+/// An output converts whatever value it is given: the template supplies the
+/// value with [`Self::apply`] or [`Self::bind`], and the output supplies the
+/// wires. It evaluates to the wire value, or a tuple of them in
+/// [`Self::wires`] order when there are several (`()` for none). Fallibility
+/// as for [`Input`].
 #[derive(Clone, Debug)]
 pub struct Output<W> {
     pub form: Form<W>,
-    pub expr: TokenStream,
+    /// The conversion, reading the value by the name [`value`] gives.
+    body: TokenStream,
     pub fallible: bool,
 }
 
+/// The name an output's conversion reads its value by. Private: the value is
+/// bound to it by [`Output::apply`], so no template has to know it.
+fn value() -> TokenStream {
+    quote!(__v)
+}
+
 impl<W: WireType> Output<W> {
-    /// `ty` leaves on one wire, computed by `expr`.
-    pub fn wire(ty: &TypeRef, wire: Wire<W>, expr: impl ToTokens) -> Self {
+    /// An output of form `form`, whose conversion `body` builds from the
+    /// value it is handed. For a composition the constructors below do not
+    /// cover; a part's own output goes into `body` with [`Self::bind`].
+    pub fn new(form: Form<W>, body: impl FnOnce(&TokenStream) -> TokenStream) -> Self {
         Self {
-            form: form(ty, FormKind::Wire(wire)),
-            expr: expr.to_token_stream(),
+            form,
+            body: body(&value()),
             fallible: false,
         }
     }
 
-    /// A converted value: the conversion turns `value` into its
+    /// `ty` leaves on one wire, which `body` computes from the value.
+    pub fn wire(
+        ty: &TypeRef,
+        wire: Wire<W>,
+        body: impl FnOnce(&TokenStream) -> TokenStream,
+    ) -> Self {
+        Self::new(form(ty, FormKind::Wire(wire)), body)
+    }
+
+    /// Nothing crosses; the value is dropped.
+    pub fn unit(ty: &TypeRef) -> Self {
+        Self::new(form(ty, FormKind::Parts(Vec::new())), |_| quote!(()))
+    }
+
+    /// A converted value: the conversion turns the value into its
     /// representation type, which leaves instead. `repr` builds the
-    /// [`Output`] of the representation type it is given, from the
-    /// expression it is given that holds the converted value. Fails when
-    /// the conversion declares no output.
+    /// [`Output`] of the representation type it is given. Fails when the
+    /// conversion declares no output.
     pub fn via<E: From<String>>(
         conversion: &ResolvedConversion,
-        value: &TokenStream,
-        repr: impl FnOnce(&TypeRef, TokenStream) -> Result<Output<W>, E>,
+        repr: impl FnOnce(&TypeRef) -> Result<Output<W>, E>,
     ) -> Result<Self, E> {
-        let (applied, fallible) = conversion.apply(Direction::Out, value)?;
-        let repr = repr(conversion.repr(), quote!(__repr))?;
-        let e = &repr.expr;
+        let (applied, fallible) = conversion.apply(Direction::Out, &value())?;
+        let repr = repr(conversion.repr())?;
         Ok(Self {
-            expr: quote!({ let __repr = #applied; #e }),
+            body: repr.apply(applied),
             fallible: repr.fallible || fallible,
             form: form(conversion.target(), FormKind::Via(Box::new(repr.form))),
         })
     }
 
-    /// Nothing crosses; `value` is dropped.
-    pub fn unit(ty: &TypeRef, value: impl ToTokens) -> Self {
-        let v = value.to_token_stream();
-        Self {
-            form: form(ty, FormKind::Parts(Vec::new())),
-            expr: quote!({ let _ = #v; }),
-            fallible: false,
-        }
-    }
-
-    /// `ty` leaves as parts. `prelude` runs first — typically a `let`
-    /// destructuring the value the parts read.
-    pub fn parts(ty: &TypeRef, prelude: TokenStream, parts: Vec<(Seg, Output<W>)>) -> Self {
-        let fallible = parts.iter().any(|(_, p)| p.fallible);
-        let binds: Vec<TokenStream> = parts.iter().map(|(_, p)| p.bind()).collect();
-        let forms: Vec<(Seg, Form<W>)> = parts.into_iter().map(|(s, p)| (s, p.form)).collect();
+    /// `ty` leaves as parts. `prelude` runs first, reading the value —
+    /// typically a `let` destructuring it. Each part then converts its own
+    /// value: an expression valid after the prelude.
+    pub fn parts(
+        ty: &TypeRef,
+        prelude: impl FnOnce(&TokenStream) -> TokenStream,
+        parts: Vec<(Seg, TokenStream, Output<W>)>,
+    ) -> Self {
+        let fallible = parts.iter().any(|(_, _, p)| p.fallible);
+        let binds: Vec<TokenStream> = parts.iter().map(|(_, v, p)| p.bind(v)).collect();
+        let forms: Vec<(Seg, Form<W>)> = parts.into_iter().map(|(s, _, p)| (s, p.form)).collect();
         let f = form(ty, FormKind::Parts(forms));
         let values = tuple(f.wires().iter().map(|w| w.name.to_token_stream()));
+        let prelude = prelude(&value());
         Self {
             form: f,
-            expr: quote!({ #prelude #(#binds)* #values }),
+            body: quote!({ #prelude #(#binds)* #values }),
             fallible,
         }
     }
 
-    /// A struct taken apart. `field` builds each field's output from the
-    /// binding that holds it.
+    /// A struct taken apart. `field` builds each field's output.
     pub fn record<E>(
         s: &Struct,
-        value: &TokenStream,
-        mut field: impl FnMut(&Field, TokenStream) -> Result<Output<W>, E>,
+        mut field: impl FnMut(&Field) -> Result<Output<W>, E>,
     ) -> Result<Self, E> {
         let record = Record::Struct(s);
         let binds = record.binds();
         let mut parts = Vec::new();
         for (f, b) in s.fields.iter().zip(&binds) {
-            parts.push((Seg::field(f), field(f, b.to_token_stream())?));
+            parts.push((Seg::field(f), b.to_token_stream(), field(f)?));
         }
         let pat = record.pattern(&s.name.to_token_stream(), &binds);
-        Ok(Self::parts(s.type_ref(), quote!(let #pat = #value;), parts))
+        Ok(Self::parts(s.type_ref(), |v| quote!(let #pat = #v;), parts))
     }
 
-    /// `value: Option<_>` leaving as `presence` (with the value it holds for
-    /// `Some`) beside the inner wires. Without `presence`, `None` is told by
-    /// the inner wires' placeholders. `inner` builds from the `Some` binding.
-    pub fn optional<E>(
+    /// An `Option` leaving as `presence` (with the value it holds for `Some`)
+    /// beside `inner`'s wires. Without `presence`, `None` is told by the
+    /// inner wires' placeholders.
+    pub fn optional(
         ty: &TypeRef,
         presence: Option<(Wire<W>, TokenStream)>,
-        value: &TokenStream,
-        inner: impl FnOnce(TokenStream) -> Result<Output<W>, E>,
-    ) -> Result<Self, E> {
-        let inner = inner(quote!(__some))?;
+        inner: Output<W>,
+    ) -> Self {
         let (presence, yes) = presence.unzip();
         let wires: Vec<&Wire<W>> = presence.iter().chain(inner.wires()).collect();
         let some = tuple(
@@ -397,9 +412,10 @@ impl<W: WireType> Output<W> {
                 .chain(inner.wires().iter().map(|w| w.name.to_token_stream())),
         );
         let none = tuple(wires.iter().map(|w| w.ty.placeholder()));
-        let bind = inner.bind();
-        Ok(Self {
-            expr: quote!(match #value {
+        let bind = inner.bind(quote!(__some));
+        let x = value();
+        Self {
+            body: quote!(match #x {
                 ::core::option::Option::Some(__some) => { #bind #some }
                 ::core::option::Option::None => #none,
             }),
@@ -411,17 +427,16 @@ impl<W: WireType> Output<W> {
                     inner: Box::new(inner.form),
                 },
             ),
-        })
+        }
     }
 
     /// A sum leaving as `tag` plus every alternative's wires; the taken
     /// alternative fills its own, the others hold placeholders. `field`
-    /// builds each field's output from the binding that holds it.
+    /// builds each field's output.
     pub fn sum<E>(
         v: &Variant,
         tag: Wire<W>,
-        value: &TokenStream,
-        mut field: impl FnMut(&Alternative, &Field, TokenStream) -> Result<Output<W>, E>,
+        mut field: impl FnMut(&Alternative, &Field) -> Result<Output<W>, E>,
     ) -> Result<Self, E> {
         let head = v.name.to_token_stream();
         let mut alts = Vec::new();
@@ -430,17 +445,17 @@ impl<W: WireType> Output<W> {
             let binds = record.binds();
             let mut outs = Vec::new();
             for (f, b) in alt.fields.iter().zip(&binds) {
-                outs.push((Seg::field(f), field(alt, f, b.to_token_stream())?));
+                outs.push((Seg::field(f), b.to_token_stream(), field(alt, f)?));
             }
             let name = &alt.name;
             alts.push((record.pattern(&quote!(#head::#name), &binds), outs));
         }
-        let fallible = alts.iter().flat_map(|(_, o)| o).any(|(_, o)| o.fallible);
+        let fallible = alts.iter().flat_map(|(_, o)| o).any(|(_, _, o)| o.fallible);
         let arms = alts.iter().enumerate().map(|(i, (pat, outs))| {
-            let binds = outs.iter().map(|(_, o)| o.bind());
+            let binds = outs.iter().map(|(_, b, o)| o.bind(b));
             let tag = Literal::usize_unsuffixed(i);
             let values = alts.iter().enumerate().flat_map(|(j, (_, other))| {
-                other.iter().flat_map(|(_, o)| o.wires()).map(move |w| {
+                other.iter().flat_map(|(_, _, o)| o.wires()).map(move |w| {
                     if i == j {
                         w.name.to_token_stream()
                     } else {
@@ -451,35 +466,51 @@ impl<W: WireType> Output<W> {
             let values = tuple(std::iter::once(quote!(#tag)).chain(values));
             quote!(#pat => { #(#binds)* #values })
         });
-        let expr = quote!(match #value { #(#arms),* });
+        let x = value();
+        let body = quote!(match #x { #(#arms),* });
         let alts = alts
             .into_iter()
-            .map(|(_, outs)| outs.into_iter().map(|(s, o)| (s, o.form)).collect())
+            .map(|(_, outs)| outs.into_iter().map(|(s, _, o)| (s, o.form)).collect())
             .collect();
         Ok(Self {
             form: form(v.type_ref(), FormKind::Sum { tag, alts }),
-            expr,
+            body,
             fallible,
         })
     }
 
-    /// A sequence leaving on `wires`; `expr` is the adapter's loop, `elem`
-    /// the form of one element. Mark it fallible if the loop uses `?`.
-    pub fn seq(ty: &TypeRef, wires: Vec<Wire<W>>, elem: Form<W>, expr: impl ToTokens) -> Self {
-        Self {
-            form: form(
-                ty,
-                FormKind::Seq {
-                    wires,
-                    elem: Box::new(elem),
-                },
-            ),
-            expr: expr.to_token_stream(),
-            fallible: false,
-        }
+    /// A sequence leaving on `wires`; `body` is the adapter's loop over the
+    /// value, `elem` the form of one element. Mark it fallible if the loop
+    /// uses `?`.
+    pub fn seq(
+        ty: &TypeRef,
+        wires: Vec<Wire<W>>,
+        elem: Form<W>,
+        body: impl FnOnce(&TokenStream) -> TokenStream,
+    ) -> Self {
+        let f = form(
+            ty,
+            FormKind::Seq {
+                wires,
+                elem: Box::new(elem),
+            },
+        );
+        Self::new(f, body)
     }
 
-    /// Declare that [`Self::expr`] uses `?`.
+    /// This output over a value `f` derives from the one given: `(*v)` for
+    /// a `Box`, a clone for a borrow. The mirror of [`Input::map`].
+    pub fn before(mut self, f: impl FnOnce(&TokenStream) -> TokenStream) -> Self {
+        let (x, body) = (value(), &self.body);
+        let derived = f(&x);
+        // An identity derivation changes nothing.
+        if derived.to_string() != x.to_string() {
+            self.body = quote!({ let #x = #derived; #body });
+        }
+        self
+    }
+
+    /// Declare that the conversion uses `?`.
     pub fn mark_fallible(mut self) -> Self {
         self.fallible = true;
         self
@@ -490,9 +521,22 @@ impl<W: WireType> Output<W> {
         self.form.wires()
     }
 
-    /// `let <wires> = expr;` — binds every wire by its own name.
-    pub fn bind(&self) -> TokenStream {
-        let (pat, e) = (self.pattern(), &self.expr);
+    /// The conversion of `value`: an expression evaluating to the wires. The
+    /// value is evaluated once.
+    pub fn apply(&self, value: impl ToTokens) -> TokenStream {
+        let (x, body) = (self::value(), &self.body);
+        let value = value.to_token_stream();
+        // A nested output handed the value under the very name it reads.
+        if value.to_string() == x.to_string() {
+            return quote!({ #body });
+        }
+        quote!({ let #x = #value; #body })
+    }
+
+    /// `let <wires> = …;` — converts `value`, binding every wire by its own
+    /// name.
+    pub fn bind(&self, value: impl ToTokens) -> TokenStream {
+        let (pat, e) = (self.pattern(), self.apply(value));
         quote!(let #pat = #e;)
     }
 
@@ -501,9 +545,9 @@ impl<W: WireType> Output<W> {
         tuple(self.wires().iter().map(|w| w.name.to_token_stream()))
     }
 
-    /// The wires as a `Result<_, String>` expression.
-    pub fn result(&self) -> TokenStream {
-        result_expr(&self.expr, self.fallible)
+    /// The conversion of `value` as a `Result<_, String>` expression.
+    pub fn result(&self, value: impl ToTokens) -> TokenStream {
+        result_expr(&self.apply(value), self.fallible)
     }
 }
 

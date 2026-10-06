@@ -288,20 +288,35 @@ pub(crate) fn __cbg_out_Shape(
         match v {
             example_flat::Shape::Empty => shape_t::Empty,
             example_flat::Shape::Circle(__f0) => {
-                let __f0 = __f0;
+                let __f0 = {
+                    let __v = __f0;
+                    __v
+                };
                 shape_t::Circle(__f0)
             }
             example_flat::Shape::Rect { width: __f0, height: __f1 } => {
-                let __f0 = __f0;
-                let __f1 = __f1;
+                let __f0 = {
+                    let __v = __f0;
+                    __v
+                };
+                let __f1 = {
+                    let __v = __f1;
+                    __v
+                };
                 shape_t::Rect {
                     width: __f0,
                     height: __f1,
                 }
             }
             example_flat::Shape::Labeled(__f0, __f1) => {
-                let __f0 = __cbg_alloc_cstr(__f0);
-                let __f1 = ::core::mem::MaybeUninit::new(__cbg_out_Operation(__f1));
+                let __f0 = {
+                    let __v = __f0;
+                    __cbg_alloc_cstr(__v)
+                };
+                let __f1 = {
+                    let __v = __f1;
+                    ::core::mem::MaybeUninit::new(__cbg_out_Operation(__v))
+                };
                 shape_t::Labeled(__f0, __f1)
             }
         },
@@ -399,8 +414,14 @@ pub(crate) unsafe fn __cbg_in_Drawing(
 pub(crate) fn __cbg_out_Drawing(v: example_flat::Drawing) -> drawing_t {
     {
         let example_flat::Drawing { id: __f0, shape: __f1 } = v;
-        let id = __f0;
-        let shape = __cbg_out_Shape(__f1);
+        let id = {
+            let __v = __f0;
+            __v
+        };
+        let shape = {
+            let __v = __f1;
+            __cbg_out_Shape(__v)
+        };
         drawing_t { id, shape }
     }
 }
@@ -474,9 +495,18 @@ pub(crate) unsafe fn __cbg_in_Caption(v: caption_t) -> example_flat::Caption {
 pub(crate) fn __cbg_out_Caption(v: example_flat::Caption) -> caption_t {
     {
         let example_flat::Caption { id: __f0, text: __f1, emphatic: __f2 } = v;
-        let id = __f0;
-        let text = __cbg_alloc_cstr(__f1);
-        let emphatic = ::core::mem::MaybeUninit::new(__f2);
+        let id = {
+            let __v = __f0;
+            __v
+        };
+        let text = {
+            let __v = __f1;
+            __cbg_alloc_cstr(__v)
+        };
+        let emphatic = {
+            let __v = __f2;
+            ::core::mem::MaybeUninit::new(__v)
+        };
         caption_t { id, text, emphatic }
     }
 }
@@ -586,22 +616,34 @@ pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<
         match v {
             example_flat::Note::Silent => note_t::Silent,
             example_flat::Note::Titled(__f0) => {
-                let __f0 = __cbg_out_Caption(__f0);
+                let __f0 = {
+                    let __v = __f0;
+                    __cbg_out_Caption(__v)
+                };
                 note_t::Titled(__f0)
             }
             example_flat::Note::After(__f0) => {
                 let __f0 = {
-                    let __repr = example_flat::millis_to_raw(&__f0);
-                    __repr
+                    let __v = __f0;
+                    {
+                        let __v = example_flat::millis_to_raw(&__v);
+                        __v
+                    }
                 };
                 note_t::After(__f0)
             }
             example_flat::Note::Flagged(__f0) => {
-                let __f0 = ::core::mem::MaybeUninit::new(__f0);
+                let __f0 = {
+                    let __v = __f0;
+                    ::core::mem::MaybeUninit::new(__v)
+                };
                 note_t::Flagged(__f0)
             }
             example_flat::Note::Sketched(__f0) => {
-                let __f0 = __cbg_out_Drawing(__f0);
+                let __f0 = {
+                    let __v = __f0;
+                    __cbg_out_Drawing(__v)
+                };
                 note_t::Sketched(__f0)
             }
         },
@@ -772,9 +814,18 @@ pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
 pub(crate) fn __cbg_out_Foo(v: example_flat::Foo) -> foo_t {
     {
         let example_flat::Foo { id: __f0, x86_64_field: __f1, stable_field: __f2 } = v;
-        let id = __f0;
-        let x86_64_field = __f1;
-        let stable_field = __f2;
+        let id = {
+            let __v = __f0;
+            __v
+        };
+        let x86_64_field = {
+            let __v = __f1;
+            __v
+        };
+        let stable_field = {
+            let __v = __f2;
+            __v
+        };
         foo_t {
             id,
             x86_64_field,
@@ -924,7 +975,7 @@ pub unsafe extern "C" fn calculator_apply(
     match __result {
         ::core::result::Result::Ok(__v) => {
             if !out.is_null() {
-                ::core::ptr::write(out, __v);
+                ::core::ptr::write(out, { __v });
             }
             true
         }
@@ -1082,7 +1133,7 @@ pub unsafe extern "C" fn calculator_absorb(
     match __result {
         ::core::result::Result::Ok(__v) => {
             if !out.is_null() {
-                ::core::ptr::write(out, __v);
+                ::core::ptr::write(out, { __v });
             }
             true
         }
@@ -1109,7 +1160,10 @@ pub unsafe extern "C" fn calculator_absorb(
 pub unsafe extern "C" fn foo_new(id: u64) -> foo_t {
     let id = id;
     let __result = example_flat::foo_new(id);
-    __cbg_out_Foo(__result)
+    {
+        let __v = __result;
+        __cbg_out_Foo(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1126,7 +1180,10 @@ pub unsafe extern "C" fn foo_new(id: u64) -> foo_t {
 pub unsafe extern "C" fn foo_get_id(f: foo_t) -> u64 {
     let f = __cbg_in_Foo(f);
     let __result = example_flat::foo_get_id(f);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1158,7 +1215,10 @@ pub unsafe extern "C" fn inside_foo_default() -> inside_foo_t {
 )]
 pub unsafe extern "C" fn shape_new_empty() -> ::core::mem::MaybeUninit<shape_t> {
     let __result = example_flat::shape_new_empty();
-    __cbg_out_Shape(__result)
+    {
+        let __v = __result;
+        __cbg_out_Shape(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1177,7 +1237,10 @@ pub unsafe extern "C" fn shape_new_circle(
 ) -> ::core::mem::MaybeUninit<shape_t> {
     let radius = radius;
     let __result = example_flat::shape_new_circle(radius);
-    __cbg_out_Shape(__result)
+    {
+        let __v = __result;
+        __cbg_out_Shape(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1198,7 +1261,10 @@ pub unsafe extern "C" fn shape_new_rect(
     let width = width;
     let height = height;
     let __result = example_flat::shape_new_rect(width, height);
-    __cbg_out_Shape(__result)
+    {
+        let __v = __result;
+        __cbg_out_Shape(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1232,7 +1298,7 @@ pub unsafe extern "C" fn shape_try_area(
     match __result {
         ::core::result::Result::Ok(__v) => {
             if !out.is_null() {
-                ::core::ptr::write(out, __v);
+                ::core::ptr::write(out, { __v });
             }
             true
         }
@@ -1258,7 +1324,10 @@ pub unsafe extern "C" fn shape_try_area(
 )]
 pub unsafe extern "C" fn note_new_silent() -> ::core::mem::MaybeUninit<note_t> {
     let __result = example_flat::note_new_silent();
-    __cbg_out_Note(__result)
+    {
+        let __v = __result;
+        __cbg_out_Note(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1277,7 +1346,10 @@ pub unsafe extern "C" fn note_new_after(
 ) -> ::core::mem::MaybeUninit<note_t> {
     let millis = millis;
     let __result = example_flat::note_new_after(millis);
-    __cbg_out_Note(__result)
+    {
+        let __v = __result;
+        __cbg_out_Note(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1296,7 +1368,10 @@ pub unsafe extern "C" fn note_new_flagged(
 ) -> ::core::mem::MaybeUninit<note_t> {
     let flag = (::core::ptr::read(flag.as_ptr() as *const u8) != 0);
     let __result = example_flat::note_new_flagged(flag);
-    __cbg_out_Note(__result)
+    {
+        let __v = __result;
+        __cbg_out_Note(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1322,7 +1397,10 @@ pub unsafe extern "C" fn inside_foo_value(
         }
     };
     let __result = example_flat::inside_foo_value(x);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1346,7 +1424,10 @@ pub unsafe extern "C" fn shape_area(s: ::core::mem::MaybeUninit<shape_t>) -> f64
         }
     };
     let __result = example_flat::shape_area(s);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1400,7 +1481,10 @@ pub unsafe extern "C" fn drawing_new(
         }
     };
     let __result = example_flat::drawing_new(id, shape);
-    __cbg_out_Drawing(__result)
+    {
+        let __v = __result;
+        __cbg_out_Drawing(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1426,7 +1510,10 @@ pub unsafe extern "C" fn drawing_get_shape(
         }
     };
     let __result = example_flat::drawing_get_shape(d);
-    __cbg_out_Shape(__result)
+    {
+        let __v = __result;
+        __cbg_out_Shape(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1450,7 +1537,10 @@ pub unsafe extern "C" fn note_value(n: ::core::mem::MaybeUninit<note_t>) -> u64 
         }
     };
     let __result = example_flat::note_value(n);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1518,7 +1608,10 @@ pub unsafe extern "C" fn note_new_titled(
     };
     let emphatic = (::core::ptr::read(emphatic.as_ptr() as *const u8) != 0);
     let __result = example_flat::note_new_titled(id, text, emphatic);
-    __cbg_out_Note(__result)
+    {
+        let __v = __result;
+        __cbg_out_Note(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1560,7 +1653,10 @@ pub unsafe extern "C" fn note_new_sketched(
         }
     };
     let __result = example_flat::note_new_sketched(id, label);
-    __cbg_out_Note(__result)
+    {
+        let __v = __result;
+        __cbg_out_Note(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1604,7 +1700,10 @@ pub unsafe extern "C" fn caption_new(
     };
     let emphatic = (::core::ptr::read(emphatic.as_ptr() as *const u8) != 0);
     let __result = example_flat::caption_new(id, text, emphatic);
-    __cbg_out_Caption(__result)
+    {
+        let __v = __result;
+        __cbg_out_Caption(__v)
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1668,7 +1767,10 @@ pub unsafe extern "C" fn calculator_get_value(c: *const calculator_t) -> f64 {
         }
     };
     let __result = example_flat::calculator_get_value(c);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1699,7 +1801,10 @@ pub unsafe extern "C" fn calculator_get_count(c: *const calculator_t) -> u64 {
         }
     };
     let __result = example_flat::calculator_get_count(c);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -1798,7 +1903,13 @@ pub unsafe extern "C" fn calculator_get_history(
         }
     };
     let __result = example_flat::calculator_get_history(c);
-    let __arr: ::std::vec::Vec<f64> = __result.into_iter().map(|__e| __e).collect();
+    let __arr: ::std::vec::Vec<f64> = __result
+        .into_iter()
+        .map(|__e| {
+            let __v = __e;
+            __v
+        })
+        .collect();
     let (__p, __n) = __cbg_alloc_array(__arr);
     if !len.is_null() {
         *len = __n;
@@ -1857,7 +1968,16 @@ pub unsafe extern "C" fn calculator_for_each(
         });
         move |__a0: f64| {
             let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
-                let __w0 = __a0;
+                let __w0 = {
+                    let __v = __a0;
+                    {
+                        let __arg = __v;
+                        {
+                            let __v = __arg;
+                            __v
+                        }
+                    }
+                };
                 if let ::core::option::Option::Some(__f) = __call {
                     unsafe { __f(__w0, __ctx.context) }
                 }
@@ -1916,7 +2036,10 @@ pub unsafe extern "C" fn shape_new_labeled(
         }
     };
     let __result = example_flat::shape_new_labeled(label, op);
-    __cbg_out_Shape(__result)
+    {
+        let __v = __result;
+        __cbg_out_Shape(__v)
+    }
 }
 const _: () = {
     konst::assertc_eq!(

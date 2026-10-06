@@ -236,8 +236,8 @@ fn rust_ret_value(plan: &Plan, ret: &RPlan, value: TokenStream) -> Res<TokenStre
     Ok(match ret {
         RPlan::Unit => quote!({ let _ = #value; ::core::result::Result::Ok(()) }),
         RPlan::Direct { ty, leaf } => {
-            let out = plan.rs_encode(ty, value, "r", 1)?;
-            let bind = out.bind();
+            let out = plan.rs_encode(ty, "r", 1)?;
+            let bind = out.bind(&value);
             let n = &out.wires()[0].name;
             let v = if leaf.is_obj() {
                 quote!(#n.into_raw())
@@ -248,7 +248,7 @@ fn rust_ret_value(plan: &Plan, ret: &RPlan, value: TokenStream) -> Res<TokenStre
         }
         RPlan::Sink {
             ty, leaves, iface, ..
-        } => call_sink(&plan.rs_encode(ty, value, "r", 1)?, leaves, iface),
+        } => call_sink(&plan.rs_encode(ty, "r", 1)?, &value, leaves, iface),
         RPlan::Builder {
             whole,
             exp,
@@ -258,10 +258,8 @@ fn rust_ret_value(plan: &Plan, ret: &RPlan, value: TokenStream) -> Res<TokenStre
         } => {
             let iface = format!("{iface}Raw");
             layered(whole, value, &mut |t, v| {
-                let x = format_ident!("__x");
-                let d = plan.deliver(t, x.to_token_stream(), "r", "", Some(exp), &[], false, 1)?;
-                let call = call_sink(&d.output, leaves, &iface);
-                Ok(quote!({ let #x = #v; #call }))
+                let d = plan.deliver(t, "r", "", Some(exp), &[], false, 1)?;
+                Ok(call_sink(&d.output, &v, leaves, &iface))
             })?
         }
         RPlan::Fold {
@@ -274,15 +272,14 @@ fn rust_ret_value(plan: &Plan, ret: &RPlan, value: TokenStream) -> Res<TokenStre
             let TypeKind::Vec(elem) = t.kind() else {
                 return err(format!("`{t}`: a folded result must be a `Vec`"));
             };
-            let e = format_ident!("__x");
-            let d = plan.deliver(elem, e.to_token_stream(), "r", "", Some(exp), &[], false, 1)?;
-            let cols = columns(t, &d.output, leaves, &e, quote!(__items));
+            let d = plan.deliver(elem, "r", "", Some(exp), &[], false, 1)?;
+            let cols = columns(t, &d.output, leaves, &format_ident!("__x"));
             let mut col_leaves = vec![Leaf::new(LeafTy::Prim(Prim::I))];
             col_leaves.extend(leaves.iter().map(Leaf::column));
-            let call = call_sink(&cols, &col_leaves, columns_iface);
-            Ok(
-                quote!({ let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(#v).collect(); #call }),
-            )
+            // The columns read the elements as a `Vec`.
+            let items = quote!(::core::iter::IntoIterator::into_iter(#v)
+                .collect::<::std::vec::Vec<_>>());
+            Ok(call_sink(&cols, &items, &col_leaves, columns_iface))
         })?,
     })
 }
@@ -321,13 +318,7 @@ fn unbox(
 }
 
 /// Columns of a sequence of deliveries: a count and one array per leaf.
-fn columns(
-    ty: &TypeRef,
-    elem: &Output<Leaf>,
-    leaves: &[Leaf],
-    x: &syn::Ident,
-    items: TokenStream,
-) -> Output<Leaf> {
+fn columns(ty: &TypeRef, elem: &Output<Leaf>, leaves: &[Leaf], x: &syn::Ident) -> Output<Leaf> {
     let rt = quote!(::prebindgen_jni_runtime);
     let mut setup = Vec::new();
     let mut pushes = Vec::new();
@@ -354,11 +345,8 @@ fn columns(
             }
         }
     }
-    let bind = elem.bind();
-    Output::seq(
-        ty,
-        wires,
-        elem.form.clone(),
+    let bind = elem.bind(x);
+    Output::seq(ty, wires, elem.form.clone(), |items| {
         quote!({
             let __n = #items.len();
             #(#setup)*
@@ -367,8 +355,8 @@ fn columns(
                 #(#pushes)*
             }
             (#(#finals),*)
-        }),
-    )
+        })
+    })
     .mark_fallible()
 }
 
@@ -387,8 +375,8 @@ fn rust_error(plan: &Plan, e: &EPlan) -> Res<TokenStream> {
             leaves,
             ..
         } => {
-            let d = plan.deliver(ty, quote!(__e), "e", "", None, &[], false, 1)?;
-            let bind = d.output.bind();
+            let d = plan.deliver(ty, "e", "", None, &[], false, 1)?;
+            let bind = d.output.bind(quote!(__e));
             let values = d
                 .output
                 .wires()
@@ -407,10 +395,10 @@ fn rust_error(plan: &Plan, e: &EPlan) -> Res<TokenStream> {
     })
 }
 
-/// Encode `out`'s wires as `jvalue`s and call the sink interface's `run`,
-/// returning its result object.
-fn call_sink(out: &Output<Leaf>, leaves: &[Leaf], iface: &str) -> TokenStream {
-    let bind = out.bind();
+/// Convert `value` with `out`, encode the wires as `jvalue`s and call the
+/// sink interface's `run`, returning its result object.
+fn call_sink(out: &Output<Leaf>, value: &TokenStream, leaves: &[Leaf], iface: &str) -> TokenStream {
+    let bind = out.bind(value);
     let values = out
         .wires()
         .into_iter()

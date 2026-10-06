@@ -61,10 +61,11 @@
 //!   type alone, for a return type or a struct field.
 //! * **The Rust code.** An input's `expr` evaluates to the source value:
 //!   place it where the value is needed, such as an argument of the source
-//!   call. An output's `expr` evaluates to the wire values, one value or a
-//!   tuple in [`Output::wires`] order; [`Output::bind`] writes
-//!   `let <wires> = expr;`, so each wire becomes a local of its own name.
-//! * **Errors.** `fallible` says whether `expr` uses `?` on a
+//!   call. An output converts a value the template hands it:
+//!   [`Output::apply`] evaluates to the wire values, one value or a tuple in
+//!   [`Output::wires`] order, and [`Output::bind`] writes
+//!   `let <wires> = …;`, so each wire becomes a local of its own name.
+//! * **Errors.** `fallible` says whether the conversion uses `?` on a
 //!   `Result<_, String>`. Place such an expression in a function returning
 //!   that type, or take [`Input::result`] / [`Output::result`], a `Result`
 //!   value, and route the error yourself.
@@ -102,29 +103,27 @@
 //! let n = &f.params[0];
 //! let n_name = &n.name;
 //! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), Long), quote!(#n_name as u64));
-//! let output = Output::wire(&f.ret, Wire::new(format_ident!("ret"), Long), quote!(__value as i64));
+//! let output = Output::wire(&f.ret, Wire::new(format_ident!("ret"), Long), |v| quote!(#v as i64));
 //!
-//! // Use: the wires give the signature, the expressions the body.
+//! // Use: the wires give the signature; the input gives the argument, and
+//! // the output converts the call's result.
 //! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
 //! let ret_ty = output.wires()[0].ty.rust();
 //! // The source function's name: spliced, the qualified path to call; its
 //! // bare identifier, the base for the wrapper's own name.
 //! let callee = &f.name;
 //! let wrapper_name = format_ident!("{}_wrapper", f.name.ident());
-//! let (arg, value) = (&input.expr, &output.expr);
+//! let arg = &input.expr;
+//! let result = output.apply(quote!(#callee(#arg)));
 //! let wrapper = quote! {
-//!     pub extern "C" fn #wrapper_name(#(#params),*) -> #ret_ty {
-//!         let __value = #callee(#arg);
-//!         #value
-//!     }
+//!     pub extern "C" fn #wrapper_name(#(#params),*) -> #ret_ty { #result }
 //! };
 //! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
 //! assert_eq!(
 //!     quote!(#wrapper).to_string(),
 //!     quote! {
 //!         pub extern "C" fn twice_wrapper(n: i64) -> i64 {
-//!             let __value = source_crate::twice(n as u64);
-//!             __value as i64
+//!             { let __v = source_crate::twice(n as u64); __v as i64 }
 //!         }
 //!     }.to_string(),
 //! );

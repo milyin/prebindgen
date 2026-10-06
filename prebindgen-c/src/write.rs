@@ -204,10 +204,10 @@ impl Fields<'_, '_> {
             .map_err(|e| Error(format!("`{}`: field `{w}`: {}", self.owner, e.0)))
     }
 
-    fn field_out(&mut self, field: &Field, value: &TokenStream) -> Res<Output<CWire>> {
+    fn field_out(&mut self, field: &Field) -> Res<Output<CWire>> {
         let w = (self.wire)(field);
         self.plan
-            .value_out(&field.ty, value, &w)
+            .value_out(&field.ty, &w)
             .map_err(|e| Error(format!("`{}`: field `{w}`: {}", self.owner, e.0)))
     }
 }
@@ -518,7 +518,7 @@ fn closure_struct(plan: &Plan, ty: &TypeRef, name: &syn::Ident) -> Res<TokenStre
     };
     let mut wires = Vec::new();
     for (i, a) in args.iter().enumerate() {
-        let out = plan.callback_arg(i, a, &quote!(__x))?;
+        let out = plan.callback_arg(i, a)?;
         wires.extend(out.wires().into_iter().map(|w| w.ty.rust()));
     }
     let allow = allow();
@@ -667,9 +667,9 @@ fn struct_mirror(
     let mut ins = Vec::new();
     let mut outs = Vec::new();
     let binds = record.binds();
-    for (f, b) in source.fields.iter().zip(&binds) {
+    for f in &source.fields {
         ins.push(cb.field_in(f)?);
-        outs.push(cb.field_out(f, &b.to_token_stream())?);
+        outs.push(cb.field_out(f)?);
     }
 
     let wires: Vec<Wire<CWire>> = ins
@@ -697,7 +697,7 @@ fn struct_mirror(
     };
     let pat = record.pattern(head, &binds);
     let fallible = outs.iter().any(|o| o.fallible);
-    let out_binds: Vec<TokenStream> = outs.iter().map(Output::bind).collect();
+    let out_binds: Vec<TokenStream> = outs.iter().zip(&binds).map(|(o, b)| o.bind(b)).collect();
     let output = Code {
         expr: quote!({ let #pat = v; #(#out_binds)* #name { #(#wire_names),* } }),
         fallible,
@@ -730,9 +730,9 @@ fn sum_mirror(
         let binds = record.binds();
         let mut ins = Vec::new();
         let mut outs = Vec::new();
-        for (f, b) in alt.fields.iter().zip(&binds) {
+        for f in &alt.fields {
             ins.push(cb.field_in(f)?);
-            outs.push(cb.field_out(f, &b.to_token_stream())?);
+            outs.push(cb.field_out(f)?);
         }
         // A mirror alternative has one mirror field per source field; a
         // field that needs several wires is kept whole as a tuple would
@@ -761,7 +761,7 @@ fn sum_mirror(
         // Out: match the source alternative, produce the mirror one.
         let source_pat = record.pattern(&source_head, &binds);
         out_fallible |= outs.iter().any(|o| o.fallible);
-        let out_binds: Vec<TokenStream> = outs.iter().map(Output::bind).collect();
+        let out_binds: Vec<TokenStream> = outs.iter().zip(&binds).map(|(o, b)| o.bind(b)).collect();
         let values: Vec<TokenStream> = wires.iter().map(|w| w.name.to_token_stream()).collect();
         let rebuilt_mirror = record.construct(&mirror_head, &values);
         out_arms.push(quote!(#source_pat => { #(#out_binds)* #rebuilt_mirror }));
