@@ -286,87 +286,6 @@ public data class DurationBoundary(val required: ULong, val delay: ULong?) {
     }
 }
 
-public data class ObjectBoundaryLeaf(val value: Long) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
-    }
-}
-
-public data class ObjectBoundary2(val left: io.prebindgen.covertest.model.ObjectBoundaryLeaf, val right: io.prebindgen.covertest.model.ObjectBoundaryLeaf) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundaryLeaf, right: io.prebindgen.covertest.model.ObjectBoundaryLeaf): ObjectBoundary2 = ObjectBoundary2(left, right)
-    }
-}
-
-public data class ObjectBoundary4(val left: io.prebindgen.covertest.model.ObjectBoundary2, val right: io.prebindgen.covertest.model.ObjectBoundary2) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary2, right: io.prebindgen.covertest.model.ObjectBoundary2): ObjectBoundary4 = ObjectBoundary4(left, right)
-    }
-}
-
-public data class ObjectBoundary8(val left: io.prebindgen.covertest.model.ObjectBoundary4, val right: io.prebindgen.covertest.model.ObjectBoundary4) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary4, right: io.prebindgen.covertest.model.ObjectBoundary4): ObjectBoundary8 = ObjectBoundary8(left, right)
-    }
-}
-
-public data class ObjectBoundary16(val left: io.prebindgen.covertest.model.ObjectBoundary8, val right: io.prebindgen.covertest.model.ObjectBoundary8) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary8, right: io.prebindgen.covertest.model.ObjectBoundary8): ObjectBoundary16 = ObjectBoundary16(left, right)
-    }
-}
-
-public data class ObjectBoundary32(val left: io.prebindgen.covertest.model.ObjectBoundary16, val right: io.prebindgen.covertest.model.ObjectBoundary16) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary16, right: io.prebindgen.covertest.model.ObjectBoundary16): ObjectBoundary32 = ObjectBoundary32(left, right)
-    }
-}
-
-public data class ObjectBoundary64(val left: io.prebindgen.covertest.model.ObjectBoundary32, val right: io.prebindgen.covertest.model.ObjectBoundary32) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary32, right: io.prebindgen.covertest.model.ObjectBoundary32): ObjectBoundary64 = ObjectBoundary64(left, right)
-    }
-}
-
-public data class ObjectBoundary63(val leaves32: io.prebindgen.covertest.model.ObjectBoundary32, val leaves16: io.prebindgen.covertest.model.ObjectBoundary16, val leaves8: io.prebindgen.covertest.model.ObjectBoundary8, val leaves4: io.prebindgen.covertest.model.ObjectBoundary4, val leaves2: io.prebindgen.covertest.model.ObjectBoundary2, val leaf: io.prebindgen.covertest.model.ObjectBoundaryLeaf) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(leaves32: io.prebindgen.covertest.model.ObjectBoundary32, leaves16: io.prebindgen.covertest.model.ObjectBoundary16, leaves8: io.prebindgen.covertest.model.ObjectBoundary8, leaves4: io.prebindgen.covertest.model.ObjectBoundary4, leaves2: io.prebindgen.covertest.model.ObjectBoundary2, leaf: io.prebindgen.covertest.model.ObjectBoundaryLeaf): ObjectBoundary63 = ObjectBoundary63(leaves32, leaves16, leaves8, leaves4, leaves2, leaf)
-    }
-}
-
-public data class ObjectBoundary(val left: io.prebindgen.covertest.model.ObjectBoundary64, val right: io.prebindgen.covertest.model.ObjectBoundary63) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary64, right: io.prebindgen.covertest.model.ObjectBoundary63): ObjectBoundary = ObjectBoundary(left, right)
-    }
-}
-
 public data class Unsigned(val byte: Int, val short: Int, val int: Long, val long: ULong, val maybeLong: ULong?) {
 
 
@@ -895,13 +814,6 @@ public fun cacheConfigWeight(cache: io.prebindgen.covertest.model.CacheConfig?, 
     return __ret
 }
 
-public fun objectBoundaryValue(value: io.prebindgen.covertest.model.ObjectBoundary, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long {
-    val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.CovNative.objectBoundaryValue(longArrayOf(value.left.left.left.left.left.left.left.value, value.left.left.left.left.left.left.right.value, value.left.left.left.left.left.right.left.value, value.left.left.left.left.left.right.right.value, value.left.left.left.left.right.left.left.value, value.left.left.left.left.right.left.right.value, value.left.left.left.left.right.right.left.value, value.left.left.left.left.right.right.right.value, value.left.left.left.right.left.left.left.value, value.left.left.left.right.left.left.right.value, value.left.left.left.right.left.right.left.value, value.left.left.left.right.left.right.right.value, value.left.left.left.right.right.left.left.value, value.left.left.left.right.right.left.right.value, value.left.left.left.right.right.right.left.value, value.left.left.left.right.right.right.right.value, value.left.left.right.left.left.left.left.value, value.left.left.right.left.left.left.right.value, value.left.left.right.left.left.right.left.value, value.left.left.right.left.left.right.right.value, value.left.left.right.left.right.left.left.value, value.left.left.right.left.right.left.right.value, value.left.left.right.left.right.right.left.value, value.left.left.right.left.right.right.right.value, value.left.left.right.right.left.left.left.value, value.left.left.right.right.left.left.right.value, value.left.left.right.right.left.right.left.value, value.left.left.right.right.left.right.right.value, value.left.left.right.right.right.left.left.value, value.left.left.right.right.right.left.right.value, value.left.left.right.right.right.right.left.value, value.left.left.right.right.right.right.right.value, value.left.right.left.left.left.left.left.value, value.left.right.left.left.left.left.right.value, value.left.right.left.left.left.right.left.value, value.left.right.left.left.left.right.right.value, value.left.right.left.left.right.left.left.value, value.left.right.left.left.right.left.right.value, value.left.right.left.left.right.right.left.value, value.left.right.left.left.right.right.right.value, value.left.right.left.right.left.left.left.value, value.left.right.left.right.left.left.right.value, value.left.right.left.right.left.right.left.value, value.left.right.left.right.left.right.right.value, value.left.right.left.right.right.left.left.value, value.left.right.left.right.right.left.right.value, value.left.right.left.right.right.right.left.value, value.left.right.left.right.right.right.right.value, value.left.right.right.left.left.left.left.value, value.left.right.right.left.left.left.right.value, value.left.right.right.left.left.right.left.value, value.left.right.right.left.left.right.right.value, value.left.right.right.left.right.left.left.value, value.left.right.right.left.right.left.right.value, value.left.right.right.left.right.right.left.value, value.left.right.right.left.right.right.right.value, value.left.right.right.right.left.left.left.value, value.left.right.right.right.left.left.right.value, value.left.right.right.right.left.right.left.value, value.left.right.right.right.left.right.right.value, value.left.right.right.right.right.left.left.value, value.left.right.right.right.right.left.right.value, value.left.right.right.right.right.right.left.value, value.left.right.right.right.right.right.right.value, value.right.leaves32.left.left.left.left.left.value, value.right.leaves32.left.left.left.left.right.value, value.right.leaves32.left.left.left.right.left.value, value.right.leaves32.left.left.left.right.right.value, value.right.leaves32.left.left.right.left.left.value, value.right.leaves32.left.left.right.left.right.value, value.right.leaves32.left.left.right.right.left.value, value.right.leaves32.left.left.right.right.right.value, value.right.leaves32.left.right.left.left.left.value, value.right.leaves32.left.right.left.left.right.value, value.right.leaves32.left.right.left.right.left.value, value.right.leaves32.left.right.left.right.right.value, value.right.leaves32.left.right.right.left.left.value, value.right.leaves32.left.right.right.left.right.value, value.right.leaves32.left.right.right.right.left.value, value.right.leaves32.left.right.right.right.right.value, value.right.leaves32.right.left.left.left.left.value, value.right.leaves32.right.left.left.left.right.value, value.right.leaves32.right.left.left.right.left.value, value.right.leaves32.right.left.left.right.right.value, value.right.leaves32.right.left.right.left.left.value, value.right.leaves32.right.left.right.left.right.value, value.right.leaves32.right.left.right.right.left.value, value.right.leaves32.right.left.right.right.right.value, value.right.leaves32.right.right.left.left.left.value, value.right.leaves32.right.right.left.left.right.value, value.right.leaves32.right.right.left.right.left.value, value.right.leaves32.right.right.left.right.right.value, value.right.leaves32.right.right.right.left.left.value, value.right.leaves32.right.right.right.left.right.value, value.right.leaves32.right.right.right.right.left.value, value.right.leaves32.right.right.right.right.right.value, value.right.leaves16.left.left.left.left.value, value.right.leaves16.left.left.left.right.value, value.right.leaves16.left.left.right.left.value, value.right.leaves16.left.left.right.right.value, value.right.leaves16.left.right.left.left.value, value.right.leaves16.left.right.left.right.value, value.right.leaves16.left.right.right.left.value, value.right.leaves16.left.right.right.right.value, value.right.leaves16.right.left.left.left.value, value.right.leaves16.right.left.left.right.value, value.right.leaves16.right.left.right.left.value, value.right.leaves16.right.left.right.right.value, value.right.leaves16.right.right.left.left.value, value.right.leaves16.right.right.left.right.value, value.right.leaves16.right.right.right.left.value, value.right.leaves16.right.right.right.right.value, value.right.leaves8.left.left.left.value, value.right.leaves8.left.left.right.value, value.right.leaves8.left.right.left.value, value.right.leaves8.left.right.right.value, value.right.leaves8.right.left.left.value, value.right.leaves8.right.left.right.value, value.right.leaves8.right.right.left.value, value.right.leaves8.right.right.right.value, value.right.leaves4.left.left.value, value.right.leaves4.left.right.value, value.right.leaves4.right.left.value, value.right.leaves4.right.right.value, value.right.leaves2.left.value, value.right.leaves2.right.value, value.right.leaf.value), __bcap)
-    if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
-}
-
 @Suppress("UNCHECKED_CAST")
 public fun unsignedRoundTrip(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.model.Unsigned>): io.prebindgen.covertest.model.Unsigned {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
@@ -958,7 +870,7 @@ public fun blobValueEcho(value: io.prebindgen.covertest.model.BlobValue, onError
     val __s0_c0 = arrayOfNulls<Any?>(__s0_n)
     for (__s0_i in 0 until __s0_n) { val __s0_e = __s0[__s0_i]; __s0_c0[__s0_i] = __s0_e }
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.CovNative.blobValueEcho(intArrayOf(__s0_n), longArrayOf(value.stamp.secs, value.stamp.nanos), arrayOf<Any?>(value.id, __s0_c0), io.prebindgen.covertest.__sink_BlobValue, __bcap)
+    val __ret = io.prebindgen.covertest.CovNative.blobValueEcho(value.stamp.secs, value.stamp.nanos, value.id, __s0_n, __s0_c0, io.prebindgen.covertest.__sink_BlobValue, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as io.prebindgen.covertest.model.BlobValue
 }
@@ -988,7 +900,7 @@ public fun boxedDurationEcho(value: ULong, onError: io.prebindgen.covertest.JniE
 @Suppress("UNCHECKED_CAST")
 public fun durationBoundaryEcho(value: io.prebindgen.covertest.model.DurationBoundary, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.model.DurationBoundary>): io.prebindgen.covertest.model.DurationBoundary {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.CovNative.durationBoundaryEcho(booleanArrayOf((value.delay != null)), longArrayOf(value.required.toLong(), (value.delay?.toLong() ?: 0L)), io.prebindgen.covertest.__sink_DurationBoundary, __bcap)
+    val __ret = io.prebindgen.covertest.CovNative.durationBoundaryEcho(value.required.toLong(), (value.delay != null), (value.delay?.toLong() ?: 0L), io.prebindgen.covertest.__sink_DurationBoundary, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as io.prebindgen.covertest.model.DurationBoundary
 }

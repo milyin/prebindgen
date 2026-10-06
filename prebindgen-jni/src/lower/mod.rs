@@ -21,13 +21,11 @@
 //!
 //! [`deliver`] hands a value to Kotlin as a list of parameters (a builder's,
 //! a callback's, an error handler's); [`select`] builds a parameter from a
-//! choice of constructors; [`pack`] folds a parameter's leaves into one array
-//! per JNI type.
+//! choice of constructors.
 
 pub(crate) mod deliver;
 pub(crate) mod kotlin;
 pub(crate) mod leaf;
-pub(crate) mod pack;
 pub(crate) mod rust;
 pub(crate) mod select;
 
@@ -307,7 +305,7 @@ impl Plan<'_> {
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => vec![Leaf::new(LeafTy::Prim(Prim::J))],
                     ClassKind::Enum => vec![Leaf::new(LeafTy::Prim(Prim::I))],
-                    ClassKind::Data { .. } => {
+                    ClassKind::Data => {
                         let mut out = Vec::new();
                         for f in &self.struct_of(c)?.fields {
                             let seg = field_seg(f);
@@ -400,7 +398,7 @@ impl Plan<'_> {
                 ..
             } => match &c.kind {
                 ClassKind::Ptr { .. } => Access::of(ty) != Access::Exclusive,
-                ClassKind::Data { .. } => {
+                ClassKind::Data => {
                     let mut any = false;
                     for f in &self.struct_of(c)?.fields {
                         any |= self.owns_handle(&f.ty)?;

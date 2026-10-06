@@ -13,7 +13,6 @@ use quote::quote;
 pub(crate) enum Prim {
     Z,
     B,
-    C,
     S,
     I,
     J,
@@ -26,7 +25,6 @@ impl Prim {
         match self {
             Prim::Z => "Z",
             Prim::B => "B",
-            Prim::C => "C",
             Prim::S => "S",
             Prim::I => "I",
             Prim::J => "J",
@@ -39,7 +37,6 @@ impl Prim {
         match self {
             Prim::Z => "Boolean",
             Prim::B => "Byte",
-            Prim::C => "Char",
             Prim::S => "Short",
             Prim::I => "Int",
             Prim::J => "Long",
@@ -52,7 +49,6 @@ impl Prim {
         match self {
             Prim::Z => "false",
             Prim::B => "0.toByte()",
-            Prim::C => "'\\u0000'",
             Prim::S => "0.toShort()",
             Prim::I => "0",
             Prim::J => "0L",
@@ -65,7 +61,6 @@ impl Prim {
         match self {
             Prim::Z => quote!(::prebindgen_jni_runtime::jni::sys::jboolean),
             Prim::B => quote!(::prebindgen_jni_runtime::jni::sys::jbyte),
-            Prim::C => quote!(::prebindgen_jni_runtime::jni::sys::jchar),
             Prim::S => quote!(::prebindgen_jni_runtime::jni::sys::jshort),
             Prim::I => quote!(::prebindgen_jni_runtime::jni::sys::jint),
             Prim::J => quote!(::prebindgen_jni_runtime::jni::sys::jlong),
@@ -87,7 +82,6 @@ impl Prim {
         let s = match self {
             Prim::Z => "z",
             Prim::B => "b",
-            Prim::C => "c",
             Prim::S => "s",
             Prim::I => "i",
             Prim::J => "j",
@@ -107,7 +101,6 @@ impl Prim {
         match self {
             Prim::Z => ("read_booleans", "write_booleans"),
             Prim::B => ("read_bytes", "write_bytes"),
-            Prim::C => ("read_chars", "write_chars"),
             Prim::S => ("read_shorts", "write_shorts"),
             Prim::I => ("read_ints", "write_ints"),
             Prim::J => ("read_longs", "write_longs"),
@@ -121,7 +114,6 @@ impl Prim {
         match self {
             Prim::Z => "box_jboolean",
             Prim::B => "box_jbyte",
-            Prim::C => "box_jchar",
             Prim::S => "box_jshort",
             Prim::I => "box_jint",
             Prim::J => "box_jlong",
@@ -134,7 +126,6 @@ impl Prim {
         match self {
             Prim::Z => "java/lang/Boolean",
             Prim::B => "java/lang/Byte",
-            Prim::C => "java/lang/Character",
             Prim::S => "java/lang/Short",
             Prim::I => "java/lang/Integer",
             Prim::J => "java/lang/Long",

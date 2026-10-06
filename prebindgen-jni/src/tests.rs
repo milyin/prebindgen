@@ -276,3 +276,45 @@ fn sequence_inputs_preserve_supported_access() {
         assert_eq!(result.is_ok(), accepted, "{ty}: {:?}", result.err());
     }
 }
+
+#[test]
+fn methods_over_the_jvm_slot_limit_are_refused() {
+    // A struct of `n` `i64` fields crosses as `2 * n` slots. A native method
+    // adds 4 (the receiver and up to three sinks), a result sink 1.
+    let wide = |name: &str, n: usize| {
+        let fields: Vec<String> = (0..n).map(|i| format!("pub f{i}: i64")).collect();
+        format!("pub struct {name} {{ {} }}", fields.join(", "))
+    };
+    let src = format!(
+        "{} {} pub fn take_fit(v: Fit) -> i64 {{ todo!() }} \
+         pub fn take_wide(v: Wide) -> i64 {{ todo!() }} pub fn make_wide() -> Wide {{ todo!() }}",
+        wide("Fit", 125),
+        wide("Wide", 128),
+    );
+    let build = |f: crate::FunctionDecl| {
+        let items = syn::parse_file(&src).unwrap().items.into_iter();
+        JniGen::builder()
+            .items(items.map(|i| (i, SourceLocation::default())))
+            .set_package_prefix("io.test")
+            .package(
+                package!()
+                    .class(data_class!(Fit))
+                    .class(data_class!(Wide))
+                    .fun(f),
+            )
+            .build()
+    };
+    // 4 + 250 = 254 slots: at the limit's edge, still accepted.
+    assert!(build(fun!(take_fit)).is_ok());
+    // 4 + 256 slots as a parameter, 1 + 256 as a result: refused.
+    let err = build(fun!(take_wide)).err().unwrap().0;
+    assert!(
+        err.contains("the native method of `take_wide` would take 260 JVM argument slots"),
+        "{err}"
+    );
+    let err = build(fun!(make_wide)).err().unwrap().0;
+    assert!(
+        err.contains("the result sink of `Wide` would take 257 JVM argument slots"),
+        "{err}"
+    );
+}

@@ -40,7 +40,6 @@
 //! | as a sum's tag and alternatives | [`Input::sum`] | [`Output::sum`] |
 //! | as a sequence | [`Input::seq`] | [`Output::seq`] |
 //! | as any other list of parts | [`Input::parts`] | [`Output::parts`] |
-//! | packed inside other wires, such as one array of many primitives | [`Input::packed`] | — |
 //!
 //! Some take a description of the type: `record` takes the flat model's
 //! struct and `sum` its enum, while `via` takes the conversion the build

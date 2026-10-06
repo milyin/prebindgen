@@ -14,9 +14,8 @@ use crate::{
         kotlin::{HandleSite, KtEnc},
         kt_ident,
         leaf::{method_desc, Leaf, LeafTy, Prim},
-        pack,
         select::SigParam,
-        Dir, Param,
+        Param,
     },
     plan::{err, Binding, Callee, EPlan, PPlan, Placement, Plan, RPlan, Res},
 };
@@ -157,25 +156,15 @@ impl RustBoundary<'_, '_> {
             .params
             .iter()
             .find(|p| match p {
-                PPlan::Receiver(fp) | PPlan::Value(fp, _) => fp.name == *name,
+                PPlan::Receiver(fp) | PPlan::Value(fp) => fp.name == *name,
                 PPlan::Selector(s, _) => s.param.name == *name,
             })
             .expect("a planned parameter");
-        let (fp, packed) = match p {
+        let fp = match p {
             PPlan::Selector(s, _) => return plan.selector_input(s),
-            PPlan::Receiver(fp) => (fp, false),
-            PPlan::Value(fp, packed) => (fp, *packed),
+            PPlan::Receiver(fp) | PPlan::Value(fp) => fp,
         };
-        let root = names::bare(&fp.name);
-        let mut input = plan.rs_decode(&fp.ty, &root, 0)?;
-        if packed {
-            let leaves: Vec<Leaf> = plan
-                .leaves(&fp.ty, Dir::In)?
-                .into_iter()
-                .map(|l| l.under(&root))
-                .collect();
-            input = pack::pack_input(&root, &leaves, input);
-        }
+        let input = plan.rs_decode(&fp.ty, &names::bare(&fp.name), 0)?;
         // A borrowed parameter lends the decoded value.
         let pass = match plan.shape(&fp.ty)? {
             Shape::Str {
@@ -503,15 +492,10 @@ fn wrapper(plan: &Plan, b: &Binding) -> Res<Wrapper> {
             PPlan::Receiver(fp) => {
                 args.extend(plan.kt_encode(&fp.ty, "this", false, &mut cx, true)?);
             }
-            PPlan::Value(fp, packed) => {
+            PPlan::Value(fp) => {
                 let n = kt_ident(&names::camel(&names::bare(&fp.name)));
                 sig.push(SigParam::Plain(n.clone(), plan.kt_type(&fp.ty)?));
-                let exprs = plan.kt_encode(&fp.ty, &n, false, &mut cx, true)?;
-                if *packed {
-                    args.extend(pack::pack_kotlin(&plan.leaves(&fp.ty, Dir::In)?, &exprs));
-                } else {
-                    args.extend(exprs);
-                }
+                args.extend(plan.kt_encode(&fp.ty, &n, false, &mut cx, true)?);
             }
             PPlan::Selector(s, split) => {
                 args.extend(plan.selector_encode(s, &mut cx)?);

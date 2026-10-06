@@ -53,7 +53,7 @@ pub(crate) fn class(
             out.rust.push(free_ptr(plan, c));
             ptr_class(plan, c, *gc, &methods, &ctors)
         }
-        ClassKind::Data { .. } => data_class(plan, c, &methods, &ctors)?,
+        ClassKind::Data => data_class(plan, c, &methods, &ctors)?,
         ClassKind::Enum => enum_class(plan, c)?,
         ClassKind::Sealed { .. } => sealed_class(plan, c)?,
     };

@@ -18,7 +18,6 @@
 //! | `JniGenBuilder::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
-//! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
@@ -294,22 +293,8 @@ fn main() {
                 .class(data_class!(RepliesConfig))
                 .class(data_class!(CacheConfig))
                 // Compose the bounded `Option<Duration>` niche through a
-                // data-class field. Explicit JObject input makes the runtime
-                // execute the whole-object decoder as well as the primitive-
-                // niche `fromParts` encoder (#138).
-                .class(data_class!(DurationBoundary).jobject_input())
-                // These small nested classes form a 127-Long-leaf tree. Its
-                // constructor is legal, but flattening the root function input
-                // would consume 256 JVM slots, so it keeps one JObject input.
-                .class(data_class!(ObjectBoundaryLeaf))
-                .class(data_class!(ObjectBoundary2))
-                .class(data_class!(ObjectBoundary4))
-                .class(data_class!(ObjectBoundary8))
-                .class(data_class!(ObjectBoundary16))
-                .class(data_class!(ObjectBoundary32))
-                .class(data_class!(ObjectBoundary64))
-                .class(data_class!(ObjectBoundary63))
-                .class(data_class!(ObjectBoundary).jobject_input())
+                // data-class field, in both directions (#138).
+                .class(data_class!(DurationBoundary))
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
@@ -326,7 +311,7 @@ fn main() {
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                .class(data_class!(BlobValue).jobject_input())
+                .class(data_class!(BlobValue))
                 // Fixed-size arrays of every JNI-primitive element.
                 .class(data_class!(Arrays)),
         )
@@ -619,7 +604,6 @@ fn main() {
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))
-                .fun(fun!(object_boundary_value))
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))
                 .fun(fun!(unsigned_data_maybe))

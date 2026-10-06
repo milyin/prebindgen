@@ -8,7 +8,7 @@
 //! elements to write — package by package, each package's classes, then
 //! its functions, then its constants — each with every decision about it
 //! already made: its Kotlin and extern names, how each parameter crosses
-//! (a value, packed, a selector), how the result and the error leave. The
+//! (a value or a selector), how the result and the error leave. The
 //! Kotlin support interfaces those decisions need — callback, sink, builder,
 //! folder and error-handler interfaces — are planned alongside, once each.
 //!
@@ -34,7 +34,12 @@ use crate::{
         ClassDecl, ConstDecl, ConstSource, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
         FunctionDecl, ParamVariant, ReturnField,
     },
-    lower::{deliver::DParam, leaf::Leaf, select::Selector, Dir},
+    lower::{
+        deliver::DParam,
+        leaf::{Leaf, LeafTy, Prim},
+        select::Selector,
+        Dir,
+    },
     Error,
 };
 
@@ -64,7 +69,7 @@ pub(crate) struct Class {
 #[derive(Debug)]
 pub(crate) enum ClassKind {
     Ptr { gc: bool },
-    Data { packed: bool },
+    Data,
     Enum,
     Sealed { renames: HashMap<String, String> },
 }
@@ -110,8 +115,8 @@ pub(crate) enum Callee {
 pub(crate) enum PPlan {
     /// The receiver of a method: `this`.
     Receiver(Param),
-    /// A value; `true` when its leaves travel packed.
-    Value(Param, bool),
+    /// A value.
+    Value(Param),
     /// Built or passed as chosen by a selector; `true` when split into
     /// typed overloads.
     Selector(Selector, bool),
@@ -314,12 +319,7 @@ impl<'f> Plan<'f> {
             for c in &p.classes {
                 let (ty, name, kind, iface) = match c {
                     ClassDecl::Ptr(d) => (&d.ty, &d.name, ClassKind::Ptr { gc: d.gc }, &d.iface),
-                    ClassDecl::Data(d) => (
-                        &d.ty,
-                        &d.name,
-                        ClassKind::Data { packed: d.packed },
-                        &d.iface,
-                    ),
+                    ClassDecl::Data(d) => (&d.ty, &d.name, ClassKind::Data, &d.iface),
                     ClassDecl::Enum(d) => (&d.ty, &d.name, ClassKind::Enum, &d.iface),
                     ClassDecl::Sealed(d) => (
                         &d.ty,
@@ -342,7 +342,7 @@ impl<'f> Plan<'f> {
                 let fits = matches!(
                     (&kind, element),
                     (ClassKind::Ptr { .. }, _)
-                        | (ClassKind::Data { .. }, FlatType::Struct(_))
+                        | (ClassKind::Data, FlatType::Struct(_))
                         | (ClassKind::Enum, FlatType::Enum(_))
                         | (ClassKind::Sealed { .. }, FlatType::Variant(_))
                 );
@@ -353,7 +353,7 @@ impl<'f> Plan<'f> {
                 }
                 let hook = match kind {
                     ClassKind::Ptr { .. } => &b.ptr_hook,
-                    ClassKind::Data { .. } | ClassKind::Sealed { .. } => &b.data_hook,
+                    ClassKind::Data | ClassKind::Sealed { .. } => &b.data_hook,
                     ClassKind::Enum => &b.enum_hook,
                 };
                 let name = match (name, hook) {
@@ -831,12 +831,18 @@ impl Planner<'_, '_> {
                     params.push(PPlan::Selector(s, split));
                 }
                 None => {
-                    if let TypeKind::Callback { .. } = p.ty.kind() {
+                    if let TypeKind::Callback { args } = p.ty.kind() {
+                        let leaves: Vec<Leaf> = plan
+                            .callback_args(args)?
+                            .into_iter()
+                            .flat_map(|d| d.leaves)
+                            .collect();
+                        check_slots(&format!("the callback `{}`", p.ty), &leaves, 1)?;
                         self.support(plan.callback_fqn(&p.ty)?, || {
                             Ok(Support::Callback(p.ty.clone()))
                         })?;
                     }
-                    params.push(PPlan::Value(p.clone(), plan.packed(&p.ty)));
+                    params.push(PPlan::Value(p.clone()));
                 }
             }
         }
@@ -851,29 +857,16 @@ impl Planner<'_, '_> {
                 ));
             }
         }
-        // The JVM caps a method's arguments at 255 slots (the holder object
-        // is one): pack the largest values until the extern fits.
-        loop {
-            let mut slots = 1 + 3;
-            let mut largest: Option<(usize, usize)> = None;
-            for (i, p) in params.iter().enumerate() {
-                let n: usize = plan.param_leaves(p)?.iter().map(Leaf::slots).sum();
-                slots += n;
-                if let PPlan::Value(_, false) = p {
-                    if largest.is_none_or(|(_, m)| n > m) {
-                        largest = Some((i, n));
-                    }
-                }
-            }
-            match largest {
-                Some((i, _)) if slots > 255 => {
-                    if let PPlan::Value(_, packed) = &mut params[i] {
-                        *packed = true;
-                    }
-                }
-                _ => break,
-            }
+        // The receiver and up to three sinks join the parameters' leaves.
+        let mut leaves = Vec::new();
+        for p in &params {
+            leaves.extend(plan.param_leaves(p)?);
         }
+        check_slots(
+            &format!("the native method of `{}`", f.name),
+            &leaves,
+            1 + 3,
+        )?;
         Ok(params)
     }
 
@@ -945,6 +938,10 @@ impl Planner<'_, '_> {
                 .class(&tname)
                 .map_or(plan.base_pkg.clone(), |c| c.pkg.clone());
             if seq {
+                // The folder's columns upcall: a count, then one array per leaf.
+                let mut columns = vec![Leaf::new(LeafTy::Prim(Prim::I))];
+                columns.extend(d.leaves.iter().map(Leaf::column));
+                check_slots(&format!("the folder of `{ty}`"), &columns, 1)?;
                 let iface = format!("{base}.{tname}{suffix}Folder");
                 let columns_iface = format!("{base}.{tname}{suffix}FolderColumns");
                 self.support(iface.clone(), || {
@@ -966,6 +963,7 @@ impl Planner<'_, '_> {
                     leaves: d.leaves,
                 });
             }
+            check_slots(&format!("the builder of `{ty}`"), &d.leaves, 1)?;
             let iface = format!("{base}.{tname}{suffix}Builder");
             self.support(iface.clone(), || {
                 Ok(Support::Builder {
@@ -991,6 +989,7 @@ impl Planner<'_, '_> {
                 leaf: leaves.remove(0),
             });
         }
+        check_slots(&format!("the result sink of `{ty}`"), &leaves, 1)?;
         let base = names::mangle(ty);
         let iface = format!("{}.__Sink_{base}", plan.base_pkg);
         let kt_sink = format!("{}.__sink_{base}", plan.base_pkg);
@@ -1026,6 +1025,7 @@ impl Planner<'_, '_> {
         let raw_iface = format!("{handler}Raw");
         let capture = format!("{handler}Capture");
         let d = plan.deliver(e, quote!(__e), "e", "", None, &[], false, 1)?;
+        check_slots(&format!("the error handler of `{e}`"), &d.leaves, 1)?;
         self.support(handler.clone(), || {
             Ok(Support::ErrorHandler {
                 pkg: pkg.clone(),
@@ -1060,34 +1060,30 @@ fn simple(fqn: &str) -> String {
 }
 
 impl Plan<'_> {
-    /// Whether a parameter of `ty` crosses packed by declaration.
-    fn packed(&self, ty: &TypeRef) -> bool {
-        let t = ty.borrow_target().unwrap_or(ty);
-        matches!(
-            t.kind(),
-            TypeKind::Named { id, .. }
-                if matches!(self.class(&id.name).map(|c| &c.kind), Some(ClassKind::Data { packed: true }))
-        )
-    }
-
     /// The raw leaves of the extern for one parameter.
     pub(crate) fn param_leaves(&self, p: &PPlan) -> Res<Vec<Leaf>> {
         match p {
-            PPlan::Receiver(fp) | PPlan::Value(fp, false) => Ok(self
+            PPlan::Receiver(fp) | PPlan::Value(fp) => Ok(self
                 .leaves(&fp.ty, Dir::In)?
                 .into_iter()
                 .map(|l| l.under(&names::bare(&fp.name)))
                 .collect()),
-            PPlan::Value(fp, true) => {
-                let root = names::bare(&fp.name);
-                let leaves: Vec<Leaf> = self
-                    .leaves(&fp.ty, Dir::In)?
-                    .into_iter()
-                    .map(|l| l.under(&root))
-                    .collect();
-                Ok(crate::lower::pack::packed_leaves(&root, &leaves))
-            }
             PPlan::Selector(s, _) => self.selector_leaves(s),
         }
     }
+}
+
+/// Refuse a JVM method whose arguments would take more than 255 slots, the
+/// JVM's limit (JVMS §4.3.3): a `long` or `double` takes two, any other
+/// argument one. `extra` counts the slots beyond `leaves` — the receiver,
+/// and for a native method the sinks.
+fn check_slots(what: &str, leaves: &[Leaf], extra: usize) -> Res<()> {
+    let slots = extra + leaves.iter().map(Leaf::slots).sum::<usize>();
+    if slots > 255 {
+        return err(format!(
+            "{what} would take {slots} JVM argument slots, more than the JVM's limit of 255: \
+             split the value into smaller parameters or fields"
+        ));
+    }
+    Ok(())
 }

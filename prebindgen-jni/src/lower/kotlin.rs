@@ -81,7 +81,7 @@ impl Plan<'_> {
                         vec![or_default(access(expr, "ptr"), "0L")]
                     }
                     ClassKind::Enum => vec![or_default(access(expr, "value"), "0")],
-                    ClassKind::Data { .. } => {
+                    ClassKind::Data => {
                         let mut out = Vec::new();
                         for f in &self.struct_of(c)?.fields {
                             let e = access(expr, &kt_prop(f));
@@ -216,7 +216,7 @@ impl Plan<'_> {
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => format!("{}({})", c.fqn(), leaves[0]),
                     ClassKind::Enum => format!("{}.fromInt({})", c.fqn(), leaves[0]),
-                    ClassKind::Data { .. } => {
+                    ClassKind::Data => {
                         let mut args = Vec::new();
                         let mut at = 0;
                         for f in &self.struct_of(c)?.fields {

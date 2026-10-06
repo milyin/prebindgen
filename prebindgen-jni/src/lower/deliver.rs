@@ -160,7 +160,7 @@ impl Plan<'_> {
                 ..
             } = self.shape(core)?
             {
-                if let ClassKind::Data { .. } = c.kind {
+                if let ClassKind::Data = c.kind {
                     let v = if borrowed {
                         quote!(::core::clone::Clone::clone(#v))
                     } else {

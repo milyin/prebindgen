@@ -3,7 +3,7 @@
 //! need. Most items exist so a *coverage* binding (e.g.
 //! `examples/covertest-kotlin`) can map one flat library through **every**
 //! adapter feature and assert the result; the `ObjectBoundary*` family also
-//! supports the flattened-vs-`JObject` JNI input micro-benchmark.
+//! supports the wide-input JNI micro-benchmark.
 //!
 //! Everything here is re-exported at the crate root (`pub use ext::*`), so a
 //! single `source_module = perftest_flat` reaches both the perf surface and this
@@ -1163,7 +1163,7 @@ pub fn cache_config_weight(cache: Option<CacheConfig>) -> i32 {
     }
 }
 
-/// One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree.
+/// One `i64` leaf in the deliberately wide [`ObjectBoundary64`] tree.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectBoundaryLeaf {
@@ -1187,42 +1187,6 @@ object_boundary_level!(ObjectBoundary8, ObjectBoundary4);
 object_boundary_level!(ObjectBoundary16, ObjectBoundary8);
 object_boundary_level!(ObjectBoundary32, ObjectBoundary16);
 object_boundary_level!(ObjectBoundary64, ObjectBoundary32);
-
-/// Structural twin of [`ObjectBoundary64`] used to benchmark an explicit
-/// whole-`JObject` input against recursive 64-leaf flattening.
-#[prebindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectBoundary64Object {
-    pub left: ObjectBoundary32,
-    pub right: ObjectBoundary32,
-}
-
-/// The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves.
-#[prebindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectBoundary63 {
-    pub leaves32: ObjectBoundary32,
-    pub leaves16: ObjectBoundary16,
-    pub leaves8: ObjectBoundary8,
-    pub leaves4: ObjectBoundary4,
-    pub leaves2: ObjectBoundary2,
-    pub leaf: ObjectBoundaryLeaf,
-}
-
-/// Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
-///
-/// Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
-/// contain 127 `i64` leaves. The generated Kotlin constructor/fromParts bridge
-/// remains legal at 254 JVM slots, but flattening a native input parameter
-/// would require 256: 254 for the leaves plus the `JNINative` receiver and
-/// binding-error sink. Because the JVM limit is 255, this otherwise-valid data
-/// class must cross Kotlin→Rust as one `JObject`.
-#[prebindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectBoundary {
-    pub left: ObjectBoundary64,
-    pub right: ObjectBoundary63,
-}
 
 trait ObjectBoundarySum {
     fn boundary_sum(&self) -> i64;
@@ -1253,40 +1217,11 @@ impl_object_boundary_sum!(
     ObjectBoundary16,
     ObjectBoundary32,
     ObjectBoundary64,
-    ObjectBoundary64Object,
 );
-
-impl ObjectBoundarySum for ObjectBoundary63 {
-    fn boundary_sum(&self) -> i64 {
-        self.leaves32.boundary_sum()
-            + self.leaves16.boundary_sum()
-            + self.leaves8.boundary_sum()
-            + self.leaves4.boundary_sum()
-            + self.leaves2.boundary_sum()
-            + self.leaf.boundary_sum()
-    }
-}
-
-impl ObjectBoundarySum for ObjectBoundary {
-    fn boundary_sum(&self) -> i64 {
-        self.left.boundary_sum() + self.right.boundary_sum()
-    }
-}
-
-#[prebindgen]
-pub fn object_boundary_value(value: &ObjectBoundary) -> i64 {
-    value.boundary_sum()
-}
 
 /// Sum the 64 scalar leaves after recursive JNI parameter flattening.
 #[prebindgen]
 pub fn large_flat_input_sum(value: &ObjectBoundary64) -> i64 {
-    value.boundary_sum()
-}
-
-/// Sum the same 64-leaf shape after decoding one whole `JObject` input.
-#[prebindgen]
-pub fn large_object_input_sum(value: &ObjectBoundary64Object) -> i64 {
     value.boundary_sum()
 }
 

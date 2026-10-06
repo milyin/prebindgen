@@ -849,8 +849,6 @@ internal object CovNative {
 
     external fun cacheConfigWeight(cachePresent: Boolean, cacheRepliesPriority: Int, cacheRepliesMaxSamples: Long, cacheTtl: Long, errorSink: Any): Int
 
-    external fun objectBoundaryValue(valuePackJ: LongArray, errorSink: Any): Long
-
     external fun unsignedRoundTrip(byte: Int, short: Int, int: Long, long: Long, maybeLongPresent: Boolean, maybeLong: Long, sink: Any, errorSink: Any): Any?
 
     external fun unsignedOptional(valuePresent: Boolean, value: Long, errorSink: Any): Long?
@@ -863,7 +861,7 @@ internal object CovNative {
 
     external fun blobValueNew(secs: Long, id: ByteArray, chunksN: Int, chunks: Array<Any?>, sink: Any, errorSink: Any): Any?
 
-    external fun blobValueEcho(valuePackI: IntArray, valuePackJ: LongArray, valuePackL: Array<Any?>, sink: Any, errorSink: Any): Any?
+    external fun blobValueEcho(valueStampSecs: Long, valueStampNanos: Long, valueId: ByteArray, valueChunksN: Int, valueChunks: Array<Any?>, sink: Any, errorSink: Any): Any?
 
     external fun arraysEcho(aBytes: ByteArray, aShorts: ShortArray, aInts: IntArray, aLongs: LongArray, aDoubles: DoubleArray, aFlags: BooleanArray, aRaw: LongArray, sink: Any, errorSink: Any): Any?
 
@@ -871,7 +869,7 @@ internal object CovNative {
 
     external fun boxedDurationEcho(value: Long, errorSink: Any): Long
 
-    external fun durationBoundaryEcho(valuePackZ: BooleanArray, valuePackJ: LongArray, sink: Any, errorSink: Any): Any?
+    external fun durationBoundaryEcho(valueRequired: Long, valueDelayPresent: Boolean, valueDelay: Long, sink: Any, errorSink: Any): Any?
 
     external fun durationEmit(value: Long, f: io.prebindgen.covertest.DurationCallbackRaw, errorSink: Any)
 

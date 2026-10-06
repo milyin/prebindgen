@@ -79,13 +79,6 @@ pub enum FormKind<W> {
         wires: Vec<Wire<W>>,
         elem: Box<Form<W>>,
     },
-    /// The wires of `inner` travel packed inside `wires` — for example
-    /// several primitives in one array — and are unpacked before `inner`
-    /// reads them.
-    Packed {
-        wires: Vec<Wire<W>>,
-        inner: Box<Form<W>>,
-    },
 }
 
 impl<W> Form<W> {
@@ -110,7 +103,7 @@ impl<W> Form<W> {
                 out.push(tag);
                 alts.iter().flatten().for_each(|(_, f)| f.collect(out))
             }
-            FormKind::Seq { wires, .. } | FormKind::Packed { wires, .. } => out.extend(wires),
+            FormKind::Seq { wires, .. } => out.extend(wires),
         }
     }
 }
@@ -273,23 +266,6 @@ impl<W: WireType> Input<W> {
             ),
             expr: expr.to_token_stream(),
             fallible: false,
-        }
-    }
-
-    /// `inner` with its wires packed inside `wires`. `unpack` binds each of
-    /// `inner`'s wires from them; it runs before `inner` and may use `?`.
-    pub fn packed(wires: Vec<Wire<W>>, unpack: TokenStream, inner: Input<W>) -> Self {
-        let e = inner.expr;
-        Self {
-            form: Form {
-                ty: inner.form.ty.clone(),
-                kind: FormKind::Packed {
-                    wires,
-                    inner: Box::new(inner.form),
-                },
-            },
-            expr: quote!({ #unpack #e }),
-            fallible: true,
         }
     }
 

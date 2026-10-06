@@ -108,7 +108,7 @@ impl Plan<'_> {
                             one(quote!((match #w { #(#pats,)* __v => ::core::result::Result::Err(::std::format!(#msg, __v)) })?))?
                                 .mark_fallible()
                         }
-                        ClassKind::Data { .. } => {
+                        ClassKind::Data => {
                             let s = self.struct_of(c)?;
                             let mut parts = Vec::new();
                             for f in &s.fields {
@@ -326,7 +326,7 @@ impl Plan<'_> {
                             let pats = arms.iter().map(|(n, d)| quote!(#t::#n => #d));
                             single(quote!((match #value { #(#pats),* } as i32)), false)?
                         }
-                        ClassKind::Data { .. } => {
+                        ClassKind::Data => {
                             Output::record(&self.q, self.struct_of(c)?, &value, |f, b| {
                                 self.rs_encode(&f.ty, b, &join(root, &field_seg(f)), depth + 1)
                             })?
