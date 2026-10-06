@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="prebindgen-tools"><title>prebindgen_tools - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0 (b940084d7 2026-09-28)" data-channel="1.99.0" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate prebindgen_tools</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#prebindgen-tools" title="prebindgen-tools">prebindgen-tools</a><ul><li><a href="#the-model" title="The model">The model</a></li><li><a href="#using-an-input-or-output" title="Using an Input or Output">Using an Input or Output</a></li><li><a href="#deciding-how-each-layer-crosses" title="Deciding how each layer crosses">Deciding how each layer crosses</a></li><li><a href="#other-tools" title="Other tools">Other tools</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>prebindgen_<wbr>tools</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_tools/lib.rs.html#2-516">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="prebindgen-tools"><a class="doc-anchor" href="#prebindgen-tools">§</a>prebindgen-tools</h2>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="prebindgen-tools"><title>prebindgen_tools - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0 (b940084d7 2026-09-28)" data-channel="1.99.0" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate prebindgen_tools</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#prebindgen-tools" title="prebindgen-tools">prebindgen-tools</a><ul><li><a href="#the-model" title="The model">The model</a></li><li><a href="#using-an-input-or-output" title="Using an Input or Output">Using an Input or Output</a></li><li><a href="#deciding-how-each-layer-crosses" title="Deciding how each layer crosses">Deciding how each layer crosses</a></li><li><a href="#other-tools" title="Other tools">Other tools</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>prebindgen_<wbr>tools</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_tools/lib.rs.html#2-532">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="prebindgen-tools"><a class="doc-anchor" href="#prebindgen-tools">§</a>prebindgen-tools</h2>
 <p>Building blocks for a prebindgen <strong>language adapter</strong>. Applications that
 only want bindings use the <code>prebindgen-c</code> or <code>prebindgen-jni</code> adapter.</p>
 <p>An adapter writes <em>generated elements</em> — functions, types, constants —
@@ -114,43 +114,58 @@ both values cross as an <code>i64</code> wire:</p>
         }
     }.to_string(),
 );</code></pre></div>
-<p>An output can be composed of others. Here <code>span</code> returns a struct, and
-<a href="wire/struct.Output.html#method.record" title="associated function prebindgen_tools::wire::Output::record"><code>Output::record</code></a> takes it apart: each field leaves on its own <code>i64</code>
-wire, converted by its own output, and the wrapper returns the wires as a
-tuple. Applied to the call, the record output binds the result once,
-destructures it, and applies each field’s output to its binding:</p>
+<p>An output can be composed of others. Here <code>sample</code> returns a struct, and
+<a href="wire/struct.Output.html#method.record" title="associated function prebindgen_tools::wire::Output::record"><code>Output::record</code></a> takes it apart. The struct’s fields have different
+types, so the closure building each field’s output asks <a href="shape/fn.shape.html" title="fn prebindgen_tools::shape::shape"><code>shape()</code></a> what
+the field is and chooses its wire and conversion: an <code>i64</code> for the <code>u64</code>,
+the <code>f64</code> as is, a <code>u8</code> for the <code>bool</code>. Applied to the call, the record
+output binds the result once, destructures it, and applies each field’s
+output to its binding; the wrapper returns the wires as a tuple:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
-<span class="kw">use </span>prebindgen_flat::{flat::Type, Flat};
-<span class="kw">use </span>prebindgen_tools::{Input, Output, Wire, WireType};
+<span class="kw">use </span>prebindgen_flat::{flat::{ScalarKind, Type}, Flat};
+<span class="kw">use </span>prebindgen_tools::{shape, Input, Output, Shape, Wire, WireType};
 <span class="kw">use </span>quote::{format_ident, quote};
 
-<span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">struct </span>Long;
-<span class="kw">impl </span>WireType <span class="kw">for </span>Long {
-    <span class="kw">fn </span>rust(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream { <span class="macro">quote!</span>(i64) }
+<span class="comment">// The wire types this example's boundary uses.
+</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">enum </span>W { Long, Double, Flag }
+<span class="kw">impl </span>WireType <span class="kw">for </span>W {
+    <span class="kw">fn </span>rust(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream {
+        <span class="kw">match </span><span class="self">self </span>{ W::Long =&gt; <span class="macro">quote!</span>(i64), W::Double =&gt; <span class="macro">quote!</span>(f64), W::Flag =&gt; <span class="macro">quote!</span>(u8) }
+    }
     <span class="kw">fn </span>placeholder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream { <span class="macro">quote!</span>(<span class="number">0</span>) }
 }
 
 <span class="kw">let </span>source = syn::parse_file(
-    <span class="string">"pub struct Range { pub lo: u64, pub hi: u64 } \
-     pub fn span(n: u64) -&gt; Range { Range { lo: n, hi: n * 2 } }"</span>,
+    <span class="string">"pub struct Sample { pub id: u64, pub value: f64, pub ok: bool } \
+     pub fn sample(n: u64) -&gt; Sample { Sample { id: n, value: n as f64 / 2.0, ok: n &gt; 0 } }"</span>,
 ).unwrap();
 <span class="kw">let </span>location = SourceLocation { crate_name: <span class="prelude-val">Some</span>(<span class="string">"source_crate"</span>.into()), ..Default::default() };
 <span class="kw">let </span>flat = Flat::builder()
     .items(source.items.into_iter().map(|i| (i, location.clone())))
     .build().unwrap();
-<span class="kw">let </span>f = flat.function(<span class="string">"span"</span>).unwrap();
-<span class="kw">let </span><span class="prelude-val">Some</span>(Type::Struct(range)) = flat.declared_type(<span class="string">"Range"</span>) <span class="kw">else </span>{ <span class="macro">panic!</span>(<span class="string">"a struct"</span>) };
+<span class="kw">let </span>f = flat.function(<span class="string">"sample"</span>).unwrap();
+<span class="kw">let </span><span class="prelude-val">Some</span>(Type::Struct(sample)) = flat.declared_type(<span class="string">"Sample"</span>) <span class="kw">else </span>{ <span class="macro">panic!</span>(<span class="string">"a struct"</span>) };
 
-<span class="comment">// Build: the parameter's input, and the result's record output, whose
-// fields each leave on a wire named like the field.
+<span class="comment">// Build: the parameter's input, and the result's record output. Each
+// field leaves on a wire named like it, of the type its own type needs.
 </span><span class="kw">let </span>n = <span class="kw-2">&amp;</span>f.params[<span class="number">0</span>];
 <span class="kw">let </span>n_name = <span class="kw-2">&amp;</span>n.name;
-<span class="kw">let </span>input = Input::wire(<span class="kw-2">&amp;</span>n.ty, Wire::new(n_name.clone(), Long), <span class="macro">quote!</span>(#n_name <span class="kw">as </span>u64));
-<span class="kw">let </span>output = Output::record(range, |field| {
+<span class="kw">let </span>input = Input::wire(<span class="kw-2">&amp;</span>n.ty, Wire::new(n_name.clone(), W::Long), <span class="macro">quote!</span>(#n_name <span class="kw">as </span>u64));
+<span class="kw">let </span>output = Output::record(sample, |field| {
     <span class="kw">let </span>name = field.name.clone().expect(<span class="string">"a named field"</span>);
-    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, ()&gt;(Output::wire(<span class="kw-2">&amp;</span>field.ty, Wire::new(name, Long), |v| <span class="macro">quote!</span>(#v <span class="kw">as </span>i64)))
+    <span class="kw">let </span>wire = |w: W| Wire::new(name.clone(), w);
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span>shape(<span class="kw-2">&amp;</span>field.ty, |<span class="kw">_</span>| <span class="prelude-val">None</span>::&lt;()&gt;)<span class="question-mark">? </span>{
+        Shape::Scalar(ScalarKind::U64) =&gt; {
+            Output::wire(<span class="kw-2">&amp;</span>field.ty, wire(W::Long), |v| <span class="macro">quote!</span>(#v <span class="kw">as </span>i64))
+        }
+        Shape::Scalar(ScalarKind::F64) =&gt; Output::wire(<span class="kw-2">&amp;</span>field.ty, wire(W::Double), |v| <span class="macro">quote!</span>(#v)),
+        Shape::Scalar(ScalarKind::Bool) =&gt; {
+            Output::wire(<span class="kw-2">&amp;</span>field.ty, wire(W::Flag), |v| <span class="macro">quote!</span>(#v <span class="kw">as </span>u8))
+        }
+        other =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}`: no wire for {other:?}"</span>, field.ty)),
+    })
 }).unwrap();
 
 <span class="comment">// Use: the output's wires give the return type, its conversion of the
@@ -168,14 +183,15 @@ destructures it, and applies each field’s output to its binding:</p>
 <span class="macro">assert_eq!</span>(
     <span class="macro">quote!</span>(#wrapper).to_string(),
     <span class="macro">quote!</span> {
-        <span class="kw">pub fn </span>span_wrapper(n: i64) -&gt; (i64, i64) {
+        <span class="kw">pub fn </span>sample_wrapper(n: i64) -&gt; (i64, f64, u8) {
             {
-                <span class="kw">let </span>__v = source_crate::span(n <span class="kw">as </span>u64);
+                <span class="kw">let </span>__v = source_crate::sample(n <span class="kw">as </span>u64);
                 {
-                    <span class="kw">let </span>source_crate::Range { lo: __f0, hi: __f1 } = __v;
-                    <span class="kw">let </span>lo = { <span class="kw">let </span>__v = __f0; __v <span class="kw">as </span>i64 };
-                    <span class="kw">let </span>hi = { <span class="kw">let </span>__v = __f1; __v <span class="kw">as </span>i64 };
-                    (lo, hi)
+                    <span class="kw">let </span>source_crate::Sample { id: __f0, value: __f1, ok: __f2 } = __v;
+                    <span class="kw">let </span>id = { <span class="kw">let </span>__v = __f0; __v <span class="kw">as </span>i64 };
+                    <span class="kw">let </span>value = { <span class="kw">let </span>__v = __f1; __v };
+                    <span class="kw">let </span>ok = { <span class="kw">let </span>__v = __f2; __v <span class="kw">as </span>u8 };
+                    (id, value, ok)
                 }
             }
         }
