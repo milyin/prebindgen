@@ -295,6 +295,9 @@ fn main() {
                 // Compose the bounded `Option<Duration>` niche through a
                 // data-class field, in both directions (#138).
                 .class(data_class!(DurationBoundary))
+                // A data class whose Kotlin `copy$default` takes exactly the
+                // JVM's 255 argument slots: the harness loads it and copies it.
+                .class(data_class!(CopyEdge))
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
@@ -615,6 +618,8 @@ fn main() {
                 .fun(fun!(duration_optional))
                 .fun(fun!(boxed_duration_echo))
                 .fun(fun!(duration_boundary_echo))
+                .fun(fun!(copy_edge_new))
+                .fun(fun!(copy_edge_sum))
                 // The converted analogue of `unsigned_emit`: a whole-value
                 // callback argument, which encodes on its own path rather than
                 // through the data-class or sum emitters.

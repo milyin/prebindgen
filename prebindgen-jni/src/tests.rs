@@ -364,3 +364,90 @@ fn methods_over_the_jvm_slot_limit_are_refused() {
         "Folder.run` would take 256 JVM argument slots",
     );
 }
+
+/// Generate `src` with one package declaration.
+fn generate(src: &str, pkg: crate::PackageDecl) -> Result<Generation, crate::Error> {
+    let items = syn::parse_file(src).unwrap().items.into_iter();
+    JniGen::builder()
+        .items(items.map(|i| (i, SourceLocation::default())))
+        .set_package_prefix("io.test")
+        .package(pkg)
+        .build()
+}
+
+/// `n` `i64` fields or parameters named `{prefix}0`, `{prefix}1`, …
+fn longs(n: usize, prefix: &str, public: bool) -> String {
+    let vis = if public { "pub " } else { "" };
+    (0..n)
+        .map(|i| format!("{vis}{prefix}{i}: i64"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[test]
+fn data_classes_fit_kotlins_copy_default() {
+    // `copy$default(self, fields…, one Int mask per 32 fields, marker)` is a
+    // data class's widest method. 124 `Long` and one `Int` field:
+    // 1 + 248 + 1 + 4 + 1 = 255.
+    let fit = format!(
+        "pub struct Fit {{ {}, pub last: i32 }}",
+        longs(124, "f", true)
+    );
+    assert!(generate(&fit, package!().class(data_class!(Fit))).is_ok());
+    // 125 `Long` fields: 1 + 250 + 4 + 1 = 256, though the constructor
+    // takes only 251.
+    let over = format!("pub struct Over {{ {} }}", longs(125, "f", true));
+    let e = generate(&over, package!().class(data_class!(Over)))
+        .err()
+        .unwrap()
+        .0;
+    assert!(
+        e.contains("`Over.copy$default`") && e.contains("256 JVM argument slots"),
+        "{e}"
+    );
+    // A sealed class's alternatives are data classes too.
+    let sum = format!(
+        "pub enum Sum {{ Big {{ {} }}, Small }}",
+        longs(125, "f", false)
+    );
+    let e = generate(&sum, package!().class(sealed_class!(Sum)))
+        .err()
+        .unwrap()
+        .0;
+    assert!(
+        e.contains("`Sum.Big.copy$default`") && e.contains("256 JVM argument slots"),
+        "{e}"
+    );
+}
+
+#[test]
+fn wrappers_are_checked_with_their_own_tail_and_placement() {
+    // A fold's wrapper takes the accumulator, the error handler and the
+    // folder; its native method the result sink and the error sink instead.
+    let src = format!(
+        "pub type Batch = inner::Batch; pub fn batch_x(b: &Batch) -> i64 {{ todo!() }} \
+         pub fn make_many({}) -> Vec<Batch> {{ todo!() }}",
+        longs(126, "a", false)
+    );
+    let build = |pkg: crate::PackageDecl| {
+        let items = syn::parse_file(&src).unwrap().items.into_iter();
+        JniGen::builder()
+            .items(items.map(|i| (i, SourceLocation::default())))
+            .set_package_prefix("io.test")
+            .expand(expand_return!(Batch).field(fun!(batch_x)))
+            .package(pkg)
+            .build()
+    };
+    // As a top-level function the wrapper is static: 252 + 3 = 255, and the
+    // native method 1 + 252 + 2 = 255.
+    assert!(build(package!().class(ptr_class!(Batch)).fun(fun!(make_many))).is_ok());
+    // As a companion constructor the wrapper gains a receiver: 256.
+    let e = build(package!().class(ptr_class!(Batch).constructor(fun!(make_many))))
+        .err()
+        .unwrap()
+        .0;
+    assert!(
+        e.contains("`Batch.makeMany` would take 256 JVM argument slots"),
+        "{e}"
+    );
+}

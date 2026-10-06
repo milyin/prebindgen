@@ -129,7 +129,7 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
         }
         Support::Sink { ty, base: b } => {
             let leaves = plan.leaves(ty, Dir::Out)?;
-            check_slots(&format!("`__Sink_{b}.run`"), &raw_types(&leaves))?;
+            check_slots(&format!("`__Sink_{b}.run`"), &raw_types(&leaves), true)?;
             let raws: Vec<String> = leaves.iter().map(raw_name).collect();
             let decode = plan.kt_decode(ty, &raws, false, 0)?;
             (
@@ -148,8 +148,8 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
             params,
             leaves,
         } => {
-            check_slots(&format!("`{name}Raw.run`"), &raw_types(leaves))?;
-            check_slots(&format!("`{name}.run`"), &kt_types(params))?;
+            check_slots(&format!("`{name}Raw.run`"), &raw_types(leaves), true)?;
+            check_slots(&format!("`{name}.run`"), &kt_types(params), true)?;
             let raws: Vec<String> = leaves.iter().map(raw_name).collect();
             let args = params
                 .iter()
@@ -179,10 +179,10 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
             // columns interface a count before one array per leaf.
             let mut typed = vec!["A".to_string()];
             typed.extend(kt_types(params));
-            check_slots(&format!("`{name}.run`"), &typed)?;
+            check_slots(&format!("`{name}.run`"), &typed, true)?;
             let mut cols = vec!["Int".to_string()];
             cols.extend(leaves.iter().map(|l| l.column().kt_raw()));
-            check_slots(&format!("`{columns}.run`"), &cols)?;
+            check_slots(&format!("`{columns}.run`"), &cols, true)?;
             let cols = leaves
                 .iter()
                 .map(|l| format!("{}: {}", raw_name(l), l.column().kt_raw()))
@@ -206,8 +206,8 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
             params,
             leaves,
         } => {
-            check_slots(&format!("`{raw}.run`"), &raw_types(leaves))?;
-            check_slots(&format!("`{name}.run`"), &kt_types(params))?;
+            check_slots(&format!("`{raw}.run`"), &raw_types(leaves), true)?;
+            check_slots(&format!("`{name}.run`"), &kt_types(params), true)?;
             let raws: Vec<String> = leaves.iter().map(raw_name).collect();
             let fields = leaves
                 .iter()
@@ -298,8 +298,12 @@ fn callback(plan: &Plan, ty: &prebindgen_flat::flat::TypeRef) -> Res<String> {
     let deliveries = plan.callback_args(args)?;
     let params: Vec<&DParam> = deliveries.iter().flat_map(|d| &d.params).collect();
     let leaves: Vec<Leaf> = deliveries.iter().flat_map(|d| d.leaves.clone()).collect();
-    check_slots(&format!("`{raw}.run`"), &raw_types(&leaves))?;
-    check_slots(&format!("`{name}.run`"), &kt_types(params.iter().copied()))?;
+    check_slots(&format!("`{raw}.run`"), &raw_types(&leaves), true)?;
+    check_slots(
+        &format!("`{name}.run`"),
+        &kt_types(params.iter().copied()),
+        true,
+    )?;
     let raws: Vec<String> = leaves.iter().map(raw_name).collect();
     let locals: Vec<String> = params
         .iter()

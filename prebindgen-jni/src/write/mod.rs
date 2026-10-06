@@ -18,18 +18,19 @@ use crate::{
 /// Refuse a JVM method whose parameters would take more than 255 slots, the
 /// JVM's limit (JVMS §4.3.3). Counted from the Kotlin parameter types as
 /// written: a non-null `Long`, `ULong` or `Double` is a JVM `long` or
-/// `double` and takes two slots, any other parameter one. Every method
-/// generated here has a receiver — an instance method, a constructor, or a
-/// `@JvmStatic` companion method, which is also an instance method of the
-/// companion — and the receiver takes one more.
-pub(crate) fn check_slots<T: AsRef<str>>(method: &str, types: &[T]) -> Res<()> {
-    let slots = 1 + types
-        .iter()
-        .map(|t| match t.as_ref() {
-            "Long" | "ULong" | "Double" => 2,
-            _ => 1,
-        })
-        .sum::<usize>();
+/// `double` and takes two slots, any other parameter one. An instance
+/// method's receiver — `this` of a class or interface method, a
+/// constructor, or a companion method — takes one more; a top-level
+/// function is static and has none.
+pub(crate) fn check_slots<T: AsRef<str>>(method: &str, types: &[T], receiver: bool) -> Res<()> {
+    let slots = usize::from(receiver)
+        + types
+            .iter()
+            .map(|t| match t.as_ref() {
+                "Long" | "ULong" | "Double" => 2,
+                _ => 1,
+            })
+            .sum::<usize>();
     if slots > 255 {
         return err(format!(
             "{method} would take {slots} JVM argument slots, more than the JVM's limit of 255: \

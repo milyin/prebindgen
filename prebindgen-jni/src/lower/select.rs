@@ -412,7 +412,7 @@ impl Plan<'_> {
         tail: &[(String, String)],
         ret: &str,
         prefix_names: bool,
-    ) -> Res<Vec<String>> {
+    ) -> Res<Vec<(String, Vec<String>)>> {
         let mut combos: Vec<Vec<(usize, usize)>> = vec![Vec::new()];
         for (pi, p) in params.iter().enumerate() {
             if let SigParam::Split(s) = p {
@@ -430,11 +430,13 @@ impl Plan<'_> {
         let mut out = Vec::new();
         for combo in combos {
             let mut sig = Vec::new();
+            let mut types = Vec::new();
             let mut args = Vec::new();
             for (pi, p) in params.iter().enumerate() {
                 match p {
                     SigParam::Plain(n, t) => {
                         sig.push(format!("{n}: {t}"));
+                        types.push(t.clone());
                         args.push(n.clone());
                     }
                     SigParam::Split(s) => {
@@ -455,7 +457,9 @@ impl Plan<'_> {
                                             } else {
                                                 kt_ident(&names::camel(&pn))
                                             };
-                                            sig.push(format!("{n}: {}", self.kt_type(&fp.ty)?));
+                                            let t = self.kt_type(&fp.ty)?;
+                                            sig.push(format!("{n}: {t}"));
+                                            types.push(t);
                                             args.push(n);
                                         } else {
                                             args.push("null".to_string());
@@ -465,6 +469,7 @@ impl Plan<'_> {
                                 SelVariant::Handle => {
                                     if i == vi {
                                         sig.push(format!("{base}: {}", s.class.fqn()));
+                                        types.push(s.class.fqn());
                                         args.push(base.clone());
                                     } else {
                                         args.push("null".to_string());
@@ -476,6 +481,7 @@ impl Plan<'_> {
                     SigParam::Selector(s) => {
                         for (n, t) in self.selector_params(s)? {
                             sig.push(format!("{n}: {t}"));
+                            types.push(t);
                             args.push(n);
                         }
                     }
@@ -483,13 +489,15 @@ impl Plan<'_> {
             }
             for (n, t) in tail {
                 sig.push(format!("{n}: {t}"));
+                types.push(t.clone());
                 args.push(n.clone());
             }
-            out.push(format!(
+            let text = format!(
                 "{head}{name}({}): {ret} =\n    {name}({})\n",
                 sig.join(", "),
                 args.join(", ")
-            ));
+            );
+            out.push((text, types));
         }
         Ok(out)
     }

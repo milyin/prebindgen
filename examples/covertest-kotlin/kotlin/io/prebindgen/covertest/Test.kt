@@ -64,6 +64,8 @@ import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
+import io.prebindgen.covertest.model.copyEdgeNew
+import io.prebindgen.covertest.model.copyEdgeSum
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.spanHolderNew
 import io.prebindgen.covertest.model.durationEmit
@@ -1534,6 +1536,16 @@ fun main() {
         check(cacheConfigWeight(null, boom) == -1)    // absent outer optional
         val low = CacheConfig(RepliesConfig(Priority.LOW, 0L), 3L)
         check(cacheConfigWeight(low, boom) == 4)      // weight(LOW)=1 + ttl 3
+    }
+
+    // A data class at the JVM's argument-slot limit: Kotlin's synthetic
+    // `copy$default` takes the instance, 124 `Long` fields and an `Int`, four
+    // default masks and a marker — 255 slots. Loading the class verifies the
+    // descriptor; `copy` with a named argument calls the method.
+    section("data class at the JVM slot limit (copy with defaults, 255 slots)") {
+        val e = copyEdgeNew(1L, boom)
+        check(copyEdgeSum(e, boom) == 7757L)   // 124 + (0 + … + 123) + 7
+        check(copyEdgeSum(e.copy(f0 = 100L), boom) == 7856L)
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────

@@ -590,6 +590,14 @@ internal val __sink_DurationBoundary: __Sink_DurationBoundary = __Sink_DurationB
     io.prebindgen.covertest.model.DurationBoundary(required.toULong(), delay?.let { __o0 -> __o0.toULong() })
 }
 
+public fun interface __Sink_CopyEdge {
+    public fun run(f0: Long, f1: Long, f2: Long, f3: Long, f4: Long, f5: Long, f6: Long, f7: Long, f8: Long, f9: Long, f10: Long, f11: Long, f12: Long, f13: Long, f14: Long, f15: Long, f16: Long, f17: Long, f18: Long, f19: Long, f20: Long, f21: Long, f22: Long, f23: Long, f24: Long, f25: Long, f26: Long, f27: Long, f28: Long, f29: Long, f30: Long, f31: Long, f32: Long, f33: Long, f34: Long, f35: Long, f36: Long, f37: Long, f38: Long, f39: Long, f40: Long, f41: Long, f42: Long, f43: Long, f44: Long, f45: Long, f46: Long, f47: Long, f48: Long, f49: Long, f50: Long, f51: Long, f52: Long, f53: Long, f54: Long, f55: Long, f56: Long, f57: Long, f58: Long, f59: Long, f60: Long, f61: Long, f62: Long, f63: Long, f64: Long, f65: Long, f66: Long, f67: Long, f68: Long, f69: Long, f70: Long, f71: Long, f72: Long, f73: Long, f74: Long, f75: Long, f76: Long, f77: Long, f78: Long, f79: Long, f80: Long, f81: Long, f82: Long, f83: Long, f84: Long, f85: Long, f86: Long, f87: Long, f88: Long, f89: Long, f90: Long, f91: Long, f92: Long, f93: Long, f94: Long, f95: Long, f96: Long, f97: Long, f98: Long, f99: Long, f100: Long, f101: Long, f102: Long, f103: Long, f104: Long, f105: Long, f106: Long, f107: Long, f108: Long, f109: Long, f110: Long, f111: Long, f112: Long, f113: Long, f114: Long, f115: Long, f116: Long, f117: Long, f118: Long, f119: Long, f120: Long, f121: Long, f122: Long, f123: Long, last: Int): Any?
+}
+
+internal val __sink_CopyEdge: __Sink_CopyEdge = __Sink_CopyEdge { f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58, f59, f60, f61, f62, f63, f64, f65, f66, f67, f68, f69, f70, f71, f72, f73, f74, f75, f76, f77, f78, f79, f80, f81, f82, f83, f84, f85, f86, f87, f88, f89, f90, f91, f92, f93, f94, f95, f96, f97, f98, f99, f100, f101, f102, f103, f104, f105, f106, f107, f108, f109, f110, f111, f112, f113, f114, f115, f116, f117, f118, f119, f120, f121, f122, f123, last ->
+    io.prebindgen.covertest.model.CopyEdge(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58, f59, f60, f61, f62, f63, f64, f65, f66, f67, f68, f69, f70, f71, f72, f73, f74, f75, f76, f77, f78, f79, f80, f81, f82, f83, f84, f85, f86, f87, f88, f89, f90, f91, f92, f93, f94, f95, f96, f97, f98, f99, f100, f101, f102, f103, f104, f105, f106, f107, f108, f109, f110, f111, f112, f113, f114, f115, f116, f117, f118, f119, f120, f121, f122, f123, last)
+}
+
 public fun interface DurationCallbackRaw {
     public fun run(a0: Long)
 }
@@ -870,6 +878,10 @@ internal object CovNative {
     external fun boxedDurationEcho(value: Long, errorSink: Any): Long
 
     external fun durationBoundaryEcho(valueRequired: Long, valueDelayPresent: Boolean, valueDelay: Long, sink: Any, errorSink: Any): Any?
+
+    external fun copyEdgeNew(seed: Long, sink: Any, errorSink: Any): Any?
+
+    external fun copyEdgeSum(vF0: Long, vF1: Long, vF2: Long, vF3: Long, vF4: Long, vF5: Long, vF6: Long, vF7: Long, vF8: Long, vF9: Long, vF10: Long, vF11: Long, vF12: Long, vF13: Long, vF14: Long, vF15: Long, vF16: Long, vF17: Long, vF18: Long, vF19: Long, vF20: Long, vF21: Long, vF22: Long, vF23: Long, vF24: Long, vF25: Long, vF26: Long, vF27: Long, vF28: Long, vF29: Long, vF30: Long, vF31: Long, vF32: Long, vF33: Long, vF34: Long, vF35: Long, vF36: Long, vF37: Long, vF38: Long, vF39: Long, vF40: Long, vF41: Long, vF42: Long, vF43: Long, vF44: Long, vF45: Long, vF46: Long, vF47: Long, vF48: Long, vF49: Long, vF50: Long, vF51: Long, vF52: Long, vF53: Long, vF54: Long, vF55: Long, vF56: Long, vF57: Long, vF58: Long, vF59: Long, vF60: Long, vF61: Long, vF62: Long, vF63: Long, vF64: Long, vF65: Long, vF66: Long, vF67: Long, vF68: Long, vF69: Long, vF70: Long, vF71: Long, vF72: Long, vF73: Long, vF74: Long, vF75: Long, vF76: Long, vF77: Long, vF78: Long, vF79: Long, vF80: Long, vF81: Long, vF82: Long, vF83: Long, vF84: Long, vF85: Long, vF86: Long, vF87: Long, vF88: Long, vF89: Long, vF90: Long, vF91: Long, vF92: Long, vF93: Long, vF94: Long, vF95: Long, vF96: Long, vF97: Long, vF98: Long, vF99: Long, vF100: Long, vF101: Long, vF102: Long, vF103: Long, vF104: Long, vF105: Long, vF106: Long, vF107: Long, vF108: Long, vF109: Long, vF110: Long, vF111: Long, vF112: Long, vF113: Long, vF114: Long, vF115: Long, vF116: Long, vF117: Long, vF118: Long, vF119: Long, vF120: Long, vF121: Long, vF122: Long, vF123: Long, vLast: Int, errorSink: Any): Long
 
     external fun durationEmit(value: Long, f: io.prebindgen.covertest.DurationCallbackRaw, errorSink: Any)
 

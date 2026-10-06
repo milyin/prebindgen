@@ -9133,6 +9133,1225 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationBou
     dead_code,
     clippy::all
 )]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_copyEdgeNew<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    seed: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let seed = seed;
+    let __result = perftest_flat::copy_edge_new(seed);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let (
+            r_f0,
+            r_f1,
+            r_f2,
+            r_f3,
+            r_f4,
+            r_f5,
+            r_f6,
+            r_f7,
+            r_f8,
+            r_f9,
+            r_f10,
+            r_f11,
+            r_f12,
+            r_f13,
+            r_f14,
+            r_f15,
+            r_f16,
+            r_f17,
+            r_f18,
+            r_f19,
+            r_f20,
+            r_f21,
+            r_f22,
+            r_f23,
+            r_f24,
+            r_f25,
+            r_f26,
+            r_f27,
+            r_f28,
+            r_f29,
+            r_f30,
+            r_f31,
+            r_f32,
+            r_f33,
+            r_f34,
+            r_f35,
+            r_f36,
+            r_f37,
+            r_f38,
+            r_f39,
+            r_f40,
+            r_f41,
+            r_f42,
+            r_f43,
+            r_f44,
+            r_f45,
+            r_f46,
+            r_f47,
+            r_f48,
+            r_f49,
+            r_f50,
+            r_f51,
+            r_f52,
+            r_f53,
+            r_f54,
+            r_f55,
+            r_f56,
+            r_f57,
+            r_f58,
+            r_f59,
+            r_f60,
+            r_f61,
+            r_f62,
+            r_f63,
+            r_f64,
+            r_f65,
+            r_f66,
+            r_f67,
+            r_f68,
+            r_f69,
+            r_f70,
+            r_f71,
+            r_f72,
+            r_f73,
+            r_f74,
+            r_f75,
+            r_f76,
+            r_f77,
+            r_f78,
+            r_f79,
+            r_f80,
+            r_f81,
+            r_f82,
+            r_f83,
+            r_f84,
+            r_f85,
+            r_f86,
+            r_f87,
+            r_f88,
+            r_f89,
+            r_f90,
+            r_f91,
+            r_f92,
+            r_f93,
+            r_f94,
+            r_f95,
+            r_f96,
+            r_f97,
+            r_f98,
+            r_f99,
+            r_f100,
+            r_f101,
+            r_f102,
+            r_f103,
+            r_f104,
+            r_f105,
+            r_f106,
+            r_f107,
+            r_f108,
+            r_f109,
+            r_f110,
+            r_f111,
+            r_f112,
+            r_f113,
+            r_f114,
+            r_f115,
+            r_f116,
+            r_f117,
+            r_f118,
+            r_f119,
+            r_f120,
+            r_f121,
+            r_f122,
+            r_f123,
+            r_last,
+        ) = {
+            let perftest_flat::CopyEdge {
+                f0: __f0,
+                f1: __f1,
+                f2: __f2,
+                f3: __f3,
+                f4: __f4,
+                f5: __f5,
+                f6: __f6,
+                f7: __f7,
+                f8: __f8,
+                f9: __f9,
+                f10: __f10,
+                f11: __f11,
+                f12: __f12,
+                f13: __f13,
+                f14: __f14,
+                f15: __f15,
+                f16: __f16,
+                f17: __f17,
+                f18: __f18,
+                f19: __f19,
+                f20: __f20,
+                f21: __f21,
+                f22: __f22,
+                f23: __f23,
+                f24: __f24,
+                f25: __f25,
+                f26: __f26,
+                f27: __f27,
+                f28: __f28,
+                f29: __f29,
+                f30: __f30,
+                f31: __f31,
+                f32: __f32,
+                f33: __f33,
+                f34: __f34,
+                f35: __f35,
+                f36: __f36,
+                f37: __f37,
+                f38: __f38,
+                f39: __f39,
+                f40: __f40,
+                f41: __f41,
+                f42: __f42,
+                f43: __f43,
+                f44: __f44,
+                f45: __f45,
+                f46: __f46,
+                f47: __f47,
+                f48: __f48,
+                f49: __f49,
+                f50: __f50,
+                f51: __f51,
+                f52: __f52,
+                f53: __f53,
+                f54: __f54,
+                f55: __f55,
+                f56: __f56,
+                f57: __f57,
+                f58: __f58,
+                f59: __f59,
+                f60: __f60,
+                f61: __f61,
+                f62: __f62,
+                f63: __f63,
+                f64: __f64,
+                f65: __f65,
+                f66: __f66,
+                f67: __f67,
+                f68: __f68,
+                f69: __f69,
+                f70: __f70,
+                f71: __f71,
+                f72: __f72,
+                f73: __f73,
+                f74: __f74,
+                f75: __f75,
+                f76: __f76,
+                f77: __f77,
+                f78: __f78,
+                f79: __f79,
+                f80: __f80,
+                f81: __f81,
+                f82: __f82,
+                f83: __f83,
+                f84: __f84,
+                f85: __f85,
+                f86: __f86,
+                f87: __f87,
+                f88: __f88,
+                f89: __f89,
+                f90: __f90,
+                f91: __f91,
+                f92: __f92,
+                f93: __f93,
+                f94: __f94,
+                f95: __f95,
+                f96: __f96,
+                f97: __f97,
+                f98: __f98,
+                f99: __f99,
+                f100: __f100,
+                f101: __f101,
+                f102: __f102,
+                f103: __f103,
+                f104: __f104,
+                f105: __f105,
+                f106: __f106,
+                f107: __f107,
+                f108: __f108,
+                f109: __f109,
+                f110: __f110,
+                f111: __f111,
+                f112: __f112,
+                f113: __f113,
+                f114: __f114,
+                f115: __f115,
+                f116: __f116,
+                f117: __f117,
+                f118: __f118,
+                f119: __f119,
+                f120: __f120,
+                f121: __f121,
+                f122: __f122,
+                f123: __f123,
+                last: __f124,
+            } = __result;
+            let r_f0 = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f1 = (__f1 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f2 = (__f2 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f3 = (__f3 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f4 = (__f4 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f5 = (__f5 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f6 = (__f6 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f7 = (__f7 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f8 = (__f8 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f9 = (__f9 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f10 = (__f10 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f11 = (__f11 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f12 = (__f12 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f13 = (__f13 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f14 = (__f14 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f15 = (__f15 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f16 = (__f16 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f17 = (__f17 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f18 = (__f18 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f19 = (__f19 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f20 = (__f20 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f21 = (__f21 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f22 = (__f22 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f23 = (__f23 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f24 = (__f24 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f25 = (__f25 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f26 = (__f26 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f27 = (__f27 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f28 = (__f28 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f29 = (__f29 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f30 = (__f30 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f31 = (__f31 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f32 = (__f32 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f33 = (__f33 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f34 = (__f34 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f35 = (__f35 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f36 = (__f36 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f37 = (__f37 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f38 = (__f38 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f39 = (__f39 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f40 = (__f40 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f41 = (__f41 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f42 = (__f42 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f43 = (__f43 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f44 = (__f44 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f45 = (__f45 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f46 = (__f46 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f47 = (__f47 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f48 = (__f48 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f49 = (__f49 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f50 = (__f50 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f51 = (__f51 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f52 = (__f52 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f53 = (__f53 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f54 = (__f54 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f55 = (__f55 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f56 = (__f56 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f57 = (__f57 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f58 = (__f58 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f59 = (__f59 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f60 = (__f60 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f61 = (__f61 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f62 = (__f62 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f63 = (__f63 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f64 = (__f64 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f65 = (__f65 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f66 = (__f66 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f67 = (__f67 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f68 = (__f68 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f69 = (__f69 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f70 = (__f70 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f71 = (__f71 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f72 = (__f72 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f73 = (__f73 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f74 = (__f74 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f75 = (__f75 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f76 = (__f76 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f77 = (__f77 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f78 = (__f78 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f79 = (__f79 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f80 = (__f80 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f81 = (__f81 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f82 = (__f82 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f83 = (__f83 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f84 = (__f84 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f85 = (__f85 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f86 = (__f86 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f87 = (__f87 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f88 = (__f88 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f89 = (__f89 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f90 = (__f90 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f91 = (__f91 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f92 = (__f92 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f93 = (__f93 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f94 = (__f94 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f95 = (__f95 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f96 = (__f96 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f97 = (__f97 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f98 = (__f98 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f99 = (__f99 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f100 = (__f100 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f101 = (__f101 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f102 = (__f102 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f103 = (__f103 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f104 = (__f104 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f105 = (__f105 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f106 = (__f106 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f107 = (__f107 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f108 = (__f108 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f109 = (__f109 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f110 = (__f110 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f111 = (__f111 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f112 = (__f112 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f113 = (__f113 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f114 = (__f114 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f115 = (__f115 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f116 = (__f116 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f117 = (__f117 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f118 = (__f118 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f119 = (__f119 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f120 = (__f120 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f121 = (__f121 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f122 = (__f122 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_f123 = (__f123 as ::prebindgen_jni_runtime::jni::sys::jlong);
+            let r_last = (__f124 as ::prebindgen_jni_runtime::jni::sys::jint);
+            (
+                r_f0,
+                r_f1,
+                r_f2,
+                r_f3,
+                r_f4,
+                r_f5,
+                r_f6,
+                r_f7,
+                r_f8,
+                r_f9,
+                r_f10,
+                r_f11,
+                r_f12,
+                r_f13,
+                r_f14,
+                r_f15,
+                r_f16,
+                r_f17,
+                r_f18,
+                r_f19,
+                r_f20,
+                r_f21,
+                r_f22,
+                r_f23,
+                r_f24,
+                r_f25,
+                r_f26,
+                r_f27,
+                r_f28,
+                r_f29,
+                r_f30,
+                r_f31,
+                r_f32,
+                r_f33,
+                r_f34,
+                r_f35,
+                r_f36,
+                r_f37,
+                r_f38,
+                r_f39,
+                r_f40,
+                r_f41,
+                r_f42,
+                r_f43,
+                r_f44,
+                r_f45,
+                r_f46,
+                r_f47,
+                r_f48,
+                r_f49,
+                r_f50,
+                r_f51,
+                r_f52,
+                r_f53,
+                r_f54,
+                r_f55,
+                r_f56,
+                r_f57,
+                r_f58,
+                r_f59,
+                r_f60,
+                r_f61,
+                r_f62,
+                r_f63,
+                r_f64,
+                r_f65,
+                r_f66,
+                r_f67,
+                r_f68,
+                r_f69,
+                r_f70,
+                r_f71,
+                r_f72,
+                r_f73,
+                r_f74,
+                r_f75,
+                r_f76,
+                r_f77,
+                r_f78,
+                r_f79,
+                r_f80,
+                r_f81,
+                r_f82,
+                r_f83,
+                r_f84,
+                r_f85,
+                r_f86,
+                r_f87,
+                r_f88,
+                r_f89,
+                r_f90,
+                r_f91,
+                r_f92,
+                r_f93,
+                r_f94,
+                r_f95,
+                r_f96,
+                r_f97,
+                r_f98,
+                r_f99,
+                r_f100,
+                r_f101,
+                r_f102,
+                r_f103,
+                r_f104,
+                r_f105,
+                r_f106,
+                r_f107,
+                r_f108,
+                r_f109,
+                r_f110,
+                r_f111,
+                r_f112,
+                r_f113,
+                r_f114,
+                r_f115,
+                r_f116,
+                r_f117,
+                r_f118,
+                r_f119,
+                r_f120,
+                r_f121,
+                r_f122,
+                r_f123,
+                r_last,
+            )
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/__Sink_CopyEdge",
+                "run",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJI)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f0,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f1,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f2,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f3,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f4,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f5,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f6,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f7,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f8,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f9,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f10,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f11,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f12,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f13,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f14,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f15,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f16,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f17,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f18,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f19,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f20,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f21,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f22,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f23,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f24,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f25,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f26,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f27,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f28,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f29,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f30,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f31,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f32,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f33,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f34,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f35,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f36,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f37,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f38,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f39,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f40,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f41,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f42,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f43,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f44,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f45,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f46,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f47,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f48,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f49,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f50,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f51,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f52,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f53,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f54,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f55,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f56,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f57,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f58,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f59,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f60,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f61,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f62,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f63,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f64,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f65,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f66,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f67,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f68,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f69,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f70,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f71,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f72,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f73,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f74,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f75,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f76,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f77,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f78,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f79,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f80,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f81,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f82,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f83,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f84,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f85,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f86,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f87,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f88,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f89,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f90,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f91,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f92,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f93,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f94,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f95,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f96,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f97,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f98,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f99,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f100,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f101,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f102,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f103,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f104,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f105,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f106,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f107,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f108,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f109,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f110,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f111,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f112,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f113,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f114,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f115,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f116,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f117,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f118,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f119,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f120,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f121,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f122,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        j: r_f123,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        i: r_last,
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_copyEdgeSum<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    v_f0: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f1: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f2: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f3: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f4: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f5: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f6: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f7: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f8: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f9: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f10: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f11: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f12: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f13: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f14: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f15: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f16: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f17: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f18: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f19: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f20: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f21: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f22: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f23: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f24: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f25: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f26: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f27: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f28: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f29: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f30: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f31: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f32: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f33: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f34: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f35: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f36: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f37: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f38: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f39: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f40: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f41: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f42: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f43: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f44: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f45: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f46: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f47: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f48: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f49: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f50: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f51: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f52: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f53: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f54: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f55: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f56: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f57: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f58: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f59: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f60: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f61: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f62: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f63: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f64: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f65: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f66: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f67: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f68: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f69: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f70: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f71: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f72: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f73: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f74: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f75: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f76: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f77: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f78: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f79: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f80: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f81: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f82: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f83: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f84: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f85: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f86: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f87: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f88: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f89: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f90: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f91: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f92: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f93: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f94: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f95: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f96: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f97: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f98: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f99: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f100: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f101: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f102: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f103: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f104: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f105: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f106: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f107: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f108: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f109: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f110: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f111: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f112: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f113: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f114: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f115: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f116: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f117: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f118: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f119: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f120: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f121: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f122: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_f123: ::prebindgen_jni_runtime::jni::sys::jlong,
+    v_last: ::prebindgen_jni_runtime::jni::sys::jint,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let v = perftest_flat::CopyEdge {
+        f0: v_f0,
+        f1: v_f1,
+        f2: v_f2,
+        f3: v_f3,
+        f4: v_f4,
+        f5: v_f5,
+        f6: v_f6,
+        f7: v_f7,
+        f8: v_f8,
+        f9: v_f9,
+        f10: v_f10,
+        f11: v_f11,
+        f12: v_f12,
+        f13: v_f13,
+        f14: v_f14,
+        f15: v_f15,
+        f16: v_f16,
+        f17: v_f17,
+        f18: v_f18,
+        f19: v_f19,
+        f20: v_f20,
+        f21: v_f21,
+        f22: v_f22,
+        f23: v_f23,
+        f24: v_f24,
+        f25: v_f25,
+        f26: v_f26,
+        f27: v_f27,
+        f28: v_f28,
+        f29: v_f29,
+        f30: v_f30,
+        f31: v_f31,
+        f32: v_f32,
+        f33: v_f33,
+        f34: v_f34,
+        f35: v_f35,
+        f36: v_f36,
+        f37: v_f37,
+        f38: v_f38,
+        f39: v_f39,
+        f40: v_f40,
+        f41: v_f41,
+        f42: v_f42,
+        f43: v_f43,
+        f44: v_f44,
+        f45: v_f45,
+        f46: v_f46,
+        f47: v_f47,
+        f48: v_f48,
+        f49: v_f49,
+        f50: v_f50,
+        f51: v_f51,
+        f52: v_f52,
+        f53: v_f53,
+        f54: v_f54,
+        f55: v_f55,
+        f56: v_f56,
+        f57: v_f57,
+        f58: v_f58,
+        f59: v_f59,
+        f60: v_f60,
+        f61: v_f61,
+        f62: v_f62,
+        f63: v_f63,
+        f64: v_f64,
+        f65: v_f65,
+        f66: v_f66,
+        f67: v_f67,
+        f68: v_f68,
+        f69: v_f69,
+        f70: v_f70,
+        f71: v_f71,
+        f72: v_f72,
+        f73: v_f73,
+        f74: v_f74,
+        f75: v_f75,
+        f76: v_f76,
+        f77: v_f77,
+        f78: v_f78,
+        f79: v_f79,
+        f80: v_f80,
+        f81: v_f81,
+        f82: v_f82,
+        f83: v_f83,
+        f84: v_f84,
+        f85: v_f85,
+        f86: v_f86,
+        f87: v_f87,
+        f88: v_f88,
+        f89: v_f89,
+        f90: v_f90,
+        f91: v_f91,
+        f92: v_f92,
+        f93: v_f93,
+        f94: v_f94,
+        f95: v_f95,
+        f96: v_f96,
+        f97: v_f97,
+        f98: v_f98,
+        f99: v_f99,
+        f100: v_f100,
+        f101: v_f101,
+        f102: v_f102,
+        f103: v_f103,
+        f104: v_f104,
+        f105: v_f105,
+        f106: v_f106,
+        f107: v_f107,
+        f108: v_f108,
+        f109: v_f109,
+        f110: v_f110,
+        f111: v_f111,
+        f112: v_f112,
+        f113: v_f113,
+        f114: v_f114,
+        f115: v_f115,
+        f116: v_f116,
+        f117: v_f117,
+        f118: v_f118,
+        f119: v_f119,
+        f120: v_f120,
+        f121: v_f121,
+        f122: v_f122,
+        f123: v_f123,
+        last: v_last,
+    };
+    let __result = perftest_flat::copy_edge_sum(&v);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationEmit<'a>(
     __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,

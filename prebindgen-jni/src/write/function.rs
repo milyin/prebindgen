@@ -454,7 +454,7 @@ fn extern_kotlin(plan: &Plan, b: &Binding) -> Res<String> {
         params.push(format!("{n}: Any"));
         types.push("Any".to_string());
     }
-    super::check_slots(&format!("`{}.{}`", plan.harness, b.ext_name), &types)?;
+    super::check_slots(&format!("`{}.{}`", plan.harness, b.ext_name), &types, true)?;
     let ret = match &b.ret {
         RPlan::Unit => String::new(),
         RPlan::Direct { leaf, .. } => format!(": {}", leaf.kt_raw()),
@@ -635,17 +635,32 @@ fn wrapper(plan: &Plan, b: &Binding) -> Res<Wrapper> {
         ""
     };
     let mut sig_strs: Vec<String> = Vec::new();
+    let mut types: Vec<String> = Vec::new();
     for p in &sig {
         match p {
-            SigParam::Plain(n, t) => sig_strs.push(format!("{n}: {t}")),
+            SigParam::Plain(n, t) => {
+                sig_strs.push(format!("{n}: {t}"));
+                types.push(t.clone());
+            }
             SigParam::Selector(s) | SigParam::Split(s) => {
                 for (n, t) in plan.selector_params(s)? {
                     sig_strs.push(format!("{n}: {t}"));
+                    types.push(t);
                 }
             }
         }
     }
     sig_strs.extend(tail.iter().map(|(n, t)| format!("{n}: {t}")));
+    types.extend(tail.iter().map(|(_, t)| t.clone()));
+    // A class's methods and a companion's constructors have a receiver; a
+    // package function is top-level and static.
+    let (method, receiver) = match &b.placement {
+        Placement::Package => (format!("`{}`", b.kt_name), false),
+        Placement::Method(c) | Placement::Constructor(c) => {
+            (format!("`{}.{}`", c.name, b.kt_name), true)
+        }
+    };
+    super::check_slots(&method, &types, receiver)?;
     let mut text = format!(
         "{suppress}{vis} fun {generics}{}({}): {ret} {{\n    {}\n}}\n",
         b.kt_name,
@@ -659,7 +674,9 @@ fn wrapper(plan: &Plan, b: &Binding) -> Res<Wrapper> {
         .count();
     if splits > 0 {
         let head = format!("public fun {generics}");
-        for o in plan.split_overloads(&head, &b.kt_name, &sig, &tail, &ret, splits > 1)? {
+        let overloads = plan.split_overloads(&head, &b.kt_name, &sig, &tail, &ret, splits > 1)?;
+        for (o, types) in overloads {
+            super::check_slots(&format!("an overload of {method}"), &types, receiver)?;
             text.push('\n');
             text.push_str(&o);
         }
