@@ -1,13 +1,11 @@
 //! Writing the plan: C definitions and wrappers in declaration order.
 
 use prebindgen_flat::{
-    flat::{Field, Function, ScalarKind, Type as FlatType, TypeKind, TypeRef},
+    flat::{Function, ScalarKind, Type as FlatType, TypeKind, TypeRef},
     Emit,
 };
 use prebindgen_tools::{
-    code::result_expr,
-    legacy::{Input, Output},
-    names, Access, Record, RustFile, Seg, Shape, Wire, WireType,
+    code::result_expr, names, Access, Node, Place, Record, RustFile, Shape, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -16,7 +14,6 @@ use crate::{
     lower::{CRet, Param},
     plan::{declared_name, err, CType, Item, Kind, Plan, Res, Setting},
     wire::CWire,
-    Error,
 };
 
 const ALLOW: &str = "#[allow(non_snake_case, non_camel_case_types, unused_variables, unused_mut, unused_unsafe, unused_parens, unused_braces, dead_code, clippy::all)]";
@@ -190,41 +187,6 @@ fn enum_mirror(plan: &Plan, t: &CType) -> Res<TokenStream> {
     })
 }
 
-/// A struct or union field: one value slot.
-struct Fields<'p, 'f> {
-    plan: &'p Plan<'f>,
-    owner: &'p syn::Ident,
-    /// The slot's name for a field.
-    wire: fn(&Field) -> syn::Ident,
-}
-
-impl Fields<'_, '_> {
-    fn field_in(&mut self, field: &Field) -> Res<Input<CWire>> {
-        let w = (self.wire)(field);
-        self.plan
-            .value_in(&field.ty, &w)
-            .map_err(|e| Error(format!("`{}`: field `{w}`: {}", self.owner, e.0)))
-    }
-
-    fn field_out(&mut self, field: &Field) -> Res<Output<CWire>> {
-        let w = (self.wire)(field);
-        self.plan
-            .value_out(&field.ty, &w)
-            .map_err(|e| Error(format!("`{}`: field `{w}`: {}", self.owner, e.0)))
-    }
-}
-
-fn named_wire(f: &Field) -> syn::Ident {
-    match &f.name {
-        Some(n) => n.clone(),
-        None => format_ident!("_{}", f.index),
-    }
-}
-
-fn positional_wire(f: &Field) -> syn::Ident {
-    format_ident!("__f{}", f.index)
-}
-
 /// A data-carrying enum: a `#[repr(C)]` enum mirror, its tag validated on
 /// the way in, and a typed drop when an arm owns memory.
 fn union_mirror(plan: &Plan, t: &CType) -> Res<TokenStream> {
@@ -234,17 +196,7 @@ fn union_mirror(plan: &Plan, t: &CType) -> Res<TokenStream> {
     let c = &t.c;
     let src = plan.source(&t.rust.to_string());
     let allow = allow();
-    let mirror = sum_mirror(
-        v,
-        &src,
-        c,
-        vec![quote!(#[repr(C)]), allow.clone()],
-        &mut Fields {
-            plan,
-            owner: &t.rust,
-            wire: positional_wire,
-        },
-    )?;
+    let mirror = sum_mirror(plan, v, &src, c, vec![quote!(#[repr(C)]), allow.clone()])?;
     let n = v.alternatives.len() as i64;
     let size_msg = format!(
         "`{c}`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
@@ -337,17 +289,7 @@ fn data_mirror(plan: &Plan, t: &CType) -> Res<TokenStream> {
     let c = &t.c;
     let src = plan.source(&t.rust.to_string());
     let allow = allow();
-    let mirror = struct_mirror(
-        s,
-        &src,
-        c,
-        vec![quote!(#[repr(C)]), allow.clone()],
-        &mut Fields {
-            plan,
-            owner: &t.rust,
-            wire: named_wire,
-        },
-    )?;
+    let mirror = struct_mirror(plan, s, c, vec![quote!(#[repr(C)]), allow.clone()])?;
     let (fin, fout, frel) = (
         format_ident!("__cbg_in_{}", t.rust),
         format_ident!("__cbg_out_{}", t.rust),
@@ -520,8 +462,8 @@ fn closure_struct(plan: &Plan, ty: &TypeRef, name: &syn::Ident) -> Res<TokenStre
     };
     let mut wires = Vec::new();
     for (i, a) in args.iter().enumerate() {
-        let out = plan.callback_arg(i, a)?;
-        wires.extend(out.wires().into_iter().map(|w| w.ty.rust()));
+        let arg = plan.callback_arg(i, a)?;
+        wires.extend(arg.wires().into_iter().map(|w| w.ty.rust()));
     }
     let allow = allow();
     Ok(quote! {
@@ -555,22 +497,23 @@ fn function(plan: &Plan, func: &Function, exported: &syn::Ident, panic: bool) ->
     let mut args = Vec::new();
     for p in &func.params {
         let name = &p.name;
-        let Param { input, pass } = plan.param(name, &p.ty)?;
-        if input.fallible && ret.on_error.is_none() && !panic {
+        let Param { crossing, pass } = plan.param(&func.name.to_string(), name, &p.ty)?;
+        let input = crossing.decode(plan)?;
+        if input.is_fallible() && ret.on_error.is_none() && !panic {
             return err(format!(
                 "function `{}`: parameter `{name}` ({}) can fail to convert (a null pointer, an invalid value) and the function has no error channel: declare it `.panic()` or return `Result`",
                 func.name, p.ty
             ));
         }
-        params.extend(input.wires().into_iter().map(Wire::decl));
-        if input.fallible {
+        params.extend(crossing.wires().into_iter().map(Wire::decl));
+        if input.is_fallible() {
             let r = input.result();
             stmts.push(quote!(let #name = match #r {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__err) => { #fail }
             };));
         } else {
-            let e = &input.expr;
+            let e = input.expr();
             stmts.push(quote!(let #name = #e;));
         }
         args.push(pass.unwrap_or_else(|| quote!(#name)));
@@ -659,25 +602,19 @@ fn alias_preflight(plan: &Plan, func: &Function, fail: &TokenStream) -> Res<Toke
 }
 
 fn struct_mirror(
+    plan: &Plan,
     source: &prebindgen_flat::flat::Struct,
-    source_path: &TokenStream,
     name: &syn::Ident,
     attrs: Vec<TokenStream>,
-    cb: &mut Fields<'_, '_>,
 ) -> Res<StructMirror> {
-    let record = Record::Struct(source);
-    let mut ins = Vec::new();
-    let mut outs = Vec::new();
-    let binds = record.binds();
-    for f in &source.fields {
-        ins.push(cb.field_in(f)?);
-        outs.push(cb.field_out(f)?);
-    }
-
-    let wires: Vec<Wire<CWire>> = ins
-        .iter()
-        .flat_map(|i| i.wires().into_iter().cloned())
-        .collect();
+    // The mirror's own place takes the struct's fields way.
+    let place = Place::new(name.to_string());
+    let input = plan.input(source.type_ref(), place.clone())?;
+    let output = plan.output(source.type_ref(), place)?;
+    let Node::Fields(fields) = output.node() else {
+        unreachable!("a mirror crosses as its fields")
+    };
+    let wires: Vec<Wire<CWire>> = input.wires().into_iter().cloned().collect();
     let decls = wires.iter().map(|w| {
         let d = w.decl();
         quote!(pub #d)
@@ -688,21 +625,19 @@ fn struct_mirror(
         pub struct #name { #(#decls),* }
     };
     let wire_names: Vec<&syn::Ident> = wires.iter().map(|w| &w.name).collect();
-    let head = source_path;
-    let rebuilt = Input::record(source, ins);
+    let rebuilt = input.decode(plan)?;
     let input = Code {
         expr: {
-            let e = &rebuilt.expr;
+            let e = rebuilt.expr();
             quote!({ let #name { #(#wire_names),* } = v; #e })
         },
-        fallible: rebuilt.fallible,
+        fallible: rebuilt.is_fallible(),
     };
-    let pat = record.pattern(head, &binds);
-    let fallible = outs.iter().any(|o| o.fallible);
-    let out_binds: Vec<TokenStream> = outs.iter().zip(&binds).map(|(o, b)| o.bind(b)).collect();
+    let taken = fields.encode_parts(plan)?;
+    let (pat, binds) = (&taken.pattern, &taken.binds);
     let output = Code {
-        expr: quote!({ let #pat = v; #(#out_binds)* #name { #(#wire_names),* } }),
-        fallible,
+        expr: quote!({ let #pat = v; #binds #name { #(#wire_names),* } }),
+        fallible: taken.fallible,
     };
     Ok(StructMirror {
         def,
@@ -713,13 +648,13 @@ fn struct_mirror(
 }
 
 fn sum_mirror(
+    plan: &Plan,
     source: &prebindgen_flat::flat::Variant,
     source_path: &TokenStream,
     name: &syn::Ident,
     attrs: Vec<TokenStream>,
-    cb: &mut Fields<'_, '_>,
 ) -> Res<SumMirror> {
-    let src = source_path;
+    let place = Place::new(name.to_string());
     let mut variants = Vec::new();
     let mut alternatives = Vec::new();
     let mut in_arms = Vec::new();
@@ -729,23 +664,9 @@ fn sum_mirror(
     for alt in &source.alternatives {
         let record = Record::Alt(alt);
         let aname = &alt.name;
-        let binds = record.binds();
-        let mut ins = Vec::new();
-        let mut outs = Vec::new();
-        for f in &alt.fields {
-            ins.push(cb.field_in(f)?);
-            outs.push(cb.field_out(f)?);
-        }
-        // A mirror alternative has one mirror field per source field; a
-        // field that needs several wires is kept whole as a tuple would
-        // lose the per-field names C sees, so it is refused here by
-        // construction: the adapter hands one wire per field.
-        let wires: Vec<Wire<CWire>> = ins
-            .iter()
-            .flat_map(|i| i.wires().into_iter().cloned())
-            .collect();
+        let (arm_in, arm_out) = plan.mirror_arm(source, alt, &place)?;
+        let wires: Vec<Wire<CWire>> = arm_in.wires().into_iter().cloned().collect();
         let mirror_head = quote!(#name::#aname);
-        let source_head = quote!(#src::#aname);
         // Declaration: same delimiters as the source, wire types in place.
         let tys: Vec<TokenStream> = wires.iter().map(|w| w.ty.rust()).collect();
         let decl = record.construct(&quote!(#aname), &tys);
@@ -753,20 +674,17 @@ fn sum_mirror(
         // In: match the mirror alternative, binding its wires by name.
         let wire_binds: Vec<syn::Ident> = wires.iter().map(|w| w.name.clone()).collect();
         let mirror_pat = record.pattern(&mirror_head, &wire_binds);
-        let parts = alt.fields.iter().map(Seg::field).zip(ins).collect();
-        let rebuilt = Input::parts(source.type_ref(), parts, |values| {
-            record.construct(&source_head, &values)
-        });
-        in_fallible |= rebuilt.fallible;
-        let e = &rebuilt.expr;
+        let rebuilt = arm_in.decode(source_path, plan)?;
+        in_fallible |= rebuilt.is_fallible();
+        let e = rebuilt.expr();
         in_arms.push(quote!(#mirror_pat => #e));
         // Out: match the source alternative, produce the mirror one.
-        let source_pat = record.pattern(&source_head, &binds);
-        out_fallible |= outs.iter().any(|o| o.fallible);
-        let out_binds: Vec<TokenStream> = outs.iter().zip(&binds).map(|(o, b)| o.bind(b)).collect();
+        let taken = arm_out.encode(source_path, plan)?;
+        out_fallible |= taken.fallible;
         let values: Vec<TokenStream> = wires.iter().map(|w| w.name.to_token_stream()).collect();
         let rebuilt_mirror = record.construct(&mirror_head, &values);
-        out_arms.push(quote!(#source_pat => { #(#out_binds)* #rebuilt_mirror }));
+        let (pat, binds) = (&taken.pattern, &taken.binds);
+        out_arms.push(quote!(#pat => { #binds #rebuilt_mirror }));
         alternatives.push(wires);
     }
 

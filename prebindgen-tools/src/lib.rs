@@ -328,8 +328,8 @@ pub mod shape {
     pub use crate::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
 }
 
-/// The hand-composed builders the adapters used before [`Crossing`]: kept
-/// until both adapters resolve crossings, then removed.
+/// The hand-composed builders the JNI adapter still uses in place of
+/// [`Crossing`]: kept until it resolves crossings, then removed.
 #[doc(hidden)]
 pub mod legacy {
     pub use crate::api::legacy::{Form, FormKind, Input, Output};
@@ -356,13 +356,13 @@ pub mod crossing {
 
 /// The Rust a crossing becomes, with the adapter's code for its wires.
 pub mod code {
-    pub use crate::api::code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output};
+    pub use crate::api::code::{result_expr, Code, Decode, Destructured, Encode, Input, Output};
 }
 
 pub use crate::{
     api::check_supported,
     callback::callback_arg_types,
-    code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
+    code::{result_expr, Code, Decode, Destructured, Encode, Input, Output},
     convert::{Conversion, FnRef, ResolvedConversion, Via},
     crossing::{
         resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,
