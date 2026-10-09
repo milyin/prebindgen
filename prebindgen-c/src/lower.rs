@@ -864,7 +864,15 @@ impl<'f> Plan<'f> {
             .collect::<Res<Vec<_>>>()?;
         let mut binds = TokenStream::new();
         for (o, n) in outs.iter().zip(&names) {
-            binds.extend(o.encode(self)?.bind(n));
+            let out = o.encode(self)?;
+            // A callback has no error channel for a conversion to fail into.
+            if out.is_fallible() {
+                return err(format!(
+                    "callback argument `{}`: a fallible output conversion needs a Result return",
+                    o.ty()
+                ));
+            }
+            binds.extend(out.bind(n));
         }
         let values: Vec<syn::Ident> = outs
             .iter()

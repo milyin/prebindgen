@@ -232,3 +232,18 @@ fn a_one_way_conversion_used_the_other_way_is_refused() {
     .expect("an output-only conversion cannot be taken");
     assert!(err.0.contains("declares no input"), "{}", err.0);
 }
+
+#[test]
+fn a_callback_argument_cannot_convert_fallibly() {
+    let err = small(
+        "pub struct Millis(pub u64); \
+         pub fn millis_to(m: &Millis) -> Result<u64, String> { Ok(m.0) } \
+         pub fn on(f: impl Fn(Millis) + Send + Sync + 'static) {}",
+    )
+    .convert(prebindgen_tools::convert!(Millis).output(prebindgen_tools::fun!(millis_to)))
+    .function(pq!(on))
+    .build()
+    .err()
+    .expect("a callback cannot report a failed conversion");
+    assert!(err.0.contains("fallible output conversion"), "{}", err.0);
+}
