@@ -1,0 +1,44 @@
+name: CodSpeed
+
+on:
+  push:
+    branches: [ "main" ]
+  # Required to get performance reports on pull requests.
+  pull_request:
+  # Allows CodSpeed to trigger backtest performance analysis to generate
+  # initial data.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # OpenID Connect authentication with CodSpeed
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust toolchain, cache and cargo-codspeed binary
+      uses: moonrepo/setup-rust@v1
+      with:
+        channel: stable
+        cache-target: release
+        bins: cargo-codspeed
+
+    - name: Build the benchmark targets
+      run: cargo codspeed build -p prebindgen -p prebindgen-flat
+
+    - name: Run the benchmarks
+      uses: CodSpeedHQ/action@v5
+      with:
+        mode: simulation
+        run: cargo codspeed run -p prebindgen -p prebindgen-flat
