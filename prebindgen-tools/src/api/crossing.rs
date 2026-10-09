@@ -187,13 +187,47 @@ pub struct Converted<'f, W: WireType, D: Direction> {
     repr: Box<Crossing<'f, W, D>>,
 }
 
-/// How an optional value says it is absent.
+/// How an optional value says whether it is present, with the code that
+/// says it: a flag wire of its own, or a niche in the inner value's wires.
 #[derive(Debug)]
-pub enum Presence<W> {
-    /// A flag wire, before the inner value's wires.
-    Flag(Wire<W>),
-    /// The inner value's wires: absent is their placeholders.
-    Niche,
+pub struct Presence<W> {
+    flag: Option<Wire<W>>,
+    /// Into Rust, the test that the value is present; out of Rust, the
+    /// flag's value when it is (empty for a niche).
+    pub(crate) code: proc_macro2::TokenStream,
+}
+
+impl<W> Presence<W> {
+    /// A flag wire, before the inner value's wires. Into Rust, `is_set`
+    /// tests it, given its name; out of Rust, it holds `set` when the
+    /// value is present and its placeholder when not.
+    pub fn flag<D: Direction>(
+        wire: Wire<W>,
+        is_set: impl FnOnce(&syn::Ident) -> proc_macro2::TokenStream,
+        set: impl FnOnce() -> proc_macro2::TokenStream,
+    ) -> Self {
+        let code = if D::IN { is_set(&wire.name) } else { set() };
+        Self {
+            flag: Some(wire),
+            code,
+        }
+    }
+
+    /// The inner value's wires tell absence. Into Rust, `is_set` tests
+    /// them; out of Rust, an absent value leaves their placeholders.
+    pub fn niche<D: Direction>(is_set: impl FnOnce() -> proc_macro2::TokenStream) -> Self {
+        let code = if D::IN {
+            is_set()
+        } else {
+            proc_macro2::TokenStream::new()
+        };
+        Self { flag: None, code }
+    }
+
+    /// The flag wire, or `None` for a niche.
+    pub fn flag_wire(&self) -> Option<&Wire<W>> {
+        self.flag.as_ref()
+    }
 }
 
 /// `Option<T>` crossing as a presence and `T`.
@@ -273,9 +307,7 @@ impl<'f, W: WireType, D: Direction> Crossing<'f, W, D> {
             }
             Node::Converted(c) => c.repr.collect(out),
             Node::Optional(o) => {
-                if let Presence::Flag(w) = &o.presence {
-                    out.push(w);
-                }
+                out.extend(o.presence.flag_wire());
                 o.inner.collect(out)
             }
             Node::Sequence(s) => out.extend(&s.wires),
@@ -405,7 +437,7 @@ pub trait Lower<'f, D: Direction> {
     ) -> Result<Option<Whole<Self::Wire>>, Self::Error>;
 
     /// How the option at `place`, whose inner value crosses as `inner`,
-    /// says it is absent.
+    /// says whether it is present.
     fn presence(
         &self,
         inner: &Crossing<'f, Self::Wire, D>,
@@ -421,7 +453,7 @@ pub trait Lower<'f, D: Direction> {
     ) -> Result<Vec<Wire<Self::Wire>>, Self::Error>;
 
     /// The tag wire of the sum at `place`.
-    fn tag(&self, place: &Place) -> Wire<Self::Wire>;
+    fn tag(&self, place: &Place) -> Result<Wire<Self::Wire>, Self::Error>;
 }
 
 /// Resolve how the occurrence of `ty` at `place` crosses: at each layer,
@@ -556,7 +588,7 @@ fn by_way<'f, D: Direction, L: Lower<'f, D>>(
         }),
         Way::Alternatives(v) => Node::Alternatives(Alternatives {
             item: v,
-            tag: lower.tag(place),
+            tag: lower.tag(place)?,
             arms: v
                 .alternatives
                 .iter()

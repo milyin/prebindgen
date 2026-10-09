@@ -10,7 +10,7 @@ use prebindgen_flat::{
 };
 use prebindgen_tools::{
     convert, fun, names, resolve, Access, Choices, Code, Crossing, Decode, Direction, Encode, In,
-    Lower, Node, Optional, Out, Place, Presence, Seg, Sequence, Shape, Ways, Whole, Wire, WireType,
+    Lower, Node, Out, Place, Presence, Seg, Sequence, Shape, Ways, Whole, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -119,37 +119,24 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
     }
 
     fn presence(&self, _: &Crossing<'f, Toy, D>, place: &Place) -> Result<Presence<Toy>, String> {
-        Ok(Presence::Flag(Wire::new(
-            place.ident_with_suffix("present"),
-            Toy::Flag,
-        )))
+        Ok(Presence::flag::<D>(
+            Wire::new(place.ident_with_suffix("present"), Toy::Flag),
+            |p| quote!(#p != 0),
+            || quote!(1),
+        ))
     }
 
     fn sequence(&self, _: &Crossing<'f, Toy, D>, place: &Place) -> Result<Vec<Wire<Toy>>, String> {
         Err(format!("{place}: the toy has no sequences"))
     }
 
-    fn tag(&self, place: &Place) -> Wire<Toy> {
-        Wire::new(place.ident_with_suffix("tag"), Toy::Int)
+    fn tag(&self, place: &Place) -> Result<Wire<Toy>, String> {
+        Ok(Wire::new(place.ident_with_suffix("tag"), Toy::Int))
     }
 }
 
 impl<'f> Decode<'f, Toy> for Toyish<'f> {
     type Error = String;
-
-    fn is_present(
-        &self,
-        _: &Crossing<'f, Toy, In>,
-        opt: &Optional<'f, Toy, In>,
-    ) -> Result<TokenStream, String> {
-        match opt.presence() {
-            Presence::Flag(f) => {
-                let p = &f.name;
-                Ok(quote!(#p != 0))
-            }
-            Presence::Niche => Err("the toy has no niches".into()),
-        }
-    }
 
     fn sequence(
         &self,
@@ -163,10 +150,6 @@ impl<'f> Decode<'f, Toy> for Toyish<'f> {
 
 impl<'f> Encode<'f, Toy> for Toyish<'f> {
     type Error = String;
-
-    fn present(&self, _: &Crossing<'f, Toy, Out>, _: &Wire<Toy>) -> TokenStream {
-        quote!(1)
-    }
 
     fn sequence(
         &self,

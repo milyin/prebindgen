@@ -4,9 +4,7 @@ use quote::{quote, ToTokens};
 use crate::{
     api::{
         convert::Direction as ConvDirection,
-        crossing::{
-            Alternatives, Arm, Crossing, In, Node, Optional, Out, Presence, Sequence, Wrapper,
-        },
+        crossing::{Alternatives, Arm, Crossing, In, Node, Out, Sequence, Wrapper},
     },
     Access, Record, Wire, WireType,
 };
@@ -162,14 +160,6 @@ impl Output {
 pub trait Decode<'f, W: WireType> {
     type Error: From<String>;
 
-    /// The test that the option `at` is present, reading its flag or its
-    /// inner wires.
-    fn is_present(
-        &self,
-        at: &Crossing<'f, W, In>,
-        opt: &Optional<'f, W, In>,
-    ) -> Result<TokenStream, Self::Error>;
-
     /// The sequence `at` rebuilt from its wires; `elem` reads one element
     /// from the locals the loop binds.
     fn sequence(
@@ -206,9 +196,6 @@ pub trait Decode<'f, W: WireType> {
 /// produces wires.
 pub trait Encode<'f, W: WireType> {
     type Error: From<String>;
-
-    /// The value of the option `at`'s presence flag when it is present.
-    fn present(&self, at: &Crossing<'f, W, Out>, flag: &Wire<W>) -> TokenStream;
 
     /// The sequence `value` written to its wires; `elem` converts one
     /// element, binding its wires as locals.
@@ -285,7 +272,7 @@ impl<'f, W: WireType> Crossing<'f, W, In> {
                 }
             }
             Node::Optional(o) => {
-                let test = codec.is_present(self, o)?;
+                let test = &o.presence().code;
                 let inner = o.inner().decode(codec)?;
                 let e = inner.expr;
                 Input {
@@ -434,12 +421,9 @@ impl<'f, W: WireType> Crossing<'f, W, Out> {
             }
             Node::Optional(o) => {
                 let inner = o.inner().encode(codec)?;
-                let flag = match o.presence() {
-                    Presence::Flag(w) => Some((w, codec.present(self, w))),
-                    Presence::Niche => None,
-                };
+                let set = o.presence().flag_wire().map(|_| o.presence().code.clone());
                 let inner_names = inner.names.iter().map(|n| n.to_token_stream());
-                let some = tuple(flag.iter().map(|(_, v)| v.clone()).chain(inner_names));
+                let some = tuple(set.into_iter().chain(inner_names));
                 let none = tuple(wires.iter().map(|w| w.ty.placeholder()));
                 let bind = inner.bind(quote!(__some));
                 Output {
