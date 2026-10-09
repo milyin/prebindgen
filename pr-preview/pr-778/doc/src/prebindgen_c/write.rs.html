@@ -204,10 +204,10 @@
 <a href=#204 id=204 data-nosnippet>204</a>            .map_err(|e| Error(<span class="macro">format!</span>(<span class="string">"`{}`: field `{w}`: {}"</span>, <span class="self">self</span>.owner, e.<span class="number">0</span>)))
 <a href=#205 id=205 data-nosnippet>205</a>    }
 <a href=#206 id=206 data-nosnippet>206</a>
-<a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">fn </span>field_out(<span class="kw-2">&amp;mut </span><span class="self">self</span>, field: <span class="kw-2">&amp;</span>Field, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; Res&lt;Output&lt;CWire&gt;&gt; {
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">fn </span>field_out(<span class="kw-2">&amp;mut </span><span class="self">self</span>, field: <span class="kw-2">&amp;</span>Field) -&gt; Res&lt;Output&lt;CWire&gt;&gt; {
 <a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">let </span>w = (<span class="self">self</span>.wire)(field);
 <a href=#209 id=209 data-nosnippet>209</a>        <span class="self">self</span>.plan
-<a href=#210 id=210 data-nosnippet>210</a>            .value_out(<span class="kw-2">&amp;</span>field.ty, value, <span class="kw-2">&amp;</span>w)
+<a href=#210 id=210 data-nosnippet>210</a>            .value_out(<span class="kw-2">&amp;</span>field.ty, <span class="kw-2">&amp;</span>w)
 <a href=#211 id=211 data-nosnippet>211</a>            .map_err(|e| Error(<span class="macro">format!</span>(<span class="string">"`{}`: field `{w}`: {}"</span>, <span class="self">self</span>.owner, e.<span class="number">0</span>)))
 <a href=#212 id=212 data-nosnippet>212</a>    }
 <a href=#213 id=213 data-nosnippet>213</a>}
@@ -518,7 +518,7 @@
 <a href=#518 id=518 data-nosnippet>518</a>    };
 <a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">let </span><span class="kw-2">mut </span>wires = Vec::new();
 <a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">for </span>(i, a) <span class="kw">in </span>args.iter().enumerate() {
-<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>out = plan.callback_arg(i, a, <span class="kw-2">&amp;</span><span class="macro">quote!</span>(__x))<span class="question-mark">?</span>;
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>out = plan.callback_arg(i, a)<span class="question-mark">?</span>;
 <a href=#522 id=522 data-nosnippet>522</a>        wires.extend(out.wires().into_iter().map(|w| w.ty.rust()));
 <a href=#523 id=523 data-nosnippet>523</a>    }
 <a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">let </span>allow = allow();
@@ -667,9 +667,9 @@
 <a href=#667 id=667 data-nosnippet>667</a>    <span class="kw">let </span><span class="kw-2">mut </span>ins = Vec::new();
 <a href=#668 id=668 data-nosnippet>668</a>    <span class="kw">let </span><span class="kw-2">mut </span>outs = Vec::new();
 <a href=#669 id=669 data-nosnippet>669</a>    <span class="kw">let </span>binds = record.binds();
-<a href=#670 id=670 data-nosnippet>670</a>    <span class="kw">for </span>(f, b) <span class="kw">in </span>source.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
+<a href=#670 id=670 data-nosnippet>670</a>    <span class="kw">for </span>f <span class="kw">in </span><span class="kw-2">&amp;</span>source.fields {
 <a href=#671 id=671 data-nosnippet>671</a>        ins.push(cb.field_in(f)<span class="question-mark">?</span>);
-<a href=#672 id=672 data-nosnippet>672</a>        outs.push(cb.field_out(f, <span class="kw-2">&amp;</span>b.to_token_stream())<span class="question-mark">?</span>);
+<a href=#672 id=672 data-nosnippet>672</a>        outs.push(cb.field_out(f)<span class="question-mark">?</span>);
 <a href=#673 id=673 data-nosnippet>673</a>    }
 <a href=#674 id=674 data-nosnippet>674</a>
 <a href=#675 id=675 data-nosnippet>675</a>    <span class="kw">let </span>wires: Vec&lt;Wire&lt;CWire&gt;&gt; = ins
@@ -697,7 +697,7 @@
 <a href=#697 id=697 data-nosnippet>697</a>    };
 <a href=#698 id=698 data-nosnippet>698</a>    <span class="kw">let </span>pat = record.pattern(head, <span class="kw-2">&amp;</span>binds);
 <a href=#699 id=699 data-nosnippet>699</a>    <span class="kw">let </span>fallible = outs.iter().any(|o| o.fallible);
-<a href=#700 id=700 data-nosnippet>700</a>    <span class="kw">let </span>out_binds: Vec&lt;TokenStream&gt; = outs.iter().map(Output::bind).collect();
+<a href=#700 id=700 data-nosnippet>700</a>    <span class="kw">let </span>out_binds: Vec&lt;TokenStream&gt; = outs.iter().zip(<span class="kw-2">&amp;</span>binds).map(|(o, b)| o.bind(b)).collect();
 <a href=#701 id=701 data-nosnippet>701</a>    <span class="kw">let </span>output = Code {
 <a href=#702 id=702 data-nosnippet>702</a>        expr: <span class="macro">quote!</span>({ <span class="kw">let </span>#pat = v; #(#out_binds)* #name { #(#wire_names),* } }),
 <a href=#703 id=703 data-nosnippet>703</a>        fallible,
@@ -730,9 +730,9 @@
 <a href=#730 id=730 data-nosnippet>730</a>        <span class="kw">let </span>binds = record.binds();
 <a href=#731 id=731 data-nosnippet>731</a>        <span class="kw">let </span><span class="kw-2">mut </span>ins = Vec::new();
 <a href=#732 id=732 data-nosnippet>732</a>        <span class="kw">let </span><span class="kw-2">mut </span>outs = Vec::new();
-<a href=#733 id=733 data-nosnippet>733</a>        <span class="kw">for </span>(f, b) <span class="kw">in </span>alt.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
+<a href=#733 id=733 data-nosnippet>733</a>        <span class="kw">for </span>f <span class="kw">in </span><span class="kw-2">&amp;</span>alt.fields {
 <a href=#734 id=734 data-nosnippet>734</a>            ins.push(cb.field_in(f)<span class="question-mark">?</span>);
-<a href=#735 id=735 data-nosnippet>735</a>            outs.push(cb.field_out(f, <span class="kw-2">&amp;</span>b.to_token_stream())<span class="question-mark">?</span>);
+<a href=#735 id=735 data-nosnippet>735</a>            outs.push(cb.field_out(f)<span class="question-mark">?</span>);
 <a href=#736 id=736 data-nosnippet>736</a>        }
 <a href=#737 id=737 data-nosnippet>737</a>        <span class="comment">// A mirror alternative has one mirror field per source field; a
 <a href=#738 id=738 data-nosnippet>738</a>        // field that needs several wires is kept whole as a tuple would
@@ -761,7 +761,7 @@
 <a href=#761 id=761 data-nosnippet>761</a>        <span class="comment">// Out: match the source alternative, produce the mirror one.
 <a href=#762 id=762 data-nosnippet>762</a>        </span><span class="kw">let </span>source_pat = record.pattern(<span class="kw-2">&amp;</span>source_head, <span class="kw-2">&amp;</span>binds);
 <a href=#763 id=763 data-nosnippet>763</a>        out_fallible |= outs.iter().any(|o| o.fallible);
-<a href=#764 id=764 data-nosnippet>764</a>        <span class="kw">let </span>out_binds: Vec&lt;TokenStream&gt; = outs.iter().map(Output::bind).collect();
+<a href=#764 id=764 data-nosnippet>764</a>        <span class="kw">let </span>out_binds: Vec&lt;TokenStream&gt; = outs.iter().zip(<span class="kw-2">&amp;</span>binds).map(|(o, b)| o.bind(b)).collect();
 <a href=#765 id=765 data-nosnippet>765</a>        <span class="kw">let </span>values: Vec&lt;TokenStream&gt; = wires.iter().map(|w| w.name.to_token_stream()).collect();
 <a href=#766 id=766 data-nosnippet>766</a>        <span class="kw">let </span>rebuilt_mirror = record.construct(<span class="kw-2">&amp;</span>mirror_head, <span class="kw-2">&amp;</span>values);
 <a href=#767 id=767 data-nosnippet>767</a>        out_arms.push(<span class="macro">quote!</span>(#source_pat =&gt; { #(#out_binds)* #rebuilt_mirror }));

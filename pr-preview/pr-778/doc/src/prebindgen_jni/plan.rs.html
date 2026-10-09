@@ -919,7 +919,7 @@
 <a href=#919 id=919 data-nosnippet>919</a>            } <span class="kw">else </span>{
 <a href=#920 id=920 data-nosnippet>920</a>                String::new()
 <a href=#921 id=921 data-nosnippet>921</a>            };
-<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">let </span>d = plan.deliver(core, <span class="macro">quote!</span>(__x), <span class="string">"r"</span>, <span class="string">""</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>e), <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">let </span>d = plan.deliver(core, <span class="string">"r"</span>, <span class="string">""</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>e), <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
 <a href=#923 id=923 data-nosnippet>923</a>            <span class="comment">// The interfaces live beside the type's class.
 <a href=#924 id=924 data-nosnippet>924</a>            </span><span class="kw">let </span>base = <span class="kw-2">&amp;</span>plan
 <a href=#925 id=925 data-nosnippet>925</a>                .class(<span class="kw-2">&amp;</span>tname)
@@ -1005,7 +1005,7 @@
 <a href=#1005 id=1005 data-nosnippet>1005</a>        <span class="kw">let </span>handler = <span class="macro">format!</span>(<span class="string">"{pkg}.{}Handler"</span>, id.name);
 <a href=#1006 id=1006 data-nosnippet>1006</a>        <span class="kw">let </span>raw_iface = <span class="macro">format!</span>(<span class="string">"{handler}Raw"</span>);
 <a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="kw">let </span>capture = <span class="macro">format!</span>(<span class="string">"{handler}Capture"</span>);
-<a href=#1008 id=1008 data-nosnippet>1008</a>        <span class="kw">let </span>d = plan.deliver(e, <span class="macro">quote!</span>(__e), <span class="string">"e"</span>, <span class="string">""</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#1008 id=1008 data-nosnippet>1008</a>        <span class="kw">let </span>d = plan.deliver(e, <span class="string">"e"</span>, <span class="string">""</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
 <a href=#1009 id=1009 data-nosnippet>1009</a>        <span class="self">self</span>.support(handler.clone(), || {
 <a href=#1010 id=1010 data-nosnippet>1010</a>            <span class="prelude-val">Ok</span>(Support::ErrorHandler {
 <a href=#1011 id=1011 data-nosnippet>1011</a>                pkg: pkg.clone(),

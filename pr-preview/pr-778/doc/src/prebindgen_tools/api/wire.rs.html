@@ -299,232 +299,276 @@
 <a href=#299 id=299 data-nosnippet>299</a><span class="doccomment">/// A source value → wires: a return value, a callback argument, a field
 <a href=#300 id=300 data-nosnippet>300</a>/// leaving for the foreign side.
 <a href=#301 id=301 data-nosnippet>301</a>///
-<a href=#302 id=302 data-nosnippet>302</a>/// `expr` evaluates to the wire value, or a tuple of them in [`Self::wires`]
-<a href=#303 id=303 data-nosnippet>303</a>/// order when there are several (`()` for none). Fallibility as for [`Input`].
-<a href=#304 id=304 data-nosnippet>304</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#305 id=305 data-nosnippet>305</a></span><span class="kw">pub struct </span>Output&lt;W&gt; {
-<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">pub </span>form: Form&lt;W&gt;,
-<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">pub </span>expr: TokenStream,
-<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">pub </span>fallible: bool,
-<a href=#309 id=309 data-nosnippet>309</a>}
-<a href=#310 id=310 data-nosnippet>310</a>
-<a href=#311 id=311 data-nosnippet>311</a><span class="kw">impl</span>&lt;W: WireType&gt; Output&lt;W&gt; {
-<a href=#312 id=312 data-nosnippet>312</a>    <span class="doccomment">/// `ty` leaves on one wire, computed by `expr`.
-<a href=#313 id=313 data-nosnippet>313</a>    </span><span class="kw">pub fn </span>wire(ty: <span class="kw-2">&amp;</span>TypeRef, wire: Wire&lt;W&gt;, expr: <span class="kw">impl </span>ToTokens) -&gt; <span class="self">Self </span>{
-<a href=#314 id=314 data-nosnippet>314</a>        <span class="self">Self </span>{
-<a href=#315 id=315 data-nosnippet>315</a>            form: form(ty, FormKind::Wire(wire)),
-<a href=#316 id=316 data-nosnippet>316</a>            expr: expr.to_token_stream(),
-<a href=#317 id=317 data-nosnippet>317</a>            fallible: <span class="bool-val">false</span>,
-<a href=#318 id=318 data-nosnippet>318</a>        }
-<a href=#319 id=319 data-nosnippet>319</a>    }
+<a href=#302 id=302 data-nosnippet>302</a>/// An output converts whatever value it is given: the template supplies the
+<a href=#303 id=303 data-nosnippet>303</a>/// value with [`Self::apply`] or [`Self::bind`], and the output supplies the
+<a href=#304 id=304 data-nosnippet>304</a>/// wires. It evaluates to the wire value, or a tuple of them in
+<a href=#305 id=305 data-nosnippet>305</a>/// [`Self::wires`] order when there are several (`()` for none). Fallibility
+<a href=#306 id=306 data-nosnippet>306</a>/// as for [`Input`].
+<a href=#307 id=307 data-nosnippet>307</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#308 id=308 data-nosnippet>308</a></span><span class="kw">pub struct </span>Output&lt;W&gt; {
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">pub </span>form: Form&lt;W&gt;,
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="doccomment">/// The conversion, reading the value by the name [`value`] gives.
+<a href=#311 id=311 data-nosnippet>311</a>    </span>body: TokenStream,
+<a href=#312 id=312 data-nosnippet>312</a>    <span class="kw">pub </span>fallible: bool,
+<a href=#313 id=313 data-nosnippet>313</a>}
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a><span class="doccomment">/// The name an output's conversion reads its value by. Private: the value is
+<a href=#316 id=316 data-nosnippet>316</a>/// bound to it by [`Output::apply`], so no template has to know it.
+<a href=#317 id=317 data-nosnippet>317</a></span><span class="kw">fn </span>value() -&gt; TokenStream {
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="macro">quote!</span>(__v)
+<a href=#319 id=319 data-nosnippet>319</a>}
 <a href=#320 id=320 data-nosnippet>320</a>
-<a href=#321 id=321 data-nosnippet>321</a>    <span class="doccomment">/// A converted value: the conversion turns `value` into its
-<a href=#322 id=322 data-nosnippet>322</a>    /// representation type, which leaves instead. `repr` builds the
-<a href=#323 id=323 data-nosnippet>323</a>    /// [`Output`] of the representation type it is given, from the
-<a href=#324 id=324 data-nosnippet>324</a>    /// expression it is given that holds the converted value. Fails when
-<a href=#325 id=325 data-nosnippet>325</a>    /// the conversion declares no output.
-<a href=#326 id=326 data-nosnippet>326</a>    </span><span class="kw">pub fn </span>via&lt;E: From&lt;String&gt;&gt;(
-<a href=#327 id=327 data-nosnippet>327</a>        conversion: <span class="kw-2">&amp;</span>ResolvedConversion,
-<a href=#328 id=328 data-nosnippet>328</a>        value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#329 id=329 data-nosnippet>329</a>        repr: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TypeRef, TokenStream) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
-<a href=#330 id=330 data-nosnippet>330</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
-<a href=#331 id=331 data-nosnippet>331</a>        <span class="kw">let </span>(applied, fallible) = conversion.apply(Direction::Out, value)<span class="question-mark">?</span>;
-<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span>repr = repr(conversion.repr(), <span class="macro">quote!</span>(__repr))<span class="question-mark">?</span>;
-<a href=#333 id=333 data-nosnippet>333</a>        <span class="kw">let </span>e = <span class="kw-2">&amp;</span>repr.expr;
-<a href=#334 id=334 data-nosnippet>334</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#335 id=335 data-nosnippet>335</a>            expr: <span class="macro">quote!</span>({ <span class="kw">let </span>__repr = #applied; #e }),
-<a href=#336 id=336 data-nosnippet>336</a>            fallible: repr.fallible || fallible,
-<a href=#337 id=337 data-nosnippet>337</a>            form: form(conversion.target(), FormKind::Via(Box::new(repr.form))),
-<a href=#338 id=338 data-nosnippet>338</a>        })
-<a href=#339 id=339 data-nosnippet>339</a>    }
-<a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a>    <span class="doccomment">/// Nothing crosses; `value` is dropped.
-<a href=#342 id=342 data-nosnippet>342</a>    </span><span class="kw">pub fn </span>unit(ty: <span class="kw-2">&amp;</span>TypeRef, value: <span class="kw">impl </span>ToTokens) -&gt; <span class="self">Self </span>{
-<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>v = value.to_token_stream();
-<a href=#344 id=344 data-nosnippet>344</a>        <span class="self">Self </span>{
-<a href=#345 id=345 data-nosnippet>345</a>            form: form(ty, FormKind::Parts(Vec::new())),
-<a href=#346 id=346 data-nosnippet>346</a>            expr: <span class="macro">quote!</span>({ <span class="kw">let _ </span>= #v; }),
-<a href=#347 id=347 data-nosnippet>347</a>            fallible: <span class="bool-val">false</span>,
-<a href=#348 id=348 data-nosnippet>348</a>        }
-<a href=#349 id=349 data-nosnippet>349</a>    }
-<a href=#350 id=350 data-nosnippet>350</a>
-<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// `ty` leaves as parts. `prelude` runs first — typically a `let`
-<a href=#352 id=352 data-nosnippet>352</a>    /// destructuring the value the parts read.
-<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">pub fn </span>parts(ty: <span class="kw-2">&amp;</span>TypeRef, prelude: TokenStream, parts: Vec&lt;(Seg, Output&lt;W&gt;)&gt;) -&gt; <span class="self">Self </span>{
-<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw">let </span>fallible = parts.iter().any(|(<span class="kw">_</span>, p)| p.fallible);
-<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">let </span>binds: Vec&lt;TokenStream&gt; = parts.iter().map(|(<span class="kw">_</span>, p)| p.bind()).collect();
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">let </span>forms: Vec&lt;(Seg, Form&lt;W&gt;)&gt; = parts.into_iter().map(|(s, p)| (s, p.form)).collect();
-<a href=#357 id=357 data-nosnippet>357</a>        <span class="kw">let </span>f = form(ty, FormKind::Parts(forms));
-<a href=#358 id=358 data-nosnippet>358</a>        <span class="kw">let </span>values = tuple(f.wires().iter().map(|w| w.name.to_token_stream()));
-<a href=#359 id=359 data-nosnippet>359</a>        <span class="self">Self </span>{
-<a href=#360 id=360 data-nosnippet>360</a>            form: f,
-<a href=#361 id=361 data-nosnippet>361</a>            expr: <span class="macro">quote!</span>({ #prelude #(#binds)* #values }),
-<a href=#362 id=362 data-nosnippet>362</a>            fallible,
-<a href=#363 id=363 data-nosnippet>363</a>        }
-<a href=#364 id=364 data-nosnippet>364</a>    }
-<a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a>    <span class="doccomment">/// A struct taken apart. `field` builds each field's output from the
-<a href=#367 id=367 data-nosnippet>367</a>    /// binding that holds it.
-<a href=#368 id=368 data-nosnippet>368</a>    </span><span class="kw">pub fn </span>record&lt;E&gt;(
-<a href=#369 id=369 data-nosnippet>369</a>        s: <span class="kw-2">&amp;</span>Struct,
-<a href=#370 id=370 data-nosnippet>370</a>        value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw-2">mut </span>field: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>Field, TokenStream) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
-<a href=#372 id=372 data-nosnippet>372</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
-<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span>record = Record::Struct(s);
-<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span>binds = record.binds();
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">let </span><span class="kw-2">mut </span>parts = Vec::new();
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">for </span>(f, b) <span class="kw">in </span>s.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
-<a href=#377 id=377 data-nosnippet>377</a>            parts.push((Seg::field(f), field(f, b.to_token_stream())<span class="question-mark">?</span>));
-<a href=#378 id=378 data-nosnippet>378</a>        }
-<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">let </span>pat = record.pattern(<span class="kw-2">&amp;</span>s.name.to_token_stream(), <span class="kw-2">&amp;</span>binds);
-<a href=#380 id=380 data-nosnippet>380</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::parts(s.type_ref(), <span class="macro">quote!</span>(<span class="kw">let </span>#pat = #value;), parts))
-<a href=#381 id=381 data-nosnippet>381</a>    }
-<a href=#382 id=382 data-nosnippet>382</a>
-<a href=#383 id=383 data-nosnippet>383</a>    <span class="doccomment">/// `value: Option&lt;_&gt;` leaving as `presence` (with the value it holds for
-<a href=#384 id=384 data-nosnippet>384</a>    /// `Some`) beside the inner wires. Without `presence`, `None` is told by
-<a href=#385 id=385 data-nosnippet>385</a>    /// the inner wires' placeholders. `inner` builds from the `Some` binding.
-<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">pub fn </span>optional&lt;E&gt;(
-<a href=#387 id=387 data-nosnippet>387</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
-<a href=#388 id=388 data-nosnippet>388</a>        presence: <span class="prelude-ty">Option</span>&lt;(Wire&lt;W&gt;, TokenStream)&gt;,
-<a href=#389 id=389 data-nosnippet>389</a>        value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#390 id=390 data-nosnippet>390</a>        inner: <span class="kw">impl </span>FnOnce(TokenStream) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
-<a href=#391 id=391 data-nosnippet>391</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>inner = inner(<span class="macro">quote!</span>(__some))<span class="question-mark">?</span>;
-<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw">let </span>(presence, yes) = presence.unzip();
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span>wires: Vec&lt;<span class="kw-2">&amp;</span>Wire&lt;W&gt;&gt; = presence.iter().chain(inner.wires()).collect();
-<a href=#395 id=395 data-nosnippet>395</a>        <span class="kw">let </span>some = tuple(
-<a href=#396 id=396 data-nosnippet>396</a>            yes.into_iter()
-<a href=#397 id=397 data-nosnippet>397</a>                .chain(inner.wires().iter().map(|w| w.name.to_token_stream())),
-<a href=#398 id=398 data-nosnippet>398</a>        );
-<a href=#399 id=399 data-nosnippet>399</a>        <span class="kw">let </span>none = tuple(wires.iter().map(|w| w.ty.placeholder()));
-<a href=#400 id=400 data-nosnippet>400</a>        <span class="kw">let </span>bind = inner.bind();
-<a href=#401 id=401 data-nosnippet>401</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#402 id=402 data-nosnippet>402</a>            expr: <span class="macro">quote!</span>(<span class="kw">match </span>#value {
-<a href=#403 id=403 data-nosnippet>403</a>                ::core::option::Option::Some(__some) =&gt; { #bind #some }
-<a href=#404 id=404 data-nosnippet>404</a>                ::core::option::Option::None =&gt; #none,
-<a href=#405 id=405 data-nosnippet>405</a>            }),
-<a href=#406 id=406 data-nosnippet>406</a>            fallible: inner.fallible,
-<a href=#407 id=407 data-nosnippet>407</a>            form: form(
-<a href=#408 id=408 data-nosnippet>408</a>                ty,
-<a href=#409 id=409 data-nosnippet>409</a>                FormKind::Optional {
-<a href=#410 id=410 data-nosnippet>410</a>                    presence,
-<a href=#411 id=411 data-nosnippet>411</a>                    inner: Box::new(inner.form),
-<a href=#412 id=412 data-nosnippet>412</a>                },
-<a href=#413 id=413 data-nosnippet>413</a>            ),
-<a href=#414 id=414 data-nosnippet>414</a>        })
-<a href=#415 id=415 data-nosnippet>415</a>    }
-<a href=#416 id=416 data-nosnippet>416</a>
-<a href=#417 id=417 data-nosnippet>417</a>    <span class="doccomment">/// A sum leaving as `tag` plus every alternative's wires; the taken
-<a href=#418 id=418 data-nosnippet>418</a>    /// alternative fills its own, the others hold placeholders. `field`
-<a href=#419 id=419 data-nosnippet>419</a>    /// builds each field's output from the binding that holds it.
-<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">pub fn </span>sum&lt;E&gt;(
-<a href=#421 id=421 data-nosnippet>421</a>        v: <span class="kw-2">&amp;</span>Variant,
-<a href=#422 id=422 data-nosnippet>422</a>        tag: Wire&lt;W&gt;,
-<a href=#423 id=423 data-nosnippet>423</a>        value: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#424 id=424 data-nosnippet>424</a>        <span class="kw-2">mut </span>field: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>Alternative, <span class="kw-2">&amp;</span>Field, TokenStream) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
-<a href=#425 id=425 data-nosnippet>425</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
-<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>head = v.name.to_token_stream();
-<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">let </span><span class="kw-2">mut </span>alts = Vec::new();
-<a href=#428 id=428 data-nosnippet>428</a>        <span class="kw">for </span>alt <span class="kw">in </span><span class="kw-2">&amp;</span>v.alternatives {
-<a href=#429 id=429 data-nosnippet>429</a>            <span class="kw">let </span>record = Record::Alt(alt);
-<a href=#430 id=430 data-nosnippet>430</a>            <span class="kw">let </span>binds = record.binds();
-<a href=#431 id=431 data-nosnippet>431</a>            <span class="kw">let </span><span class="kw-2">mut </span>outs = Vec::new();
-<a href=#432 id=432 data-nosnippet>432</a>            <span class="kw">for </span>(f, b) <span class="kw">in </span>alt.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
-<a href=#433 id=433 data-nosnippet>433</a>                outs.push((Seg::field(f), field(alt, f, b.to_token_stream())<span class="question-mark">?</span>));
-<a href=#434 id=434 data-nosnippet>434</a>            }
-<a href=#435 id=435 data-nosnippet>435</a>            <span class="kw">let </span>name = <span class="kw-2">&amp;</span>alt.name;
-<a href=#436 id=436 data-nosnippet>436</a>            alts.push((record.pattern(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(#head::#name), <span class="kw-2">&amp;</span>binds), outs));
-<a href=#437 id=437 data-nosnippet>437</a>        }
-<a href=#438 id=438 data-nosnippet>438</a>        <span class="kw">let </span>fallible = alts.iter().flat_map(|(<span class="kw">_</span>, o)| o).any(|(<span class="kw">_</span>, o)| o.fallible);
-<a href=#439 id=439 data-nosnippet>439</a>        <span class="kw">let </span>arms = alts.iter().enumerate().map(|(i, (pat, outs))| {
-<a href=#440 id=440 data-nosnippet>440</a>            <span class="kw">let </span>binds = outs.iter().map(|(<span class="kw">_</span>, o)| o.bind());
-<a href=#441 id=441 data-nosnippet>441</a>            <span class="kw">let </span>tag = Literal::usize_unsuffixed(i);
-<a href=#442 id=442 data-nosnippet>442</a>            <span class="kw">let </span>values = alts.iter().enumerate().flat_map(|(j, (<span class="kw">_</span>, other))| {
-<a href=#443 id=443 data-nosnippet>443</a>                other.iter().flat_map(|(<span class="kw">_</span>, o)| o.wires()).map(<span class="kw">move </span>|w| {
-<a href=#444 id=444 data-nosnippet>444</a>                    <span class="kw">if </span>i == j {
-<a href=#445 id=445 data-nosnippet>445</a>                        w.name.to_token_stream()
-<a href=#446 id=446 data-nosnippet>446</a>                    } <span class="kw">else </span>{
-<a href=#447 id=447 data-nosnippet>447</a>                        w.ty.placeholder()
-<a href=#448 id=448 data-nosnippet>448</a>                    }
-<a href=#449 id=449 data-nosnippet>449</a>                })
-<a href=#450 id=450 data-nosnippet>450</a>            });
-<a href=#451 id=451 data-nosnippet>451</a>            <span class="kw">let </span>values = tuple(std::iter::once(<span class="macro">quote!</span>(#tag)).chain(values));
-<a href=#452 id=452 data-nosnippet>452</a>            <span class="macro">quote!</span>(#pat =&gt; { #(#binds)* #values })
-<a href=#453 id=453 data-nosnippet>453</a>        });
-<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">let </span>expr = <span class="macro">quote!</span>(<span class="kw">match </span>#value { #(#arms),* });
-<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">let </span>alts = alts
-<a href=#456 id=456 data-nosnippet>456</a>            .into_iter()
-<a href=#457 id=457 data-nosnippet>457</a>            .map(|(<span class="kw">_</span>, outs)| outs.into_iter().map(|(s, o)| (s, o.form)).collect())
-<a href=#458 id=458 data-nosnippet>458</a>            .collect();
-<a href=#459 id=459 data-nosnippet>459</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#460 id=460 data-nosnippet>460</a>            form: form(v.type_ref(), FormKind::Sum { tag, alts }),
-<a href=#461 id=461 data-nosnippet>461</a>            expr,
-<a href=#462 id=462 data-nosnippet>462</a>            fallible,
-<a href=#463 id=463 data-nosnippet>463</a>        })
-<a href=#464 id=464 data-nosnippet>464</a>    }
-<a href=#465 id=465 data-nosnippet>465</a>
-<a href=#466 id=466 data-nosnippet>466</a>    <span class="doccomment">/// A sequence leaving on `wires`; `expr` is the adapter's loop, `elem`
-<a href=#467 id=467 data-nosnippet>467</a>    /// the form of one element. Mark it fallible if the loop uses `?`.
-<a href=#468 id=468 data-nosnippet>468</a>    </span><span class="kw">pub fn </span>seq(ty: <span class="kw-2">&amp;</span>TypeRef, wires: Vec&lt;Wire&lt;W&gt;&gt;, elem: Form&lt;W&gt;, expr: <span class="kw">impl </span>ToTokens) -&gt; <span class="self">Self </span>{
-<a href=#469 id=469 data-nosnippet>469</a>        <span class="self">Self </span>{
-<a href=#470 id=470 data-nosnippet>470</a>            form: form(
-<a href=#471 id=471 data-nosnippet>471</a>                ty,
-<a href=#472 id=472 data-nosnippet>472</a>                FormKind::Seq {
-<a href=#473 id=473 data-nosnippet>473</a>                    wires,
-<a href=#474 id=474 data-nosnippet>474</a>                    elem: Box::new(elem),
-<a href=#475 id=475 data-nosnippet>475</a>                },
-<a href=#476 id=476 data-nosnippet>476</a>            ),
-<a href=#477 id=477 data-nosnippet>477</a>            expr: expr.to_token_stream(),
-<a href=#478 id=478 data-nosnippet>478</a>            fallible: <span class="bool-val">false</span>,
-<a href=#479 id=479 data-nosnippet>479</a>        }
+<a href=#321 id=321 data-nosnippet>321</a><span class="kw">impl</span>&lt;W: WireType&gt; Output&lt;W&gt; {
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="doccomment">/// An output of form `form`, whose conversion `body` builds from the
+<a href=#323 id=323 data-nosnippet>323</a>    /// value it is handed. For a composition the constructors below do not
+<a href=#324 id=324 data-nosnippet>324</a>    /// cover; a part's own output goes into `body` with [`Self::bind`].
+<a href=#325 id=325 data-nosnippet>325</a>    </span><span class="kw">pub fn </span>new(form: Form&lt;W&gt;, body: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream) -&gt; <span class="self">Self </span>{
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="self">Self </span>{
+<a href=#327 id=327 data-nosnippet>327</a>            form,
+<a href=#328 id=328 data-nosnippet>328</a>            body: body(<span class="kw-2">&amp;</span>value()),
+<a href=#329 id=329 data-nosnippet>329</a>            fallible: <span class="bool-val">false</span>,
+<a href=#330 id=330 data-nosnippet>330</a>        }
+<a href=#331 id=331 data-nosnippet>331</a>    }
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a>    <span class="doccomment">/// `ty` leaves on one wire, which `body` computes from the value.
+<a href=#334 id=334 data-nosnippet>334</a>    </span><span class="kw">pub fn </span>wire(
+<a href=#335 id=335 data-nosnippet>335</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#336 id=336 data-nosnippet>336</a>        wire: Wire&lt;W&gt;,
+<a href=#337 id=337 data-nosnippet>337</a>        body: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream,
+<a href=#338 id=338 data-nosnippet>338</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="self">Self</span>::new(form(ty, FormKind::Wire(wire)), body)
+<a href=#340 id=340 data-nosnippet>340</a>    }
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// Nothing crosses; the value is dropped.
+<a href=#343 id=343 data-nosnippet>343</a>    </span><span class="kw">pub fn </span>unit(ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="self">Self </span>{
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="self">Self</span>::new(form(ty, FormKind::Parts(Vec::new())), |<span class="kw">_</span>| <span class="macro">quote!</span>(()))
+<a href=#345 id=345 data-nosnippet>345</a>    }
+<a href=#346 id=346 data-nosnippet>346</a>
+<a href=#347 id=347 data-nosnippet>347</a>    <span class="doccomment">/// A converted value: the conversion turns the value into its
+<a href=#348 id=348 data-nosnippet>348</a>    /// representation type, which leaves instead. `repr` builds the
+<a href=#349 id=349 data-nosnippet>349</a>    /// [`Output`] of the representation type it is given. Fails when the
+<a href=#350 id=350 data-nosnippet>350</a>    /// conversion declares no output.
+<a href=#351 id=351 data-nosnippet>351</a>    </span><span class="kw">pub fn </span>via&lt;E: From&lt;String&gt;&gt;(
+<a href=#352 id=352 data-nosnippet>352</a>        conversion: <span class="kw-2">&amp;</span>ResolvedConversion,
+<a href=#353 id=353 data-nosnippet>353</a>        repr: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
+<a href=#354 id=354 data-nosnippet>354</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">let </span>(applied, fallible) = conversion.apply(Direction::Out, <span class="kw-2">&amp;</span>value())<span class="question-mark">?</span>;
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">let </span>repr = repr(conversion.repr())<span class="question-mark">?</span>;
+<a href=#357 id=357 data-nosnippet>357</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#358 id=358 data-nosnippet>358</a>            body: repr.apply(applied),
+<a href=#359 id=359 data-nosnippet>359</a>            fallible: repr.fallible || fallible,
+<a href=#360 id=360 data-nosnippet>360</a>            form: form(conversion.target(), FormKind::Via(Box::new(repr.form))),
+<a href=#361 id=361 data-nosnippet>361</a>        })
+<a href=#362 id=362 data-nosnippet>362</a>    }
+<a href=#363 id=363 data-nosnippet>363</a>
+<a href=#364 id=364 data-nosnippet>364</a>    <span class="doccomment">/// `ty` leaves as parts. `prelude` runs first, reading the value —
+<a href=#365 id=365 data-nosnippet>365</a>    /// typically a `let` destructuring it. Each part then converts its own
+<a href=#366 id=366 data-nosnippet>366</a>    /// value: an expression valid after the prelude.
+<a href=#367 id=367 data-nosnippet>367</a>    </span><span class="kw">pub fn </span>parts(
+<a href=#368 id=368 data-nosnippet>368</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#369 id=369 data-nosnippet>369</a>        prelude: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream,
+<a href=#370 id=370 data-nosnippet>370</a>        parts: Vec&lt;(Seg, TokenStream, Output&lt;W&gt;)&gt;,
+<a href=#371 id=371 data-nosnippet>371</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">let </span>fallible = parts.iter().any(|(<span class="kw">_</span>, <span class="kw">_</span>, p)| p.fallible);
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span>binds: Vec&lt;TokenStream&gt; = parts.iter().map(|(<span class="kw">_</span>, v, p)| p.bind(v)).collect();
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span>forms: Vec&lt;(Seg, Form&lt;W&gt;)&gt; = parts.into_iter().map(|(s, <span class="kw">_</span>, p)| (s, p.form)).collect();
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">let </span>f = form(ty, FormKind::Parts(forms));
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span>values = tuple(f.wires().iter().map(|w| w.name.to_token_stream()));
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>prelude = prelude(<span class="kw-2">&amp;</span>value());
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="self">Self </span>{
+<a href=#379 id=379 data-nosnippet>379</a>            form: f,
+<a href=#380 id=380 data-nosnippet>380</a>            body: <span class="macro">quote!</span>({ #prelude #(#binds)* #values }),
+<a href=#381 id=381 data-nosnippet>381</a>            fallible,
+<a href=#382 id=382 data-nosnippet>382</a>        }
+<a href=#383 id=383 data-nosnippet>383</a>    }
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a>    <span class="doccomment">/// A struct taken apart. `field` builds each field's output.
+<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">pub fn </span>record&lt;E&gt;(
+<a href=#387 id=387 data-nosnippet>387</a>        s: <span class="kw-2">&amp;</span>Struct,
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw-2">mut </span>field: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>Field) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
+<a href=#389 id=389 data-nosnippet>389</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span>record = Record::Struct(s);
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span>binds = record.binds();
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span><span class="kw-2">mut </span>parts = Vec::new();
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw">for </span>(f, b) <span class="kw">in </span>s.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
+<a href=#394 id=394 data-nosnippet>394</a>            parts.push((Seg::field(f), b.to_token_stream(), field(f)<span class="question-mark">?</span>));
+<a href=#395 id=395 data-nosnippet>395</a>        }
+<a href=#396 id=396 data-nosnippet>396</a>        <span class="kw">let </span>pat = record.pattern(<span class="kw-2">&amp;</span>s.name.to_token_stream(), <span class="kw-2">&amp;</span>binds);
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::parts(s.type_ref(), |v| <span class="macro">quote!</span>(<span class="kw">let </span>#pat = #v;), parts))
+<a href=#398 id=398 data-nosnippet>398</a>    }
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="doccomment">/// An `Option` leaving as `presence` (with the value it holds for `Some`)
+<a href=#401 id=401 data-nosnippet>401</a>    /// beside `inner`'s wires. Without `presence`, `None` is told by the
+<a href=#402 id=402 data-nosnippet>402</a>    /// inner wires' placeholders.
+<a href=#403 id=403 data-nosnippet>403</a>    </span><span class="kw">pub fn </span>optional(
+<a href=#404 id=404 data-nosnippet>404</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#405 id=405 data-nosnippet>405</a>        presence: <span class="prelude-ty">Option</span>&lt;(Wire&lt;W&gt;, TokenStream)&gt;,
+<a href=#406 id=406 data-nosnippet>406</a>        inner: Output&lt;W&gt;,
+<a href=#407 id=407 data-nosnippet>407</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">let </span>(presence, yes) = presence.unzip();
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="kw">let </span>wires: Vec&lt;<span class="kw-2">&amp;</span>Wire&lt;W&gt;&gt; = presence.iter().chain(inner.wires()).collect();
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span>some = tuple(
+<a href=#411 id=411 data-nosnippet>411</a>            yes.into_iter()
+<a href=#412 id=412 data-nosnippet>412</a>                .chain(inner.wires().iter().map(|w| w.name.to_token_stream())),
+<a href=#413 id=413 data-nosnippet>413</a>        );
+<a href=#414 id=414 data-nosnippet>414</a>        <span class="kw">let </span>none = tuple(wires.iter().map(|w| w.ty.placeholder()));
+<a href=#415 id=415 data-nosnippet>415</a>        <span class="kw">let </span>bind = inner.bind(<span class="macro">quote!</span>(__some));
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">let </span>x = value();
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="self">Self </span>{
+<a href=#418 id=418 data-nosnippet>418</a>            body: <span class="macro">quote!</span>(<span class="kw">match </span>#x {
+<a href=#419 id=419 data-nosnippet>419</a>                ::core::option::Option::Some(__some) =&gt; { #bind #some }
+<a href=#420 id=420 data-nosnippet>420</a>                ::core::option::Option::None =&gt; #none,
+<a href=#421 id=421 data-nosnippet>421</a>            }),
+<a href=#422 id=422 data-nosnippet>422</a>            fallible: inner.fallible,
+<a href=#423 id=423 data-nosnippet>423</a>            form: form(
+<a href=#424 id=424 data-nosnippet>424</a>                ty,
+<a href=#425 id=425 data-nosnippet>425</a>                FormKind::Optional {
+<a href=#426 id=426 data-nosnippet>426</a>                    presence,
+<a href=#427 id=427 data-nosnippet>427</a>                    inner: Box::new(inner.form),
+<a href=#428 id=428 data-nosnippet>428</a>                },
+<a href=#429 id=429 data-nosnippet>429</a>            ),
+<a href=#430 id=430 data-nosnippet>430</a>        }
+<a href=#431 id=431 data-nosnippet>431</a>    }
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="doccomment">/// A sum leaving as `tag` plus every alternative's wires; the taken
+<a href=#434 id=434 data-nosnippet>434</a>    /// alternative fills its own, the others hold placeholders. `field`
+<a href=#435 id=435 data-nosnippet>435</a>    /// builds each field's output.
+<a href=#436 id=436 data-nosnippet>436</a>    </span><span class="kw">pub fn </span>sum&lt;E&gt;(
+<a href=#437 id=437 data-nosnippet>437</a>        v: <span class="kw-2">&amp;</span>Variant,
+<a href=#438 id=438 data-nosnippet>438</a>        tag: Wire&lt;W&gt;,
+<a href=#439 id=439 data-nosnippet>439</a>        <span class="kw-2">mut </span>field: <span class="kw">impl </span>FnMut(<span class="kw-2">&amp;</span>Alternative, <span class="kw-2">&amp;</span>Field) -&gt; <span class="prelude-ty">Result</span>&lt;Output&lt;W&gt;, E&gt;,
+<a href=#440 id=440 data-nosnippet>440</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
+<a href=#441 id=441 data-nosnippet>441</a>        <span class="kw">let </span>head = v.name.to_token_stream();
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="kw">let </span><span class="kw-2">mut </span>alts = Vec::new();
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw">for </span>alt <span class="kw">in </span><span class="kw-2">&amp;</span>v.alternatives {
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="kw">let </span>record = Record::Alt(alt);
+<a href=#445 id=445 data-nosnippet>445</a>            <span class="kw">let </span>binds = record.binds();
+<a href=#446 id=446 data-nosnippet>446</a>            <span class="kw">let </span><span class="kw-2">mut </span>outs = Vec::new();
+<a href=#447 id=447 data-nosnippet>447</a>            <span class="kw">for </span>(f, b) <span class="kw">in </span>alt.fields.iter().zip(<span class="kw-2">&amp;</span>binds) {
+<a href=#448 id=448 data-nosnippet>448</a>                outs.push((Seg::field(f), b.to_token_stream(), field(alt, f)<span class="question-mark">?</span>));
+<a href=#449 id=449 data-nosnippet>449</a>            }
+<a href=#450 id=450 data-nosnippet>450</a>            <span class="kw">let </span>name = <span class="kw-2">&amp;</span>alt.name;
+<a href=#451 id=451 data-nosnippet>451</a>            alts.push((record.pattern(<span class="kw-2">&amp;</span><span class="macro">quote!</span>(#head::#name), <span class="kw-2">&amp;</span>binds), outs));
+<a href=#452 id=452 data-nosnippet>452</a>        }
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="kw">let </span>fallible = alts.iter().flat_map(|(<span class="kw">_</span>, o)| o).any(|(<span class="kw">_</span>, <span class="kw">_</span>, o)| o.fallible);
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">let </span>arms = alts.iter().enumerate().map(|(i, (pat, outs))| {
+<a href=#455 id=455 data-nosnippet>455</a>            <span class="kw">let </span>binds = outs.iter().map(|(<span class="kw">_</span>, b, o)| o.bind(b));
+<a href=#456 id=456 data-nosnippet>456</a>            <span class="kw">let </span>tag = Literal::usize_unsuffixed(i);
+<a href=#457 id=457 data-nosnippet>457</a>            <span class="kw">let </span>values = alts.iter().enumerate().flat_map(|(j, (<span class="kw">_</span>, other))| {
+<a href=#458 id=458 data-nosnippet>458</a>                other.iter().flat_map(|(<span class="kw">_</span>, <span class="kw">_</span>, o)| o.wires()).map(<span class="kw">move </span>|w| {
+<a href=#459 id=459 data-nosnippet>459</a>                    <span class="kw">if </span>i == j {
+<a href=#460 id=460 data-nosnippet>460</a>                        w.name.to_token_stream()
+<a href=#461 id=461 data-nosnippet>461</a>                    } <span class="kw">else </span>{
+<a href=#462 id=462 data-nosnippet>462</a>                        w.ty.placeholder()
+<a href=#463 id=463 data-nosnippet>463</a>                    }
+<a href=#464 id=464 data-nosnippet>464</a>                })
+<a href=#465 id=465 data-nosnippet>465</a>            });
+<a href=#466 id=466 data-nosnippet>466</a>            <span class="kw">let </span>values = tuple(std::iter::once(<span class="macro">quote!</span>(#tag)).chain(values));
+<a href=#467 id=467 data-nosnippet>467</a>            <span class="macro">quote!</span>(#pat =&gt; { #(#binds)* #values })
+<a href=#468 id=468 data-nosnippet>468</a>        });
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">let </span>x = value();
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">let </span>body = <span class="macro">quote!</span>(<span class="kw">match </span>#x { #(#arms),* });
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>alts = alts
+<a href=#472 id=472 data-nosnippet>472</a>            .into_iter()
+<a href=#473 id=473 data-nosnippet>473</a>            .map(|(<span class="kw">_</span>, outs)| outs.into_iter().map(|(s, <span class="kw">_</span>, o)| (s, o.form)).collect())
+<a href=#474 id=474 data-nosnippet>474</a>            .collect();
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#476 id=476 data-nosnippet>476</a>            form: form(v.type_ref(), FormKind::Sum { tag, alts }),
+<a href=#477 id=477 data-nosnippet>477</a>            body,
+<a href=#478 id=478 data-nosnippet>478</a>            fallible,
+<a href=#479 id=479 data-nosnippet>479</a>        })
 <a href=#480 id=480 data-nosnippet>480</a>    }
 <a href=#481 id=481 data-nosnippet>481</a>
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="doccomment">/// Declare that [`Self::expr`] uses `?`.
-<a href=#483 id=483 data-nosnippet>483</a>    </span><span class="kw">pub fn </span>mark_fallible(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-<a href=#484 id=484 data-nosnippet>484</a>        <span class="self">self</span>.fallible = <span class="bool-val">true</span>;
-<a href=#485 id=485 data-nosnippet>485</a>        <span class="self">self
-<a href=#486 id=486 data-nosnippet>486</a>    </span>}
-<a href=#487 id=487 data-nosnippet>487</a>
-<a href=#488 id=488 data-nosnippet>488</a>    <span class="doccomment">/// The boundary slots, in order; see [`Form::wires`].
-<a href=#489 id=489 data-nosnippet>489</a>    </span><span class="kw">pub fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="kw-2">&amp;</span>Wire&lt;W&gt;&gt; {
-<a href=#490 id=490 data-nosnippet>490</a>        <span class="self">self</span>.form.wires()
-<a href=#491 id=491 data-nosnippet>491</a>    }
-<a href=#492 id=492 data-nosnippet>492</a>
-<a href=#493 id=493 data-nosnippet>493</a>    <span class="doccomment">/// `let &lt;wires&gt; = expr;` — binds every wire by its own name.
-<a href=#494 id=494 data-nosnippet>494</a>    </span><span class="kw">pub fn </span>bind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#495 id=495 data-nosnippet>495</a>        <span class="kw">let </span>(pat, e) = (<span class="self">self</span>.pattern(), <span class="kw-2">&amp;</span><span class="self">self</span>.expr);
-<a href=#496 id=496 data-nosnippet>496</a>        <span class="macro">quote!</span>(<span class="kw">let </span>#pat = #e;)
-<a href=#497 id=497 data-nosnippet>497</a>    }
-<a href=#498 id=498 data-nosnippet>498</a>
-<a href=#499 id=499 data-nosnippet>499</a>    <span class="doccomment">/// The binding pattern for the wires: `w`, `(a, b)`, or `()`.
-<a href=#500 id=500 data-nosnippet>500</a>    </span><span class="kw">pub fn </span>pattern(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#501 id=501 data-nosnippet>501</a>        tuple(<span class="self">self</span>.wires().iter().map(|w| w.name.to_token_stream()))
-<a href=#502 id=502 data-nosnippet>502</a>    }
-<a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a>    <span class="doccomment">/// The wires as a `Result&lt;_, String&gt;` expression.
-<a href=#505 id=505 data-nosnippet>505</a>    </span><span class="kw">pub fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#506 id=506 data-nosnippet>506</a>        result_expr(<span class="kw-2">&amp;</span><span class="self">self</span>.expr, <span class="self">self</span>.fallible)
-<a href=#507 id=507 data-nosnippet>507</a>    }
-<a href=#508 id=508 data-nosnippet>508</a>}
-<a href=#509 id=509 data-nosnippet>509</a>
-<a href=#510 id=510 data-nosnippet>510</a><span class="doccomment">/// `a` for one item, `(a, b)` otherwise.
-<a href=#511 id=511 data-nosnippet>511</a></span><span class="kw">fn </span>tuple(items: <span class="kw">impl </span>IntoIterator&lt;Item = TokenStream&gt;) -&gt; TokenStream {
-<a href=#512 id=512 data-nosnippet>512</a>    <span class="kw">let </span>items: Vec&lt;TokenStream&gt; = items.into_iter().collect();
-<a href=#513 id=513 data-nosnippet>513</a>    <span class="kw">match </span>items.as_slice() {
-<a href=#514 id=514 data-nosnippet>514</a>        [one] =&gt; one.clone(),
-<a href=#515 id=515 data-nosnippet>515</a>        <span class="kw">_ </span>=&gt; <span class="macro">quote!</span>((#(#items),<span class="kw-2">*</span>)),
-<a href=#516 id=516 data-nosnippet>516</a>    }
-<a href=#517 id=517 data-nosnippet>517</a>}
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="doccomment">/// A sequence leaving on `wires`; `body` is the adapter's loop over the
+<a href=#483 id=483 data-nosnippet>483</a>    /// value, `elem` the form of one element. Mark it fallible if the loop
+<a href=#484 id=484 data-nosnippet>484</a>    /// uses `?`.
+<a href=#485 id=485 data-nosnippet>485</a>    </span><span class="kw">pub fn </span>seq(
+<a href=#486 id=486 data-nosnippet>486</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#487 id=487 data-nosnippet>487</a>        wires: Vec&lt;Wire&lt;W&gt;&gt;,
+<a href=#488 id=488 data-nosnippet>488</a>        elem: Form&lt;W&gt;,
+<a href=#489 id=489 data-nosnippet>489</a>        body: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream,
+<a href=#490 id=490 data-nosnippet>490</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">let </span>f = form(
+<a href=#492 id=492 data-nosnippet>492</a>            ty,
+<a href=#493 id=493 data-nosnippet>493</a>            FormKind::Seq {
+<a href=#494 id=494 data-nosnippet>494</a>                wires,
+<a href=#495 id=495 data-nosnippet>495</a>                elem: Box::new(elem),
+<a href=#496 id=496 data-nosnippet>496</a>            },
+<a href=#497 id=497 data-nosnippet>497</a>        );
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="self">Self</span>::new(f, body)
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="doccomment">/// This output over a value `f` derives from the one given: `(*v)` for
+<a href=#502 id=502 data-nosnippet>502</a>    /// a `Box`, a clone for a borrow. The mirror of [`Input::map`].
+<a href=#503 id=503 data-nosnippet>503</a>    </span><span class="kw">pub fn </span>before(<span class="kw-2">mut </span><span class="self">self</span>, f: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream) -&gt; <span class="self">Self </span>{
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw">let </span>(x, body) = (value(), <span class="kw-2">&amp;</span><span class="self">self</span>.body);
+<a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>derived = f(<span class="kw-2">&amp;</span>x);
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="comment">// An identity derivation changes nothing.
+<a href=#507 id=507 data-nosnippet>507</a>        </span><span class="kw">if </span>derived.to_string() != x.to_string() {
+<a href=#508 id=508 data-nosnippet>508</a>            <span class="self">self</span>.body = <span class="macro">quote!</span>({ <span class="kw">let </span>#x = #derived; #body });
+<a href=#509 id=509 data-nosnippet>509</a>        }
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="self">self
+<a href=#511 id=511 data-nosnippet>511</a>    </span>}
+<a href=#512 id=512 data-nosnippet>512</a>
+<a href=#513 id=513 data-nosnippet>513</a>    <span class="doccomment">/// Declare that the conversion uses `?`.
+<a href=#514 id=514 data-nosnippet>514</a>    </span><span class="kw">pub fn </span>mark_fallible(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#515 id=515 data-nosnippet>515</a>        <span class="self">self</span>.fallible = <span class="bool-val">true</span>;
+<a href=#516 id=516 data-nosnippet>516</a>        <span class="self">self
+<a href=#517 id=517 data-nosnippet>517</a>    </span>}
 <a href=#518 id=518 data-nosnippet>518</a>
-<a href=#519 id=519 data-nosnippet>519</a><span class="doccomment">/// `expr` as a `Result&lt;_, String&gt;`: an immediately-invoked closure when it
-<a href=#520 id=520 data-nosnippet>520</a>/// uses `?`, an `Ok` otherwise.
-<a href=#521 id=521 data-nosnippet>521</a></span><span class="kw">pub fn </span>result_expr(expr: <span class="kw-2">&amp;</span>TokenStream, fallible: bool) -&gt; TokenStream {
-<a href=#522 id=522 data-nosnippet>522</a>    <span class="kw">if </span>fallible {
-<a href=#523 id=523 data-nosnippet>523</a>        <span class="macro">quote!</span>((|| -&gt; ::core::result::Result&lt;<span class="kw">_</span>, ::std::string::String&gt; {
-<a href=#524 id=524 data-nosnippet>524</a>            ::core::result::Result::Ok(#expr)
-<a href=#525 id=525 data-nosnippet>525</a>        })())
-<a href=#526 id=526 data-nosnippet>526</a>    } <span class="kw">else </span>{
-<a href=#527 id=527 data-nosnippet>527</a>        <span class="macro">quote!</span>(::core::result::Result::&lt;<span class="kw">_</span>, ::std::string::String&gt;::Ok(#expr))
-<a href=#528 id=528 data-nosnippet>528</a>    }
-<a href=#529 id=529 data-nosnippet>529</a>}
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="doccomment">/// The boundary slots, in order; see [`Form::wires`].
+<a href=#520 id=520 data-nosnippet>520</a>    </span><span class="kw">pub fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="kw-2">&amp;</span>Wire&lt;W&gt;&gt; {
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="self">self</span>.form.wires()
+<a href=#522 id=522 data-nosnippet>522</a>    }
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="doccomment">/// The conversion of `value`: an expression evaluating to the wires. The
+<a href=#525 id=525 data-nosnippet>525</a>    /// value is evaluated once.
+<a href=#526 id=526 data-nosnippet>526</a>    </span><span class="kw">pub fn </span>apply(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw">impl </span>ToTokens) -&gt; TokenStream {
+<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">let </span>(x, body) = (<span class="self">self</span>::value(), <span class="kw-2">&amp;</span><span class="self">self</span>.body);
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw">let </span>value = value.to_token_stream();
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="comment">// A nested output handed the value under the very name it reads.
+<a href=#530 id=530 data-nosnippet>530</a>        </span><span class="kw">if </span>value.to_string() == x.to_string() {
+<a href=#531 id=531 data-nosnippet>531</a>            <span class="kw">return </span><span class="macro">quote!</span>({ #body });
+<a href=#532 id=532 data-nosnippet>532</a>        }
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="macro">quote!</span>({ <span class="kw">let </span>#x = #value; #body })
+<a href=#534 id=534 data-nosnippet>534</a>    }
+<a href=#535 id=535 data-nosnippet>535</a>
+<a href=#536 id=536 data-nosnippet>536</a>    <span class="doccomment">/// `let &lt;wires&gt; = …;` — converts `value`, binding every wire by its own
+<a href=#537 id=537 data-nosnippet>537</a>    /// name.
+<a href=#538 id=538 data-nosnippet>538</a>    </span><span class="kw">pub fn </span>bind(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw">impl </span>ToTokens) -&gt; TokenStream {
+<a href=#539 id=539 data-nosnippet>539</a>        <span class="kw">let </span>(pat, e) = (<span class="self">self</span>.pattern(), <span class="self">self</span>.apply(value));
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="macro">quote!</span>(<span class="kw">let </span>#pat = #e;)
+<a href=#541 id=541 data-nosnippet>541</a>    }
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a>    <span class="doccomment">/// The binding pattern for the wires: `w`, `(a, b)`, or `()`.
+<a href=#544 id=544 data-nosnippet>544</a>    </span><span class="kw">pub fn </span>pattern(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#545 id=545 data-nosnippet>545</a>        tuple(<span class="self">self</span>.wires().iter().map(|w| w.name.to_token_stream()))
+<a href=#546 id=546 data-nosnippet>546</a>    }
+<a href=#547 id=547 data-nosnippet>547</a>
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="doccomment">/// The conversion of `value` as a `Result&lt;_, String&gt;` expression.
+<a href=#549 id=549 data-nosnippet>549</a>    </span><span class="kw">pub fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw">impl </span>ToTokens) -&gt; TokenStream {
+<a href=#550 id=550 data-nosnippet>550</a>        result_expr(<span class="kw-2">&amp;</span><span class="self">self</span>.apply(value), <span class="self">self</span>.fallible)
+<a href=#551 id=551 data-nosnippet>551</a>    }
+<a href=#552 id=552 data-nosnippet>552</a>}
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a><span class="doccomment">/// `a` for one item, `(a, b)` otherwise.
+<a href=#555 id=555 data-nosnippet>555</a></span><span class="kw">fn </span>tuple(items: <span class="kw">impl </span>IntoIterator&lt;Item = TokenStream&gt;) -&gt; TokenStream {
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="kw">let </span>items: Vec&lt;TokenStream&gt; = items.into_iter().collect();
+<a href=#557 id=557 data-nosnippet>557</a>    <span class="kw">match </span>items.as_slice() {
+<a href=#558 id=558 data-nosnippet>558</a>        [one] =&gt; one.clone(),
+<a href=#559 id=559 data-nosnippet>559</a>        <span class="kw">_ </span>=&gt; <span class="macro">quote!</span>((#(#items),<span class="kw-2">*</span>)),
+<a href=#560 id=560 data-nosnippet>560</a>    }
+<a href=#561 id=561 data-nosnippet>561</a>}
+<a href=#562 id=562 data-nosnippet>562</a>
+<a href=#563 id=563 data-nosnippet>563</a><span class="doccomment">/// `expr` as a `Result&lt;_, String&gt;`: an immediately-invoked closure when it
+<a href=#564 id=564 data-nosnippet>564</a>/// uses `?`, an `Ok` otherwise.
+<a href=#565 id=565 data-nosnippet>565</a></span><span class="kw">pub fn </span>result_expr(expr: <span class="kw-2">&amp;</span>TokenStream, fallible: bool) -&gt; TokenStream {
+<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">if </span>fallible {
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="macro">quote!</span>((|| -&gt; ::core::result::Result&lt;<span class="kw">_</span>, ::std::string::String&gt; {
+<a href=#568 id=568 data-nosnippet>568</a>            ::core::result::Result::Ok(#expr)
+<a href=#569 id=569 data-nosnippet>569</a>        })())
+<a href=#570 id=570 data-nosnippet>570</a>    } <span class="kw">else </span>{
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="macro">quote!</span>(::core::result::Result::&lt;<span class="kw">_</span>, ::std::string::String&gt;::Ok(#expr))
+<a href=#572 id=572 data-nosnippet>572</a>    }
+<a href=#573 id=573 data-nosnippet>573</a>}
 </code></pre></div></section></main></body></html>
