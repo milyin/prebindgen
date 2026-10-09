@@ -17,8 +17,8 @@
 <a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">use </span>prebindgen_flat::flat::{ScalarKind, Type <span class="kw">as </span>FlatType, TypeKind, TypeRef, Variant};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>prebindgen_tools::{
 <a href=#19 id=19 data-nosnippet>19</a>    names, out_value, resolve, resolve_arm, shape, Access, Arm, Choices, Code, Crossing, Decode,
-<a href=#20 id=20 data-nosnippet>20</a>    Direction, Encode, In, Input, Lower, Optional, Out, Output, Place, Presence, Seg, Sequence,
-<a href=#21 id=21 data-nosnippet>21</a>    SequenceKind, Shape, TextKind, Ways, Whole, Wire, WireType, Wrapper,
+<a href=#20 id=20 data-nosnippet>20</a>    Direction, Encode, In, Input, Lower, Out, Output, Place, Presence, Seg, Sequence, SequenceKind,
+<a href=#21 id=21 data-nosnippet>21</a>    Shape, TextKind, Ways, Whole, Wire, WireType, Wrapper,
 <a href=#22 id=22 data-nosnippet>22</a>};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>quote::{format_ident, quote, ToTokens};
@@ -982,104 +982,94 @@
 <a href=#982 id=982 data-nosnippet>982</a>        ])
 <a href=#983 id=983 data-nosnippet>983</a>    }
 <a href=#984 id=984 data-nosnippet>984</a>
-<a href=#985 id=985 data-nosnippet>985</a>    <span class="kw">fn </span>tag(<span class="kw-2">&amp;</span><span class="self">self</span>, place: <span class="kw-2">&amp;</span>Place) -&gt; Wire&lt;CWire&gt; {
-<a href=#986 id=986 data-nosnippet>986</a>        <span class="macro">unreachable!</span>(<span class="string">"{place}: C mirrors a sum; it registers no way of tag and arms"</span>)
-<a href=#987 id=987 data-nosnippet>987</a>    }
-<a href=#988 id=988 data-nosnippet>988</a>}
-<a href=#989 id=989 data-nosnippet>989</a>
-<a href=#990 id=990 data-nosnippet>990</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Plan&lt;<span class="lifetime">'f</span>&gt; {
-<a href=#991 id=991 data-nosnippet>991</a>    <span class="kw">fn </span>boundary&lt;<span class="lifetime">'a</span>, D: Direction&gt;(
-<a href=#992 id=992 data-nosnippet>992</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
-<a href=#993 id=993 data-nosnippet>993</a>        choices: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Choices&lt;D&gt;,
-<a href=#994 id=994 data-nosnippet>994</a>        sum: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'f </span>Variant&gt;,
-<a href=#995 id=995 data-nosnippet>995</a>    ) -&gt; Boundary&lt;<span class="lifetime">'a</span>, <span class="lifetime">'f</span>, D&gt; {
-<a href=#996 id=996 data-nosnippet>996</a>        Boundary {
-<a href=#997 id=997 data-nosnippet>997</a>            plan: <span class="self">self</span>,
-<a href=#998 id=998 data-nosnippet>998</a>            choices,
-<a href=#999 id=999 data-nosnippet>999</a>            sum,
-<a href=#1000 id=1000 data-nosnippet>1000</a>        }
-<a href=#1001 id=1001 data-nosnippet>1001</a>    }
-<a href=#1002 id=1002 data-nosnippet>1002</a>
-<a href=#1003 id=1003 data-nosnippet>1003</a>    <span class="doccomment">/// How the value of `ty` at `place` crosses into Rust.
-<a href=#1004 id=1004 data-nosnippet>1004</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef, place: Place) -&gt; Res&lt;Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;&gt; {
-<a href=#1005 id=1005 data-nosnippet>1005</a>        resolve(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="prelude-val">None</span>), ty, place)
-<a href=#1006 id=1006 data-nosnippet>1006</a>    }
-<a href=#1007 id=1007 data-nosnippet>1007</a>
-<a href=#1008 id=1008 data-nosnippet>1008</a>    <span class="doccomment">/// How the value of `ty` at `place` crosses out of Rust.
-<a href=#1009 id=1009 data-nosnippet>1009</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>output(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef, place: Place) -&gt; Res&lt;Crossing&lt;<span class="lifetime">'f</span>, CWire, Out&gt;&gt; {
-<a href=#1010 id=1010 data-nosnippet>1010</a>        resolve(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.outputs, <span class="prelude-val">None</span>), ty, place)
-<a href=#1011 id=1011 data-nosnippet>1011</a>    }
-<a href=#1012 id=1012 data-nosnippet>1012</a>
-<a href=#1013 id=1013 data-nosnippet>1013</a>    <span class="doccomment">/// Alternative `alt` of the sum `v`, mirrored at `place`, both ways.
-<a href=#1014 id=1014 data-nosnippet>1014</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>mirror_arm(
-<a href=#1015 id=1015 data-nosnippet>1015</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1016 id=1016 data-nosnippet>1016</a>        v: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>Variant,
-<a href=#1017 id=1017 data-nosnippet>1017</a>        alt: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>prebindgen_flat::flat::Alternative,
-<a href=#1018 id=1018 data-nosnippet>1018</a>        place: <span class="kw-2">&amp;</span>Place,
-<a href=#1019 id=1019 data-nosnippet>1019</a>    ) -&gt; Res&lt;(Arm&lt;<span class="lifetime">'f</span>, CWire, In&gt;, Arm&lt;<span class="lifetime">'f</span>, CWire, Out&gt;)&gt; {
-<a href=#1020 id=1020 data-nosnippet>1020</a>        <span class="prelude-val">Ok</span>((
-<a href=#1021 id=1021 data-nosnippet>1021</a>            resolve_arm(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="prelude-val">Some</span>(v)), v, alt, place)<span class="question-mark">?</span>,
-<a href=#1022 id=1022 data-nosnippet>1022</a>            resolve_arm(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.outputs, <span class="prelude-val">Some</span>(v)), v, alt, place)<span class="question-mark">?</span>,
-<a href=#1023 id=1023 data-nosnippet>1023</a>        ))
-<a href=#1024 id=1024 data-nosnippet>1024</a>    }
-<a href=#1025 id=1025 data-nosnippet>1025</a>}
-<a href=#1026 id=1026 data-nosnippet>1026</a>
-<a href=#1027 id=1027 data-nosnippet>1027</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Decode&lt;<span class="lifetime">'f</span>, CWire&gt; <span class="kw">for </span>Plan&lt;<span class="lifetime">'f</span>&gt; {
-<a href=#1028 id=1028 data-nosnippet>1028</a>    <span class="kw">type </span>Error = <span class="kw">crate</span>::Error;
-<a href=#1029 id=1029 data-nosnippet>1029</a>
-<a href=#1030 id=1030 data-nosnippet>1030</a>    <span class="kw">fn </span>is_present(
-<a href=#1031 id=1031 data-nosnippet>1031</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1032 id=1032 data-nosnippet>1032</a>        at: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;,
-<a href=#1033 id=1033 data-nosnippet>1033</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Optional&lt;<span class="lifetime">'f</span>, CWire, In&gt;,
-<a href=#1034 id=1034 data-nosnippet>1034</a>    ) -&gt; Res&lt;TokenStream&gt; {
-<a href=#1035 id=1035 data-nosnippet>1035</a>        err(<span class="macro">format!</span>(<span class="string">"{}: C has no optional values"</span>, at.place()))
-<a href=#1036 id=1036 data-nosnippet>1036</a>    }
-<a href=#1037 id=1037 data-nosnippet>1037</a>
-<a href=#1038 id=1038 data-nosnippet>1038</a>    <span class="kw">fn </span>sequence(
-<a href=#1039 id=1039 data-nosnippet>1039</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1040 id=1040 data-nosnippet>1040</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;,
-<a href=#1041 id=1041 data-nosnippet>1041</a>        seq: <span class="kw-2">&amp;</span>Sequence&lt;<span class="lifetime">'f</span>, CWire, In&gt;,
-<a href=#1042 id=1042 data-nosnippet>1042</a>        <span class="kw">_</span>: Input,
-<a href=#1043 id=1043 data-nosnippet>1043</a>    ) -&gt; Res&lt;Code&gt; {
-<a href=#1044 id=1044 data-nosnippet>1044</a>        <span class="kw">let </span>[name, len] = seq.wires() <span class="kw">else </span>{
-<a href=#1045 id=1045 data-nosnippet>1045</a>            <span class="macro">unreachable!</span>(<span class="string">"a slice lent in place is a pointer and a length"</span>)
-<a href=#1046 id=1046 data-nosnippet>1046</a>        };
-<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="kw">let </span>(name, len) = (<span class="kw-2">&amp;</span>name.name, <span class="kw-2">&amp;</span>len.name);
-<a href=#1048 id=1048 data-nosnippet>1048</a>        <span class="kw">let </span>src = <span class="self">self</span>.source(<span class="kw-2">&amp;</span><span class="self">self</span>.pointee(seq.elem().ty())<span class="question-mark">?</span>.rust.to_string());
-<a href=#1049 id=1049 data-nosnippet>1049</a>        <span class="prelude-val">Ok</span>(Code::new(<span class="macro">quote!</span>(<span class="kw">if </span>#name.is_null() || #len == <span class="number">0 </span>{
-<a href=#1050 id=1050 data-nosnippet>1050</a>            <span class="kw-2">&amp;</span>[][..]
-<a href=#1051 id=1051 data-nosnippet>1051</a>        } <span class="kw">else </span>{
-<a href=#1052 id=1052 data-nosnippet>1052</a>            ::core::slice::from_raw_parts(#name <span class="kw">as </span><span class="kw-2">*const </span>#src, #len)
-<a href=#1053 id=1053 data-nosnippet>1053</a>        })))
-<a href=#1054 id=1054 data-nosnippet>1054</a>    }
-<a href=#1055 id=1055 data-nosnippet>1055</a>
-<a href=#1056 id=1056 data-nosnippet>1056</a>    <span class="doccomment">/// A borrow passes the converted local, which the call lends
-<a href=#1057 id=1057 data-nosnippet>1057</a>    /// ([`Plan::pass`]).
-<a href=#1058 id=1058 data-nosnippet>1058</a>    </span><span class="kw">fn </span>wrapped(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;, wrapper: Wrapper, inner: Input) -&gt; Res&lt;Input&gt; {
-<a href=#1059 id=1059 data-nosnippet>1059</a>        <span class="prelude-val">Ok</span>(<span class="kw">match </span>wrapper {
-<a href=#1060 id=1060 data-nosnippet>1060</a>            Wrapper::Box =&gt; inner.map(|e| <span class="macro">quote!</span>(::std::boxed::Box::new(#e))),
-<a href=#1061 id=1061 data-nosnippet>1061</a>            Wrapper::Cow =&gt; inner.map(|e| <span class="macro">quote!</span>(::std::borrow::Cow::Owned(#e))),
-<a href=#1062 id=1062 data-nosnippet>1062</a>            Wrapper::Ref(<span class="kw">_</span>) =&gt; inner,
-<a href=#1063 id=1063 data-nosnippet>1063</a>        })
-<a href=#1064 id=1064 data-nosnippet>1064</a>    }
-<a href=#1065 id=1065 data-nosnippet>1065</a>}
-<a href=#1066 id=1066 data-nosnippet>1066</a>
-<a href=#1067 id=1067 data-nosnippet>1067</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Encode&lt;<span class="lifetime">'f</span>, CWire&gt; <span class="kw">for </span>Plan&lt;<span class="lifetime">'f</span>&gt; {
-<a href=#1068 id=1068 data-nosnippet>1068</a>    <span class="kw">type </span>Error = <span class="kw">crate</span>::Error;
-<a href=#1069 id=1069 data-nosnippet>1069</a>
-<a href=#1070 id=1070 data-nosnippet>1070</a>    <span class="kw">fn </span>present(<span class="kw-2">&amp;</span><span class="self">self</span>, at: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, Out&gt;, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Wire&lt;CWire&gt;) -&gt; TokenStream {
-<a href=#1071 id=1071 data-nosnippet>1071</a>        <span class="macro">unreachable!</span>(<span class="string">"{}: C has no optional values"</span>, at.place())
-<a href=#1072 id=1072 data-nosnippet>1072</a>    }
-<a href=#1073 id=1073 data-nosnippet>1073</a>
-<a href=#1074 id=1074 data-nosnippet>1074</a>    <span class="kw">fn </span>sequence(
-<a href=#1075 id=1075 data-nosnippet>1075</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1076 id=1076 data-nosnippet>1076</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, Out&gt;,
-<a href=#1077 id=1077 data-nosnippet>1077</a>        seq: <span class="kw-2">&amp;</span>Sequence&lt;<span class="lifetime">'f</span>, CWire, Out&gt;,
-<a href=#1078 id=1078 data-nosnippet>1078</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Output,
-<a href=#1079 id=1079 data-nosnippet>1079</a>        v: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#1080 id=1080 data-nosnippet>1080</a>    ) -&gt; Res&lt;Code&gt; {
-<a href=#1081 id=1081 data-nosnippet>1081</a>        <span class="kw">let </span>c = <span class="kw-2">&amp;</span><span class="self">self</span>.pointee(seq.elem().ty())<span class="question-mark">?</span>.c;
-<a href=#1082 id=1082 data-nosnippet>1082</a>        <span class="prelude-val">Ok</span>(Code::new(<span class="macro">quote!</span>((#v.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span>#c, #v.len()))))
-<a href=#1083 id=1083 data-nosnippet>1083</a>    }
-<a href=#1084 id=1084 data-nosnippet>1084</a>}
+<a href=#985 id=985 data-nosnippet>985</a>    <span class="kw">fn </span>tag(<span class="kw-2">&amp;</span><span class="self">self</span>, place: <span class="kw-2">&amp;</span>Place) -&gt; Res&lt;Wire&lt;CWire&gt;&gt; {
+<a href=#986 id=986 data-nosnippet>986</a>        err(<span class="macro">format!</span>(
+<a href=#987 id=987 data-nosnippet>987</a>            <span class="string">"{place}: C mirrors a sum rather than taking it apart"
+<a href=#988 id=988 data-nosnippet>988</a>        </span>))
+<a href=#989 id=989 data-nosnippet>989</a>    }
+<a href=#990 id=990 data-nosnippet>990</a>}
+<a href=#991 id=991 data-nosnippet>991</a>
+<a href=#992 id=992 data-nosnippet>992</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Plan&lt;<span class="lifetime">'f</span>&gt; {
+<a href=#993 id=993 data-nosnippet>993</a>    <span class="kw">fn </span>boundary&lt;<span class="lifetime">'a</span>, D: Direction&gt;(
+<a href=#994 id=994 data-nosnippet>994</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+<a href=#995 id=995 data-nosnippet>995</a>        choices: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Choices&lt;D&gt;,
+<a href=#996 id=996 data-nosnippet>996</a>        sum: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'f </span>Variant&gt;,
+<a href=#997 id=997 data-nosnippet>997</a>    ) -&gt; Boundary&lt;<span class="lifetime">'a</span>, <span class="lifetime">'f</span>, D&gt; {
+<a href=#998 id=998 data-nosnippet>998</a>        Boundary {
+<a href=#999 id=999 data-nosnippet>999</a>            plan: <span class="self">self</span>,
+<a href=#1000 id=1000 data-nosnippet>1000</a>            choices,
+<a href=#1001 id=1001 data-nosnippet>1001</a>            sum,
+<a href=#1002 id=1002 data-nosnippet>1002</a>        }
+<a href=#1003 id=1003 data-nosnippet>1003</a>    }
+<a href=#1004 id=1004 data-nosnippet>1004</a>
+<a href=#1005 id=1005 data-nosnippet>1005</a>    <span class="doccomment">/// How the value of `ty` at `place` crosses into Rust.
+<a href=#1006 id=1006 data-nosnippet>1006</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef, place: Place) -&gt; Res&lt;Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;&gt; {
+<a href=#1007 id=1007 data-nosnippet>1007</a>        resolve(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="prelude-val">None</span>), ty, place)
+<a href=#1008 id=1008 data-nosnippet>1008</a>    }
+<a href=#1009 id=1009 data-nosnippet>1009</a>
+<a href=#1010 id=1010 data-nosnippet>1010</a>    <span class="doccomment">/// How the value of `ty` at `place` crosses out of Rust.
+<a href=#1011 id=1011 data-nosnippet>1011</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>output(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef, place: Place) -&gt; Res&lt;Crossing&lt;<span class="lifetime">'f</span>, CWire, Out&gt;&gt; {
+<a href=#1012 id=1012 data-nosnippet>1012</a>        resolve(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.outputs, <span class="prelude-val">None</span>), ty, place)
+<a href=#1013 id=1013 data-nosnippet>1013</a>    }
+<a href=#1014 id=1014 data-nosnippet>1014</a>
+<a href=#1015 id=1015 data-nosnippet>1015</a>    <span class="doccomment">/// Alternative `alt` of the sum `v`, mirrored at `place`, both ways.
+<a href=#1016 id=1016 data-nosnippet>1016</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>mirror_arm(
+<a href=#1017 id=1017 data-nosnippet>1017</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1018 id=1018 data-nosnippet>1018</a>        v: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>Variant,
+<a href=#1019 id=1019 data-nosnippet>1019</a>        alt: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>prebindgen_flat::flat::Alternative,
+<a href=#1020 id=1020 data-nosnippet>1020</a>        place: <span class="kw-2">&amp;</span>Place,
+<a href=#1021 id=1021 data-nosnippet>1021</a>    ) -&gt; Res&lt;(Arm&lt;<span class="lifetime">'f</span>, CWire, In&gt;, Arm&lt;<span class="lifetime">'f</span>, CWire, Out&gt;)&gt; {
+<a href=#1022 id=1022 data-nosnippet>1022</a>        <span class="prelude-val">Ok</span>((
+<a href=#1023 id=1023 data-nosnippet>1023</a>            resolve_arm(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="prelude-val">Some</span>(v)), v, alt, place)<span class="question-mark">?</span>,
+<a href=#1024 id=1024 data-nosnippet>1024</a>            resolve_arm(<span class="kw-2">&amp;</span><span class="self">self</span>.boundary(<span class="kw-2">&amp;</span><span class="self">self</span>.outputs, <span class="prelude-val">Some</span>(v)), v, alt, place)<span class="question-mark">?</span>,
+<a href=#1025 id=1025 data-nosnippet>1025</a>        ))
+<a href=#1026 id=1026 data-nosnippet>1026</a>    }
+<a href=#1027 id=1027 data-nosnippet>1027</a>}
+<a href=#1028 id=1028 data-nosnippet>1028</a>
+<a href=#1029 id=1029 data-nosnippet>1029</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Decode&lt;<span class="lifetime">'f</span>, CWire&gt; <span class="kw">for </span>Plan&lt;<span class="lifetime">'f</span>&gt; {
+<a href=#1030 id=1030 data-nosnippet>1030</a>    <span class="kw">type </span>Error = <span class="kw">crate</span>::Error;
+<a href=#1031 id=1031 data-nosnippet>1031</a>
+<a href=#1032 id=1032 data-nosnippet>1032</a>    <span class="kw">fn </span>sequence(
+<a href=#1033 id=1033 data-nosnippet>1033</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1034 id=1034 data-nosnippet>1034</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;,
+<a href=#1035 id=1035 data-nosnippet>1035</a>        seq: <span class="kw-2">&amp;</span>Sequence&lt;<span class="lifetime">'f</span>, CWire, In&gt;,
+<a href=#1036 id=1036 data-nosnippet>1036</a>        <span class="kw">_</span>: Input,
+<a href=#1037 id=1037 data-nosnippet>1037</a>    ) -&gt; Res&lt;Code&gt; {
+<a href=#1038 id=1038 data-nosnippet>1038</a>        <span class="kw">let </span>[name, len] = seq.wires() <span class="kw">else </span>{
+<a href=#1039 id=1039 data-nosnippet>1039</a>            <span class="macro">unreachable!</span>(<span class="string">"a slice lent in place is a pointer and a length"</span>)
+<a href=#1040 id=1040 data-nosnippet>1040</a>        };
+<a href=#1041 id=1041 data-nosnippet>1041</a>        <span class="kw">let </span>(name, len) = (<span class="kw-2">&amp;</span>name.name, <span class="kw-2">&amp;</span>len.name);
+<a href=#1042 id=1042 data-nosnippet>1042</a>        <span class="kw">let </span>src = <span class="self">self</span>.source(<span class="kw-2">&amp;</span><span class="self">self</span>.pointee(seq.elem().ty())<span class="question-mark">?</span>.rust.to_string());
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="prelude-val">Ok</span>(Code::new(<span class="macro">quote!</span>(<span class="kw">if </span>#name.is_null() || #len == <span class="number">0 </span>{
+<a href=#1044 id=1044 data-nosnippet>1044</a>            <span class="kw-2">&amp;</span>[][..]
+<a href=#1045 id=1045 data-nosnippet>1045</a>        } <span class="kw">else </span>{
+<a href=#1046 id=1046 data-nosnippet>1046</a>            ::core::slice::from_raw_parts(#name <span class="kw">as </span><span class="kw-2">*const </span>#src, #len)
+<a href=#1047 id=1047 data-nosnippet>1047</a>        })))
+<a href=#1048 id=1048 data-nosnippet>1048</a>    }
+<a href=#1049 id=1049 data-nosnippet>1049</a>
+<a href=#1050 id=1050 data-nosnippet>1050</a>    <span class="doccomment">/// A borrow passes the converted local, which the call lends
+<a href=#1051 id=1051 data-nosnippet>1051</a>    /// ([`Plan::pass`]).
+<a href=#1052 id=1052 data-nosnippet>1052</a>    </span><span class="kw">fn </span>wrapped(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, In&gt;, wrapper: Wrapper, inner: Input) -&gt; Res&lt;Input&gt; {
+<a href=#1053 id=1053 data-nosnippet>1053</a>        <span class="prelude-val">Ok</span>(<span class="kw">match </span>wrapper {
+<a href=#1054 id=1054 data-nosnippet>1054</a>            Wrapper::Box =&gt; inner.map(|e| <span class="macro">quote!</span>(::std::boxed::Box::new(#e))),
+<a href=#1055 id=1055 data-nosnippet>1055</a>            Wrapper::Cow =&gt; inner.map(|e| <span class="macro">quote!</span>(::std::borrow::Cow::Owned(#e))),
+<a href=#1056 id=1056 data-nosnippet>1056</a>            Wrapper::Ref(<span class="kw">_</span>) =&gt; inner,
+<a href=#1057 id=1057 data-nosnippet>1057</a>        })
+<a href=#1058 id=1058 data-nosnippet>1058</a>    }
+<a href=#1059 id=1059 data-nosnippet>1059</a>}
+<a href=#1060 id=1060 data-nosnippet>1060</a>
+<a href=#1061 id=1061 data-nosnippet>1061</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Encode&lt;<span class="lifetime">'f</span>, CWire&gt; <span class="kw">for </span>Plan&lt;<span class="lifetime">'f</span>&gt; {
+<a href=#1062 id=1062 data-nosnippet>1062</a>    <span class="kw">type </span>Error = <span class="kw">crate</span>::Error;
+<a href=#1063 id=1063 data-nosnippet>1063</a>
+<a href=#1064 id=1064 data-nosnippet>1064</a>    <span class="kw">fn </span>sequence(
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1066 id=1066 data-nosnippet>1066</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Crossing&lt;<span class="lifetime">'f</span>, CWire, Out&gt;,
+<a href=#1067 id=1067 data-nosnippet>1067</a>        seq: <span class="kw-2">&amp;</span>Sequence&lt;<span class="lifetime">'f</span>, CWire, Out&gt;,
+<a href=#1068 id=1068 data-nosnippet>1068</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>Output,
+<a href=#1069 id=1069 data-nosnippet>1069</a>        v: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#1070 id=1070 data-nosnippet>1070</a>    ) -&gt; Res&lt;Code&gt; {
+<a href=#1071 id=1071 data-nosnippet>1071</a>        <span class="kw">let </span>c = <span class="kw-2">&amp;</span><span class="self">self</span>.pointee(seq.elem().ty())<span class="question-mark">?</span>.c;
+<a href=#1072 id=1072 data-nosnippet>1072</a>        <span class="prelude-val">Ok</span>(Code::new(<span class="macro">quote!</span>((#v.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span>#c, #v.len()))))
+<a href=#1073 id=1073 data-nosnippet>1073</a>    }
+<a href=#1074 id=1074 data-nosnippet>1074</a>}
 </code></pre></div></section></main></body></html>
