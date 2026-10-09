@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use prebindgen_flat::flat::{Function, Struct, TypeKind, TypeRef, Variant};
+use prebindgen_flat::flat::{Function, GenericArg, Struct, TypeKind, TypeRef, Variant};
 
 use crate::{
     api::crossing::{Direction, In, Out},
@@ -14,6 +14,8 @@ use crate::{
 
 /// A way that serves both directions.
 pub enum Both {}
+
+const BOTH: (bool, bool) = (true, true);
 
 /// One way a type may cross, as registered in [`Ways`].
 ///
@@ -87,8 +89,8 @@ struct Registered<'f, L> {
     /// The type the way is for.
     key: String,
     way: Way<'f, L>,
-    /// Whether it builds a value and so serves [`In`] only.
-    in_only: bool,
+    /// The directions it serves: into Rust, out of Rust.
+    serves: (bool, bool),
 }
 
 /// Every way each type may cross, registered once and checked against the
@@ -109,11 +111,25 @@ impl<L> Default for Ways<'_, L> {
     }
 }
 
-/// The identity a type is registered under: a named type by its name, any
-/// other type by its canonical form.
+/// The identity a type is registered under: a named type by its name and
+/// type arguments (`Foo<u8>` is not `Foo<u64>`; lifetimes do not count),
+/// any other type by its canonical form.
 pub(crate) fn key_of(ty: &TypeRef) -> String {
     match ty.kind() {
-        TypeKind::Named { id, .. } => id.name.clone(),
+        TypeKind::Named { id, args } => {
+            let args: Vec<String> = args
+                .iter()
+                .filter_map(|a| match a {
+                    GenericArg::Type(t) => Some(key_of(t)),
+                    GenericArg::Lifetime(_) => None,
+                })
+                .collect();
+            if args.is_empty() {
+                id.name.clone()
+            } else {
+                format!("{}<{}>", id.name, args.join(", "))
+            }
+        }
         TypeKind::String => "String".into(),
         _ => ty.key().as_str().to_string(),
     }
@@ -124,34 +140,65 @@ impl<'f, L> Ways<'f, L> {
         Self::default()
     }
 
-    fn push<D>(&mut self, ty: &TypeRef, way: Way<'f, L>, in_only: bool) -> WayId<D> {
+    fn push<D>(&mut self, ty: &TypeRef, way: Way<'f, L>, serves: (bool, bool)) -> WayId<D> {
         self.ways.push(Registered {
             key: key_of(ty),
             way,
-            in_only,
+            serves,
         });
         WayId::new(self.id, self.ways.len() - 1)
     }
 
     /// `ty` crosses whole, as `leaf` says.
     pub fn whole(&mut self, ty: &TypeRef, leaf: L) -> WayId<Both> {
-        self.push(ty, Way::Whole(leaf), false)
+        self.push(ty, Way::Whole(leaf), BOTH)
     }
 
     /// The struct crosses as its fields.
     pub fn fields(&mut self, s: &'f Struct) -> WayId<Both> {
-        self.push(s.type_ref(), Way::Fields(s), false)
+        self.push(s.type_ref(), Way::Fields(s), BOTH)
     }
 
     /// The sum crosses as a tag and its alternatives' fields.
     pub fn alternatives(&mut self, v: &'f Variant) -> WayId<Both> {
-        self.push(v.type_ref(), Way::Alternatives(v), false)
+        self.push(v.type_ref(), Way::Alternatives(v), BOTH)
     }
 
-    /// The conversion's target crosses as its representation.
-    pub fn converted(&mut self, conversion: ResolvedConversion) -> WayId<Both> {
+    /// The conversion's target crosses as its representation, both ways.
+    /// Fails unless the conversion declares both an input and an output.
+    pub fn converted(&mut self, conversion: ResolvedConversion) -> Result<WayId<Both>, String> {
+        self.conversion(conversion, BOTH)
+    }
+
+    /// The same, into Rust only: the conversion must declare an input.
+    pub fn converted_in(&mut self, conversion: ResolvedConversion) -> Result<WayId<In>, String> {
+        self.conversion(conversion, (true, false))
+    }
+
+    /// The same, out of Rust only: the conversion must declare an output.
+    pub fn converted_out(&mut self, conversion: ResolvedConversion) -> Result<WayId<Out>, String> {
+        self.conversion(conversion, (false, true))
+    }
+
+    fn conversion<D>(
+        &mut self,
+        conversion: ResolvedConversion,
+        serves: (bool, bool),
+    ) -> Result<WayId<D>, String> {
+        let declared = (conversion.has_input(), conversion.has_output());
+        for (needed, has, what) in [
+            (serves.0, declared.0, "input"),
+            (serves.1, declared.1, "output"),
+        ] {
+            if needed && !has {
+                return Err(format!(
+                    "convert!({}) declares no {what}",
+                    conversion.target()
+                ));
+            }
+        }
         let ty = conversion.target().clone();
-        self.push(&ty, Way::Converted(Box::new(conversion)), false)
+        Ok(self.push(&ty, Way::Converted(Box::new(conversion)), serves))
     }
 
     /// The type `f` returns (directly or as the `Ok` of a `Result`) is built
@@ -167,7 +214,7 @@ impl<'f, L> Ways<'f, L> {
                 f.name
             ));
         }
-        Ok(self.push(&ret.clone(), Way::Constructed(f), true))
+        Ok(self.push(&ret.clone(), Way::Constructed(f), (true, false)))
     }
 
     /// The way `id` names, or an error if another registry issued it.
@@ -191,13 +238,22 @@ impl<'f, L> Ways<'f, L> {
         for (key, borrowed) in keys {
             let Some(key) = key else { continue };
             let ids: Vec<usize> = (0..self.ways.len())
-                .filter(|&i| self.ways[i].key == key && (D::IN || !self.ways[i].in_only))
+                .filter(|&i| self.ways[i].key == key && self.serves::<D>(i))
                 .collect();
             if !ids.is_empty() {
                 return (ids, borrowed);
             }
         }
         (Vec::new(), false)
+    }
+
+    fn serves<D: Direction>(&self, index: usize) -> bool {
+        let (into, out_of) = self.ways[index].serves;
+        if D::IN {
+            into
+        } else {
+            out_of
+        }
     }
 
     /// Whether way `index` is for `ty` (`Some(false)`) or for the type it
@@ -217,6 +273,8 @@ impl<'f, L> Ways<'f, L> {
 /// The way an occurrence takes, and whether it is the way of the type the
 /// occurrence borrows rather than of its own type.
 pub(crate) struct Picked<'w, 'f, L> {
+    /// Its position in the registry, which identifies it.
+    pub(crate) index: usize,
     pub(crate) way: &'w Way<'f, L>,
     pub(crate) through_borrow: bool,
 }
@@ -280,6 +338,7 @@ impl<D: Direction> Choices<D> {
         place: &Place,
     ) -> Result<Option<Picked<'w, 'f, L>>, String> {
         let picked = |i: usize, through_borrow| Picked {
+            index: i,
             way: &ways.ways[i].way,
             through_borrow,
         };

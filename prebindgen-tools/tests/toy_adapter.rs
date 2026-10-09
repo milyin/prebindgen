@@ -282,6 +282,8 @@ const SRC: &str = r#"
     pub fn send_raw(p: Point) -> Option<Millis> { todo!() }
     pub fn send_built(p: Point) {}
     pub fn look(p: &Point) {}
+    pub struct Chain { pub id: i32, pub next: Option<Box<Chain>> }
+    pub fn walk(c: Chain) {}
 "#;
 
 fn flat() -> Flat {
@@ -322,7 +324,7 @@ fn toy(flat: &Flat) -> Toyish<'_> {
         .output(fun!(millis_to))
         .resolve(flat)
         .unwrap();
-    ways.converted(millis);
+    ways.converted(millis).unwrap();
 
     // Every `Point` crosses as its fields, but `send_raw` takes its `p` as
     // a handle and `send_built` builds its `p` from `point_new`'s
@@ -561,4 +563,49 @@ fn a_way_from_another_registry_is_refused() {
         )
         .unwrap_err();
     assert!(e.contains("another `Ways` registry"), "{e}");
+}
+
+#[test]
+fn a_way_that_reaches_itself_is_refused() {
+    let flat = flat();
+    let mut t = toy(&flat);
+    let Type::Struct(chain) = flat.declared_type("Chain").unwrap() else {
+        panic!()
+    };
+    t.ways.fields(chain);
+    let e = t
+        .input(
+            &flat.function("walk").unwrap().params[0].ty,
+            Place::new("walk").at(Seg::Param("c".into())),
+        )
+        .unwrap_err();
+    assert!(e.contains("reaches its own way again"), "{e}");
+}
+
+#[test]
+fn a_one_way_conversion_serves_one_direction() {
+    let flat = flat();
+    let mut t = toy(&flat);
+    let into_only = || {
+        convert!(Millis)
+            .input(fun!(millis_from))
+            .resolve(&flat)
+            .unwrap()
+    };
+    let e = t.ways.converted(into_only()).unwrap_err();
+    assert!(e.contains("declares no output"), "{e}");
+    // Registered for one direction, it is the only way into Rust; out of
+    // Rust `Millis` keeps the one way it had.
+    t.ways.converted_in(into_only()).unwrap();
+    let send = flat.function("send").unwrap();
+    let e = t
+        .input(
+            &send.params[3].ty,
+            Place::new("send").at(Seg::Param("m".into())),
+        )
+        .unwrap_err();
+    assert!(e.contains("`Millis` has 2 ways to cross into Rust"), "{e}");
+    let raw = flat.function("send_raw").unwrap();
+    t.output(&raw.ret, Place::new("send_raw").at(Seg::Return))
+        .unwrap();
 }

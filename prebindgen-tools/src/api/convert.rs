@@ -208,6 +208,16 @@ impl ResolvedConversion {
             })
     }
 
+    /// Whether it converts into the source type.
+    pub fn has_input(&self) -> bool {
+        self.input.is_some()
+    }
+
+    /// Whether it converts out of the source type.
+    pub fn has_output(&self) -> bool {
+        self.output.is_some()
+    }
+
     /// The source type being converted.
     pub fn target(&self) -> &TypeRef {
         &self.target

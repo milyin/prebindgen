@@ -419,3 +419,13 @@ fn rendering_elides_lifetimes_in_every_nested_shape() {
         assert_eq!(norm(elided), norm(expected), "{input}");
     }
 }
+
+#[test]
+fn way_keys_keep_type_arguments_and_drop_lifetimes() {
+    let flat = model(SRC);
+    let key =
+        |s: &str| crate::api::ways::key_of(&flat.classify(&syn::parse_str(s).unwrap()).unwrap());
+    assert_ne!(key("foreign::Foo<u8>"), key("foreign::Foo<u64>"));
+    assert_eq!(key("foreign::Foo<'a, u8>"), key("foreign::Foo<u8>"));
+    assert_eq!(key("Payload"), "Payload");
+}

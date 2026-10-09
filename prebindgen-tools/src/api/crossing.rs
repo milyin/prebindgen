@@ -426,12 +426,40 @@ pub trait Lower<'f, D: Direction> {
 
 /// Resolve how the occurrence of `ty` at `place` crosses: at each layer,
 /// the way the choices pick for it, or else its structure.
+///
+/// A way that takes a value apart may not reach the same way again inside
+/// it — `struct Node { next: Box<Node> }` crossing as its fields — unless a
+/// place inside chooses a way that ends the walk; resolving refuses the
+/// cycle.
 pub fn resolve<'f, D: Direction, L: Lower<'f, D>>(
     lower: &L,
     ty: &TypeRef,
     place: Place,
 ) -> Result<Crossing<'f, L::Wire, D>, L::Error> {
-    let node = match lower.choices().pick(lower.ways(), ty, &place)? {
+    walk(lower, ty, place, &mut Vec::new())
+}
+
+/// [`resolve`], inside the ways being expanded (`active`, by index).
+fn walk<'f, D: Direction, L: Lower<'f, D>>(
+    lower: &L,
+    ty: &TypeRef,
+    place: Place,
+    active: &mut Vec<usize>,
+) -> Result<Crossing<'f, L::Wire, D>, L::Error> {
+    let picked = lower.choices().pick(lower.ways(), ty, &place)?;
+    if let Some(p) = &picked {
+        if !matches!(p.way, Way::Whole(_)) {
+            if active.contains(&p.index) {
+                return Err(format!(
+                    "{place}: `{ty}` reaches its own way again inside itself; choose a way \
+                     that crosses whole at a place inside it"
+                )
+                .into());
+            }
+            active.push(p.index);
+        }
+    }
+    let node = match &picked {
         // A way of the borrowed type that takes the value apart crosses
         // the borrowed value, under the borrow.
         Some(p) if p.through_borrow && !matches!(p.way, Way::Whole(_)) => {
@@ -442,14 +470,17 @@ pub fn resolve<'f, D: Direction, L: Lower<'f, D>>(
                 wrapper: Wrapper::Ref(access),
                 inner: Box::new(Crossing {
                     ty: (**inner).clone(),
-                    node: by_way(lower, inner, p.way, &place)?,
+                    node: by_way(lower, inner, p.way, &place, active)?,
                     place: place.clone(),
                 }),
             })
         }
-        Some(p) => by_way(lower, ty, p.way, &place)?,
-        None => by_structure(lower, ty, &place)?,
+        Some(p) => by_way(lower, ty, p.way, &place, active)?,
+        None => by_structure(lower, ty, &place, active)?,
     };
+    if picked.is_some_and(|p| !matches!(p.way, Way::Whole(_))) {
+        active.pop();
+    }
     Ok(Crossing {
         ty: ty.clone(),
         place,
@@ -468,10 +499,19 @@ pub fn resolve_arm<'f, D: Direction, L: Lower<'f, D>>(
     if !v.alternatives.iter().any(|a| std::ptr::eq(a, alt)) {
         return Err(format!("`{}` is not an alternative of `{}`", alt.name, v.name).into());
     }
+    arm(lower, alt, place, &mut Vec::new())
+}
+
+fn arm<'f, D: Direction, L: Lower<'f, D>>(
+    lower: &L,
+    alt: &'f Alternative,
+    place: &Place,
+    active: &mut Vec<usize>,
+) -> Result<Arm<'f, L::Wire, D>, L::Error> {
     let at = place.at(Seg::Alt(names::bare(&alt.name)));
     Ok(Arm {
         alt,
-        fields: fields(lower, &alt.fields, &at)?,
+        fields: fields(lower, &alt.fields, &at, active)?,
     })
 }
 
@@ -479,10 +519,11 @@ fn fields<'f, D: Direction, L: Lower<'f, D>>(
     lower: &L,
     fields: &'f [Field],
     place: &Place,
+    active: &mut Vec<usize>,
 ) -> Result<Vec<Crossing<'f, L::Wire, D>>, L::Error> {
     fields
         .iter()
-        .map(|f| resolve(lower, &f.ty, place.at(Seg::field(f))))
+        .map(|f| walk(lower, &f.ty, place.at(Seg::field(f)), active))
         .collect()
 }
 
@@ -491,6 +532,7 @@ fn by_way<'f, D: Direction, L: Lower<'f, D>>(
     ty: &TypeRef,
     way: &Way<'f, L::Leaf>,
     place: &Place,
+    active: &mut Vec<usize>,
 ) -> Result<Node<'f, L::Wire, D>, L::Error> {
     Ok(match way {
         Way::Whole(leaf) => {
@@ -510,7 +552,7 @@ fn by_way<'f, D: Direction, L: Lower<'f, D>>(
         }
         Way::Fields(s) => Node::Fields(Fields {
             item: s,
-            fields: fields(lower, &s.fields, place)?,
+            fields: fields(lower, &s.fields, place, active)?,
         }),
         Way::Alternatives(v) => Node::Alternatives(Alternatives {
             item: v,
@@ -518,18 +560,25 @@ fn by_way<'f, D: Direction, L: Lower<'f, D>>(
             arms: v
                 .alternatives
                 .iter()
-                .map(|alt| resolve_arm(lower, v, alt, place))
+                .map(|alt| arm(lower, alt, place, &mut *active))
                 .collect::<Result<_, _>>()?,
         }),
         Way::Converted(c) => Node::Converted(Converted {
             conversion: c.clone(),
-            repr: Box::new(resolve(lower, c.repr(), place.at(Seg::Repr))?),
+            repr: Box::new(walk(lower, c.repr(), place.at(Seg::Repr), active)?),
         }),
         Way::Constructed(func) => {
             let args = func
                 .params
                 .iter()
-                .map(|p| resolve(lower, &p.ty, place.at(Seg::Param(names::bare(&p.name)))))
+                .map(|p| {
+                    walk(
+                        lower,
+                        &p.ty,
+                        place.at(Seg::Param(names::bare(&p.name))),
+                        &mut *active,
+                    )
+                })
                 .collect::<Result<_, _>>()?;
             match D::constructed(func, args) {
                 Some(c) => Node::Constructed(c),
@@ -543,28 +592,29 @@ fn by_structure<'f, D: Direction, L: Lower<'f, D>>(
     lower: &L,
     ty: &TypeRef,
     place: &Place,
+    active: &mut Vec<usize>,
 ) -> Result<Node<'f, L::Wire, D>, L::Error> {
     let layer = || shape(ty, |_| None::<&L::Leaf>).map_err(|e| format!("{place}: {e}"));
     if let Some(w) = lower.whole(ty, layer()?, place)? {
         return Ok(Node::Whole(w));
     }
-    let wrapped = |wrapper, inner: &TypeRef| -> Result<Node<'f, L::Wire, D>, L::Error> {
-        Ok(Node::Wrapped(Wrapped {
+    let wrapped = |wrapper, inner: &TypeRef, active: &mut Vec<usize>| {
+        Ok::<_, L::Error>(Node::Wrapped(Wrapped {
             wrapper,
-            inner: Box::new(resolve(lower, inner, place.clone())?),
+            inner: Box::new(walk(lower, inner, place.clone(), active)?),
         }))
     };
     Ok(match layer()? {
         Shape::Unit => Node::Unit,
         Shape::Option(inner) => {
-            let inner = resolve(lower, inner, place.at(Seg::Some))?;
+            let inner = walk(lower, inner, place.at(Seg::Some), active)?;
             Node::Optional(Optional {
                 presence: lower.presence(&inner, place)?,
                 inner: Box::new(inner),
             })
         }
         Shape::Seq { elem, kind, access } => {
-            let elem = resolve(lower, elem, place.at(Seg::Elem))?;
+            let elem = walk(lower, elem, place.at(Seg::Elem), active)?;
             Node::Sequence(Sequence {
                 kind,
                 access,
@@ -572,9 +622,9 @@ fn by_structure<'f, D: Direction, L: Lower<'f, D>>(
                 elem: Box::new(elem),
             })
         }
-        Shape::Boxed(inner) => wrapped(Wrapper::Box, inner)?,
-        Shape::Cow(inner) => wrapped(Wrapper::Cow, inner)?,
-        Shape::Ref { inner, access } => wrapped(Wrapper::Ref(access), inner)?,
+        Shape::Boxed(inner) => wrapped(Wrapper::Box, inner, active)?,
+        Shape::Cow(inner) => wrapped(Wrapper::Cow, inner, active)?,
+        Shape::Ref { inner, access } => wrapped(Wrapper::Ref(access), inner, active)?,
         Shape::Undeclared(name) => {
             return Err(format!("{place}: `{name}` has no way to cross; declare one").into())
         }
