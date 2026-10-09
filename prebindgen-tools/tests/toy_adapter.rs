@@ -10,7 +10,7 @@ use prebindgen_flat::{
 };
 use prebindgen_tools::{
     convert, fun, names, resolve, Access, Choices, Code, Crossing, Decode, Direction, Encode, In,
-    Lower, Node, Optional, Out, Place, Presence, Seg, Sequence, Shape, Ways, Wire, WireType,
+    Lower, Node, Optional, Out, Place, Presence, Seg, Sequence, Shape, Ways, Whole, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -86,14 +86,36 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
         ty: &TypeRef,
         shape: Shape<'_, &Handle>,
         place: &Place,
-    ) -> Result<Option<Wire<Toy>>, String> {
-        let wire = |t| Some(Wire::new(place.ident(), t));
-        Ok(match shape {
-            Shape::Scalar(ScalarKind::I32) => wire(Toy::Int),
-            Shape::Scalar(ScalarKind::U64) => wire(Toy::Long { unsigned: true }),
-            Shape::Declared { .. } => wire(Toy::Handle(name_of(ty))),
-            _ => None,
-        })
+    ) -> Result<Option<Whole<Toy>>, String> {
+        let wire = |t| Wire::new(place.ident(), t);
+        let same = |w: &syn::Ident| Code::new(quote!(#w));
+        let pass = |v: &TokenStream| Code::new(quote!(#v));
+        Ok(Some(match shape {
+            Shape::Scalar(ScalarKind::I32) => Whole::either::<D>(wire(Toy::Int), same, pass),
+            Shape::Scalar(ScalarKind::U64) => Whole::either::<D>(
+                wire(Toy::Long { unsigned: true }),
+                |w| Code::new(quote!((#w as u64))),
+                |v| Code::new(quote!((#v as i64))),
+            ),
+            Shape::Declared { .. } => {
+                let name = name_of(ty);
+                let t = self.toy.flat.declared_type(&name).unwrap().name();
+                let owned = Access::of(ty) == Access::Owned;
+                Whole::either::<D>(
+                    wire(Toy::Handle(name.clone())),
+                    |w| match owned {
+                        true => Code::new(quote!(*::std::boxed::Box::from_raw(#w as *mut #t))),
+                        false => Code::new(quote!(&*(#w as *const #t))),
+                    },
+                    |v| {
+                        Code::new(
+                            quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut ::core::ffi::c_void),
+                        )
+                    },
+                )
+            }
+            _ => return Ok(None),
+        }))
     }
 
     fn presence(&self, _: &Crossing<'f, Toy, D>, place: &Place) -> Result<Presence<Toy>, String> {
@@ -114,21 +136,6 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
 
 impl<'f> Decode<'f, Toy> for Toyish<'f> {
     type Error = String;
-
-    fn wire(&self, at: &Crossing<'f, Toy, In>, wire: &Wire<Toy>) -> Result<Code, String> {
-        let w = &wire.name;
-        Ok(match &wire.ty {
-            Toy::Long { .. } => Code::new(quote!((#w as u64))),
-            Toy::Handle(name) => {
-                let t = self.flat.declared_type(name).unwrap().name();
-                match Access::of(at.ty()) {
-                    Access::Owned => Code::new(quote!(*::std::boxed::Box::from_raw(#w as *mut #t))),
-                    _ => Code::new(quote!(&*(#w as *const #t))),
-                }
-            }
-            _ => Code::new(quote!(#w)),
-        })
-    }
 
     fn is_present(
         &self,
@@ -156,21 +163,6 @@ impl<'f> Decode<'f, Toy> for Toyish<'f> {
 
 impl<'f> Encode<'f, Toy> for Toyish<'f> {
     type Error = String;
-
-    fn wire(
-        &self,
-        _: &Crossing<'f, Toy, Out>,
-        wire: &Wire<Toy>,
-        v: &TokenStream,
-    ) -> Result<Code, String> {
-        Ok(Code::new(match &wire.ty {
-            Toy::Long { .. } => quote!((#v as i64)),
-            Toy::Handle(_) => {
-                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut ::core::ffi::c_void)
-            }
-            _ => quote!(#v),
-        }))
-    }
 
     fn present(&self, _: &Crossing<'f, Toy, Out>, _: &Wire<Toy>) -> TokenStream {
         quote!(1)
@@ -235,7 +227,7 @@ impl<'f> Toyish<'f> {
 /// The foreign side: a signature read off the crossing alone.
 fn foreign<D: Direction>(c: &Crossing<'_, Toy, D>) -> String {
     match c.node() {
-        Node::Wire(w) => match &w.ty {
+        Node::Whole(w) => match &w.wire().ty {
             Toy::Int => "Int".into(),
             Toy::Long { unsigned: true } => "ULong".into(),
             Toy::Long { unsigned: false } => "Long".into(),

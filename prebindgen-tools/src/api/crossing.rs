@@ -4,6 +4,7 @@ use prebindgen_flat::flat::{Alternative, Field, Function, Struct, TypeRef, Varia
 
 use crate::{
     api::{
+        code::Code,
         shape::{shape, Access, SequenceKind, Shape},
         ways::{Choices, Way, Ways},
     },
@@ -100,7 +101,7 @@ pub struct Crossing<'f, W: WireType, D: Direction> {
 #[derive(Debug)]
 pub enum Node<'f, W: WireType, D: Direction> {
     /// Whole, on one wire.
-    Wire(Wire<W>),
+    Whole(Whole<W>),
     /// Nothing crosses: `()`.
     Unit,
     /// A struct, as its fields.
@@ -117,6 +118,43 @@ pub enum Node<'f, W: WireType, D: Direction> {
     Wrapped(Wrapped<'f, W, D>),
     /// A value built by a function from its arguments.
     Constructed(D::Constructed<'f, W>),
+}
+
+/// A value crossing whole on one wire, with the adapter's code converting
+/// between the two.
+#[derive(Debug)]
+pub struct Whole<W> {
+    wire: Wire<W>,
+    pub(crate) code: Code,
+}
+
+impl<W> Whole<W> {
+    /// The value travels on `wire`. Into Rust, `code` reads the wire by
+    /// name and evaluates to the value; out of Rust, it reads the value as
+    /// [`out_value`](crate::out_value) and evaluates to the wire.
+    pub fn new(wire: Wire<W>, code: Code) -> Self {
+        Self { wire, code }
+    }
+
+    /// The value travels on `wire` in direction `D`, converted by
+    /// `into_rust` (given the wire's name) or `out_of_rust` (given the
+    /// value): for a [`Lower`] written once for both directions.
+    pub fn either<D: Direction>(
+        wire: Wire<W>,
+        into_rust: impl FnOnce(&syn::Ident) -> Code,
+        out_of_rust: impl FnOnce(&proc_macro2::TokenStream) -> Code,
+    ) -> Self {
+        let code = if D::IN {
+            into_rust(&wire.name)
+        } else {
+            out_of_rust(&crate::out_value())
+        };
+        Self { wire, code }
+    }
+
+    pub fn wire(&self) -> &Wire<W> {
+        &self.wire
+    }
 }
 
 /// A struct crossing as its fields.
@@ -224,7 +262,7 @@ impl<'f, W: WireType, D: Direction> Crossing<'f, W, D> {
 
     fn collect<'s>(&'s self, out: &mut Vec<&'s Wire<W>>) {
         match &self.node {
-            Node::Wire(w) => out.push(w),
+            Node::Whole(w) => out.push(&w.wire),
             Node::Unit => {}
             Node::Fields(f) => f.fields.iter().for_each(|c| c.collect(out)),
             Node::Alternatives(a) => {
@@ -355,16 +393,16 @@ pub trait Lower<'f, D: Direction> {
     /// Which way each occurrence takes.
     fn choices(&self) -> &Choices<D>;
 
-    /// The wire the value at `place` crosses whole on, or `None` to cross
-    /// it by its structure. A type whose chosen way is [`Way::Whole`]
-    /// arrives as [`Shape::Declared`] with that declaration, and must get a
-    /// wire.
+    /// The wire the value at `place` crosses whole on, and the code
+    /// converting it, or `None` to cross it by its structure. A type whose
+    /// chosen way is [`Way::Whole`] arrives as [`Shape::Declared`] with that
+    /// declaration, and must cross whole.
     fn whole(
         &self,
         ty: &TypeRef,
         shape: Shape<'_, &Self::Leaf>,
         place: &Place,
-    ) -> Result<Option<Wire<Self::Wire>>, Self::Error>;
+    ) -> Result<Option<Whole<Self::Wire>>, Self::Error>;
 
     /// How the option at `place`, whose inner value crosses as `inner`,
     /// says it is absent.
@@ -446,7 +484,7 @@ fn by_way<'f, D: Direction, L: Lower<'f, D>>(
                 declaration: leaf,
             };
             match lower.whole(ty, shape, place)? {
-                Some(w) => Node::Wire(w),
+                Some(w) => Node::Whole(w),
                 None => {
                     return Err(format!(
                         "{place}: `{ty}` is declared to cross whole, but has no wire here"
@@ -493,7 +531,7 @@ fn by_structure<'f, D: Direction, L: Lower<'f, D>>(
 ) -> Result<Node<'f, L::Wire, D>, L::Error> {
     let layer = || shape(ty, |_| None::<&L::Leaf>).map_err(|e| format!("{place}: {e}"));
     if let Some(w) = lower.whole(ty, layer()?, place)? {
-        return Ok(Node::Wire(w));
+        return Ok(Node::Whole(w));
     }
     let wrapped = |wrapper, inner: &TypeRef| -> Result<Node<'f, L::Wire, D>, L::Error> {
         Ok(Node::Wrapped(Wrapped {

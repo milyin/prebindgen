@@ -38,9 +38,9 @@
 //! 4. **Code**: [`Crossing::decode`] turns an [`In`] crossing into the Rust
 //!    that rebuilds the value from its wires ([`Input`]), and
 //!    [`Crossing::encode`] an [`Out`] crossing into the Rust that produces
-//!    them ([`Output`]). The adapter writes only what a wire holds and a
-//!    sequence's loop ([`Decode`], [`Encode`]); every composition is the
-//!    crossing's.
+//!    them ([`Output`]). The adapter writes only what one wire holds — with
+//!    the wire itself, as a [`Whole`] — and a sequence's loop
+//!    ([`Decode`], [`Encode`]); every composition is the crossing's.
 //!
 //! The same crossing serves both sides of the boundary: its
 //! [`wires`](Crossing::wires) are the generated element's parameters, and
@@ -236,23 +236,25 @@ pub mod ways {
 pub mod crossing {
     pub use crate::api::crossing::{
         resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,
-        Fields, In, Lower, Never, Node, Optional, Out, Presence, Sequence, Wrapped, Wrapper,
+        Fields, In, Lower, Never, Node, Optional, Out, Presence, Sequence, Whole, Wrapped, Wrapper,
     };
 }
 
 /// The Rust a crossing becomes, with the adapter's code for its wires.
 pub mod code {
-    pub use crate::api::code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output};
+    pub use crate::api::code::{
+        out_value, result_expr, ArmOutput, Code, Decode, Encode, Input, Output,
+    };
 }
 
 pub use crate::{
     api::check_supported,
     callback::callback_arg_types,
-    code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
+    code::{out_value, result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
     convert::{Conversion, FnRef, ResolvedConversion, Via},
     crossing::{
         resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,
-        Fields, In, Lower, Never, Node, Optional, Out, Presence, Sequence, Wrapped, Wrapper,
+        Fields, In, Lower, Never, Node, Optional, Out, Presence, Sequence, Whole, Wrapped, Wrapper,
     },
     file::RustFile,
     place::{Place, Seg},

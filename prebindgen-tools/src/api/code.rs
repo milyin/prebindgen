@@ -93,9 +93,14 @@ pub struct Output {
     fallible: bool,
 }
 
-/// The name an output's body reads its value by.
-fn value() -> TokenStream {
+/// The name the Rust leaving Rust reads its value by: what the code of a
+/// [`Whole`](crate::Whole) out of Rust converts.
+pub fn out_value() -> TokenStream {
     quote!(__v)
+}
+
+fn value() -> TokenStream {
+    out_value()
 }
 
 impl Output {
@@ -157,9 +162,6 @@ impl Output {
 pub trait Decode<'f, W: WireType> {
     type Error: From<String>;
 
-    /// The value the whole-crossing `at` reads off `wire`.
-    fn wire(&self, at: &Crossing<'f, W, In>, wire: &Wire<W>) -> Result<Code, Self::Error>;
-
     /// The test that the option `at` is present, reading its flag or its
     /// inner wires.
     fn is_present(
@@ -204,14 +206,6 @@ pub trait Decode<'f, W: WireType> {
 pub trait Encode<'f, W: WireType> {
     type Error: From<String>;
 
-    /// The wire value the whole-crossing `at` produces from `value`.
-    fn wire(
-        &self,
-        at: &Crossing<'f, W, Out>,
-        wire: &Wire<W>,
-        value: &TokenStream,
-    ) -> Result<Code, Self::Error>;
-
     /// The value of the option `at`'s presence flag when it is present.
     fn present(&self, at: &Crossing<'f, W, Out>, flag: &Wire<W>) -> TokenStream;
 
@@ -255,7 +249,7 @@ impl<'f, W: WireType> Crossing<'f, W, In> {
     /// The Rust that rebuilds this value from its wires.
     pub fn decode<C: Decode<'f, W>>(&self, codec: &C) -> Result<Input, C::Error> {
         Ok(match self.node() {
-            Node::Wire(w) => Input::of(codec.wire(self, w)?),
+            Node::Whole(w) => Input::of(w.code.clone()),
             Node::Unit => Input::of(Code::new(quote!(()))),
             Node::Fields(f) => {
                 let values = f
@@ -384,7 +378,7 @@ impl<'f, W: WireType> Crossing<'f, W, Out> {
         let wires = self.wires();
         let x = value();
         Ok(match self.node() {
-            Node::Wire(w) => Output::over(&wires, codec.wire(self, w, &x)?),
+            Node::Whole(w) => Output::over(&wires, w.code.clone()),
             Node::Unit => Output::over(&wires, Code::new(quote!(()))),
             Node::Fields(f) => {
                 let record = Record::Struct(f.item());
