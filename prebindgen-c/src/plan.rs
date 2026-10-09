@@ -106,7 +106,12 @@ impl<'f> Plan<'f> {
             let r = c.resolve(flat).map_err(Error)?;
             let name = named(r.target())
                 .ok_or_else(|| Error(format!("convert!({}): not a named type", r.target())))?;
-            plan.ways.converted(r.clone());
+            match (r.has_input(), r.has_output()) {
+                (true, true) => plan.ways.converted(r.clone()).map(drop),
+                (true, false) => plan.ways.converted_in(r.clone()).map(drop),
+                _ => plan.ways.converted_out(r.clone()).map(drop),
+            }
+            .map_err(Error)?;
             if plan
                 .types
                 .insert(name.clone(), Setting::Converted(r))
