@@ -17,8 +17,8 @@
 use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef, Variant};
 use prebindgen_tools::{
     names, out_value, resolve, resolve_arm, shape, Access, Arm, Choices, Code, Crossing, Decode,
-    Direction, Encode, In, Input, Lower, Optional, Out, Output, Place, Presence, Seg, Sequence,
-    SequenceKind, Shape, TextKind, Ways, Whole, Wire, WireType, Wrapper,
+    Direction, Encode, In, Input, Lower, Out, Output, Place, Presence, Seg, Sequence, SequenceKind,
+    Shape, TextKind, Ways, Whole, Wire, WireType, Wrapper,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -982,8 +982,10 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
         ])
     }
 
-    fn tag(&self, place: &Place) -> Wire<CWire> {
-        unreachable!("{place}: C mirrors a sum; it registers no way of tag and arms")
+    fn tag(&self, place: &Place) -> Res<Wire<CWire>> {
+        err(format!(
+            "{place}: C mirrors a sum rather than taking it apart"
+        ))
     }
 }
 
@@ -1027,14 +1029,6 @@ impl<'f> Plan<'f> {
 impl<'f> Decode<'f, CWire> for Plan<'f> {
     type Error = crate::Error;
 
-    fn is_present(
-        &self,
-        at: &Crossing<'f, CWire, In>,
-        _: &Optional<'f, CWire, In>,
-    ) -> Res<TokenStream> {
-        err(format!("{}: C has no optional values", at.place()))
-    }
-
     fn sequence(
         &self,
         _: &Crossing<'f, CWire, In>,
@@ -1066,10 +1060,6 @@ impl<'f> Decode<'f, CWire> for Plan<'f> {
 
 impl<'f> Encode<'f, CWire> for Plan<'f> {
     type Error = crate::Error;
-
-    fn present(&self, at: &Crossing<'f, CWire, Out>, _: &Wire<CWire>) -> TokenStream {
-        unreachable!("{}: C has no optional values", at.place())
-    }
 
     fn sequence(
         &self,
