@@ -23,3 +23,11 @@ proc-macro2 = { workspace = true }
 # with it off, the seal `Emit` documents holds exactly as documented, so a
 # normal build is unaffected and production code still cannot mint an `Emit`.
 testing = []
+
+[dev-dependencies]
+divan = { version = "5.0.2", package = "codspeed-divan-compat" }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "flat"
+harness = false
