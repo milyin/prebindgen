@@ -16,9 +16,9 @@
 
 use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef, Variant};
 use prebindgen_tools::{
-    names, out_value, resolve, resolve_arm, shape, Access, Arm, Choices, Code, Crossing, Decode,
-    Direction, Encode, In, Input, Lower, Out, Output, Place, Presence, Seg, Sequence, SequenceKind,
-    Shape, TextKind, Ways, Whole, Wire, WireType, Wrapper,
+    names, resolve, resolve_arm, shape, Access, Arm, Choices, Code, Crossing, Decode, Direction,
+    Encode, In, Input, Lower, Out, Output, Place, Presence, Seg, Sequence, SequenceKind, Shape,
+    TextKind, Ways, Whole, Wire, WireType, Wrapper,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -84,10 +84,10 @@ impl<'f> Plan<'f> {
     // ── value slots ─────────────────────────────────────────────────────
 
     /// A value slot `w` → a value of `ty`.
-    fn value_in(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Option<Whole<CWire>>> {
+    fn value_in(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Option<Whole<CWire, In>>> {
         let one = |t: CWire| Wire::new(w.clone(), t);
-        let wire = |t: CWire, e: TokenStream| Whole::new(one(t), Code::new(e));
-        let fallible = |t: CWire, e: TokenStream| Whole::new(one(t), Code::fallible(e));
+        let wire = |t: CWire, e: TokenStream| read(one(t), Code::new(e));
+        let fallible = |t: CWire, e: TokenStream| read(one(t), Code::fallible(e));
         Ok(Some(match self.shape(ty)? {
             Shape::Scalar(ScalarKind::Bool) => wire(
                 CWire::BoolSlot,
@@ -110,7 +110,9 @@ impl<'f> Plan<'f> {
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
-                    Setting::Converted(_) => unreachable!("a conversion is a way, resolved before"),
+                    Setting::Converted(_) => {
+                        return err(format!("`{ty}`: its conversion declares no input"))
+                    }
                     Setting::Type(t) => {
                         let (c, fin) = (&t.c, format_ident!("__cbg_in_{}", t.rust));
                         match &t.kind {
@@ -153,9 +155,9 @@ impl<'f> Plan<'f> {
     }
 
     /// A value of `ty` → a value slot `w`.
-    fn value_out(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Option<Whole<CWire>>> {
+    fn value_out(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Option<Whole<CWire, Out>>> {
         let one = |t: CWire, e: &dyn Fn(&TokenStream) -> TokenStream| {
-            Whole::new(Wire::new(w.clone(), t), Code::new(e(&out_value())))
+            Whole::<CWire, Out>::new(Wire::new(w.clone(), t), |v| Code::new(e(v)))
         };
         Ok(Some(match self.shape(ty)? {
             Shape::Scalar(ScalarKind::Bool) => one(
@@ -175,7 +177,9 @@ impl<'f> Plan<'f> {
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
-                    Setting::Converted(_) => unreachable!("a conversion is a way, resolved before"),
+                    Setting::Converted(_) => {
+                        return err(format!("`{ty}`: its conversion declares no output"))
+                    }
                     Setting::Type(t) => {
                         let (c, fout) = (&t.c, format_ident!("__cbg_out_{}", t.rust));
                         match &t.kind {
@@ -282,11 +286,11 @@ impl<'f> Plan<'f> {
 
     /// A parameter `name` of type `ty` crossing whole, or `None` for a
     /// slice C lends in place.
-    fn param_whole(&self, name: &syn::Ident, ty: &TypeRef) -> Res<Option<Whole<CWire>>> {
+    fn param_whole(&self, name: &syn::Ident, ty: &TypeRef) -> Res<Option<Whole<CWire, In>>> {
         let null = |what: &str| format!("null {what} pointer");
         let fail = |msg: &str| quote!(return ::core::result::Result::Err(::std::string::String::from(#msg)));
         // A borrow of a value: the value, which the call lends ([`Self::pass`]).
-        let borrowed_value = || -> Res<Option<Whole<CWire>>> {
+        let borrowed_value = || -> Res<Option<Whole<CWire, In>>> {
             let TypeKind::Ref { inner, .. } = ty.kind() else {
                 unreachable!("borrowed shape without a borrowed type")
             };
@@ -301,7 +305,7 @@ impl<'f> Plan<'f> {
                     fail("null pointer passed for str argument"),
                     fail("invalid UTF-8 in str argument"),
                 );
-                Whole::new(
+                read(
                     Wire::new(name.clone(), CWire::c_str(false)),
                     Code::fallible(quote!({
                         if #name.is_null() { #null; }
@@ -320,7 +324,7 @@ impl<'f> Plan<'f> {
                     fail("null pointer passed for String argument"),
                     fail("invalid UTF-8 in String argument"),
                 );
-                Whole::new(
+                read(
                     Wire::new(name.clone(), CWire::c_str(false)),
                     Code::fallible(quote!({
                         if #name.is_null() { #null; }
@@ -335,7 +339,7 @@ impl<'f> Plan<'f> {
                 let t = self.pointee(slot)?;
                 let (c, src) = (&t.c, self.source(&t.rust.to_string()));
                 let null = fail(&null(&t.rust.to_string()));
-                Whole::new(
+                read(
                     Wire::new(name.clone(), CWire::ptr(true, CWire::Struct(c.clone()))),
                     Code::fallible(quote!({
                         if #name.is_null() { #null; }
@@ -370,7 +374,7 @@ impl<'f> Plan<'f> {
                     quote!(&*(#name as *const #src))
                 };
                 let ptr = CWire::ptr(exclusive, CWire::Struct(c.clone()));
-                Whole::new(
+                read(
                     Wire::new(name.clone(), ptr),
                     Code::fallible(quote!({
                         if #name.is_null() { #null; }
@@ -392,7 +396,7 @@ impl<'f> Plan<'f> {
                 let c = &t.c;
                 let null = fail(&format!("null {tname} value passed by value"));
                 let graves = self.repr_c_graves(tname);
-                Whole::new(
+                read(
                     Wire::new(name.clone(), CWire::ptr(true, CWire::Struct(c.clone()))),
                     Code::fallible(quote!({
                         if #name.is_null() { #null; }
@@ -415,7 +419,7 @@ impl<'f> Plan<'f> {
                 let key = ty.key().as_str().to_string();
                 let c = self.closures[&key].clone();
                 let closure = self.closure(name, args)?;
-                Whole::new(
+                read(
                     Wire::new(name.clone(), CWire::Struct(c)),
                     Code::new(closure),
                 )
@@ -432,7 +436,7 @@ impl<'f> Plan<'f> {
                 } if Access::of(declared_ty) == Access::Shared => {
                     let tname = declared_name(declared_ty);
                     let (c, src) = (&t.c, self.source(tname));
-                    Whole::new(
+                    read(
                         Wire::new(name.clone(), CWire::ptr(false, CWire::Struct(c.clone()))),
                         Code::new(
                             quote!(if #name.is_null() { ::core::option::Option::None } else { ::core::option::Option::Some(&*(#name as *const #src)) }),
@@ -792,8 +796,7 @@ impl<'f> Plan<'f> {
 
     /// Callback argument `n` of type `ty` crossing whole, or `None` for a
     /// slice lent in place.
-    fn arg_whole(&self, n: &syn::Ident, ty: &TypeRef) -> Res<Option<Whole<CWire>>> {
-        let v = out_value();
+    fn arg_whole(&self, n: &syn::Ident, ty: &TypeRef) -> Res<Option<Whole<CWire, Out>>> {
         Ok(Some(match self.shape(ty)? {
             // Lent in place: a sequence of its elements ([`Lower::sequence`]).
             Shape::Seq {
@@ -812,18 +815,17 @@ impl<'f> Plan<'f> {
             } if Access::of(declared_ty) == Access::Shared => {
                 let name = declared_name(declared_ty);
                 let src = self.source(name);
-                Whole::new(
+                Whole::<CWire, Out>::new(
                     Wire::new(n.clone(), CWire::ptr(false, CWire::Struct(c.clone()))),
-                    Code::new(quote!(#v as *const #src as *const #c)),
+                    |v| Code::new(quote!(#v as *const #src as *const #c)),
                 )
             }
             _ => {
                 // Delivered like a by-value result, over the argument.
                 let (wire, e) = self.ret_value(ty, &quote!(__arg))?;
-                Whole::new(
-                    Wire::new(n.clone(), wire),
-                    Code::new(quote!({ let __arg = #v; #e })),
-                )
+                Whole::<CWire, Out>::new(Wire::new(n.clone(), wire), |v| {
+                    Code::new(quote!({ let __arg = #v; #e }))
+                })
             }
         }))
     }
@@ -925,7 +927,7 @@ impl<D: Direction> Boundary<'_, '_, D> {
                         _ => names::ident(n),
                     }
                 }
-                Seg::Return | Seg::Some | Seg::Elem | Seg::Repr => {}
+                Seg::Return | Seg::Some | Seg::Elem | Seg::Repr | Seg::Inner => {}
             }
         }
         slot
@@ -945,27 +947,34 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
         self.choices
     }
 
-    fn whole(&self, ty: &TypeRef, _: Shape<'_, &()>, place: &Place) -> Res<Option<Whole<CWire>>> {
+    fn whole(
+        &self,
+        ty: &TypeRef,
+        _: Shape<'_, &()>,
+        place: &Place,
+    ) -> Res<Option<Whole<CWire, D>>> {
         let name = self.slot(place);
-        match (place.path.as_slice(), D::IN) {
-            ([Seg::Param(_)], true) => self.plan.param_whole(&name, ty),
-            ([Seg::Arg(_)], false) => self.plan.arg_whole(&name, ty),
+        if let [.., Seg::Elem] = place.path.as_slice() {
             // One element of a slice lent in place: the C struct itself.
-            ([.., Seg::Elem], _) => {
-                let c = &self.plan.pointee(ty)?.c;
-                let elem = format_ident!("__elem");
-                let code = if D::IN { quote!(#elem) } else { out_value() };
-                Ok(Some(Whole::new(
-                    Wire::new(elem, CWire::Struct(c.clone())),
-                    Code::new(code),
-                )))
-            }
-            (_, true) => self.plan.value_in(ty, &name),
-            (_, false) => self.plan.value_out(ty, &name),
+            let c = &self.plan.pointee(ty)?.c;
+            let elem = Wire::new(format_ident!("__elem"), CWire::Struct(c.clone()));
+            let same = |e: &dyn ToTokens| Code::new(e.to_token_stream());
+            return Ok(Some(Whole::either(elem, |w| same(w), |v| same(v))));
         }
+        let root = |kind: fn(&Seg) -> bool| matches!(place.path.as_slice(), [seg] if kind(seg));
+        Whole::by_direction(
+            || match root(|s| matches!(s, Seg::Param(_))) {
+                true => self.plan.param_whole(&name, ty),
+                false => self.plan.value_in(ty, &name),
+            },
+            || match root(|s| matches!(s, Seg::Arg(_))) {
+                true => self.plan.arg_whole(&name, ty),
+                false => self.plan.value_out(ty, &name),
+            },
+        )
     }
 
-    fn presence(&self, inner: &Crossing<'f, CWire, D>, place: &Place) -> Res<Presence<CWire>> {
+    fn presence(&self, inner: &Crossing<'f, CWire, D>, place: &Place) -> Res<Presence<CWire, D>> {
         err(format!(
             "{place}: `Option<{}>` has no C representation here",
             inner.ty()
@@ -1071,4 +1080,9 @@ impl<'f> Encode<'f, CWire> for Plan<'f> {
         let c = &self.pointee(seq.elem().ty())?.c;
         Ok(Code::new(quote!((#v.as_ptr() as *const #c, #v.len()))))
     }
+}
+
+/// A leaf into Rust whose code `code` reads its wire.
+fn read(wire: Wire<CWire>, code: Code) -> Whole<CWire, In> {
+    Whole::<CWire, In>::new(wire, |_| code)
 }
