@@ -86,13 +86,13 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
         ty: &TypeRef,
         shape: Shape<'_, &Handle>,
         place: &Place,
-    ) -> Result<Option<Whole<Toy>>, String> {
+    ) -> Result<Option<Whole<Toy, D>>, String> {
         let wire = |t| Wire::new(place.ident(), t);
         let same = |w: &syn::Ident| Code::new(quote!(#w));
         let pass = |v: &TokenStream| Code::new(quote!(#v));
         Ok(Some(match shape {
-            Shape::Scalar(ScalarKind::I32) => Whole::either::<D>(wire(Toy::Int), same, pass),
-            Shape::Scalar(ScalarKind::U64) => Whole::either::<D>(
+            Shape::Scalar(ScalarKind::I32) => Whole::either(wire(Toy::Int), same, pass),
+            Shape::Scalar(ScalarKind::U64) => Whole::either(
                 wire(Toy::Long { unsigned: true }),
                 |w| Code::new(quote!((#w as u64))),
                 |v| Code::new(quote!((#v as i64))),
@@ -101,7 +101,7 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
                 let name = name_of(ty);
                 let t = self.toy.flat.declared_type(&name).unwrap().name();
                 let owned = Access::of(ty) == Access::Owned;
-                Whole::either::<D>(
+                Whole::either(
                     wire(Toy::Handle(name.clone())),
                     |w| match owned {
                         true => Code::new(quote!(*::std::boxed::Box::from_raw(#w as *mut #t))),
@@ -118,8 +118,12 @@ impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
         }))
     }
 
-    fn presence(&self, _: &Crossing<'f, Toy, D>, place: &Place) -> Result<Presence<Toy>, String> {
-        Ok(Presence::flag::<D>(
+    fn presence(
+        &self,
+        _: &Crossing<'f, Toy, D>,
+        place: &Place,
+    ) -> Result<Presence<Toy, D>, String> {
+        Ok(Presence::flag(
             Wire::new(place.ident_with_suffix("present"), Toy::Flag),
             |p| quote!(#p != 0),
             || quote!(1),

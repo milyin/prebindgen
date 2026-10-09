@@ -91,14 +91,9 @@ pub struct Output {
     fallible: bool,
 }
 
-/// The name the Rust leaving Rust reads its value by: what the code of a
-/// [`Whole`](crate::Whole) out of Rust converts.
-pub fn out_value() -> TokenStream {
+/// The name the Rust leaving Rust reads its value by.
+pub(crate) fn value() -> TokenStream {
     quote!(__v)
-}
-
-fn value() -> TokenStream {
-    out_value()
 }
 
 impl Output {

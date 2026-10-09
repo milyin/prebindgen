@@ -242,15 +242,13 @@ pub mod crossing {
 
 /// The Rust a crossing becomes, with the adapter's code for its wires.
 pub mod code {
-    pub use crate::api::code::{
-        out_value, result_expr, ArmOutput, Code, Decode, Encode, Input, Output,
-    };
+    pub use crate::api::code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output};
 }
 
 pub use crate::{
     api::check_supported,
     callback::callback_arg_types,
-    code::{out_value, result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
+    code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
     convert::{Conversion, FnRef, ResolvedConversion, Via},
     crossing::{
         resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,

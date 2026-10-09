@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, marker::PhantomData};
 
 use prebindgen_flat::flat::{Alternative, Field, Function, Struct, TypeKind, TypeRef, Variant};
 
@@ -101,7 +101,7 @@ pub struct Crossing<'f, W: WireType, D: Direction> {
 #[derive(Debug)]
 pub enum Node<'f, W: WireType, D: Direction> {
     /// Whole, on one wire.
-    Whole(Whole<W>),
+    Whole(Whole<W, D>),
     /// Nothing crosses: `()`.
     Unit,
     /// A struct, as its fields.
@@ -120,40 +120,84 @@ pub enum Node<'f, W: WireType, D: Direction> {
     Constructed(D::Constructed<'f, W>),
 }
 
-/// A value crossing whole on one wire, with the adapter's code converting
-/// between the two.
+/// A value crossing whole on one wire in direction `D`, with the adapter's
+/// code converting between the two: into Rust it reads the wire, out of
+/// Rust it writes it.
+///
+/// Code written for one direction cannot cross the other way:
+///
+/// ```compile_fail
+/// use prebindgen_tools::{Code, In, Out, Whole, Wire};
+/// fn into_rust(w: Wire<()>) -> Whole<(), In> {
+///     Whole::<(), Out>::new(w, |v| Code::new(v.clone()))
+/// }
+/// ```
 #[derive(Debug)]
-pub struct Whole<W> {
+pub struct Whole<W, D: Direction> {
     wire: Wire<W>,
     pub(crate) code: Code,
+    _direction: PhantomData<fn() -> D>,
 }
 
-impl<W> Whole<W> {
-    /// The value travels on `wire`. Into Rust, `code` reads the wire by
-    /// name and evaluates to the value; out of Rust, it reads the value as
-    /// [`out_value`](crate::out_value) and evaluates to the wire.
-    pub fn new(wire: Wire<W>, code: Code) -> Self {
-        Self { wire, code }
+impl<W, D: Direction> Whole<W, D> {
+    fn of(wire: Wire<W>, code: Code) -> Self {
+        Self {
+            wire,
+            code,
+            _direction: PhantomData,
+        }
     }
 
-    /// The value travels on `wire` in direction `D`, converted by
-    /// `into_rust` (given the wire's name) or `out_of_rust` (given the
-    /// value): for a [`Lower`] written once for both directions.
-    pub fn either<D: Direction>(
+    /// The value travels on `wire`, read by `read` (given the wire's name)
+    /// or written by `write` (given the value), whichever `D` needs: for a
+    /// [`Lower`] written once for both directions.
+    pub fn either(
         wire: Wire<W>,
-        into_rust: impl FnOnce(&syn::Ident) -> Code,
-        out_of_rust: impl FnOnce(&proc_macro2::TokenStream) -> Code,
+        read: impl FnOnce(&syn::Ident) -> Code,
+        write: impl FnOnce(&proc_macro2::TokenStream) -> Code,
     ) -> Self {
         let code = if D::IN {
-            into_rust(&wire.name)
+            read(&wire.name)
         } else {
-            out_of_rust(&crate::out_value())
+            write(&crate::api::code::value())
         };
-        Self { wire, code }
+        Self::of(wire, code)
+    }
+
+    /// The leaf `into_rust` or `out_of_rust` decides, whichever `D` needs:
+    /// for a [`Lower`] written once for both directions whose two
+    /// directions decide differently.
+    pub fn by_direction<E>(
+        into_rust: impl FnOnce() -> Result<Option<Whole<W, In>>, E>,
+        out_of_rust: impl FnOnce() -> Result<Option<Whole<W, Out>>, E>,
+    ) -> Result<Option<Self>, E> {
+        Ok(if D::IN {
+            into_rust()?.map(|w| Self::of(w.wire, w.code))
+        } else {
+            out_of_rust()?.map(|w| Self::of(w.wire, w.code))
+        })
     }
 
     pub fn wire(&self) -> &Wire<W> {
         &self.wire
+    }
+}
+
+impl<W> Whole<W, In> {
+    /// Into Rust, on `wire`: `read` reads it, given its name, and evaluates
+    /// to the value.
+    pub fn new(wire: Wire<W>, read: impl FnOnce(&syn::Ident) -> Code) -> Self {
+        let code = read(&wire.name);
+        Self::of(wire, code)
+    }
+}
+
+impl<W> Whole<W, Out> {
+    /// Out of Rust, on `wire`: `write` converts the value it is given and
+    /// evaluates to the wire.
+    pub fn new(wire: Wire<W>, write: impl FnOnce(&proc_macro2::TokenStream) -> Code) -> Self {
+        let code = write(&crate::api::code::value());
+        Self::of(wire, code)
     }
 }
 
@@ -187,21 +231,23 @@ pub struct Converted<'f, W: WireType, D: Direction> {
     repr: Box<Crossing<'f, W, D>>,
 }
 
-/// How an optional value says whether it is present, with the code that
-/// says it: a flag wire of its own, or a niche in the inner value's wires.
+/// How an optional value says whether it is present in direction `D`, with
+/// the code that says it: a flag wire of its own, or a niche in the inner
+/// value's wires.
 #[derive(Debug)]
-pub struct Presence<W> {
+pub struct Presence<W, D: Direction> {
     flag: Option<Wire<W>>,
     /// Into Rust, the test that the value is present; out of Rust, the
     /// flag's value when it is (empty for a niche).
     pub(crate) code: proc_macro2::TokenStream,
+    _direction: PhantomData<fn() -> D>,
 }
 
-impl<W> Presence<W> {
+impl<W, D: Direction> Presence<W, D> {
     /// A flag wire, before the inner value's wires. Into Rust, `is_set`
     /// tests it, given its name; out of Rust, it holds `set` when the
     /// value is present and its placeholder when not.
-    pub fn flag<D: Direction>(
+    pub fn flag(
         wire: Wire<W>,
         is_set: impl FnOnce(&syn::Ident) -> proc_macro2::TokenStream,
         set: impl FnOnce() -> proc_macro2::TokenStream,
@@ -210,18 +256,23 @@ impl<W> Presence<W> {
         Self {
             flag: Some(wire),
             code,
+            _direction: PhantomData,
         }
     }
 
     /// The inner value's wires tell absence. Into Rust, `is_set` tests
     /// them; out of Rust, an absent value leaves their placeholders.
-    pub fn niche<D: Direction>(is_set: impl FnOnce() -> proc_macro2::TokenStream) -> Self {
+    pub fn niche(is_set: impl FnOnce() -> proc_macro2::TokenStream) -> Self {
         let code = if D::IN {
             is_set()
         } else {
             proc_macro2::TokenStream::new()
         };
-        Self { flag: None, code }
+        Self {
+            flag: None,
+            code,
+            _direction: PhantomData,
+        }
     }
 
     /// The flag wire, or `None` for a niche.
@@ -233,7 +284,7 @@ impl<W> Presence<W> {
 /// `Option<T>` crossing as a presence and `T`.
 #[derive(Debug)]
 pub struct Optional<'f, W: WireType, D: Direction> {
-    presence: Presence<W>,
+    presence: Presence<W, D>,
     inner: Box<Crossing<'f, W, D>>,
 }
 
@@ -364,7 +415,7 @@ impl<'f, W: WireType, D: Direction> Converted<'f, W, D> {
 }
 
 impl<'f, W: WireType, D: Direction> Optional<'f, W, D> {
-    pub fn presence(&self) -> &Presence<W> {
+    pub fn presence(&self) -> &Presence<W, D> {
         &self.presence
     }
     pub fn inner(&self) -> &Crossing<'f, W, D> {
@@ -434,7 +485,7 @@ pub trait Lower<'f, D: Direction> {
         ty: &TypeRef,
         shape: Shape<'_, &Self::Leaf>,
         place: &Place,
-    ) -> Result<Option<Whole<Self::Wire>>, Self::Error>;
+    ) -> Result<Option<Whole<Self::Wire, D>>, Self::Error>;
 
     /// How the option at `place`, whose inner value crosses as `inner`,
     /// says whether it is present.
@@ -442,7 +493,7 @@ pub trait Lower<'f, D: Direction> {
         &self,
         inner: &Crossing<'f, Self::Wire, D>,
         place: &Place,
-    ) -> Result<Presence<Self::Wire>, Self::Error>;
+    ) -> Result<Presence<Self::Wire, D>, Self::Error>;
 
     /// The wires the sequence at `place` crosses on, its element crossing
     /// as `elem`.
@@ -502,8 +553,8 @@ fn walk<'f, D: Direction, L: Lower<'f, D>>(
                 wrapper: Wrapper::Ref(access),
                 inner: Box::new(Crossing {
                     ty: (**inner).clone(),
-                    node: by_way(lower, inner, p.way, &place, active)?,
-                    place: place.clone(),
+                    node: by_way(lower, inner, p.way, &place.at(Seg::Inner), active)?,
+                    place: place.at(Seg::Inner),
                 }),
             })
         }
@@ -633,7 +684,7 @@ fn by_structure<'f, D: Direction, L: Lower<'f, D>>(
     let wrapped = |wrapper, inner: &TypeRef, active: &mut Vec<usize>| {
         Ok::<_, L::Error>(Node::Wrapped(Wrapped {
             wrapper,
-            inner: Box::new(walk(lower, inner, place.clone(), active)?),
+            inner: Box::new(walk(lower, inner, place.at(Seg::Inner), active)?),
         }))
     };
     Ok(match layer()? {

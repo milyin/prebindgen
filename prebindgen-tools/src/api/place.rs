@@ -23,6 +23,8 @@ pub enum Seg {
     Elem,
     /// The representation a converted type crosses as.
     Repr,
+    /// The value a `Box`, a borrow or a `Cow` wraps.
+    Inner,
 }
 
 impl Seg {
@@ -45,7 +47,7 @@ impl Seg {
             Seg::Field(n) => Some(n.clone()),
             Seg::Alt(n) => Some(names::snake(n)),
             Seg::Elem => Some("elem".into()),
-            Seg::Some | Seg::Repr => None,
+            Seg::Some | Seg::Repr | Seg::Inner => None,
         }
     }
 }
@@ -73,6 +75,7 @@ impl fmt::Display for Place {
                 Seg::Some => write!(f, ".some")?,
                 Seg::Elem => write!(f, ".elem")?,
                 Seg::Repr => write!(f, ".repr")?,
+                Seg::Inner => write!(f, ".inner")?,
             }
         }
         Ok(())
