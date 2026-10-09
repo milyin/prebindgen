@@ -271,6 +271,7 @@ const SRC: &str = r#"
     pub fn look(p: &Point) {}
     pub struct Chain { pub id: i32, pub next: Option<Box<Chain>> }
     pub fn walk(c: Chain) {}
+    pub fn held(p: Box<&Point>) {}
 "#;
 
 fn flat() -> Flat {
@@ -595,4 +596,20 @@ fn a_one_way_conversion_serves_one_direction() {
     let raw = flat.function("send_raw").unwrap();
     t.output(&raw.ret, Place::new("send_raw").at(Seg::Return))
         .unwrap();
+}
+
+#[test]
+fn only_a_direct_borrow_inherits_a_way() {
+    let flat = flat();
+    let t = toy(&flat);
+    // `Box<&Point>`: the box is crossed by its structure, the borrow
+    // inside inherits `Point`'s fields way.
+    let held = param(&t, flat.function("held").unwrap(), 0);
+    let Node::Wrapped(boxed) = held.node() else {
+        panic!("{held:?}")
+    };
+    let Node::Wrapped(borrow) = boxed.inner().node() else {
+        panic!("{held:?}")
+    };
+    assert!(matches!(borrow.inner().node(), Node::Fields(_)));
 }

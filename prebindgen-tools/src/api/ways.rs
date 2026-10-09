@@ -111,27 +111,49 @@ impl<L> Default for Ways<'_, L> {
     }
 }
 
-/// The identity a type is registered under: a named type by its name and
-/// type arguments (`Foo<u8>` is not `Foo<u64>`; lifetimes do not count),
-/// any other type by its canonical form.
+/// The identity a type is registered under: its structure, with type
+/// arguments (`Foo<u8>` is not `Foo<u64>`) and without lifetimes, at any
+/// depth (`Foo<'a, &'b T>` is `Foo<&T>`).
 pub(crate) fn key_of(ty: &TypeRef) -> String {
+    let list =
+        |ts: &mut dyn Iterator<Item = &TypeRef>| ts.map(key_of).collect::<Vec<_>>().join(", ");
     match ty.kind() {
+        TypeKind::Scalar(k) => k.as_str().into(),
+        TypeKind::Str => "str".into(),
+        TypeKind::String => "String".into(),
+        TypeKind::Unit => "()".into(),
+        TypeKind::Optional(t) => format!("Option<{}>", key_of(t)),
+        TypeKind::Vec(t) => format!("Vec<{}>", key_of(t)),
+        TypeKind::Slice(t) => format!("[{}]", key_of(t)),
+        TypeKind::Boxed(t) => format!("Box<{}>", key_of(t)),
+        TypeKind::Uninit(t) => format!("MaybeUninit<{}>", key_of(t)),
+        TypeKind::Cow { inner, .. } => format!("Cow<{}>", key_of(inner)),
+        TypeKind::Fallible { ok, err } => format!("Result<{}, {}>", key_of(ok), key_of(err)),
+        TypeKind::Array { elem, extent } => format!("[{}; {}]", key_of(elem), extent.value),
+        TypeKind::Ref { mutable, inner, .. } => {
+            format!("&{}{}", if *mutable { "mut " } else { "" }, key_of(inner))
+        }
+        TypeKind::Callback { args } => format!("impl Fn({})", list(&mut args.iter())),
         TypeKind::Named { id, args } => {
-            let args: Vec<String> = args
-                .iter()
-                .filter_map(|a| match a {
-                    GenericArg::Type(t) => Some(key_of(t)),
-                    GenericArg::Lifetime(_) => None,
-                })
-                .collect();
-            if args.is_empty() {
-                id.name.clone()
-            } else {
-                format!("{}<{}>", id.name, args.join(", "))
+            let mut types = args.iter().filter_map(|a| match a {
+                GenericArg::Type(t) => Some(&**t),
+                GenericArg::Lifetime(_) => None,
+            });
+            match list(&mut types) {
+                a if a.is_empty() => id.name.clone(),
+                a => format!("{}<{a}>", id.name),
             }
         }
-        TypeKind::String => "String".into(),
-        _ => ty.key().as_str().to_string(),
+    }
+}
+
+/// What a borrow `&T` or `&mut T` borrows, through which it inherits `T`'s
+/// ways — not an output slot `&mut MaybeUninit<T>`, and nothing under a
+/// `Box` or a `Cow`, as [`shape()`](crate::shape()) declares.
+fn referent(ty: &TypeRef) -> Option<&TypeRef> {
+    match ty.kind() {
+        TypeKind::Ref { inner, .. } if !matches!(inner.kind(), TypeKind::Uninit(_)) => Some(inner),
+        _ => None,
     }
 }
 
@@ -231,10 +253,7 @@ impl<'f, L> Ways<'f, L> {
 
     /// The ways registered for `ty`, else for the type it borrows (`true`).
     fn of<D: Direction>(&self, ty: &TypeRef) -> (Vec<usize>, bool) {
-        let keys = [
-            (Some(key_of(ty)), false),
-            (ty.borrow_target().map(key_of), true),
-        ];
+        let keys = [(Some(key_of(ty)), false), (referent(ty).map(key_of), true)];
         for (key, borrowed) in keys {
             let Some(key) = key else { continue };
             let ids: Vec<usize> = (0..self.ways.len())
@@ -262,7 +281,7 @@ impl<'f, L> Ways<'f, L> {
         let key = &self.ways[index].key;
         if *key == key_of(ty) {
             Some(false)
-        } else if ty.borrow_target().is_some_and(|t| *key == key_of(t)) {
+        } else if referent(ty).is_some_and(|t| *key == key_of(t)) {
             Some(true)
         } else {
             None

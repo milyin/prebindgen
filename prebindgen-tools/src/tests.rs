@@ -428,4 +428,13 @@ fn way_keys_keep_type_arguments_and_drop_lifetimes() {
     assert_ne!(key("foreign::Foo<u8>"), key("foreign::Foo<u64>"));
     assert_eq!(key("foreign::Foo<'a, u8>"), key("foreign::Foo<u8>"));
     assert_eq!(key("Payload"), "Payload");
+    // Lifetimes do not count at any depth.
+    assert_eq!(
+        key("foreign::Wrapper<'a, &'b Payload>"),
+        key("foreign::Wrapper<'c, &'d Payload>")
+    );
+    assert_eq!(
+        key("std::borrow::Cow<'a, str>"),
+        key("std::borrow::Cow<'b, str>")
+    );
 }
