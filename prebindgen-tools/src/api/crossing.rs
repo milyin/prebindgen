@@ -7,7 +7,7 @@ use crate::{
         shape::{shape, Access, SequenceKind, Shape},
         ways::{Choices, Way, Ways},
     },
-    Place, ResolvedConversion, Seg, Wire, WireType,
+    names, Place, ResolvedConversion, Seg, Wire, WireType,
 };
 
 mod sealed {
@@ -40,8 +40,9 @@ pub trait Direction: sealed::Sealed + Sized + 'static {
         args: Vec<Crossing<'f, W, Self>>,
     ) -> Option<Self::Constructed<'f, W>>;
     #[doc(hidden)]
-    fn args<'s, 'f: 's, W: WireType>(c: &'s Self::Constructed<'f, W>)
-        -> &'s [Crossing<'f, W, Self>];
+    fn args<'s, 'f: 's, W: WireType>(
+        c: &'s Self::Constructed<'f, W>,
+    ) -> &'s [Crossing<'f, W, Self>];
 }
 
 /// A node that cannot exist in this direction.
@@ -144,7 +145,7 @@ pub struct Alternatives<'f, W: WireType, D: Direction> {
 /// A type crossing as the representation its conversion declares.
 #[derive(Debug)]
 pub struct Converted<'f, W: WireType, D: Direction> {
-    conversion: ResolvedConversion,
+    conversion: Box<ResolvedConversion>,
     repr: Box<Crossing<'f, W, D>>,
 }
 
@@ -246,7 +247,6 @@ impl<'f, W: WireType, D: Direction> Crossing<'f, W, D> {
     }
 }
 
-
 impl<'f, W: WireType, D: Direction> Fields<'f, W, D> {
     pub fn item(&self) -> &'f Struct {
         self.item
@@ -333,7 +333,9 @@ impl<'f, W: WireType> Constructed<'f, W> {
         self.func
     }
     /// Each parameter with its argument's crossing, in order.
-    pub fn args(&self) -> impl Iterator<Item = (&'f prebindgen_flat::flat::Param, &Crossing<'f, W, In>)> {
+    pub fn args(
+        &self,
+    ) -> impl Iterator<Item = (&'f prebindgen_flat::flat::Param, &Crossing<'f, W, In>)> {
         self.func.params.iter().zip(&self.args)
     }
 }
@@ -413,7 +415,7 @@ pub fn resolve_arm<'f, D: Direction, L: Lower<'f, D>>(
     if !v.alternatives.iter().any(|a| std::ptr::eq(a, alt)) {
         return Err(format!("`{}` is not an alternative of `{}`", alt.name, v.name).into());
     }
-    let at = place.at(Seg::Alt(alt.name.to_string()));
+    let at = place.at(Seg::Alt(names::bare(&alt.name)));
     Ok(Arm {
         alt,
         fields: fields(lower, &alt.fields, &at)?,
@@ -474,7 +476,7 @@ fn by_way<'f, D: Direction, L: Lower<'f, D>>(
             let args = func
                 .params
                 .iter()
-                .map(|p| resolve(lower, &p.ty, place.at(Seg::Param(p.name.to_string()))))
+                .map(|p| resolve(lower, &p.ty, place.at(Seg::Param(names::bare(&p.name)))))
                 .collect::<Result<_, _>>()?;
             match D::constructed(func, args) {
                 Some(c) => Node::Constructed(c),

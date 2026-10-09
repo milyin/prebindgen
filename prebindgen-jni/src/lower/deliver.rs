@@ -9,7 +9,10 @@
 //! fields gated by one presence flag: every one of them `null` when absent.
 
 use prebindgen_flat::flat::{Struct, Type as FlatType, TypeKind, TypeRef};
-use prebindgen_tools::{names, Form, FormKind, Output, Record, Seg, Shape, Wire};
+use prebindgen_tools::{
+    legacy::{Form, FormKind, Output},
+    names, Record, Seg, Shape, Wire,
+};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 

@@ -4,6 +4,7 @@ pub(super) mod code;
 pub(super) mod convert;
 pub(super) mod crossing;
 pub(super) mod file;
+pub(super) mod legacy;
 pub(super) mod names;
 pub(super) mod place;
 pub(super) mod qualify;

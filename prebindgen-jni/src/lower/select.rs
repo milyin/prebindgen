@@ -17,7 +17,10 @@
 use std::rc::Rc;
 
 use prebindgen_flat::flat::{Function, Param as FlatParam, TypeKind};
-use prebindgen_tools::{names, shape, Access, Form, FormKind, Input, Seg, Shape, Wire};
+use prebindgen_tools::{
+    legacy::{Form, FormKind, Input},
+    names, shape, Access, Seg, Shape, Wire,
+};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 

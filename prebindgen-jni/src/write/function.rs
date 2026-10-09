@@ -3,7 +3,7 @@
 //! extern's parameter list and the declaration cannot disagree.
 
 use prebindgen_flat::flat::{TypeKind, TypeRef};
-use prebindgen_tools::{names, Access, Output, Shape, Wire};
+use prebindgen_tools::{legacy::Output, names, Access, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 

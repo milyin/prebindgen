@@ -175,9 +175,8 @@ impl Conversion {
 /// both. Both directions share the representation, so the foreign side sees
 /// one type for the source type whichever way a value goes.
 ///
-/// An adapter keeps it as its declaration for the source type, and passes
-/// it to [`Input::via`](crate::Input::via) or
-/// [`Output::via`](crate::Output::via) when it builds a value of that type.
+/// An adapter registers it as a way for the source type
+/// ([`Ways::converted`](crate::Ways::converted)).
 #[derive(Clone, Debug)]
 pub struct ResolvedConversion {
     target: TypeRef,

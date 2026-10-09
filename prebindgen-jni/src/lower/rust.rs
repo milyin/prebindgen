@@ -2,7 +2,10 @@
 //! taken apart into wires.
 
 use prebindgen_flat::flat::{ScalarKind, TypeKind, TypeRef};
-use prebindgen_tools::{names, Access, Input, Output, SequenceKind, Shape, TextKind, Wire};
+use prebindgen_tools::{
+    legacy::{Input, Output},
+    names, Access, SequenceKind, Shape, TextKind, Wire,
+};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 

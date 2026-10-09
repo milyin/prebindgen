@@ -5,7 +5,9 @@ use prebindgen_flat::{
     Emit,
 };
 use prebindgen_tools::{
-    names, wire::result_expr, Access, Input, Output, Record, RustFile, Seg, Shape, Wire, WireType,
+    code::result_expr,
+    legacy::{Input, Output},
+    names, Access, Record, RustFile, Seg, Shape, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};

@@ -123,13 +123,6 @@ impl Output {
         self
     }
 
-    /// The same, where deriving the value uses `?`.
-    pub fn before_fallible(self, f: impl FnOnce(&TokenStream) -> TokenStream) -> Self {
-        let mut out = self.before(f);
-        out.fallible = true;
-        out
-    }
-
     /// The conversion of `value`: evaluates to the wires. `value` is
     /// evaluated once.
     pub fn apply(&self, value: impl ToTokens) -> TokenStream {
@@ -201,11 +194,7 @@ pub trait Decode<'f, W: WireType> {
 
     /// A converted value's representation, before the conversion runs on
     /// it — the place for a check of its domain. As is by default.
-    fn representation(
-        &self,
-        _at: &Crossing<'f, W, In>,
-        repr: Input,
-    ) -> Result<Input, Self::Error> {
+    fn representation(&self, _at: &Crossing<'f, W, In>, repr: Input) -> Result<Input, Self::Error> {
         Ok(repr)
     }
 }
@@ -364,7 +353,11 @@ impl<'f, W: WireType> Arm<'f, W, In> {
             .map(|(_, c)| c.decode(codec))
             .collect::<Result<Vec<_>, _>>()?;
         let name = &self.alternative().name;
-        Ok(construct(Record::Alt(self.alternative()), &quote!(#sum::#name), values))
+        Ok(construct(
+            Record::Alt(self.alternative()),
+            &quote!(#sum::#name),
+            values,
+        ))
     }
 }
 

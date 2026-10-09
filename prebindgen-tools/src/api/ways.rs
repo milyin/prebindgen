@@ -25,7 +25,7 @@ pub enum Way<'f, L> {
     /// As a tag and the fields of every alternative of this sum.
     Alternatives(&'f Variant),
     /// As the representation this conversion declares.
-    Converted(ResolvedConversion),
+    Converted(Box<ResolvedConversion>),
     /// Into Rust only: as the arguments of this function, which builds the
     /// value.
     Constructed(&'f Function),
@@ -135,7 +135,7 @@ impl<'f, L> Ways<'f, L> {
     /// The conversion's target crosses as its representation.
     pub fn converted(&mut self, conversion: ResolvedConversion) -> WayId<Both> {
         let ty = conversion.target().clone();
-        self.push(&ty, Way::Converted(conversion), false)
+        self.push(&ty, Way::Converted(Box::new(conversion)), false)
     }
 
     /// The type `f` returns (directly or as the `Ok` of a `Result`) is built
@@ -238,7 +238,10 @@ impl<D: Direction> Choices<D> {
             return Ok(Some(&ways.ways[i].way));
         }
         let ids = ways.of::<D>(ty);
-        if let Some(&i) = ids.iter().find(|&&i| self.defaults.get(&ways.ways[i].key) == Some(&i)) {
+        if let Some(&i) = ids
+            .iter()
+            .find(|&&i| self.defaults.get(&ways.ways[i].key) == Some(&i))
+        {
             return Ok(Some(&ways.ways[i].way));
         }
         match ids.as_slice() {

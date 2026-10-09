@@ -16,8 +16,8 @@
 
 use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef};
 use prebindgen_tools::{
-    names, shape, Access, Form, FormKind, Input, Output, SequenceKind, Shape, TextKind, Wire,
-    WireType,
+    legacy::{Form, FormKind, Input, Output},
+    names, shape, Access, SequenceKind, Shape, TextKind, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};

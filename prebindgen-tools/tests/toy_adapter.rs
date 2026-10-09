@@ -10,7 +10,7 @@ use prebindgen_flat::{
 };
 use prebindgen_tools::{
     convert, fun, names, resolve, Access, Choices, Code, Crossing, Decode, Direction, Encode, In,
-    Lower, Node, Optional, Out, Place, Presence, Seg, Sequence, Shape, Wire, WireType, Ways,
+    Lower, Node, Optional, Out, Place, Presence, Seg, Sequence, Shape, Ways, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -270,7 +270,10 @@ fn foreign<D: Direction>(c: &Crossing<'_, Toy, D>) -> String {
 /// arguments.
 fn constructor_args(c: &Crossing<'_, Toy, In>) -> Vec<String> {
     match c.node() {
-        Node::Constructed(k) => k.args().map(|(p, a)| format!("{}: {}", p.name, foreign(a))).collect(),
+        Node::Constructed(k) => k
+            .args()
+            .map(|(p, a)| format!("{}: {}", p.name, foreign(a)))
+            .collect(),
         _ => panic!("not built by a constructor"),
     }
 }
@@ -377,7 +380,10 @@ fn parameters_cross_by_their_choices() {
             ("p_y".into(), Toy::Long { unsigned: true })
         ]
     );
-    assert_eq!(norm(p.decode(&t).unwrap().expr()), "src::Point{x:p_x,y:(p_yasu64)}");
+    assert_eq!(
+        norm(p.decode(&t).unwrap().expr()),
+        "src::Point{x:p_x,y:(p_yasu64)}"
+    );
     assert_eq!(foreign(&p), "Point(Int, ULong)");
 
     // An option of fields: a presence wire beside the inner wires.
@@ -388,8 +394,14 @@ fn parameters_cross_by_their_choices() {
 
     // A borrowed handle.
     let s = param(&t, send, 2);
-    assert_eq!(wires(s.wires()), [("s".into(), Toy::Handle("Storage".into()))]);
-    assert_eq!(norm(s.decode(&t).unwrap().expr()), "&*(sas*constsrc::Storage)");
+    assert_eq!(
+        wires(s.wires()),
+        [("s".into(), Toy::Handle("Storage".into()))]
+    );
+    assert_eq!(
+        norm(s.decode(&t).unwrap().expr()),
+        "&*(sas*constsrc::Storage)"
+    );
 
     // A converted type: its representation's wire.
     let m = param(&t, send, 3);
@@ -409,12 +421,18 @@ fn a_place_takes_its_own_way() {
     // The same type, whole as a handle.
     let raw = param(&t, flat.function("send_raw").unwrap(), 0);
     assert_eq!(foreign(&raw), "Point");
-    assert_eq!(wires(raw.wires()), [("p".into(), Toy::Handle("Point".into()))]);
+    assert_eq!(
+        wires(raw.wires()),
+        [("p".into(), Toy::Handle("Point".into()))]
+    );
 
     // And built by its constructor, from the constructor's arguments.
     let built = param(&t, flat.function("send_built").unwrap(), 0);
     assert_eq!(constructor_args(&built), ["y: ULong"]);
-    assert_eq!(wires(built.wires()), [("p_y".into(), Toy::Long { unsigned: true })]);
+    assert_eq!(
+        wires(built.wires()),
+        [("p_y".into(), Toy::Long { unsigned: true })]
+    );
     assert_eq!(
         norm(built.decode(&t).unwrap().expr()),
         "src::point_new((p_yasu64))"
@@ -431,7 +449,10 @@ fn a_choice_must_fit_its_place() {
         .choose_at(Place::new("send").at(Seg::Param("p".into())), storage);
     let send = flat.function("send").unwrap();
     let e = t
-        .input(&send.params[0].ty, Place::new("send").at(Seg::Param("p".into())))
+        .input(
+            &send.params[0].ty,
+            Place::new("send").at(Seg::Param("p".into())),
+        )
         .unwrap_err();
     assert!(e.contains("the way chosen here is for `Storage`"), "{e}");
 }
@@ -443,7 +464,10 @@ fn a_type_with_several_ways_needs_a_choice() {
     t.inputs = Choices::new();
     let send = flat.function("send").unwrap();
     let e = t
-        .input(&send.params[0].ty, Place::new("send").at(Seg::Param("p".into())))
+        .input(
+            &send.params[0].ty,
+            Place::new("send").at(Seg::Param("p".into())),
+        )
         .unwrap_err();
     assert!(e.contains("`Point` has 3 ways to cross into Rust"), "{e}");
     // Out of Rust the constructor does not count.
@@ -459,8 +483,11 @@ fn results_leave_by_their_choices() {
     let flat = flat();
     let t = toy(&flat);
     let ret = |f: &str| {
-        t.output(&flat.function(f).unwrap().ret, Place::new(f).at(Seg::Return))
-            .unwrap()
+        t.output(
+            &flat.function(f).unwrap().ret,
+            Place::new(f).at(Seg::Return),
+        )
+        .unwrap()
     };
 
     // A sum: the tag, then every alternative's wires.
@@ -468,9 +495,18 @@ fn results_leave_by_their_choices() {
     let names: Vec<String> = wires(r.wires()).into_iter().map(|w| w.0).collect();
     assert_eq!(
         names,
-        ["ret_tag", "ret_at_v0_x", "ret_at_v0_y", "ret_span_from", "ret_span_to"]
+        [
+            "ret_tag",
+            "ret_at_v0_x",
+            "ret_at_v0_y",
+            "ret_span_from",
+            "ret_span_to"
+        ]
     );
-    assert_eq!(foreign(&r), "Reading of [] | [Point(Int, ULong)] | [ULong, ULong]");
+    assert_eq!(
+        foreign(&r),
+        "Reading of [] | [Point(Int, ULong)] | [ULong, ULong]"
+    );
     let e = r.encode(&t).unwrap().apply(quote!(v));
     syn::parse2::<syn::Expr>(e.clone()).expect("a Rust expression");
     // The taken alternative fills its wires; the others hold placeholders.

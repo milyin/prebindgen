@@ -54,7 +54,7 @@ fn declared_name(ty: &TypeRef) -> Option<&str> {
 /// A parameter's input, plus how the wrapper passes the bound value to the
 /// callee when not as is — `&s` for a borrow of a decoded local.
 pub(crate) struct Param {
-    pub input: prebindgen_tools::Input<Leaf>,
+    pub input: prebindgen_tools::legacy::Input<Leaf>,
     pub pass: Option<proc_macro2::TokenStream>,
 }
 

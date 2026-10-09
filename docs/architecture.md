@@ -60,42 +60,51 @@ JNI adapter builds JNI signatures and the corresponding Kotlin surface.
 Their code owns parameter evaluation order, source calls, return delivery,
 resource handling and failure policy.
 
-`prebindgen-tools` provides conversion expressions and composition utilities,
-not item templates or writer callback traits. Adapters place `Input` and
-`Output` expressions directly into their generated code. This allows each
+`prebindgen-tools` decides and writes how one value crosses, not whole
+items: it has no item templates. Adapters place the `Input` and `Output`
+expressions of a value's crossing directly into their generated code. This allows each
 boundary to choose its own layout and construction strategy.
 
-## Recursion
+## Ways, choices, crossings
 
-An adapter builds the `Input` or `Output` of a whole type by recursing over
-its structure.
-`shape(ty, lookup)` reads one layer of a type: a scalar, text, a sequence and
-how it is held, an `Option`, a `Box`, a borrow, a callback, or a named type
-together with the adapter's setting for it and whether it is owned, shared or
-exclusive. Each adapter's builder is one `match` over `Shape` per place — a
-parameter, a result, a struct field, a callback argument — recursing into
-what the layer holds.
+How a value crosses is decided before any code is written, as a tree with
+the shape of the type:
 
-The answers compose:
+* `Ways` registers every way a type *may* cross, once: whole on one wire
+  (as the adapter's own declaration — a handle, an enum), as the fields of
+  its struct, as a tag and its sum's alternatives, as the representation a
+  `convert!` declares, or — into Rust only — built by a constructor
+  function. Each way holds the model item that fixes its parts, so a way
+  cannot have parts its item does not have.
+* `Choices` says which way each occurrence takes, per direction: a default
+  per type, replaced at chosen `Place`s (`send.p`, `send.p.x`). A way id is
+  typed by the directions it can serve, so a constructor cannot be chosen
+  for a value leaving Rust. A type with a single way needs no choice; a type
+  with several and no choice is an error naming it.
+* `resolve` walks one occurrence's type, installs the chosen way at each
+  node, and asks the adapter (`Lower`) only what the model leaves open:
+  which values cross whole and on which wire, how an option tells absence,
+  which wires carry a sequence. The result is a `Crossing`, typed by its
+  direction (`In` or `Out`), whose nodes only `resolve` can build: a
+  `Fields` node has one crossing per field of its struct, an `Optional` one
+  of the option's inner type.
+* `Crossing::decode` and `Crossing::encode` turn a crossing into Rust
+  (`Input`: wires → value; `Output`: value → wires). The adapter writes
+  what a single wire holds and a sequence's loop (`Decode`, `Encode`);
+  every composition comes from the crossing.
 
-* `Input` (wires → value) and `Output` (value → wires) carry a conversion
-  and a `Form`: the tree recording how each layer of the value crosses, whose
-  leaves are the wires, typed by the adapter's own `WireType` enum. An input's
-  expression reads its wires; an output converts whatever value the template
-  hands it (`Output::apply`, `Output::bind`). A fallible conversion uses `?`
-  on `Result<_, String>`; whoever places it decides where the error goes.
-* `Input::wire`, `via`, `record`, `optional`, `sum`, `seq` and `parts` (and
-  their `Output` counterparts) build one layer each. `via` wraps the
-  representation's `Input` or `Output` in a declared conversion (`convert!`:
-  functions or `From`/`TryFrom` impls), resolved once into a
-  `ResolvedConversion`.
-* `Place` names an occurrence of a type inside a generated element;
-  `Overrides` gives a type's default decision, replaced at chosen places.
-* A source item's `name` is an `ItemName`, which the flat model qualifies
-  when it is built, so splicing it names the item from the generated crate
-  (`Payload` → `perftest_flat::Payload`). `callback_arg_types` spells the
-  parameter types of a callback closure, the one place an adapter writes a
-  whole source type.
+The crossing's wires are the generated element's parameters, and the
+foreign-side writer reads the same nodes, so both sides follow one decision.
+
+A source item's `name` is an `ItemName`, which the flat model qualifies when
+it is built, so splicing it names the item from the generated crate
+(`Payload` → `perftest_flat::Payload`). `callback_arg_types` spells the
+parameter types of a callback closure, the one place an adapter writes a
+whole source type.
+
+Both adapters still build their values with the hand-composed builders that
+preceded crossings, kept as `prebindgen_tools::legacy` until each adapter
+resolves crossings instead.
 
 ## The two adapters
 
