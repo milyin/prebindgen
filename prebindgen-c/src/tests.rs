@@ -161,3 +161,27 @@ fn slice_inputs_do_not_accept_vector_references() {
         assert_eq!(result.is_ok(), accepted, "{ty}: {:?}", result.err());
     }
 }
+
+#[test]
+fn a_mirror_named_by_a_keyword_takes_its_fields_way() {
+    let loc = SourceLocation {
+        crate_name: Some("src_crate".to_string()),
+        ..Default::default()
+    };
+    let items = syn::parse_file(SRC)
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|i| (i, loc.clone()));
+    // `type` is a keyword: the mirror's identifier is `r#type`.
+    let out = Cbindgen::builder()
+        .items(items)
+        .free_memory_function("src_free")
+        .mangle_type_name(|_| "type".into())
+        .data_struct(pq!(Point))
+        .function(pq!(point_norm))
+        .build()
+        .unwrap()
+        .render();
+    assert!(flat(out).contains("pub struct r#type {"));
+}

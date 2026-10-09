@@ -5,14 +5,14 @@ use prebindgen_flat::{
     Emit,
 };
 use prebindgen_tools::{
-    code::result_expr, names, Access, Node, Place, Record, RustFile, Shape, Wire, WireType,
+    code::result_expr, names, Access, Node, Record, RustFile, Shape, Wire, WireType,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 use crate::{
     lower::{CRet, Param},
-    plan::{declared_name, err, CType, Item, Kind, Plan, Res, Setting},
+    plan::{declared_name, err, mirror_place, CType, Item, Kind, Plan, Res, Setting},
     wire::CWire,
 };
 
@@ -608,7 +608,7 @@ fn struct_mirror(
     attrs: Vec<TokenStream>,
 ) -> Res<StructMirror> {
     // The mirror's own place takes the struct's fields way.
-    let place = Place::new(name.to_string());
+    let place = mirror_place(name);
     let input = plan.input(source.type_ref(), place.clone())?;
     let output = plan.output(source.type_ref(), place)?;
     let Node::Fields(fields) = output.node() else {
@@ -654,7 +654,7 @@ fn sum_mirror(
     name: &syn::Ident,
     attrs: Vec<TokenStream>,
 ) -> Res<SumMirror> {
-    let place = Place::new(name.to_string());
+    let place = mirror_place(name);
     let mut variants = Vec::new();
     let mut alternatives = Vec::new();
     let mut in_arms = Vec::new();

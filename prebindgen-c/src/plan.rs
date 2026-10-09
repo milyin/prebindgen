@@ -210,8 +210,9 @@ impl<'f> Plan<'f> {
             if let (DeclKind::Data, Some(FlatType::Struct(s))) = (&d.kind, element) {
                 // Everywhere whole, except in its own mirror.
                 let fields = self.ways.fields(s);
-                self.inputs.choose_at(Place::new(&c), fields);
-                self.outputs.choose_at(Place::new(&c), fields);
+                let mirror = mirror_place(&names::ident(&c));
+                self.inputs.choose_at(mirror.clone(), fields);
+                self.outputs.choose_at(mirror, fields);
             }
             self.items.push(Item::Type(name));
         }
@@ -297,6 +298,12 @@ impl<'f> Plan<'f> {
             .declared_type(name)
             .ok_or_else(|| Error(format!("`{name}` is not a #[prebindgen] type")))
     }
+}
+
+/// Where a declared type's mirror `c` converts it: the one place a data
+/// struct crosses as its fields.
+pub(crate) fn mirror_place(c: &syn::Ident) -> Place {
+    Place::new(names::bare(c))
 }
 
 fn classify(flat: &Flat, ty: &syn::Type) -> Res<TypeRef> {
