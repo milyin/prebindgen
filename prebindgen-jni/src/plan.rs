@@ -919,7 +919,7 @@ impl Planner<'_, '_> {
             } else {
                 String::new()
             };
-            let d = plan.deliver(core, quote!(__x), "r", "", Some(&e), &[], false, 1)?;
+            let d = plan.deliver(core, "r", "", Some(&e), &[], false, 1)?;
             // The interfaces live beside the type's class.
             let base = &plan
                 .class(&tname)
@@ -1005,7 +1005,7 @@ impl Planner<'_, '_> {
         let handler = format!("{pkg}.{}Handler", id.name);
         let raw_iface = format!("{handler}Raw");
         let capture = format!("{handler}Capture");
-        let d = plan.deliver(e, quote!(__e), "e", "", None, &[], false, 1)?;
+        let d = plan.deliver(e, "e", "", None, &[], false, 1)?;
         self.support(handler.clone(), || {
             Ok(Support::ErrorHandler {
                 pkg: pkg.clone(),

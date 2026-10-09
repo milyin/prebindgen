@@ -61,10 +61,11 @@
 //!   type alone, for a return type or a struct field.
 //! * **The Rust code.** An input's `expr` evaluates to the source value:
 //!   place it where the value is needed, such as an argument of the source
-//!   call. An output's `expr` evaluates to the wire values, one value or a
-//!   tuple in [`Output::wires`] order; [`Output::bind`] writes
-//!   `let <wires> = expr;`, so each wire becomes a local of its own name.
-//! * **Errors.** `fallible` says whether `expr` uses `?` on a
+//!   call. An output converts a value the template hands it:
+//!   [`Output::apply`] evaluates to the wire values, one value or a tuple in
+//!   [`Output::wires`] order, and [`Output::bind`] writes
+//!   `let <wires> = …;`, so each wire becomes a local of its own name.
+//! * **Errors.** `fallible` says whether the conversion uses `?` on a
 //!   `Result<_, String>`. Place such an expression in a function returning
 //!   that type, or take [`Input::result`] / [`Output::result`], a `Result`
 //!   value, and route the error yourself.
@@ -102,29 +103,113 @@
 //! let n = &f.params[0];
 //! let n_name = &n.name;
 //! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), Long), quote!(#n_name as u64));
-//! let output = Output::wire(&f.ret, Wire::new(format_ident!("ret"), Long), quote!(__value as i64));
+//! let output = Output::wire(&f.ret, Wire::new(format_ident!("ret"), Long), |v| quote!(#v as i64));
 //!
-//! // Use: the wires give the signature, the expressions the body.
+//! // Use: the wires give the signature; the input gives the argument, and
+//! // the output converts the call's result.
 //! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
 //! let ret_ty = output.wires()[0].ty.rust();
 //! // The source function's name: spliced, the qualified path to call; its
 //! // bare identifier, the base for the wrapper's own name.
 //! let callee = &f.name;
 //! let wrapper_name = format_ident!("{}_wrapper", f.name.ident());
-//! let (arg, value) = (&input.expr, &output.expr);
+//! let arg = &input.expr;
+//! let result = output.apply(quote!(#callee(#arg)));
 //! let wrapper = quote! {
-//!     pub extern "C" fn #wrapper_name(#(#params),*) -> #ret_ty {
-//!         let __value = #callee(#arg);
-//!         #value
-//!     }
+//!     pub extern "C" fn #wrapper_name(#(#params),*) -> #ret_ty { #result }
 //! };
 //! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
 //! assert_eq!(
 //!     quote!(#wrapper).to_string(),
 //!     quote! {
 //!         pub extern "C" fn twice_wrapper(n: i64) -> i64 {
-//!             let __value = source_crate::twice(n as u64);
-//!             __value as i64
+//!             { let __v = source_crate::twice(n as u64); __v as i64 }
+//!         }
+//!     }.to_string(),
+//! );
+//! ```
+//!
+//! An output can be composed of others. Here `sample` returns a struct, and
+//! [`Output::record`] takes it apart. The struct's fields have different
+//! types, so the closure building each field's output asks [`shape()`] what
+//! the field is and chooses its wire and conversion: an `i64` for the `u64`,
+//! the `f64` as is, a `u8` for the `bool`. Applied to the call, the record
+//! output binds the result once, destructures it, and applies each field's
+//! output to its binding; the wrapper returns the wires as a tuple:
+//!
+//! ```
+//! use prebindgen::SourceLocation;
+//! use prebindgen_flat::{flat::{ScalarKind, Type}, Flat};
+//! use prebindgen_tools::{shape, Input, Output, Shape, Wire, WireType};
+//! use quote::{format_ident, quote};
+//!
+//! // The wire types this example's boundary uses.
+//! #[derive(Clone, Debug)]
+//! enum W { Long, Double, Flag }
+//! impl WireType for W {
+//!     fn rust(&self) -> proc_macro2::TokenStream {
+//!         match self { W::Long => quote!(i64), W::Double => quote!(f64), W::Flag => quote!(u8) }
+//!     }
+//!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
+//! }
+//!
+//! let source = syn::parse_file(
+//!     "pub struct Sample { pub id: u64, pub value: f64, pub ok: bool } \
+//!      pub fn sample(n: u64) -> Sample { Sample { id: n, value: n as f64 / 2.0, ok: n > 0 } }",
+//! ).unwrap();
+//! let location = SourceLocation { crate_name: Some("source_crate".into()), ..Default::default() };
+//! let flat = Flat::builder()
+//!     .items(source.items.into_iter().map(|i| (i, location.clone())))
+//!     .build().unwrap();
+//! let f = flat.function("sample").unwrap();
+//! let Some(Type::Struct(sample)) = flat.declared_type("Sample") else { panic!("a struct") };
+//!
+//! // Build: the parameter's input, and the result's record output. Each
+//! // field leaves on a wire named like it, of the type its own type needs.
+//! let n = &f.params[0];
+//! let n_name = &n.name;
+//! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), W::Long), quote!(#n_name as u64));
+//! let output = Output::record(sample, |field| {
+//!     let name = field.name.clone().expect("a named field");
+//!     let wire = |w: W| Wire::new(name.clone(), w);
+//!     Ok(match shape(&field.ty, |_| None::<()>)? {
+//!         Shape::Scalar(ScalarKind::U64) => {
+//!             Output::wire(&field.ty, wire(W::Long), |v| quote!(#v as i64))
+//!         }
+//!         Shape::Scalar(ScalarKind::F64) => Output::wire(&field.ty, wire(W::Double), |v| quote!(#v)),
+//!         Shape::Scalar(ScalarKind::Bool) => {
+//!             Output::wire(&field.ty, wire(W::Flag), |v| quote!(#v as u8))
+//!         }
+//!         other => return Err(format!("`{}`: no wire for {other:?}", field.ty)),
+//!     })
+//! }).unwrap();
+//!
+//! // Use: the output's wires give the return type, its conversion of the
+//! // call's result the body.
+//! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
+//! let ret_tys = output.wires().iter().map(|w| w.ty.rust()).collect::<Vec<_>>();
+//! let callee = &f.name;
+//! let wrapper_name = format_ident!("{}_wrapper", f.name.ident());
+//! let arg = &input.expr;
+//! let result = output.apply(quote!(#callee(#arg)));
+//! let wrapper = quote! {
+//!     pub fn #wrapper_name(#(#params),*) -> (#(#ret_tys),*) { #result }
+//! };
+//! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+//! assert_eq!(
+//!     quote!(#wrapper).to_string(),
+//!     quote! {
+//!         pub fn sample_wrapper(n: i64) -> (i64, f64, u8) {
+//!             {
+//!                 let __v = source_crate::sample(n as u64);
+//!                 {
+//!                     let source_crate::Sample { id: __f0, value: __f1, ok: __f2 } = __v;
+//!                     let id = { let __v = __f0; __v as i64 };
+//!                     let value = { let __v = __f1; __v };
+//!                     let ok = { let __v = __f2; __v as u8 };
+//!                     (id, value, ok)
+//!                 }
+//!             }
 //!         }
 //!     }.to_string(),
 //! );

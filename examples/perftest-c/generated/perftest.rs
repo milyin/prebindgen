@@ -352,7 +352,7 @@ pub unsafe extern "C" fn storage_get(s: *const storage_t, out: *mut payload_t) -
             if !out.is_null() {
                 ::core::ptr::write(
                     out,
-                    <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(__v),
+                    { <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(__v) },
                 );
             }
             true
@@ -645,7 +645,10 @@ pub unsafe extern "C" fn payload_handler_new(
         });
         move |__a0: &perftest_flat::Payload| {
             let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
-                let __w0 = __a0 as *const perftest_flat::Payload as *const payload_t;
+                let __w0 = {
+                    let __v = __a0;
+                    __v as *const perftest_flat::Payload as *const payload_t
+                };
                 if let ::core::option::Option::Some(__f) = __call {
                     unsafe { __f(__w0, __ctx.context) }
                 }
@@ -774,7 +777,10 @@ pub unsafe extern "C" fn string_len(s: *const string_t) -> usize {
         }
     };
     let __result = perftest_flat::string_len(s);
-    __result
+    {
+        let __v = __result;
+        __v
+    }
 }
 #[no_mangle]
 #[allow(
@@ -856,9 +862,10 @@ pub unsafe extern "C" fn storage_get_vec(
         ::core::option::Option::Some(__v) => {
             let __arr: ::std::vec::Vec<payload_t> = __v
                 .into_iter()
-                .map(|__e| <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(
-                    __e,
-                ))
+                .map(|__e| {
+                    let __v = __e;
+                    <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(__v)
+                })
                 .collect();
             let (__p, __n) = __cbg_alloc_array(__arr);
             if !out.is_null() {
@@ -908,7 +915,10 @@ pub unsafe extern "C" fn payload_vec_handler_new(
         });
         move |__a0: &[perftest_flat::Payload]| {
             let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
-                let (__w0, __w0_len) = (__a0.as_ptr() as *const payload_t, __a0.len());
+                let (__w0, __w0_len) = {
+                    let __v = __a0;
+                    (__v.as_ptr() as *const payload_t, __v.len())
+                };
                 if let ::core::option::Option::Some(__f) = __call {
                     unsafe { __f(__w0, __w0_len, __ctx.context) }
                 }
