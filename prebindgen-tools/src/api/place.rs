@@ -1,9 +1,6 @@
-use std::collections::HashMap;
+use std::fmt;
 
-use prebindgen_flat::{
-    flat::{Field, TypeRef},
-    TypeKey,
-};
+use prebindgen_flat::flat::Field;
 
 use crate::names;
 
@@ -57,11 +54,29 @@ impl Seg {
 ///
 /// `Place::new("send").at(Seg::Param("p".into())).at(Seg::Field("x".into()))`
 /// is field `x` of parameter `p` of `send`. Places key overrides
-/// ([`Overrides`]) and name wires ([`Place::ident`]).
+/// ([`Choices`](crate::Choices)) and name wires ([`Place::ident`]).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Place {
     pub element: String,
     pub path: Vec<Seg>,
+}
+
+impl fmt::Display for Place {
+    /// `send.p.x`: the element, then each step.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.element)?;
+        for seg in &self.path {
+            match seg {
+                Seg::Param(n) | Seg::Field(n) | Seg::Alt(n) => write!(f, ".{n}")?,
+                Seg::Return => write!(f, ".return")?,
+                Seg::Arg(i) => write!(f, ".arg{i}")?,
+                Seg::Some => write!(f, ".some")?,
+                Seg::Elem => write!(f, ".elem")?,
+                Seg::Repr => write!(f, ".repr")?,
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Place {
@@ -97,47 +112,5 @@ impl Place {
             .collect::<Vec<_>>()
             .join("_");
         names::ident(if name.is_empty() { "value" } else { &name })
-    }
-}
-
-/// The adapter's decisions: one per type, replaced at chosen places.
-///
-/// `R` is the adapter's own declaration — "a handle", "a record", "converted
-/// through these functions". An element's writer asks with the place of the
-/// part it is building, so a per-parameter override wins over the type's
-/// default without the writer knowing which one applied.
-pub struct Overrides<R> {
-    types: HashMap<TypeKey, R>,
-    places: HashMap<Place, R>,
-}
-
-impl<R> Default for Overrides<R> {
-    fn default() -> Self {
-        Self {
-            types: HashMap::new(),
-            places: HashMap::new(),
-        }
-    }
-}
-
-impl<R> Overrides<R> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// The default for every occurrence of `ty`.
-    pub fn ty(&mut self, ty: &TypeRef, decl: R) {
-        self.types.insert(ty.key(), decl);
-    }
-
-    /// The decision for whatever type sits at `place`, replacing its default.
-    pub fn at(&mut self, place: Place, decl: R) {
-        self.places.insert(place, decl);
-    }
-
-    /// The decision for `ty` at `place`: the place's override, else the
-    /// type's default. Shaped to be [`shape()`](crate::shape())'s callback.
-    pub fn get(&self, place: &Place, ty: &TypeRef) -> Option<&R> {
-        self.places.get(place).or_else(|| self.types.get(&ty.key()))
     }
 }

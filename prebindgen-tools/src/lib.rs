@@ -345,7 +345,7 @@ pub mod record {
 
 /// Places in an element, and the decisions made at them.
 pub mod place {
-    pub use crate::api::place::{Overrides, Place, Seg};
+    pub use crate::api::place::{Place, Seg};
 }
 
 /// One level of a type's structure, with any adapter declaration for that type.
@@ -408,35 +408,28 @@ pub mod shape {
     pub use crate::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
 }
 
-/// Wires, the forms values take on them, and the conversions between.
-///
-/// ```
-/// use prebindgen::SourceLocation;
-/// use prebindgen_flat::Flat;
-/// use prebindgen_tools::{Input, Place, Seg, Wire, WireType};
-/// use quote::quote;
-///
-/// // The adapter's closed set of wire types.
-/// #[derive(Clone, Debug)]
-/// enum W { Long { unsigned: bool } }
-/// impl WireType for W {
-///     fn rust(&self) -> proc_macro2::TokenStream { quote!(i64) }
-///     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
-/// }
-///
-/// let source = syn::parse_file("pub fn send(n: u64) {}").unwrap();
-/// let flat = Flat::builder()
-///     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
-///     .build().unwrap();
-/// let n = &flat.function("send").unwrap().params[0];
-/// let place = Place::new("send").at(Seg::Param("n".into()));
-/// let w = place.ident();
-/// let input = Input::wire(&n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
-///     quote!(#w as u64));
-/// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");
-/// ```
+/// Wires: the slots of the generated boundary, typed by the adapter.
 pub mod wire {
-    pub use crate::api::wire::{result_expr, Form, FormKind, Input, Output, Wire, WireType};
+    pub use crate::api::wire::{Wire, WireType};
+}
+
+/// The ways each type may cross, and which one each occurrence takes.
+pub mod ways {
+    pub use crate::api::ways::{Both, Choices, Way, WayId, Ways};
+}
+
+/// How one occurrence of a type crosses: the decision tree, resolved from
+/// the model and the choices.
+pub mod crossing {
+    pub use crate::api::crossing::{
+        resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,
+        Fields, In, Lower, Never, Node, Optional, Out, Presence, Sequence, Wrapped, Wrapper,
+    };
+}
+
+/// The Rust a crossing becomes, with the adapter's code for its wires.
+pub mod code {
+    pub use crate::api::code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output};
 }
 
 pub use crate::{
@@ -444,10 +437,16 @@ pub use crate::{
     callback::callback_arg_types,
     convert::{Conversion, FnRef, ResolvedConversion, Via},
     file::RustFile,
-    place::{Overrides, Place, Seg},
+    code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
+    crossing::{
+        resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,
+        Fields, In, Lower, Never, Node, Optional, Out, Presence, Sequence, Wrapped, Wrapper,
+    },
+    place::{Place, Seg},
     record::Record,
     shape::{shape, Access, SequenceKind, Shape, TextKind},
-    wire::{Form, FormKind, Input, Output, Wire, WireType},
+    ways::{Both, Choices, Way, WayId, Ways},
+    wire::{Wire, WireType},
 };
 
 /// `fun!(name)` / `fun!(crate::local)` — a function reference.

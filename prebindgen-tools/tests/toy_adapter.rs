@@ -1,6 +1,7 @@
 //! A toy adapter written against the public API only: its own wire enum,
-//! type-level declarations with a per-parameter override, recursion over
-//! `shape`, and a foreign-side writer that reads the `Form` tree.
+//! a type that may cross three ways — whole as a handle, as its fields, or
+//! built by a constructor — with the way chosen per place, and a
+//! foreign-side writer that reads the resolved crossing.
 
 use prebindgen::SourceLocation;
 use prebindgen_flat::{
@@ -8,8 +9,8 @@ use prebindgen_flat::{
     Flat,
 };
 use prebindgen_tools::{
-    convert, fun, names, shape, Access, Form, FormKind, Input, Output, Overrides, Place,
-    ResolvedConversion, Seg, Shape, Wire, WireType,
+    convert, fun, names, resolve, Access, Choices, Code, Crossing, Decode, Direction, Encode, In,
+    Lower, Node, Optional, Out, Place, Presence, Seg, Sequence, Shape, Wire, WireType, Ways,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -42,18 +43,22 @@ impl WireType for Toy {
     }
 }
 
-/// The toy's declarations.
-#[derive(Debug)]
-enum Decl {
-    Handle,
-    Record,
-    Sum,
-    Convert(Box<ResolvedConversion>),
+/// The toy's one whole-crossing declaration: an opaque handle.
+struct Handle;
+
+/// Everything the toy decided: the ways each type may cross, and which one
+/// each occurrence takes, per direction.
+struct Toyish<'f> {
+    flat: &'f Flat,
+    ways: Ways<'f, Handle>,
+    inputs: Choices<In>,
+    outputs: Choices<Out>,
 }
 
-struct Adapter<'f> {
-    flat: &'f Flat,
-    decls: Overrides<Decl>,
+/// The toy's boundary in direction `D`.
+struct Boundary<'a, 'f, D: Direction> {
+    toy: &'a Toyish<'f>,
+    choices: &'a Choices<D>,
 }
 
 fn name_of(ty: &TypeRef) -> String {
@@ -63,138 +68,146 @@ fn name_of(ty: &TypeRef) -> String {
     }
 }
 
-impl Adapter<'_> {
-    fn ty(&self, src: &str) -> TypeRef {
-        self.flat.classify(&syn::parse_str(src).unwrap()).unwrap()
+impl<'f, D: Direction> Lower<'f, D> for Boundary<'_, 'f, D> {
+    type Wire = Toy;
+    type Leaf = Handle;
+    type Error = String;
+
+    fn ways(&self) -> &Ways<'f, Handle> {
+        &self.toy.ways
     }
 
-    fn input(&self, ty: &TypeRef, place: &Place) -> Result<Input<Toy>, String> {
-        let w = place.ident();
-        let wire = |t: Toy| Wire::new(w.clone(), t);
-        Ok(match shape(ty, |t| self.decls.get(place, t))? {
-            Shape::Scalar(ScalarKind::I32) => Input::wire(ty, wire(Toy::Int), quote!(#w)),
-            Shape::Scalar(ScalarKind::U64) => {
-                Input::wire(ty, wire(Toy::Long { unsigned: true }), quote!((#w as u64)))
-            }
-            Shape::Option(inner) => {
-                let p = place.ident_with_suffix("present");
-                let inner = self.input(inner, &place.at(Seg::Some))?;
-                Input::optional(
-                    ty,
-                    Some(Wire::new(p.clone(), Toy::Flag)),
-                    quote!(#p != 0),
-                    inner,
-                )
-            }
-            Shape::Declared {
-                ty: dty,
-                declaration,
-            } => {
-                let name = name_of(dty);
-                let input = match declaration {
-                    Decl::Handle => {
-                        let t = self.flat.declared_type(name.as_str()).unwrap().name();
-                        let wire = wire(Toy::Handle(name.clone()));
-                        return Ok(match Access::of(dty) {
-                            Access::Owned => Input::wire(
-                                ty,
-                                wire,
-                                quote!(*::std::boxed::Box::from_raw(#w as *mut #t)),
-                            ),
-                            _ => Input::wire(ty, wire, quote!(&*(#w as *const #t))),
-                        });
-                    }
-                    Decl::Record => {
-                        let Some(Type::Struct(s)) = self.flat.declared_type(name.as_str()) else {
-                            return Err(format!("`{name}` is not a struct"));
-                        };
-                        let fields = s
-                            .fields
-                            .iter()
-                            .map(|f| self.input(&f.ty, &place.at(Seg::field(f))))
-                            .collect::<Result<_, _>>()?;
-                        Input::record(s, fields)
-                    }
-                    Decl::Sum => {
-                        let Some(Type::Variant(v)) = self.flat.declared_type(name.as_str()) else {
-                            return Err(format!("`{name}` is not a sum"));
-                        };
-                        let mut alts = Vec::new();
-                        for a in &v.alternatives {
-                            let at = place.at(Seg::Alt(names::bare(&a.name)));
-                            let fields = a
-                                .fields
-                                .iter()
-                                .map(|f| self.input(&f.ty, &at.at(Seg::field(f))))
-                                .collect::<Result<_, _>>()?;
-                            alts.push(fields);
-                        }
-                        Input::sum(v, Wire::new(place.ident_with_suffix("tag"), Toy::Int), alts)
-                    }
-                    Decl::Convert(c) => {
-                        Input::via(c, |repr| self.input(repr, &place.at(Seg::Repr)))?
-                    }
-                };
-                match Access::of(dty) {
-                    Access::Owned => input,
-                    _ => input.map(|e| quote!(&#e)),
-                }
-            }
-            s => return Err(format!("`{ty}`: no toy form for {s:?}")),
+    fn choices(&self) -> &Choices<D> {
+        self.choices
+    }
+
+    fn whole(
+        &self,
+        ty: &TypeRef,
+        shape: Shape<'_, &Handle>,
+        place: &Place,
+    ) -> Result<Option<Wire<Toy>>, String> {
+        let wire = |t| Some(Wire::new(place.ident(), t));
+        Ok(match shape {
+            Shape::Scalar(ScalarKind::I32) => wire(Toy::Int),
+            Shape::Scalar(ScalarKind::U64) => wire(Toy::Long { unsigned: true }),
+            Shape::Declared { .. } => wire(Toy::Handle(name_of(ty))),
+            _ => None,
         })
     }
 
-    fn output(&self, ty: &TypeRef, place: &Place) -> Result<Output<Toy>, String> {
-        let w = place.ident();
-        let wire = |t: Toy| Wire::new(w.clone(), t);
-        Ok(match shape(ty, |t| self.decls.get(place, t))? {
-            Shape::Unit => Output::unit(ty),
-            Shape::Scalar(ScalarKind::I32) => Output::wire(ty, wire(Toy::Int), |v| quote!(#v)),
-            Shape::Scalar(ScalarKind::U64) => Output::wire(
-                ty,
-                wire(Toy::Long { unsigned: true }),
-                |v| quote!((#v as i64)),
-            ),
-            Shape::Option(inner) => {
-                let p = Wire::new(place.ident_with_suffix("present"), Toy::Flag);
-                let inner = self.output(inner, &place.at(Seg::Some))?;
-                Output::optional(ty, Some((p, quote!(1))), inner)
-            }
-            Shape::Declared {
-                ty: dty,
-                declaration,
-            } if Access::of(dty) == Access::Owned => {
-                let name = name_of(dty);
-                match declaration {
-                    Decl::Handle => Output::wire(
-                        ty,
-                        wire(Toy::Handle(name)),
-                        |v| quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut ::core::ffi::c_void),
-                    ),
-                    Decl::Record => {
-                        let Some(Type::Struct(s)) = self.flat.declared_type(name.as_str()) else {
-                            return Err(format!("`{name}` is not a struct"));
-                        };
-                        Output::record(s, |f| self.output(&f.ty, &place.at(Seg::field(f))))?
-                    }
-                    Decl::Sum => {
-                        let Some(Type::Variant(sum)) = self.flat.declared_type(name.as_str())
-                        else {
-                            return Err(format!("`{name}` is not a sum"));
-                        };
-                        let tag = Wire::new(place.ident_with_suffix("tag"), Toy::Int);
-                        Output::sum(sum, tag, |a, f| {
-                            let at = place.at(Seg::Alt(names::bare(&a.name)));
-                            self.output(&f.ty, &at.at(Seg::field(f)))
-                        })?
-                    }
-                    Decl::Convert(c) => {
-                        Output::via(c, |repr| self.output(repr, &place.at(Seg::Repr)))?
-                    }
+    fn presence(&self, _: &Crossing<'f, Toy, D>, place: &Place) -> Result<Presence<Toy>, String> {
+        Ok(Presence::Flag(Wire::new(
+            place.ident_with_suffix("present"),
+            Toy::Flag,
+        )))
+    }
+
+    fn sequence(&self, _: &Crossing<'f, Toy, D>, place: &Place) -> Result<Vec<Wire<Toy>>, String> {
+        Err(format!("{place}: the toy has no sequences"))
+    }
+
+    fn tag(&self, place: &Place) -> Wire<Toy> {
+        Wire::new(place.ident_with_suffix("tag"), Toy::Int)
+    }
+}
+
+impl<'f> Decode<'f, Toy> for Toyish<'f> {
+    type Error = String;
+
+    fn wire(&self, at: &Crossing<'f, Toy, In>, wire: &Wire<Toy>) -> Result<Code, String> {
+        let w = &wire.name;
+        Ok(match &wire.ty {
+            Toy::Long { .. } => Code::new(quote!((#w as u64))),
+            Toy::Handle(name) => {
+                let t = self.flat.declared_type(name).unwrap().name();
+                match Access::of(at.ty()) {
+                    Access::Owned => Code::new(quote!(*::std::boxed::Box::from_raw(#w as *mut #t))),
+                    _ => Code::new(quote!(&*(#w as *const #t))),
                 }
             }
-            s => return Err(format!("`{ty}`: no toy form for {s:?}")),
+            _ => Code::new(quote!(#w)),
         })
+    }
+
+    fn is_present(
+        &self,
+        _: &Crossing<'f, Toy, In>,
+        opt: &Optional<'f, Toy, In>,
+    ) -> Result<TokenStream, String> {
+        match opt.presence() {
+            Presence::Flag(f) => {
+                let p = &f.name;
+                Ok(quote!(#p != 0))
+            }
+            Presence::Niche => Err("the toy has no niches".into()),
+        }
+    }
+
+    fn sequence(
+        &self,
+        at: &Crossing<'f, Toy, In>,
+        _: &Sequence<'f, Toy, In>,
+        _: prebindgen_tools::Input,
+    ) -> Result<Code, String> {
+        Err(format!("{}: the toy has no sequences", at.place()))
+    }
+}
+
+impl<'f> Encode<'f, Toy> for Toyish<'f> {
+    type Error = String;
+
+    fn wire(
+        &self,
+        _: &Crossing<'f, Toy, Out>,
+        wire: &Wire<Toy>,
+        v: &TokenStream,
+    ) -> Result<Code, String> {
+        Ok(Code::new(match &wire.ty {
+            Toy::Long { .. } => quote!((#v as i64)),
+            Toy::Handle(_) => {
+                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut ::core::ffi::c_void)
+            }
+            _ => quote!(#v),
+        }))
+    }
+
+    fn present(&self, _: &Crossing<'f, Toy, Out>, _: &Wire<Toy>) -> TokenStream {
+        quote!(1)
+    }
+
+    fn sequence(
+        &self,
+        at: &Crossing<'f, Toy, Out>,
+        _: &Sequence<'f, Toy, Out>,
+        _: &prebindgen_tools::Output,
+        _: &TokenStream,
+    ) -> Result<Code, String> {
+        Err(format!("{}: the toy has no sequences", at.place()))
+    }
+}
+
+impl<'f> Toyish<'f> {
+    fn input(&self, ty: &TypeRef, place: Place) -> Result<Crossing<'f, Toy, In>, String> {
+        resolve(
+            &Boundary {
+                toy: self,
+                choices: &self.inputs,
+            },
+            ty,
+            place,
+        )
+    }
+
+    fn output(&self, ty: &TypeRef, place: Place) -> Result<Crossing<'f, Toy, Out>, String> {
+        resolve(
+            &Boundary {
+                toy: self,
+                choices: &self.outputs,
+            },
+            ty,
+            place,
+        )
     }
 
     /// A generated element: one wrapper around one source function.
@@ -203,17 +216,14 @@ impl Adapter<'_> {
         let mut params = Vec::new();
         let mut args = Vec::new();
         for p in &f.params {
-            let input = self.input(&p.ty, &el.at(Seg::Param(names::bare(&p.name))))?;
-            params.extend(input.wires().iter().map(|w| w.decl()));
-            args.push(input.expr);
+            let c = self.input(&p.ty, el.at(Seg::Param(names::bare(&p.name))))?;
+            params.extend(c.wires().iter().map(|w| w.decl()));
+            args.push(c.decode(self)?.expr().clone());
         }
-        let out = self.output(&f.ret, &el.at(Seg::Return))?;
-        let ret_tys = out.wires().iter().map(|w| w.ty.rust()).collect::<Vec<_>>();
-        // The wrapper is defined under the function's own name, and calls the
-        // source function by its qualified one; the output converts the
-        // call's result.
+        let ret = self.output(&f.ret, el.at(Seg::Return))?;
+        let ret_tys = ret.wires().iter().map(|w| w.ty.rust()).collect::<Vec<_>>();
         let (name, callee) = (f.name.ident(), &f.name);
-        let result = out.apply(quote!(#callee(#(#args),*)));
+        let result = ret.encode(self)?.apply(quote!(#callee(#(#args),*)));
         Ok(quote! {
             pub unsafe fn #name(#(#params),*) -> ::core::result::Result<(#(#ret_tys,)*), ::std::string::String> {
                 ::core::result::Result::Ok(#result)
@@ -222,41 +232,52 @@ impl Adapter<'_> {
     }
 }
 
-/// The foreign side: a signature read off the form alone.
-fn foreign(f: &Form<Toy>) -> String {
-    match &f.kind {
-        FormKind::Wire(w) => match &w.ty {
+/// The foreign side: a signature read off the crossing alone.
+fn foreign<D: Direction>(c: &Crossing<'_, Toy, D>) -> String {
+    match c.node() {
+        Node::Wire(w) => match &w.ty {
             Toy::Int => "Int".into(),
             Toy::Long { unsigned: true } => "ULong".into(),
             Toy::Long { unsigned: false } => "Long".into(),
             Toy::Flag => "Boolean".into(),
             Toy::Handle(class) => class.clone(),
         },
-        FormKind::Via(repr) => foreign(repr),
-        FormKind::Parts(parts) => {
-            let parts: Vec<String> = parts
-                .iter()
-                .map(|(s, f)| format!("{s:?}={}", foreign(f)))
-                .collect();
-            format!("{}({})", f.ty, parts.join(", "))
+        Node::Unit => "Unit".into(),
+        Node::Converted(v) => foreign(v.repr()),
+        Node::Fields(f) => {
+            let fs: Vec<String> = f.fields().map(|(_, c)| foreign(c)).collect();
+            format!("{}({})", f.item().name, fs.join(", "))
         }
-        FormKind::Optional { inner, .. } => format!("{}?", foreign(inner)),
-        FormKind::Sum { alts, .. } => {
-            let alts: Vec<String> = alts
+        Node::Optional(o) => format!("{}?", foreign(o.inner())),
+        Node::Alternatives(a) => {
+            let arms: Vec<String> = a
+                .arms()
                 .iter()
-                .map(|a| {
-                    let fs: Vec<String> = a.iter().map(|(_, f)| foreign(f)).collect();
+                .map(|arm| {
+                    let fs: Vec<String> = arm.fields().map(|(_, c)| foreign(c)).collect();
                     format!("[{}]", fs.join(", "))
                 })
                 .collect();
-            format!("{} of {}", f.ty, alts.join(" | "))
+            format!("{} of {}", a.item().name, arms.join(" | "))
         }
-        FormKind::Seq { elem, .. } => format!("List<{}>", foreign(elem)),
+        Node::Sequence(s) => format!("List<{}>", foreign(s.elem())),
+        Node::Wrapped(w) => foreign(w.inner()),
+        Node::Constructed(_) => format!("new {}", name_of(c.ty())),
+    }
+}
+
+/// What the foreign side passes for a value built by a constructor: its
+/// arguments.
+fn constructor_args(c: &Crossing<'_, Toy, In>) -> Vec<String> {
+    match c.node() {
+        Node::Constructed(k) => k.args().map(|(p, a)| format!("{}: {}", p.name, foreign(a))).collect(),
+        _ => panic!("not built by a constructor"),
     }
 }
 
 const SRC: &str = r#"
     pub struct Point { pub x: i32, pub y: u64 }
+    pub fn point_new(y: u64) -> Point { Point { x: 0, y } }
     pub struct Storage;
     pub struct Millis(pub u64);
     pub fn millis_from(v: u64) -> Millis { Millis(v) }
@@ -264,31 +285,8 @@ const SRC: &str = r#"
     pub enum Reading { Empty, At(Point), Span { from: Millis, to: Millis } }
     pub fn send(p: Point, o: Option<Point>, s: &Storage, m: Millis) -> Reading { todo!() }
     pub fn send_raw(p: Point) -> Option<Millis> { todo!() }
+    pub fn send_built(p: Point) {}
 "#;
-
-fn adapter(flat: &Flat) -> Adapter<'_> {
-    let mut a = Adapter {
-        flat,
-        decls: Overrides::new(),
-    };
-    let mut decls = Overrides::new();
-    decls.ty(&a.ty("Point"), Decl::Record);
-    decls.ty(&a.ty("Storage"), Decl::Handle);
-    decls.ty(&a.ty("Reading"), Decl::Sum);
-    let millis = convert!(Millis)
-        .input(fun!(millis_from))
-        .output(fun!(millis_to))
-        .resolve(flat)
-        .unwrap();
-    decls.ty(&a.ty("Millis"), Decl::Convert(Box::new(millis)));
-    // `send_raw` takes its `p` as a handle; every other `Point` is a record.
-    decls.at(
-        Place::new("send_raw").at(Seg::Param("p".into())),
-        Decl::Handle,
-    );
-    a.decls = decls;
-    a
-}
 
 fn flat() -> Flat {
     let loc = SourceLocation {
@@ -302,6 +300,52 @@ fn flat() -> Flat {
         .unwrap()
 }
 
+fn ty(flat: &Flat, src: &str) -> TypeRef {
+    flat.classify(&syn::parse_str(src).unwrap()).unwrap()
+}
+
+fn toy(flat: &Flat) -> Toyish<'_> {
+    let declared = |name: &str| flat.declared_type(name).unwrap();
+    let Type::Struct(point) = declared("Point") else {
+        panic!()
+    };
+    let Type::Variant(reading) = declared("Reading") else {
+        panic!()
+    };
+    let mut ways = Ways::new();
+    // `Point` may cross three ways.
+    let fields = ways.fields(point);
+    let handle = ways.whole(point.type_ref(), Handle);
+    let built = ways
+        .constructed(flat.function("point_new").unwrap())
+        .unwrap();
+    ways.whole(&ty(flat, "Storage"), Handle);
+    ways.alternatives(reading);
+    let millis = convert!(Millis)
+        .input(fun!(millis_from))
+        .output(fun!(millis_to))
+        .resolve(flat)
+        .unwrap();
+    ways.converted(millis);
+
+    // Every `Point` crosses as its fields, but `send_raw` takes its `p` as
+    // a handle and `send_built` builds its `p` from `point_new`'s
+    // arguments. Out of Rust there is no constructor: the type says so.
+    let mut inputs = Choices::new();
+    inputs.choose(&ways, fields);
+    let param = |f: &str| Place::new(f).at(Seg::Param("p".into()));
+    inputs.choose_at(param("send_raw"), handle);
+    inputs.choose_at(param("send_built"), built);
+    let mut outputs = Choices::new();
+    outputs.choose(&ways, fields);
+    Toyish {
+        flat,
+        ways,
+        inputs,
+        outputs,
+    }
+}
+
 fn norm(t: impl ToString) -> String {
     t.to_string().replace(' ', "")
 }
@@ -312,20 +356,20 @@ fn wires<W: WireType>(ws: Vec<&Wire<W>>) -> Vec<(String, W)> {
         .collect()
 }
 
-#[test]
-fn parameters_cross_by_their_decisions() {
-    let flat = flat();
-    let a = adapter(&flat);
-    let send = flat.function("send").unwrap();
-    let el = Place::new("send");
-    let param = |i: usize| {
-        let p = &send.params[i];
-        a.input(&p.ty, &el.at(Seg::Param(names::bare(&p.name))))
-            .unwrap()
-    };
+fn param<'f>(t: &Toyish<'f>, f: &'f Function, i: usize) -> Crossing<'f, Toy, In> {
+    let p = &f.params[i];
+    let place = Place::new(names::bare(f.name.ident())).at(Seg::Param(names::bare(&p.name)));
+    t.input(&p.ty, place).unwrap()
+}
 
-    // A record: its fields' wires, named by place, rebuilt in source order.
-    let p = param(0);
+#[test]
+fn parameters_cross_by_their_choices() {
+    let flat = flat();
+    let t = toy(&flat);
+    let send = flat.function("send").unwrap();
+
+    // Fields: their wires, named by place, rebuilt in source order.
+    let p = param(&t, send, 0);
     assert_eq!(
         wires(p.wires()),
         [
@@ -333,97 +377,103 @@ fn parameters_cross_by_their_decisions() {
             ("p_y".into(), Toy::Long { unsigned: true })
         ]
     );
-    assert_eq!(norm(&p.expr), "src::Point{x:p_x,y:(p_yasu64)}");
-    assert_eq!(
-        foreign(&p.form),
-        r#"Point(Field("x")=Int, Field("y")=ULong)"#
-    );
+    assert_eq!(norm(p.decode(&t).unwrap().expr()), "src::Point{x:p_x,y:(p_yasu64)}");
+    assert_eq!(foreign(&p), "Point(Int, ULong)");
 
-    // An optional record: a presence wire beside the inner record's.
-    let o = param(1);
-    assert_eq!(
-        wires(o.wires())
-            .iter()
-            .map(|w| w.0.as_str())
-            .collect::<Vec<_>>(),
-        ["o_present", "o_x", "o_y"]
-    );
-    assert_eq!(
-        foreign(&o.form),
-        r#"Point(Field("x")=Int, Field("y")=ULong)?"#
-    );
+    // An option of fields: a presence wire beside the inner wires.
+    let o = param(&t, send, 1);
+    let names: Vec<String> = wires(o.wires()).into_iter().map(|w| w.0).collect();
+    assert_eq!(names, ["o_present", "o_x", "o_y"]);
+    assert_eq!(foreign(&o), "Point(Int, ULong)?");
 
     // A borrowed handle.
-    let s = param(2);
-    assert_eq!(
-        wires(s.wires()),
-        [("s".into(), Toy::Handle("Storage".into()))]
-    );
-    assert_eq!(norm(&s.expr), "&*(sas*constsrc::Storage)");
+    let s = param(&t, send, 2);
+    assert_eq!(wires(s.wires()), [("s".into(), Toy::Handle("Storage".into()))]);
+    assert_eq!(norm(s.decode(&t).unwrap().expr()), "&*(sas*constsrc::Storage)");
 
-    // A converted type: its representation's wire, under a Via node.
-    let m = param(3);
-    assert!(matches!(m.form.kind, FormKind::Via(_)));
-    assert_eq!(foreign(&m.form), "ULong");
+    // A converted type: its representation's wire.
+    let m = param(&t, send, 3);
+    assert!(matches!(m.node(), Node::Converted(_)));
+    assert_eq!(foreign(&m), "ULong");
     assert_eq!(
-        norm(&m.expr),
+        norm(m.decode(&t).unwrap().expr()),
         "{let__repr=(masu64);src::millis_from(__repr)}"
     );
 }
 
 #[test]
-fn a_place_override_replaces_the_type_default() {
+fn a_place_takes_its_own_way() {
     let flat = flat();
-    let a = adapter(&flat);
-    let f = flat.function("send_raw").unwrap();
-    let p = a
-        .input(
-            &f.params[0].ty,
-            &Place::new("send_raw").at(Seg::Param("p".into())),
-        )
-        .unwrap();
-    // The foreign side learns of the override from the form alone.
-    assert_eq!(foreign(&p.form), "Point");
+    let t = toy(&flat);
+
+    // The same type, whole as a handle.
+    let raw = param(&t, flat.function("send_raw").unwrap(), 0);
+    assert_eq!(foreign(&raw), "Point");
+    assert_eq!(wires(raw.wires()), [("p".into(), Toy::Handle("Point".into()))]);
+
+    // And built by its constructor, from the constructor's arguments.
+    let built = param(&t, flat.function("send_built").unwrap(), 0);
+    assert_eq!(constructor_args(&built), ["y: ULong"]);
+    assert_eq!(wires(built.wires()), [("p_y".into(), Toy::Long { unsigned: true })]);
     assert_eq!(
-        wires(p.wires()),
-        [("p".into(), Toy::Handle("Point".into()))]
+        norm(built.decode(&t).unwrap().expr()),
+        "src::point_new((p_yasu64))"
     );
 }
 
 #[test]
-fn results_leave_by_their_decisions() {
+fn a_choice_must_fit_its_place() {
     let flat = flat();
-    let a = adapter(&flat);
+    let mut t = toy(&flat);
+    let storage = t.ways.whole(&ty(&flat, "Storage"), Handle);
+    // `send`'s `p` is a `Point`, not a `Storage`.
+    t.inputs
+        .choose_at(Place::new("send").at(Seg::Param("p".into())), storage);
+    let send = flat.function("send").unwrap();
+    let e = t
+        .input(&send.params[0].ty, Place::new("send").at(Seg::Param("p".into())))
+        .unwrap_err();
+    assert!(e.contains("the way chosen here is for `Storage`"), "{e}");
+}
+
+#[test]
+fn a_type_with_several_ways_needs_a_choice() {
+    let flat = flat();
+    let mut t = toy(&flat);
+    t.inputs = Choices::new();
+    let send = flat.function("send").unwrap();
+    let e = t
+        .input(&send.params[0].ty, Place::new("send").at(Seg::Param("p".into())))
+        .unwrap_err();
+    assert!(e.contains("`Point` has 3 ways to cross into Rust"), "{e}");
+    // Out of Rust the constructor does not count.
+    t.outputs = Choices::new();
+    let e = t
+        .output(&send.params[0].ty, Place::new("send").at(Seg::Return))
+        .unwrap_err();
+    assert!(e.contains("`Point` has 2 ways to cross out of Rust"), "{e}");
+}
+
+#[test]
+fn results_leave_by_their_choices() {
+    let flat = flat();
+    let t = toy(&flat);
     let ret = |f: &str| {
-        a.output(
-            &flat.function(f).unwrap().ret,
-            &Place::new(f).at(Seg::Return),
-        )
-        .unwrap()
+        t.output(&flat.function(f).unwrap().ret, Place::new(f).at(Seg::Return))
+            .unwrap()
     };
 
     // A sum: the tag, then every alternative's wires.
     let r = ret("send");
+    let names: Vec<String> = wires(r.wires()).into_iter().map(|w| w.0).collect();
     assert_eq!(
-        wires(r.wires())
-            .iter()
-            .map(|w| w.0.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "ret_tag",
-            "ret_at_v0_x",
-            "ret_at_v0_y",
-            "ret_span_from",
-            "ret_span_to"
-        ]
+        names,
+        ["ret_tag", "ret_at_v0_x", "ret_at_v0_y", "ret_span_from", "ret_span_to"]
     );
-    assert_eq!(
-        foreign(&r.form),
-        r#"Reading of [] | [Point(Field("x")=Int, Field("y")=ULong)] | [ULong, ULong]"#
-    );
-    syn::parse2::<syn::Expr>(r.apply(quote!(v))).expect("a Rust expression");
+    assert_eq!(foreign(&r), "Reading of [] | [Point(Int, ULong)] | [ULong, ULong]");
+    let e = r.encode(&t).unwrap().apply(quote!(v));
+    syn::parse2::<syn::Expr>(e.clone()).expect("a Rust expression");
     // The taken alternative fills its wires; the others hold placeholders.
-    let e = r.apply(quote!(v));
     assert!(norm(&e).contains("(0,0,0,0,0)"), "{e}");
 
     // An optional converted value.
@@ -435,16 +485,16 @@ fn results_leave_by_their_decisions() {
             ("ret".into(), Toy::Long { unsigned: true })
         ]
     );
-    assert_eq!(foreign(&o.form), "ULong?");
-    syn::parse2::<syn::Expr>(o.apply(quote!(v))).expect("a Rust expression");
+    assert_eq!(foreign(&o), "ULong?");
+    syn::parse2::<syn::Expr>(o.encode(&t).unwrap().apply(quote!(v))).expect("a Rust expression");
 }
 
 #[test]
-fn a_wrapper_assembles_from_its_parts() {
+fn a_wrapper_assembles_from_its_crossings() {
     let flat = flat();
-    let a = adapter(&flat);
-    for name in ["send", "send_raw"] {
-        let item = a.wrapper(flat.function(name).unwrap()).unwrap();
+    let t = toy(&flat);
+    for name in ["send", "send_raw", "send_built"] {
+        let item = t.wrapper(flat.function(name).unwrap()).unwrap();
         syn::parse2::<syn::ItemFn>(item.clone()).unwrap_or_else(|e| panic!("{e}: {item}"));
     }
 }

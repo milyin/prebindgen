@@ -1,12 +1,15 @@
 //! Implementation of the API selected in `lib.rs`.
 
+pub(super) mod code;
 pub(super) mod convert;
+pub(super) mod crossing;
 pub(super) mod file;
 pub(super) mod names;
 pub(super) mod place;
 pub(super) mod qualify;
 pub(super) mod record;
 pub(super) mod shape;
+pub(super) mod ways;
 pub(super) mod wire;
 
 /// Refuse a model the frontend could not read in full: every
