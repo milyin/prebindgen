@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bare","camel","ident","join","mangle","pascal","snake"]};
