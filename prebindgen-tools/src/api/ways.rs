@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fmt, marker::PhantomData};
+use std::{
+    collections::HashMap,
+    fmt,
+    marker::PhantomData,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use prebindgen_flat::flat::{Function, Struct, TypeKind, TypeRef, Variant};
 
@@ -33,14 +38,19 @@ pub enum Way<'f, L> {
 
 /// A registered way, typed by the directions it can serve: [`Both`], or only
 /// [`In`] or [`Out`]. A `WayId<Both>` converts into either.
+///
+/// An id is only valid with the [`Ways`] that issued it: [`Choices`] refuses
+/// one from another registry.
 pub struct WayId<D> {
+    registry: usize,
     index: usize,
     _direction: PhantomData<fn() -> D>,
 }
 
 impl<D> WayId<D> {
-    fn new(index: usize) -> Self {
+    fn new(registry: usize, index: usize) -> Self {
         Self {
+            registry,
             index,
             _direction: PhantomData,
         }
@@ -57,19 +67,19 @@ impl<D> Copy for WayId<D> {}
 
 impl<D> fmt::Debug for WayId<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "WayId({})", self.index)
+        write!(f, "WayId({}.{})", self.registry, self.index)
     }
 }
 
 impl From<WayId<Both>> for WayId<In> {
     fn from(id: WayId<Both>) -> Self {
-        Self::new(id.index)
+        Self::new(id.registry, id.index)
     }
 }
 
 impl From<WayId<Both>> for WayId<Out> {
     fn from(id: WayId<Both>) -> Self {
-        Self::new(id.index)
+        Self::new(id.registry, id.index)
     }
 }
 
@@ -84,12 +94,18 @@ struct Registered<'f, L> {
 /// Every way each type may cross, registered once and checked against the
 /// model when registered. Which one an occurrence takes is a [`Choices`].
 pub struct Ways<'f, L> {
+    /// This registry's identity, which its ids carry.
+    id: usize,
     ways: Vec<Registered<'f, L>>,
 }
 
 impl<L> Default for Ways<'_, L> {
     fn default() -> Self {
-        Self { ways: Vec::new() }
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        Self {
+            id: NEXT.fetch_add(1, Ordering::Relaxed),
+            ways: Vec::new(),
+        }
     }
 }
 
@@ -114,7 +130,7 @@ impl<'f, L> Ways<'f, L> {
             way,
             in_only,
         });
-        WayId::new(self.ways.len() - 1)
+        WayId::new(self.id, self.ways.len() - 1)
     }
 
     /// `ty` crosses whole, as `leaf` says.
@@ -154,30 +170,55 @@ impl<'f, L> Ways<'f, L> {
         Ok(self.push(&ret.clone(), Way::Constructed(f), true))
     }
 
-    /// The way `id` names.
-    pub fn get<D>(&self, id: WayId<D>) -> &Way<'f, L> {
-        &self.ways[id.index].way
+    /// The way `id` names, or an error if another registry issued it.
+    pub fn get<D>(&self, id: WayId<D>) -> Result<&Way<'f, L>, String> {
+        self.index(id.registry, id.index).map(|i| &self.ways[i].way)
     }
 
-    /// The ways registered for `ty`, or for the type it borrows.
-    fn of<D: Direction>(&self, ty: &TypeRef) -> Vec<usize> {
-        let keys = [Some(key_of(ty)), ty.borrow_target().map(key_of)];
-        for key in keys.iter().flatten() {
+    fn index(&self, registry: usize, index: usize) -> Result<usize, String> {
+        if registry != self.id {
+            return Err("a way id issued by another `Ways` registry".into());
+        }
+        Ok(index)
+    }
+
+    /// The ways registered for `ty`, else for the type it borrows (`true`).
+    fn of<D: Direction>(&self, ty: &TypeRef) -> (Vec<usize>, bool) {
+        let keys = [
+            (Some(key_of(ty)), false),
+            (ty.borrow_target().map(key_of), true),
+        ];
+        for (key, borrowed) in keys {
+            let Some(key) = key else { continue };
             let ids: Vec<usize> = (0..self.ways.len())
-                .filter(|&i| &self.ways[i].key == key && (D::IN || !self.ways[i].in_only))
+                .filter(|&i| self.ways[i].key == key && (D::IN || !self.ways[i].in_only))
                 .collect();
             if !ids.is_empty() {
-                return ids;
+                return (ids, borrowed);
             }
         }
-        Vec::new()
+        (Vec::new(), false)
     }
 
-    /// Whether way `index` is for `ty` or the type it borrows.
-    fn is_for(&self, index: usize, ty: &TypeRef) -> bool {
+    /// Whether way `index` is for `ty` (`Some(false)`) or for the type it
+    /// borrows (`Some(true)`).
+    fn is_for(&self, index: usize, ty: &TypeRef) -> Option<bool> {
         let key = &self.ways[index].key;
-        *key == key_of(ty) || ty.borrow_target().is_some_and(|t| *key == key_of(t))
+        if *key == key_of(ty) {
+            Some(false)
+        } else if ty.borrow_target().is_some_and(|t| *key == key_of(t)) {
+            Some(true)
+        } else {
+            None
+        }
     }
+}
+
+/// The way an occurrence takes, and whether it is the way of the type the
+/// occurrence borrows rather than of its own type.
+pub(crate) struct Picked<'w, 'f, L> {
+    pub(crate) way: &'w Way<'f, L>,
+    pub(crate) through_borrow: bool,
 }
 
 /// Which registered way each occurrence takes, in direction `D`: a default
@@ -185,8 +226,9 @@ impl<'f, L> Ways<'f, L> {
 ///
 /// A type with a single way registered for `D` needs no choice.
 pub struct Choices<D> {
-    defaults: HashMap<String, usize>,
-    places: HashMap<Place, usize>,
+    /// Way ids, as `(registry, index)`.
+    defaults: HashMap<String, (usize, usize)>,
+    places: HashMap<Place, (usize, usize)>,
     _direction: PhantomData<fn() -> D>,
 }
 
@@ -207,15 +249,24 @@ impl<D: Direction> Choices<D> {
 
     /// Every occurrence of the way's type takes it, unless a place chooses
     /// otherwise.
-    pub fn choose<L>(&mut self, ways: &Ways<'_, L>, way: impl Into<WayId<D>>) {
-        let index = way.into().index;
-        self.defaults.insert(ways.ways[index].key.clone(), index);
+    /// Fails if `ways` did not issue `way`.
+    pub fn choose<L>(
+        &mut self,
+        ways: &Ways<'_, L>,
+        way: impl Into<WayId<D>>,
+    ) -> Result<(), String> {
+        let id = way.into();
+        let index = ways.index(id.registry, id.index)?;
+        self.defaults
+            .insert(ways.ways[index].key.clone(), (id.registry, index));
+        Ok(())
     }
 
     /// The occurrence at `place` takes `way`. Resolving fails if the type
     /// at `place` is not the way's.
     pub fn choose_at(&mut self, place: Place, way: impl Into<WayId<D>>) {
-        self.places.insert(place, way.into().index);
+        let id = way.into();
+        self.places.insert(place, (id.registry, id.index));
     }
 
     /// The way the occurrence of `ty` at `place` takes: the place's choice,
@@ -227,26 +278,33 @@ impl<D: Direction> Choices<D> {
         ways: &'w Ways<'f, L>,
         ty: &TypeRef,
         place: &Place,
-    ) -> Result<Option<&'w Way<'f, L>>, String> {
-        if let Some(&i) = self.places.get(place) {
-            if !ways.is_for(i, ty) {
+    ) -> Result<Option<Picked<'w, 'f, L>>, String> {
+        let picked = |i: usize, through_borrow| Picked {
+            way: &ways.ways[i].way,
+            through_borrow,
+        };
+        if let Some(&(registry, i)) = self.places.get(place) {
+            let i = ways
+                .index(registry, i)
+                .map_err(|e| format!("{place}: {e}"))?;
+            let Some(through_borrow) = ways.is_for(i, ty) else {
                 return Err(format!(
                     "{place}: the way chosen here is for `{}`, the type here is `{ty}`",
                     ways.ways[i].key
                 ));
-            }
-            return Ok(Some(&ways.ways[i].way));
+            };
+            return Ok(Some(picked(i, through_borrow)));
         }
-        let ids = ways.of::<D>(ty);
+        let (ids, through_borrow) = ways.of::<D>(ty);
         if let Some(&i) = ids
             .iter()
-            .find(|&&i| self.defaults.get(&ways.ways[i].key) == Some(&i))
+            .find(|&&i| self.defaults.get(&ways.ways[i].key) == Some(&(ways.id, i)))
         {
-            return Ok(Some(&ways.ways[i].way));
+            return Ok(Some(picked(i, through_borrow)));
         }
         match ids.as_slice() {
             [] => Ok(None),
-            [i] => Ok(Some(&ways.ways[*i].way)),
+            [i] => Ok(Some(picked(*i, through_borrow))),
             _ => Err(format!(
                 "{place}: `{ty}` has {} ways to cross {}; choose one",
                 ids.len(),

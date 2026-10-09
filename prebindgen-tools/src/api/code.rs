@@ -8,7 +8,7 @@ use crate::{
             Alternatives, Arm, Crossing, In, Node, Optional, Out, Presence, Sequence, Wrapper,
         },
     },
-    Record, Wire, WireType,
+    Access, Record, Wire, WireType,
 };
 
 /// An expression an adapter writes for one step: what a wire holds, a
@@ -180,7 +180,7 @@ pub trait Decode<'f, W: WireType> {
     ) -> Result<Code, Self::Error>;
 
     /// The wrapper's value, given what it wraps. By default a `Box` boxes,
-    /// a `Cow` owns, and a borrow passes the value for the caller to lend.
+    /// a `Cow` owns, and a borrow borrows.
     fn wrapped(
         &self,
         _at: &Crossing<'f, W, In>,
@@ -190,7 +190,8 @@ pub trait Decode<'f, W: WireType> {
         Ok(match wrapper {
             Wrapper::Box => inner.map(|e| quote!(::std::boxed::Box::new(#e))),
             Wrapper::Cow => inner.map(|e| quote!(::std::borrow::Cow::Owned(#e))),
-            Wrapper::Ref(_) => inner,
+            Wrapper::Ref(Access::Exclusive) => inner.map(|e| quote!(&mut (#e))),
+            Wrapper::Ref(_) => inner.map(|e| quote!(&(#e))),
         })
     }
 

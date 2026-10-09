@@ -281,6 +281,7 @@ const SRC: &str = r#"
     pub fn send(p: Point, o: Option<Point>, s: &Storage, m: Millis) -> Reading { todo!() }
     pub fn send_raw(p: Point) -> Option<Millis> { todo!() }
     pub fn send_built(p: Point) {}
+    pub fn look(p: &Point) {}
 "#;
 
 fn flat() -> Flat {
@@ -327,12 +328,12 @@ fn toy(flat: &Flat) -> Toyish<'_> {
     // a handle and `send_built` builds its `p` from `point_new`'s
     // arguments. Out of Rust there is no constructor: the type says so.
     let mut inputs = Choices::new();
-    inputs.choose(&ways, fields);
+    inputs.choose(&ways, fields).unwrap();
     let param = |f: &str| Place::new(f).at(Seg::Param("p".into()));
     inputs.choose_at(param("send_raw"), handle);
     inputs.choose_at(param("send_built"), built);
     let mut outputs = Choices::new();
-    outputs.choose(&ways, fields);
+    outputs.choose(&ways, fields).unwrap();
     Toyish {
         flat,
         ways,
@@ -525,4 +526,39 @@ fn a_wrapper_assembles_from_its_crossings() {
         let item = t.wrapper(flat.function(name).unwrap()).unwrap();
         syn::parse2::<syn::ItemFn>(item.clone()).unwrap_or_else(|e| panic!("{e}: {item}"));
     }
+}
+
+#[test]
+fn a_borrow_of_fields_borrows_the_rebuilt_value() {
+    let flat = flat();
+    let t = toy(&flat);
+    let look = param(&t, flat.function("look").unwrap(), 0);
+    // `Point`'s way crosses the `Point`; the borrow wraps it.
+    let Node::Wrapped(w) = look.node() else {
+        panic!("{look:?}")
+    };
+    assert!(matches!(w.inner().node(), Node::Fields(_)));
+    assert_eq!(
+        norm(look.decode(&t).unwrap().expr()),
+        "&(src::Point{x:p_x,y:(p_yasu64)})"
+    );
+}
+
+#[test]
+fn a_way_from_another_registry_is_refused() {
+    let flat = flat();
+    let mut t = toy(&flat);
+    let mut other = Ways::<Handle>::new();
+    let foreign_id = other.whole(&ty(&flat, "Storage"), Handle);
+    assert!(t.inputs.choose(&t.ways, foreign_id).is_err());
+    t.inputs
+        .choose_at(Place::new("send").at(Seg::Param("s".into())), foreign_id);
+    let send = flat.function("send").unwrap();
+    let e = t
+        .input(
+            &send.params[2].ty,
+            Place::new("send").at(Seg::Param("s".into())),
+        )
+        .unwrap_err();
+    assert!(e.contains("another `Ways` registry"), "{e}");
 }

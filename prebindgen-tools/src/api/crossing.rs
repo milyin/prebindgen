@@ -1,6 +1,6 @@
 use std::fmt;
 
-use prebindgen_flat::flat::{Alternative, Field, Function, Struct, TypeRef, Variant};
+use prebindgen_flat::flat::{Alternative, Field, Function, Struct, TypeKind, TypeRef, Variant};
 
 use crate::{
     api::{
@@ -432,7 +432,22 @@ pub fn resolve<'f, D: Direction, L: Lower<'f, D>>(
     place: Place,
 ) -> Result<Crossing<'f, L::Wire, D>, L::Error> {
     let node = match lower.choices().pick(lower.ways(), ty, &place)? {
-        Some(way) => by_way(lower, ty, way, &place)?,
+        // A way of the borrowed type that takes the value apart crosses
+        // the borrowed value, under the borrow.
+        Some(p) if p.through_borrow && !matches!(p.way, Way::Whole(_)) => {
+            let (TypeKind::Ref { inner, .. }, access) = (ty.kind(), Access::of(ty)) else {
+                unreachable!("a way through a borrow is picked for a borrow")
+            };
+            Node::Wrapped(Wrapped {
+                wrapper: Wrapper::Ref(access),
+                inner: Box::new(Crossing {
+                    ty: (**inner).clone(),
+                    node: by_way(lower, inner, p.way, &place)?,
+                    place: place.clone(),
+                }),
+            })
+        }
+        Some(p) => by_way(lower, ty, p.way, &place)?,
         None => by_structure(lower, ty, &place)?,
     };
     Ok(Crossing {
