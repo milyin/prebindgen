@@ -92,6 +92,32 @@ impl CachedIfaceMethod {
     }
 }
 
+impl CachedIfaceMethod {
+    /// Invoke a `void` interface method on `obj`.
+    pub fn call_void(
+        &self,
+        env: &mut JNIEnv,
+        class_fqn: &str,
+        method: &str,
+        descr: &str,
+        obj: &JObject,
+        args: &[jvalue],
+    ) -> Result<(), String> {
+        let r = self.resolve(env, class_fqn, method, descr)?;
+        // SAFETY: as `call_object`.
+        unsafe {
+            env.call_method_unchecked(
+                obj,
+                r.method,
+                ReturnType::Primitive(jni::signature::Primitive::Void),
+                args,
+            )
+        }
+        .map(|_| ())
+        .map_err(|e| format!("invoke {class_fqn}.{method}: {e}"))
+    }
+}
+
 impl Default for CachedIfaceMethod {
     fn default() -> Self {
         Self::new()

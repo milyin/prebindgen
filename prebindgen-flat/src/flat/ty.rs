@@ -45,50 +45,19 @@ use super::{
 /// # The invariant
 ///
 /// > **Every `TypeRef` was classified by the model.** [`Flat`](super::Flat)
-/// > classified it from source syntax, or the registry pipeline composed it by
-/// > layering over something already classified.
+/// > classified it from source syntax, or it was composed by layering over
+/// > something already classified ([`Self::borrowed`], [`Self::optional`],
+/// > [`Self::scalar`]).
 ///
-/// **Historically enforced by visibility, now by convention.** Before the
-/// registry pipeline moved to the separate `prebindgen-registry` crate, the
-/// boundary was `api::core` and was drawn by visibility at four places, each
-/// checked by the compiler on every build:
-///
-/// | | |
-/// |---|---|
-/// | the `kind` and `origin` fields | `pub(super)` — a public field **is** a constructor, so restricting only the composers would block nothing |
-/// | `borrowed` / `optional` / `scalar` | `pub(crate)` |
-/// | `named` | `pub(super)` — `flat` alone |
-/// | `Flat::classify` | `pub(crate)` |
-///
-/// A module-path seal can no longer express "the registry pipeline, and
-/// nothing else" once that pipeline is a different crate — there is no path
-/// inside this crate to name it — so `borrowed` / `optional` / `scalar` and
-/// `Flat::classify` are now plain `pub`, and the fields stay `pub(super)`
-/// (nothing outside `flat` ever needed them). The intent is unchanged and
-/// documented here, but no longer compiler-enforced against a destination
-/// adapter (`prebindgen-c`, `prebindgen-jni`): restoring that would need a real
-/// API, e.g. a sealed capability token minted only by `prebindgen-registry`.
-/// Where one needs a type the model already declares, the **declaration**
-/// answers: see [`Variant::type_ref`](super::Variant::type_ref), which is what
-/// the `SumTag` selector uses instead of composing a reading from an ident.
+/// The fields are private, so a consumer cannot assemble a reading whose
+/// `kind` disagrees with its spelling. Where a consumer needs a type the model
+/// already declares, the **declaration** answers: see
+/// [`Variant::type_ref`](super::Variant::type_ref).
 ///
 /// The invariant is unconditional — no phase, no lifetime, no direction — so it
-/// holds for a **stored** value. That is the point: a `TypeRef` lives in
-/// `UnfoldLeaf::out_ty` and `FoldLeaf::ty`, inside plans the registry itself
-/// stores, so a borrow-carrying token would make the registry self-referential.
-///
-/// It deliberately does **not** claim the type's converters exist. That is
-/// false by design for stored readings — `unrequire_output` leaves a cell whose
-/// converter genuinely cannot resolve, and a `SumTag` leaf never has one — so
-/// converter existence stays a lookup that answers `Option`.
-///
-/// It does **not** claim a registry cell either, and the two are separate
-/// questions. Holding a `TypeRef` means the model classified the type; whether
-/// it is in a type table is the registry's business, and the registry states it
-/// in three parts — a **cell** (the type entered the pipeline), a **root** (the
-/// binding asked for it directly), an **entry** (a converter resolved). A
-/// `SumTag` leaf's type makes the first and not the second, deliberately
-/// (#282); see `Registry::reference_output` in the registry layer above.
+/// holds for a **stored** value. It deliberately does **not** claim the type
+/// crosses any particular boundary: whether and how it does is an adapter's
+/// decision.
 #[derive(Clone, Debug)]
 pub struct TypeRef {
     /// The accepted syntax this type is — the closed grammar, not an
@@ -106,20 +75,13 @@ pub struct TypeRef {
 }
 
 impl fmt::Display for TypeRef {
-    /// The type as the source wrote it, **for a message**.
+    /// The normalized type identity, for a message.
     ///
-    /// Diagnostics are not emission: a panic naming an unsupported type is
-    /// decision code reporting why it decided, and it must not need the
-    /// [`Emit`](crate::flat::emit::Emit) capability to say so. So this is
-    /// ungated where [`spell`](Self::spell) is not.
+    /// Diagnostics render the normalized identity, while [`spell`](Self::spell)
+    /// returns the captured tokens. Both are available to consumers.
     ///
-    /// **The identity, not the spelling** — `TypeKey`, which is
-    /// `canonical_type` rendered. Delegating to `spell()` would have handed the
-    /// captured spelling back out through `format!("{ty}")`, so
-    /// `syn::parse_str(&ty.to_string())` reconstructed it exactly and the
-    /// capability was a suggestion. Rendering the canonical form keeps
-    /// diagnostics readable while making the round trip land on a *normalized*
-    /// type rather than the source's own tokens.
+    /// Uses [`TypeKey`], the rendered canonical type, so diagnostics use a
+    /// consistent name regardless of how the source spelled that type.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key().as_str())
     }
@@ -137,29 +99,22 @@ impl TypeRef {
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
-    /// …nor, historically, through a composer (`E0624`) — **no longer true**:
-    /// `borrowed` / `optional` / `scalar` are `pub` now that the registry
-    /// pipeline that composes with them is the separate `prebindgen-registry`
-    /// crate rather than code inside this one:
+    /// A composer, which layers over a reading the model already made, is
+    /// open:
     ///
     /// ```
     /// # use prebindgen_flat::flat::{ScalarKind, TypeRef};
     /// let composed = TypeRef::scalar(ScalarKind::Bool);
     /// ```
-    ///
-    /// The struct-literal case above still proves the **crate** boundary. The
-    /// stronger claim this crate used to enforce by visibility — that nothing
-    /// above `api::core` can mint one either — no longer has a module path to
-    /// be checked against once the registry pipeline is the separate
-    /// `prebindgen-registry` crate; see the type-level doc's "The invariant"
-    /// section for what replaced it.
     pub fn kind(&self) -> &TypeKind {
         &self.kind
     }
 
-    /// The tokens generated Rust must spell. **Spell off this**, never off
-    /// `kind` — re-deriving a spelling from the classification is how
-    /// `Box<Option<T>>` becomes an `E0308`.
+    /// The captured type tokens in the flat namespace.
+    ///
+    /// These retain source lifetimes and bare flat names. Generated code in
+    /// another crate must qualify those names using the item's source location.
+    /// Read [`kind`](Self::kind) when inspecting the type's structure.
     ///
     /// Tokens, not a `syn::Type`: a spelling is for spelling. What the type
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside
@@ -169,10 +124,8 @@ impl TypeRef {
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
-    // Test-only as of C7: `Emit` hands out a spelling, never the node, so the
-    // round-trip checks (`syntax_is_recoverable_from_kind`) are the last
-    // callers. That is the correct end state — the check that a kind can
-    // reproduce its own syntax needs both halves.
+    // Keep structural syntax inside the model. Consumers can render through
+    // `spell()` and inspect structure through `kind()`.
     #[allow(dead_code)]
     pub(crate) fn as_syn(&self) -> &syn::Type {
         self.origin.as_syn()
@@ -340,8 +293,7 @@ impl TypeRef {
     // Here rather than at the callers, and not via
     // [`Flat::classify`](super::Flat::classify), because the two acts are
     // different. `classify` lowers *source syntax* — it is the frontend reading
-    // what a crate wrote, and `classify_has_no_caller_outside_the_registry`
-    // keeps it that way. These compose a type from parts already understood,
+    // what a crate wrote. These compose a type from parts already understood,
     // which needs no lowering at all: each builds `kind` **and** the matching
     // `spell()` in one place, so the classification and the spelling
     // cannot disagree — the invariant every consumer of a `TypeRef` relies on.
@@ -837,10 +789,9 @@ impl TypeKind {
     ///
     /// # What it is for
     ///
-    /// **Not** for generating code: generated Rust spells
-    /// [`TypeRef::syntax`], the source's own tokens, and always will. This
-    /// exists so that claim can be *checked* — a kind that cannot reproduce the
-    /// syntax it was lowered from has dropped something, and the round-trip test
+    /// Checks reconstruction against the captured tokens returned by
+    /// [`TypeRef::spell`]. A kind that cannot reproduce the syntax it was
+    /// lowered from has dropped something, and the round-trip test
     /// is what says so before a consumer has to discover it.
     ///
     /// Two forms reconstruct up to their own freedom rather than token for
@@ -850,10 +801,8 @@ impl TypeKind {
     /// * a `Group` or `Paren` around a type, which the lowering sees through;
     /// * a [`Callback`](TypeKind::Callback)'s bound *order* — `Send + Sync` and
     ///   `Sync + Send` are one accepted form, and nothing reads the order.
-    // Its whole job is the round-trip check (`syntax_is_recoverable_from_kind`),
-    // and with the spelling sealed nothing in a built crate calls it — which is
-    // the correct end state, not dead code: a kind that cannot reproduce its
-    // own syntax has lost something, and this is what says so.
+    // Used by the model's round-trip check (`syntax_is_recoverable_from_kind`):
+    // a kind that cannot reproduce its own syntax has lost something.
     #[allow(dead_code)]
     pub(crate) fn to_syn(&self) -> syn::Type {
         let opt_lifetime =

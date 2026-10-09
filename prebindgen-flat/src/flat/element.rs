@@ -11,7 +11,7 @@
 
 use prebindgen::SourceLocation;
 
-use super::{origin::Origin, ty::TypeRef};
+use super::{item_name::ItemName, origin::Origin, ty::TypeRef};
 
 /// One member of the flat API.
 ///
@@ -37,7 +37,7 @@ pub enum Element {
     ///
     /// Indexed under its name so nothing else can claim it, with the diagnosis
     /// riding along. Parsing carries it; building a
-    /// `Registry` from a model holding one fails, reporting
+    /// binding from a model holding one fails, reporting
     /// every offender at once. See the [module docs](super) on where acceptance
     /// is enforced.
     Unsupported(Unsupported),
@@ -49,13 +49,26 @@ impl Element {
     ///
     /// `None` when the item has no address — a [`Guard`], or an item kind with
     /// no identifier at all.
-    pub fn name(&self) -> Option<&syn::Ident> {
+    pub fn name(&self) -> Option<&ItemName> {
         match self {
             Element::Function(f) => Some(&f.name),
             Element::Type(t) => Some(t.name()),
             Element::Constant(c) => Some(&c.name),
             Element::Guard(_) => None,
             Element::Unsupported(u) => u.name.as_ref(),
+        }
+    }
+
+    pub(super) fn name_mut(&mut self) -> Option<&mut ItemName> {
+        match self {
+            Element::Function(f) => Some(&mut f.name),
+            Element::Type(Type::Struct(s)) => Some(&mut s.name),
+            Element::Type(Type::Variant(v)) => Some(&mut v.name),
+            Element::Type(Type::Enum(e)) => Some(&mut e.name),
+            Element::Type(Type::Extern(e)) => Some(&mut e.name),
+            Element::Constant(c) => Some(&mut c.name),
+            Element::Guard(_) => None,
+            Element::Unsupported(u) => u.name.as_mut(),
         }
     }
 
@@ -107,7 +120,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn name(&self) -> &syn::Ident {
+    pub fn name(&self) -> &ItemName {
         match self {
             Type::Struct(s) => &s.name,
             Type::Variant(v) => &v.name,
@@ -163,7 +176,7 @@ impl Type {
 /// contents.
 #[derive(Clone, Debug)]
 pub struct Extern {
-    pub name: syn::Ident,
+    pub name: ItemName,
     /// What the declaration points at, for an alias — `std::time::Duration`,
     /// `zenoh::Session`, `handles::Storage`. `None` for a tuple struct, which is
     /// itself the definition.
@@ -181,7 +194,7 @@ pub struct Extern {
 /// A `#[prebindgen]` free function.
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub name: syn::Ident,
+    pub name: ItemName,
     /// Parameters in declaration order.
     pub params: Vec<Param>,
     /// What the function returns. An elided return is
@@ -217,7 +230,7 @@ impl Function {
             }
         };
         Self {
-            name: ident,
+            name: ItemName::bare(ident),
             params: Vec::new(),
             origin: ret.origin_with(item),
             ret,
@@ -245,7 +258,7 @@ pub struct Param {
 /// syntax when the struct is spelled.
 #[derive(Clone, Debug)]
 pub struct Struct {
-    pub name: syn::Ident,
+    pub name: ItemName,
     pub fields: Vec<Field>,
     pub origin: Origin<syn::ItemStruct>,
     /// This struct **as a type**, taken at parse time — the twin of
@@ -258,9 +271,7 @@ impl Struct {
     /// something needs a reading naming it.
     ///
     /// The alternative is composing one from the name at the call site, which
-    /// an adapter cannot do (minting is sealed to this crate) and which would
-    /// be phase-dependent if routed through the registry instead: a
-    /// decomposition is declared before anything is interned. The declaration
+    /// an adapter cannot do (minting is sealed to this crate). The declaration
     /// is the one thing that can always say. Same reasoning as
     /// [`Variant::type_ref`].
     pub fn type_ref(&self) -> &TypeRef {
@@ -281,7 +292,7 @@ impl Struct {
 /// once: any alternative with a field makes it a `Variant`.
 #[derive(Clone, Debug)]
 pub struct Variant {
-    pub name: syn::Ident,
+    pub name: ItemName,
     /// Alternatives in declaration order; `alternatives[i].index == i`.
     pub alternatives: Vec<Alternative>,
     pub origin: Origin<syn::ItemEnum>,
@@ -390,7 +401,7 @@ impl Alternative {
 /// is why the two are separate entities rather than one with a dead field each.
 #[derive(Clone, Debug)]
 pub struct Enum {
-    pub name: syn::Ident,
+    pub name: ItemName,
     /// This enum **as a type**, taken at parse time — the twin of
     /// [`Variant::reading`] and [`Struct::reading`], stored and `pub(super)`
     /// for the same two reasons.
@@ -476,7 +487,7 @@ pub struct Field {
 /// address.
 #[derive(Clone, Debug)]
 pub struct Constant {
-    pub name: syn::Ident,
+    pub name: ItemName,
     pub ty: TypeRef,
     /// The whole item — the initializer expression included, which is where a
     /// consumer that re-emits the value reads it from.
@@ -513,8 +524,8 @@ pub struct Guard {
 /// An item the language cannot express.
 #[derive(Clone, Debug)]
 pub struct Unsupported {
-    /// The item's identifier, or `None` for an item kind that has none.
-    pub name: Option<syn::Ident>,
+    /// The item's name, or `None` for an item kind that has none.
+    pub name: Option<ItemName>,
     /// What could not be expressed, ready to be raised by whatever declares
     /// this item. Boxed: it is the size outlier among the elements, and this
     /// one is the rare variant.

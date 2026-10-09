@@ -136,11 +136,6 @@ impl<S: ToTokens> Origin<S> {
     /// reaches one, and the ledger still lists that as open. What it makes is
     /// **visible**: `.to_token_stream().to_string()` was indistinguishable from
     /// the same call on a type an adapter built itself.
-    ///
-    /// `pub`, not `pub(crate)`: the registry pipeline's own
-    /// tests (now in the separate `prebindgen-registry` crate) call this on a
-    /// captured element's `origin` — see `TypeRef`'s doc for why this seal is
-    /// now a convention rather than a compiler check.
     pub fn spell(&self) -> proc_macro2::TokenStream {
         self.syntax.to_token_stream()
     }

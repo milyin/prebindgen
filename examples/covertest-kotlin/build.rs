@@ -18,7 +18,6 @@
 //! | `JniGenBuilder::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
-//! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
@@ -37,7 +36,6 @@
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
 //! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
-//! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
@@ -53,6 +51,7 @@
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
+//! | binding-local fn with explicit generic arguments | `sizeOfLong` ← `crate::size_of_as_i64::<i64>` |
 //! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
 //! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (wrong-length `tag` → binding; bad `secs` → domain) |
@@ -98,10 +97,9 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen_jni::{
-    constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
-};
-use prebindgen_registry::{
-    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
+    constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
+    fun, into, matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant,
+    JniGen,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -296,22 +294,11 @@ fn main() {
                 .class(data_class!(RepliesConfig))
                 .class(data_class!(CacheConfig))
                 // Compose the bounded `Option<Duration>` niche through a
-                // data-class field. Explicit JObject input makes the runtime
-                // execute the whole-object decoder as well as the primitive-
-                // niche `fromParts` encoder (#138).
-                .class(data_class!(DurationBoundary).jobject_input())
-                // These small nested classes form a 127-Long-leaf tree. Its
-                // constructor is legal, but flattening the root function input
-                // would consume 256 JVM slots, so it keeps one JObject input.
-                .class(data_class!(ObjectBoundaryLeaf))
-                .class(data_class!(ObjectBoundary2))
-                .class(data_class!(ObjectBoundary4))
-                .class(data_class!(ObjectBoundary8))
-                .class(data_class!(ObjectBoundary16))
-                .class(data_class!(ObjectBoundary32))
-                .class(data_class!(ObjectBoundary64))
-                .class(data_class!(ObjectBoundary63))
-                .class(data_class!(ObjectBoundary).jobject_input())
+                // data-class field, in both directions (#138).
+                .class(data_class!(DurationBoundary))
+                // A data class whose Kotlin `copy$default` takes exactly the
+                // JVM's 255 argument slots: the harness loads it and copies it.
+                .class(data_class!(CopyEdge))
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
@@ -328,7 +315,7 @@ fn main() {
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                .class(data_class!(BlobValue).jobject_input())
+                .class(data_class!(BlobValue))
                 // Fixed-size arrays of every JNI-primitive element.
                 .class(data_class!(Arrays)),
         )
@@ -368,7 +355,7 @@ fn main() {
                         // Binding-local INSTANCE METHOD and COMPANION
                         // CONSTRUCTOR (`fun!(crate::…).sig(sig!(…))`): fns
                         // defined in THIS crate (src/lib.rs), no source-crate
-                        // item — same member machinery as registry fns.
+                        // item — same member machinery as source fns.
                         // NO .name(): the strip-class-prefix method hook
                         // derives `mean` from the path's LAST segment
                         // (`summary_mean` on `Summary` → strip → `mean`) —
@@ -377,7 +364,7 @@ fn main() {
                         // FALLIBLE binding-local constructor: the sig's
                         // `Result<Summary, String>` return is the error
                         // channel — a negative count routes the Err message
-                        // to onError, exactly like a registry fn's Result.
+                        // to onError, exactly like a source fn's Result.
                         .constructor(
                             fun!(crate::summary_from_mean)
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
@@ -621,7 +608,6 @@ fn main() {
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))
-                .fun(fun!(object_boundary_value))
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))
                 .fun(fun!(unsigned_data_maybe))
@@ -633,6 +619,8 @@ fn main() {
                 .fun(fun!(duration_optional))
                 .fun(fun!(boxed_duration_echo))
                 .fun(fun!(duration_boundary_echo))
+                .fun(fun!(copy_edge_new))
+                .fun(fun!(copy_edge_sum))
                 // The converted analogue of `unsigned_emit`: a whole-value
                 // callback argument, which encodes on its own path rather than
                 // through the data-class or sum emitters.
@@ -654,6 +642,14 @@ fn main() {
                     fun!(crate::summary_describe)
                         .sig(sig!((s: &Summary, verbose: bool) -> String))
                         .name("describeSummary"),
+                )
+                // A binding-local GENERIC fn with explicit generic arguments:
+                // the generated call must keep the `::<i64>`, since nothing
+                // else determines `T`.
+                .fun(
+                    fun!(crate::size_of_as_i64::<i64>)
+                        .sig(sig!(() -> i64))
+                        .name("sizeOfLong"),
                 )
                 // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
                 // `storageMatchesSummary(count, total, …)` / `(expected, …)`.
@@ -781,6 +777,45 @@ fn main() {
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
         .package(package!().fun(fun!(string_new)))
+        // Single-constructor input expansions: direct where the arguments
+        // can say the value is absent, a selector where they cannot; and a
+        // value form with one field renamed and one dropped.
+        .package(
+            package!("tags")
+                .class(ptr_class!(Tag))
+                .fun(
+                    fun!(tag_describe).expand_param("t", expand_param!(Tag).variant(fun!(tag_new))),
+                )
+                .fun(
+                    fun!(tag_describe_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_new))),
+                )
+                .fun(
+                    fun!(tag_default_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_default))),
+                )
+                .fun(
+                    fun!(tag_with_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_with))),
+                )
+                .fun(
+                    fun!(tag_pick).expand_return(
+                        expand_return!(Tag).fields(
+                            fields!(tag_parts)
+                                .name("label", "title")
+                                .field("note", expand_return!(Summary)),
+                        ),
+                    ),
+                ),
+        )
+        .package(
+            package!("cow")
+                .class(data_class!(CowBytes))
+                .fun(fun!(cow_text))
+                .fun(fun!(cow_bytes))
+                .fun(fun!(cow_numbers))
+                .fun(fun!(cow_bytes_box)),
+        )
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
@@ -789,7 +824,7 @@ fn main() {
         .ignore(fun!(storage_put_by_read_and_update));
 
     // Two prebindgen sources: the flat crate plus the binding-side helper crate
-    // (conversion fns for `convert!`). The registry records each fn's origin from
+    // (conversion fns for `convert!`). The adapter records each fn's origin from
     // the `SourceLocation` stamps so generated calls qualify with the defining
     // crate (`perftest_flat::…` vs `cov_helpers::…`). The helper dependency is
     // RENAMED in Cargo.toml (`cov_helpers = { package = "covertest-helpers", .. }`),
@@ -818,14 +853,4 @@ fn main() {
     for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
-
-    // The resolved-surface report (C7): committed next to the regen so a
-    // decl's effect is reviewable in a PR without reading generated Kotlin.
-    std::fs::write(
-        std::path::Path::new(&crate_dir)
-            .join("kotlin")
-            .join("REPORT.md"),
-        jni.report(),
-    )
-    .expect("write REPORT.md");
 }

@@ -7,9 +7,9 @@
 //! > opposite ends of the pipeline.
 //!
 //! ```text
-//! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
-//!   raw records          parse +               indexes       classify off `kind`
-//!   (syn::Item)          validate              elements      spell with `spell()`
+//! Source(s) ──items──> Flat ──Elements──> adapters
+//!   raw records          parse +               classify off `kind`
+//!   (syn::Item)          validate              spell with `spell()`
 //! ```
 //!
 //! [`FlatBuilder::source`] folds the first arrow in for the common case, so a build
@@ -43,9 +43,7 @@
 //! this module is a classifier, and issue #211 says classification lives here
 //! alone; the visibility is what makes that hold rather than a convention
 //! anyone has to remember. Code whose job *is* producing Rust reaches the
-//! syntax through [`Emit`](crate::Emit), which the registry pipeline
-//! (`prebindgen-registry`'s `write_rust`) hands only to the emission
-//! callbacks.
+//! syntax through [`Emit`](crate::Emit).
 //!
 //! # What earns a variant
 //!
@@ -132,8 +130,8 @@
 //! that wants to *inspect* what a source crate marked, refusals included, gets
 //! exactly that from [`Flat::unsupported`].
 //!
-//! `Registry` ingestion is where the diagnoses are raised.
-//! Building a registry from this model **fails if any element is
+//! An adapter is where the diagnoses are raised.
+//! Building a binding from this model **fails if any element is
 //! `Unsupported`** — all of them at once, so a source crate that needs migrating
 //! sees one list rather than one rebuild per item — and it fails before any
 //! adapter declaration is examined. A binding is built against a model the
@@ -174,8 +172,8 @@
 //! | `fn f(a: u8, ...)` | a function without the tail | the variadic arguments vanish |
 //! | `struct S<T>`, `fn f<T>()`, `struct S<const N: usize>` | `T` as a nominal reference | a parameter is indistinguishable from an item named `T` |
 //!
-//! All three are [`ItemError`]s, carried like any other refusal and raised at
-//! registry ingestion. A
+//! All three are [`ItemError`]s, carried like any other refusal and raised by
+//! the adapter. A
 //! **lifetime** binder is not among them: lifetimes are spelling, and the
 //! spelling already travels. Nor is `impl Trait` in argument position — Rust
 //! calls it an anonymous type parameter, but it is not a binder in the syntax,
@@ -188,6 +186,7 @@ use quote::ToTokens;
 mod array_len;
 mod element;
 pub mod emit;
+mod item_name;
 mod key;
 mod origin;
 pub(crate) mod spell;
@@ -206,6 +205,7 @@ pub use self::{
         Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Guard, Param,
         Struct, Type, Unsupported, Variant,
     },
+    item_name::ItemName,
     key::{TypeKey, TypeKeyParseError},
     origin::Origin,
     spelling::{canonical_spelling, canonical_type},
@@ -269,6 +269,7 @@ pub use self::{
 #[derive(Debug, Default, Clone)]
 pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
+    default_module: Option<syn::Path>,
 }
 
 impl FlatBuilder {
@@ -316,6 +317,14 @@ impl FlatBuilder {
         self.items(source.items_all())
     }
 
+    /// The module generated code reaches an item by when its capture records
+    /// no crate — a stream fed through [`Self::items`] without a stamp. A
+    /// recorded crate, renamed or not, takes precedence. See [`ItemName`].
+    pub fn default_module(mut self, module: syn::Path) -> Self {
+        self.default_module = Some(module);
+        self
+    }
+
     /// Add a captured item stream.
     ///
     /// The general feeder: any `(syn::Item, SourceLocation)` iterator, so
@@ -352,6 +361,7 @@ impl FlatBuilder {
     /// array length and a cross-source mention may each name something declared
     /// later, in this input or another.
     pub fn build(self) -> Result<Flat, ParseError> {
+        let default_module = self.default_module;
         let mut items = self.items;
 
         // Pass 0: normalize every item's types to the canonical flat spelling
@@ -388,9 +398,18 @@ impl FlatBuilder {
         let mut elements: Vec<Element> = Vec::with_capacity(items.len());
         let mut seen: Vec<(syn::Ident, SourceLocation)> = Vec::new();
         for (item, loc) in items {
-            let element = lower_item(item, loc, &consts);
+            // The path generated code reaches the item by: its recorded crate,
+            // else the binding's default.
+            let module = match &loc.crate_name {
+                Some(c) => syn::parse_str::<syn::Path>(&c.replace('-', "_")).ok(),
+                None => default_module.clone(),
+            };
+            let mut element = lower_item(item, loc, &consts);
+            if let Some(name) = element.name_mut() {
+                name.place(module.as_ref());
+            }
             if let Some(name) = element.name() {
-                if let Some((first_name, first)) = seen.iter().find(|(n, _)| n == name) {
+                if let Some((first_name, first)) = seen.iter().find(|(n, _)| name == n) {
                     return Err(ParseError::DuplicateName(Box::new(DuplicateName {
                         name: first_name.clone(),
                         first: first.clone(),
@@ -399,7 +418,7 @@ impl FlatBuilder {
                         second_crate: element.location().crate_name.clone(),
                     })));
                 }
-                seen.push((name.clone(), element.location().clone()));
+                seen.push((name.ident().clone(), element.location().clone()));
             }
             elements.push(element);
         }
@@ -453,7 +472,7 @@ impl FlatBuilder {
 /// holds, and [`Self::resolve`] hands it over. An item that named something the
 /// flat API does not declare is [`Element::Unsupported`] with
 /// [`ItemError::UnresolvedType`], exactly like every other refusal — carried
-/// here, raised by `Registry` ingestion.
+/// here, raised by the adapter.
 ///
 /// Resolving here rather than in the adapters is the point of #211: a dangling
 /// name used to surface much later as an unresolved-converter error, from
@@ -533,6 +552,7 @@ mod sealed {
     impl Sealed for str {}
     impl Sealed for String {}
     impl Sealed for syn::Ident {}
+    impl Sealed for super::ItemName {}
     impl<T: ?Sized + Sealed> Sealed for &T {}
 }
 
@@ -554,6 +574,12 @@ impl Name for syn::Ident {
     }
 }
 
+impl Name for ItemName {
+    fn as_name(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Owned(self.ident().to_string())
+    }
+}
+
 /// So a caller already holding a reference does not have to reborrow.
 impl<T: ?Sized + Name> Name for &T {
     fn as_name(&self) -> std::borrow::Cow<'_, str> {
@@ -564,7 +590,7 @@ impl<T: ?Sized + Name> Name for &T {
 impl Flat {
     /// Start collecting what to parse.
     pub fn builder() -> FlatBuilder {
-        FlatBuilder { items: Vec::new() }
+        FlatBuilder::default()
     }
 
     /// Every element, in the order the sources were fed.
@@ -648,10 +674,7 @@ impl Flat {
     // Test-only since S42: `unit_enum`, `payload_enum`, `enum_alternatives` and
     // `declared_member_names` each ask the model which shape a declared enum is
     // and get the element that answers, so nothing in a built crate needs the
-    // item. The registry pipeline's own tests (now in the separate
-    // `prebindgen-registry` crate) still exercise it, which is why this is
-    // `pub` rather than `pub(crate)` — see `TypeRef`'s doc for
-    // why that seal is now a convention rather than a compiler check.
+    // item.
     #[allow(dead_code)]
     pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
         match self.declared_type(name)? {
@@ -713,27 +736,11 @@ impl Flat {
     /// `TypeRef`s computed at parse time — and re-deriving one from
     /// `spell()` is reasoning from the spelling, which is what `origin` is
     /// not for. This exists for the one case with no element behind it: a type a
-    /// build script declared, or one expansion composed. `ensure_entry` is its
-    /// only caller in the registry pipeline.
-    ///
-    /// Whoever asks is expected to keep the answer. The registry does: a reading is
-    /// taken once when a type-table cell is born, and lives in that cell — and
-    /// `Registry::reading` (in the registry layer above) hands
-    /// back only what is in one, so a second source of readings cannot reappear
-    /// here (#266).
+    /// build script declared — a class, a conversion's representation type, a
+    /// callback signature.
     ///
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
-    /// about a type the *binding* built, not a cache miss.
-    ///
-    /// **`pub`, not `pub(crate)`.** The registry pipeline that is
-    /// this method's sole legitimate caller now lives in the separate
-    /// `prebindgen-registry` crate, so a module-path seal can no longer express
-    /// "the pipeline, and nothing else" — there is no path inside this crate for
-    /// it to name. The seal is now a documented convention (this doc comment)
-    /// rather than a compiler-enforced one; #280's intent (an adapter must not
-    /// mint a `TypeRef` from tokens of its own) is no longer structurally
-    /// guaranteed and would need a real API (e.g. a sealed trait token minted
-    /// only by `prebindgen-registry`) to restore.
+    /// about a type the *binding* named, not a cache miss.
     pub fn classify(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());
@@ -771,7 +778,7 @@ impl Flat {
     /// Every item the language could not express, with its diagnosis.
     ///
     /// Present in the model so a consumer can inspect what a source crate marked
-    /// — building a `Registry` from a model holding any of
+    /// — building a binding from a model holding any of
     /// these fails, and reports all of them. See the [module docs](self) on where
     /// acceptance is enforced.
     pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
@@ -784,8 +791,7 @@ impl Flat {
     /// Lower a function signature written outside the captured stream.
     ///
     /// For the **one input that does not come through this module**: a binding's
-    /// `local_functions`, whose signatures are written by hand in a build script
-    /// and inserted straight into the registry. Everything else was already
+    /// local functions, whose signatures are written by hand in a build script. Everything else was already
     /// lowered here, so this exists to keep the grammar decided in one place
     /// rather than re-checked at the far end.
     ///
@@ -821,10 +827,9 @@ impl Flat {
     /// Deliberately does **not** extend [`Self::source_modules`]: see that
     /// field's docs.
     ///
-    /// `pub`: its caller (`RegistryBuilder::fun`, on a binding-local
-    /// [`fun!`](https://docs.rs/prebindgen-registry/latest/prebindgen_registry/macro.fun.html)
-    /// path) now lives in the separate `prebindgen-registry` crate.
     pub fn add_local_function(&mut self, mut f: Function, crate_name: String) {
+        let module = syn::parse_str::<syn::Path>(&crate_name.replace('-', "_")).ok();
+        f.name.place(module.as_ref());
         f.origin.location = Rc::new(SourceLocation {
             crate_name: Some(crate_name),
             ..SourceLocation::default()
@@ -961,7 +966,6 @@ fn first_unresolved(
 ///
 /// The callback grammar, and the language's alone: [`TypeKind::Callback`] is
 /// exactly what this accepts, so acceptance cannot drift from classification.
-/// The registry re-exports it for the consumers that have not migrated yet.
 pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
     let syn::Type::ImplTrait(it) = ty else {
         return None;
@@ -1220,7 +1224,7 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
             Ok(()) => {
                 let target = Some(t.ty.to_token_stream().to_string());
                 Element::Type(Type::Extern(Extern {
-                    name: t.ident.clone(),
+                    name: ItemName::bare(t.ident.clone()),
                     target,
                     origin: Origin::new(syn::Item::Type(t), at),
                 }))
@@ -1234,7 +1238,7 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
         }),
         syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
             Ok(ty) => Element::Constant(Constant {
-                name: c.ident.clone(),
+                name: ItemName::bare(c.ident.clone()),
                 ty,
                 origin: Origin::new(c, at),
             }),
@@ -1267,7 +1271,7 @@ fn unsupported(
     error: ItemError,
 ) -> Element {
     Element::Unsupported(Unsupported {
-        name: name.into(),
+        name: name.into().map(ItemName::bare),
         error: Box::new(error),
         origin: Origin::new(syntax, Rc::clone(at)),
     })
@@ -1338,7 +1342,7 @@ fn lower_fn(
         }
     };
     Ok(Function {
-        name: f.sig.ident.clone(),
+        name: ItemName::bare(f.sig.ident.clone()),
         params,
         ret,
         origin: Origin::new(f.clone(), Rc::clone(at)),
@@ -1377,7 +1381,7 @@ fn lower_struct(
         // Its contents are not a boundary surface, so nothing is lowered.
         syn::Fields::Unnamed(_) => {
             return Ok(Type::Extern(Extern {
-                name: s.ident.clone(),
+                name: ItemName::bare(s.ident.clone()),
                 // A tuple struct IS the definition; it points at nothing.
                 target: None,
                 origin: Origin::new(syn::Item::Struct(s.clone()), Rc::clone(at)),
@@ -1387,7 +1391,7 @@ fn lower_struct(
     };
     Ok(Type::Struct(Struct {
         reading: TypeRef::named(&s.ident),
-        name: s.ident.clone(),
+        name: ItemName::bare(s.ident.clone()),
         fields,
         origin: Origin::new(s.clone(), Rc::clone(at)),
     }))
@@ -1452,7 +1456,7 @@ fn lower_variant(
     }
     Ok(Variant {
         reading: TypeRef::named(&e.ident),
-        name: e.ident.clone(),
+        name: ItemName::bare(e.ident.clone()),
         alternatives,
         origin: Origin::new(e.clone(), Rc::clone(at)),
     })
@@ -1486,7 +1490,7 @@ fn lower_c_enum(e: &syn::ItemEnum, at: &Rc<SourceLocation>) -> Enum {
     }
     Enum {
         reading: TypeRef::named(&e.ident),
-        name: e.ident.clone(),
+        name: ItemName::bare(e.ident.clone()),
         values,
         origin: Origin::new(e.clone(), Rc::clone(at)),
     }

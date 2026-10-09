@@ -114,9 +114,9 @@ fn generate_ffi_bindings() -> PathBuf {
     // leaf (`Millis` → `u64`).
     cbindgen = cbindgen.data_struct(pq!(Caption));
     cbindgen = cbindgen.convert(
-        prebindgen_registry::convert!(Millis)
-            .input(prebindgen_registry::fun!(millis_from_raw))
-            .output(prebindgen_registry::fun!(millis_to_raw)),
+        prebindgen_c::convert!(Millis)
+            .input(prebindgen_c::fun!(millis_from_raw))
+            .output(prebindgen_c::fun!(millis_to_raw)),
     );
     cbindgen = cbindgen
         .ignore_function(pq!(millis_from_raw))

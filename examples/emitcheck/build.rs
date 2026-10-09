@@ -23,8 +23,7 @@
 //! One file is therefore both the compiled definitions and the model input,
 //! and adding a spelling means editing `src/myflat.rs` alone.
 
-use prebindgen_jni::{matching, package, ptr_class, JniGen};
-use prebindgen_registry::{expand_return, fields, fun};
+use prebindgen_jni::{expand_return, fields, fun, matching, package, ptr_class, JniGen};
 
 /// The crate name stamped on every item, and so the qualifier the generated
 /// code calls through (`myflat::z_keyexpr_as_str(..)`). `src/lib.rs` mounts

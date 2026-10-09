@@ -1,0 +1,20 @@
+[package]
+name = "prebindgen-tools"
+version = { workspace = true }
+edition = { workspace = true }
+description = "Building blocks for prebindgen language adapters: type inspection, conversion composition and Rust output"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+prebindgen = { workspace = true }
+prebindgen-flat = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+prettyplease = { workspace = true }

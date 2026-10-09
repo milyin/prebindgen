@@ -31,7 +31,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 35 sections, every JniGen feature exercised
+PASS - 53 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -60,8 +60,7 @@ for the full table; in brief:
   `model` / `errors` / `analytics` / `storage`), `jni_native_init`, all six
   name-mangle closures.
 - **types:** `data_class` (`Payload`; recursively nested/Option-nested
-  `Annotated`; explicit `.jobject_input()` `ObjectBoundary`, whose 127 nested
-  `Long` leaves plus native infrastructure exceed the JVM's 255-slot limit),
+  `Annotated`),
   `ptr_class` (`Storage` / `Summary` / `StorageError` / `Archive` / handlers),
   `enum_class` (`Priority`), `value_class` (`Stamp`),
   `kotlin_type` (`Millis` → `Long`).
@@ -137,6 +136,7 @@ The asserts are grouped into these sections (run order):
 33. `high-volume callback (localref pressure)`
 34. `.gc_managed() lifecycle (ticket + Cleaner backstop)`
 35. `JNI native-symbol escaping (esc_pkg / Esc_Probe / snake extern)`
+36. `single-constructor expand_param (direct / selector) + fields! overrides`
 
 ### Relationship to perftest-kotlin
 

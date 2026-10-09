@@ -57,6 +57,13 @@ pub(crate) fn summary_describe(s: &perftest_flat::Summary, verbose: bool) -> Str
     }
 }
 
+/// A binding-local GENERIC function, bound with explicit generic arguments
+/// (`fun!(crate::size_of_as_i64::<i64>)`): `T` cannot be inferred from the
+/// call, so the generated call must keep the `::<i64>`.
+pub(crate) fn size_of_as_i64<T>() -> i64 {
+    std::mem::size_of::<T>() as i64
+}
+
 pub(crate) fn summary_mean(s: &perftest_flat::Summary) -> f64 {
     let count = perftest_flat::summary_count(s);
     if count == 0 {

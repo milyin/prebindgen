@@ -19,9 +19,8 @@
 # ns/op per operation (the single-payload put / get / callback and the whole-batch
 # put_vec / get_vec / callback_vec) per language, followed by each language's full
 # report. The vector ops process a batch of VEC_N payloads per call (ns reported per
-# call); they run N / VEC_N iterations. The Kotlin report additionally compares a
-# nested 64-Long input recursively flattened into JNI scalars (`large_flat`) with
-# the identical shape passed as one `JObject` (`large_obj`).
+# call); they run N / VEC_N iterations. The Kotlin report additionally measures a
+# nested 64-Long input flattened into JNI scalars (`large_flat`).
 #
 # Usage:
 #   examples/perftest-bench.sh            # full run (N = 5,000,000, VEC_N = 16)
@@ -150,7 +149,7 @@ awk -v want_n="$N" '
         for (i = 1; i <= 3; i++) if (canon[i] in order_seen) langs[++nlangs] = canon[i]
         if (nlangs == 0) { print "No benchmark output captured." ; exit 1 }
 
-        nops = split("put get callback put_vec get_vec callback_vec large_flat large_obj", ops, " ")
+        nops = split("put get callback put_vec get_vec callback_vec large_flat", ops, " ")
         # Apples-to-apples: one table per string category, null-label first.
         ncats = 0
         if ("null" in cats_seen) cattab[++ncats] = "null"

@@ -3,7 +3,7 @@
 //! need. Most items exist so a *coverage* binding (e.g.
 //! `examples/covertest-kotlin`) can map one flat library through **every**
 //! adapter feature and assert the result; the `ObjectBoundary*` family also
-//! supports the flattened-vs-`JObject` JNI input micro-benchmark.
+//! supports the wide-input JNI micro-benchmark.
 //!
 //! Everything here is re-exported at the crate root (`pub use ext::*`), so a
 //! single `source_module = perftest_flat` reaches both the perf surface and this
@@ -1163,7 +1163,7 @@ pub fn cache_config_weight(cache: Option<CacheConfig>) -> i32 {
     }
 }
 
-/// One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree.
+/// One `i64` leaf in the deliberately wide [`ObjectBoundary64`] tree.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectBoundaryLeaf {
@@ -1187,42 +1187,6 @@ object_boundary_level!(ObjectBoundary8, ObjectBoundary4);
 object_boundary_level!(ObjectBoundary16, ObjectBoundary8);
 object_boundary_level!(ObjectBoundary32, ObjectBoundary16);
 object_boundary_level!(ObjectBoundary64, ObjectBoundary32);
-
-/// Structural twin of [`ObjectBoundary64`] used to benchmark an explicit
-/// whole-`JObject` input against recursive 64-leaf flattening.
-#[prebindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectBoundary64Object {
-    pub left: ObjectBoundary32,
-    pub right: ObjectBoundary32,
-}
-
-/// The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves.
-#[prebindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectBoundary63 {
-    pub leaves32: ObjectBoundary32,
-    pub leaves16: ObjectBoundary16,
-    pub leaves8: ObjectBoundary8,
-    pub leaves4: ObjectBoundary4,
-    pub leaves2: ObjectBoundary2,
-    pub leaf: ObjectBoundaryLeaf,
-}
-
-/// Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
-///
-/// Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
-/// contain 127 `i64` leaves. The generated Kotlin constructor/fromParts bridge
-/// remains legal at 254 JVM slots, but flattening a native input parameter
-/// would require 256: 254 for the leaves plus the `JNINative` receiver and
-/// binding-error sink. Because the JVM limit is 255, this otherwise-valid data
-/// class must cross Kotlin→Rust as one `JObject`.
-#[prebindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectBoundary {
-    pub left: ObjectBoundary64,
-    pub right: ObjectBoundary63,
-}
 
 trait ObjectBoundarySum {
     fn boundary_sum(&self) -> i64;
@@ -1253,30 +1217,7 @@ impl_object_boundary_sum!(
     ObjectBoundary16,
     ObjectBoundary32,
     ObjectBoundary64,
-    ObjectBoundary64Object,
 );
-
-impl ObjectBoundarySum for ObjectBoundary63 {
-    fn boundary_sum(&self) -> i64 {
-        self.leaves32.boundary_sum()
-            + self.leaves16.boundary_sum()
-            + self.leaves8.boundary_sum()
-            + self.leaves4.boundary_sum()
-            + self.leaves2.boundary_sum()
-            + self.leaf.boundary_sum()
-    }
-}
-
-impl ObjectBoundarySum for ObjectBoundary {
-    fn boundary_sum(&self) -> i64 {
-        self.left.boundary_sum() + self.right.boundary_sum()
-    }
-}
-
-#[prebindgen]
-pub fn object_boundary_value(value: &ObjectBoundary) -> i64 {
-    value.boundary_sum()
-}
 
 /// Sum the 64 scalar leaves after recursive JNI parameter flattening.
 #[prebindgen]
@@ -1284,10 +1225,399 @@ pub fn large_flat_input_sum(value: &ObjectBoundary64) -> i64 {
     value.boundary_sum()
 }
 
-/// Sum the same 64-leaf shape after decoding one whole `JObject` input.
+/// A data class at the JVM's slot limit. Kotlin generates a static
+/// `copy$default` for every data class, taking the instance, every field, one
+/// `Int` mask per 32 fields and a marker: here 1 + 124 × 2 + 1 + 4 + 1 = 255
+/// slots, the most the JVM accepts.
 #[prebindgen]
-pub fn large_object_input_sum(value: &ObjectBoundary64Object) -> i64 {
-    value.boundary_sum()
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CopyEdge {
+    pub f0: i64,
+    pub f1: i64,
+    pub f2: i64,
+    pub f3: i64,
+    pub f4: i64,
+    pub f5: i64,
+    pub f6: i64,
+    pub f7: i64,
+    pub f8: i64,
+    pub f9: i64,
+    pub f10: i64,
+    pub f11: i64,
+    pub f12: i64,
+    pub f13: i64,
+    pub f14: i64,
+    pub f15: i64,
+    pub f16: i64,
+    pub f17: i64,
+    pub f18: i64,
+    pub f19: i64,
+    pub f20: i64,
+    pub f21: i64,
+    pub f22: i64,
+    pub f23: i64,
+    pub f24: i64,
+    pub f25: i64,
+    pub f26: i64,
+    pub f27: i64,
+    pub f28: i64,
+    pub f29: i64,
+    pub f30: i64,
+    pub f31: i64,
+    pub f32: i64,
+    pub f33: i64,
+    pub f34: i64,
+    pub f35: i64,
+    pub f36: i64,
+    pub f37: i64,
+    pub f38: i64,
+    pub f39: i64,
+    pub f40: i64,
+    pub f41: i64,
+    pub f42: i64,
+    pub f43: i64,
+    pub f44: i64,
+    pub f45: i64,
+    pub f46: i64,
+    pub f47: i64,
+    pub f48: i64,
+    pub f49: i64,
+    pub f50: i64,
+    pub f51: i64,
+    pub f52: i64,
+    pub f53: i64,
+    pub f54: i64,
+    pub f55: i64,
+    pub f56: i64,
+    pub f57: i64,
+    pub f58: i64,
+    pub f59: i64,
+    pub f60: i64,
+    pub f61: i64,
+    pub f62: i64,
+    pub f63: i64,
+    pub f64: i64,
+    pub f65: i64,
+    pub f66: i64,
+    pub f67: i64,
+    pub f68: i64,
+    pub f69: i64,
+    pub f70: i64,
+    pub f71: i64,
+    pub f72: i64,
+    pub f73: i64,
+    pub f74: i64,
+    pub f75: i64,
+    pub f76: i64,
+    pub f77: i64,
+    pub f78: i64,
+    pub f79: i64,
+    pub f80: i64,
+    pub f81: i64,
+    pub f82: i64,
+    pub f83: i64,
+    pub f84: i64,
+    pub f85: i64,
+    pub f86: i64,
+    pub f87: i64,
+    pub f88: i64,
+    pub f89: i64,
+    pub f90: i64,
+    pub f91: i64,
+    pub f92: i64,
+    pub f93: i64,
+    pub f94: i64,
+    pub f95: i64,
+    pub f96: i64,
+    pub f97: i64,
+    pub f98: i64,
+    pub f99: i64,
+    pub f100: i64,
+    pub f101: i64,
+    pub f102: i64,
+    pub f103: i64,
+    pub f104: i64,
+    pub f105: i64,
+    pub f106: i64,
+    pub f107: i64,
+    pub f108: i64,
+    pub f109: i64,
+    pub f110: i64,
+    pub f111: i64,
+    pub f112: i64,
+    pub f113: i64,
+    pub f114: i64,
+    pub f115: i64,
+    pub f116: i64,
+    pub f117: i64,
+    pub f118: i64,
+    pub f119: i64,
+    pub f120: i64,
+    pub f121: i64,
+    pub f122: i64,
+    pub f123: i64,
+    pub last: i32,
+}
+
+/// A `CopyEdge` whose field `i` is `seed + i` and whose `last` is 7.
+#[prebindgen]
+pub fn copy_edge_new(seed: i64) -> CopyEdge {
+    CopyEdge {
+        f0: seed,
+        f1: seed + 1,
+        f2: seed + 2,
+        f3: seed + 3,
+        f4: seed + 4,
+        f5: seed + 5,
+        f6: seed + 6,
+        f7: seed + 7,
+        f8: seed + 8,
+        f9: seed + 9,
+        f10: seed + 10,
+        f11: seed + 11,
+        f12: seed + 12,
+        f13: seed + 13,
+        f14: seed + 14,
+        f15: seed + 15,
+        f16: seed + 16,
+        f17: seed + 17,
+        f18: seed + 18,
+        f19: seed + 19,
+        f20: seed + 20,
+        f21: seed + 21,
+        f22: seed + 22,
+        f23: seed + 23,
+        f24: seed + 24,
+        f25: seed + 25,
+        f26: seed + 26,
+        f27: seed + 27,
+        f28: seed + 28,
+        f29: seed + 29,
+        f30: seed + 30,
+        f31: seed + 31,
+        f32: seed + 32,
+        f33: seed + 33,
+        f34: seed + 34,
+        f35: seed + 35,
+        f36: seed + 36,
+        f37: seed + 37,
+        f38: seed + 38,
+        f39: seed + 39,
+        f40: seed + 40,
+        f41: seed + 41,
+        f42: seed + 42,
+        f43: seed + 43,
+        f44: seed + 44,
+        f45: seed + 45,
+        f46: seed + 46,
+        f47: seed + 47,
+        f48: seed + 48,
+        f49: seed + 49,
+        f50: seed + 50,
+        f51: seed + 51,
+        f52: seed + 52,
+        f53: seed + 53,
+        f54: seed + 54,
+        f55: seed + 55,
+        f56: seed + 56,
+        f57: seed + 57,
+        f58: seed + 58,
+        f59: seed + 59,
+        f60: seed + 60,
+        f61: seed + 61,
+        f62: seed + 62,
+        f63: seed + 63,
+        f64: seed + 64,
+        f65: seed + 65,
+        f66: seed + 66,
+        f67: seed + 67,
+        f68: seed + 68,
+        f69: seed + 69,
+        f70: seed + 70,
+        f71: seed + 71,
+        f72: seed + 72,
+        f73: seed + 73,
+        f74: seed + 74,
+        f75: seed + 75,
+        f76: seed + 76,
+        f77: seed + 77,
+        f78: seed + 78,
+        f79: seed + 79,
+        f80: seed + 80,
+        f81: seed + 81,
+        f82: seed + 82,
+        f83: seed + 83,
+        f84: seed + 84,
+        f85: seed + 85,
+        f86: seed + 86,
+        f87: seed + 87,
+        f88: seed + 88,
+        f89: seed + 89,
+        f90: seed + 90,
+        f91: seed + 91,
+        f92: seed + 92,
+        f93: seed + 93,
+        f94: seed + 94,
+        f95: seed + 95,
+        f96: seed + 96,
+        f97: seed + 97,
+        f98: seed + 98,
+        f99: seed + 99,
+        f100: seed + 100,
+        f101: seed + 101,
+        f102: seed + 102,
+        f103: seed + 103,
+        f104: seed + 104,
+        f105: seed + 105,
+        f106: seed + 106,
+        f107: seed + 107,
+        f108: seed + 108,
+        f109: seed + 109,
+        f110: seed + 110,
+        f111: seed + 111,
+        f112: seed + 112,
+        f113: seed + 113,
+        f114: seed + 114,
+        f115: seed + 115,
+        f116: seed + 116,
+        f117: seed + 117,
+        f118: seed + 118,
+        f119: seed + 119,
+        f120: seed + 120,
+        f121: seed + 121,
+        f122: seed + 122,
+        f123: seed + 123,
+        last: 7,
+    }
+}
+
+/// The sum of every field of `v`.
+#[prebindgen]
+pub fn copy_edge_sum(v: &CopyEdge) -> i64 {
+    v.f0 + v.f1
+        + v.f2
+        + v.f3
+        + v.f4
+        + v.f5
+        + v.f6
+        + v.f7
+        + v.f8
+        + v.f9
+        + v.f10
+        + v.f11
+        + v.f12
+        + v.f13
+        + v.f14
+        + v.f15
+        + v.f16
+        + v.f17
+        + v.f18
+        + v.f19
+        + v.f20
+        + v.f21
+        + v.f22
+        + v.f23
+        + v.f24
+        + v.f25
+        + v.f26
+        + v.f27
+        + v.f28
+        + v.f29
+        + v.f30
+        + v.f31
+        + v.f32
+        + v.f33
+        + v.f34
+        + v.f35
+        + v.f36
+        + v.f37
+        + v.f38
+        + v.f39
+        + v.f40
+        + v.f41
+        + v.f42
+        + v.f43
+        + v.f44
+        + v.f45
+        + v.f46
+        + v.f47
+        + v.f48
+        + v.f49
+        + v.f50
+        + v.f51
+        + v.f52
+        + v.f53
+        + v.f54
+        + v.f55
+        + v.f56
+        + v.f57
+        + v.f58
+        + v.f59
+        + v.f60
+        + v.f61
+        + v.f62
+        + v.f63
+        + v.f64
+        + v.f65
+        + v.f66
+        + v.f67
+        + v.f68
+        + v.f69
+        + v.f70
+        + v.f71
+        + v.f72
+        + v.f73
+        + v.f74
+        + v.f75
+        + v.f76
+        + v.f77
+        + v.f78
+        + v.f79
+        + v.f80
+        + v.f81
+        + v.f82
+        + v.f83
+        + v.f84
+        + v.f85
+        + v.f86
+        + v.f87
+        + v.f88
+        + v.f89
+        + v.f90
+        + v.f91
+        + v.f92
+        + v.f93
+        + v.f94
+        + v.f95
+        + v.f96
+        + v.f97
+        + v.f98
+        + v.f99
+        + v.f100
+        + v.f101
+        + v.f102
+        + v.f103
+        + v.f104
+        + v.f105
+        + v.f106
+        + v.f107
+        + v.f108
+        + v.f109
+        + v.f110
+        + v.f111
+        + v.f112
+        + v.f113
+        + v.f114
+        + v.f115
+        + v.f116
+        + v.f117
+        + v.f118
+        + v.f119
+        + v.f120
+        + v.f121
+        + v.f122
+        + v.f123
+        + v.last as i64
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2018,6 +2348,56 @@ pub fn ref_vec_id_sum(ps: &Vec<Payload>) -> i64 {
 pub fn ledger_each(n: i64, sink: impl Fn(Ledger) + Send + Sync + 'static) {
     for i in 0..n {
         sink(ledger_new(i));
+    }
+}
+
+/// Exercise both runtime ownership cases of a Cow text result.
+#[prebindgen]
+pub fn cow_text(text: std::borrow::Cow<'_, str>, borrowed: bool) -> std::borrow::Cow<'static, str> {
+    if borrowed {
+        std::borrow::Cow::Borrowed("borrowed")
+    } else {
+        std::borrow::Cow::Owned(text.into_owned())
+    }
+}
+
+/// Exercise the JNI byte-array codec inside an explicit Cow wrapper.
+#[prebindgen]
+pub fn cow_bytes(
+    bytes: std::borrow::Cow<'_, [u8]>,
+    borrowed: bool,
+) -> std::borrow::Cow<'static, [u8]> {
+    if borrowed {
+        std::borrow::Cow::Borrowed(&[0, 128, 255])
+    } else {
+        std::borrow::Cow::Owned(bytes.into_owned())
+    }
+}
+
+/// Exercise the general sequence codec inside an explicit Cow wrapper.
+#[prebindgen]
+pub fn cow_numbers(
+    values: std::borrow::Cow<'_, [i64]>,
+    borrowed: bool,
+) -> std::borrow::Cow<'static, [i64]> {
+    if borrowed {
+        std::borrow::Cow::Borrowed(&[1, -2, 3])
+    } else {
+        std::borrow::Cow::Owned(values.into_owned())
+    }
+}
+
+/// A Cow field still gives the Kotlin data class array-content equality.
+#[prebindgen]
+#[derive(Clone)]
+pub struct CowBytes {
+    pub bytes: std::borrow::Cow<'static, [u8]>,
+}
+
+#[prebindgen]
+pub fn cow_bytes_box(bytes: std::borrow::Cow<'_, [u8]>) -> CowBytes {
+    CowBytes {
+        bytes: std::borrow::Cow::Owned(bytes.into_owned()),
     }
 }
 

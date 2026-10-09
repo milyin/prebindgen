@@ -1,82 +1,22 @@
-//! [`Emit`] — the capability to render captured Rust syntax.
-//!
-//! # Why this exists
+//! [`Emit`] — rendering captured Rust syntax.
 //!
 //! The model pairs every element with the syntax it was built from, and
-//! generated Rust has to **spell** that syntax: a converter's signature says
-//! what the source said. But *reading* the same syntax to decide what a type
-//! means is the thing [#211](https://github.com/milyin/prebindgen/issues/211)
+//! generated Rust has to **spell** that syntax: a wrapper's signature says
+//! what the source said. *Reading* the same syntax to decide what a type
+//! means is what [#211](https://github.com/milyin/prebindgen/issues/211)
 //! removed — a decision belongs to `kind`, which cannot disagree with itself
 //! the way a spelling can.
 //!
-//! Those two are the same capability if the model simply hands syntax out, so
-//! the difference has to be enforced somewhere. Enforcing it by *measurement* —
-//! counting how many places name a door, and failing the build when the count
-//! moves — was tried and retired: a count can be walked around without moving
-//! (`spell()` → `parse_quote!` recovers a node while naming no door), and it
-//! cannot see an out-of-crate adapter at all.
-//!
-//! So the difference is a **capability**. Syntax is reachable only
-//! through this type, this type cannot be constructed outside this crate, and
-//! `write_rust` (in the separate `prebindgen-registry` crate, which is where
-//! the callbacks below now live) hands one out only to the callbacks whose job
-//! is producing Rust. Adapter code that classifies, plans, names or validates
-//! never receives one, and a call to a door from there does not compile.
-//!
-//! # Where one comes from
-//!
-//! `Prebindgen::on_function` and its four peers, `prerequisites`,
-//! `post_process_item`, and the closure `RegistryBuilder::convert_with`
-//! calls — all in the separate `prebindgen-registry` crate — a converter is
-//! generated Rust, since `ConverterImpl::function` is a complete
-//! `syn::ItemFn` the adapter writes. Nothing else.
-//!
-//! If a helper needs an `&Emit`, that is the helper saying it emits; if
-//! threading one to it feels wrong, it is probably deciding something and wants
-//! the model instead.
-//!
-//! # What is closed
-//!
-//! **Every route from the model to captured syntax, except the ones the
-//! registry pipeline itself needs.** Every accessor that hands out a `syn`
-//! node — a type's own node and its stripped form, an element's item, an
-//! origin's node, the syntax rebuilt from a kind, and the shape-spelling
-//! helpers — is crate-internal; nothing outside this crate calls them.
-//! `TypeRef::spell`, `Origin::spell`
-//! and `Flat::enum_item` are `pub`: the registry pipeline that legitimately
-//! calls them (`write_rust`'s emission, and its own tests) is now the separate
-//! `prebindgen-registry` crate, and a module-path seal cannot reach across a
-//! crate boundary. The `compile_fail` examples on [`Emit`] check what remains
-//! closed from outside the crate.
-//!
-//! Two things stay public because they are not that:
-//!
-//! * [`Origin::declared_spelling`](super::Origin::declared_spelling) — an
-//!   adapter declaration's `Origin<syn::Type>` holds a type the **build script**
-//!   wrote, never captured, which #280 leaves the model no reading for.
-//! * [`Field::member`](super::Field::member) and
-//!   [`Field::bind`](super::Field::bind) — they read the field's `name`
-//!   and `index`, model facts, no syntax.
+//! So the renderings live here, apart from the model's readings: a
+//! declaration's delimiters, an enum value's discriminant as written, a
+//! guard, a verbatim item. The accessors that hand out a `syn` node itself —
+//! a type's node and its stripped form, an element's item, an origin's node,
+//! the syntax rebuilt from a kind — stay crate-internal; the `compile_fail`
+//! examples on [`Emit`] check that from outside the crate.
 //!
 //! `Display for TypeRef` renders the **identity**, not the spelling: a message
-//! is decision code explaining itself and must not need this capability, and
-//! delegating to `spell()` would have handed the captured tokens back out
-//! through `format!`.
-//!
-//! # The residual
-//!
-//! Two things visibility does not do, both accepted.
-//!
-//! [`Emit::spell`] yields a `TokenStream`, so emission code can re-parse it and
-//! take the node apart. That is deliberate — emission is where syntax belongs —
-//! and closing it would mean an emission IR for Rust, mirroring the
-//! `kotlin-codegen` crate, which is a much larger piece of work.
-//!
-//! And nothing stops a *new* door being added: someone can write `pub fn
-//! as_syn2` in `flat` tomorrow. The reason that is tolerable is that such a
-//! method has to be added inside `flat` **and** surfaced here before an adapter
-//! can reach it — a two-file diff in the one module a reviewer of this
-//! subsystem already reads.
+//! is decision code explaining itself, and delegating to `spell()` would hand
+//! the captured tokens back out through `format!`.
 
 use proc_macro2::TokenStream;
 
@@ -84,14 +24,9 @@ use super::{Element, EnumValue, Field, Struct, Type, TypeRef};
 
 /// Re-emit a captured `#[prebindgen]` const as a **path-alias** to its
 /// source-of-truth: same attributes (doc comments), visibility, name and
-/// type, with the initializer replaced by `<source_module>::<ident>`. Used
-/// by `Prebindgen::on_const` implementations so consts whose initializers
-/// reference source-crate internals (private helpers, upstream constants)
-/// still compile in the generated file.
-///
-/// Lives here rather than beside the `Prebindgen` trait because it is pure
-/// syntax rendering with no pipeline dependency, and [`Emit::const_alias`] is
-/// its only caller.
+/// type, with the initializer replaced by `<source_module>::<ident>`, so a
+/// const whose initializer references source-crate internals still compiles
+/// in the generated file. [`Emit::const_alias`] is its only caller.
 fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStream {
     let attrs = &c.attrs;
     let vis = &c.vis;
@@ -103,25 +38,15 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
     }
 }
 
-/// The capability to render captured Rust syntax.
+/// Renders captured Rust syntax for code that generates Rust.
 ///
-/// Unforgeable outside this crate: the field is private and there is no public
-/// constructor, so the only way to hold one is to have been handed one. See the
-/// [module docs](self) for where that happens and why.
+/// Every method here is a *rendering* — it answers "what did the source
+/// write", never "what does this mean". The second question is the model's,
+/// and its answers ([`TypeRef::kind`], [`TypeRef::key`], the layer readings)
+/// are on the model itself.
 ///
-/// Every method here is a *rendering* — it answers "what did the source write",
-/// never "what does this mean". The second question is the model's, and its
-/// answers ([`TypeRef::kind`], [`TypeRef::key`], the layer readings) need no
-/// capability precisely because they cannot be misused into re-deriving a
-/// classification.
-///
-/// # The seal, as compiled assertions
-///
-/// A doctest builds as its **own crate** against the published API, so these
-/// check the property that matters: what an out-of-crate adapter can reach.
-/// Each names a route that used to be open.
-///
-/// An element's item (`E0624` — the method is private):
+/// What stays closed from outside the crate — each of these is a route to a
+/// `syn` node:
 ///
 /// ```compile_fail
 /// # use prebindgen_flat::{Element, flat};
@@ -142,31 +67,11 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// fn leak(f: &flat::Function) -> &syn::ItemFn { f.origin.as_syn() }
 /// ```
 ///
-/// …and its tokens, which re-parse to the same item — the door under another
-/// name, and the one a reviewer found still open when this type was introduced.
-/// **No longer closed**: `Origin::spell` is `pub` now that the registry
-/// pipeline's own tests, this method's other legitimate caller, are the
-/// separate `prebindgen-registry` crate rather than code inside this one:
-///
-/// ```
-/// # use prebindgen_flat::flat;
-/// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
-/// ```
-///
 /// A type's **node** — the door C5 claimed to have closed and did not:
 ///
 /// ```compile_fail
 /// # use prebindgen_flat::flat;
 /// fn leak(t: &flat::TypeRef) -> &syn::Type { t.as_syn() }
-/// ```
-///
-/// A declared enum's item, by name. **No longer closed**, for the same reason
-/// as `Origin::spell` above — `Flat::enum_item` is a registry-pipeline test
-/// helper:
-///
-/// ```
-/// # use prebindgen_flat::Flat;
-/// fn leak(f: &Flat) -> Option<&syn::ItemEnum> { f.enum_item("E") }
 /// ```
 ///
 /// The delimiters a shape was written with — `S { a }` vs `S(a)` vs `S`:
@@ -183,15 +88,6 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// fn leak(v: &flat::EnumValue) -> proc_macro2::TokenStream {
 ///     v.spell(Default::default(), &[])
 /// }
-/// ```
-///
-/// A type's spelling. **No longer closed**: `TypeRef::spell` is `pub` now
-/// that `write_rust`'s own emission code, this method's other legitimate
-/// caller, lives in the separate `prebindgen-registry` crate:
-///
-/// ```
-/// # use prebindgen_flat::flat;
-/// fn leak(t: &flat::TypeRef) -> proc_macro2::TokenStream { t.spell() }
 /// ```
 ///
 /// …its stripped form, and the kind's reconstruction:
@@ -219,35 +115,13 @@ pub struct Emit {
 }
 
 impl Emit {
-    /// Mint one. Previously `pub(crate)`, the whole enforcement
-    /// mechanism when the registry pipeline that is this method's sole
-    /// legitimate caller lived in this crate; now `pub`, since that pipeline
-    /// is the separate `prebindgen-registry` crate and a module-path seal
-    /// cannot reach across the boundary. `write_rust` there mints the one
-    /// `Emit` per generation and hands out only borrows of it — see the module
-    /// doc.
-    ///
-    /// No `Default` impl on purpose: `Emit::default()` would be one more
-    /// trivially-derivable way to mint one, undermining the "only where a
-    /// capability is deliberately needed" convention `new` itself relies on
-    /// now that visibility alone cannot enforce it.
+    /// A renderer.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self { _seal: () }
     }
 
-    /// A capability for a test that drives an emission helper directly.
-    ///
-    /// Gated on `cfg(test)` or the non-default `testing` feature, so it does
-    /// not exist in an ordinary built crate — production code still cannot
-    /// mint one, and the `compile_fail` examples above still prove the
-    /// out-of-crate seal, since a doctest compiles against the built crate
-    /// where this is absent.
-    ///
-    /// The feature exists because the adapters that drive emission are now
-    /// separate crates, so their test suites need the same capability this
-    /// crate's own tests do — and a test suite is exactly the caller the seal
-    /// was never aimed at.
+    /// A renderer, for tests.
     #[cfg(any(test, feature = "testing"))]
     pub fn for_test() -> Self {
         Self { _seal: () }

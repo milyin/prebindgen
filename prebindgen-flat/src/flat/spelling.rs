@@ -30,7 +30,7 @@ use prebindgen::SourceLocation;
 ///    item per bare ident, and a `crate::` path in a captured item can only
 ///    denote the source crate's own item.
 /// 3. A multi-segment path headed by a name in `source_modules` (the
-///    `#[prebindgen]` source crates chained into the registry,
+///    `#[prebindgen]` source crates fed to the builder,
 ///    hyphens-as-underscores) reduces the same way (`myflat::Foo` ≡ `Foo`).
 ///    Pure callers pass `&[]`.
 /// 4. A **prelude** path reduces to the bare name the language knows it by —

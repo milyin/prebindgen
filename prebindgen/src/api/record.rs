@@ -20,8 +20,9 @@ pub struct Record {
     pub cfg: Option<String>,
 }
 
-/// Source location information for tracking where code originated
-#[doc(hidden)]
+/// Where a captured item came from: its file, position and crate. Every
+/// `(syn::Item, SourceLocation)` pair a [`Source`](crate::Source) hands out
+/// carries one, and generated code names the item through its crate.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct SourceLocation {
     /// The source file path
