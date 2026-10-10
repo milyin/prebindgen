@@ -47,9 +47,123 @@
 //! the foreign-side writer reads its nodes to produce or unpack the same
 //! wires in the same order.
 //!
-//! `tests/toy_adapter.rs` is a complete adapter in this style: a struct that
-//! crosses as its fields by default, whole as a handle for one parameter, and
-//! built by its constructor for another.
+//! ## Example
+//!
+//! A struct `Point` registered three ways — as its fields, whole as a
+//! handle, and built by `point_new` — crossing each way at a different
+//! parameter:
+//!
+//! ```
+//! use prebindgen::SourceLocation;
+//! use prebindgen_flat::{flat::{ScalarKind, Type, TypeRef}, Flat};
+//! use prebindgen_tools::{
+//!     resolve, Choices, Code, Crossing, Decode, In, Input, Lower, Place, Presence, Seg,
+//!     Sequence, Shape, Ways, Whole, Wire, WireType,
+//! };
+//! use proc_macro2::TokenStream;
+//! use quote::quote;
+//!
+//! // The adapter's wire types.
+//! #[derive(Clone, Debug)]
+//! enum W { Long, Handle }
+//! impl WireType for W {
+//!     fn rust(&self) -> TokenStream {
+//!         match self { W::Long => quote!(i64), W::Handle => quote!(*mut ::core::ffi::c_void) }
+//!     }
+//!     fn placeholder(&self) -> TokenStream {
+//!         match self { W::Long => quote!(0), W::Handle => quote!(::core::ptr::null_mut()) }
+//!     }
+//! }
+//!
+//! let source = syn::parse_file("
+//!     pub struct Point { pub x: i64, pub y: i64 }
+//!     pub fn point_new(x: i64) -> Point { Point { x, y: 0 } }
+//!     pub fn draw(p: Point) {}
+//!     pub fn keep(p: Point) {}
+//!     pub fn build(p: Point) {}
+//! ").unwrap();
+//! let location = SourceLocation { crate_name: Some("src".into()), ..Default::default() };
+//! let flat = Flat::builder()
+//!     .items(source.items.into_iter().map(|i| (i, location.clone())))
+//!     .build().unwrap();
+//! let Some(Type::Struct(point)) = flat.declared_type("Point") else { unreachable!() };
+//!
+//! // 1. Ways: every way `Point` may cross, each checked against the model.
+//! let mut ways = Ways::new();
+//! let fields = ways.fields(point);
+//! let handle = ways.whole(point.type_ref(), ());
+//! let built = ways.constructed(flat.function("point_new").unwrap()).unwrap();
+//!
+//! // 2. Choices: the fields everywhere, but a handle for `keep`'s `p` and
+//! //    the constructor for `build`'s. (`built` is a `WayId<In>`: it cannot
+//! //    be chosen for a `Choices<Out>`.)
+//! let param = |f: &str| Place::new(f).at(Seg::Param("p".into()));
+//! let mut choices = Choices::<In>::new();
+//! choices.choose(&ways, fields).unwrap();
+//! choices.choose_at(param("keep"), handle);
+//! choices.choose_at(param("build"), built);
+//!
+//! // 3. What the model leaves to the boundary: which values cross whole,
+//! //    on which wire, read by which code.
+//! struct Boundary<'a, 'f> { ways: &'a Ways<'f, ()>, choices: &'a Choices<In> }
+//! impl<'f> Lower<'f, In> for Boundary<'_, 'f> {
+//!     type Wire = W;
+//!     type Leaf = ();
+//!     type Error = String;
+//!     fn ways(&self) -> &Ways<'f, ()> { self.ways }
+//!     fn choices(&self) -> &Choices<In> { self.choices }
+//!     fn whole(&self, _: &TypeRef, shape: Shape<'_, &()>, place: &Place)
+//!         -> Result<Option<Whole<W, In>>, String>
+//!     {
+//!         let wire = |t| Wire::new(place.ident(), t);
+//!         Ok(match shape {
+//!             Shape::Scalar(ScalarKind::I64) => {
+//!                 Some(Whole::<W, In>::new(wire(W::Long), |w| Code::new(quote!(#w))))
+//!             }
+//!             // `Point`, where its chosen way is whole.
+//!             Shape::Declared { .. } => Some(Whole::<W, In>::new(wire(W::Handle), |w| {
+//!                 Code::new(quote!(*::std::boxed::Box::from_raw(#w as *mut src::Point)))
+//!             })),
+//!             _ => None,
+//!         })
+//!     }
+//!     fn presence(&self, _: &Crossing<'f, W, In>, place: &Place)
+//!         -> Result<Presence<W, In>, String> { Err(format!("{place}: no options")) }
+//!     fn sequence(&self, _: &Crossing<'f, W, In>, place: &Place)
+//!         -> Result<Vec<Wire<W>>, String> { Err(format!("{place}: no sequences")) }
+//!     fn tag(&self, place: &Place) -> Result<Wire<W>, String> {
+//!         Err(format!("{place}: no sums"))
+//!     }
+//! }
+//!
+//! // 4. The code the crossing leaves to the adapter: here, none.
+//! struct Codec;
+//! impl<'f> Decode<'f, W> for Codec {
+//!     type Error = String;
+//!     fn sequence(&self, at: &Crossing<'f, W, In>, _: &Sequence<'f, W, In>, _: Input)
+//!         -> Result<Code, String> { Err(format!("{}: no sequences", at.place())) }
+//! }
+//!
+//! // Resolve each function's `p`, then read its wires and its Rust.
+//! let boundary = Boundary { ways: &ways, choices: &choices };
+//! let cross = |f: &str| {
+//!     let p = &flat.function(f).unwrap().params[0];
+//!     let crossing = resolve(&boundary, &p.ty, param(f)).unwrap();
+//!     let wires: Vec<String> = crossing.wires().iter().map(|w| w.name.to_string()).collect();
+//!     (wires, crossing.decode(&Codec).unwrap().expr().to_string())
+//! };
+//! let (wires, rust) = cross("draw");
+//! assert_eq!(wires, ["p_x", "p_y"]);
+//! assert_eq!(rust, quote!(src::Point { x: p_x, y: p_y }).to_string());
+//! let (wires, _) = cross("keep");
+//! assert_eq!(wires, ["p"]);
+//! let (wires, rust) = cross("build");
+//! assert_eq!(wires, ["p_x"]);
+//! assert_eq!(rust, quote!(src::point_new(p_x)).to_string());
+//! ```
+//!
+//! `tests/toy_adapter.rs` is a complete adapter in this style, with both
+//! directions, options, sums, conversions and the foreign side.
 //!
 //! ## Other tools
 //!

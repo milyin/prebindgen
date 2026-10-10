@@ -96,6 +96,10 @@ the shape of the type:
 The crossing's wires are the generated element's parameters, and the
 foreign-side writer reads the same nodes, so both sides follow one decision.
 
+The `prebindgen-tools` crate documentation walks through a struct crossing
+three ways — as its fields, whole as a handle, and built by a constructor —
+each chosen at a different parameter.
+
 A source item's `name` is an `ItemName`, which the flat model qualifies when
 it is built, so splicing it names the item from the generated crate
 (`Payload` → `perftest_flat::Payload`). `callback_arg_types` spells the
