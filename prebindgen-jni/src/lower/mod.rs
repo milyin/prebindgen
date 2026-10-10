@@ -194,8 +194,7 @@ impl Plan<'_> {
     pub(crate) fn shape<'t>(&self, ty: &'t TypeRef) -> Res<Shape<'t, &Setting>> {
         let s = shape(ty, |candidate| {
             bare_declared_name(candidate).and_then(|name| self.types.get(name))
-        })
-        .map_err(|e| crate::Error(format!("`{ty}`: {e}")))?;
+        });
         Ok(match s {
             Shape::Declared {
                 ty, declaration, ..

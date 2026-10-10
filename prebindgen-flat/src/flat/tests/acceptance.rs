@@ -253,13 +253,10 @@ fn the_prelude_reaches_every_builtin_by_either_spelling() {
 
     // The bug: qualified `MaybeUninit` used to fall through to an unresolvable
     // nominal type, so an out-parameter worked only if the source `use`d it.
-    let TypeKind::Ref { mutable, inner, .. } =
-        kind(quote::quote!(&mut std::mem::MaybeUninit<Sample>))
-    else {
-        panic!("a borrow");
-    };
-    assert!(mutable);
-    assert!(matches!(inner.kind, TypeKind::Uninit(_)));
+    assert!(matches!(
+        kind(quote::quote!(&mut std::mem::MaybeUninit<Sample>)),
+        TypeKind::Out(_)
+    ));
 }
 
 /// A `#[prebindgen] pub type` is a **one-way road**: it brings a foreign type into
@@ -426,11 +423,10 @@ fn references() {
         kind(quote::quote!(&mut Sample)),
         TypeKind::Ref { mutable: true, .. }
     ));
-    // The lifetime is part of the type, so the model keeps it.
-    let TypeKind::Ref { lifetime, .. } = kind(quote::quote!(&'a Sample)) else {
-        panic!("a borrow");
-    };
-    assert_eq!(lifetime.expect("a lifetime").ident, "a");
+    // The lifetime is spelling: the kind drops it, the slice keeps it.
+    let ty = lower(quote::quote!(&'a Sample)).expect("in the language");
+    assert!(matches!(ty.kind, TypeKind::Ref { mutable: false, .. }));
+    assert_eq!(tokens(ty.origin.as_syn()), "& 'a Sample");
 }
 
 /// `Vec<T>` and `[T]` are two Rust forms, so two kinds — and one *run of values*
@@ -467,7 +463,7 @@ fn a_run_of_values_is_read_through_either_spelling() {
     }
 }
 
-/// A `Cow<'_, T>` keeps its own kind, its lifetime included, and reads as the
+/// A `Cow<'_, T>` keeps its own kind and reads as the
 /// `T` it borrows — the same treatment `Box<T>` gets, taken at the consumer
 /// rather than during lowering.
 ///
@@ -485,10 +481,7 @@ fn a_cow_reads_as_what_it_borrows() {
         format!("{:?}", kind(quote::quote!([u8]))),
         "a byte Cow reads exactly as the byte slice it borrows"
     );
-    let TypeKind::Cow { lifetime, .. } = &cow.kind else {
-        panic!("a cow");
-    };
-    assert_eq!(lifetime.ident, "_");
+    assert!(matches!(cow.kind, TypeKind::Cow { .. }));
     assert!(matches!(
         lower(quote::quote!(Cow<'_, str>))
             .expect("in the language")
@@ -534,19 +527,13 @@ fn a_cow_reads_as_what_it_borrows() {
 ///
 /// Counting types alone accepts three spellings that are not `Cow`s: the review
 /// case `Cow<u8, 'a>`, a second lifetime, and no lifetime at all. Each has
-/// exactly one type argument, so each passed — and then reconstructed as
-/// `Cow<'a, u8>`, quietly breaking the property
-/// [`syntax_is_recoverable_from_kind`] asserts. A model that keeps only the
-/// first lifetime cannot spell any of them back, which is the reason to refuse
-/// them rather than the consequence of doing so.
+/// exactly one type argument, so each passed.
 #[test]
 fn a_cow_takes_a_lifetime_and_a_type_in_that_order() {
     // The accepted shape, either way the lifetime is written.
     for spelling in [quote::quote!(Cow<'_, [u8]>), quote::quote!(Cow<'a, str>)] {
         let ty = lower(spelling).expect("in the language");
         assert!(matches!(ty.kind, TypeKind::Cow { .. }));
-        // And it spells back, which is what the refusals below protect.
-        assert_eq!(tokens(&ty.kind().to_syn()), tokens(ty.as_syn()));
     }
 
     // Everything else is refused by shape, and named as such.
@@ -616,19 +603,23 @@ fn a_raw_pointer_is_not_in_the_language() {
     );
 }
 
-/// Generic arguments are accepted and not modelled — a reference is a *name*, and
-/// the spelling keeps the rest.
-///
-/// Nothing could read retained arguments: a surviving reference resolves to a
-/// declared type, and no declaration takes type parameters. They are still lowered,
-/// so a bad type inside one is diagnosed.
+/// A named type keeps its type arguments and drops its lifetimes, which the
+/// spelling keeps. The arguments are lowered, so a bad type inside one is
+/// diagnosed.
 #[test]
-fn generic_arguments_are_spelling_only() {
+fn lifetime_arguments_are_spelling_only() {
     let ty = lower(quote::quote!(Foo<'a, u8>)).expect("in the language");
-    let TypeKind::Named { id, .. } = &ty.kind else {
+    let TypeKind::Named { id, args } = &ty.kind else {
         panic!("a named type");
     };
     assert_eq!(id.name, "Foo");
+    assert!(matches!(
+        args[..],
+        [TypeRef {
+            kind: TypeKind::Scalar(ScalarKind::U8),
+            ..
+        }]
+    ));
     assert_eq!(tokens(ty.origin.as_syn()), "Foo < 'a , u8 >");
 
     // Lowered, so still checked: a tuple inside a generic argument is refused.
@@ -1524,12 +1515,11 @@ fn an_undeclared_reference_refuses_the_referencing_item() {
     }
 }
 
-/// An out-parameter is `&mut MaybeUninit<T>` — the two forms the source wrote,
-/// each with its own kind. What it *means* (the caller supplies the slot, the
-/// callee fills it) is a reading, and the model provides the two that consumers
-/// need: [`TypeRef::borrow_target`] sees past the slot to the `T` that actually
-/// crosses, and [`TypeRef::is_exclusive_borrow`] is false for it, because a
-/// callee may not read the slot first.
+/// An out-parameter is `&mut MaybeUninit<T>`, one [`TypeKind::Out`]: the
+/// caller supplies the slot, the callee fills it. [`TypeRef::borrow_target`]
+/// sees past the slot to the `T` that actually crosses, and
+/// [`TypeRef::is_exclusive_borrow`] is false for it, because a callee may not
+/// read the slot first.
 ///
 /// Uninitialized storage anywhere else promises nothing a destination language
 /// can use, so it is refused — an acceptance rule about a **position**, which is
@@ -1537,12 +1527,8 @@ fn an_undeclared_reference_refuses_the_referencing_item() {
 #[test]
 fn an_out_parameter_is_a_mutable_borrow_of_a_slot() {
     let out = lower(quote::quote!(&mut MaybeUninit<Sample>)).expect("in the language");
-    let TypeKind::Ref { mutable, inner, .. } = &out.kind else {
-        panic!("a borrow");
-    };
-    assert!(mutable);
-    let TypeKind::Uninit(slot) = &inner.kind else {
-        panic!("the slot the source wrote");
+    let TypeKind::Out(slot) = &out.kind else {
+        panic!("an out-parameter");
     };
     let TypeKind::Named { id, .. } = &slot.kind else {
         panic!("the value's own type");

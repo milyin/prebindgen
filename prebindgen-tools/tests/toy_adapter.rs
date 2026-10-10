@@ -71,7 +71,7 @@ impl Adapter<'_> {
     fn input(&self, ty: &TypeRef, place: &Place) -> Result<Input<Toy>, String> {
         let w = place.ident();
         let wire = |t: Toy| Wire::new(w.clone(), t);
-        Ok(match shape(ty, |t| self.decls.get(place, t))? {
+        Ok(match shape(ty, |t| self.decls.get(place, t)) {
             Shape::Scalar(ScalarKind::I32) => Input::wire(ty, wire(Toy::Int), quote!(#w)),
             Shape::Scalar(ScalarKind::U64) => {
                 Input::wire(ty, wire(Toy::Long { unsigned: true }), quote!((#w as u64)))
@@ -147,7 +147,7 @@ impl Adapter<'_> {
     fn output(&self, ty: &TypeRef, place: &Place) -> Result<Output<Toy>, String> {
         let w = place.ident();
         let wire = |t: Toy| Wire::new(w.clone(), t);
-        Ok(match shape(ty, |t| self.decls.get(place, t))? {
+        Ok(match shape(ty, |t| self.decls.get(place, t)) {
             Shape::Unit => Output::unit(ty),
             Shape::Scalar(ScalarKind::I32) => Output::wire(ty, wire(Toy::Int), |v| quote!(#v)),
             Shape::Scalar(ScalarKind::U64) => Output::wire(

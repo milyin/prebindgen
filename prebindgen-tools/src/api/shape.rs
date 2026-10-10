@@ -16,7 +16,7 @@ impl Access {
     /// Whether `ty` is owned, shared, or exclusively borrowed at its outer layer.
     pub fn of(ty: &TypeRef) -> Self {
         match ty.kind() {
-            TypeKind::Ref { mutable: true, .. } => Self::Exclusive,
+            TypeKind::Ref { mutable: true, .. } | TypeKind::Out(_) => Self::Exclusive,
             TypeKind::Ref { .. } => Self::Shared,
             _ => Self::Owned,
         }
@@ -168,11 +168,11 @@ pub enum Shape<'t, D> {
 ///     }
 /// };
 ///
-/// let Shape::Option(inner) = shape(ty, shape_declared).unwrap() else { panic!() };
-/// let Shape::Seq { elem, kind: SequenceKind::Vec, access: Access::Owned } = shape(inner, shape_declared).unwrap()
+/// let Shape::Option(inner) = shape(ty, shape_declared) else { panic!() };
+/// let Shape::Seq { elem, kind: SequenceKind::Vec, access: Access::Owned } = shape(inner, shape_declared)
 ///     else { panic!() };
 /// assert!(matches!(
-///     shape(elem, shape_declared).unwrap(),
+///     shape(elem, shape_declared),
 ///     Shape::Declared {
 ///         declaration: "opaque handle", ty: declared_ty
 ///     } if std::ptr::eq(declared_ty, elem)
@@ -182,8 +182,7 @@ pub enum Shape<'t, D> {
 /// let bytes = &flat.function("send").unwrap().params[1].ty;
 /// let bytes_key = bytes.key();
 /// assert!(matches!(
-///     shape(bytes, |candidate| (candidate.key() == bytes_key).then_some("blob"))
-///         .unwrap(),
+///     shape(bytes, |candidate| (candidate.key() == bytes_key).then_some("blob")),
 ///     Shape::Declared { ty, declaration: "blob" } if std::ptr::eq(ty, bytes)
 /// ));
 /// ```
@@ -216,50 +215,27 @@ pub enum Shape<'t, D> {
 /// container kind as shared borrows, with [`Access::Exclusive`]. `Cow`
 /// remains a wrapper: its runtime ownership is not an access mode.
 /// `Option`, `Box`, `Cow`, `Result`, and callbacks expose their children
-/// without visiting them. Lifetimes remain on the original [`TypeRef`].
+/// without visiting them. Lifetimes are spelling, and not modelled.
 ///
 /// Bare `str` and `[T]` classify as unsized containers with [`Access::Owned`].
 /// This lets an adapter inspect a `Cow` child without inventing another type.
 /// It does not make those types valid by-value parameters: the adapter must
 /// reject unsupported uses, including mutable containers it cannot implement.
 ///
-/// # Errors
-///
-/// Bare `MaybeUninit<T>` is refused; only `&mut MaybeUninit<T>` is recognized
-/// as an output slot. A different borrow initially returns `Ref`; visiting
-/// its child then encounters the bare-`MaybeUninit` error.
-///
 /// See the [`shape` module](mod@crate::shape) for a runnable recursive example.
-pub fn shape<D>(
-    ty: &TypeRef,
-    shape_declared: impl Fn(&TypeRef) -> Option<D>,
-) -> Result<Shape<'_, D>, String> {
-    match ty.kind() {
-        TypeKind::Uninit(_) => {
-            return Err("`MaybeUninit<T>` crosses only as `&mut MaybeUninit<T>`".into())
-        }
-        TypeKind::Ref {
-            mutable: true,
-            inner,
-            ..
-        } => {
-            if let TypeKind::Uninit(t) = inner.kind() {
-                return Ok(Shape::Out(t));
-            }
-        }
-        _ => {}
+pub fn shape<D>(ty: &TypeRef, shape_declared: impl Fn(&TypeRef) -> Option<D>) -> Shape<'_, D> {
+    if let TypeKind::Out(t) = ty.kind() {
+        return Shape::Out(t);
     }
     if let Some(declaration) = shape_declared(ty) {
-        return Ok(Shape::Declared { ty, declaration });
+        return Shape::Declared { ty, declaration };
     }
     if let TypeKind::Ref { inner, .. } = ty.kind() {
-        if !matches!(inner.kind(), TypeKind::Uninit(_)) {
-            if let Some(declaration) = shape_declared(inner) {
-                return Ok(Shape::Declared { ty, declaration });
-            }
+        if let Some(declaration) = shape_declared(inner) {
+            return Shape::Declared { ty, declaration };
         }
     }
-    Ok(match ty.kind() {
+    match ty.kind() {
         TypeKind::Unit => Shape::Unit,
         TypeKind::Scalar(k) => Shape::Scalar(*k),
         TypeKind::String => Shape::Str {
@@ -287,7 +263,7 @@ pub fn shape<D>(
         },
         TypeKind::Boxed(t) => Shape::Boxed(t),
         TypeKind::Cow { inner, .. } => Shape::Cow(inner),
-        TypeKind::Ref { mutable, inner, .. } => {
+        TypeKind::Ref { inner, .. } => {
             let access = Access::of(ty);
             match inner.kind() {
                 TypeKind::Str => Shape::Str {
@@ -304,7 +280,6 @@ pub fn shape<D>(
                     kind: SequenceKind::Vec,
                     access,
                 },
-                TypeKind::Uninit(t) if *mutable => Shape::Out(t),
                 TypeKind::Named { id, .. } => Shape::Undeclared(&id.name),
                 TypeKind::String => Shape::Str {
                     kind: TextKind::String,
@@ -316,8 +291,6 @@ pub fn shape<D>(
         TypeKind::Named { id, .. } => Shape::Undeclared(&id.name),
         TypeKind::Callback { args } => Shape::Callback(args),
         TypeKind::Fallible { ok, err } => Shape::Result { ok, err },
-        TypeKind::Uninit(_) => {
-            return Err("`MaybeUninit<T>` crosses only as `&mut MaybeUninit<T>`".into())
-        }
-    })
+        TypeKind::Out(_) => unreachable!("returned above"),
+    }
 }

@@ -172,7 +172,7 @@
 //! let output = Output::record(sample, |field| {
 //!     let name = field.name.clone().expect("a named field");
 //!     let wire = |w: W| Wire::new(name.clone(), w);
-//!     Ok(match shape(&field.ty, |_| None::<()>)? {
+//!     Ok(match shape(&field.ty, |_| None::<()>) {
 //!         Shape::Scalar(ScalarKind::U64) => {
 //!             Output::wire(&field.ty, wire(W::Long), |v| quote!(#v as i64))
 //!         }
@@ -387,20 +387,21 @@ pub mod place {
 ///     .build().unwrap();
 /// let ty = &flat.function("send").unwrap().params[0].ty;
 /// // The callback has no declaration for the whole Option.
-/// let Shape::Option(inner) = shape::<&str>(ty, |_| None)
-///     .unwrap() else { panic!("expected Option") };
+/// let Shape::Option(inner) = shape::<&str>(ty, |_| None) else {
+///     panic!("expected Option")
+/// };
 /// // The callback finds Payload inside the borrow; Declared retains &Payload.
 /// assert!(matches!(
 ///     shape(inner, |candidate: &TypeRef| match candidate.kind() {
 ///         TypeKind::Named { id, .. } if id.name == "Payload" => Some("handle"),
 ///         _ => None,
-///     }).unwrap(),
+///     }),
 ///     Shape::Declared { ty, declaration: "handle" }
 ///         if std::ptr::eq(ty, inner) && Access::of(ty) == Access::Shared
 /// ));
 /// // Missing adapter configuration is a shape the adapter must handle.
 /// assert!(matches!(
-///     shape::<()>(inner, |_| None).unwrap(),
+///     shape::<()>(inner, |_| None),
 ///     Shape::Undeclared("Payload")
 /// ));
 /// ```

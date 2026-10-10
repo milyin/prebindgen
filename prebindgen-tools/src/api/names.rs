@@ -1,4 +1,4 @@
-use prebindgen_flat::flat::{GenericArg, TypeKind, TypeRef};
+use prebindgen_flat::flat::{TypeKind, TypeRef};
 use proc_macro2::Span;
 
 /// An identifier from a name, accepting raw spellings (`r#type`) and
@@ -113,8 +113,8 @@ fn mangle_into(ty: &TypeRef, out: &mut String) {
             push(out, "Cow");
             mangle_into(inner, out)
         }
-        TypeKind::Uninit(t) => {
-            push(out, "Uninit");
+        TypeKind::Out(t) => {
+            push(out, "mut_Uninit");
             mangle_into(t, out)
         }
         TypeKind::Fallible { ok, err } => {
@@ -134,9 +134,7 @@ fn mangle_into(ty: &TypeRef, out: &mut String) {
         TypeKind::Named { id, args } => {
             push(out, &id.name.replace("::", "_"));
             for a in args {
-                if let GenericArg::Type(t) = a {
-                    mangle_into(t, out)
-                }
+                mangle_into(a, out)
             }
         }
         TypeKind::Callback { args } => {

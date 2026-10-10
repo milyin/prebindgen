@@ -92,11 +92,11 @@ impl Plan<'_> {
         let (name, access) = match shape(core, |candidate| {
             super::bare_declared_name(candidate).and_then(|name| self.types.get(name))
         }) {
-            Ok(Shape::Declared { ty, .. }) => (
+            Shape::Declared { ty, .. } => (
                 super::declared_name(ty).expect("a declared class name"),
                 Access::of(ty),
             ),
-            Ok(Shape::Undeclared(name)) => (name, Access::Owned),
+            Shape::Undeclared(name) => (name, Access::Owned),
             _ => return Ok(None),
         };
         if access == Access::Exclusive {

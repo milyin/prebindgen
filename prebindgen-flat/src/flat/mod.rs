@@ -47,25 +47,20 @@
 //!
 //! # What earns a variant
 //!
-//! For a **type**, a Rust form — and nothing else. [`TypeKind`] is the accepted
-//! subset of `syn::Type`, so two spellings are two variants even when every
-//! destination language would treat them alike. Deciding that `&str` and
-//! `String` are both "a string" is a destination's decision, taken in an
-//! adapter, on a reading the model provides:
+//! For a **type**, a form something decides on. Two forms an adapter treats
+//! differently are two variants — `&str` and `String` rebuild differently, and
+//! C crosses `Option<Box<T>>` as a pointer — while spelling nobody decides on
+//! is left to the slice:
 //!
-//! | Rust writes | The model says | The reading, where a consumer wants one |
-//! |---|---|---|
-//! | `String`, `str` | [`String`](TypeKind::String), [`Str`](TypeKind::Str) | the adapter's, at its own site |
-//! | `Vec<T>`, `[T]` | [`Vec`](TypeKind::Vec), [`Slice`](TypeKind::Slice) | [`TypeRef::sequence_elem`] — one run of `T` |
-//! | `Box<T>`, `Cow<'_, T>` | [`Boxed`](TypeKind::Boxed), [`Cow`](TypeKind::Cow) | [`TypeRef::unwrapped`] — a `T` either way |
-//! | `&mut MaybeUninit<T>` | `Ref` over [`Uninit`](TypeKind::Uninit) | [`TypeRef::borrow_target`] — the value, not its slot |
-//! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
-//! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
-//!
-//! It buys one property: the syntax is **recoverable from the kind**
-//! (checked, over the whole acceptance corpus, by rebuilding it). Which is
-//! the difference between a slice that rides along because it is exact, and one
-//! the model cannot do without.
+//! | Rust writes | The model says |
+//! |---|---|
+//! | `String`, `str` | [`String`](TypeKind::String), [`Str`](TypeKind::Str) |
+//! | `Vec<T>`, `[T]` | [`Vec`](TypeKind::Vec), [`Slice`](TypeKind::Slice) |
+//! | `Box<T>`, `Cow<'_, T>` | [`Boxed`](TypeKind::Boxed), [`Cow`](TypeKind::Cow) |
+//! | `&mut MaybeUninit<T>` | [`Out`](TypeKind::Out) — an out-parameter slot |
+//! | `&'a T`, `Foo<'a, T>` | `Ref`, `Named` with its type arguments — no lifetime |
+//! | no `->`, `-> ()` | [`TypeKind::Unit`] |
+//! | `*const T` | *rejected* — a source crate is idiomatic Rust; the adapter owns pointers |
 //!
 //! An **element** is not a type, and there the rule is still the concept:
 //!
@@ -103,21 +98,12 @@
 //! exactly, and at no modelling cost, so a delimiter and a literal's base need
 //! never become fields.
 //!
-//! For a **type** the slice is no longer where facts go to survive:
-//! [`TypeKind`] keeps the lifetime, the wrapper and the argument it once
-//! dropped, and rebuilding the syntax from it is the round-trip that says
-//! so. What is
-//! left is the reason a slice beats a reconstruction anywhere — it is what the
-//! source wrote, and it is already there.
-//!
 //! # Where acceptance is enforced
 //!
 //! Lowering is **total over the accepted grammar**: a form with no variant in
 //! [`TypeKind`] is a form the language does not accept, so there is no second
-//! acceptance list to drift from it. One rule cannot be stated that way and is
-//! stated in the lowering instead: [`Uninit`](TypeKind::Uninit) is accepted only
-//! directly under a `&mut`, which is a fact about a **position** and not about a
-//! form.
+//! acceptance list to drift from it. `MaybeUninit` is accepted only directly
+//! under a `&mut`, which [`Out`](TypeKind::Out) states as one form.
 //!
 //! **Parsing diagnoses; ingestion raises.** Those are two different points, and
 //! the split is what lets one model serve both.
@@ -210,7 +196,7 @@ pub use self::{
     origin::Origin,
     spelling::{canonical_spelling, canonical_type},
     ty::{
-        peel_transparent, GenericArg, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
+        peel_transparent, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
         UnsupportedTypeReason, TRANSPARENT_WRAPPERS,
     },
 };
