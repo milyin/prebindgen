@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["result_expr"],"struct":["ArmOutput","Code","Input","Output"],"trait":["Decode","Encode"]};
+window.SIDEBAR_ITEMS = {"fn":["result_expr"],"struct":["Code","Destructured","Input","Output"],"trait":["Decode","Encode"]};

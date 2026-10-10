@@ -328,8 +328,8 @@
 <a href=#328 id=328 data-nosnippet>328</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
 <a href=#329 id=329 data-nosnippet>329</a>}
 <a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a><span class="doccomment">/// The hand-composed builders the adapters used before [`Crossing`]: kept
-<a href=#332 id=332 data-nosnippet>332</a>/// until both adapters resolve crossings, then removed.
+<a href=#331 id=331 data-nosnippet>331</a><span class="doccomment">/// The hand-composed builders the JNI adapter still uses in place of
+<a href=#332 id=332 data-nosnippet>332</a>/// [`Crossing`]: kept until it resolves crossings, then removed.
 <a href=#333 id=333 data-nosnippet>333</a></span><span class="attr">#[doc(hidden)]
 <a href=#334 id=334 data-nosnippet>334</a></span><span class="kw">pub mod </span>legacy {
 <a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::legacy::{Form, FormKind, Input, Output};
@@ -356,13 +356,13 @@
 <a href=#356 id=356 data-nosnippet>356</a>
 <a href=#357 id=357 data-nosnippet>357</a><span class="doccomment">/// The Rust a crossing becomes, with the adapter's code for its wires.
 <a href=#358 id=358 data-nosnippet>358</a></span><span class="kw">pub mod </span>code {
-<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output};
+<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::code::{result_expr, Code, Decode, Destructured, Encode, Input, Output};
 <a href=#360 id=360 data-nosnippet>360</a>}
 <a href=#361 id=361 data-nosnippet>361</a>
 <a href=#362 id=362 data-nosnippet>362</a><span class="kw">pub use crate</span>::{
 <a href=#363 id=363 data-nosnippet>363</a>    api::check_supported,
 <a href=#364 id=364 data-nosnippet>364</a>    callback::callback_arg_types,
-<a href=#365 id=365 data-nosnippet>365</a>    code::{result_expr, ArmOutput, Code, Decode, Encode, Input, Output},
+<a href=#365 id=365 data-nosnippet>365</a>    code::{result_expr, Code, Decode, Destructured, Encode, Input, Output},
 <a href=#366 id=366 data-nosnippet>366</a>    convert::{Conversion, FnRef, ResolvedConversion, Via},
 <a href=#367 id=367 data-nosnippet>367</a>    crossing::{
 <a href=#368 id=368 data-nosnippet>368</a>        resolve, resolve_arm, Alternatives, Arm, Constructed, Converted, Crossing, Direction,
