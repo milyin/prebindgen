@@ -57,13 +57,12 @@ pub(crate) struct CRet {
 }
 
 impl<'f> Plan<'f> {
-    pub(crate) fn shape<'t>(&self, ty: &'t TypeRef) -> Res<Shape<'t, &Setting>> {
+    pub(crate) fn shape<'t>(&self, ty: &'t TypeRef) -> Shape<'t, &Setting> {
         shape(ty, |candidate| match candidate.kind() {
             TypeKind::Named { id, .. } => self.setting(&id.name),
             TypeKind::String => self.setting("String"),
             _ => None,
         })
-        .map_err(|e| crate::Error(format!("`{ty}`: {e}")))
     }
 
     /// The source type a declared name spells.
@@ -93,7 +92,7 @@ impl<'f> Plan<'f> {
     /// A value slot `w` → a value of `ty`.
     pub(crate) fn value_in(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Input<CWire>> {
         let one = |t: CWire| Wire::new(w.clone(), t);
-        Ok(match self.shape(ty)? {
+        Ok(match self.shape(ty) {
             Shape::Scalar(ScalarKind::Bool) => Input::wire(
                 ty,
                 one(CWire::BoolSlot),
@@ -172,7 +171,7 @@ impl<'f> Plan<'f> {
         let one = |t: CWire, e: &dyn Fn(&TokenStream) -> TokenStream| {
             Output::wire(ty, Wire::new(w.clone(), t), e)
         };
-        Ok(match self.shape(ty)? {
+        Ok(match self.shape(ty) {
             Shape::Scalar(ScalarKind::Bool) => one(
                 CWire::BoolSlot,
                 &|v| quote!(::core::mem::MaybeUninit::new(#v)),
@@ -230,7 +229,7 @@ impl<'f> Plan<'f> {
             free(#place as *mut ::core::ffi::c_void);
             #place = ::core::ptr::null_mut();
         };
-        Ok(match self.shape(ty)? {
+        Ok(match self.shape(ty) {
             Shape::Str {
                 kind: TextKind::String,
                 access: Access::Owned,
@@ -313,7 +312,7 @@ impl<'f> Plan<'f> {
                 pass: Some(pass),
             })
         };
-        let input = match self.shape(ty)? {
+        let input = match self.shape(ty) {
             Shape::Str {
                 kind: TextKind::Str,
                 access: Access::Shared,
@@ -466,7 +465,7 @@ impl<'f> Plan<'f> {
                 let closure = self.closure(name, args)?;
                 Input::wire(ty, Wire::new(name.clone(), CWire::Struct(c)), closure)
             }
-            Shape::Option(inner) => match self.shape(inner)? {
+            Shape::Option(inner) => match self.shape(inner) {
                 Shape::Declared {
                     ty: declared_ty,
                     declaration:
@@ -500,7 +499,7 @@ impl<'f> Plan<'f> {
     /// A type C passes by pointer: a declared `repr_c_struct` or opaque
     /// handle.
     fn pointee(&self, ty: &TypeRef) -> Res<&CType> {
-        match self.shape(ty)? {
+        match self.shape(ty) {
             Shape::Declared {
                 ty: declared_ty,
                 declaration:
@@ -536,13 +535,13 @@ impl<'f> Plan<'f> {
     /// How a result of type `ty` leaves the wrapper.
     pub(crate) fn ret(&self, ty: &TypeRef) -> Res<CRet> {
         let r = format_ident!("__result");
-        let Shape::Result { ok, err: e } = self.shape(ty)? else {
+        let Shape::Result { ok, err: e } = self.shape(ty) else {
             return Ok(CRet {
                 ret: self.plain_ret(ty)?,
                 on_error: None,
             });
         };
-        let ename = match self.shape(e)? {
+        let ename = match self.shape(e) {
             Shape::Declared {
                 ty: declared_ty,
                 declaration:
@@ -608,7 +607,7 @@ impl<'f> Plan<'f> {
     /// A result C receives as a pointer it owns, if `ty` is one: the wire
     /// type and the expression producing it from `v`.
     fn pointer_out(&self, ty: &TypeRef, v: &TokenStream) -> Res<Option<(CWire, TokenStream)>> {
-        Ok(match self.shape(ty)? {
+        Ok(match self.shape(ty) {
             Shape::Str {
                 kind: TextKind::String,
                 access: Access::Owned,
@@ -629,7 +628,7 @@ impl<'f> Plan<'f> {
                 CWire::ptr(true, CWire::Struct(c.clone())),
                 quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
             )),
-            Shape::Option(inner) => match self.shape(inner)? {
+            Shape::Option(inner) => match self.shape(inner) {
                 Shape::Declared {
                     ty: declared_ty,
                     declaration:
@@ -665,7 +664,7 @@ impl<'f> Plan<'f> {
     fn ret_value(&self, ty: &TypeRef, v: &TokenStream) -> Res<(CWire, TokenStream)> {
         // A plain `bool` / enum leaves as itself: only an inbound value needs
         // the `MaybeUninit` guard.
-        match self.shape(ty)? {
+        match self.shape(ty) {
             Shape::Scalar(ScalarKind::Bool) => return Ok((CWire::Bool, v.clone())),
             Shape::Declared {
                 ty: declared_ty,
@@ -702,7 +701,7 @@ impl<'f> Plan<'f> {
             self.require_free()?;
             self.ret_value(elem, &quote!(__e))
         };
-        Ok(match self.shape(ty)? {
+        Ok(match self.shape(ty) {
             Shape::Unit => Return {
                 ty: None,
                 wires: Vec::new(),
@@ -737,7 +736,7 @@ impl<'f> Plan<'f> {
                     elem,
                     kind: SequenceKind::Vec,
                     access: Access::Owned,
-                } = self.shape(inner)?
+                } = self.shape(inner)
                 {
                     let (wire, e) = array(elem)?;
                     let elem_ty = wire.rust();
@@ -798,7 +797,7 @@ impl<'f> Plan<'f> {
     /// Argument `index` of a C callback, of type `ty`, held in `value`.
     pub(crate) fn callback_arg(&self, index: usize, ty: &TypeRef) -> Res<Output<CWire>> {
         let n = format_ident!("__w{}", index);
-        match self.shape(ty)? {
+        match self.shape(ty) {
             Shape::Seq {
                 elem,
                 kind: SequenceKind::Slice,

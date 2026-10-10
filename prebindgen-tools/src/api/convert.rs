@@ -160,8 +160,8 @@ impl Conversion {
             }
         };
         Ok(ResolvedConversion {
-            target_rust: render(flat, &target, false),
-            repr_rust: render(flat, &repr, false),
+            target_rust: render(flat, &target),
+            repr_rust: render(flat, &repr),
             target,
             repr,
             input: input.map(|(s, _)| s),

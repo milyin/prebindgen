@@ -1,5 +1,5 @@
 use prebindgen_flat::{
-    flat::{ExtentSource, GenericArg, TypeKind, TypeRef},
+    flat::{ExtentSource, TypeKind, TypeRef},
     Flat,
 };
 use proc_macro2::TokenStream;
@@ -14,7 +14,7 @@ use quote::{quote, ToTokens};
 ///
 /// [`ItemName`]: prebindgen_flat::flat::ItemName
 pub fn callback_arg_types(flat: &Flat, args: &[TypeRef]) -> Vec<TokenStream> {
-    args.iter().map(|t| render(flat, t, true)).collect()
+    args.iter().map(|t| render(flat, t)).collect()
 }
 
 /// A reference to the item named `name`: its qualified path when the model
@@ -26,17 +26,10 @@ fn item(flat: &Flat, name: &str) -> TokenStream {
     }
 }
 
-/// A model type spelled for generated Rust; `elide` drops lifetimes, for a
-/// position that cannot name the source's lifetime parameters.
-pub(crate) fn render(flat: &Flat, ty: &TypeRef, elide: bool) -> TokenStream {
-    let child = |ty: &TypeRef| render(flat, ty, elide);
-    let render_lifetime = |l: &syn::Lifetime| {
-        if elide {
-            quote!('_)
-        } else {
-            quote!(#l)
-        }
-    };
+/// A model type spelled for generated Rust, lifetimes elided: generated code
+/// never names the source's lifetime parameters.
+pub(crate) fn render(flat: &Flat, ty: &TypeRef) -> TokenStream {
+    let child = |ty: &TypeRef| render(flat, ty);
     match ty.kind() {
         TypeKind::Scalar(k) => {
             let id = crate::names::ident(k.as_str());
@@ -61,28 +54,22 @@ pub(crate) fn render(flat: &Flat, ty: &TypeRef, elide: bool) -> TokenStream {
             let t = child(t);
             quote!(::std::boxed::Box<#t>)
         }
-        TypeKind::Cow { lifetime, inner } => {
+        TypeKind::Cow { inner } => {
             let t = child(inner);
-            let lifetime = render_lifetime(lifetime);
-            quote!(::std::borrow::Cow<#lifetime, #t>)
+            quote!(::std::borrow::Cow<'_, #t>)
         }
-        TypeKind::Uninit(t) => {
+        TypeKind::Out(t) => {
             let t = child(t);
-            quote!(::core::mem::MaybeUninit<#t>)
+            quote!(&mut ::core::mem::MaybeUninit<#t>)
         }
         TypeKind::Fallible { ok, err } => {
             let (ok, err) = (child(ok), child(err));
             quote!(::core::result::Result<#ok, #err>)
         }
-        TypeKind::Ref {
-            lifetime,
-            mutable,
-            inner,
-        } => {
+        TypeKind::Ref { mutable, inner } => {
             let t = child(inner);
             let m = mutable.then(|| quote!(mut));
-            let lifetime = lifetime.as_ref().filter(|_| !elide);
-            quote!(& #lifetime #m #t)
+            quote!(& #m #t)
         }
         TypeKind::Array { elem, extent } => {
             let e = child(elem);
@@ -100,10 +87,7 @@ pub(crate) fn render(flat: &Flat, ty: &TypeRef, elide: bool) -> TokenStream {
             if args.is_empty() {
                 head
             } else {
-                let args = args.iter().map(|a| match a {
-                    GenericArg::Lifetime(l) => render_lifetime(l),
-                    GenericArg::Type(t) => child(t),
-                });
+                let args = args.iter().map(child);
                 quote!(#head<#(#args),*>)
             }
         }

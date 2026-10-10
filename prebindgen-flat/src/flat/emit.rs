@@ -90,16 +90,11 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// }
 /// ```
 ///
-/// …its stripped form, and the kind's reconstruction:
+/// …or its stripped form:
 ///
 /// ```compile_fail
 /// # use prebindgen_flat::flat;
 /// fn leak(t: &flat::TypeRef) -> syn::Type { t.stripped_syntax() }
-/// ```
-///
-/// ```compile_fail
-/// # use prebindgen_flat::flat;
-/// fn leak(k: &flat::TypeKind) -> syn::Type { k.to_syn() }
 /// ```
 ///
 /// Minting one by naming the struct literal is not available either — the

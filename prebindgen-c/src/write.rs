@@ -455,7 +455,7 @@ fn repr_c_field(
         ))
     };
     let opaque = |t: &TypeRef| match plan.shape(t) {
-        Ok(Shape::Declared {
+        Shape::Declared {
             ty: declared_ty,
             declaration:
                 Setting::Type(CType {
@@ -464,7 +464,7 @@ fn repr_c_field(
                     ..
                 }),
             ..
-        }) if Access::of(declared_ty) == Access::Owned => Some(c.clone()),
+        } if Access::of(declared_ty) == Access::Owned => Some(c.clone()),
         _ => None,
     };
     Ok(match ty.kind() {
@@ -494,7 +494,7 @@ fn repr_c_field(
             },
             _ => return refuse("is not a representable field"),
         },
-        TypeKind::Named { .. } => match plan.shape(ty)? {
+        TypeKind::Named { .. } => match plan.shape(ty) {
             Shape::Declared {
                 ty: declared_ty,
                 declaration: Setting::Type(t),
@@ -627,7 +627,7 @@ fn alias_preflight(plan: &Plan, func: &Function, fail: &TokenStream) -> Res<Toke
                     kind: Kind::Opaque | Kind::ReprC { .. },
                     ..
                 }),
-        } = plan.shape(&p.ty)?
+        } = plan.shape(&p.ty)
         {
             handles.push((&p.name, declared_name(ty), Access::of(ty)));
         }

@@ -44,14 +44,14 @@ fn items_are_named_by_their_crate() {
     assert_eq!(norm(f.name.to_token_stream()), "src_crate::payloads");
     assert_eq!(f.name.to_string(), "payloads");
     assert_eq!(
-        norm(render(&flat, &f.ret, false)),
+        norm(render(&flat, &f.ret)),
         "::core::option::Option<::std::vec::Vec<src_crate::Payload>>"
     );
     // A type the model does not declare is spelled as written.
     let foreign = flat
         .classify(&syn::parse_str("foreign::Thing").unwrap())
         .unwrap();
-    assert_eq!(norm(render(&flat, &foreign, false)), "foreign::Thing");
+    assert_eq!(norm(render(&flat, &foreign)), "foreign::Thing");
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn shape_reads_one_layer_with_the_adapters_declaration() {
         TypeKind::Named { id, .. } if id.name == "Payload" => Some(7u8),
         _ => None,
     };
-    let at = |i: usize| shape(&f.params[i].ty, shape_declared).unwrap();
+    let at = |i: usize| shape(&f.params[i].ty, shape_declared);
     assert!(matches!(
         at(0),
         Shape::Declared {
@@ -235,11 +235,11 @@ fn shape_declared_can_override_a_complete_generic_type() {
         }
     };
     assert!(matches!(
-        shape(bytes, declared).unwrap(),
+        shape(bytes, declared),
         Shape::Declared { ty, declaration: "bytes" } if std::ptr::eq(ty, bytes)
     ));
     assert!(matches!(
-        shape(numbers, declared).unwrap(),
+        shape(numbers, declared),
         Shape::Seq {
             kind: SequenceKind::Vec,
             access: Access::Owned,
@@ -247,12 +247,12 @@ fn shape_declared_can_override_a_complete_generic_type() {
         }
     ));
     assert!(matches!(
-        shape(borrowed, declared).unwrap(),
+        shape(borrowed, declared),
         Shape::Declared { ty, declaration: "borrowed bytes" }
             if std::ptr::eq(ty, borrowed) && Access::of(ty) == Access::Shared
     ));
     assert!(matches!(
-        shape(borrowed, |candidate| (candidate.key() == bytes_key).then_some("bytes")).unwrap(),
+        shape(borrowed, |candidate| (candidate.key() == bytes_key).then_some("bytes")),
         Shape::Declared { ty, declaration: "bytes" }
             if std::ptr::eq(ty, borrowed) && Access::of(ty) == Access::Shared
     ));
@@ -262,22 +262,22 @@ fn shape_declared_can_override_a_complete_generic_type() {
     let declared_text =
         |candidate: &TypeRef| matches!(candidate.kind(), TypeKind::String).then_some("text");
     assert!(matches!(
-        shape(text, declared_text).unwrap(),
+        shape(text, declared_text),
         Shape::Declared { ty, declaration: "text" } if std::ptr::eq(ty, text)
     ));
     assert!(matches!(
-        shape(borrowed_text, declared_text).unwrap(),
+        shape(borrowed_text, declared_text),
         Shape::Declared { ty, declaration: "text" } if std::ptr::eq(ty, borrowed_text)
     ));
     assert!(matches!(
-        shape::<()>(text, |_| None).unwrap(),
+        shape::<()>(text, |_| None),
         Shape::Str {
             kind: TextKind::String,
             access: Access::Owned
         }
     ));
     assert!(matches!(
-        shape::<()>(borrowed_text, |_| None).unwrap(),
+        shape::<()>(borrowed_text, |_| None),
         Shape::Str {
             kind: TextKind::String,
             access: Access::Shared
@@ -302,7 +302,7 @@ fn shape_keeps_container_kind_independent_of_access() {
         ] {
             let syntax = syn::parse_str(&format!("{prefix}{container}")).unwrap();
             let ty = flat.classify(&syntax).unwrap();
-            let shape = shape::<()>(&ty, |_| None).unwrap();
+            let shape = shape::<()>(&ty, |_| None);
             match shape {
                 Shape::Str { kind, access } => {
                     assert_eq!(Some(kind), text);
@@ -330,14 +330,10 @@ fn shape_keeps_cow_as_a_wrapper_and_string_declaration_precedence() {
         syn::parse_quote!(Cow<'static, [u8]>),
     ] {
         let ty = flat.classify(&syntax).unwrap();
-        let Shape::Cow(inner) = shape::<()>(&ty, |_| None).unwrap() else {
+        let Shape::Cow(inner) = shape::<()>(&ty, |_| None) else {
             panic!("expected Cow")
         };
         assert!(matches!(inner.kind(), TypeKind::Str | TypeKind::Slice(_)));
-        assert!(
-            shape::<()>(inner, |_| None).is_ok(),
-            "unsized Cow child is classifiable"
-        );
     }
     for (syntax, expected) in [
         (syn::parse_quote!(String), Access::Owned),
@@ -346,7 +342,7 @@ fn shape_keeps_cow_as_a_wrapper_and_string_declaration_precedence() {
     ] {
         let ty = flat.classify(&syntax).unwrap();
         assert!(
-            matches!(shape(&ty, |candidate| matches!(candidate.kind(), TypeKind::String).then_some(7)).unwrap(),
+            matches!(shape(&ty, |candidate| matches!(candidate.kind(), TypeKind::String).then_some(7)),
             Shape::Declared { ty: declared_ty, declaration: 7 } if Access::of(declared_ty) == expected)
         );
     }
@@ -392,7 +388,7 @@ fn item_paths_follow_the_recorded_crate_or_the_default_module() {
     assert_eq!(path(&flat, "make"), "source_crate::make");
     let array = &flat.function("make").unwrap().ret;
     assert_eq!(
-        norm(render(&flat, array, false)),
+        norm(render(&flat, array)),
         "[source_crate::Payload;source_crate::LEN]"
     );
     assert_eq!(path(&flat, "Other"), "other::Other");
@@ -423,7 +419,7 @@ fn rendering_elides_lifetimes_in_every_nested_shape() {
         ("[&'a Payload; 2]", quote!([&src_crate::Payload; 2])),
         (
             "foreign::Wrapper<'a, &'b Payload>",
-            quote!(foreign::Wrapper<'_, &src_crate::Payload>),
+            quote!(foreign::Wrapper<&src_crate::Payload>),
         ),
         (
             "Vec<Box<Cow<'a, [Payload]>>>",
@@ -443,9 +439,7 @@ fn rendering_elides_lifetimes_in_every_nested_shape() {
         ),
     ] {
         let ty = flat.classify(&syn::parse_str(input).unwrap()).unwrap();
-        let retained = render(&flat, &ty, false);
-        assert!(retained.to_string().contains("'a"), "{input}: {retained}");
-        let elided = render(&flat, &ty, true);
+        let elided = render(&flat, &ty);
         syn::parse2::<syn::Type>(elided.clone()).expect("valid Rust type syntax");
         assert_eq!(norm(elided), norm(expected), "{input}");
     }
