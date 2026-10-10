@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["In","Never","Node","Out","Wrapper"],"fn":["resolve","resolve_arm"],"struct":["Alternatives","Arm","Constructed","Converted","Crossing","Fields","Optional","Presence","Sequence","Whole","Wrapped"],"trait":["Direction","Lower"]};
