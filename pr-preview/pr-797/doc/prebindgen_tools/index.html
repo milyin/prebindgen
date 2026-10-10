@@ -1,0 +1,232 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="prebindgen-tools"><title>prebindgen_tools - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0 (b940084d7 2026-09-28)" data-channel="1.99.0" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate prebindgen_tools</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#prebindgen-tools" title="prebindgen-tools">prebindgen-tools</a><ul><li><a href="#the-model" title="The model">The model</a></li><li><a href="#using-an-input-or-output" title="Using an Input or Output">Using an Input or Output</a></li><li><a href="#deciding-how-each-layer-crosses" title="Deciding how each layer crosses">Deciding how each layer crosses</a></li><li><a href="#other-tools" title="Other tools">Other tools</a></li></ul></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>prebindgen_<wbr>tools</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_tools/lib.rs.html#2-533">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="prebindgen-tools"><a class="doc-anchor" href="#prebindgen-tools">§</a>prebindgen-tools</h2>
+<p>Building blocks for a prebindgen <strong>language adapter</strong>. Applications that
+only want bindings use the <code>prebindgen-c</code> or <code>prebindgen-jni</code> adapter.</p>
+<p>An adapter writes <em>generated elements</em> — functions, types, constants —
+around the elements of the <a href="../prebindgen_flat/flat/struct.Flat.html" title="struct prebindgen_flat::flat::Flat"><code>Flat</code></a> model, plus the
+foreign code that uses them. Values cross between the two on <strong>wires</strong>:
+the parameters, return values and fields of the generated elements. Wire
+types form a closed set, one enum per adapter (<a href="wire/trait.WireType.html" title="trait prebindgen_tools::wire::WireType"><code>WireType</code></a>). The tools
+here are what every adapter needs to get a source type onto wires and
+back.</p>
+<h3 id="the-model"><a class="doc-anchor" href="#the-model">§</a>The model</h3>
+<p>A value crosses in one of two directions:</p>
+<ul>
+<li>an <a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a> turns wires into a source value — for example a parameter
+on its way into the source function;</li>
+<li>an <a href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output"><code>Output</code></a> turns a source value into wires — for example a result on
+its way back.</li>
+</ul>
+<p>Each holds the Rust expression that turns one into the other <em>and</em> a
+<a href="wire/struct.Form.html" title="struct prebindgen_tools::wire::Form"><code>Form</code></a>: a tree recording how each layer of the type crossed.</p>
+<p>A source type crosses in one of the ways below; its form records which,
+as a <a href="wire/enum.FormKind.html" title="enum prebindgen_tools::wire::FormKind"><code>FormKind</code></a>.
+For each way, the table names the function that builds the <a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a> and
+the one that builds the <a href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output"><code>Output</code></a>:</p>
+<div><table><thead><tr><th>The value crosses…</th><th><a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a></th><th><a href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output"><code>Output</code></a></th></tr></thead><tbody>
+<tr><td>as one wire</td><td><a href="wire/struct.Input.html#method.wire" title="associated function prebindgen_tools::wire::Input::wire"><code>Input::wire</code></a></td><td><a href="wire/struct.Output.html#method.wire" title="associated function prebindgen_tools::wire::Output::wire"><code>Output::wire</code></a></td></tr>
+<tr><td>converted to another source type, which crosses instead</td><td><a href="wire/struct.Input.html#method.via" title="associated function prebindgen_tools::wire::Input::via"><code>Input::via</code></a></td><td><a href="wire/struct.Output.html#method.via" title="associated function prebindgen_tools::wire::Output::via"><code>Output::via</code></a></td></tr>
+<tr><td>as a record’s fields</td><td><a href="wire/struct.Input.html#method.record" title="associated function prebindgen_tools::wire::Input::record"><code>Input::record</code></a></td><td><a href="wire/struct.Output.html#method.record" title="associated function prebindgen_tools::wire::Output::record"><code>Output::record</code></a></td></tr>
+<tr><td>as an option’s presence flag and value</td><td><a href="wire/struct.Input.html#method.optional" title="associated function prebindgen_tools::wire::Input::optional"><code>Input::optional</code></a></td><td><a href="wire/struct.Output.html#method.optional" title="associated function prebindgen_tools::wire::Output::optional"><code>Output::optional</code></a></td></tr>
+<tr><td>as a sum’s tag and alternatives</td><td><a href="wire/struct.Input.html#method.sum" title="associated function prebindgen_tools::wire::Input::sum"><code>Input::sum</code></a></td><td><a href="wire/struct.Output.html#method.sum" title="associated function prebindgen_tools::wire::Output::sum"><code>Output::sum</code></a></td></tr>
+<tr><td>as a sequence</td><td><a href="wire/struct.Input.html#method.seq" title="associated function prebindgen_tools::wire::Input::seq"><code>Input::seq</code></a></td><td><a href="wire/struct.Output.html#method.seq" title="associated function prebindgen_tools::wire::Output::seq"><code>Output::seq</code></a></td></tr>
+<tr><td>as any other list of parts</td><td><a href="wire/struct.Input.html#method.parts" title="associated function prebindgen_tools::wire::Input::parts"><code>Input::parts</code></a></td><td><a href="wire/struct.Output.html#method.parts" title="associated function prebindgen_tools::wire::Output::parts"><code>Output::parts</code></a></td></tr>
+</tbody></table>
+</div>
+<p>Some take a description of the type: <code>record</code> takes the flat model’s
+struct and <code>sum</code> its enum, while <code>via</code> takes the conversion the build
+script declared with <code>convert!</code>, resolved once into a
+<a href="convert/struct.ResolvedConversion.html" title="struct prebindgen_tools::convert::ResolvedConversion"><code>ResolvedConversion</code></a>.</p>
+<p>The foreign-side writer walks the form, so it follows what the adapter
+decided for each layer without deciding again. What a single wire means
+is in the wire’s own type.</p>
+<h3 id="using-an-input-or-output"><a class="doc-anchor" href="#using-an-input-or-output">§</a>Using an Input or Output</h3>
+<p>An <a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a> or <a href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output"><code>Output</code></a> holds everything the element needs for one
+value, on both sides of the boundary:</p>
+<ul>
+<li><strong>The element’s signature.</strong> <a href="wire/struct.Input.html#method.wires" title="method prebindgen_tools::wire::Input::wires"><code>Input::wires</code></a> and <a href="wire/struct.Output.html#method.wires" title="method prebindgen_tools::wire::Output::wires"><code>Output::wires</code></a>
+list the value’s wires in order. <a href="wire/struct.Wire.html#method.decl" title="method prebindgen_tools::wire::Wire::decl"><code>Wire::decl</code></a> writes one wire as
+<code>name: Type</code> for a parameter list; <a href="wire/trait.WireType.html#tymethod.rust" title="method prebindgen_tools::wire::WireType::rust"><code>WireType::rust</code></a> gives its Rust
+type alone, for a return type or a struct field.</li>
+<li><strong>The Rust code.</strong> An input’s <code>expr</code> evaluates to the source value:
+place it where the value is needed, such as an argument of the source
+call. An output converts a value the template hands it:
+<a href="wire/struct.Output.html#method.apply" title="method prebindgen_tools::wire::Output::apply"><code>Output::apply</code></a> evaluates to the wire values, one value or a tuple in
+<a href="wire/struct.Output.html#method.wires" title="method prebindgen_tools::wire::Output::wires"><code>Output::wires</code></a> order, and <a href="wire/struct.Output.html#method.bind" title="method prebindgen_tools::wire::Output::bind"><code>Output::bind</code></a> writes
+<code>let &lt;wires&gt; = …;</code>, so each wire becomes a local of its own name.</li>
+<li><strong>Errors.</strong> <code>fallible</code> says whether the conversion uses <code>?</code> on a
+<code>Result&lt;_, String&gt;</code>. Place such an expression in a function returning
+that type, or take <a href="wire/struct.Input.html#method.result" title="method prebindgen_tools::wire::Input::result"><code>Input::result</code></a> / <a href="wire/struct.Output.html#method.result" title="method prebindgen_tools::wire::Output::result"><code>Output::result</code></a>, a <code>Result</code>
+value, and route the error yourself.</li>
+<li><strong>The foreign code.</strong> <code>form</code> tells the foreign-side writer how to
+produce the same wires (for an input) or read them (for an output), in
+the same order. What a single wire means is in its <a href="wire/trait.WireType.html" title="trait prebindgen_tools::wire::WireType"><code>WireType</code></a>
+variant; records, options, sums and sequences are their <a href="wire/enum.FormKind.html" title="enum prebindgen_tools::wire::FormKind"><code>FormKind</code></a>.</li>
+</ul>
+<p>For example, a C-style wrapper for <code>pub fn twice(n: u64) -&gt; u64</code>, where
+both values cross as an <code>i64</code> wire:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
+<span class="kw">use </span>prebindgen_flat::Flat;
+<span class="kw">use </span>prebindgen_tools::{Input, Output, Wire, WireType};
+<span class="kw">use </span>quote::{format_ident, quote};
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">struct </span>Long;
+<span class="kw">impl </span>WireType <span class="kw">for </span>Long {
+    <span class="kw">fn </span>rust(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream { <span class="macro">quote!</span>(i64) }
+    <span class="kw">fn </span>placeholder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream { <span class="macro">quote!</span>(<span class="number">0</span>) }
+}
+
+<span class="comment">// `twice`, captured from the crate `source_crate`.
+</span><span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn twice(n: u64) -&gt; u64 { n * 2 }"</span>).unwrap();
+<span class="kw">let </span>location = SourceLocation { crate_name: <span class="prelude-val">Some</span>(<span class="string">"source_crate"</span>.into()), ..Default::default() };
+<span class="kw">let </span>flat = Flat::builder()
+    .items(source.items.into_iter().map(|i| (i, location.clone())))
+    .build().unwrap();
+<span class="kw">let </span>f = flat.function(<span class="string">"twice"</span>).unwrap();
+
+<span class="comment">// Build: one input for the parameter, on a wire named like it, and one
+// output for the result, on a wire named `ret`.
+</span><span class="kw">let </span>n = <span class="kw-2">&amp;</span>f.params[<span class="number">0</span>];
+<span class="kw">let </span>n_name = <span class="kw-2">&amp;</span>n.name;
+<span class="kw">let </span>input = Input::wire(<span class="kw-2">&amp;</span>n.ty, Wire::new(n_name.clone(), Long), <span class="macro">quote!</span>(#n_name <span class="kw">as </span>u64));
+<span class="kw">let </span>output = Output::wire(<span class="kw-2">&amp;</span>f.ret, Wire::new(<span class="macro">format_ident!</span>(<span class="string">"ret"</span>), Long), |v| <span class="macro">quote!</span>(#v <span class="kw">as </span>i64));
+
+<span class="comment">// Use: the wires give the signature; the input gives the argument, and
+// the output converts the call's result.
+</span><span class="kw">let </span>params = input.wires().iter().map(|w| w.decl()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="kw">let </span>ret_ty = output.wires()[<span class="number">0</span>].ty.rust();
+<span class="comment">// The source function's name: spliced, the qualified path to call; its
+// bare identifier, the base for the wrapper's own name.
+</span><span class="kw">let </span>callee = <span class="kw-2">&amp;</span>f.name;
+<span class="kw">let </span>wrapper_name = <span class="macro">format_ident!</span>(<span class="string">"{}_wrapper"</span>, f.name.ident());
+<span class="kw">let </span>arg = <span class="kw-2">&amp;</span>input.expr;
+<span class="kw">let </span>result = output.apply(<span class="macro">quote!</span>(#callee(#arg)));
+<span class="kw">let </span>wrapper = <span class="macro">quote!</span> {
+    <span class="kw">pub extern </span><span class="string">"C" </span><span class="kw">fn </span>#wrapper_name(#(#params),<span class="kw-2">*</span>) -&gt; #ret_ty { #result }
+};
+<span class="kw">let </span>wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+<span class="macro">assert_eq!</span>(
+    <span class="macro">quote!</span>(#wrapper).to_string(),
+    <span class="macro">quote!</span> {
+        <span class="kw">pub extern </span><span class="string">"C" </span><span class="kw">fn </span>twice_wrapper(n: i64) -&gt; i64 {
+            { <span class="kw">let </span>__v = source_crate::twice(n <span class="kw">as </span>u64); __v <span class="kw">as </span>i64 }
+        }
+    }.to_string(),
+);</code></pre></div>
+<p>An output can be composed of others. Here <code>sample</code> returns a struct, and
+<a href="wire/struct.Output.html#method.record" title="associated function prebindgen_tools::wire::Output::record"><code>Output::record</code></a> takes it apart. The struct’s fields have different
+types, so the closure building each field’s output asks <a href="shape/fn.shape.html" title="fn prebindgen_tools::shape::shape"><code>shape()</code></a> what
+the field is and chooses its wire and conversion: an <code>i64</code> for the <code>u64</code>,
+the <code>f64</code> as is, a <code>u8</code> for the <code>bool</code>. Applied to the call, the record
+output binds the result once, destructures it, and applies each field’s
+output to its binding; the wrapper returns the wires as a tuple:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
+<span class="kw">use </span>prebindgen_flat::{flat::{ScalarKind, Type}, Flat};
+<span class="kw">use </span>prebindgen_tools::{shape, Input, Output, Shape, Wire, WireType};
+<span class="kw">use </span>quote::{format_ident, quote};
+
+<span class="comment">// The wire types this example's boundary uses.
+</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">enum </span>W { Long, Double, Flag }
+<span class="kw">impl </span>WireType <span class="kw">for </span>W {
+    <span class="kw">fn </span>rust(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream {
+        <span class="kw">match </span><span class="self">self </span>{ W::Long =&gt; <span class="macro">quote!</span>(i64), W::Double =&gt; <span class="macro">quote!</span>(f64), W::Flag =&gt; <span class="macro">quote!</span>(u8) }
+    }
+    <span class="kw">fn </span>placeholder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream { <span class="macro">quote!</span>(<span class="number">0</span>) }
+}
+
+<span class="kw">let </span>source = syn::parse_file(
+    <span class="string">"pub struct Sample { pub id: u64, pub value: f64, pub ok: bool } \
+     pub fn sample(n: u64) -&gt; Sample { Sample { id: n, value: n as f64 / 2.0, ok: n &gt; 0 } }"</span>,
+).unwrap();
+<span class="kw">let </span>location = SourceLocation { crate_name: <span class="prelude-val">Some</span>(<span class="string">"source_crate"</span>.into()), ..Default::default() };
+<span class="kw">let </span>flat = Flat::builder()
+    .items(source.items.into_iter().map(|i| (i, location.clone())))
+    .build().unwrap();
+<span class="kw">let </span>f = flat.function(<span class="string">"sample"</span>).unwrap();
+<span class="kw">let </span><span class="prelude-val">Some</span>(Type::Struct(sample)) = flat.declared_type(<span class="string">"Sample"</span>) <span class="kw">else </span>{ <span class="macro">panic!</span>(<span class="string">"a struct"</span>) };
+
+<span class="comment">// Build: the parameter's input, and the result's record output. Each
+// field leaves on a wire named like it, of the type its own type needs.
+</span><span class="kw">let </span>n = <span class="kw-2">&amp;</span>f.params[<span class="number">0</span>];
+<span class="kw">let </span>n_name = <span class="kw-2">&amp;</span>n.name;
+<span class="kw">let </span>input = Input::wire(<span class="kw-2">&amp;</span>n.ty, Wire::new(n_name.clone(), W::Long), <span class="macro">quote!</span>(#n_name <span class="kw">as </span>u64));
+<span class="kw">let </span>output = Output::record(sample, |field| {
+    <span class="kw">let </span>name = field.name.clone().expect(<span class="string">"a named field"</span>);
+    <span class="kw">let </span>wire = |w: W| Wire::new(name.clone(), w);
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span>shape(<span class="kw-2">&amp;</span>field.ty, |<span class="kw">_</span>| <span class="prelude-val">None</span>::&lt;()&gt;) {
+        Shape::Scalar(ScalarKind::U64) =&gt; {
+            Output::wire(<span class="kw-2">&amp;</span>field.ty, wire(W::Long), |v| <span class="macro">quote!</span>(#v <span class="kw">as </span>i64))
+        }
+        Shape::Scalar(ScalarKind::F64) =&gt; Output::wire(<span class="kw-2">&amp;</span>field.ty, wire(W::Double), |v| <span class="macro">quote!</span>(#v)),
+        Shape::Scalar(ScalarKind::Bool) =&gt; {
+            Output::wire(<span class="kw-2">&amp;</span>field.ty, wire(W::Flag), |v| <span class="macro">quote!</span>(#v <span class="kw">as </span>u8))
+        }
+        other =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}`: no wire for {other:?}"</span>, field.ty)),
+    })
+}).unwrap();
+
+<span class="comment">// Use: the output's wires give the return type, its conversion of the
+// call's result the body.
+</span><span class="kw">let </span>params = input.wires().iter().map(|w| w.decl()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="kw">let </span>ret_tys = output.wires().iter().map(|w| w.ty.rust()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="kw">let </span>callee = <span class="kw-2">&amp;</span>f.name;
+<span class="kw">let </span>wrapper_name = <span class="macro">format_ident!</span>(<span class="string">"{}_wrapper"</span>, f.name.ident());
+<span class="kw">let </span>arg = <span class="kw-2">&amp;</span>input.expr;
+<span class="kw">let </span>result = output.apply(<span class="macro">quote!</span>(#callee(#arg)));
+<span class="kw">let </span>wrapper = <span class="macro">quote!</span> {
+    <span class="kw">pub fn </span>#wrapper_name(#(#params),<span class="kw-2">*</span>) -&gt; (#(#ret_tys),<span class="kw-2">*</span>) { #result }
+};
+<span class="kw">let </span>wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+<span class="macro">assert_eq!</span>(
+    <span class="macro">quote!</span>(#wrapper).to_string(),
+    <span class="macro">quote!</span> {
+        <span class="kw">pub fn </span>sample_wrapper(n: i64) -&gt; (i64, f64, u8) {
+            {
+                <span class="kw">let </span>__v = source_crate::sample(n <span class="kw">as </span>u64);
+                {
+                    <span class="kw">let </span>source_crate::Sample { id: __f0, value: __f1, ok: __f2 } = __v;
+                    <span class="kw">let </span>id = { <span class="kw">let </span>__v = __f0; __v <span class="kw">as </span>i64 };
+                    <span class="kw">let </span>value = { <span class="kw">let </span>__v = __f1; __v };
+                    <span class="kw">let </span>ok = { <span class="kw">let </span>__v = __f2; __v <span class="kw">as </span>u8 };
+                    (id, value, ok)
+                }
+            }
+        }
+    }.to_string(),
+);</code></pre></div><h3 id="deciding-how-each-layer-crosses"><a class="doc-anchor" href="#deciding-how-each-layer-crosses">§</a>Deciding how each layer crosses</h3>
+<p>The example decided by itself that a <code>u64</code> crosses as one wire. A real
+adapter decides per type, following the build script’s declarations, and
+a type such as <code>Option&lt;Point&gt;</code> needs one decision per layer: the
+<code>Option</code>, then the <code>Point</code>, then each of its fields.</p>
+<p>So the adapter builds an input or output by recursion over the type.
+<a href="shape/fn.shape.html" title="fn prebindgen_tools::shape::shape"><code>shape()</code></a> reads the outermost layer as a <a href="shape/enum.Shape.html" title="enum prebindgen_tools::shape::Shape"><code>Shape</code></a> — a scalar, an
+<code>Option</code>, a borrow, a type the adapter declared, and so on. The adapter
+calls the function the table above gives for that layer, and recurses
+into what the layer holds.</p>
+<p>The adapter keeps its declarations in <a href="place/struct.Overrides.html" title="struct prebindgen_tools::place::Overrides"><code>Overrides</code></a>: a default for each
+type, and the replacements the build script declared for single places.
+A <a href="place/struct.Place.html" title="struct prebindgen_tools::place::Place"><code>Place</code></a> names where a part sits in the element, such as parameter
+<code>p</code> of <code>send</code>, or field <code>x</code> of that parameter. The adapter starts from
+the place of each parameter or result and extends it as it recurses
+(<a href="place/struct.Place.html#method.at" title="method prebindgen_tools::place::Place::at"><code>Place::at</code></a>). At each layer it asks <a href="place/struct.Overrides.html#method.get" title="method prebindgen_tools::place::Overrides::get"><code>Overrides::get</code></a> with the
+current place and type — passing that lookup to <a href="shape/fn.shape.html" title="fn prebindgen_tools::shape::shape"><code>shape()</code></a> does it —
+and names the layer’s wires after the place (<a href="place/struct.Place.html#method.ident" title="method prebindgen_tools::place::Place::ident"><code>Place::ident</code></a>). The place
+only steers the building; it is not stored in the <a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a> or
+<a href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output"><code>Output</code></a>.</p>
+<h3 id="other-tools"><a class="doc-anchor" href="#other-tools">§</a>Other tools</h3>
+<p>Generated code names a source item by its
+<a href="../prebindgen_flat/flat/item_name/struct.ItemName.html" title="struct prebindgen_flat::flat::item_name::ItemName"><code>ItemName</code></a>, which the flat model
+qualifies when it is built: splicing a function’s <code>name</code> writes
+<code>source_crate::make</code>. A whole source type is never spelled by the adapter,
+except through <a href="callback/fn.callback_arg_types.html" title="fn prebindgen_tools::callback::callback_arg_types"><code>callback_arg_types</code></a>. <a href="file/struct.RustFile.html" title="struct prebindgen_tools::file::RustFile"><code>RustFile</code></a> collects and writes the
+generated Rust.</p>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.callback_arg_types"><code>pub use crate::callback::<a class="fn" href="callback/fn.callback_arg_types.html" title="fn prebindgen_tools::callback::callback_arg_types">callback_arg_types</a>;</code></dt><dt id="reexport.Conversion"><code>pub use crate::convert::<a class="struct" href="convert/struct.Conversion.html" title="struct prebindgen_tools::convert::Conversion">Conversion</a>;</code></dt><dt id="reexport.FnRef"><code>pub use crate::convert::<a class="struct" href="convert/struct.FnRef.html" title="struct prebindgen_tools::convert::FnRef">FnRef</a>;</code></dt><dt id="reexport.ResolvedConversion"><code>pub use crate::convert::<a class="struct" href="convert/struct.ResolvedConversion.html" title="struct prebindgen_tools::convert::ResolvedConversion">ResolvedConversion</a>;</code></dt><dt id="reexport.Via"><code>pub use crate::convert::<a class="enum" href="convert/enum.Via.html" title="enum prebindgen_tools::convert::Via">Via</a>;</code></dt><dt id="reexport.RustFile"><code>pub use crate::file::<a class="struct" href="file/struct.RustFile.html" title="struct prebindgen_tools::file::RustFile">RustFile</a>;</code></dt><dt id="reexport.Overrides"><code>pub use crate::place::<a class="struct" href="place/struct.Overrides.html" title="struct prebindgen_tools::place::Overrides">Overrides</a>;</code></dt><dt id="reexport.Place"><code>pub use crate::place::<a class="struct" href="place/struct.Place.html" title="struct prebindgen_tools::place::Place">Place</a>;</code></dt><dt id="reexport.Seg"><code>pub use crate::place::<a class="enum" href="place/enum.Seg.html" title="enum prebindgen_tools::place::Seg">Seg</a>;</code></dt><dt id="reexport.Record"><code>pub use crate::record::<a class="enum" href="record/enum.Record.html" title="enum prebindgen_tools::record::Record">Record</a>;</code></dt><dt id="reexport.shape"><code>pub use crate::shape::<a class="fn" href="shape/fn.shape.html" title="fn prebindgen_tools::shape::shape">shape</a>;</code></dt><dt id="reexport.Access"><code>pub use crate::shape::<a class="enum" href="shape/enum.Access.html" title="enum prebindgen_tools::shape::Access">Access</a>;</code></dt><dt id="reexport.SequenceKind"><code>pub use crate::shape::<a class="enum" href="shape/enum.SequenceKind.html" title="enum prebindgen_tools::shape::SequenceKind">SequenceKind</a>;</code></dt><dt id="reexport.Shape"><code>pub use crate::shape::<a class="enum" href="shape/enum.Shape.html" title="enum prebindgen_tools::shape::Shape">Shape</a>;</code></dt><dt id="reexport.TextKind"><code>pub use crate::shape::<a class="enum" href="shape/enum.TextKind.html" title="enum prebindgen_tools::shape::TextKind">TextKind</a>;</code></dt><dt id="reexport.Form"><code>pub use crate::wire::<a class="struct" href="wire/struct.Form.html" title="struct prebindgen_tools::wire::Form">Form</a>;</code></dt><dt id="reexport.FormKind"><code>pub use crate::wire::<a class="enum" href="wire/enum.FormKind.html" title="enum prebindgen_tools::wire::FormKind">FormKind</a>;</code></dt><dt id="reexport.Input"><code>pub use crate::wire::<a class="struct" href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input">Input</a>;</code></dt><dt id="reexport.Output"><code>pub use crate::wire::<a class="struct" href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output">Output</a>;</code></dt><dt id="reexport.Wire"><code>pub use crate::wire::<a class="struct" href="wire/struct.Wire.html" title="struct prebindgen_tools::wire::Wire">Wire</a>;</code></dt><dt id="reexport.WireType"><code>pub use crate::wire::<a class="trait" href="wire/trait.WireType.html" title="trait prebindgen_tools::wire::WireType">WireType</a>;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="callback/index.html" title="mod prebindgen_tools::callback">callback</a></dt><dd>The parameter types of a callback closure.</dd><dt><a class="mod" href="convert/index.html" title="mod prebindgen_tools::convert">convert</a></dt><dd>Custom conversions: a source type that crosses as another type.</dd><dt><a class="mod" href="file/index.html" title="mod prebindgen_tools::file">file</a></dt><dd>The generated Rust file.</dd><dt><a class="mod" href="names/index.html" title="mod prebindgen_tools::names">names</a></dt><dd>Identifier and case helpers shared by every adapter.</dd><dt><a class="mod" href="place/index.html" title="mod prebindgen_tools::place">place</a></dt><dd>Places in an element, and the decisions made at them.</dd><dt><a class="mod" href="record/index.html" title="mod prebindgen_tools::record">record</a></dt><dd>Records — structs and the alternatives of a sum — taken apart into their
+fields and put back together, with the delimiters the source wrote.
+<a href="wire/struct.Input.html#method.record" title="associated function prebindgen_tools::wire::Input::record"><code>Input::record</code></a> and <a href="wire/struct.Output.html#method.record" title="associated function prebindgen_tools::wire::Output::record"><code>Output::record</code></a> use it; an adapter writing its own
+mirror does too.</dd><dt><a class="mod" href="shape/index.html" title="mod prebindgen_tools::shape">shape</a></dt><dd>One level of a type’s structure, with any adapter declaration for that type.</dd><dt><a class="mod" href="wire/index.html" title="mod prebindgen_tools::wire">wire</a></dt><dd>Wires, the forms values take on them, and the conversions between.</dd></dl><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.convert.html" title="macro prebindgen_tools::convert">convert</a></dt><dd><code>convert!(Type)</code> — start a conversion declaration.</dd><dt><a class="macro" href="macro.expr.html" title="macro prebindgen_tools::expr">expr</a></dt><dd><code>expr!(e)</code> — a <code>syn::Expr</code>.</dd><dt><a class="macro" href="macro.from.html" title="macro prebindgen_tools::from">from</a></dt><dd><code>from!(Repr)</code> — the input stage is <code>From&lt;Repr&gt;</code> on the source type.</dd><dt><a class="macro" href="macro.fun.html" title="macro prebindgen_tools::fun">fun</a></dt><dd><code>fun!(name)</code> / <code>fun!(crate::local)</code> — a function reference.</dd><dt><a class="macro" href="macro.ident.html" title="macro prebindgen_tools::ident">ident</a></dt><dd><code>ident!(name)</code> — a <code>syn::Ident</code>.</dd><dt><a class="macro" href="macro.into.html" title="macro prebindgen_tools::into">into</a></dt><dd><code>into!(Repr)</code> — the output stage is <code>Into&lt;Repr&gt;</code> on the source type.</dd><dt><a class="macro" href="macro.path.html" title="macro prebindgen_tools::path">path</a></dt><dd><code>path!(a::b)</code> — a <code>syn::Path</code>.</dd><dt><a class="macro" href="macro.sig.html" title="macro prebindgen_tools::sig">sig</a></dt><dd><code>sig!((a: A, b: B) -&gt; R)</code> — a signature, for a binding-local function.</dd><dt><a class="macro" href="macro.try_from.html" title="macro prebindgen_tools::try_from">try_<wbr>from</a></dt><dd><code>try_from!(Repr)</code> — the input stage is <code>TryFrom&lt;Repr&gt;</code> on the source type.</dd><dt><a class="macro" href="macro.try_into.html" title="macro prebindgen_tools::try_into">try_<wbr>into</a></dt><dd><code>try_into!(Repr)</code> — the output stage is <code>TryInto&lt;Repr&gt;</code> on the source type.</dd><dt><a class="macro" href="macro.ty.html" title="macro prebindgen_tools::ty">ty</a></dt><dd><code>ty!(T)</code> — a <code>syn::Type</code>.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.check_supported.html" title="fn prebindgen_tools::check_supported">check_<wbr>supported</a></dt><dd>Refuse a model the frontend could not read in full: every
+<a href="../prebindgen_flat/flat/element/enum.Element.html#variant.Unsupported" title="variant prebindgen_flat::flat::element::Element::Unsupported"><code>Unsupported</code></a> element, reported at
+once. An adapter calls this before looking at any declaration, so a
+binding is built against the whole source or not at all.</dd></dl></section></div></main></body></html>
