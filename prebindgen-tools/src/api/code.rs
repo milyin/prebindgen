@@ -4,7 +4,7 @@ use quote::{quote, ToTokens};
 use crate::{
     api::{
         convert::Direction as ConvDirection,
-        crossing::{Alternatives, Arm, Crossing, In, Node, Out, Sequence, Wrapper},
+        crossing::{Alternatives, Arm, Crossing, Fields, In, Node, Out, Sequence, Wrapper},
     },
     Access, Record, Wire, WireType,
 };
@@ -347,9 +347,10 @@ fn construct(record: Record<'_>, head: &TokenStream, values: Vec<Input>) -> Inpu
     }
 }
 
-/// One alternative taken apart: the pattern matching it, which binds its
-/// fields, and the statements binding each field's wires by name.
-pub struct ArmOutput {
+/// A record — a struct, or one alternative of a sum — taken apart: the
+/// pattern matching it, which binds its fields, and the statements binding
+/// each field's wires by name.
+pub struct Destructured {
     pub pattern: TokenStream,
     pub binds: TokenStream,
     pub fallible: bool,
@@ -364,21 +365,13 @@ impl<'f, W: WireType> Crossing<'f, W, Out> {
             Node::Whole(w) => Output::over(&wires, w.code.clone()),
             Node::Unit => Output::over(&wires, Code::new(quote!(()))),
             Node::Fields(f) => {
-                let record = Record::Struct(f.item());
-                let binds = record.binds();
-                let mut stmts = Vec::new();
-                let mut fallible = false;
-                for ((_, c), b) in f.fields().zip(&binds) {
-                    let out = c.encode(codec)?;
-                    fallible |= out.fallible;
-                    stmts.push(out.bind(b));
-                }
-                let pat = record.pattern(&f.item().name.to_token_stream(), &binds);
+                let d = f.encode_parts(codec)?;
+                let (pat, binds) = (&d.pattern, &d.binds);
                 let values = tuple(wires.iter().map(|w| w.name.to_token_stream()));
                 Output {
                     names: names(&wires),
-                    body: quote!({ let #pat = #x; #(#stmts)* #values }),
-                    fallible,
+                    body: quote!({ let #pat = #x; #binds #values }),
+                    fallible: d.fallible,
                 }
             }
             Node::Alternatives(a) => {
@@ -446,12 +439,46 @@ impl<'f, W: WireType> Crossing<'f, W, Out> {
 impl<'f, W: WireType> Alternatives<'f, W, Out> {
     /// Each alternative taken apart, in order: the arms of a match on the
     /// source value.
-    pub fn encode_each<C: Encode<'f, W>>(&self, codec: &C) -> Result<Vec<ArmOutput>, C::Error> {
+    pub fn encode_each<C: Encode<'f, W>>(&self, codec: &C) -> Result<Vec<Destructured>, C::Error> {
         self.arms()
             .iter()
             .map(|arm| arm.encode(&self.item().name.to_token_stream(), codec))
             .collect()
     }
+}
+
+impl<'f, W: WireType> Fields<'f, W, Out> {
+    /// The struct taken apart: for a writer that builds its own value from
+    /// the fields' wires, such as a mirror.
+    pub fn encode_parts<C: Encode<'f, W>>(&self, codec: &C) -> Result<Destructured, C::Error> {
+        destructure(
+            Record::Struct(self.item()),
+            &self.item().name.to_token_stream(),
+            self.fields().map(|(_, c)| c),
+            codec,
+        )
+    }
+}
+
+fn destructure<'c, 'f: 'c, W: WireType + 'c, C: Encode<'f, W>>(
+    record: Record<'_>,
+    head: &TokenStream,
+    fields: impl Iterator<Item = &'c Crossing<'f, W, Out>>,
+    codec: &C,
+) -> Result<Destructured, C::Error> {
+    let binds = record.binds();
+    let mut stmts = Vec::new();
+    let mut fallible = false;
+    for (c, b) in fields.zip(&binds) {
+        let out = c.encode(codec)?;
+        fallible |= out.fallible;
+        stmts.push(out.bind(b));
+    }
+    Ok(Destructured {
+        pattern: record.pattern(head, &binds),
+        binds: quote!(#(#stmts)*),
+        fallible,
+    })
 }
 
 impl<'f, W: WireType> Arm<'f, W, Out> {
@@ -461,22 +488,14 @@ impl<'f, W: WireType> Arm<'f, W, Out> {
         &self,
         sum: &TokenStream,
         codec: &C,
-    ) -> Result<ArmOutput, C::Error> {
-        let record = Record::Alt(self.alternative());
-        let binds = record.binds();
-        let mut stmts = Vec::new();
-        let mut fallible = false;
-        for ((_, c), b) in self.fields().zip(&binds) {
-            let out = c.encode(codec)?;
-            fallible |= out.fallible;
-            stmts.push(out.bind(b));
-        }
+    ) -> Result<Destructured, C::Error> {
         let name = &self.alternative().name;
-        Ok(ArmOutput {
-            pattern: record.pattern(&quote!(#sum::#name), &binds),
-            binds: quote!(#(#stmts)*),
-            fallible,
-        })
+        destructure(
+            Record::Alt(self.alternative()),
+            &quote!(#sum::#name),
+            self.fields().map(|(_, c)| c),
+            codec,
+        )
     }
 }
 

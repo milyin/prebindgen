@@ -13,7 +13,7 @@ use prebindgen_flat::{
     flat::{Function, Type as FlatType, TypeKind, TypeRef},
     Flat,
 };
-use prebindgen_tools::{names, ResolvedConversion};
+use prebindgen_tools::{names, Choices, In, Out, Place, ResolvedConversion, Ways};
 use quote::ToTokens;
 
 use crate::{
@@ -77,6 +77,12 @@ pub(crate) struct Plan<'f> {
     pub free_fn: Option<syn::Ident>,
     /// The setting of each declared type, by name.
     pub types: HashMap<String, Setting>,
+    /// The ways each declared type crosses: whole, as its C spelling; as its
+    /// representation, when converted; and a data struct also as its
+    /// fields, which its mirror takes.
+    pub ways: Ways<'f, ()>,
+    pub inputs: Choices<In>,
+    pub outputs: Choices<Out>,
     /// Each callback type's closure struct, by the type's key.
     pub closures: HashMap<String, syn::Ident>,
     pub items: Vec<Item>,
@@ -89,6 +95,9 @@ impl<'f> Plan<'f> {
             flat,
             free_fn: b.free_fn.as_deref().map(names::ident),
             types: HashMap::new(),
+            ways: Ways::new(),
+            inputs: Choices::new(),
+            outputs: Choices::new(),
             closures: HashMap::new(),
             items: Vec::new(),
         };
@@ -97,6 +106,12 @@ impl<'f> Plan<'f> {
             let r = c.resolve(flat).map_err(Error)?;
             let name = named(r.target())
                 .ok_or_else(|| Error(format!("convert!({}): not a named type", r.target())))?;
+            match (r.has_input(), r.has_output()) {
+                (true, true) => plan.ways.converted(r.clone()).map(drop),
+                (true, false) => plan.ways.converted_in(r.clone()).map(drop),
+                _ => plan.ways.converted_out(r.clone()).map(drop),
+            }
+            .map_err(Error)?;
             if plan
                 .types
                 .insert(name.clone(), Setting::Converted(r))
@@ -189,6 +204,16 @@ impl<'f> Plan<'f> {
             if self.types.insert(name.clone(), setting).is_some() {
                 return err(format!("`{name}` is declared twice"));
             }
+            let whole = self.ways.whole(&ty, ());
+            self.inputs.choose(&self.ways, whole).map_err(Error)?;
+            self.outputs.choose(&self.ways, whole).map_err(Error)?;
+            if let (DeclKind::Data, Some(FlatType::Struct(s))) = (&d.kind, element) {
+                // Everywhere whole, except in its own mirror.
+                let fields = self.ways.fields(s);
+                let mirror = mirror_place(&names::ident(&c));
+                self.inputs.choose_at(mirror.clone(), fields);
+                self.outputs.choose_at(mirror, fields);
+            }
             self.items.push(Item::Type(name));
         }
         Ok(())
@@ -273,6 +298,12 @@ impl<'f> Plan<'f> {
             .declared_type(name)
             .ok_or_else(|| Error(format!("`{name}` is not a #[prebindgen] type")))
     }
+}
+
+/// Where a declared type's mirror `c` converts it: the one place a data
+/// struct crosses as its fields.
+pub(crate) fn mirror_place(c: &syn::Ident) -> Place {
+    Place::new(names::bare(c))
 }
 
 fn classify(flat: &Flat, ty: &syn::Type) -> Res<TypeRef> {

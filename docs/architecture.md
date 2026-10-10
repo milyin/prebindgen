@@ -106,9 +106,9 @@ it is built, so splicing it names the item from the generated crate
 parameter types of a callback closure, the one place an adapter writes a
 whole source type.
 
-Both adapters still build their values with the hand-composed builders that
-preceded crossings, kept as `prebindgen_tools::legacy` until each adapter
-resolves crossings instead.
+The C adapter resolves crossings. The JNI adapter still builds its values
+with the hand-composed builders that preceded them, kept as
+`prebindgen_tools::legacy` until it resolves crossings too.
 
 ## The two adapters
 

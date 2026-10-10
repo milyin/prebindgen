@@ -1,6 +1,6 @@
-//! The builders the adapters used before crossings: an `Input` or `Output`
-//! composed by hand. Kept only until `prebindgen-c` and `prebindgen-jni`
-//! resolve crossings instead; nothing else may use them.
+//! The builders adapters used before crossings: an `Input` or `Output`
+//! composed by hand. Kept only until `prebindgen-jni` resolves crossings
+//! instead; nothing else may use them.
 
 use prebindgen_flat::flat::{Alternative, Field, Struct, TypeRef, Variant};
 use proc_macro2::{Literal, TokenStream};

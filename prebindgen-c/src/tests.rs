@@ -161,3 +161,89 @@ fn slice_inputs_do_not_accept_vector_references() {
         assert_eq!(result.is_ok(), accepted, "{ty}: {:?}", result.err());
     }
 }
+
+#[test]
+fn a_mirror_named_by_a_keyword_takes_its_fields_way() {
+    let loc = SourceLocation {
+        crate_name: Some("src_crate".to_string()),
+        ..Default::default()
+    };
+    let items = syn::parse_file(SRC)
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|i| (i, loc.clone()));
+    // `type` is a keyword: the mirror's identifier is `r#type`.
+    let out = Cbindgen::builder()
+        .items(items)
+        .free_memory_function("src_free")
+        .mangle_type_name(|_| "type".into())
+        .data_struct(pq!(Point))
+        .function(pq!(point_norm))
+        .build()
+        .unwrap()
+        .render();
+    assert!(flat(out).contains("pub struct r#type {"));
+}
+
+fn small(src: &str) -> CbindgenBuilder {
+    let loc = SourceLocation {
+        crate_name: Some("src_crate".to_string()),
+        ..Default::default()
+    };
+    let items = syn::parse_file(src)
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|i| (i, loc.clone()));
+    Cbindgen::builder()
+        .items(items)
+        .free_memory_function("src_free")
+}
+
+#[test]
+fn a_boxed_parameter_crosses_as_a_value() {
+    let out = small(
+        "#[repr(C)] pub struct Pos { pub x: f64 } \
+         pub fn take(p: Box<Pos>) {}",
+    )
+    .repr_c_struct(pq!(Pos))
+    .function(pq!(take))
+    .build()
+    .unwrap()
+    .render();
+    // The boxed `Pos` is a by-value C struct, not the pointer a bare `Pos`
+    // parameter is.
+    let out = flat(out);
+    assert!(out.contains("fn take(p: pos)"), "{out}");
+}
+
+#[test]
+fn a_one_way_conversion_used_the_other_way_is_refused() {
+    let err = small(
+        "pub struct Millis(pub u64); \
+         pub fn millis_to(m: &Millis) -> u64 { m.0 } \
+         pub fn take(m: Millis) {}",
+    )
+    .convert(prebindgen_tools::convert!(Millis).output(prebindgen_tools::fun!(millis_to)))
+    .function(pq!(take))
+    .build()
+    .err()
+    .expect("an output-only conversion cannot be taken");
+    assert!(err.0.contains("declares no input"), "{}", err.0);
+}
+
+#[test]
+fn a_callback_argument_cannot_convert_fallibly() {
+    let err = small(
+        "pub struct Millis(pub u64); \
+         pub fn millis_to(m: &Millis) -> Result<u64, String> { Ok(m.0) } \
+         pub fn on(f: impl Fn(Millis) + Send + Sync + 'static) {}",
+    )
+    .convert(prebindgen_tools::convert!(Millis).output(prebindgen_tools::fun!(millis_to)))
+    .function(pq!(on))
+    .build()
+    .err()
+    .expect("a callback cannot report a failed conversion");
+    assert!(err.0.contains("fallible output conversion"), "{}", err.0);
+}
