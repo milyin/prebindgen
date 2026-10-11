@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["bare_path_ident","ident","is_result_type","option_inner_type","pascal_to_snake","path_tail_ident","result_ok_type","result_parts","vec_inner_type"]};
