@@ -35,13 +35,14 @@ impl Storage {
         }
     }
 }
-pub fn input(
+pub fn input<W>(
     storage: &Storage,
     ty: &syn::Type,
     w: syn::Ident,
     v: syn::Ident,
     active: &Condition,
-) -> Result<PreparedInput<BoxedWire>> {
+    wire_extra: impl FnOnce(BoxedWire) -> W,
+) -> Result<PreparedInput<W>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -82,7 +83,8 @@ pub fn input(
     Ok(PreparedInput {
         wires: vec![Wire {
             name: w.clone(),
-            kind: WireKind::Foreign(BoxedWire {
+            kind: WireKind::Foreign,
+            extra: wire_extra(BoxedWire {
                 ty: target.clone(),
                 access,
             }),
@@ -99,13 +101,14 @@ pub fn input(
         }],
     })
 }
-pub fn output(
+pub fn output<W>(
     storage: &Storage,
     ty: &syn::Type,
     w: syn::Ident,
     value: TokenStream,
     borrowed: bool,
-) -> Result<PreparedOutput<BoxedWire>> {
+    wire_extra: impl FnOnce(BoxedWire) -> W,
+) -> Result<PreparedOutput<W>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -119,7 +122,8 @@ pub fn output(
     Ok(PreparedOutput {
         wires: vec![Wire {
             name: w.clone(),
-            kind: WireKind::Foreign(BoxedWire {
+            kind: WireKind::Foreign,
+            extra: wire_extra(BoxedWire {
                 ty: ty.clone(),
                 access: Access::Move,
             }),

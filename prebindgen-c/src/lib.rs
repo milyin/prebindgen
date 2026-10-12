@@ -2,18 +2,21 @@
 use prebindgen_flat::{Flat, Primitive, Result};
 pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
 use prebindgen_tools::{
-    Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
+    Codec, Prepared as GenericPrepared, Slot as GenericSlot, Wire as GenericWire, WireKind,
 };
 type Slot = GenericSlot<()>;
-type Prepared = GenericPrepared<PointerWire>;
-type WireKind = GenericWireKind<PointerWire>;
+type Prepared = GenericPrepared<Option<PointerWire>>;
+type Wire = GenericWire<Option<PointerWire>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 struct CCodec;
 impl Codec for CCodec {
     type Extra = ();
-    type Wire = PointerWire;
+    type Wire = Option<PointerWire>;
+    fn wire_extra(&self, _: &syn::Type, _: &WireKind, _: &()) -> Self::Wire {
+        None
+    }
     fn consumes(&self, _: &syn::Type, _: &()) -> bool {
         true
     }
@@ -24,8 +27,15 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
-    ) -> Result<prebindgen_tools::PreparedInput<PointerWire>> {
-        prebindgen_tools::boxed::input(&prebindgen_tools::boxed::Storage::Direct, ty, w, v, active)
+    ) -> Result<prebindgen_tools::PreparedInput<Option<PointerWire>>> {
+        prebindgen_tools::boxed::input(
+            &prebindgen_tools::boxed::Storage::Direct,
+            ty,
+            w,
+            v,
+            active,
+            Some,
+        )
     }
     fn output_foreign(
         &self,
@@ -34,13 +44,14 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_tools::PreparedOutput<PointerWire>> {
+    ) -> Result<prebindgen_tools::PreparedOutput<Option<PointerWire>>> {
         prebindgen_tools::boxed::output(
             &prebindgen_tools::boxed::Storage::Direct,
             ty,
             w,
             v,
             borrowed,
+            Some,
         )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
@@ -180,8 +191,8 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-fn rust_ty(kind: &WireKind) -> TokenStream {
-    match kind {
+fn rust_ty(wire: &Wire) -> TokenStream {
+    match &wire.kind {
         WireKind::Scalar(p) => match p {
             Primitive::Bool => quote!(u8),
             Primitive::Char => quote!(u32),
@@ -191,7 +202,8 @@ fn rust_ty(kind: &WireKind) -> TokenStream {
                 quote!(#ty)
             }
         },
-        WireKind::Foreign(p) => {
+        WireKind::Foreign => {
+            let p = wire.extra.as_ref().expect("validated C pointer metadata");
             let ty = &p.ty;
             if p.access == prebindgen_tools::Access::Shared {
                 quote!(*const #ty)
@@ -203,8 +215,8 @@ fn rust_ty(kind: &WireKind) -> TokenStream {
         _ => quote!(__PbBuffer),
     }
 }
-fn c_ty(kind: &WireKind, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
-    match kind {
+fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
+    match &wire.kind {
         WireKind::Scalar(p) => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
             Primitive::Char | Primitive::U32 => "uint32_t".into(),
@@ -220,7 +232,8 @@ fn c_ty(kind: &WireKind, prefix: &str, pointers: &[(String, syn::Type)]) -> Stri
             Primitive::F64 => "double".into(),
             Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
         },
-        WireKind::Foreign(p) => {
+        WireKind::Foreign => {
+            let p = wire.extra.as_ref().expect("validated C pointer metadata");
             let (name, _) = pointers
                 .iter()
                 .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
@@ -261,7 +274,11 @@ fn generate(
             _ => unreachable!(),
         });
         for wire in inputs.chain(out.wires.iter()) {
-            if let WireKind::Foreign(pointer) = &wire.kind {
+            if matches!(wire.kind, WireKind::Foreign) {
+                let pointer = wire
+                    .extra
+                    .as_ref()
+                    .ok_or("C foreign wire needs pointer metadata")?;
                 if !pointers
                     .iter()
                     .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
@@ -322,9 +339,9 @@ The pointer must be null or a live allocation of the declared type returned by t
             };
             for w in &input.wires {
                 let n = &w.name;
-                let ty = rust_ty(&w.kind);
+                let ty = rust_ty(w);
                 params.push(quote!(#n:#ty));
-                cparams.push(format!("{} {n}", c_ty(&w.kind, prefix, &pointers)));
+                cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
             }
             validation.extend(input.validation.clone());
             acquire.extend(input.acquire.clone());
@@ -339,7 +356,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str("typedef struct {\n");
         for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
             let field = format_ident!("v{i}");
-            let ty = rust_ty(&w.kind);
+            let ty = rust_ty(w);
             fields.push(quote!(pub #field:#ty));
             let value = match &w.kind {
                 WireKind::Text | WireKind::Bytes => {
@@ -356,7 +373,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 _ => v.clone(),
             };
             values.push(quote!(#field:#value));
-            header.push_str(&format!("    {} v{i};\n", c_ty(&w.kind, prefix, &pointers)));
+            header.push_str(&format!("    {} v{i};\n", c_ty(w, prefix, &pointers)));
         }
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));

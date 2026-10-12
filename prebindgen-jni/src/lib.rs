@@ -7,11 +7,11 @@ mod scalar;
 use prebindgen_flat::Primitive;
 pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
 use prebindgen_tools::{
-    Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
+    Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, Wire as GenericWire, WireKind,
 };
 type Slot = GenericSlot<()>;
-type Prepared = GenericPrepared<HandleWire>;
-type WireKind = GenericWireKind<HandleWire>;
+type Prepared = GenericPrepared<Option<HandleWire>>;
+type Wire = GenericWire<Option<HandleWire>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
@@ -240,7 +240,10 @@ impl Class {
 struct JniCodec;
 impl Codec for JniCodec {
     type Extra = ();
-    type Wire = HandleWire;
+    type Wire = Option<HandleWire>;
+    fn wire_extra(&self, _: &syn::Type, _: &WireKind, _: &()) -> Self::Wire {
+        None
+    }
     fn consumes(&self, _: &syn::Type, _: &()) -> bool {
         true
     }
@@ -251,7 +254,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
-    ) -> Result<prebindgen_tools::PreparedInput<HandleWire>> {
+    ) -> Result<prebindgen_tools::PreparedInput<Option<HandleWire>>> {
         prebindgen_tools::boxed::input(
             &prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
                 ::prebindgen_jni_runtime::Allocation
@@ -260,6 +263,7 @@ impl Codec for JniCodec {
             w,
             v,
             active,
+            Some,
         )
     }
     fn output_foreign(
@@ -269,7 +273,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_tools::PreparedOutput<HandleWire>> {
+    ) -> Result<prebindgen_tools::PreparedOutput<Option<HandleWire>>> {
         prebindgen_tools::boxed::output(
             &prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
                 ::prebindgen_jni_runtime::Allocation
@@ -278,6 +282,7 @@ impl Codec for JniCodec {
             w,
             v,
             borrowed,
+            Some,
         )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
@@ -408,10 +413,15 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
         escape(method)
     )
 }
+fn handle_metadata(wire: &Wire) -> Result<&HandleWire> {
+    wire.extra
+        .as_ref()
+        .ok_or_else(|| "JNI foreign wire needs handle metadata".into())
+}
 fn raw_rust(kind: &WireKind) -> TokenStream {
     match kind {
         WireKind::Scalar(p) => scalar::rust_type(*p),
-        WireKind::Foreign(_) => quote!(i64),
+        WireKind::Foreign => quote!(i64),
         WireKind::Selector => quote!(i32),
         WireKind::Text => quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
         WireKind::Bytes => quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>),
@@ -420,7 +430,7 @@ fn raw_rust(kind: &WireKind) -> TokenStream {
 fn raw_kt(kind: &WireKind) -> &'static str {
     match kind {
         WireKind::Scalar(p) => scalar::raw_kotlin(*p),
-        WireKind::Foreign(_) => "Long",
+        WireKind::Foreign => "Long",
         WireKind::Selector => "Int",
         WireKind::Text => "String?",
         WireKind::Bytes => "ByteArray?",
@@ -488,7 +498,8 @@ fn generate(
                 raw_params.push(format!("{n}: {}", raw_kt(&w.kind)));
                 let (kt, arg) = match &w.kind {
                     WireKind::Scalar(p) => scalar::input(*p, n),
-                    WireKind::Foreign(handle) => {
+                    WireKind::Foreign => {
+                        let handle = handle_metadata(w)?;
                         let condition = kotlin_condition(&w.active);
                         locks.push(format!(
                             "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
@@ -534,7 +545,7 @@ fn generate(
                     i.wires
                         .iter()
                         .map(|w| match w.kind {
-                            WireKind::Foreign(_) => 2,
+                            WireKind::Foreign => 2,
                             WireKind::Scalar(p) => scalar::parameter_slots(p),
                             _ => 1,
                         })
@@ -557,8 +568,8 @@ fn generate(
         for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
             let (expr, kt, decode) = match &w.kind {
                 WireKind::Scalar(p) => scalar::output(*p, v, i),
-                WireKind::Foreign(ty) => {
-                    let c = class(&classes, &ty.ty)?.fqn();
+                WireKind::Foreign => {
+                    let c = class(&classes, &handle_metadata(w)?.ty)?.fqn();
                     (
                         quote!(::prebindgen_jni_runtime::handle_object(&mut env,(#v) as u64)?),
                         c.clone(),
@@ -601,7 +612,8 @@ fn generate(
         let mut materialize = String::new();
         let mut cleanup = String::new();
         for (i, w) in output.wires.iter().enumerate() {
-            if let WireKind::Foreign(handle) = &w.kind {
+            if matches!(w.kind, WireKind::Foreign) {
+                let handle = handle_metadata(w)?;
                 let c = class(&classes, &handle.ty)?.fqn();
                 output_locals.push_str(&format!("        var output{i}: {c}? = null\n"));
                 materialize.push_str(&format!("            output{i} = {}\n", delivered[i]));

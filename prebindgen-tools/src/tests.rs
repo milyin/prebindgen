@@ -1,13 +1,29 @@
 use super::*;
-struct TestCodec;
+struct TestCodec<W>(std::marker::PhantomData<W>);
+const TEST_CODEC: TestCodec<WireExtra> = TestCodec(std::marker::PhantomData);
+#[derive(Clone, Debug)]
+struct WireExtra {
+    name: &'static str,
+    ty: String,
+}
+impl From<WireExtra> for () {
+    fn from(_: WireExtra) {}
+}
 #[derive(Clone, Debug, Default)]
 struct Extra {
     name: &'static str,
     copy: bool,
 }
-impl Codec for TestCodec {
+impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
     type Extra = Extra;
-    type Wire = (&'static str, String);
+    type Wire = W;
+    fn wire_extra(&self, ty: &Type, _: &WireKind, extra: &Extra) -> W {
+        WireExtra {
+            name: extra.name,
+            ty: type_key(ty),
+        }
+        .into()
+    }
     fn consumes(&self, _: &Type, extra: &Extra) -> bool {
         !extra.copy
     }
@@ -22,7 +38,8 @@ impl Codec for TestCodec {
         Ok(PreparedInput {
             wires: vec![Wire {
                 name: w.clone(),
-                kind: WireKind::Foreign((extra.name, type_key(ty))),
+                kind: WireKind::Foreign,
+                extra: self.wire_extra(ty, &WireKind::Foreign, extra),
                 active: active.clone(),
             }],
             validation: quote!(),
@@ -46,7 +63,8 @@ impl Codec for TestCodec {
         Ok(PreparedOutput {
             wires: vec![Wire {
                 name: w.clone(),
-                kind: WireKind::Foreign((extra.name, type_key(ty))),
+                kind: WireKind::Foreign,
+                extra: self.wire_extra(ty, &WireKind::Foreign, extra),
                 active: Condition::default(),
             }],
             statements: quote!(let #w=send_token(#v);),
@@ -85,7 +103,7 @@ fn different_occurrences_have_different_converters() {
     ]));
     f.params[1].ty.slot.recipe = Recipe::Input(Input::Foreign);
     f.ret.slot.recipe = Recipe::Output(Output::Foreign);
-    let ready = prepare(flat, &TestCodec).unwrap();
+    let ready = prepare(flat, &TEST_CODEC).unwrap();
     let f = ready.function("foo").unwrap();
     let Prepared::Input(x) = &f.params[0].ty.slot else {
         panic!()
@@ -100,7 +118,7 @@ fn different_occurrences_have_different_converters() {
 fn rejects_incomplete_slots() {
     let mut f = model();
     f.function_mut("foo").unwrap().ret.slot.recipe = Recipe::Output(Output::Foreign);
-    assert!(prepare(f, &TestCodec).unwrap_err().contains("no input"));
+    assert!(prepare(f, &TEST_CODEC).unwrap_err().contains("no input"));
 }
 #[test]
 fn rejects_constructor_arity_mismatch() {
@@ -109,7 +127,7 @@ fn rejects_constructor_arity_mismatch() {
     foo.params[0].ty.slot.recipe = Recipe::Input(Input::constructor("foo", []));
     foo.params[1].ty.slot.recipe = Recipe::Input(Input::Foreign);
     foo.ret.slot.recipe = Recipe::Output(Output::Foreign);
-    assert!(prepare(f, &TestCodec)
+    assert!(prepare(f, &TEST_CODEC)
         .unwrap_err()
         .contains("argument count"));
 }
@@ -125,7 +143,7 @@ fn rejects_double_move_and_field_move() {
             p.ty.slot.recipe = Recipe::Input(Input::Foreign);
         }
         foo.ret.slot.recipe = Recipe::Output(output);
-        assert!(prepare(f, &TestCodec).is_err());
+        assert!(prepare(f, &TEST_CODEC).is_err());
     }
 }
 #[test]
@@ -139,11 +157,11 @@ fn observations_precede_move_but_wires_keep_order() {
         Output::Foreign,
         Output::fields([Output::Bytes]),
     ]));
-    let ready = prepare(f, &TestCodec).unwrap();
+    let ready = prepare(f, &TEST_CODEC).unwrap();
     let Prepared::Output(o) = &ready.function("foo").unwrap().ret.slot else {
         panic!()
     };
-    assert!(matches!(o.wires[0].kind, WireKind::Foreign(_)));
+    assert!(matches!(o.wires[0].kind, WireKind::Foreign));
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -202,7 +220,7 @@ fn declarations_preserve_defaults_and_occurrence_overrides() {
             &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
         )
         .unwrap();
-    let ready = prepare(flat, &TestCodec).unwrap();
+    let ready = prepare(flat, &TEST_CODEC).unwrap();
     let f = ready.function("foo").unwrap();
     let Prepared::Input(x) = &f.params[0].ty.slot else {
         panic!()
@@ -212,16 +230,18 @@ fn declarations_preserve_defaults_and_occurrence_overrides() {
     };
     assert_eq!(x.wires.len(), 3);
     assert_eq!(y.wires.len(), 1);
-    assert!(matches!(&x.wires[2].kind, WireKind::Foreign(("x", _))));
-    assert!(matches!(&y.wires[0].kind, WireKind::Foreign(("y", _))));
+    assert!(matches!(x.wires[2].kind, WireKind::Foreign));
+    assert_eq!(x.wires[2].extra.name, "x");
+    assert_eq!(x.wires[0].extra.name, "x");
+    assert_eq!(x.wires[1].extra.name, "x");
+    assert!(matches!(y.wires[0].kind, WireKind::Foreign));
+    assert_eq!(y.wires[0].extra.name, "y");
     assert!(x.validation.to_string().contains("\"x\""));
     let Prepared::Output(result) = &f.ret.slot else {
         panic!()
     };
-    assert!(matches!(
-        &result.wires[0].kind,
-        WireKind::Foreign(("result", _))
-    ));
+    assert!(matches!(result.wires[0].kind, WireKind::Foreign));
+    assert_eq!(result.wires[0].extra.name, "result");
 }
 #[test]
 fn field_defaults_follow_type_expansions() {
@@ -245,12 +265,14 @@ fn field_defaults_follow_type_expansions() {
             &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
         )
         .unwrap();
-    let ready = prepare(flat, &TestCodec).unwrap();
+    let ready = prepare(flat, &TEST_CODEC).unwrap();
     let Prepared::Output(output) = &ready.function("read").unwrap().ret.slot else {
         panic!()
     };
     assert!(matches!(output.wires[0].kind, WireKind::Text));
     assert!(matches!(output.wires[1].kind, WireKind::Bytes));
+    assert_eq!(output.wires[0].extra.ty, "String");
+    assert_eq!(output.wires[1].extra.ty, "Vec < u8 >");
 }
 
 #[test]
@@ -270,7 +292,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     )
     .unwrap();
     defaults.fill(&mut flat, &fun!(f)).unwrap();
-    let prepared = prepare(flat, &TestCodec).unwrap();
+    let prepared = prepare(flat, &TEST_CODEC).unwrap();
     let f = prepared.function("f").unwrap();
     let Prepared::Input(input) = &f.params[0].ty.slot else {
         panic!()
@@ -286,6 +308,10 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         output.wires[0].kind,
         WireKind::Scalar(Primitive::I64)
     ));
+    assert_eq!(input.wires[0].extra.name, "scalar-input");
+    assert_eq!(input.wires[0].extra.ty, "i64");
+    assert_eq!(output.wires[0].extra.name, "scalar-output");
+    assert_eq!(output.wires[0].extra.ty, "i64");
     assert!(input.validation.to_string().contains("scalar-input"));
     assert!(output.statements.to_string().contains("scalar-output"));
 }
@@ -334,7 +360,7 @@ fn nested_recipes_use_the_boundary_occurrences_extra() {
             copy: true,
         },
     };
-    let ready = prepare(flat, &TestCodec).unwrap();
+    let ready = prepare(flat, &TEST_CODEC).unwrap();
     let f = ready.function("foo").unwrap();
     let Prepared::Input(x) = &f.params[0].ty.slot else {
         panic!()
@@ -345,11 +371,11 @@ fn nested_recipes_use_the_boundary_occurrences_extra() {
     let Prepared::Output(result) = &f.ret.slot else {
         panic!()
     };
-    let foreign = |wires: &[Wire<(&'static str, String)>]| {
+    let foreign = |wires: &[Wire<WireExtra>]| {
         wires
             .iter()
             .filter_map(|w| match &w.kind {
-                WireKind::Foreign((name, ty)) => Some((*name, ty.clone())),
+                WireKind::Foreign => Some((w.extra.name, w.extra.ty.clone())),
                 _ => None,
             })
             .collect::<Vec<_>>()
@@ -382,7 +408,7 @@ fn extra_controls_consumption_without_changing_the_recipe() {
         }
         f.ret.slot.recipe = Recipe::Output(recipe.clone());
         f.ret.slot.extra.copy = copy;
-        let prepared = prepare(flat, &TestCodec);
+        let prepared = prepare(flat, &TEST_CODEC);
         if copy {
             assert!(prepared.is_ok(), "{prepared:?}");
         } else {
@@ -390,5 +416,26 @@ fn extra_controls_consumption_without_changing_the_recipe() {
                 .unwrap_err()
                 .contains("consume the same value twice"));
         }
+    }
+}
+
+#[test]
+fn adapter_can_use_unit_data_even_for_foreign_wires() {
+    let mut flat = model();
+    let declarations = Declarations::new(&flat, vec![]).unwrap();
+    declarations.fill(&mut flat, &fun!(foo)).unwrap();
+    let codec = TestCodec::<()>(std::marker::PhantomData);
+    let ready = prepare(flat, &codec).unwrap();
+    let f = ready.function("foo").unwrap();
+    let Prepared::Output(output) = &f.ret.slot else {
+        panic!()
+    };
+    let wire: &Wire<()> = &output.wires[0];
+    assert!(matches!(wire.kind, WireKind::Foreign));
+    for p in &f.params {
+        let Prepared::Input(input) = &p.ty.slot else {
+            panic!()
+        };
+        assert!(matches!(input.wires[0].kind, WireKind::Foreign));
     }
 }

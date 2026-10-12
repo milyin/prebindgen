@@ -84,9 +84,9 @@ pub struct Slot<E> {
 
 /// A wire's role remains available to both sides, even when carriers coincide.
 #[derive(Clone, Debug)]
-pub enum WireKind<W> {
+pub enum WireKind {
     Scalar(Primitive),
-    Foreign(W),
+    Foreign,
     Text,
     Bytes,
     Selector,
@@ -94,7 +94,9 @@ pub enum WireKind<W> {
 #[derive(Clone, Debug)]
 pub struct Wire<W> {
     pub name: syn::Ident,
-    pub kind: WireKind<W>,
+    pub kind: WireKind,
+    /// Adapter-owned data for any wire kind; `()` is valid, including for foreign wires.
+    pub extra: W,
     pub active: Condition,
 }
 
@@ -109,6 +111,9 @@ pub struct Wire<W> {
 pub trait Codec {
     type Extra: Clone + std::fmt::Debug;
     type Wire: Clone + std::fmt::Debug;
+    /// Data for wires emitted by common conversions. Foreign converters supply
+    /// their own wires and data. Tools impose no metadata requirements by kind.
+    fn wire_extra(&self, ty: &Type, kind: &WireKind, extra: &Self::Extra) -> Self::Wire;
     fn consumes(&self, ty: &Type, extra: &Self::Extra) -> bool;
     fn input_foreign(
         &self,
@@ -223,6 +228,21 @@ struct Compiler<'a, C: Codec> {
     next: usize,
 }
 impl<C: Codec> Compiler<'_, C> {
+    fn wire(
+        &self,
+        name: syn::Ident,
+        ty: &Type,
+        kind: WireKind,
+        extra: &C::Extra,
+        active: &Condition,
+    ) -> Wire<C::Wire> {
+        Wire {
+            name,
+            extra: self.codec.wire_extra(ty, &kind, extra),
+            kind,
+            active: active.clone(),
+        }
+    }
     fn name(&mut self) -> syn::Ident {
         let n = format_ident!("w{}", self.next);
         self.next += 1;
@@ -249,11 +269,7 @@ impl<C: Codec> Compiler<'_, C> {
                     Primitive::from_type(ty).ok_or("scalar input needs a primitive type")?;
                 let w = self.name();
                 let decode = self.codec.decode_scalar(primitive, &w, extra);
-                wires.push(Wire {
-                    name: w,
-                    kind: WireKind::Scalar(primitive),
-                    active: active.clone(),
-                });
+                wires.push(self.wire(w, ty, WireKind::Scalar(primitive), extra, active));
                 validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
                 statements = quote!(let #var:#ty=#var.expect("active scalar"););
             }
@@ -285,15 +301,17 @@ impl<C: Codec> Compiler<'_, C> {
                     ));
                 }
                 let w = self.name();
-                wires.push(Wire {
-                    name: w.clone(),
-                    active: active.clone(),
-                    kind: if text {
+                wires.push(self.wire(
+                    w.clone(),
+                    ty,
+                    if text {
                         WireKind::Text
                     } else {
                         WireKind::Bytes
                     },
-                });
+                    extra,
+                    active,
+                ));
                 let decode = if text {
                     self.codec.decode_text(&w, ty, extra)
                 } else {
@@ -372,11 +390,7 @@ impl<C: Codec> Compiler<'_, C> {
                     return Err("selector results must be owned in this subset".into());
                 }
                 let tag = self.name();
-                wires.push(Wire {
-                    name: tag.clone(),
-                    kind: WireKind::Selector,
-                    active: active.clone(),
-                });
+                wires.push(self.wire(tag.clone(), ty, WireKind::Selector, extra, active));
                 let count = arms.len() as i32;
                 let invalid = active.and(quote!(!(0..#count).contains(&#tag)));
                 validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
@@ -434,11 +448,13 @@ impl<C: Codec> Compiler<'_, C> {
                 let w = self.name();
                 out.statements.extend(quote!(let #w=#expr;));
                 out.values.push(quote!(#w));
-                out.wires.push(Wire {
-                    name: w,
-                    kind: WireKind::Scalar(primitive),
-                    active: Condition::default(),
-                });
+                out.wires.push(self.wire(
+                    w,
+                    ty,
+                    WireKind::Scalar(primitive),
+                    extra,
+                    &Condition::default(),
+                ));
             }
             Output::Foreign => {
                 let w = self.name();
@@ -457,15 +473,17 @@ impl<C: Codec> Compiler<'_, C> {
                 let w = self.name();
                 out.statements = quote!(let #w = #expr;);
                 out.values.push(quote!(#w));
-                out.wires.push(Wire {
-                    name: w,
-                    kind: if text {
+                out.wires.push(self.wire(
+                    w,
+                    ty,
+                    if text {
                         WireKind::Text
                     } else {
                         WireKind::Bytes
                     },
-                    active: Condition::default(),
-                });
+                    extra,
+                    &Condition::default(),
+                ));
             }
             Output::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {

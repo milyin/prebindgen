@@ -88,9 +88,16 @@ The same occurrence data is passed through its entire recipe, including nested
 fields, constructors, selectors, getters and combined outputs. It is not replaced
 with the extra data of a referenced field or function declaration. This subset
 does not provide separate metadata per nested recipe node. C and JNI currently
-use `()` as their extra data. `WireKind<W>` and `Prepared<W>` retain the adapter's
-prepared wire description. Tools compose primitives, text/bytes, adapter leaves,
-fields, constructors, input selectors and combined outputs. The composition model
+use `()` as their extra data.
+
+Prepared wires follow the same separation: `WireKind` is non-generic, while
+`Wire<W>` stores the common kind and adapter data in separate `kind` and `extra`
+fields. The adapter supplies data for common conversions through `wire_extra`
+and for foreign conversions in their prepared wires. The framework does not
+interpret this data or require foreign metadata; an adapter can use `W = ()`.
+C and JNI use optional pointer metadata and check their own requirements.
+`Prepared<W>` retains these wires. Tools compose primitives, text/bytes, adapter
+leaves, fields, constructors, input selectors and combined outputs. The composition model
 requires neither handles nor boxed storage. It has no object registry or universal
 `Send` requirement.
 
