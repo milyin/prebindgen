@@ -43,7 +43,7 @@
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
-//! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
+//! | per-class `.name()`                  | `Summary` → Kotlin `SummaryValue` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
 //! | `.interface_name(…)`                  | `Priority` → generated `PriorityKind` interface (#54) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
@@ -497,8 +497,9 @@ fn main() {
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-                .class(ptr_class!(Summary))
-                .class(ptr_class!(Archive).name("SummaryVault")),
+                // Disabled: the reduced Archive is zero-sized.
+                // .class(ptr_class!(Archive).name("SummaryVault"))
+                .class(ptr_class!(Summary).name("SummaryValue")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
         // ingredients OR passed as an existing handle (runtime-selected). This
@@ -1041,7 +1042,8 @@ fn main() {
                 // The borrowed-accessor trio. `archive_latest` suppresses the default
                 // Summary return-field default so the BORROWED handle path (clone into a
                 // fresh owned handle, null when absent) is what crosses.
-                .fun(fun!(archive_new))
+                // Disabled: the reduced Archive is zero-sized.
+                // .fun(fun!(archive_new))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))
@@ -1155,7 +1157,6 @@ fn main() {
                 .fun(fun!(primitive_unit)),
         )
         .package(package!()
-            .fun(fun!(archive_move_pair)).fun(fun!(archive_borrow_pair))
             .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
             .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
             .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))

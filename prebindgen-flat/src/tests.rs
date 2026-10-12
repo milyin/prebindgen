@@ -98,3 +98,64 @@ fn primitives_keep_their_rust_syntax_without_accepting_lookalikes() {
     );
     assert!(parse("pub fn f(x: unrelated::i64) {} ").is_err());
 }
+
+#[test]
+fn named_object_size_is_checked_by_rust_layout() {
+    let dir = tempfile::tempdir().unwrap();
+    for (source, valid) in [
+        ("pub struct Empty {}", false),
+        ("pub struct Empty { pub nothing: () }", false),
+        ("pub type Empty = ();", false),
+        ("pub type Empty = [u8; 0];", false),
+        (
+            "mod hidden { pub struct Token; } pub type Empty = hidden::Token;",
+            false,
+        ),
+        ("pub struct Object { pub byte: u8, pub nothing: () }", true),
+        ("pub type Object = std::rc::Rc<std::cell::Cell<u64>>;", true),
+        ("pub fn no_result() {}", true),
+    ] {
+        let items = syn::parse_file(source).unwrap().items;
+        let flat = Flat::<()>::parse(items.into_iter().filter_map(|i| {
+            (!matches!(i, syn::Item::Mod(_))).then_some((
+                i,
+                SourceLocation {
+                    crate_name: Some("source_crate".into()),
+                    ..Default::default()
+                },
+            ))
+        }))
+        .unwrap()
+        .map_slots(|_, ()| Ok(()))
+        .unwrap();
+        let guards = flat.guards.iter().map(ToTokens::to_token_stream);
+        let file = dir.path().join("size_check.rs");
+        std::fs::write(
+            &file,
+            format!(
+                "pub mod source_crate {{ {source} }} {}",
+                quote::quote!(#(#guards)*)
+            ),
+        )
+        .unwrap();
+        let output = std::process::Command::new("rustc")
+            .args([
+                "--edition=2021",
+                "--crate-type=lib",
+                "--emit=metadata",
+                "--out-dir",
+            ])
+            .arg(dir.path())
+            .arg(&file)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.success(), valid, "{source}: {stderr}");
+        if !valid {
+            assert!(
+                stderr.contains("flat object `Empty` must have nonzero size"),
+                "{stderr}"
+            );
+        }
+    }
+}

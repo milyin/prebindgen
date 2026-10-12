@@ -45,17 +45,18 @@ mod handles {
         pub(super) total: f64,
     }
 
-    #[derive(Default)]
-    pub struct Archive {
-        // Unsupported field/value:         pub(super) latest: Option<Summary>,
-        // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-        // — the return shape whose encoder must match on the value behind the
-        // reference rather than moving it.
-        // Unsupported field/value:         pub(super) reading: Reading,
-        // The same, optional, for the `Option<&Reading>` shape.
-        // Unsupported field/value:         pub(super) fallback: Option<Reading>,
-    }
-
+    // Disabled: the reduced Archive is zero-sized; flat objects must have nonzero size.
+    // #[derive(Default)]
+    // pub struct Archive {
+    //     // Unsupported field/value:         pub(super) latest: Option<Summary>,
+    //     // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
+    //     // — the return shape whose encoder must match on the value behind the
+    //     // reference rather than moving it.
+    //     // Unsupported field/value:         pub(super) reading: Reading,
+    //     // The same, optional, for the `Option<&Reading>` shape.
+    //     // Unsupported field/value:         pub(super) fallback: Option<Reading>,
+    // }
+    //
     // Disabled: unsupported by the current binding subset
     // pub struct Ledger {
     //         pub(super) filed: Option<Report>,
@@ -1547,8 +1548,9 @@ pub fn unsigned_round_trip(
 // **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 // zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 // owned handle (the JVM keeps its handle past the call).
-#[prebindgen]
-pub type Archive = handles::Archive;
+// Disabled: the reduced Archive is zero-sized.
+// #[prebindgen]
+// pub type Archive = handles::Archive;
 
 // Disabled: unsupported by the current binding subset
 // impl Default for Archive {
@@ -1561,11 +1563,12 @@ pub type Archive = handles::Archive;
 //     }
 // }
 
+// Disabled: the reduced Archive is zero-sized.
 // Create an empty archive.
-#[prebindgen]
-pub fn archive_new() -> Archive {
-    Archive::default()
-}
+// #[prebindgen]
+// pub fn archive_new() -> Archive {
+//     Archive::default()
+// }
 
 // Disabled: unsupported by the current binding subset
 // /// Store a summary, consuming it (owned-handle input).
@@ -2447,14 +2450,4 @@ pub fn report_from_summary(summary: Summary, label: &str) -> Report {
 #[prebindgen]
 pub fn report_label(report: Report) -> String {
     report.label
-}
-
-// Distinct zero-sized allocations must not look like conflicting aliases.
-#[prebindgen]
-pub fn archive_move_pair(first: Archive, _second: Archive) -> Archive {
-    first
-}
-#[prebindgen]
-pub fn archive_borrow_pair(first: &mut Archive, second: &mut Archive) -> bool {
-    !std::ptr::eq(first, second)
 }

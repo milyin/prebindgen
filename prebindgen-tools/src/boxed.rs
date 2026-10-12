@@ -9,7 +9,34 @@ pub struct BoxedWire {
     pub ty: syn::Type,
     pub access: Access,
 }
+/// Storage chosen by the adapter. A wrapper must expose a `value` field and
+/// allow construction as `Wrapper { value }`.
+pub enum Storage {
+    Direct,
+    Wrapped(syn::Path),
+}
+impl Storage {
+    fn ty(&self, ty: &syn::Type) -> TokenStream {
+        match self {
+            Self::Direct => quote!(#ty),
+            Self::Wrapped(path) => quote!(#path<#ty>),
+        }
+    }
+    fn field(&self) -> TokenStream {
+        match self {
+            Self::Direct => quote!(),
+            Self::Wrapped(_) => quote!(.value),
+        }
+    }
+    fn wrap(&self, value: TokenStream) -> TokenStream {
+        match self {
+            Self::Direct => value,
+            Self::Wrapped(path) => quote!(#path { value: #value }),
+        }
+    }
+}
 pub fn input(
+    storage: &Storage,
     ty: &syn::Type,
     w: syn::Ident,
     v: syn::Ident,
@@ -27,23 +54,29 @@ pub fn input(
         _ => (ty, Access::Move),
     };
     let condition = active.rust();
+    let allocation = storage.ty(target);
+    let field = storage.field();
     let pointer = format_ident!("{w}_pointer");
+    let taken = match storage {
+        Storage::Direct => quote!(*#v.expect("active allocation")),
+        Storage::Wrapped(_) => quote!(#v.expect("active allocation").value),
+    };
     let validation = quote!(
-        let #pointer = #w as *mut ::prebindgen_runtime::Allocation<#target>;
-        if #condition {::prebindgen_runtime::validate_allocation(#pointer)?;}
+        let #pointer = #w as *mut #allocation;
+        if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;}
     );
     let (acquire, statements) = match access {
         Access::Move => (
             quote!(let #v = if #condition {Some(unsafe {Box::from_raw(#pointer)})} else {None};),
-            quote!(let #v: #ty = #v.expect("active allocation").value;),
+            quote!(let #v: #ty = #taken;),
         ),
         Access::Shared => (
             quote!(),
-            quote!(let #v: #ty = unsafe { &(*#pointer).value };),
+            quote!(let #v: #ty = unsafe { &(*#pointer)#field };),
         ),
         Access::Exclusive => (
             quote!(),
-            quote!(let #v: #ty = unsafe { &mut (*#pointer).value };),
+            quote!(let #v: #ty = unsafe { &mut (*#pointer)#field };),
         ),
     };
     Ok(PreparedInput {
@@ -67,6 +100,7 @@ pub fn input(
     })
 }
 pub fn output(
+    storage: &Storage,
     ty: &syn::Type,
     w: syn::Ident,
     value: TokenStream,
@@ -80,6 +114,8 @@ pub fn output(
     } else {
         value
     };
+    let value = storage.wrap(value);
+    let allocation = storage.ty(ty);
     Ok(PreparedOutput {
         wires: vec![Wire {
             name: w.clone(),
@@ -89,8 +125,8 @@ pub fn output(
             }),
             active: Condition::default(),
         }],
-        statements: quote!(let mut #w = ::prebindgen_runtime::Allocation::new(#value);),
-        values: vec![quote!((&mut *#w) as *mut ::prebindgen_runtime::Allocation<#ty>)],
+        statements: quote!(let mut #w = Box::new(#value);),
+        values: vec![quote!((&mut *#w) as *mut #allocation)],
         commit: quote!(let _ = Box::into_raw(#w);),
     })
 }

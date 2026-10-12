@@ -24,10 +24,6 @@ fun main() {
     workers.forEach { it.join() }
     check(storage.isClosed)
     storage.close()
-    val archive = io.prebindgen.covertest.analytics.archiveNew()
-    check(!archive.isClosed)
-    archive.close()
-    check(archive.isClosed)
     for (bytes in listOf(byteArrayOf(), byteArrayOf(0, 127, -128, -1))) {
         val blob = blobValueNew(Long.MIN_VALUE, bytes)
         val echoed = blobValueEcho(blob)

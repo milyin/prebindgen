@@ -1,4 +1,7 @@
 //! The small flat source model. Types retain Rust syntax and an occurrence slot.
+//! Named objects must have nonzero Rust size, including opaque aliases. Their
+//! layout is checked by the emitted compile-time guards, independently of the
+//! adapter or conversion chosen. Unit remains available for absence of a value.
 use prebindgen::SourceLocation;
 use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
@@ -227,6 +230,14 @@ impl<S: Default> Flat<S> {
                 syn::Item::Const(c) => flat.guards.push(c),
                 _ => unreachable!(),
             }
+        }
+        // Rust, not source syntax, determines layout (especially for opaque
+        // aliases). Keep this flat-model invariant in the guards all adapters emit.
+        for (name, ty) in &flat.types {
+            let message = format!("flat object `{name}` must have nonzero size");
+            flat.guards.push(syn::parse_quote! {
+                const _: () = assert!(::core::mem::size_of::<#ty>() != 0, #message);
+            });
         }
         Ok(flat)
     }

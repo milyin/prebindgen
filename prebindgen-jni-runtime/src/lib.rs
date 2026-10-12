@@ -85,17 +85,71 @@ fn parse_unsigned128(mut bytes: &[u8]) -> Result<u128> {
     Ok(u128::from_be_bytes(result))
 }
 
+/// JNI storage alignment reserves the low pointer bit for Kotlin's consumed
+/// state. The flat model requires `T` to have nonzero size.
+#[repr(C, align(2))]
+pub struct Allocation<T> {
+    pub value: T,
+}
+
 /// # Safety
 /// `raw` must be a live allocation of `T` from this JNI library, exclusively held.
 pub unsafe fn drop_pointer<T: Send>(raw: i64) -> Result<()> {
-    let pointer = raw as *mut prebindgen_runtime::Allocation<T>;
-    prebindgen_runtime::validate_allocation(pointer)?;
+    let pointer = raw as *mut Allocation<T>;
+    prebindgen_runtime::validate_pointer(pointer)?;
     drop(Box::from_raw(pointer));
     Ok(())
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn byte_objects_leave_the_tag_bit_free_without_an_anchor() {
+        assert_eq!(
+            std::mem::size_of::<Allocation<u64>>(),
+            std::mem::size_of::<u64>()
+        );
+        assert!(std::mem::align_of::<Allocation<u8>>() >= 2);
+        let allocation = Box::new(Allocation { value: 42u8 });
+        let pointer = Box::into_raw(allocation);
+        assert_eq!(pointer.addr() & 1, 0);
+        unsafe {
+            assert!(drop_pointer::<u8>(pointer as i64 | 1).is_err());
+            assert!(drop_pointer::<u8>(pointer as i64).is_ok());
+        }
+    }
+    #[test]
+    fn unpublished_and_transferred_objects_drop_once() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        struct Tracked(Arc<AtomicUsize>);
+        impl Drop for Tracked {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        let count = Arc::new(AtomicUsize::new(0));
+        drop(Box::new(Allocation {
+            value: Tracked(count.clone()),
+        }));
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        let raw = Box::into_raw(Box::new(Allocation {
+            value: Tracked(count.clone()),
+        }));
+        unsafe {
+            drop_pointer::<Tracked>(raw as i64).unwrap();
+        }
+        assert_eq!(count.load(Ordering::SeqCst), 2);
+        let raw = Box::into_raw(Box::new(Allocation {
+            value: Tracked(count.clone()),
+        }));
+        let moved = unsafe { Box::from_raw(raw) }.value;
+        assert_eq!(count.load(Ordering::SeqCst), 2);
+        drop(moved);
+        assert_eq!(count.load(Ordering::SeqCst), 3);
+    }
     #[test]
     fn wide_integer_sign_extension_and_range_checks() {
         for value in [i128::MIN, i128::MAX, -1, 0, 1, 128] {

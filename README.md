@@ -36,7 +36,7 @@ work. The retained records demonstrate the supported shapes of the real examples
 | [perftest-flat](examples/perftest-flat) | Payload scalar fields, Stamp, Summary, Unsigned, BlobValue and Report projections |
 | [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/pointer outputs |
 | [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction/projection and Storage creation/release through JNI |
-| [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, Archive, subpackages and the SummaryVault class rename |
+| [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, subpackages and the SummaryValue class rename |
 | [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
 | [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
 
@@ -50,6 +50,13 @@ The old foreign performance drivers require the commented bindings and have
 been removed. Full coverage clients are replaced with focused C and Kotlin smoke
 clients exercising the active declarations; this branch makes no performance or
 full downstream compatibility claim. Generated artifacts remain under `OUT_DIR`.
+
+Named flat objects must have nonzero Rust size, including opaque aliases and
+records delivered as fields. The model emits compile-time size assertions for
+all selected named types; adapters must emit these guards. This checks actual
+Rust layout, including hidden or nested zero-sized types. Unit results remain
+supported. The reduced `Archive` example is disabled because its remaining
+fields give it zero size.
 
 ## Supported generator API
 
@@ -149,10 +156,9 @@ with ordinary owned C pointers. There is no runtime type/liveness registry.
 C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
 Both current adapters opt into `prebindgen_tools::boxed`, which shares pointer
 validation, borrow/move acquisition, cloned observations and output commit.
-Its optional runtime `Allocation<T>` gives zero-sized objects distinct addresses.
-The C header still exposes only typed opaque pointers. Other adapters can choose
-different storage through their foreign conversion hooks; there is no universal
-`Object` operation or required allocation policy.
+C stores objects directly in `Box<T>`; its header exposes typed opaque pointers.
+Other adapters can choose different storage through their foreign conversion
+hooks; there is no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
 C wrappers still return status and write output structs only on success. Text
@@ -162,9 +168,9 @@ memory, while owned inputs copy it. Callers free returned buffers exactly once.
 
 **JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
-or consumed state. The shared allocation wrapper guarantees alignment and gives
-zero-sized values distinct addresses. Native objects require `Send` because
-Kotlin can transfer them between threads; this restriction belongs to JNI.
+or consumed state. A JNI-specific wrapper guarantees the alignment needed for
+that bit. Native objects require `Send` because Kotlin can transfer them between
+threads; this restriction belongs to JNI.
 Generated wrappers lock all active handle objects in a stable address order,
 including handles nested in selected constructor arguments. Close uses the same
 object monitor. Repeated close and close after consumption are harmless.

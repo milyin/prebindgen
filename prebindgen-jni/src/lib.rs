@@ -257,7 +257,15 @@ impl Codec for JniCodec {
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
     ) -> Result<prebindgen_tools::PreparedInput<HandleWire>> {
-        prebindgen_tools::boxed::input(ty, w, v, active)
+        prebindgen_tools::boxed::input(
+            &prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
+                ::prebindgen_jni_runtime::Allocation
+            )),
+            ty,
+            w,
+            v,
+            active,
+        )
     }
     fn output_foreign(
         &self,
@@ -267,7 +275,15 @@ impl Codec for JniCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<prebindgen_tools::PreparedOutput<HandleWire>> {
-        prebindgen_tools::boxed::output(ty, w, v, borrowed)
+        prebindgen_tools::boxed::output(
+            &prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
+                ::prebindgen_jni_runtime::Allocation
+            )),
+            ty,
+            w,
+            v,
+            borrowed,
+        )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
         scalar::decode(p, w)
