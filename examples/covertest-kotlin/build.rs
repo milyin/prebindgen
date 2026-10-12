@@ -1155,6 +1155,7 @@ fn main() {
                 .fun(fun!(primitive_unit)),
         )
         .package(package!()
+            .fun(fun!(archive_move_pair)).fun(fun!(archive_borrow_pair))
             .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
             .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
             .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))

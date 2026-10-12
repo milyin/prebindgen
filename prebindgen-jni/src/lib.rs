@@ -5,11 +5,12 @@
 use prebindgen_flat::{type_key, Flat, Result};
 mod scalar;
 use prebindgen_flat::Primitive;
+pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
 use prebindgen_tools::{
     Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
 };
-mod handle;
-pub use handle::{Handle, HandleWire};
+#[derive(Clone, Debug)]
+pub struct Handle;
 type Slot = GenericSlot<Handle>;
 type Prepared = GenericPrepared<HandleWire>;
 type WireKind = GenericWireKind<HandleWire>;
@@ -256,7 +257,7 @@ impl Codec for JniCodec {
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
     ) -> Result<prebindgen_tools::PreparedInput<HandleWire>> {
-        handle::input(ty, w, v, active)
+        prebindgen_tools::boxed::input(ty, w, v, active)
     }
     fn output_foreign(
         &self,
@@ -266,7 +267,7 @@ impl Codec for JniCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<prebindgen_tools::PreparedOutput<HandleWire>> {
-        handle::output(ty, w, v, borrowed)
+        prebindgen_tools::boxed::output(ty, w, v, borrowed)
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
         scalar::decode(p, w)
@@ -548,7 +549,7 @@ fn generate(
                 WireKind::Foreign(ty) => {
                     let c = class(&classes, &ty.ty)?.fqn();
                     (
-                        quote!(::prebindgen_jni_runtime::handle_object(&mut env,#v)?),
+                        quote!(::prebindgen_jni_runtime::handle_object(&mut env,(#v) as u64)?),
                         c.clone(),
                         format!("{c}(result[{i}] as Long)"),
                     )

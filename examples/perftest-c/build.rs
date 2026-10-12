@@ -206,7 +206,11 @@ fn main() {
             expand_param!(Report).variant(fun!(report_from_summary)),
         ))
         .function(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self()));
+    cbindgen = cbindgen.opaque_ptr("archive", pq!(Archive));
     for f in [
+        fun!(archive_new),
+        fun!(archive_move_pair),
+        fun!(archive_borrow_pair),
         fun!(storage_len),
         fun!(storage_contains),
         fun!(storage_total_len),

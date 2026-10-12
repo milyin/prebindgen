@@ -600,3 +600,6 @@ pub fn validate_resources(resources: &[Resource]) -> TokenStream {
     }
     result
 }
+
+/// Reusable storage-specific conversions; not a required object model.
+pub mod boxed;

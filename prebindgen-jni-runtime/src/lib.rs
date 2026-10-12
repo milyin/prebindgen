@@ -85,33 +85,12 @@ fn parse_unsigned128(mut bytes: &[u8]) -> Result<u128> {
     Ok(u128::from_be_bytes(result))
 }
 
-/// One boxed JNI object. Alignment reserves the low pointer bit for Kotlin's
-/// closed/consumed tag and gives zero-sized source types distinct allocations.
-/// This is private to the JNI ABI, not a cross-language handle representation.
-#[repr(C, align(2))]
-pub struct Allocation<T> {
-    pub value: T,
-    // Alignment alone does not make a zero-sized type occupy storage.
-    _anchor: u8,
-}
-impl<T: Send> Allocation<T> {
-    pub fn new(value: T) -> Box<Self> {
-        Box::new(Self { value, _anchor: 0 })
-    }
-}
-/// Checks the pointer encoding only. Provenance and liveness are guaranteed by
-/// generated Kotlin wrappers holding the object's monitor across each JNI call.
-pub fn validate_pointer<T: Send>(raw: i64) -> Result<()> {
-    if raw == 0 || (raw as usize) & (std::mem::align_of::<Allocation<T>>() - 1) != 0 {
-        return Err("null, closed or misaligned handle".into());
-    }
-    Ok(())
-}
 /// # Safety
 /// `raw` must be a live allocation of `T` from this JNI library, exclusively held.
 pub unsafe fn drop_pointer<T: Send>(raw: i64) -> Result<()> {
-    validate_pointer::<T>(raw)?;
-    drop(Box::from_raw(raw as *mut Allocation<T>));
+    let pointer = raw as *mut prebindgen_runtime::Allocation<T>;
+    prebindgen_runtime::validate_allocation(pointer)?;
+    drop(Box::from_raw(pointer));
     Ok(())
 }
 #[cfg(test)]
@@ -133,42 +112,5 @@ mod tests {
         assert!(parse_unsigned128(&[1; 17]).is_err());
         assert!(parse_signed128(&[]).is_err());
         assert!(parse_unsigned128(&[]).is_err());
-    }
-    #[test]
-    fn zero_sized_objects_have_distinct_taggable_addresses() {
-        let a = Allocation::new(());
-        let b = Allocation::new(());
-        let pa = (&*a) as *const _ as i64;
-        let pb = (&*b) as *const _ as i64;
-        assert_ne!(pa, pb);
-        assert!(validate_pointer::<()>(pa).is_ok());
-        assert!(validate_pointer::<()>(pa | 1).is_err());
-        assert!(validate_pointer::<()>(0).is_err());
-    }
-    #[test]
-    fn unpublished_and_transferred_objects_drop_once() {
-        use std::sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        };
-        struct Tracked(Arc<AtomicUsize>);
-        impl Drop for Tracked {
-            fn drop(&mut self) {
-                self.0.fetch_add(1, Ordering::SeqCst);
-            }
-        }
-        let count = Arc::new(AtomicUsize::new(0));
-        drop(Allocation::new(Tracked(count.clone())));
-        assert_eq!(count.load(Ordering::SeqCst), 1);
-        let raw = Box::into_raw(Allocation::new(Tracked(count.clone()))) as i64;
-        unsafe {
-            drop_pointer::<Tracked>(raw).unwrap();
-        }
-        assert_eq!(count.load(Ordering::SeqCst), 2);
-        let raw = Box::into_raw(Allocation::new(Tracked(count.clone())));
-        let moved = unsafe { Box::from_raw(raw) }.value;
-        assert_eq!(count.load(Ordering::SeqCst), 2);
-        drop(moved);
-        assert_eq!(count.load(Ordering::SeqCst), 3);
     }
 }

@@ -5,6 +5,18 @@
 #include <math.h>
 #include <limits.h>
 int main(void) {
+    perftest_archive_new_result first_archive = {0}, second_archive = {0};
+    assert(perftest_archive_new(&first_archive) == 0);
+    assert(perftest_archive_new(&second_archive) == 0);
+    assert(first_archive.v0 != second_archive.v0);
+    perftest_archive_borrow_pair_result borrowed_archives = {0};
+    assert(perftest_archive_borrow_pair(first_archive.v0, first_archive.v0, &borrowed_archives) != 0);
+    assert(perftest_archive_borrow_pair(first_archive.v0, second_archive.v0, &borrowed_archives) == 0);
+    assert(borrowed_archives.v0 == 1);
+    perftest_archive_move_pair_result moved_archive = {0};
+    assert(perftest_archive_move_pair(first_archive.v0, first_archive.v0, &moved_archive) != 0);
+    assert(perftest_archive_move_pair(first_archive.v0, second_archive.v0, &moved_archive) == 0);
+    assert(perftest_drop_archive(moved_archive.v0) == 0);
     perftest_storage_new_result storage = {0};
     assert(perftest_storage_new(&storage) == 0);
     assert(perftest_drop_storage(storage.v0) == 0);

@@ -1,10 +1,11 @@
 //! C adapter for prepared occurrence slots. No recursive type conversion lives here.
 use prebindgen_flat::{Flat, Primitive, Result};
+pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
 use prebindgen_tools::{
     Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
 };
-mod pointer;
-pub use pointer::{OpaquePointer, PointerWire};
+#[derive(Clone, Debug)]
+pub struct OpaquePointer;
 type Slot = GenericSlot<OpaquePointer>;
 type Prepared = GenericPrepared<PointerWire>;
 type WireKind = GenericWireKind<PointerWire>;
@@ -29,7 +30,7 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
     ) -> Result<prebindgen_tools::PreparedInput<PointerWire>> {
-        pointer::input(ty, w, v, active)
+        prebindgen_tools::boxed::input(ty, w, v, active)
     }
     fn output_foreign(
         &self,
@@ -39,7 +40,7 @@ impl Codec for CCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<prebindgen_tools::PreparedOutput<PointerWire>> {
-        pointer::output(ty, w, v, borrowed)
+        prebindgen_tools::boxed::output(ty, w, v, borrowed)
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
         let ty = p.rust_type();
@@ -192,9 +193,9 @@ fn rust_ty(kind: &WireKind) -> TokenStream {
         WireKind::Foreign(p) => {
             let ty = &p.ty;
             if p.access == prebindgen_tools::Access::Shared {
-                quote!(*const #ty)
+                quote!(*const ::prebindgen_runtime::Allocation<#ty>)
             } else {
-                quote!(*mut #ty)
+                quote!(*mut ::prebindgen_runtime::Allocation<#ty>)
             }
         }
         WireKind::Selector => quote!(i32),
@@ -295,7 +296,7 @@ fn generate(
         tokens.extend(quote!{
             #[doc = "# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call."]
-            #[no_mangle] pub unsafe extern "C" fn #drop(ptr:*mut #ty)->i32{
+            #[no_mangle] pub unsafe extern "C" fn #drop(ptr:*mut ::prebindgen_runtime::Allocation<#ty>)->i32{
                 match ::prebindgen_runtime::boundary(||{if !ptr.is_null(){drop(Box::from_raw(ptr));}Ok(())}){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
             }
         });

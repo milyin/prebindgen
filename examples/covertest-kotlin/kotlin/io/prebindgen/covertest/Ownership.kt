@@ -9,6 +9,14 @@ private fun rejected(action: () -> Unit) {
 }
 
 fun checkOwnership() {
+    val firstArchive = io.prebindgen.covertest.analytics.archiveNew()
+    val secondArchive = io.prebindgen.covertest.analytics.archiveNew()
+    rejected { archiveBorrowPair(firstArchive, firstArchive) }
+    check(archiveBorrowPair(firstArchive, secondArchive))
+    rejected { archiveMovePair(firstArchive, firstArchive) }
+    archiveMovePair(firstArchive, secondArchive).close()
+    check(firstArchive.isClosed && secondArchive.isClosed)
+    firstArchive.close(); secondArchive.close()
     val report = reportNew(1, 2.0, "original") { _, _, _, _, _, handle -> handle }
     rejected { reportRelabel(report, null) { _, _, _, _, _, handle -> handle.close() } }
     check(!report.isClosed)

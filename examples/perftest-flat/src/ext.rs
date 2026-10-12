@@ -2448,3 +2448,13 @@ pub fn report_from_summary(summary: Summary, label: &str) -> Report {
 pub fn report_label(report: Report) -> String {
     report.label
 }
+
+// Distinct zero-sized allocations must not look like conflicting aliases.
+#[prebindgen]
+pub fn archive_move_pair(first: Archive, _second: Archive) -> Archive {
+    first
+}
+#[prebindgen]
+pub fn archive_borrow_pair(first: &mut Archive, second: &mut Archive) -> bool {
+    !std::ptr::eq(first, second)
+}

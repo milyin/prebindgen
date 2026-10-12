@@ -74,8 +74,9 @@ Manual slot configuration remains available for generator development, but none
 of the migrated binding examples requires it. `Input<L>`, `Output<L>` and
 `Slot<L>` carry an adapter's leaf recipe; `WireKind<W>` and `Prepared<W>` carry
 its wire description. Tools compose primitives, text/bytes, adapter leaves,
-fields, constructors, input selectors and combined outputs. There is no common
-handle converter, handle wire type, object store or `Send` requirement.
+fields, constructors, input selectors and combined outputs. The composition model
+requires neither handles nor boxed storage. It has no object registry or universal
+`Send` requirement.
 
 The adapter chooses identity/default conversions for domain types and declares
 whether an output consumes its value. Tools run observations before that move
@@ -146,6 +147,12 @@ Consumed pointers become invalid. Destruction accepts null, but destroying a
 non-null pointer twice or using a consumed pointer is undefined behavior, as
 with ordinary owned C pointers. There is no runtime type/liveness registry.
 C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
+Both current adapters opt into `prebindgen_tools::boxed`, which shares pointer
+validation, borrow/move acquisition, cloned observations and output commit.
+Its optional runtime `Allocation<T>` gives zero-sized objects distinct addresses.
+The C header still exposes only typed opaque pointers. Other adapters can choose
+different storage through their foreign conversion hooks; there is no universal
+`Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
 C wrappers still return status and write output structs only on success. Text
@@ -155,7 +162,7 @@ memory, while owned inputs copy it. Callers free returned buffers exactly once.
 
 **JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
-or consumed state. JNI's allocation wrapper guarantees alignment and gives
+or consumed state. The shared allocation wrapper guarantees alignment and gives
 zero-sized values distinct addresses. Native objects require `Send` because
 Kotlin can transfer them between threads; this restriction belongs to JNI.
 Generated wrappers lock all active handle objects in a stable address order,
