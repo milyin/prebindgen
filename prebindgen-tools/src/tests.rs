@@ -1,6 +1,12 @@
 use super::*;
 struct TestCodec;
 impl Codec for TestCodec {
+    fn decode_scalar(&self, _: Primitive, w: &syn::Ident) -> TokenStream {
+        quote!(#w)
+    }
+    fn encode_scalar(&self, _: Primitive, v: TokenStream) -> TokenStream {
+        v
+    }
     fn decode_text(&self, w: &syn::Ident) -> TokenStream {
         quote!(decode_text(#w)?)
     }
@@ -173,4 +179,35 @@ fn field_defaults_follow_type_expansions() {
     };
     assert!(matches!(output.wires[0].kind, WireKind::Text));
     assert!(matches!(output.wires[1].kind, WireKind::Bytes));
+}
+
+#[test]
+fn explicit_scalar_identity_is_a_value_conversion() {
+    let items = syn::parse_file("pub fn f(x:i64)->i64{}").unwrap().items;
+    let mut flat = Flat::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+    let defaults = Declarations::new(
+        &flat,
+        vec![
+            expand_param!(i64).variant_self().into(),
+            expand_return!(i64).field_self().into(),
+        ],
+    )
+    .unwrap();
+    defaults.fill(&mut flat, &fun!(f)).unwrap();
+    let prepared = prepare(flat, &TestCodec).unwrap();
+    let f = prepared.function("f").unwrap();
+    let Prepared::Input(input) = &f.params[0].ty.slot else {
+        panic!()
+    };
+    let Prepared::Output(output) = &f.ret.slot else {
+        panic!()
+    };
+    assert!(matches!(
+        input.wires[0].kind,
+        WireKind::Scalar(Primitive::I64)
+    ));
+    assert!(matches!(
+        output.wires[0].kind,
+        WireKind::Scalar(Primitive::I64)
+    ));
 }

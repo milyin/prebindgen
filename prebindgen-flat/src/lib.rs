@@ -4,6 +4,9 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
+mod primitive;
+pub use primitive::Primitive;
+
 pub type Result<T> = std::result::Result<T, String>;
 
 #[derive(Clone, Debug)]
@@ -276,7 +279,7 @@ impl<S> Flat<S> {
         Ok(ty)
     }
     fn validate_type(&self, ty: &Type) -> Result<()> {
-        if self.types.values().any(|t| same_type(t, ty)) {
+        if Primitive::from_type(ty).is_some() || self.types.values().any(|t| same_type(t, ty)) {
             return Ok(());
         }
         match ty {

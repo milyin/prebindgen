@@ -1,11 +1,32 @@
 //! C adapter for prepared occurrence slots. No recursive type conversion lives here.
-use prebindgen_flat::{Flat, Result};
+use prebindgen_flat::{Flat, Primitive, Result};
 use prebindgen_tools::{Codec, Prepared, Slot, WireKind};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 struct CCodec;
 impl Codec for CCodec {
+    fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
+        let ty = p.rust_type();
+        match p {
+            Primitive::Bool => quote!(#w != 0),
+            Primitive::Char => quote!(char::from_u32(#w).ok_or("invalid Unicode scalar")?),
+            Primitive::I128 | Primitive::U128 => {
+                quote!(((u128::from(#w.hi) << 64) | u128::from(#w.lo)) as #ty)
+            }
+            _ => quote!(#w),
+        }
+    }
+    fn encode_scalar(&self, p: Primitive, v: TokenStream) -> TokenStream {
+        match p {
+            Primitive::Bool => quote!(u8::from(#v)),
+            Primitive::Char => quote!((#v) as u32),
+            Primitive::I128 | Primitive::U128 => {
+                quote!({ let bits = (#v) as u128; __Pb128 { hi: (bits >> 64) as u64, lo: bits as u64 } })
+            }
+            _ => v,
+        }
+    }
     fn decode_text(&self, w: &syn::Ident) -> TokenStream {
         quote!(String::from_utf8(__pb_read(#w)?).map_err(|_|"invalid UTF-8")?)
     }
@@ -116,6 +137,15 @@ impl Generation {
 }
 fn rust_ty(kind: &WireKind) -> TokenStream {
     match kind {
+        WireKind::Scalar(p) => match p {
+            Primitive::Bool => quote!(u8),
+            Primitive::Char => quote!(u32),
+            Primitive::I128 | Primitive::U128 => quote!(__Pb128),
+            p => {
+                let ty = p.rust_type();
+                quote!(#ty)
+            }
+        },
         WireKind::Handle(_) => quote!(u64),
         WireKind::Selector => quote!(i32),
         _ => quote!(__PbBuffer),
@@ -123,6 +153,21 @@ fn rust_ty(kind: &WireKind) -> TokenStream {
 }
 fn c_ty(kind: &WireKind, prefix: &str) -> String {
     match kind {
+        WireKind::Scalar(p) => match p {
+            Primitive::Bool | Primitive::U8 => "uint8_t".into(),
+            Primitive::Char | Primitive::U32 => "uint32_t".into(),
+            Primitive::I8 => "int8_t".into(),
+            Primitive::I16 => "int16_t".into(),
+            Primitive::I32 => "int32_t".into(),
+            Primitive::I64 => "int64_t".into(),
+            Primitive::U16 => "uint16_t".into(),
+            Primitive::U64 => "uint64_t".into(),
+            Primitive::Isize => "intptr_t".into(),
+            Primitive::Usize => "uintptr_t".into(),
+            Primitive::F32 => "float".into(),
+            Primitive::F64 => "double".into(),
+            Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
+        },
         WireKind::Handle(_) => "uint64_t".into(),
         WireKind::Selector => "int32_t".into(),
         _ => format!("{prefix}_buffer"),
@@ -167,6 +212,7 @@ fn generate(
         }
     }
     let mut tokens = quote! {
+       #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
        std::thread_local! {static __PB_ERROR:std::cell::RefCell<std::ffi::CString>=std::cell::RefCell::new(std::ffi::CString::default());}
        fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=std::ffi::CString::new(e.replace('\0',"?")).unwrap());}
@@ -182,7 +228,7 @@ fn generate(
     The buffer must have been returned by this library and not already freed."]
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
-    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
+    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
     for (name, ty) in handles {
         prebindgen_tools::ident(&name)?;
         let drop = format_ident!("{prefix}_drop_{name}");

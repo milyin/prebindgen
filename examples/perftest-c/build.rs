@@ -174,6 +174,53 @@ fn main() {
         .function(fun!(report_new))
         .function(fun!(report_into_struct));
 
+    cbindgen = cbindgen
+        .handle("summary", pq!(Summary))
+        .handle("unsigned", pq!(Unsigned))
+        .expand(
+            expand_return!(Summary)
+                .field(fun!(summary_count))
+                .field(fun!(summary_total)),
+        )
+        .expand(
+            expand_param!(Summary)
+                .variant(fun!(summary_new))
+                .variant_self(),
+        )
+        .expand(
+            expand_return!(Stamp)
+                .field(fun!(stamp_secs))
+                .field(fun!(stamp_nanos)),
+        )
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .function(fun!(payload_new))
+        .function(fun!(storage_with_payload))
+        .function(fun!(summary_new))
+        .function(fun!(summary_total_raw))
+        .function(fun!(stamp_new))
+        .function(fun!(unsigned_round_trip));
+    for f in [
+        fun!(primitive_i8),
+        fun!(primitive_i16),
+        fun!(primitive_i32),
+        fun!(primitive_i64),
+        fun!(primitive_i128),
+        fun!(primitive_isize),
+        fun!(primitive_u8),
+        fun!(primitive_u16),
+        fun!(primitive_u32),
+        fun!(primitive_u64),
+        fun!(primitive_u128),
+        fun!(primitive_usize),
+        fun!(primitive_f32),
+        fun!(primitive_f64),
+        fun!(primitive_bool),
+        fun!(primitive_char),
+        fun!(primitive_unit),
+    ] {
+        cbindgen = cbindgen.function(f);
+    }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();

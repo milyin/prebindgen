@@ -57,3 +57,22 @@ fn rejects_jvm_signature_overflow() {
         .package(package!().class(ptr_class!(Key)).fun(fun!(f)));
     assert!(fail(b).contains("limit is 255"));
 }
+
+#[test]
+fn scalar_jvm_slots_include_wide_numeric_carriers() {
+    for ty in ["i64", "u32", "u64", "isize", "usize", "f64"] {
+        for (count, accepted) in [(127, true), (128, false)] {
+            let params = (0..count)
+                .map(|i| format!("p{i}:{ty}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let source = format!("pub fn f({params}){{}}");
+            let result = JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(f)))
+                .build();
+            assert_eq!(result.is_ok(), accepted, "{ty}: {count}");
+        }
+    }
+}
