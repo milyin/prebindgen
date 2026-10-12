@@ -127,8 +127,8 @@ fn main() {
         // rather than aborting.
         // Unsupported signature: pq!(calculator_merge),
         // Unsupported signature: pq!(calculator_absorb),
-        // Unsupported signature: pq!(foo_new),
-        // Unsupported signature: pq!(foo_get_id),
+        fun!(foo_new),
+        fun!(foo_get_id),
         // Unsupported signature: pq!(inside_foo_default),
         // The tagged union crossing OUT: constructed and returned. Nothing to
         // validate on this side — Rust always writes a live arm.
@@ -191,7 +191,9 @@ fn main() {
         }
     */
 
-    cbindgen = cbindgen.handle("caption", pq!(Caption));
+    cbindgen = cbindgen
+        .handle("caption", pq!(Caption))
+        .handle("foo", pq!(Foo));
 
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");

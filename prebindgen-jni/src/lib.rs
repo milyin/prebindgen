@@ -3,6 +3,8 @@
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 use prebindgen_flat::{type_key, Flat, Result};
+mod scalar;
+use prebindgen_flat::Primitive;
 use prebindgen_tools::{Codec, Prepared, Slot, WireKind};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -231,6 +233,12 @@ impl Class {
 }
 struct JniCodec;
 impl Codec for JniCodec {
+    fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
+        scalar::decode(p, w)
+    }
+    fn encode_scalar(&self, p: Primitive, v: TokenStream) -> TokenStream {
+        scalar::encode(p, v)
+    }
     fn decode_text(&self, w: &syn::Ident) -> TokenStream {
         quote!(::prebindgen_jni_runtime::text(&mut env,&#w)?)
     }
@@ -355,6 +363,7 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
 }
 fn raw_rust(kind: &WireKind) -> TokenStream {
     match kind {
+        WireKind::Scalar(p) => scalar::rust_type(*p),
         WireKind::Handle(_) => quote!(i64),
         WireKind::Selector => quote!(i32),
         WireKind::Text => quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
@@ -363,6 +372,7 @@ fn raw_rust(kind: &WireKind) -> TokenStream {
 }
 fn raw_kt(kind: &WireKind) -> &'static str {
     match kind {
+        WireKind::Scalar(p) => scalar::raw_kotlin(*p),
         WireKind::Handle(_) => "Long",
         WireKind::Selector => "Int",
         WireKind::Text => "String?",
@@ -423,6 +433,7 @@ fn generate(
                 params.push(quote!(#n:#rt));
                 raw_params.push(format!("{n}: {}", raw_kt(&w.kind)));
                 let (kt, arg) = match &w.kind {
+                    WireKind::Scalar(p) => scalar::input(*p, n),
                     WireKind::Handle(ty) => (
                         format!("{}?", class(&classes, ty)?.fqn()),
                         format!("{n}?.raw ?: 0L"),
@@ -444,12 +455,10 @@ fn generate(
                 };
                 i.wires
                     .iter()
-                    .map(|w| {
-                        if matches!(w.kind, WireKind::Handle(_)) {
-                            2
-                        } else {
-                            1
-                        }
+                    .map(|w| match w.kind {
+                        WireKind::Handle(_) => 2,
+                        WireKind::Scalar(p) => scalar::parameter_slots(p),
+                        _ => 1,
                     })
                     .sum::<usize>()
             })
@@ -467,6 +476,7 @@ fn generate(
         let mut result_types = Vec::new();
         for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
             let (expr, kt, decode) = match &w.kind {
+                WireKind::Scalar(p) => scalar::output(*p, v, i),
                 WireKind::Handle(ty) => {
                     let c = class(&classes, ty)?.fqn();
                     (
@@ -493,7 +503,7 @@ fn generate(
             result_types.push(kt);
         }
         rust.extend(quote!{
-   #[allow(clippy::needless_borrow, clippy::let_unit_value)]
+   #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[no_mangle]pub extern "system" fn #sym<'local>(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
     match ::prebindgen_runtime::boundary(||{
      #body let __result=#path(#(#args),*);let mut __outputs=::prebindgen_runtime::Outputs::default();#output_body

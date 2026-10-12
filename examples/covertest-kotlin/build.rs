@@ -1,4 +1,4 @@
-//! Active coverage: strings/bytes, owned handles, Report selectors and field outputs.
+//! Active coverage: primitives, strings/bytes, owned handles, selectors and field outputs.
 //! The original coverage inventory below includes features now commented out.
 //!
 //! Migrated from main. Unsupported declarations remain commented below.
@@ -409,6 +409,7 @@ fn main() {
                 /* Unsupported: this class kind or its binding is not available yet.
 .class(data_class!(Unsigned))
 */
+                .class(ptr_class!(Unsigned))
                 // `Stamp` is a small `Copy` struct of two scalars, so it crosses
                 // as its FIELDS — no array, no raw-memory image. Its readers stay
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
@@ -496,6 +497,7 @@ fn main() {
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
+                .class(ptr_class!(Summary))
                 .class(ptr_class!(Archive).name("SummaryVault")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
@@ -504,22 +506,20 @@ fn main() {
         // `(count, total)` vs `Summary` surface as distinct JVM signatures, so
         // functions may `.split_on_param(...)` it into typed overloads (see
         // `archive_store` / `storage_matches_summary` / `summary_prefer`).
-        /* Unsupported: this expansion needs unsupported conversions.
-.expand(
+        .expand(
             expand_param!(Summary)
                 .variant(fun!(summary_new))
                 .variant_self(),
         )
-*/
+
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
-        /* Unsupported: this expansion needs unsupported conversions.
-.expand(
+        .expand(
             expand_return!(Summary)
                 .field(fun!(summary_count))
                 .field(fun!(summary_total)),
         )
-*/
+
         // `Report` default output DERIVED from its value form (#213): the
         // leaves come from `ReportStruct`'s fields, so the list cannot drift
         // from the struct the way a restated one does. Each field still crosses
@@ -668,9 +668,7 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(priority_or))
 */
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(stamp_new))
-*/
+                .fun(fun!(stamp_new))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(stamp_series))
 */
@@ -880,9 +878,7 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(object_boundary_value))
 */
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(unsigned_round_trip))
-*/
+                .fun(fun!(unsigned_round_trip))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(unsigned_optional))
 */
@@ -1129,11 +1125,35 @@ fn main() {
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
         .package(package!().fun(fun!(string_new)))
-        // The reduced Report value form contains only the supported label field.
-        // Project that field before handing ownership of the Report to Kotlin.
+        // Report projects its supported Summary, Stamp and label fields.
+        // Project those fields before handing ownership of the Report to Kotlin.
         .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
         .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
         .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
+        .expand(expand_return!(Stamp).field(fun!(stamp_secs)).field(fun!(stamp_nanos)))
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .package(package!().fun(fun!(payload_new)).fun(fun!(storage_with_payload)).fun(fun!(summary_new)).fun(fun!(summary_total_raw)))
+        .package(
+            package!("primitives")
+                .fun(fun!(primitive_i8))
+                .fun(fun!(primitive_i16))
+                .fun(fun!(primitive_i32))
+                .fun(fun!(primitive_i64))
+                .fun(fun!(primitive_i128))
+                .fun(fun!(primitive_isize))
+                .fun(fun!(primitive_u8))
+                .fun(fun!(primitive_u16))
+                .fun(fun!(primitive_u32))
+                .fun(fun!(primitive_u64))
+                .fun(fun!(primitive_u128))
+                .fun(fun!(primitive_usize))
+                .fun(fun!(primitive_f32))
+                .fun(fun!(primitive_f64))
+                .fun(fun!(primitive_bool))
+                .fun(fun!(primitive_char))
+                .fun(fun!(primitive_unit)),
+        )
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

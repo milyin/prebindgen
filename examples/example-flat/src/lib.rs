@@ -97,18 +97,18 @@ pub fn error_get_message(e: &Error) -> String {
 #[prebindgen]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Caption {
-    // Unsupported field/value:     pub id: u64,
+    pub id: u64,
     pub text: String,
-    // Unsupported field/value:     pub emphatic: bool,
+    pub emphatic: bool,
 }
 
 // Build a [`Caption`].
 #[prebindgen]
-pub fn caption_new(/* id: u64, */ text: &str /* , emphatic: bool */) -> Caption {
+pub fn caption_new(id: u64, text: &str, emphatic: bool) -> Caption {
     Caption {
-        // Unsupported field/value:         id,
+        id,
         text: text.to_string(),
-        // Unsupported field/value:         emphatic,
+        emphatic,
     }
 }
 
@@ -411,19 +411,17 @@ pub fn calculator_new_clone(c: &Calculator) -> Calculator {
 //     Ok(next)
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The current accumulator value.
-// #[prebindgen]
-// pub fn calculator_get_value(c: &Calculator) -> f64 {
-//     c.value
-// }
+// The current accumulator value.
+#[prebindgen]
+pub fn calculator_get_value(c: &Calculator) -> f64 {
+    c.value
+}
 
-// Disabled: unsupported by the current binding subset
-// /// How many operations have been applied so far.
-// #[prebindgen]
-// pub fn calculator_get_count(c: &Calculator) -> u64 {
-//     c.history.len() as u64
-// }
+// How many operations have been applied so far.
+#[prebindgen]
+pub fn calculator_get_count(c: &Calculator) -> u64 {
+    c.history.len() as u64
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Whether the accumulator currently holds exactly `value`.
@@ -497,42 +495,39 @@ pub fn calculator_to_string(c: &Calculator) -> String {
 //     DouddleDum = 88,
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// A by-value data struct whose **field set varies by target architecture and by
-// /// feature**. `#[prebindgen]` records every `cfg`-gated field; the binding crate
-// /// keeps only those matching the build target, so the generated `#[repr(C)] foo_t`
-// /// differs per target. (`lang::CbindgenBuilder` `.data_struct`.)
-// #[prebindgen("structs")]
-// #[derive(Clone, Copy, Debug, Default, PartialEq)]
-// pub struct Foo {
-//     /// Always present.
-//     pub id: u64,
-//     #[cfg(target_arch = "x86_64")]
-//     pub x86_64_field: u64,
-//     #[cfg(target_arch = "aarch64")]
-//     pub aarch64_field: u64,
-//     #[cfg(feature = "unstable")]
-//     pub unstable_field: u64,
-//     #[cfg(not(feature = "unstable"))]
-//     pub stable_field: u64,
-// }
+// A by-value data struct whose **field set varies by target architecture and by
+// feature**. `#[prebindgen]` records every `cfg`-gated field; the binding crate
+// keeps only those matching the build target, so the generated `#[repr(C)] foo_t`
+// differs per target. (`lang::CbindgenBuilder` `.data_struct`.)
+#[prebindgen("structs")]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Foo {
+    // Always present.
+    pub id: u64,
+    #[cfg(target_arch = "x86_64")]
+    pub x86_64_field: u64,
+    #[cfg(target_arch = "aarch64")]
+    pub aarch64_field: u64,
+    #[cfg(feature = "unstable")]
+    pub unstable_field: u64,
+    #[cfg(not(feature = "unstable"))]
+    pub stable_field: u64,
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Construct a `Foo` (the target-specific fields default to zero).
-// #[prebindgen]
-// pub fn foo_new(id: u64) -> Foo {
-//     Foo {
-//         id,
-//         ..Foo::default()
-//     }
-// }
+// Construct a `Foo` (the target-specific fields default to zero).
+#[prebindgen]
+pub fn foo_new(id: u64) -> Foo {
+    Foo {
+        id,
+        ..Foo::default()
+    }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Read a `Foo`'s always-present field (consumes the value-struct by value).
-// #[prebindgen]
-// pub fn foo_get_id(f: Foo) -> u64 {
-//     f.id
-// }
+// Read a `Foo`'s always-present field (consumes the value-struct by value).
+#[prebindgen]
+pub fn foo_get_id(f: Foo) -> u64 {
+    f.id
+}
 
 // Disabled: unsupported by the current binding subset
 // /// The default `InsideFoo` variant (its numeric value is target-specific).

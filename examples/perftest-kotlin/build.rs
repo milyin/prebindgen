@@ -24,12 +24,12 @@
 
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
-use prebindgen_registry::fun;
+use prebindgen_registry::{expand_param, expand_return, fields, fun};
 
 
 */
 use prebindgen_jni::{package, ptr_class, JniGen};
-use prebindgen_registry::fun;
+use prebindgen_registry::{expand_param, expand_return, fields, fun};
 
 fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
@@ -191,6 +191,14 @@ fn main() {
         }
 
     */
+    let binding = binding
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
+        .package(
+            package!()
+                .fun(fun!(payload_new))
+                .fun(fun!(storage_with_payload)),
+        );
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let jni = binding.build().expect("build supported declarations");
     jni.write_rust("bindings.rs").unwrap();

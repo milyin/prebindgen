@@ -61,10 +61,10 @@ pub const FEATURES: &str = features!();
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Payload {
-    // Unsupported field/value:     pub id: i64,
-    // Unsupported field/value:     pub seq: i32,
-    // Unsupported field/value:     pub value: f64,
-    // Unsupported field/value:     pub flag: bool,
+    pub id: i64,
+    pub seq: i32,
+    pub value: f64,
+    pub flag: bool,
     // Unsupported field/value:     pub label: Option<Box<String>>,
 }
 
@@ -491,3 +491,18 @@ pub fn string_new(s: &str) -> String {
 //         assert_eq!(sum.load(Ordering::Relaxed), 67);
 //     }
 // }
+
+// Construct/project the currently supported Payload fields for binding coverage.
+#[prebindgen]
+pub fn payload_new(id: i64, seq: i32, value: f64, flag: bool) -> Payload {
+    Payload {
+        id,
+        seq,
+        value,
+        flag,
+    }
+}
+#[prebindgen]
+pub fn payload_to_struct(value: &Payload) -> Payload {
+    value.clone()
+}

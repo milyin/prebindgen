@@ -1,5 +1,5 @@
 //! Conversion composition. Adapters supply leaf codecs; wrappers consume prepared slots.
-use prebindgen_flat::{same_type, type_key, Flat, Result};
+use prebindgen_flat::{same_type, type_key, Flat, Primitive, Result};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -7,6 +7,7 @@ use syn::Type;
 /// Inputs are recipes, not wire layouts. A selector denotes a logical choice.
 #[derive(Clone, Debug)]
 pub enum Input {
+    Scalar,
     Handle,
     Text,
     Bytes,
@@ -30,6 +31,7 @@ impl Input {
 }
 #[derive(Clone, Debug)]
 pub enum Output {
+    Scalar,
     /// Transfer this owned value into a handle.
     Handle,
     /// Make an independent handle from a borrowed value. Requires Rust `Clone`.
@@ -76,6 +78,7 @@ pub enum Slot {
 /// A wire's role remains available to both sides, even when carriers coincide.
 #[derive(Clone, Debug)]
 pub enum WireKind {
+    Scalar(Primitive),
     Handle(Box<Type>),
     Text,
     Bytes,
@@ -89,6 +92,8 @@ pub struct Wire {
 
 /// Language-specific terminal operations. Recursive composition stays in tools.
 pub trait Codec {
+    fn decode_scalar(&self, primitive: Primitive, wire: &syn::Ident) -> TokenStream;
+    fn encode_scalar(&self, primitive: Primitive, value: TokenStream) -> TokenStream;
     fn decode_text(&self, wire: &syn::Ident) -> TokenStream;
     fn decode_bytes(&self, wire: &syn::Ident) -> TokenStream;
 }
@@ -169,6 +174,17 @@ impl<C: Codec> Compiler<'_, C> {
         let mut statements = TokenStream::new();
         let mut argument = quote!(#var);
         match recipe {
+            Input::Scalar => {
+                let primitive =
+                    Primitive::from_type(ty).ok_or("scalar input needs a primitive type")?;
+                let w = self.name();
+                let decode = self.codec.decode_scalar(primitive, &w);
+                wires.push(Wire {
+                    name: w,
+                    kind: WireKind::Scalar(primitive),
+                });
+                statements = quote!(let #var:#ty=#decode;);
+            }
             Input::Handle => {
                 if matches!(ty, Type::Reference(_)) {
                     return Err("handle inputs in this subset transfer ownership; borrowed handles are unsupported".into());
@@ -310,6 +326,26 @@ impl<C: Codec> Compiler<'_, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Scalar => {
+                let primitive =
+                    Primitive::from_type(ty).ok_or("scalar output needs a primitive type")?;
+                let value = if borrowed {
+                    let reference = self.name();
+                    out.statements
+                        .extend(quote!(let #reference: &#ty = #value;));
+                    quote!(*#reference)
+                } else {
+                    value
+                };
+                let expr = self.codec.encode_scalar(primitive, value);
+                let w = self.name();
+                out.statements.extend(quote!(let #w=#expr;));
+                out.values.push(quote!(#w));
+                out.wires.push(Wire {
+                    name: w,
+                    kind: WireKind::Scalar(primitive),
+                });
+            }
             Output::Handle | Output::ClonedHandle | Output::Text | Output::Bytes => {
                 let w = self.name();
                 let (kind, expr) = match recipe {

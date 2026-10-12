@@ -85,3 +85,17 @@ fn selected_record_fields_retain_transitive_source_types() {
     assert!(flat.types.contains_key("Record"));
     assert!(!flat.functions.contains_key("unrelated"));
 }
+
+#[test]
+fn primitives_keep_their_rust_syntax_without_accepting_lookalikes() {
+    let f = parse("pub fn f(x: ::core::primitive::i64) -> std::primitive::char {} ").unwrap();
+    assert_eq!(
+        Primitive::from_type(&f.function("f").unwrap().params[0].ty.ty),
+        Some(Primitive::I64)
+    );
+    assert_eq!(
+        Primitive::from_type(&f.function("f").unwrap().ret.ty),
+        Some(Primitive::Char)
+    );
+    assert!(parse("pub fn f(x: unrelated::i64) {} ").is_err());
+}

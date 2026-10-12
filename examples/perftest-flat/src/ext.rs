@@ -1,4 +1,4 @@
-//! Main coverage source narrowed to byte records and Report label projections.
+//! Coverage source with primitive leaves, byte records and Report projections.
 // Extended `#[prebindgen]` surface primarily used to exercise language-binding
 // generator features that the lean performance surface in [`crate`] does not
 // need. Most items exist so a *coverage* binding (e.g.
@@ -35,16 +35,15 @@
 // each has a **name** every signature can resolve against without declaring
 // its fields a boundary surface. See `lib.rs`'s `handles` for the same shape.
 mod handles {
+    use super::Stamp;
     // Disabled: unsupported by the current binding subset
     // use super::{Lookup, Reading, Stamp, Storage};
 
-    // Disabled: unsupported by the current binding subset
-    // #[derive(Clone)]
-    //
-    //     pub struct Summary {
-    //         pub(super) count: i64,
-    //         pub(super) total: f64,
-    //     }
+    #[derive(Clone)]
+    pub struct Summary {
+        pub(super) count: i64,
+        pub(super) total: f64,
+    }
 
     #[derive(Default)]
     pub struct Archive {
@@ -65,9 +64,9 @@ mod handles {
 
     #[derive(Clone)]
     pub struct Report {
-        // Unsupported field/value:         pub(super) summary: Summary,
+        pub(super) summary: Summary,
         // Unsupported field/value:         pub(super) taken: Option<Stamp>,
-        // Unsupported field/value:         pub(super) origin: Stamp,
+        pub(super) origin: Stamp,
         // Unsupported field/value:         pub(super) outcome: Lookup,
         pub(super) label: String,
     }
@@ -470,31 +469,28 @@ use crate::{Payload, Storage};
 // Stamp — a small `Copy` value type (→ Kotlin data class over its fields).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// A plain `Copy` timestamp. Declared `data_class` in the binding, so it
-// /// crosses **by value as its two scalar fields** (no heap handle, no
-// /// `close()`), and `Vec<Stamp>` surfaces as `List<Stamp>`.
-// #[prebindgen]
-// #[repr(C)]
-// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-// pub struct Stamp {
-//     pub secs: i64,
-//     pub nanos: i64,
-// }
+// A plain `Copy` timestamp. Declared `data_class` in the binding, so it
+// crosses **by value as its two scalar fields** (no heap handle, no
+// `close()`), and `Vec<Stamp>` surfaces as `List<Stamp>`.
+#[prebindgen]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stamp {
+    pub secs: i64,
+    pub nanos: i64,
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Build a [`Stamp`] (data-class **return**).
-// #[prebindgen]
-// pub fn stamp_new(secs: i64, nanos: i64) -> Stamp {
-//     Stamp { secs, nanos }
-// }
+// Build a [`Stamp`] (data-class **return**).
+#[prebindgen]
+pub fn stamp_new(secs: i64, nanos: i64) -> Stamp {
+    Stamp { secs, nanos }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Seconds component (data-class **accessor**, receiver = its field leaves).
-// #[prebindgen]
-// pub fn stamp_secs(s: &Stamp) -> i64 {
-//     s.secs
-// }
+// Seconds component (data-class **accessor**, receiver = its field leaves).
+#[prebindgen]
+pub fn stamp_secs(s: &Stamp) -> i64 {
+    s.secs
+}
 
 // A value whose equality is **array-backed** on the JVM side: a byte-array
 // field beside a nested data class.
@@ -515,7 +511,7 @@ use crate::{Payload, Storage};
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlobValue {
-    // Unsupported field/value:     pub stamp: Stamp,
+    pub stamp: Stamp,
     pub id: Vec<u8>,
     // A CONTAINER of arrays. `List<ByteArray>` inherits `ByteArray`'s
     // identity equality just as a bare array does, so the generated operators
@@ -525,9 +521,9 @@ pub struct BlobValue {
 
 // Build a [`BlobValue`] (its equality is asserted from Kotlin).
 #[prebindgen]
-pub fn blob_value_new(/* secs: i64, */ id: Vec<u8>, /* , chunks: Vec<Vec<u8>> */) -> BlobValue {
+pub fn blob_value_new(secs: i64, id: Vec<u8> /* , chunks: Vec<Vec<u8>> */) -> BlobValue {
     BlobValue {
-        // Unsupported field/value:         stamp: Stamp { secs, nanos: 0 },
+        stamp: Stamp { secs, nanos: 0 },
         id,
         // Unsupported field/value:         chunks,
     }
@@ -575,12 +571,11 @@ pub fn blob_value_echo(value: BlobValue) -> BlobValue {
     value
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Nanoseconds component (data-class **accessor**).
-// #[prebindgen]
-// pub fn stamp_nanos(s: &Stamp) -> i64 {
-//     s.nanos
-// }
+// Nanoseconds component (data-class **accessor**).
+#[prebindgen]
+pub fn stamp_nanos(s: &Stamp) -> i64 {
+    s.nanos
+}
 
 // Disabled: unsupported by the current binding subset
 // /// A monotonically increasing run of stamps (`Vec<data-class>` →
@@ -664,38 +659,34 @@ pub fn blob_value_echo(value: BlobValue) -> BlobValue {
 // Summary — an opaque handle whose fields decompose at the boundary.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// An aggregate over a [`Storage`]'s payloads: how many there are and the sum of
-// /// their `value`s. An opaque handle in the binding, but its default
-// /// flatten-output decomposes it into `(count, total)` leaves and its
-// /// flatten-input rebuilds it from the same leaves (via [`summary_new`]).
-// /// `Clone` because [`archive_latest`] returns it *borrowed* (`Option<&Summary>`)
-// /// and the JVM binding's only sound lowering of a borrowed handle is a clone
-// /// into a fresh owned handle.
-// #[prebindgen]
-// pub type Summary = handles::Summary;
+// An aggregate over a [`Storage`]'s payloads: how many there are and the sum of
+// their `value`s. An opaque handle in the binding, but its default
+// flatten-output decomposes it into `(count, total)` leaves and its
+// flatten-input rebuilds it from the same leaves (via [`summary_new`]).
+// `Clone` because [`archive_latest`] returns it *borrowed* (`Option<&Summary>`)
+// and the JVM binding's only sound lowering of a borrowed handle is a clone
+// into a fresh owned handle.
+#[prebindgen]
+pub type Summary = handles::Summary;
 
-// Disabled: unsupported by the current binding subset
-// /// Construct a [`Summary`] from its parts (declared a **constructor** /
-// /// companion factory, and the build-from **variant** of the flatten-input).
-// #[prebindgen]
-// pub fn summary_new(count: i64, total: f64) -> Summary {
-//     Summary { count, total }
-// }
+// Construct a [`Summary`] from its parts (declared a **constructor** /
+// companion factory, and the build-from **variant** of the flatten-input).
+#[prebindgen]
+pub fn summary_new(count: i64, total: f64) -> Summary {
+    Summary { count, total }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Number of payloads (flatten-output **field** / **accessor**).
-// #[prebindgen]
-// pub fn summary_count(s: &Summary) -> i64 {
-//     s.count
-// }
+// Number of payloads (flatten-output **field** / **accessor**).
+#[prebindgen]
+pub fn summary_count(s: &Summary) -> i64 {
+    s.count
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Sum of payload values (flatten-output **field** / **accessor**).
-// #[prebindgen]
-// pub fn summary_total(s: &Summary) -> f64 {
-//     s.total
-// }
+// Sum of payload values (flatten-output **field** / **accessor**).
+#[prebindgen]
+pub fn summary_total(s: &Summary) -> f64 {
+    s.total
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Total scaled by a factor (an instance **method**: `&Self` receiver + arg).
@@ -767,13 +758,12 @@ pub fn blob_value_echo(value: BlobValue) -> BlobValue {
 //     storage_summary(s)
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// Read a summary's total through a raw handle (per-fn **flatten-input-suppress**
-// /// on the `Summary` parameter).
-// #[prebindgen]
-// pub fn summary_total_raw(s: Summary) -> f64 {
-//     s.total
-// }
+// Read a summary's total through a raw handle (per-fn **flatten-input-suppress**
+// on the `Summary` parameter).
+#[prebindgen]
+pub fn summary_total_raw(s: Summary) -> f64 {
+    s.total
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Like [`storage_summary`] but the binding decomposes it with a **custom**
@@ -1421,39 +1411,37 @@ pub fn storage_with_payload(payload: Payload) -> Storage {
 // Fixed-width unsigned integers — widened Kotlin scalars + ULong projection.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Every fixed-width Rust unsigned scalar in one generated Kotlin data class.
-// /// The first three fields widen losslessly; `long`/`maybe_long` surface as
-// /// `ULong`/`ULong?` over raw JNI `Long` bit patterns.
-// #[prebindgen]
-// #[derive(Clone, Debug, PartialEq, Eq)]
-// pub struct Unsigned {
-//     pub byte: u8,
-//     pub short: u16,
-//     pub int: u32,
-//     pub long: u64,
-//     pub maybe_long: Option<u64>,
-// }
+// Every fixed-width Rust unsigned scalar in one generated Kotlin data class.
+// The first three fields widen losslessly; `long`/`maybe_long` surface as
+// `ULong`/`ULong?` over raw JNI `Long` bit patterns.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unsigned {
+    pub byte: u8,
+    pub short: u16,
+    pub int: u32,
+    pub long: u64,
+    // Unsupported: pub maybe_long: Option<u64>,
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Round-trip direct unsigned parameters through an unsigned data-class
-// /// return, covering both checked widening and the `ULong` projection.
-// #[prebindgen]
-// pub fn unsigned_round_trip(
-//     byte: u8,
-//     short: u16,
-//     int: u32,
-//     long: u64,
-//     maybe_long: Option<u64>,
-// ) -> Unsigned {
-//     Unsigned {
-//         byte,
-//         short,
-//         int,
-//         long,
-//         maybe_long,
-//     }
-// }
+// Round-trip direct unsigned parameters through an unsigned data-class
+// return, covering both checked widening and the `ULong` projection.
+#[prebindgen]
+pub fn unsigned_round_trip(
+    byte: u8,
+    short: u16,
+    int: u32,
+    long: u64,
+    // Unsupported: maybe_long: Option<u64>,
+) -> Unsigned {
+    Unsigned {
+        byte,
+        short,
+        int,
+        long,
+        // Unsupported: maybe_long,
+    }
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Direct nullable `u64` projection in both directions.
@@ -1749,11 +1737,11 @@ pub type Report = handles::Report;
 #[prebindgen]
 pub struct ReportStruct {
     // Decomposed by `Summary`'s own boundary decl, not delivered as a handle.
-    // Unsupported field/value:     pub summary: Summary,
+    pub summary: Summary,
     // Absent when the report was never stamped.
     // Unsupported field/value:     pub taken: Option<Stamp>,
     // Always present, so it inlines into `origin_secs` / `origin_nanos`.
-    // Unsupported field/value:     pub origin: Stamp,
+    pub origin: Stamp,
     // A tag-gated group set, one alternative live, carrying a handle.
     // Unsupported field/value:     pub outcome: Lookup,
     // A plain string leaf beside the rest.
@@ -1762,11 +1750,11 @@ pub struct ReportStruct {
 
 // Build a [`Report`]. `count < 0` makes the outcome a failure, `0` absent.
 #[prebindgen]
-pub fn report_new(/* count: i64, total: f64, taken: bool, */ label: String) -> Report {
+pub fn report_new(count: i64, total: f64, /* taken: bool, */ label: String) -> Report {
     Report {
-        // Unsupported field/value:         summary: summary_new(count.max(0), total),
+        summary: summary_new(count.max(0), total),
         // Unsupported field/value:         taken: taken.then(|| stamp_new(7, 8)),
-        // Unsupported field/value:         origin: stamp_new(1, 2),
+        origin: stamp_new(1, 2),
         // Unsupported field/value:         outcome: lookup_of(count, total),
         label,
     }
@@ -1779,9 +1767,9 @@ pub fn report_new(/* count: i64, total: f64, taken: bool, */ label: String) -> R
 #[prebindgen]
 pub fn report_to_struct(r: &Report) -> ReportStruct {
     ReportStruct {
-        // Unsupported field/value:         summary: r.summary.clone(),
+        summary: r.summary.clone(),
         // Unsupported field/value:         taken: r.taken,
-        // Unsupported field/value:         origin: r.origin,
+        origin: r.origin,
         // Unsupported field/value:         outcome: r.outcome.clone(),
         label: r.label.clone(),
     }
@@ -1800,9 +1788,9 @@ pub fn report_to_struct(r: &Report) -> ReportStruct {
 #[prebindgen]
 pub fn report_into_struct(r: Report) -> ReportStruct {
     ReportStruct {
-        // Unsupported field/value:         summary: r.summary,
+        summary: r.summary,
         // Unsupported field/value:         taken: r.taken,
-        // Unsupported field/value:         origin: r.origin,
+        origin: r.origin,
         // Unsupported field/value:         outcome: r.outcome,
         label: r.label,
     }
@@ -2376,3 +2364,71 @@ pub fn report_into_struct(r: Report) -> ReportStruct {
 //         assert_eq!(storage_len(&s3), 1);
 //     }
 // }
+
+// Primitive boundary conformance: exercise every stable scalar in both directions.
+#[prebindgen]
+pub fn primitive_i8(value: i8) -> i8 {
+    value
+}
+#[prebindgen]
+pub fn primitive_i16(value: i16) -> i16 {
+    value
+}
+#[prebindgen]
+pub fn primitive_i32(value: i32) -> i32 {
+    value
+}
+#[prebindgen]
+pub fn primitive_i64(value: i64) -> i64 {
+    value
+}
+#[prebindgen]
+pub fn primitive_i128(value: i128) -> i128 {
+    value
+}
+#[prebindgen]
+pub fn primitive_isize(value: isize) -> isize {
+    value
+}
+#[prebindgen]
+pub fn primitive_u8(value: u8) -> u8 {
+    value
+}
+#[prebindgen]
+pub fn primitive_u16(value: u16) -> u16 {
+    value
+}
+#[prebindgen]
+pub fn primitive_u32(value: u32) -> u32 {
+    value
+}
+#[prebindgen]
+pub fn primitive_u64(value: u64) -> u64 {
+    value
+}
+#[prebindgen]
+pub fn primitive_u128(value: u128) -> u128 {
+    value
+}
+#[prebindgen]
+pub fn primitive_usize(value: usize) -> usize {
+    value
+}
+#[prebindgen]
+pub fn primitive_f32(value: f32) -> f32 {
+    value
+}
+#[prebindgen]
+pub fn primitive_f64(value: f64) -> f64 {
+    value
+}
+#[prebindgen]
+pub fn primitive_bool(value: bool) -> bool {
+    value
+}
+#[prebindgen]
+pub fn primitive_char(value: char) -> char {
+    value
+}
+#[prebindgen]
+pub fn primitive_unit() {}

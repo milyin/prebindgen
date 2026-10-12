@@ -9,5 +9,9 @@ fun main() {
         storage.close()
         check(storage.isClosed)
     }
-    println("perftest-kotlin PASS: generated handle creation and release")
+    payloadNew(Long.MIN_VALUE, Int.MAX_VALUE, 1.25, true) { id, seq, value, flag ->
+        check(id == Long.MIN_VALUE && seq == Int.MAX_VALUE && value == 1.25 && flag)
+    }
+    storageWithPayload(42, -1, 3.5, false).close()
+    println("perftest-kotlin PASS: scalar Payload construction/projection and handle release")
 }

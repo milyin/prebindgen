@@ -31,11 +31,11 @@ work. The retained records demonstrate the supported shapes of the real examples
 
 | Example | Currently active |
 |---|---|
-| [example-flat](examples/example-flat) | Calculator/Error aliases and Caption with only a text field |
-| [example-cbindgen](examples/example-cbindgen/build.rs) | Calculator and Caption creation and typed release |
-| [perftest-flat](examples/perftest-flat) | Storage/Archive creation, strings, BlobValue with bytes, Report/ReportStruct with a label |
+| [example-flat](examples/example-flat) | Calculator/Error aliases, Caption and Foo with primitive fields |
+| [example-cbindgen](examples/example-cbindgen/build.rs) | Calculator/Caption/Foo creation, Foo ID extraction and typed release |
+| [perftest-flat](examples/perftest-flat) | Payload scalar fields, Stamp, Summary, Unsigned, BlobValue and Report projections |
 | [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/handle outputs |
-| [perftest-kotlin](examples/perftest-kotlin/build.rs) | Storage creation/release through JNI |
+| [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction/projection and Storage creation/release through JNI |
 | [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, Archive, subpackages and the SummaryVault class rename |
 | [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
 | [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
@@ -63,7 +63,7 @@ The tools layer also supports `expand_param!` constructor/identity variants,
 output overrides, and per-function overrides. These fill slots before preparing
 wrappers. The migrated C and JNI examples exercise Report constructor/handle input
 variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
-The reduced BlobValue uses a handle class; data-class generation stays disabled.
+BlobValue and Unsigned use handle classes; data-class generation stays disabled.
 
 C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
 `.prefix(...)` and `.handle(...)`. Its old naming, raw-pointer and cbindgen
@@ -71,9 +71,43 @@ postprocessing settings are commented out in the example manifests.
 
 Manual `Flat<Slot>` configuration remains available for generator development,
 but none of the migrated binding examples requires it. Tools compose owned
-handles, text/bytes, fields, constructors, input selectors and combined outputs.
+handles, primitives, text/bytes, fields, constructors, input selectors and combined outputs.
 Observation outputs execute before a consuming output. Moving twice or moving a
 borrowed field is rejected; independent field handles explicitly require cloning.
+
+## Primitive conversions
+
+All stable scalar types supported by Rust 1.85 have value converters, selected
+by default in build-script declarations. Unit continues to use no wire values.
+Field and constructor composition use the same converters as direct parameters
+and results. The source model still stores `syn::Type`; primitive classification
+only identifies the scalar leaf and leaves its representation to the adapter.
+
+| Rust | C carrier | Kotlin surface / JNI carrier |
+|---|---|---|
+| `i8`, `i16`, `i32`, `i64` | matching `intN_t` | `Byte`, `Short`, `Int`, `Long` |
+| `u8`, `u16` | matching `uintN_t` | `Int` / `jint`, checked on input |
+| `u32` | `uint32_t` | `Long` / `jlong`, checked on input |
+| `u64` | `uint64_t` | `ULong` / `jlong` bit pattern |
+| `isize`, `usize` | `intptr_t`, `uintptr_t` | `Long`, `ULong` / `jlong`, checked against the native target width |
+| `f32`, `f64` | `float`, `double` | `Float`, `Double` |
+| `bool` | `uint8_t` | `Boolean` / `jboolean` |
+| `char` | `uint32_t` Unicode scalar | `Int` Unicode scalar / `jint` |
+| `i128`, `u128` | `<prefix>_int128 { uint64_t hi, lo; }` | `java.math.BigInteger` / `ByteArray` |
+
+Boolean inputs normalize zero to false and any nonzero carrier to true; outputs
+are 0 or 1. Character inputs reject surrogates and values outside Unicode's
+scalar range, preserving supplementary characters. Floats retain infinities,
+NaNs and signed zero. JNI unsigned mappings match the established JniGen API.
+
+The C 128-bit pair carries the high and low halves of the value's bit pattern;
+signed values use two's complement. JNI 128-bit inputs use BigInteger's big-endian
+two's-complement bytes with range checks inside the selected converter. Outputs
+use exactly 16 big-endian bytes; Kotlin reconstructs signed or unsigned BigInteger
+values accordingly. No C compiler extension or narrowing to 64 bits is needed.
+Native methods remain unmangled by Kotlin unsigned types because their carriers
+use signed JVM types. Scalar `Long`/`Double` carriers count as two JVM parameter
+slots when checking the method-size limit.
 
 ## Boundary contracts and limits
 
@@ -91,7 +125,7 @@ conversion failures as exceptions. Rust panics are caught when unwinding is
 enabled. Multi-output JNI delivery uses an object array and a builder lambda;
 a throwing builder releases its output handles.
 
-Scalars, callbacks, enums, options, general collections, borrowed/mutable handle
+Callbacks, enums, options, general collections, borrowed/mutable handle
 inputs, methods, data classes, `convert!`, consuming record decomposition, field
 renaming, local function declarations, domain errors, split overloads and shared
 selector argument storage remain outside this subset.
@@ -110,11 +144,12 @@ python3 examples/check.py
 ```
 
 The script builds every example and runs both C and both JNI smoke clients,
-including string round trips, byte-vector constructors, consumed handles,
+including every primitive at boundary values, invalid unsigned/Unicode/128-bit
+inputs, restored Payload fields, string round trips, byte-vector constructors, consumed handles,
 selector arms, field projections, builder rollback, output preservation and
 concurrent close. `KOTLINC` and `CC` select the compilers.
 `SANITIZE=1` instruments the C callers with AddressSanitizer and
 UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.
 
 The native Rust benchmark is commented out because it depends on disabled
-scalar, borrowed-handle and callback APIs. Its driver reports that limitation.
+borrowed-handle, optional-field and callback APIs. Its driver reports that limitation.

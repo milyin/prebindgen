@@ -1,7 +1,7 @@
 //! The retained JniGen expansion vocabulary translates into tools recipes.
 
 use crate::{Input, Output, Slot};
-use prebindgen_flat::{type_key, Flat, Result};
+use prebindgen_flat::{type_key, Flat, Primitive, Result};
 use std::collections::BTreeMap;
 
 #[derive(Clone)]
@@ -175,6 +175,7 @@ impl Declarations {
             let mut arms = Vec::new();
             for variant in &d.variants {
                 arms.push(match variant {
+                    None if Primitive::from_type(ty).is_some() => Input::Scalar,
                     None => Input::Handle,
                     Some(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
@@ -194,6 +195,9 @@ impl Declarations {
                 1 => Ok(arms.remove(0)),
                 _ => Ok(Input::selector(arms)),
             };
+        }
+        if Primitive::from_type(ty).is_some() {
+            return Ok(Input::Scalar);
         }
         let key = match ty {
             syn::Type::Reference(r) => type_key(&r.elem),
@@ -226,6 +230,7 @@ impl Declarations {
             let mut parts = Vec::new();
             for field in &d.fields {
                 parts.push(match field {
+                    ReturnField::Identity if Primitive::from_type(ty).is_some() => Output::Scalar,
                     ReturnField::Identity => Output::Handle,
                     ReturnField::Getter(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
@@ -268,6 +273,9 @@ impl Declarations {
                 1 => Ok(parts.remove(0)),
                 _ => Ok(Output::combine(parts)),
             };
+        }
+        if Primitive::from_type(ty).is_some() {
+            return Ok(Output::Scalar);
         }
         Ok(match key.as_str() {
             "String" => Output::Text,

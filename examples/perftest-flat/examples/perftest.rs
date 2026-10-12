@@ -171,5 +171,7 @@
 //     println!("(sink = {sink})");
 // }
 fn main() {
-    eprintln!("Benchmark disabled until the scalar, borrowed and callback API is restored.");
+    eprintln!(
+        "Benchmark disabled until the optional-field, borrowed and callback API is restored."
+    );
 }
