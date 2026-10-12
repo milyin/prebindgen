@@ -5,7 +5,14 @@
 use prebindgen_flat::{type_key, Flat, Result};
 mod scalar;
 use prebindgen_flat::Primitive;
-use prebindgen_tools::{Codec, Prepared, Slot, WireKind};
+use prebindgen_tools::{
+    Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
+};
+mod handle;
+pub use handle::{Handle, HandleWire};
+type Slot = GenericSlot<Handle>;
+type Prepared = GenericPrepared<HandleWire>;
+type WireKind = GenericWireKind<HandleWire>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
@@ -176,7 +183,7 @@ impl JniGenBuilder {
                     },
                 };
                 validate_name(&name)?;
-                if name == "JNINative" || name == "Functions" {
+                if name == "JNINative" || name == "Functions" || name == "NativeHandle" {
                     return Err("reserved generated class name".into());
                 }
                 let fqn = format!("{pkg}.{name}");
@@ -198,7 +205,7 @@ impl JniGenBuilder {
                 }
             }
             for f in p.functions {
-                defaults.fill(&mut flat, &f)?;
+                defaults.fill(&mut flat, &f, &JniCodec)?;
                 let name = f.foreign.unwrap_or_else(|| camel(&f.name));
                 validate_name(&name)?;
                 if !seen.insert(format!("{pkg}.{name}")) {
@@ -233,16 +240,44 @@ impl Class {
 }
 struct JniCodec;
 impl Codec for JniCodec {
+    type Leaf = Handle;
+    type Wire = HandleWire;
+    fn identity(&self, _: &syn::Type) -> Result<Handle> {
+        Ok(Handle)
+    }
+    fn consumes(&self, _: &Handle) -> bool {
+        true
+    }
+    fn input_foreign(
+        &self,
+        ty: &syn::Type,
+        _: &Handle,
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &prebindgen_tools::Condition,
+    ) -> Result<prebindgen_tools::PreparedInput<HandleWire>> {
+        handle::input(ty, w, v, active)
+    }
+    fn output_foreign(
+        &self,
+        ty: &syn::Type,
+        _: &Handle,
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<prebindgen_tools::PreparedOutput<HandleWire>> {
+        handle::output(ty, w, v, borrowed)
+    }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
         scalar::decode(p, w)
     }
     fn encode_scalar(&self, p: Primitive, v: TokenStream) -> TokenStream {
         scalar::encode(p, v)
     }
-    fn decode_text(&self, w: &syn::Ident) -> TokenStream {
+    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
         quote!(::prebindgen_jni_runtime::text(&mut env,&#w)?)
     }
-    fn decode_bytes(&self, w: &syn::Ident) -> TokenStream {
+    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
         quote!(::prebindgen_jni_runtime::bytes(&mut env,&#w)?)
     }
 }
@@ -364,7 +399,7 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
 fn raw_rust(kind: &WireKind) -> TokenStream {
     match kind {
         WireKind::Scalar(p) => scalar::rust_type(*p),
-        WireKind::Handle(_) => quote!(i64),
+        WireKind::Foreign(_) => quote!(i64),
         WireKind::Selector => quote!(i32),
         WireKind::Text => quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
         WireKind::Bytes => quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>),
@@ -373,7 +408,7 @@ fn raw_rust(kind: &WireKind) -> TokenStream {
 fn raw_kt(kind: &WireKind) -> &'static str {
     match kind {
         WireKind::Scalar(p) => scalar::raw_kotlin(*p),
-        WireKind::Handle(_) => "Long",
+        WireKind::Foreign(_) => "Long",
         WireKind::Selector => "Int",
         WireKind::Text => "String?",
         WireKind::Bytes => "ByteArray?",
@@ -394,20 +429,22 @@ fn generate(
     let mut rust = TokenStream::new();
     let mut files = BTreeMap::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
-    let mut native = format!("package {prefix}\n\npublic object JNINative {{\n");
+    let mut native = format!("package {prefix}\n\ninternal object JNINative {{\n");
     if !init.is_empty() {
         native.push_str(&format!("    init {{ {init} }}\n"));
     }
-    let alive = symbol(prefix, "isAlive");
-    rust.extend(quote!{#[no_mangle]pub extern "system" fn #alive(_env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64)->u8{u8::from(::prebindgen_runtime::is_alive(id as u64))}});
-    native.push_str("    @JvmStatic external fun isAlive(id: Long): Boolean\n");
+    files.insert(
+        format!("{}/NativeHandle.kt", prefix.replace('.', "/")),
+        native_handle(prefix),
+    );
     for (index, c) in classes.values().enumerate() {
         let method = format!("drop{index}");
         let sym = symbol(prefix, &method);
         let ty = &c.ty;
-        rust.extend(quote!{#[no_mangle]pub extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||::prebindgen_runtime::release::<#ty>(id as u64)){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
+        rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]
+#[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let text=format!("package {}\n\npublic class {} internal constructor(internal val raw: Long) : AutoCloseable {{\n    public val isClosed: Boolean get() = !{prefix}.JNINative.isAlive(raw)\n    override fun close() {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name);
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
@@ -422,6 +459,11 @@ fn generate(
         let mut kt_params = Vec::new();
         let mut kt_args = Vec::new();
         let mut body = TokenStream::new();
+        let mut validation = TokenStream::new();
+        let mut acquire = TokenStream::new();
+        let mut resources = Vec::new();
+        let mut locks = Vec::new();
+        let mut consumed = Vec::new();
         let mut args = Vec::new();
         for p in &f.params {
             let Prepared::Input(input) = &p.ty.slot else {
@@ -434,35 +476,59 @@ fn generate(
                 raw_params.push(format!("{n}: {}", raw_kt(&w.kind)));
                 let (kt, arg) = match &w.kind {
                     WireKind::Scalar(p) => scalar::input(*p, n),
-                    WireKind::Handle(ty) => (
-                        format!("{}?", class(&classes, ty)?.fqn()),
-                        format!("{n}?.raw ?: 0L"),
-                    ),
+                    WireKind::Foreign(handle) => {
+                        let condition = kotlin_condition(&w.active);
+                        locks.push(format!(
+                            "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
+                        ));
+                        if handle.access == Access::Move {
+                            consumed.push(format!("if ({condition}) {n}!!.markConsumed()"));
+                        }
+                        (
+                            format!("{}?", class(&classes, &handle.ty)?.fqn()),
+                            format!("{n}?.raw ?: 0L"),
+                        )
+                    }
                     _ => (raw_kt(&w.kind).into(), n.to_string()),
                 };
                 kt_params.push(format!("{n}: {kt}"));
                 kt_args.push(arg);
             }
+            validation.extend(input.validation.clone());
+            acquire.extend(input.acquire.clone());
+            resources.extend(input.resources.clone());
             body.extend(input.statements.clone());
             args.push(input.argument.clone());
         }
-        let slots: usize = f
-            .params
-            .iter()
-            .map(|p| {
-                let Prepared::Input(i) = &p.ty.slot else {
-                    unreachable!()
-                };
-                i.wires
-                    .iter()
-                    .map(|w| match w.kind {
-                        WireKind::Handle(_) => 2,
-                        WireKind::Scalar(p) => scalar::parameter_slots(p),
-                        _ => 1,
-                    })
-                    .sum::<usize>()
-            })
-            .sum();
+        let has_consumes = !consumed.is_empty();
+        let ownership_param = if has_consumes {
+            params.push(
+                quote!(__ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
+            );
+            raw_params.push("ownership: BooleanArray".into());
+            kt_args.push("ownership".into());
+            quote!(if env.get_array_length(&__ownership).map_err(|e|e.to_string())? != 1 {return Err("invalid ownership acknowledgement".into());}
+                env.set_boolean_array_region(&__ownership, 0, &[1]).map_err(|e|e.to_string())?;)
+        } else {
+            quote!()
+        };
+        let slots: usize = usize::from(has_consumes)
+            + f.params
+                .iter()
+                .map(|p| {
+                    let Prepared::Input(i) = &p.ty.slot else {
+                        unreachable!()
+                    };
+                    i.wires
+                        .iter()
+                        .map(|w| match w.kind {
+                            WireKind::Foreign(_) => 2,
+                            WireKind::Scalar(p) => scalar::parameter_slots(p),
+                            _ => 1,
+                        })
+                        .sum::<usize>()
+                })
+                .sum::<usize>();
         if slots > 255 {
             return Err(format!(
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"
@@ -470,6 +536,8 @@ fn generate(
         }
         let path = &f.path;
         let output_body = &output.statements;
+        let commit = &output.commit;
+        let aliases = prebindgen_tools::validate_resources(&resources);
         let count = output.wires.len();
         let mut encode = TokenStream::new();
         let mut delivered = Vec::new();
@@ -477,8 +545,8 @@ fn generate(
         for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
             let (expr, kt, decode) = match &w.kind {
                 WireKind::Scalar(p) => scalar::output(*p, v, i),
-                WireKind::Handle(ty) => {
-                    let c = class(&classes, ty)?.fqn();
+                WireKind::Foreign(ty) => {
+                    let c = class(&classes, &ty.ty)?.fqn();
                     (
                         quote!(::prebindgen_jni_runtime::handle_object(&mut env,#v)?),
                         c.clone(),
@@ -504,11 +572,12 @@ fn generate(
         }
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-   #[no_mangle]pub extern "system" fn #sym<'local>(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
+   #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]
+#[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
     match ::prebindgen_runtime::boundary(||{
-     #body let __result=#path(#(#args),*);let mut __outputs=::prebindgen_runtime::Outputs::default();#output_body
+     #validation #aliases #ownership_param #acquire #body let __result=#path(#(#args),*);#output_body
      let result=::prebindgen_jni_runtime::array(&mut env,#count)?;#encode
-     __outputs.commit();Ok(result.into_raw())
+     #commit Ok(result.into_raw())
     }){Ok(result)=>result,Err(e)=>{::prebindgen_jni_runtime::fail(&mut env,&e);std::ptr::null_mut()}}
    }
   });
@@ -516,38 +585,55 @@ fn generate(
             "    @JvmStatic external fun {method}({}): Array<Any?>\n",
             raw_params.join(", ")
         ));
+        let mut output_locals = String::new();
+        let mut materialize = String::new();
+        let mut cleanup = String::new();
+        for (i, w) in output.wires.iter().enumerate() {
+            if let WireKind::Foreign(handle) = &w.kind {
+                let c = class(&classes, &handle.ty)?.fqn();
+                output_locals.push_str(&format!("        var output{i}: {c}? = null\n"));
+                materialize.push_str(&format!("            output{i} = {}\n", delivered[i]));
+                delivered[i] = format!("output{i}");
+                let index = classes
+                    .keys()
+                    .position(|key| *key == type_key(&handle.ty))
+                    .unwrap();
+                cleanup.push_str(&format!("            try {{ if (output{i} != null) output{i}.close() else {prefix}.JNINative.drop{index}(result[{i}] as Long) }} catch (cleanup: Throwable) {{ failure.addSuppressed(cleanup) }}\n"));
+            }
+        }
         let (generic, ret, end) = match delivered.len() {
-            0 => ("", "Unit".into(), "    return Unit\n".into()),
-            1 => (
-                "",
-                result_types[0].clone(),
-                format!("    return {}\n", delivered[0]),
-            ),
+            0 => ("", "Unit".into(), "Unit".into()),
+            1 => ("", result_types[0].clone(), delivered[0].clone()),
             _ => {
                 kt_params.push(format!("build: ({}) -> R", result_types.join(", ")));
                 (
                     "<R> ",
                     "R".into(),
-                    format!("    return build({})\n", delivered.join(", ")),
+                    format!("build({})", delivered.join(", ")),
                 )
             }
         };
-        let mut cleanup = String::new();
-        for (i, w) in output.wires.iter().enumerate() {
-            if let WireKind::Handle(ty) = &w.kind {
-                let index = classes.keys().position(|key| *key == type_key(ty)).unwrap();
-                cleanup.push_str(&format!(
-                    "        {prefix}.JNINative.drop{index}(result[{i}] as Long)\n"
-                ));
-            }
-        }
         let end = if cleanup.is_empty() {
             end
         } else {
-            format!("    try {{\n{end}    }} catch (failure: Throwable) {{\n{cleanup}        throw failure\n    }}\n")
+            format!("{output_locals}        try {{\n{materialize}            {end}\n        }} catch (failure: Throwable) {{\n{cleanup}            throw failure\n        }}")
+        };
+        let call = format!("{prefix}.JNINative.{method}({})", kt_args.join(", "));
+        let call = if has_consumes {
+            format!("val ownership = BooleanArray(1)\n        try {{ {call} }} finally {{ if (ownership[0]) {{ {} }} }}", consumed.join("; "))
+        } else {
+            call
+        };
+        let native_call = if locks.is_empty() {
+            format!("val result = {call}\n        {end}")
+        } else {
+            format!("val result = {prefix}.withHandleLocks(listOfNotNull({})) {{\n        {call}\n    }}\n{end}", locks.join(", "))
         };
         let text = packages.entry(pkg).or_default();
-        text.push_str(&format!("public fun {generic}`{name}`({}): {ret} {{\n    val result = {prefix}.JNINative.{method}({})\n{end}}}\n\n",kt_params.join(", "),kt_args.join(", ")));
+        text.push_str(&format!(
+            "public fun {generic}`{name}`({}): {ret} = run {{\n    {native_call}\n}}\n\n",
+            kt_params.join(", ")
+        ));
     }
     native.push_str("}\n");
     files.insert(format!("{}/JNINative.kt", prefix.replace('.', "/")), native);
@@ -573,3 +659,18 @@ fn generate(
 
 #[cfg(test)]
 mod tests;
+
+fn kotlin_condition(condition: &prebindgen_tools::Condition) -> String {
+    if condition.0.is_empty() {
+        return "true".into();
+    }
+    condition
+        .0
+        .iter()
+        .map(|(tag, index)| format!("{tag} == {index}"))
+        .collect::<Vec<_>>()
+        .join(" && ")
+}
+fn native_handle(prefix: &str) -> String {
+    include_str!("native_handle.kt").replace("PACKAGE", prefix)
+}

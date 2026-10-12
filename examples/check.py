@@ -31,6 +31,12 @@ for name in ["example-cbindgen", "perftest-c"]:
     executable = build / name
     subprocess.run(cc + ["-I" + str(outputs[name]), f"examples/{name}/c/smoke.c", "-L" + str(lib), "-l" + name.replace("-", "_"), "-Wl,-rpath," + str(lib), "-o", str(executable)], check=True)
     subprocess.run([str(executable)], check=True)
+# The C compiler must reject crossing distinct opaque pointer types.
+wrong_type = build / "wrong-pointer.c"
+wrong_type.write_text('#include "bindings.h"\nvoid wrong(perftest_storage *p) { perftest_drop_blob(p); }\n')
+rejected = subprocess.run(cc + ["-fsyntax-only", "-I" + str(outputs["perftest-c"]), str(wrong_type)], capture_output=True, text=True)
+if rejected.returncode == 0 or "incompatible" not in rejected.stderr:
+    raise RuntimeError("C compiler did not diagnose incompatible opaque pointers: " + rejected.stderr)
 for name in ["covertest-kotlin", "perftest-kotlin"]:
     kotlin = sorted(outputs[name].joinpath("kotlin").rglob("*.kt"))
     kotlin += sorted(Path(f"examples/{name}/kotlin").rglob("*.kt"))

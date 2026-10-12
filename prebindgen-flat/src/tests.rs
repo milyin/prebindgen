@@ -36,7 +36,6 @@ fn refuses_unsupported_syntax_without_dropping_it() {
         "pub async fn f(){}",
         "pub fn f<T>(x:T){}",
         "pub fn f(x:Option<String>){}",
-        "pub fn f(x:&mut String){}",
         "pub struct X{field:String}",
         "fn f(){}",
         "pub enum E{A}",

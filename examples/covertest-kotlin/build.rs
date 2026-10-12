@@ -1154,6 +1154,12 @@ fn main() {
                 .fun(fun!(primitive_char))
                 .fun(fun!(primitive_unit)),
         )
+        .package(package!()
+            .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
+            .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
+            .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
+            .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
+            .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

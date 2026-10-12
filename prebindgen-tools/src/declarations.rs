@@ -1,6 +1,6 @@
 //! The retained JniGen expansion vocabulary translates into tools recipes.
 
-use crate::{Input, Output, Slot};
+use crate::{Codec, Input, Output, Slot};
 use prebindgen_flat::{type_key, Flat, Primitive, Result};
 use std::collections::BTreeMap;
 
@@ -100,7 +100,7 @@ pub struct Declarations {
     outputs: BTreeMap<String, ExpandReturnDecl>,
 }
 impl Declarations {
-    pub fn new(flat: &Flat<Slot>, decls: Vec<ExpandDecl>) -> Result<Self> {
+    pub fn new<L: Clone>(flat: &Flat<Slot<L>>, decls: Vec<ExpandDecl>) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -123,7 +123,12 @@ impl Declarations {
         }
         Ok(out)
     }
-    pub fn fill(&self, flat: &mut Flat<Slot>, decl: &FunctionDecl) -> Result<()> {
+    pub fn fill<C: Codec>(
+        &self,
+        flat: &mut Flat<Slot<C::Leaf>>,
+        decl: &FunctionDecl,
+        codec: &C,
+    ) -> Result<()> {
         let source = flat.function(&decl.name)?.clone();
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
@@ -134,13 +139,19 @@ impl Declarations {
         for p in &source.params {
             let explicit = decl.params.get(&p.name.to_string());
             inputs.push(if explicit.is_some() || matches!(p.ty.slot, Slot::Empty) {
-                Some(self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?)
+                Some(self.input(flat, &p.ty.ty, explicit, &mut Vec::new(), codec)?)
             } else {
                 None
             });
         }
         let output = if decl.ret.is_some() || matches!(source.ret.slot, Slot::Empty) {
-            Some(self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?)
+            Some(self.output(
+                flat,
+                &source.ret.ty,
+                decl.ret.as_ref(),
+                &mut Vec::new(),
+                codec,
+            )?)
         } else {
             None
         };
@@ -155,13 +166,14 @@ impl Declarations {
         }
         Ok(())
     }
-    fn input(
+    fn input<C: Codec>(
         &self,
-        flat: &Flat<Slot>,
+        flat: &Flat<Slot<C::Leaf>>,
         ty: &syn::Type,
         explicit: Option<&ExpandParamDecl>,
         stack: &mut Vec<String>,
-    ) -> Result<Input> {
+        codec: &C,
+    ) -> Result<Input<C::Leaf>> {
         let key = type_key(ty);
         let d = explicit.or_else(|| self.inputs.get(&key));
         if let Some(d) = d {
@@ -176,14 +188,14 @@ impl Declarations {
             for variant in &d.variants {
                 arms.push(match variant {
                     None if Primitive::from_type(ty).is_some() => Input::Scalar,
-                    None => Input::Handle,
+                    None => Input::Foreign(codec.identity(ty)?),
                     Some(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err("constructor references only support their source name in this subset".into());
                         }
                         let func = flat.function(&f.name)?;
                         let args = func.params.iter()
-                            .map(|p| self.input(flat, &p.ty.ty, None, stack))
+                            .map(|p| self.input(flat, &p.ty.ty, None, stack, codec))
                             .collect::<Result<Vec<_>>>()?;
                         Input::constructor(&f.name, args)
                     }
@@ -207,16 +219,17 @@ impl Declarations {
             "String" | "str" => Input::Text,
             "Vec < u8 >" | "[u8]" => Input::Bytes,
             "()" => Input::fields([]),
-            _ => Input::Handle,
+            _ => Input::Foreign(codec.identity(ty)?),
         })
     }
-    fn output(
+    fn output<C: Codec>(
         &self,
-        flat: &Flat<Slot>,
+        flat: &Flat<Slot<C::Leaf>>,
         ty: &syn::Type,
         explicit: Option<&ExpandReturnDecl>,
         stack: &mut Vec<String>,
-    ) -> Result<Output> {
+        codec: &C,
+    ) -> Result<Output<C::Leaf>> {
         let key = type_key(ty);
         let d = explicit.or_else(|| self.outputs.get(&key));
         if let Some(d) = d {
@@ -231,7 +244,7 @@ impl Declarations {
             for field in &d.fields {
                 parts.push(match field {
                     ReturnField::Identity if Primitive::from_type(ty).is_some() => Output::Scalar,
-                    ReturnField::Identity => Output::Handle,
+                    ReturnField::Identity => Output::Foreign(codec.identity(ty)?),
                     ReturnField::Getter(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err(
@@ -240,7 +253,10 @@ impl Declarations {
                             );
                         }
                         let func = flat.function(&f.name)?;
-                        Output::getter(&f.name, self.output(flat, &func.ret.ty, None, stack)?)
+                        Output::getter(
+                            &f.name,
+                            self.output(flat, &func.ret.ty, None, stack, codec)?,
+                        )
                     }
                     ReturnField::Fields(d) => {
                         let f = flat.function(&d.function)?;
@@ -259,8 +275,8 @@ impl Declarations {
                                     &p.ty.ty,
                                     d.overrides.get(&p.name.to_string()),
                                     stack,
+                                    codec,
                                 )
-                                .map(clone_field_handles)
                             })
                             .collect::<Result<Vec<_>>>()?;
                         Output::getter(&d.function, Output::fields(children))
@@ -281,19 +297,11 @@ impl Declarations {
             "String" => Output::Text,
             "Vec < u8 >" => Output::Bytes,
             "()" => Output::fields([]),
-            _ => Output::Handle,
+            _ => Output::Foreign(codec.identity(ty)?),
         })
     }
 }
 
-// A value-form field is borrowed. Identity delivery therefore needs an independent handle.
-fn clone_field_handles(output: Output) -> Output {
-    match output {
-        Output::Handle => Output::ClonedHandle,
-        Output::Combine(parts) => Output::combine(parts.into_iter().map(clone_field_handles)),
-        other => other,
-    }
-}
 #[doc(hidden)]
 pub fn parse_type(s: &str) -> syn::Type {
     syn::parse_str(s).expect("type syntax")

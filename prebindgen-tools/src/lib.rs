@@ -6,120 +6,158 @@ use syn::Type;
 
 /// Inputs are recipes, not wire layouts. A selector denotes a logical choice.
 #[derive(Clone, Debug)]
-pub enum Input {
+pub enum Input<L> {
     Scalar,
-    Handle,
+    Foreign(L),
     Text,
     Bytes,
-    Fields(Vec<Input>),
-    Constructor { function: String, args: Vec<Input> },
-    Selector(Vec<Input>),
+    Fields(Vec<Input<L>>),
+    Constructor {
+        function: String,
+        args: Vec<Input<L>>,
+    },
+    Selector(Vec<Input<L>>),
 }
-impl Input {
-    pub fn fields(fields: impl IntoIterator<Item = Input>) -> Self {
+impl<L> Input<L> {
+    pub fn fields(fields: impl IntoIterator<Item = Input<L>>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
-    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input>) -> Self {
+    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input<L>>) -> Self {
         Self::Constructor {
             function: name.into(),
             args: args.into_iter().collect(),
         }
     }
-    pub fn selector(arms: impl IntoIterator<Item = Input>) -> Self {
+    pub fn selector(arms: impl IntoIterator<Item = Input<L>>) -> Self {
         Self::Selector(arms.into_iter().collect())
     }
 }
 #[derive(Clone, Debug)]
-pub enum Output {
+pub enum Output<L> {
     Scalar,
-    /// Transfer this owned value into a handle.
-    Handle,
-    /// Make an independent handle from a borrowed value. Requires Rust `Clone`.
-    ClonedHandle,
+    /// The adapter owns the representation and ownership policy.
+    Foreign(L),
     Text,
     Bytes,
-    Fields(Vec<Output>),
+    Fields(Vec<Output<L>>),
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         function: String,
-        output: Box<Output>,
+        output: Box<Output<L>>,
     },
-    Combine(Vec<Output>),
+    Combine(Vec<Output<L>>),
 }
-impl Output {
-    pub fn fields(fields: impl IntoIterator<Item = Output>) -> Self {
+impl<L> Output<L> {
+    pub fn fields(fields: impl IntoIterator<Item = Output<L>>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
-    pub fn getter(name: impl Into<String>, output: Output) -> Self {
+    pub fn getter(name: impl Into<String>, output: Output<L>) -> Self {
         Self::Getter {
             function: name.into(),
             output: Box::new(output),
         }
     }
-    pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
+    pub fn combine(parts: impl IntoIterator<Item = Output<L>>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
-    fn consumes(&self) -> bool {
+    fn consumes<C: Codec<Leaf = L>>(&self, codec: &C) -> bool {
         match self {
-            Self::Handle => true,
-            Self::Combine(p) => p.iter().any(Self::consumes),
+            Self::Foreign(leaf) => codec.consumes(leaf),
+            Self::Combine(p) => p.iter().any(|p| p.consumes(codec)),
             _ => false,
         }
     }
 }
+
 #[derive(Clone, Debug, Default)]
-pub enum Slot {
+pub enum Slot<L> {
     #[default]
     Empty,
-    Input(Input),
-    Output(Output),
+    Input(Input<L>),
+    Output(Output<L>),
 }
 
 /// A wire's role remains available to both sides, even when carriers coincide.
 #[derive(Clone, Debug)]
-pub enum WireKind {
+pub enum WireKind<W> {
     Scalar(Primitive),
-    Handle(Box<Type>),
+    Foreign(W),
     Text,
     Bytes,
     Selector,
 }
 #[derive(Clone, Debug)]
-pub struct Wire {
+pub struct Wire<W> {
     pub name: syn::Ident,
-    pub kind: WireKind,
+    pub kind: WireKind<W>,
+    pub active: Condition,
 }
 
 /// Language-specific terminal operations. Recursive composition stays in tools.
+///
+/// Foreign input leaves must validate without consuming in `validation`, then
+/// acquire ownership without failure or source calls in `acquire`. Each acquired
+/// value needs an ordinary Rust owner so later failures drop it. `statements`
+/// can construct arguments from those owners. Every foreign wire must retain
+/// the supplied activation condition. Output leaves keep ownership in Rust
+/// locals until their infallible `commit` runs after successful delivery.
 pub trait Codec {
+    type Leaf: Clone + std::fmt::Debug;
+    type Wire: Clone + std::fmt::Debug;
+    /// Explicit identity and unexpanded domain types are adapter policy.
+    fn identity(&self, ty: &Type) -> Result<Self::Leaf>;
+    fn consumes(&self, leaf: &Self::Leaf) -> bool;
+    fn input_foreign(
+        &self,
+        ty: &Type,
+        leaf: &Self::Leaf,
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<PreparedInput<Self::Wire>>;
+    fn output_foreign(
+        &self,
+        ty: &Type,
+        leaf: &Self::Leaf,
+        wire: syn::Ident,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<PreparedOutput<Self::Wire>>;
     fn decode_scalar(&self, primitive: Primitive, wire: &syn::Ident) -> TokenStream;
     fn encode_scalar(&self, primitive: Primitive, value: TokenStream) -> TokenStream;
-    fn decode_text(&self, wire: &syn::Ident) -> TokenStream;
-    fn decode_bytes(&self, wire: &syn::Ident) -> TokenStream;
+    fn decode_text(&self, wire: &syn::Ident, ty: &Type) -> TokenStream;
+    fn decode_bytes(&self, wire: &syn::Ident, ty: &Type) -> TokenStream;
 }
 #[derive(Clone, Debug)]
-pub struct PreparedInput {
-    pub wires: Vec<Wire>,
+pub struct PreparedInput<W> {
+    pub wires: Vec<Wire<W>>,
+    /// Validate and prepare every active leaf before any ownership transfer.
+    pub validation: TokenStream,
+    /// Infallible acquisition of all owned inputs, before constructors can run.
+    pub acquire: TokenStream,
+    pub resources: Vec<Resource>,
     pub statements: TokenStream,
     pub argument: TokenStream,
 }
 #[derive(Clone, Debug)]
-pub struct PreparedOutput {
-    pub wires: Vec<Wire>,
+pub struct PreparedOutput<W> {
+    pub wires: Vec<Wire<W>>,
+    /// Transfer ownership only after all foreign delivery operations succeed.
+    pub commit: TokenStream,
     pub statements: TokenStream,
     pub values: Vec<TokenStream>,
 }
 #[derive(Clone, Debug, Default)]
-pub enum Prepared {
+pub enum Prepared<W> {
     #[default]
     Empty,
-    Input(PreparedInput),
-    Output(PreparedOutput),
+    Input(PreparedInput<W>),
+    Output(PreparedOutput<W>),
 }
 
 /// Fill slots on the same flat structure, rejecting incomplete bound functions.
 /// A function is exported iff its result has an output slot, including `fields([])` for unit.
-pub fn prepare(flat: Flat<Slot>, codec: &impl Codec) -> Result<Flat<Prepared>> {
+pub fn prepare<C: Codec>(flat: Flat<Slot<C::Leaf>>, codec: &C) -> Result<Flat<Prepared<C::Wire>>> {
     for f in flat.functions.values() {
         match &f.ret.slot {
             Slot::Output(_) => {
@@ -150,15 +188,17 @@ pub fn prepare(flat: Flat<Slot>, codec: &impl Codec) -> Result<Flat<Prepared>> {
     flat.map_slots(|ty, slot| {
         Ok(match slot {
             Slot::Empty => Prepared::Empty,
-            Slot::Input(recipe) => Prepared::Input(compiler.input(ty, &recipe)?),
+            Slot::Input(recipe) => {
+                Prepared::Input(compiler.input(ty, &recipe, &Condition::default())?)
+            }
             Slot::Output(recipe) => {
                 Prepared::Output(compiler.output(ty, &recipe, quote!(__result), false)?)
             }
         })
     })
 }
-struct Compiler<'a, C> {
-    flat: &'a Flat<Slot>,
+struct Compiler<'a, C: Codec> {
+    flat: &'a Flat<Slot<C::Leaf>>,
     codec: &'a C,
     next: usize,
 }
@@ -168,9 +208,18 @@ impl<C: Codec> Compiler<'_, C> {
         self.next += 1;
         n
     }
-    fn input(&mut self, ty: &Type, recipe: &Input) -> Result<PreparedInput> {
+    fn input(
+        &mut self,
+        ty: &Type,
+        recipe: &Input<C::Leaf>,
+        active: &Condition,
+    ) -> Result<PreparedInput<C::Wire>> {
         let var = self.name();
         let mut wires = Vec::new();
+        let mut validation = TokenStream::new();
+        let mut acquire = TokenStream::new();
+        let mut resources = Vec::new();
+        let condition = active.rust();
         let mut statements = TokenStream::new();
         let mut argument = quote!(#var);
         match recipe {
@@ -182,22 +231,22 @@ impl<C: Codec> Compiler<'_, C> {
                 wires.push(Wire {
                     name: w,
                     kind: WireKind::Scalar(primitive),
+                    active: active.clone(),
                 });
-                statements = quote!(let #var:#ty=#decode;);
+                validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
+                statements = quote!(let #var:#ty=#var.expect("active scalar"););
             }
-            Input::Handle => {
-                if matches!(ty, Type::Reference(_)) {
-                    return Err("handle inputs in this subset transfer ownership; borrowed handles are unsupported".into());
-                }
+            Input::Foreign(leaf) => {
                 let w = self.name();
-                wires.push(Wire {
-                    name: w.clone(),
-                    kind: WireKind::Handle(Box::new(ty.clone())),
-                });
-                statements = quote!(let #var:#ty=::prebindgen_runtime::take::<#ty>(#w as u64)?;);
+                return self.codec.input_foreign(ty, leaf, w, var, active);
             }
             Input::Text | Input::Bytes => {
                 let text = matches!(recipe, Input::Text);
+                if matches!(ty, Type::Reference(r) if r.mutability.is_some()) {
+                    return Err(
+                        "mutable text/byte views require an adapter-specific converter".into(),
+                    );
+                }
                 let (core, borrowed) = match ty {
                     Type::Reference(r) => (&*r.elem, true),
                     _ => (ty, false),
@@ -217,6 +266,7 @@ impl<C: Codec> Compiler<'_, C> {
                 let w = self.name();
                 wires.push(Wire {
                     name: w.clone(),
+                    active: active.clone(),
                     kind: if text {
                         WireKind::Text
                     } else {
@@ -224,11 +274,12 @@ impl<C: Codec> Compiler<'_, C> {
                     },
                 });
                 let decode = if text {
-                    self.codec.decode_text(&w)
+                    self.codec.decode_text(&w, ty)
                 } else {
-                    self.codec.decode_bytes(&w)
+                    self.codec.decode_bytes(&w, ty)
                 };
-                statements = quote!(let #var=#decode;);
+                validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
+                statements = quote!(let #var=#var.expect("active buffer"););
                 if borrowed {
                     argument = quote!(&#var);
                 }
@@ -237,6 +288,9 @@ impl<C: Codec> Compiler<'_, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(PreparedInput {
                         wires,
+                        validation,
+                        acquire,
+                        resources,
                         statements,
                         argument: quote!(()),
                     });
@@ -252,7 +306,10 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 let mut fields = Vec::new();
                 for (field, child) in r.fields.iter().zip(children) {
-                    let p = self.input(&field.ty.ty, child)?;
+                    let p = self.input(&field.ty.ty, child, active)?;
+                    validation.extend(p.validation);
+                    acquire.extend(p.acquire);
+                    resources.extend(p.resources);
                     statements.extend(p.statements);
                     wires.extend(p.wires);
                     let name = &field.name;
@@ -275,7 +332,10 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 let mut call_args = Vec::new();
                 for (param, child) in f.params.iter().zip(args) {
-                    let p = self.input(&param.ty.ty, child)?;
+                    let p = self.input(&param.ty.ty, child, active)?;
+                    validation.extend(p.validation);
+                    acquire.extend(p.acquire);
+                    resources.extend(p.resources);
                     statements.extend(p.statements);
                     wires.extend(p.wires);
                     call_args.push(p.argument);
@@ -294,21 +354,31 @@ impl<C: Codec> Compiler<'_, C> {
                 wires.push(Wire {
                     name: tag.clone(),
                     kind: WireKind::Selector,
+                    active: active.clone(),
                 });
+                let count = arms.len() as i32;
+                let invalid = active.and(quote!(!(0..#count).contains(&#tag)));
+                validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
-                    let p = self.input(ty, arm)?;
+                    let p = self.input(ty, arm, &active.arm(tag.clone(), i as i32))?;
+                    validation.extend(p.validation);
+                    acquire.extend(p.acquire);
+                    resources.extend(p.resources);
                     let body = p.statements;
                     let value = p.argument;
                     wires.extend(p.wires);
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
-                statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>return Err("invalid selector".into())};);
+                statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
         Ok(PreparedInput {
             wires,
+            validation,
+            acquire,
+            resources,
             statements,
             argument,
         })
@@ -316,11 +386,12 @@ impl<C: Codec> Compiler<'_, C> {
     fn output(
         &mut self,
         ty: &Type,
-        recipe: &Output,
+        recipe: &Output<C::Leaf>,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<PreparedOutput> {
+    ) -> Result<PreparedOutput<C::Wire>> {
         let mut out = PreparedOutput {
+            commit: TokenStream::new(),
             wires: Vec::new(),
             statements: TokenStream::new(),
             values: Vec::new(),
@@ -344,50 +415,35 @@ impl<C: Codec> Compiler<'_, C> {
                 out.wires.push(Wire {
                     name: w,
                     kind: WireKind::Scalar(primitive),
+                    active: Condition::default(),
                 });
             }
-            Output::Handle | Output::ClonedHandle | Output::Text | Output::Bytes => {
+            Output::Foreign(leaf) => {
                 let w = self.name();
-                let (kind, expr) = match recipe {
-                    Output::Handle => {
-                        if borrowed {
-                            return Err(
-                                "cannot move a borrowed field into a handle; use ClonedHandle"
-                                    .into(),
-                            );
-                        }
-                        (
-                            WireKind::Handle(Box::new(ty.clone())),
-                            quote!(__outputs.insert(#value)?),
-                        )
-                    }
-                    Output::ClonedHandle => {
-                        let v = if borrowed { value } else { quote!(&#value) };
-                        (
-                            WireKind::Handle(Box::new(ty.clone())),
-                            quote!(__outputs.insert(::core::clone::Clone::clone(#v))?),
-                        )
-                    }
-                    Output::Text | Output::Bytes => {
-                        let text = matches!(recipe, Output::Text);
-                        if type_key(ty) != if text { "String" } else { "Vec < u8 >" } {
-                            return Err(format!("wrong output type `{}`", type_key(ty)));
-                        }
-                        let v = if borrowed { value } else { quote!(&#value) };
-                        (
-                            if text {
-                                WireKind::Text
-                            } else {
-                                WireKind::Bytes
-                            },
-                            quote!(::core::clone::Clone::clone(#v)),
-                        )
-                    }
-                    _ => unreachable!(),
+                return self.codec.output_foreign(ty, leaf, w, value, borrowed);
+            }
+            Output::Text | Output::Bytes => {
+                let text = matches!(recipe, Output::Text);
+                if type_key(ty) != if text { "String" } else { "Vec < u8 >" } {
+                    return Err(format!("wrong output type `{}`", type_key(ty)));
+                }
+                let expr = if borrowed {
+                    quote!(::core::clone::Clone::clone(#value))
+                } else {
+                    value
                 };
-                out.statements = quote!(let #w=#expr;);
+                let w = self.name();
+                out.statements = quote!(let #w = #expr;);
                 out.values.push(quote!(#w));
-                out.wires.push(Wire { name: w, kind });
+                out.wires.push(Wire {
+                    name: w,
+                    kind: if text {
+                        WireKind::Text
+                    } else {
+                        WireKind::Bytes
+                    },
+                    active: Condition::default(),
+                });
             }
             Output::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -425,12 +481,12 @@ impl<C: Codec> Compiler<'_, C> {
                 if parts.is_empty() {
                     return Err("an output combination needs at least one part".into());
                 }
-                if parts.iter().filter(|p| p.consumes()).count() > 1 {
+                if parts.iter().filter(|p| p.consumes(self.codec)).count() > 1 {
                     return Err("a combination cannot consume the same value twice".into());
                 }
                 let mut bodies = Vec::new();
                 for child in parts {
-                    let consuming = child.consumes();
+                    let consuming = child.consumes(self.codec);
                     let arg = if borrowed || consuming {
                         value.clone()
                     } else {
@@ -450,7 +506,8 @@ impl<C: Codec> Compiler<'_, C> {
         Ok(out)
     }
 }
-fn append(to: &mut PreparedOutput, from: PreparedOutput) {
+fn append<W>(to: &mut PreparedOutput<W>, from: PreparedOutput<W>) {
+    to.commit.extend(from.commit);
     to.wires.extend(from.wires);
     to.statements.extend(from.statements);
     to.values.extend(from.values);
@@ -474,3 +531,72 @@ pub mod declarations;
 pub use declarations::{
     Declarations, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl,
 };
+
+/// A leaf is active only on its selected path. Adapters use the same condition
+/// for foreign-side resource locking and native preparation.
+#[derive(Clone, Debug, Default)]
+pub struct Condition(pub Vec<(syn::Ident, i32)>);
+impl Condition {
+    pub fn arm(&self, tag: syn::Ident, index: i32) -> Self {
+        let mut result = self.clone();
+        result.0.push((tag, index));
+        result
+    }
+    pub fn and(&self, predicate: TokenStream) -> TokenStream {
+        if self.0.is_empty() {
+            predicate
+        } else {
+            let condition = self.rust();
+            quote!((#condition) && (#predicate))
+        }
+    }
+    pub fn rust(&self) -> TokenStream {
+        self.0
+            .iter()
+            .map(|(tag, i)| quote!(#tag == #i))
+            .reduce(|a, b| quote!((#a) && (#b)))
+            .unwrap_or_else(|| quote!(true))
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Access {
+    Shared,
+    Exclusive,
+    Move,
+}
+/// The adapter supplies identity; tools only enforce call-wide access conflicts.
+#[derive(Clone, Debug)]
+pub struct Resource {
+    pub identity: TokenStream,
+    pub access: Access,
+    pub active: Condition,
+}
+pub fn validate_resources(resources: &[Resource]) -> TokenStream {
+    let mut result = TokenStream::new();
+    for (i, a) in resources.iter().enumerate() {
+        for b in &resources[i + 1..] {
+            if a.access == Access::Shared && b.access == Access::Shared {
+                continue;
+            }
+            let x = &a.identity;
+            let y = &b.identity;
+            // Different alternatives of the same selector cannot conflict.
+            if a.active
+                .0
+                .iter()
+                .any(|(tag, arm)| b.active.0.iter().any(|(t, i)| t == tag && i != arm))
+            {
+                continue;
+            }
+            let mut active = a.active.clone();
+            for term in &b.active.0 {
+                if !active.0.contains(term) {
+                    active.0.push(term.clone());
+                }
+            }
+            let conflict = active.and(quote!((#x) == (#y)));
+            result.extend(quote!(if #conflict {return Err("conflicting input aliases".into());}));
+        }
+    }
+    result
+}

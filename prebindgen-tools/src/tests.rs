@@ -1,20 +1,73 @@
 use super::*;
 struct TestCodec;
+#[derive(Clone, Debug)]
+struct Token;
 impl Codec for TestCodec {
+    type Leaf = Token;
+    type Wire = ();
+    fn identity(&self, _: &Type) -> Result<Token> {
+        Ok(Token)
+    }
+    fn consumes(&self, _: &Token) -> bool {
+        true
+    }
+    fn input_foreign(
+        &self,
+        _: &Type,
+        _: &Token,
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &Condition,
+    ) -> Result<PreparedInput<()>> {
+        Ok(PreparedInput {
+            wires: vec![Wire {
+                name: w.clone(),
+                kind: WireKind::Foreign(()),
+                active: active.clone(),
+            }],
+            validation: quote!(),
+            acquire: quote!(),
+            resources: vec![],
+            statements: quote!(let #v=receive_token(#w);),
+            argument: quote!(#v),
+        })
+    }
+    fn output_foreign(
+        &self,
+        _: &Type,
+        _: &Token,
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<PreparedOutput<()>> {
+        if borrowed {
+            return Err("test token cannot be copied".into());
+        }
+        Ok(PreparedOutput {
+            wires: vec![Wire {
+                name: w.clone(),
+                kind: WireKind::Foreign(()),
+                active: Condition::default(),
+            }],
+            statements: quote!(let #w=send_token(#v);),
+            values: vec![quote!(#w)],
+            commit: quote!(),
+        })
+    }
     fn decode_scalar(&self, _: Primitive, w: &syn::Ident) -> TokenStream {
         quote!(#w)
     }
     fn encode_scalar(&self, _: Primitive, v: TokenStream) -> TokenStream {
         v
     }
-    fn decode_text(&self, w: &syn::Ident) -> TokenStream {
+    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
         quote!(decode_text(#w)?)
     }
-    fn decode_bytes(&self, w: &syn::Ident) -> TokenStream {
+    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
         quote!(decode_bytes(#w)?)
     }
 }
-fn model() -> Flat<Slot> {
+fn model() -> Flat<Slot<Token>> {
     let file=syn::parse_file("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}").unwrap();
     Flat::parse(file.items.into_iter().map(|i| (i, Default::default()))).unwrap()
 }
@@ -23,11 +76,11 @@ fn different_occurrences_have_different_converters() {
     let mut flat = model();
     let f = flat.function_mut("foo").unwrap();
     f.params[0].ty.slot = Slot::Input(Input::selector([
-        Input::Handle,
+        Input::Foreign(Token),
         Input::constructor("make", [Input::Text]),
     ]));
-    f.params[1].ty.slot = Slot::Input(Input::Handle);
-    f.ret.slot = Slot::Output(Output::Handle);
+    f.params[1].ty.slot = Slot::Input(Input::Foreign(Token));
+    f.ret.slot = Slot::Output(Output::Foreign(Token));
     let ready = prepare(flat, &TestCodec).unwrap();
     let f = ready.function("foo").unwrap();
     let Prepared::Input(x) = &f.params[0].ty.slot else {
@@ -42,7 +95,7 @@ fn different_occurrences_have_different_converters() {
 #[test]
 fn rejects_incomplete_slots() {
     let mut f = model();
-    f.function_mut("foo").unwrap().ret.slot = Slot::Output(Output::Handle);
+    f.function_mut("foo").unwrap().ret.slot = Slot::Output(Output::Foreign(Token));
     assert!(prepare(f, &TestCodec).unwrap_err().contains("no input"));
 }
 #[test]
@@ -50,8 +103,8 @@ fn rejects_constructor_arity_mismatch() {
     let mut f = model();
     let foo = f.function_mut("foo").unwrap();
     foo.params[0].ty.slot = Slot::Input(Input::constructor("foo", []));
-    foo.params[1].ty.slot = Slot::Input(Input::Handle);
-    foo.ret.slot = Slot::Output(Output::Handle);
+    foo.params[1].ty.slot = Slot::Input(Input::Foreign(Token));
+    foo.ret.slot = Slot::Output(Output::Foreign(Token));
     assert!(prepare(f, &TestCodec)
         .unwrap_err()
         .contains("argument count"));
@@ -59,13 +112,13 @@ fn rejects_constructor_arity_mismatch() {
 #[test]
 fn rejects_double_move_and_field_move() {
     for output in [
-        Output::combine([Output::Handle, Output::Handle]),
-        Output::fields([Output::Handle]),
+        Output::combine([Output::Foreign(Token), Output::Foreign(Token)]),
+        Output::fields([Output::Foreign(Token)]),
     ] {
         let mut f = model();
         let foo = f.function_mut("foo").unwrap();
         for p in &mut foo.params {
-            p.ty.slot = Slot::Input(Input::Handle);
+            p.ty.slot = Slot::Input(Input::Foreign(Token));
         }
         foo.ret.slot = Slot::Output(output);
         assert!(prepare(f, &TestCodec).is_err());
@@ -76,19 +129,19 @@ fn observations_precede_move_but_wires_keep_order() {
     let mut f = model();
     let foo = f.function_mut("foo").unwrap();
     for p in &mut foo.params {
-        p.ty.slot = Slot::Input(Input::Handle);
+        p.ty.slot = Slot::Input(Input::Foreign(Token));
     }
     foo.ret.slot = Slot::Output(Output::combine([
-        Output::Handle,
+        Output::Foreign(Token),
         Output::fields([Output::Bytes]),
     ]));
     let ready = prepare(f, &TestCodec).unwrap();
     let Prepared::Output(o) = &ready.function("foo").unwrap().ret.slot else {
         panic!()
     };
-    assert!(matches!(o.wires[0].kind, WireKind::Handle(_)));
+    assert!(matches!(o.wires[0].kind, WireKind::Foreign(())));
     let body = o.statements.to_string();
-    assert!(body.find("clone").unwrap() < body.find("insert").unwrap());
+    assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
 
 #[test]
@@ -118,7 +171,7 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
         let function = fun!(read)
             .expand_return(expand_return!(Payload).fields(fields!(parts).field(field, output)));
         assert!(declarations
-            .fill(&mut flat, &function)
+            .fill(&mut flat, &function, &TestCodec)
             .unwrap_err()
             .contains(message));
     }
@@ -138,6 +191,7 @@ fn declarations_preserve_defaults_and_occurrence_overrides() {
         .fill(
             &mut flat,
             &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
+            &TestCodec,
         )
         .unwrap();
     let ready = prepare(flat, &TestCodec).unwrap();
@@ -171,6 +225,7 @@ fn field_defaults_follow_type_expansions() {
         .fill(
             &mut flat,
             &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
+            &TestCodec,
         )
         .unwrap();
     let ready = prepare(flat, &TestCodec).unwrap();
@@ -193,7 +248,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         ],
     )
     .unwrap();
-    defaults.fill(&mut flat, &fun!(f)).unwrap();
+    defaults.fill(&mut flat, &fun!(f), &TestCodec).unwrap();
     let prepared = prepare(flat, &TestCodec).unwrap();
     let f = prepared.function("f").unwrap();
     let Prepared::Input(input) = &f.params[0].ty.slot else {

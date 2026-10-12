@@ -284,9 +284,7 @@ impl<S> Flat<S> {
         }
         match ty {
             Type::Tuple(t) if t.elems.is_empty() => Ok(()),
-            Type::Reference(r) if r.mutability.is_none() && r.lifetime.is_none() => {
-                self.validate_type(&r.elem)
-            }
+            Type::Reference(r) if r.lifetime.is_none() => self.validate_type(&r.elem),
             Type::Slice(s) if type_key(&s.elem) == "u8" => Ok(()),
             Type::Path(_)
                 if matches!(

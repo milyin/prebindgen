@@ -542,3 +542,20 @@ pub fn foo_get_id(f: Foo) -> u64 {
 // pub fn inside_foo_value(x: InsideFoo) -> i32 {
 //     x as i32
 // }
+
+// C pointer coverage: this source type is deliberately neither Send nor Sync.
+#[prebindgen]
+pub type LocalCounter = std::rc::Rc<std::cell::Cell<u64>>;
+#[prebindgen]
+pub fn local_counter_new(value: u64) -> LocalCounter {
+    std::rc::Rc::new(std::cell::Cell::new(value))
+}
+#[prebindgen]
+pub fn local_counter_value(counter: &LocalCounter) -> u64 {
+    counter.get()
+}
+#[prebindgen]
+pub fn local_counter_label(counter: LocalCounter, label: &str) -> LocalCounter {
+    counter.set(counter.get() + label.len() as u64);
+    counter
+}

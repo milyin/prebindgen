@@ -1,11 +1,46 @@
 //! C adapter for prepared occurrence slots. No recursive type conversion lives here.
 use prebindgen_flat::{Flat, Primitive, Result};
-use prebindgen_tools::{Codec, Prepared, Slot, WireKind};
+use prebindgen_tools::{
+    Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
+};
+mod pointer;
+pub use pointer::{OpaquePointer, PointerWire};
+type Slot = GenericSlot<OpaquePointer>;
+type Prepared = GenericPrepared<PointerWire>;
+type WireKind = GenericWireKind<PointerWire>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 struct CCodec;
 impl Codec for CCodec {
+    type Leaf = OpaquePointer;
+    type Wire = PointerWire;
+    fn identity(&self, _: &syn::Type) -> Result<OpaquePointer> {
+        Ok(OpaquePointer)
+    }
+    fn consumes(&self, _: &OpaquePointer) -> bool {
+        true
+    }
+    fn input_foreign(
+        &self,
+        ty: &syn::Type,
+        _: &OpaquePointer,
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &prebindgen_tools::Condition,
+    ) -> Result<prebindgen_tools::PreparedInput<PointerWire>> {
+        pointer::input(ty, w, v, active)
+    }
+    fn output_foreign(
+        &self,
+        ty: &syn::Type,
+        _: &OpaquePointer,
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<prebindgen_tools::PreparedOutput<PointerWire>> {
+        pointer::output(ty, w, v, borrowed)
+    }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
         let ty = p.rust_type();
         match p {
@@ -27,21 +62,29 @@ impl Codec for CCodec {
             _ => v,
         }
     }
-    fn decode_text(&self, w: &syn::Ident) -> TokenStream {
-        quote!(String::from_utf8(__pb_read(#w)?).map_err(|_|"invalid UTF-8")?)
+    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
+        if matches!(_ty, syn::Type::Reference(r) if prebindgen_flat::type_key(&r.elem) == "str") {
+            quote!(std::str::from_utf8(unsafe {__pb_read(#w)?}).map_err(|_|"invalid UTF-8")?)
+        } else {
+            quote!(std::str::from_utf8(unsafe {__pb_read(#w)?}).map_err(|_|"invalid UTF-8")?.to_owned())
+        }
     }
-    fn decode_bytes(&self, w: &syn::Ident) -> TokenStream {
-        quote!(__pb_read(#w)?)
+    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
+        if matches!(_ty, syn::Type::Reference(r) if prebindgen_flat::type_key(&r.elem) == "[u8]") {
+            quote!(unsafe {__pb_read(#w)?})
+        } else {
+            quote!(unsafe {__pb_read(#w)?}.to_vec())
+        }
     }
 }
-/// The caller pins conversion recipes on the flat model before building.
+/// C declarations resolve domain types to typed opaque pointers.
 pub struct Cbindgen {
     flat: Option<Flat<Slot>>,
     source: Option<std::path::PathBuf>,
     expansions: Vec<prebindgen_tools::ExpandDecl>,
     functions: Vec<prebindgen_tools::FunctionDecl>,
     prefix: String,
-    handles: Vec<(String, syn::Type)>,
+    pointers: Vec<(String, syn::Type)>,
 }
 impl Cbindgen {
     pub fn builder() -> Self {
@@ -51,7 +94,7 @@ impl Cbindgen {
             expansions: Vec::new(),
             functions: Vec::new(),
             prefix: "pb".into(),
-            handles: Vec::new(),
+            pointers: Vec::new(),
         }
     }
     pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
@@ -74,15 +117,15 @@ impl Cbindgen {
             expansions: Vec::new(),
             functions: Vec::new(),
             prefix: "pb".into(),
-            handles: Vec::new(),
+            pointers: Vec::new(),
         }
     }
     pub fn prefix(mut self, prefix: &str) -> Self {
         self.prefix = prefix.into();
         self
     }
-    pub fn handle(mut self, name: &str, ty: syn::Type) -> Self {
-        self.handles.push((name.into(), ty));
+    pub fn opaque_ptr(mut self, name: &str, ty: syn::Type) -> Self {
+        self.pointers.push((name.into(), ty));
         self
     }
     pub fn build(self) -> Result<Generation> {
@@ -96,7 +139,7 @@ impl Cbindgen {
                     &self.functions,
                 ),
                 &self
-                    .handles
+                    .pointers
                     .iter()
                     .map(|(_, ty)| ty.clone())
                     .collect::<Vec<_>>(),
@@ -112,15 +155,15 @@ impl Cbindgen {
             if decl.foreign.is_some() {
                 return Err("C function renaming is outside this subset".into());
             }
-            declarations.fill(&mut flat, &decl)?;
+            declarations.fill(&mut flat, &decl, &CCodec)?;
         }
-        let handles = self
-            .handles
+        let pointers = self
+            .pointers
             .into_iter()
             .map(|(n, t)| Ok((n, flat.resolve_type(&t)?)))
             .collect::<Result<Vec<_>>>()?;
         let flat = prebindgen_tools::prepare(flat, &CCodec)?;
-        generate(flat, &self.prefix, handles)
+        generate(flat, &self.prefix, pointers)
     }
 }
 pub struct Generation {
@@ -146,12 +189,19 @@ fn rust_ty(kind: &WireKind) -> TokenStream {
                 quote!(#ty)
             }
         },
-        WireKind::Handle(_) => quote!(u64),
+        WireKind::Foreign(p) => {
+            let ty = &p.ty;
+            if p.access == prebindgen_tools::Access::Shared {
+                quote!(*const #ty)
+            } else {
+                quote!(*mut #ty)
+            }
+        }
         WireKind::Selector => quote!(i32),
         _ => quote!(__PbBuffer),
     }
 }
-fn c_ty(kind: &WireKind, prefix: &str) -> String {
+fn c_ty(kind: &WireKind, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     match kind {
         WireKind::Scalar(p) => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
@@ -168,7 +218,18 @@ fn c_ty(kind: &WireKind, prefix: &str) -> String {
             Primitive::F64 => "double".into(),
             Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
         },
-        WireKind::Handle(_) => "uint64_t".into(),
+        WireKind::Foreign(p) => {
+            let (name, _) = pointers
+                .iter()
+                .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
+                .expect("validated pointer declaration");
+            let qualifier = if p.access == prebindgen_tools::Access::Shared {
+                "const "
+            } else {
+                ""
+            };
+            format!("{qualifier}{prefix}_{name} *")
+        }
         WireKind::Selector => "int32_t".into(),
         _ => format!("{prefix}_buffer"),
     }
@@ -176,12 +237,12 @@ fn c_ty(kind: &WireKind, prefix: &str) -> String {
 fn generate(
     flat: Flat<Prepared>,
     prefix: &str,
-    handles: Vec<(String, syn::Type)>,
+    pointers: Vec<(String, syn::Type)>,
 ) -> Result<Generation> {
     let error = format_ident!("{prefix}_last_error");
     let free = format_ident!("{prefix}_free_buffer");
     let mut symbols = std::collections::BTreeSet::from([error.to_string(), free.to_string()]);
-    for (name, _) in &handles {
+    for (name, _) in &pointers {
         if !symbols.insert(format!("{prefix}_drop_{name}")) {
             return Err("duplicate C destructor".into());
         }
@@ -198,14 +259,14 @@ fn generate(
             _ => unreachable!(),
         });
         for wire in inputs.chain(out.wires.iter()) {
-            if let WireKind::Handle(ty) = &wire.kind {
-                if !handles
+            if let WireKind::Foreign(pointer) = &wire.kind {
+                if !pointers
                     .iter()
-                    .any(|(_, declared)| prebindgen_flat::same_type(declared, ty))
+                    .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
                 {
                     return Err(format!(
-                        "declare a C handle destructor for `{}`",
-                        prebindgen_flat::type_key(ty)
+                        "declare a C opaque pointer for `{}`",
+                        prebindgen_flat::type_key(&pointer.ty)
                     ));
                 }
             }
@@ -214,26 +275,31 @@ fn generate(
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
-       std::thread_local! {static __PB_ERROR:std::cell::RefCell<std::ffi::CString>=std::cell::RefCell::new(std::ffi::CString::default());}
-       fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=std::ffi::CString::new(e.replace('\0',"?")).unwrap());}
-       #[no_mangle] pub extern "C" fn #error()->*const std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ptr())}
+       std::thread_local! {static __PB_ERROR:std::cell::RefCell<Option<std::ffi::CString>>=const {std::cell::RefCell::new(None)};}
+       fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=if e.is_empty(){None}else{Some(std::ffi::CString::new(e.replace('\0',"?")).unwrap())});}
+       #[no_mangle] pub extern "C" fn #error()->*const std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ref().map_or(c"".as_ptr(),|e| e.as_ptr()))}
        // Input pointers are borrowed only during the call; output buffers are owned.
-       unsafe fn __pb_read(b:__PbBuffer)->Result<Vec<u8>,String>{
-        if b.len==0{return Ok(Vec::new());}
+       unsafe fn __pb_read<'a>(b:__PbBuffer)->Result<&'a [u8],String>{
+        if b.len==0{return Ok(&[]);}
         if b.data.is_null()||b.len>isize::MAX as usize{return Err("invalid buffer".into());}
-        Ok(std::slice::from_raw_parts(b.data,b.len).to_vec())
+        Ok(std::slice::from_raw_parts(b.data,b.len))
        }
-       fn __pb_buffer(v:Vec<u8>)->__PbBuffer {let b=v.into_boxed_slice();let len=b.len();let data=Box::into_raw(b) as *mut u8;__PbBuffer{data,len}}
        #[doc = "# Safety
     The buffer must have been returned by this library and not already freed."]
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
-    for (name, ty) in handles {
-        prebindgen_tools::ident(&name)?;
+    for (name, ty) in &pointers {
+        prebindgen_tools::ident(name)?;
         let drop = format_ident!("{prefix}_drop_{name}");
-        tokens.extend(quote!{#[no_mangle] pub extern "C" fn #drop(id:u64)->i32{match ::prebindgen_runtime::boundary(||::prebindgen_runtime::release::<#ty>(id)){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}}});
-        header.push_str(&format!("int32_t {drop}(uint64_t id);\n"));
+        tokens.extend(quote!{
+            #[doc = "# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call."]
+            #[no_mangle] pub unsafe extern "C" fn #drop(ptr:*mut #ty)->i32{
+                match ::prebindgen_runtime::boundary(||{if !ptr.is_null(){drop(Box::from_raw(ptr));}Ok(())}){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
+            }
+        });
+        header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
     for f in flat.functions.values() {
         let Prepared::Output(output) = &f.ret.slot else {
@@ -244,6 +310,9 @@ fn generate(
         let mut params = Vec::new();
         let mut cparams = Vec::new();
         let mut body = TokenStream::new();
+        let mut validation = TokenStream::new();
+        let mut acquire = TokenStream::new();
+        let mut resources = Vec::new();
         let mut args = Vec::new();
         for p in &f.params {
             let Prepared::Input(input) = &p.ty.slot else {
@@ -253,25 +322,39 @@ fn generate(
                 let n = &w.name;
                 let ty = rust_ty(&w.kind);
                 params.push(quote!(#n:#ty));
-                cparams.push(format!("{} {n}", c_ty(&w.kind, prefix)));
+                cparams.push(format!("{} {n}", c_ty(&w.kind, prefix, &pointers)));
             }
+            validation.extend(input.validation.clone());
+            acquire.extend(input.acquire.clone());
+            resources.extend(input.resources.clone());
             body.extend(input.statements.clone());
             args.push(input.argument.clone());
         }
         let mut fields = Vec::new();
         let mut values = Vec::new();
+        let mut delivery = TokenStream::new();
+        let mut buffer_commit = TokenStream::new();
         header.push_str("typedef struct {\n");
         for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
             let field = format_ident!("v{i}");
             let ty = rust_ty(&w.kind);
             fields.push(quote!(pub #field:#ty));
             let value = match &w.kind {
-                WireKind::Text => quote!(__pb_buffer(#v.into_bytes())),
-                WireKind::Bytes => quote!(__pb_buffer(#v)),
+                WireKind::Text | WireKind::Bytes => {
+                    let buffer = format_ident!("buffer{i}");
+                    let bytes = if matches!(w.kind, WireKind::Text) {
+                        quote!(#v.into_bytes())
+                    } else {
+                        v.clone()
+                    };
+                    delivery.extend(quote!(let #buffer = (#bytes).into_boxed_slice();));
+                    buffer_commit.extend(quote!(let _ = Box::into_raw(#buffer);));
+                    quote!(__PbBuffer {data: #buffer.as_ptr(), len: #buffer.len()})
+                }
                 _ => v.clone(),
             };
             values.push(quote!(#field:#value));
-            header.push_str(&format!("    {} v{i};\n", c_ty(&w.kind, prefix)));
+            header.push_str(&format!("    {} v{i};\n", c_ty(&w.kind, prefix, &pointers)));
         }
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));
@@ -283,21 +366,23 @@ fn generate(
         header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
         let call = &f.path;
         let output_body = &output.statements;
+        let commit = &output.commit;
+        let aliases = prebindgen_tools::validate_resources(&resources);
         tokens.extend(quote! {
          #[repr(C)] pub struct #result {#(#fields),*}
          #[doc = "# Safety
-The output pointer must be writable. Each active input buffer must be readable for its stated length."]
+The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."]
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast)]
    #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)*out:*mut #result)->i32{
           if out.is_null(){__pb_error("null result pointer");return -1;}
           match ::prebindgen_runtime::boundary(||{
-           #body
+           #validation #aliases #acquire #body
            let __result=#call(#(#args),*);
-           let mut __outputs=::prebindgen_runtime::Outputs::default();
            #output_body
+           #delivery
            let result=#result{#(#values),*};
            std::ptr::write(out,result);
-           __outputs.commit();Ok(())
+           #commit #buffer_commit Ok(())
           }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
          }
         });

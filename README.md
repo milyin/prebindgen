@@ -9,9 +9,9 @@ engine behind it.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Flat<Slot>: syn::Type + conversion recipe at each parameter/result occurrence
+Flat<Slot<AdapterLeaf>>: syn::Type + conversion recipe at each parameter/result occurrence
         ↓ prebindgen-tools: defaults, overrides, validation and composition
-Flat<Prepared>: wire roles, input construction, output delivery
+Flat<Prepared<AdapterWire>>: input preparation, access requirements, output delivery
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
@@ -34,7 +34,7 @@ work. The retained records demonstrate the supported shapes of the real examples
 | [example-flat](examples/example-flat) | Calculator/Error aliases, Caption and Foo with primitive fields |
 | [example-cbindgen](examples/example-cbindgen/build.rs) | Calculator/Caption/Foo creation, Foo ID extraction and typed release |
 | [perftest-flat](examples/perftest-flat) | Payload scalar fields, Stamp, Summary, Unsigned, BlobValue and Report projections |
-| [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/handle outputs |
+| [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/pointer outputs |
 | [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction/projection and Storage creation/release through JNI |
 | [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, Archive, subpackages and the SummaryVault class rename |
 | [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
@@ -66,14 +66,22 @@ variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
 BlobValue and Unsigned use handle classes; data-class generation stays disabled.
 
 C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
-`.prefix(...)` and `.handle(...)`. Its old naming, raw-pointer and cbindgen
-postprocessing settings are commented out in the example manifests.
+`.prefix(...)` and `.opaque_ptr(name, type)`. Opaque declarations generate distinct
+C pointer types and typed destructors. Its old naming and cbindgen postprocessing
+settings remain commented out in the example manifests.
 
-Manual `Flat<Slot>` configuration remains available for generator development,
-but none of the migrated binding examples requires it. Tools compose owned
-handles, primitives, text/bytes, fields, constructors, input selectors and combined outputs.
-Observation outputs execute before a consuming output. Moving twice or moving a
-borrowed field is rejected; independent field handles explicitly require cloning.
+Manual slot configuration remains available for generator development, but none
+of the migrated binding examples requires it. `Input<L>`, `Output<L>` and
+`Slot<L>` carry an adapter's leaf recipe; `WireKind<W>` and `Prepared<W>` carry
+its wire description. Tools compose primitives, text/bytes, adapter leaves,
+fields, constructors, input selectors and combined outputs. There is no common
+handle converter, handle wire type, object store or `Send` requirement.
+
+The adapter chooses identity/default conversions for domain types and declares
+whether an output consumes its value. Tools run observations before that move
+and reject double consumption. For pointer/handle output from borrowed record
+fields, these adapters make independent owned copies using Rust `Clone`.
+A standalone owned text/byte result moves its buffer; an observed field is copied.
 
 ## Primitive conversions
 
@@ -111,24 +119,67 @@ slots when checking the method-size limit.
 
 ## Boundary contracts and limits
 
-Handles are opaque numeric IDs with runtime type checks. A selected input handle
-transfers ownership when its conversion executes. On later failure, consumed
-handles stay consumed; unvisited handles remain caller-owned. Pending output
-handles are reclaimed on delivery failure. Closing an already closed or consumed
-handle is harmless.
+The call data flow has an explicit ownership boundary:
 
-C wrappers return status and write output structs only on success. Strings and
-bytes use pointer/length buffers. Callers supply valid input/output memory and
-free returned buffers exactly once using the generated function. `last_error`
-is thread-local. JNI uses typed `AutoCloseable` handle classes and reports
-conversion failures as exceptions. Rust panics are caught when unwinding is
-enabled. Multi-output JNI delivery uses an object array and a builder lambda;
-a throwing builder releases its output handles.
+```text
+select active alternatives
+    → validate/decode all active leaves and check access conflicts
+    → acquire all consuming inputs
+    → construct arguments and invoke the source function
+    → prepare outputs under Rust ownership
+    → publish foreign outputs and transfer their ownership
+```
 
-Callbacks, enums, options, general collections, borrowed/mutable handle
-inputs, methods, data classes, `convert!`, consuming record decomposition, field
-renaming, local function declarations, domain errors, split overloads and shared
-selector argument storage remain outside this subset.
+Before acquisition, failure leaves every input owned by its caller. Acquisition
+is infallible after validation; all consuming leaves become Rust-owned before
+any constructor runs. A constructor/source panic or later delivery failure does
+not restore consumed inputs. Rust guards reclaim acquired inputs and unpublished
+outputs. Borrows last through the call, including constructors. Multiple shared
+borrows of one allocation are allowed; an exclusive borrow or move conflicts
+with every other active use of that allocation. Inactive selector arms neither
+validate nor acquire their inputs.
+
+**C owns pointer semantics.** Each declared opaque type has its own incomplete
+C struct and `T *` / `const T *` inputs. The caller must supply live pointers of
+the declared type, valid for the whole call, and serialize conflicting access.
+Consumed pointers become invalid. Destruction accepts null, but destroying a
+non-null pointer twice or using a consumed pointer is undefined behavior, as
+with ordinary owned C pointers. There is no runtime type/liveness registry.
+C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
+Thread-affine source values retain their source-side restrictions.
+
+C wrappers still return status and write output structs only on success. Text
+and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow that
+memory, while owned inputs copy it. Callers free returned buffers exactly once.
+`last_error` is thread-local; clearing it on success allocates nothing.
+
+**JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
+allocation whose address travels in a `Long`. A low pointer bit records closed
+or consumed state. JNI's allocation wrapper guarantees alignment and gives
+zero-sized values distinct addresses. Native objects require `Send` because
+Kotlin can transfer them between threads; this restriction belongs to JNI.
+Generated wrappers lock all active handle objects in a stable address order,
+including handles nested in selected constructor arguments. Close uses the same
+object monitor. Repeated close and close after consumption are harmless.
+
+For calls with consuming inputs, a one-element boolean array acknowledges when
+native validation has succeeded and ownership transfers. Kotlin marks the
+selected objects consumed in `finally` only after this acknowledgement, including
+on a caught native panic. This keeps preflight failures from closing caller
+objects. It adds one allocation to those calls; it is not a performance claim.
+Native entry points are internal Kotlin plumbing and require the generated
+wrappers' pointer provenance and locking contract; arbitrary `Long` values are
+not safe native inputs.
+
+Rust panics are caught when unwinding is enabled. JNI still boxes outputs into
+an object array. Multi-output delivery uses a builder lambda, outside input
+locks; a throwing builder closes output handles, including escaped references.
+C status/out-struct and JNI object-array ABI optimization remain separate work.
+
+Callbacks, enums, options, general collections, borrowed pointer/handle outputs,
+mutable text/byte views, methods, data classes, `convert!`, consuming record
+decomposition, field renaming, local function declarations, domain errors, split
+overloads and shared selector argument storage remain outside this subset.
 
 ## Build and verify
 
@@ -147,9 +198,12 @@ The script builds every example and runs both C and both JNI smoke clients,
 including every primitive at boundary values, invalid unsigned/Unicode/128-bit
 inputs, restored Payload fields, string round trips, byte-vector constructors, consumed handles,
 selector arms, field projections, builder rollback, output preservation and
-concurrent close. `KOTLINC` and `CC` select the compilers.
+concurrent close. Ownership coverage also exercises mutable/shared Storage
+borrows, repeated shared arguments, opposite lock order, close/borrow/consume
+races, later-selector/text failures, duplicate consumption, native panic after
+transfer, C pointer type checking and a non-`Send` C object. `KOTLINC` and `CC` select the compilers.
 `SANITIZE=1` instruments the C callers with AddressSanitizer and
 UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.
 
 The native Rust benchmark is commented out because it depends on disabled
-borrowed-handle, optional-field and callback APIs. Its driver reports that limitation.
+optional-field and callback APIs. Its driver reports that limitation.

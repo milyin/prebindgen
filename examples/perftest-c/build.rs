@@ -43,7 +43,7 @@ fn main() {
 
     // `Storage` as an opaque handle (`storage_t *` = `Box<Storage>`, `storage_drop`):
     // it owns the payload that the functions read/write.
-    cbindgen = cbindgen.handle("storage", pq!(Storage));
+    cbindgen = cbindgen.opaque_ptr("storage", pq!(Storage));
 
     // `PayloadHandler` as an opaque handle (`payload_handler_t *`, `payload_handler_drop`):
     // a prepared callback built once via `payload_handler_new` and fired by
@@ -156,9 +156,9 @@ fn main() {
 
     // Reduced flat records now allow constructor selectors and field projections.
     cbindgen = cbindgen
-        .handle("blob", pq!(BlobValue))
-        .handle("report", pq!(Report))
-        .handle("report_struct", pq!(ReportStruct))
+        .opaque_ptr("blob", pq!(BlobValue))
+        .opaque_ptr("report", pq!(Report))
+        .opaque_ptr("report_struct", pq!(ReportStruct))
         .expand(
             expand_param!(Report)
                 .variant_self()
@@ -175,8 +175,8 @@ fn main() {
         .function(fun!(report_into_struct));
 
     cbindgen = cbindgen
-        .handle("summary", pq!(Summary))
-        .handle("unsigned", pq!(Unsigned))
+        .opaque_ptr("summary", pq!(Summary))
+        .opaque_ptr("unsigned", pq!(Unsigned))
         .expand(
             expand_return!(Summary)
                 .field(fun!(summary_count))
@@ -200,7 +200,18 @@ fn main() {
         .function(fun!(summary_total_raw))
         .function(fun!(stamp_new))
         .function(fun!(unsigned_round_trip));
+    cbindgen = cbindgen
+        .function(fun!(report_label).expand_param(
+            "report",
+            expand_param!(Report).variant(fun!(report_from_summary)),
+        ))
+        .function(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self()));
     for f in [
+        fun!(storage_len),
+        fun!(storage_contains),
+        fun!(storage_total_len),
+        fun!(storage_put_by_take),
+        fun!(summary_merge),
         fun!(primitive_i8),
         fun!(primitive_i16),
         fun!(primitive_i32),
