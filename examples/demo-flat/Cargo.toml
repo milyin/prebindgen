@@ -1,0 +1,13 @@
+[package]
+name="demo-flat"
+version="0.1.0"
+edition="2021"
+publish=false
+
+
+[dependencies]
+prebindgen.workspace=true
+prebindgen-proc-macro.workspace=true
+
+[build-dependencies]
+prebindgen.workspace=true

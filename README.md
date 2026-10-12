@@ -1,237 +1,154 @@
-# prebindgen
+# prebindgen: occurrence conversion slots
 
-A tool for separating the implementation of FFI interfaces from language-specific binding generation, allowing each to reside in different crates.
+This branch contains a small replacement pipeline for generating C and
+JNI/Kotlin bindings from `#[prebindgen]` source. It is an experimental subset,
+not a drop-in replacement for the full published adapters. The previous
+registry, adapters, examples and documentation have been removed.
 
-## Stability in 0.5
+The source capture macro and its source-reading/configuration support remain
+unchanged. The new pipeline is:
 
-The language-neutral pipeline (`prebindgen`, `prebindgen-flat`,
-`prebindgen-registry`) and the JNI/Kotlin `prebindgen-jni` adapter are
-supported public APIs in 0.5. `prebindgen-c` is always compiled — there is
-no feature gate — but it remains an experimental proof of concept and is not
-covered by the semver guarantee; its API may change in a minor release.
+```text
+#[prebindgen] source
+        ↓
+Flat<Slot>: syn::Type + a converter at each parameter/result occurrence
+        ↓ prebindgen-tools: validate and compose the converters
+Flat<Prepared>: wire roles, input construction, output delivery
+        ↓ C or JNI wrapper writer
+Rust wrappers + C header / Kotlin files
+```
 
-## Problem
+`Flat<S>` also preserves named record fields, source names and locations.
+`TypeUse<S>` holds `syn::Type` and a slot; there is no parallel `TypeKind` tree
+or global converter registry. Sharing an input recipe does not share runtime
+values. A function is selected by filling its result slot, and all its parameter
+slots must then have input conversions.
 
-Making FFI (Foreign Function Interface) for a Rust library is not an easy task. This involves a large amount of boilerplate code that wraps the Rust API in `extern "C"` functions and `#[repr(C)]` structures.
-It's already hard for a single language, but when you need to add more languages, the situation becomes more complex.
+## The demonstrated subset
 
-The root cause of this complexity in a multi-language scenario is that you must either:
-
-- Make separate crates for each language's FFI. For example, you have a Rust library "foo" and cdylib/staticlib crates "foo-c", "foo-csharp", "foo-java", etc. Each crate contains its own independent wrappers for "foo". Code duplication is huge.
-- Generate all language-specific libraries from the same source. In this case, you just replace code duplication with code complexity: the single FFI library must conform to all language targets.
-
-A small example: `cbindgen` supports wrapper types (`Option`, `MaybeUninit`) in `extern "C"` functions, but `csbindgen` (a binding generator for C#) doesn't understand them. The following FFI function works for C but can't be used for C#:
+Both adapters run the same configuration in [examples/configure.rs](examples/configure.rs):
 
 ```rust
-#[no_mangle]
-pub extern "C" fn foo(dst: &mut MaybeUninit<Foo>, src: &Foo) { ...  }
+let key = Input::selector([
+    Input::Handle,
+    Input::constructor("keyexpr_from_string", [Input::Text]),
+]);
+let payload = Input::selector([
+    Input::Handle,
+    Input::fields([key.clone(), Input::Handle]),
+    Input::constructor("payload_from_string", [key.clone(), Input::Text]),
+    Input::constructor("payload_from_slice", [key.clone(), Input::Bytes]),
+]);
+
+let f = flat.function_mut("foo")?;
+f.params[0].ty.slot = Slot::Input(key);
+f.params[1].ty.slot = Slot::Input(payload);
+f.params[2].ty.slot = Slot::Input(Input::Handle);
+f.ret.slot = Slot::Output(Output::combine([
+    Output::Handle,
+    Output::fields([
+        Output::combine([
+            Output::ClonedHandle,
+            Output::getter("keyexpr_to_string", Output::Text),
+        ]),
+        Output::ClonedHandle,
+    ]),
+]));
 ```
 
-And there are more such quirks, which make it hard to support a common source for multiple languages.
+The source function is `foo(k: KeyExpr, x: Payload, y: Payload) -> Payload`,
+where `Payload` contains a `KeyExpr` and a `Vec<u8>`. This demonstrates:
 
-## Solution
+- Different conversions for two occurrences of the same `Payload` type.
+- Nested choices: a handle, record fields, or either of two constructors.
+- Temporary storage retained through a constructor taking `&[u8]`.
+- Four outputs from one result: the original payload handle, an independent
+  cloned key handle, its text, and an independent cloned byte-vector handle.
+- All 14 concrete input combinations through one native wrapper per operation.
 
-The proposed solution is to create a common Rust library (e.g., "foo-ffi") that wraps the original "foo" library in FFI-compatible functions, but does not add `extern "C"` and `#[no_mangle]` modifiers. Instead, it marks these functions with the `#[prebindgen]` macro.
+Tools own recursive construction, field access, choice and output composition.
+Adapters supply text/byte leaf decoding and the C/JNI wire carriers. Wrapper
+writers only apply prepared slots and arrange boundary transport and errors.
+An output combination evaluates observations before its consuming conversion,
+while retaining the declared wire order. It rejects two moves of the same value
+or a move from a borrowed field. `ClonedHandle` explicitly requires `Clone`.
 
-```rust
-#[prebindgen]
-pub fn foo(dst: &mut MaybeUninit<Foo>, src: &Foo) { ...  }
+The retained source grammar includes public nongeneric free functions, public
+named records, opaque aliases, `String`, `Vec<u8>`, borrowed text/byte inputs and
+unit. Types use declared flat names and the supported bare standard names;
+arbitrary Rust type equivalence and arbitrary qualified paths are not resolved.
+Unsupported source forms and incomplete conversions produce generation errors.
+Constructors must return the required type directly; getters take one shared
+borrow and return an owned value. Fallible source returns are not included yet.
+
+## C and JniGen
+
+[C's build script](examples/demo-c/build.rs) supplies the configured flat model
+to `Cbindgen`, declares typed handle destructors and writes Rust plus a C header.
+Each function returns status and fills an output struct. Strings and bytes use
+pointer/length buffers. Active input buffers are borrowed during the call;
+returned buffers must be freed exactly once with the generated buffer-release
+function. A nonzero status leaves the output struct untouched. `last_error`
+returns a thread-local message valid until the next boundary call on that thread.
+C callers must supply valid readable input memory and writable output memory.
+
+[JniGen's build script](examples/covertest-kotlin/build.rs) retains the existing
+`source`, `package!`, `ptr_class!`, `fun!`, `.name()`, package-prefix and native
+initialization declarations. The supported `expand_param!` constructor/identity
+variants, `expand_return!` getter/identity fields and per-function overrides
+translate into the same tools recipes. `.configure(...)` allows direct slot
+configuration; `.flat(...)` accepts an already configured model.
+
+Kotlin owns typed `AutoCloseable` handle classes. The current input surface
+exposes a selector and arguments for all alternatives, including nullable dummy
+arguments. Only the selected branch decodes or consumes them. Multi-value
+outputs travel in a JNI object array and reach a typed Kotlin builder lambda.
+If that lambda throws, its output handles are released. This transport is kept
+simple to exercise the pipeline; it does not implement the full production
+JniGen delivery surface or its performance optimizations.
+
+Both adapters use an opaque numeric handle store. A wrong-type or stale handle
+is an error, not a pointer dereference. Input handles transfer ownership when
+that conversion executes. If a later input fails, earlier consumed handles stay
+consumed and their Rust values are dropped; unvisited handles stay caller-owned.
+Output handles are released if result encoding fails before handoff. Closing a
+consumed or already closed handle is harmless. Concurrent attempts to consume
+one handle allow exactly one successful take.
+
+Rust panics are caught at each boundary when compiled with unwinding enabled;
+they become a C error status or a JNI exception. Conversion errors use the same
+boundary channels. This subset has no typed source-error delivery.
+
+## What is deliberately absent
+
+There is one pipeline and no legacy fallback. The following remain outside this
+first subset: ordinary scalar conversions, enums and sums, options, general
+collections, callbacks, borrowed/mutable handle inputs, methods, generated data
+classes, `convert!`, domain errors, overload splitting, multiple specialized
+native wrappers, and shared storage between selector alternatives. New support
+should be added to this pipeline and exercised by both boundary tests as
+applicable. Every JniGen feature belongs in the Kotlin covertest.
+
+## Build and verify
+
+Rust 1.85+, a C compiler, JDK 11+ and a Kotlin compiler are required for the full
+boundary check. Build once online to fetch dependencies; the test script uses
+Cargo's offline mode thereafter.
+
+```sh
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
+python3 examples/check.py
 ```
 
-The dependent language-specific crates ("foo-c", "foo-cs", etc.) in this case contain only autogenerated code based on these marked functions, with the necessary `extern "C"` and `#[no_mangle]` added, stripped-out wrapper types, etc.
+`KOTLINC` and `CC` select the compilers. `SANITIZE=1 python3 examples/check.py`
+enables AddressSanitizer and UndefinedBehaviorSanitizer on the C caller.
+The script locates artifacts from Cargo's JSON build messages and runs JNI with
+`-Xcheck:jni`; generated files stay under Cargo's output directory.
 
-### Comparison to other solutions
-
-Several tools solve adjacent parts of the Rust FFI problem:
-
-- **Language-specific generators** such as [`cbindgen`](https://github.com/mozilla/cbindgen) and `csbindgen` are mature and integrate well with their target ecosystems. Their drawback in a multi-language project is that each generator expects a slightly different Rust FFI surface, so a single hand-written `extern "C"` crate either becomes a compromise or has to be duplicated per language.
-- **[`UniFFI`](https://github.com/mozilla/uniffi-rs)** is production-ready and widely used, especially for Kotlin, Swift, and Python bindings. It supports both UDL files and proc-macros, generates Rust scaffolding plus foreign bindings, and has a strong object model with records, interfaces, errors, callbacks/foreign traits, and async functions. Its trade-off is that it owns the binding model: APIs must fit UniFFI's supported type/object model, proc-macro binding generation discovers metadata from a compiled library, complex values go through UniFFI's lifting/lowering layer, and it generates UniFFI bindings rather than source tailored for existing tools or C/C++ header generators.
-- **[`Diplomat`](https://github.com/rust-diplomat/diplomat)** provides a mature bridge-crate model and generates idiomatic bindings for several languages from one Rust-defined API. Its trade-off is the shared generated C ABI hub: all targets are shaped by the same bridge surface, which is not always ideal when different languages need different ownership, performance, or API projections.
-- **[`BoltFFI`](https://github.com/boltffi/boltffi)** is an end-to-end SDK/package generator with strong built-in support for Swift, Kotlin, Java, C#, TypeScript/WASM, async functions, streams, and platform packaging. Its trade-off is that it is a complete toolchain: it owns build, generation, and packaging, while some projects need a smaller layer that composes with existing generators and custom build logic.
-
-What makes `prebindgen` different:
-
-- **No separate tooling step**: the destination crate generates bindings from its `build.rs` by pulling the marked pieces of the source crate, then includes the generated Rust with `include!()`.
-- **Works with existing binding generators**: `prebindgen` is not intended to replace tools such as `cbindgen` or `csbindgen`; it prepares Rust source adapted and tweaked for the chosen generator when needed.
-- **Per-language ABI freedom**: destination crates choose their own adapter and wire representation instead of sharing one generated ABI for every language.
-- **Opt-in consumers**: each language-specific crate declares exactly which annotated functions and types it exports, so C, JNI, and other targets can expose different subsets of the same source crate.
-- **Cross-compilation-aware generation**: `prebindgen` has been proven in cross-compilation scenarios where the generated source depends on the destination platform.
-- **Performance-oriented projections**: adapters can specialize ownership and value passing for a target language, such as inline C value types or JNI handle/value-class projections, without constraining other backends.
-
-### Architecture
-
-Each element to be exported is marked in the source crate with the `#[prebindgen]` macro. When the source crate is compiled, these elements are written to an output directory. The destination crate's `build.rs` reads these elements and creates FFI-compatible functions and proxy structures for them. The generated source file is included with the `include!()` macro in the dependent crate and parsed by the language binding generator (e.g., cbindgen).
-
-It's important to keep in mind that `[build-dependencies]` and `[dependencies]` are different. The `#[prebindgen]` macro collects sources when compiling the `[build-dependencies]` instance of the source crate. Later, these sources are used to generate proxy calls to the `[dependencies]` instance, which may be built with a different feature set and for a different architecture. A set of assertions is added to the generated code to catch possible divergences, but it's the developer's job to manually resolve these errors.
-
-## Crates
-
-This repository is a Cargo workspace of eight crates, layered so a *source*
-crate and a *shipped binding library* each pull in only what they need: a
-source crate that just calls `init_prebindgen_out_dir()` depends on
-`prebindgen` alone, while a shipped binding library depends on a small
-runtime crate (~350 lines), not the generator.
-
-| Crate | What it's for | Depends on |
-|---|---|---|
-| `prebindgen` | Base: reads what `#[prebindgen]` captured and hands out `(syn::Item, SourceLocation)` pairs via `Source` | — |
-| `prebindgen-proc-macro` | The `#[prebindgen]` macro itself | `prebindgen` |
-| `prebindgen-flat` | The flat model: parses the captured stream into one flat namespace | `prebindgen` |
-| `prebindgen-registry` | The language-agnostic pipeline: type resolution, boundary expansion, Rust emission | `prebindgen-flat`, `prebindgen` |
-| `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) — experimental proof of concept | `prebindgen-registry` |
-| `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-registry`, [`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) |
-| `prebindgen-c-runtime` | Leaf, ~65 lines, no deps — traits the generated C converters call at run time | — |
-| `prebindgen-jni-runtime` | Leaf, ~350 lines, only `jni` — helpers the generated JNI bindings call at run time | `jni` |
-
-A binding crate's `build.rs` depends on a generator (`prebindgen-c` or
-`prebindgen-jni`, plus `prebindgen-registry`); the crate it builds depends on
-the matching runtime crate instead. The generator itself — `syn`, `quote`,
-`prettyplease`, and for JNI the `kotlin-codegen` emitter — never ends up in a
-shipped library's regular dependency graph.
-
-[`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) is a
-general-purpose Kotlin source emitter, developed in a separate repo on its own
-release cycle and consumed by `prebindgen-jni` from
-[crates.io](https://crates.io/crates/kotlin-codegen) like any other dependency.
-
-## Usage
-
-### Stable core and JNI/Kotlin path
-
-Use `prebindgen::Source` to collect annotated items, resolve them through
-`prebindgen-registry`'s `Registry`, then configure `prebindgen-jni`'s
-`JniGenBuilder` to emit Rust JNI wrappers and Kotlin sources. The
-[`covertest-kotlin`](examples/covertest-kotlin) example is the maintained,
-comprehensive reference for that supported flow; the smaller
-[`perftest-kotlin`](examples/perftest-kotlin) consumer shows a lean production
-configuration. A dedicated introductory JniGen guide is tracked in [#57].
-
-[#57]: https://github.com/milyin/prebindgen/issues/57
-
-### 1. In the Common FFI Library Crate (e.g., `example-flat`)
-
-Mark the types and functions that form your FFI surface with the `prebindgen` macro and export the prebindgen output directory path. The source crate stays **plain idiomatic Rust** — opaque handles are ordinary types returned by value, fallible calls return `Result<T, E>`; the language adapter does the C-ABI lowering, so there is no `#[repr(C)]` here.
-
-```rust
-// example-flat/src/lib.rs
-use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
-
-// Path to the prebindgen output directory; the destination crate's `build.rs`
-// reads the collected code from this path.
-pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
-
-// Features with which the crate is compiled. This constant is used
-// in the generated code to validate that it's compatible with the actual crate.
-pub const FEATURES: &str = features!();
-
-// An opaque handle — a plain Rust type, returned by value.
-pub struct Calculator {
-    value: f64,
-}
-
-#[prebindgen]
-pub fn calculator_new() -> Calculator {
-    Calculator { value: 0.0 }
-}
-
-#[prebindgen]
-pub fn calculator_get_value(c: &Calculator) -> f64 {
-    c.value
-}
-```
-
-Call `init_prebindgen_out_dir()` in the source crate's `build.rs`:
-
-```rust
-// example-flat/build.rs
-fn main() {
-    prebindgen::init_prebindgen_out_dir();
-}
-```
-
-### 2. Experimental C Binding Crate (e.g., `example-cbindgen`)
-
-Add the source FFI library and `prebindgen-c-runtime` as regular dependencies
-(the generated converters reference its traits at run time), and
-`prebindgen-registry` + `prebindgen-c` as build-dependencies to drive the
-experimental `CbindgenBuilder` adapter from `build.rs`:
-
-```toml
-# example-cbindgen/Cargo.toml
-[dependencies]
-example-flat = { path = "../example-flat" }
-prebindgen = "0.5"
-prebindgen-c-runtime = "0.5"   # the generated converters reference its traits
-konst = "0.3"                 # the generated file emits a konst feature guard
-
-[build-dependencies]
-example-flat = { path = "../example-flat" }
-prebindgen = "0.5"
-prebindgen-registry = "0.5"
-prebindgen-c = "0.5"
-cbindgen = "0.29"
-syn = { version = "2", features = ["full"] }
-```
-
-Declare which `#[prebindgen]`-marked items to export and how to name them, then let the adapter resolve types and emit the Rust file of `extern "C"` wrappers. Items are opt-in — only what you declare is generated.
-
-```rust
-// example-cbindgen/build.rs
-use syn::parse_quote as pq;
-
-fn main() {
-    // Configure the C adapter: point it at the captured items, and declare
-    // which ones to export and how to name them.
-    let cbindgen = prebindgen_c::Cbindgen::builder()
-        .source(example_flat::PREBINDGEN_OUT_DIR)
-        .source_module(pq!(example_flat))
-        .free_memory_function("example_free")
-        .mangle_type_name(|base| format!("{base}_t"))
-        .mangle_destructor(|base| format!("{base}_drop"))
-        .mangle_function(|n| n.to_string())
-        .opaque_ptr(pq!(Calculator))
-        .function(pq!(calculator_new))
-        .function(pq!(calculator_get_value)).panic();
-
-    // Resolve types, then write the Rust file of `extern "C"` wrappers.
-    let bindings_file = cbindgen
-        .build()
-        .unwrap()
-        .write_rust("example_flat.rs")
-        .unwrap();
-
-    // Pass the generated file to cbindgen for C header generation.
-    generate_c_headers(&bindings_file);
-}
-```
-
-Include the generated Rust file in your project to build the static or dynamic FFI-compatible library:
-
-```rust
-// lib.rs
-include!(concat!(env!("OUT_DIR"), "/example_flat.rs"));
-```
-
-## Examples
-
-See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples):
-
-- **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
-- **example-cbindgen**: experimental C proof of concept using `prebindgen-c`'s `CbindgenBuilder` + cbindgen for C headers
-- **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
-- **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `prebindgen-jni` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
-- **emitcheck**: A binding with no JVM side whose only job is to *compile* the emitted Rust, for the type spellings the adapter unit tests reach and the examples above do not (`Box<Option<T>>`, `Cow<'_, str>`, …). Success is `cargo build`.
-
-## Documentation
-
-- **prebindgen**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
-- **prebindgen-proc-macro**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)
-- **prebindgen-flat**: [docs.rs/prebindgen-flat](https://docs.rs/prebindgen-flat)
-- **prebindgen-registry**: [docs.rs/prebindgen-registry](https://docs.rs/prebindgen-registry)
-- **prebindgen-c**: [docs.rs/prebindgen-c](https://docs.rs/prebindgen-c)
-- **prebindgen-jni**: [docs.rs/prebindgen-jni](https://docs.rs/prebindgen-jni)
-
-## Releasing
-
-Publishing is automated from GitHub Actions, one crate per dispatch and in
-dependency order. See [RELEASING.md](RELEASING.md).
+The C and Kotlin tests cover the 14 input combinations, output ownership,
+inactive branches, invalid tags, stale and wrong-type handles, partial input
+failure and source panics. Kotlin additionally exercises the retained declaration
+API, builder failure cleanup and concurrent consumption. Rust tests cover source
+validation, occurrence independence, invalid compositions and output rollback.
