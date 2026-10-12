@@ -217,6 +217,7 @@ See example projects in the [examples directory](https://github.com/milyin/prebi
 
 ## Documentation
 
+- [Conceptual data flow](docs/conceptual-data-flow.md) — source values, binding declarations, and cross-language conversion.
 - **prebindgen**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
 - **prebindgen-proc-macro**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)
 - **prebindgen-flat**: [docs.rs/prebindgen-flat](https://docs.rs/prebindgen-flat)
