@@ -1,3 +1,6 @@
+//! Active coverage: strings/bytes, owned handles, Report selectors and field outputs.
+//! The original coverage inventory below includes features now commented out.
+//!
 //! Migrated from main. Unsupported declarations remain commented below.
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
 //! separate `prebindgen-jni` crate's `JniGenBuilder` adapter — exercising **every**
@@ -123,7 +126,7 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 */
 use prebindgen_jni::{package, ptr_class, JniGen};
-use prebindgen_registry::fun;
+use prebindgen_registry::{expand_param, expand_return, fields, fun};
 
 fn main() {
     let binding = JniGen::builder()
@@ -301,13 +304,11 @@ fn main() {
                 /* Unsupported: this class kind or its binding is not available yet.
 .class(data_class!(Verdict))
 */
-                // `Report`'s output boundary is DERIVED from its value form
-                // (`.fields_self_into(fields!(report_into_struct))` below) instead of
-                // being restated field by field — #213. The form it names is
-                // the CONSUMING one, so the fields are moved, not cloned.
-                /* Unsupported: this class kind or its binding is not available yet.
-.class(ptr_class!(Report))
-*/
+                // Report now projects the reduced value form through a borrowing
+                // getter, then delivers its owned handle. The original consuming
+                // expansion remains commented below.
+                .class(ptr_class!(Report))
+                .class(ptr_class!(ReportStruct))
                 // #220: the same derived-boundary idea with an `Option<sum>`
                 // FIELD — the shape that used to be refused on a value form
                 // while a `data_class` accepted it.
@@ -423,9 +424,11 @@ fn main() {
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                /* Unsupported: this class kind or its binding is not available yet.
+                /* Unsupported: data classes are not available yet.
 .class(data_class!(BlobValue).jobject_input())
 */
+                // The reduced byte-vector record can already travel as a handle.
+                .class(ptr_class!(BlobValue))
                 // Fixed-size arrays of every JNI-primitive element.
                 /* Unsupported: this class kind or its binding is not available yet.
 .class(data_class!(Arrays))
@@ -892,12 +895,8 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(unsigned_series))
 */
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(blob_value_new))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(blob_value_echo))
-*/
+                .fun(fun!(blob_value_new))
+                .fun(fun!(blob_value_echo))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(arrays_echo))
 */
@@ -1130,6 +1129,11 @@ fn main() {
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
         .package(package!().fun(fun!(string_new)))
+        // The reduced Report value form contains only the supported label field.
+        // Project that field before handing ownership of the Report to Kotlin.
+        .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
+        .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
+        .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

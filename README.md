@@ -25,24 +25,26 @@ writers use prepared slots; recursive conversion decisions belong to tools.
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
 been removed. All eight Rust example crates from `main` are in the workspace.
-Their flat source files are preserved. Unsupported binding declarations remain
-commented in the migrated `build.rs` files as the checklist for future work.
+Unsupported declarations, record fields and matching constructor arguments are
+commented in the flat sources and `build.rs` files as the checklist for future
+work. The retained records demonstrate the supported shapes of the real examples.
 
 | Example | Currently active |
 |---|---|
-| [example-flat](examples/example-flat) | Original Calculator, shapes and feature-gated source API |
-| [example-cbindgen](examples/example-cbindgen/build.rs) | Calculator creation and typed release |
-| [perftest-flat](examples/perftest-flat) | Original Storage API, extended coverage types, native benchmark and Rust tests |
-| [perftest-c](examples/perftest-c/build.rs) | Storage creation/release and string copying |
+| [example-flat](examples/example-flat) | Calculator/Error aliases and Caption with only a text field |
+| [example-cbindgen](examples/example-cbindgen/build.rs) | Calculator and Caption creation and typed release |
+| [perftest-flat](examples/perftest-flat) | Storage/Archive creation, strings, BlobValue with bytes, Report/ReportStruct with a label |
+| [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/handle outputs |
 | [perftest-kotlin](examples/perftest-kotlin/build.rs) | Storage creation/release through JNI |
-| [covertest-kotlin](examples/covertest-kotlin/build.rs) | String copying, Storage and Archive creation/release, subpackages and the SummaryVault class rename |
-| [covertest-helpers](examples/covertest-helpers) | Original helper source compiles; multi-source conversion bindings are commented out |
-| [emitcheck](examples/emitcheck/build.rs) | Original source is compiled; its callback/value-form declarations are commented out, so it currently emits no API wrappers |
+| [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, Archive, subpackages and the SummaryVault class rename |
+| [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
+| [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
 
 Source selection happens before subset validation. Unbound enums, callbacks,
 collections and functions can stay in the source crate; selecting one still
-produces a generation error when its shape is unsupported. This lets bindings
-be enabled incrementally without rewriting the real source API.
+produces a generation error when its shape is unsupported. Both annotated flat
+examples also have tests that parse the entire captured surface, ensuring no
+unsupported shapes remain active behind that selection.
 
 The old foreign performance drivers require the commented bindings and have
 been removed. Full coverage clients are replaced with focused C and Kotlin smoke
@@ -59,8 +61,9 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `fun!`,
 The tools layer also supports `expand_param!` constructor/identity variants,
 `expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
 output overrides, and per-function overrides. These fill slots before preparing
-wrappers. Unit tests retain coverage of these compositions; the active migrated
-examples exercise the smaller subset their existing declarations allow.
+wrappers. The migrated C and JNI examples exercise Report constructor/handle input
+variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
+The reduced BlobValue uses a handle class; data-class generation stays disabled.
 
 C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
 `.prefix(...)` and `.handle(...)`. Its old naming, raw-pointer and cbindgen
@@ -107,11 +110,11 @@ python3 examples/check.py
 ```
 
 The script builds every example and runs both C and both JNI smoke clients,
-including string round trips, invalid input handling, output preservation,
-handle release and concurrent close. `KOTLINC` and `CC` select the compilers.
+including string round trips, byte-vector constructors, consumed handles,
+selector arms, field projections, builder rollback, output preservation and
+concurrent close. `KOTLINC` and `CC` select the compilers.
 `SANITIZE=1` instruments the C callers with AddressSanitizer and
 UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.
 
-The native Rust benchmark remains runnable with
-`cargo run --release -p perftest-flat --example perftest`; it does not measure
-this reduced binding surface.
+The native Rust benchmark is commented out because it depends on disabled
+scalar, borrowed-handle and callback APIs. Its driver reports that limitation.

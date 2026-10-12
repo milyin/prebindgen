@@ -115,9 +115,10 @@ fn main() {
     // `InsideFoo` producer — none need `.panic()`. `calculator_apply` takes an
     // `Operation` by value, so its `char **e` also carries an invalid-discriminant
     // rejection (see `inside_foo_value` below).
-    #[allow(clippy::single_element_loop)] // Keep main's list ready for incremental enablement.
     for function in [
         fun!(calculator_new),
+        // Caption retains only its supported text field.
+        fun!(caption_new),
         // Unsupported signature: pq!(calculator_new_from_str),
         // Unsupported signature: pq!(calculator_apply),
         // Two consumed handles of one type, and one consumed beside one
@@ -189,6 +190,8 @@ fn main() {
             cbindgen = cbindgen.function(function).panic();
         }
     */
+
+    cbindgen = cbindgen.handle("caption", pq!(Caption));
 
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");

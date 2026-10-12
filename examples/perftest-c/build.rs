@@ -1,5 +1,5 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_registry::fun;
+use prebindgen_registry::{expand_param, expand_return, fields, fun};
 use syn::parse_quote as pq;
 
 fn main() {
@@ -153,6 +153,26 @@ fn main() {
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
     */
+
+    // Reduced flat records now allow constructor selectors and field projections.
+    cbindgen = cbindgen
+        .handle("blob", pq!(BlobValue))
+        .handle("report", pq!(Report))
+        .handle("report_struct", pq!(ReportStruct))
+        .expand(
+            expand_param!(Report)
+                .variant_self()
+                .variant(fun!(report_new)),
+        )
+        .expand(
+            expand_return!(Report)
+                .fields(fields!(report_to_struct))
+                .field_self(),
+        )
+        .function(fun!(blob_value_new))
+        .function(fun!(blob_value_echo))
+        .function(fun!(report_new))
+        .function(fun!(report_into_struct));
 
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");
