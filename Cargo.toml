@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "prebindgen", "prebindgen-proc-macro", "prebindgen-flat", "prebindgen-tools",
-    "prebindgen-runtime", "prebindgen-c", "prebindgen-jni", "prebindgen-jni-runtime",
+    "prebindgen-registry", "prebindgen-runtime", "prebindgen-c", "prebindgen-jni", "prebindgen-jni-runtime",
     "examples/demo-flat", "examples/demo-c", "examples/covertest-kotlin",
 ]
 resolver = "2"
@@ -39,3 +39,4 @@ toml = "0.9.5"
 rand = "0.9.2"
 prebindgen-tools = { path = "prebindgen-tools", version = "0.5.0" }
 prebindgen-runtime = { path = "prebindgen-runtime", version = "0.5.0" }
+prebindgen-registry = { path = "prebindgen-registry", version = "0.5.0" }

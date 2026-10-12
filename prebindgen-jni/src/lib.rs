@@ -1,44 +1,17 @@
 //! JNI/Kotlin adapter over the same prepared conversion slots as C.
 //! The retained declaration subset is `package!`, `ptr_class!`, `fun!`,
-//! `.name()`, source selection, package prefix and native initialization.
-//! Explicit occurrence converters are configured through `.flat(...)`.
+//! expansion declarations, `.name()`, source selection, package prefix and native initialization.
+//! Declaration processing fills occurrence slots before wrappers are generated.
 use prebindgen_flat::{type_key, Flat, Result};
 use prebindgen_tools::{Codec, Prepared, Slot, WireKind};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
-mod decl;
-pub use decl::{ExpandDecl, ExpandParamDecl, ExpandReturnDecl};
-#[derive(Clone)]
-pub struct FunctionDecl {
-    pub name: String,
-    pub foreign: Option<String>,
-    pub(crate) params: BTreeMap<String, ExpandParamDecl>,
-    pub(crate) ret: Option<ExpandReturnDecl>,
-}
-impl FunctionDecl {
-    pub fn new(name: &str) -> Self {
-        Self {
-            name: name.into(),
-            foreign: None,
-            params: BTreeMap::new(),
-            ret: None,
-        }
-    }
-    pub fn name(mut self, name: &str) -> Self {
-        self.foreign = Some(name.into());
-        self
-    }
-    pub fn expand_param(mut self, name: &str, decl: ExpandParamDecl) -> Self {
-        self.params.insert(name.into(), decl);
-        self
-    }
-    pub fn expand_return(mut self, decl: ExpandReturnDecl) -> Self {
-        self.ret = Some(decl);
-        self
-    }
-}
+pub use prebindgen_tools::{
+    expand_param, expand_return, fields, fun, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+    FieldsDecl, FunctionDecl,
+};
 #[derive(Clone)]
 pub struct PtrClassDecl {
     pub ty: syn::Type,
@@ -48,7 +21,7 @@ impl PtrClassDecl {
     pub fn new(ty: syn::Type) -> Self {
         Self { ty, name: None }
     }
-    pub fn name(mut self, name: &str) -> Self {
+    pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
@@ -60,7 +33,7 @@ pub struct PackageDecl {
     pub functions: Vec<FunctionDecl>,
 }
 impl PackageDecl {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
             ..Default::default()
@@ -74,12 +47,6 @@ impl PackageDecl {
         self.functions.push(f);
         self
     }
-}
-#[macro_export]
-macro_rules! fun {
-    ($name:ident) => {
-        $crate::FunctionDecl::new(stringify!($name))
-    };
 }
 #[macro_export]
 macro_rules! ptr_class {($($ty:tt)+)=>{$crate::PtrClassDecl::new($crate::__type(stringify!($($ty)+)))};}
@@ -97,7 +64,10 @@ pub fn __type(s: &str) -> syn::Type {
     syn::parse_str(s).expect("type syntax")
 }
 
-pub struct JniGen;
+pub struct JniGen {
+    pub rust: String,
+    pub kotlin: BTreeMap<String, String>,
+}
 impl JniGen {
     pub fn builder() -> JniGenBuilder {
         JniGenBuilder::default()
@@ -115,6 +85,9 @@ pub struct JniGenBuilder {
     packages: Vec<PackageDecl>,
 }
 impl JniGenBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
     pub fn configure(mut self, f: impl FnOnce(&mut Flat<Slot>) -> Result<()> + 'static) -> Self {
         self.configure.push(Box::new(f));
         self
@@ -131,11 +104,11 @@ impl JniGenBuilder {
         self.flat = Some(flat);
         self
     }
-    pub fn set_package_prefix(mut self, prefix: &str) -> Self {
+    pub fn set_package_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
         self
     }
-    pub fn set_jni_native_init(mut self, init: &str) -> Self {
+    pub fn set_jni_native_init(mut self, init: impl Into<String>) -> Self {
         self.init = init.into();
         self
     }
@@ -143,7 +116,7 @@ impl JniGenBuilder {
         self.packages.push(package);
         self
     }
-    pub fn build(self) -> Result<Generation> {
+    pub fn build(self) -> Result<JniGen> {
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
             (None, Some(path)) => Flat::parse(prebindgen::Source::new(path).items_all())?,
@@ -152,7 +125,7 @@ impl JniGenBuilder {
         for configure in self.configure {
             configure(&mut flat)?;
         }
-        let defaults = decl::Defaults::new(&flat, self.expansions)?;
+        let defaults = prebindgen_tools::Declarations::new(&flat, self.expansions)?;
         validate_package(&self.prefix)?;
         let mut classes = BTreeMap::new();
         let mut functions = Vec::new();
@@ -239,22 +212,33 @@ impl Codec for JniCodec {
         quote!(::prebindgen_jni_runtime::bytes(&mut env,&#w)?)
     }
 }
-pub struct Generation {
-    pub rust: String,
-    pub kotlin: BTreeMap<String, String>,
-}
-impl Generation {
-    pub fn write_rust(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
-        std::fs::write(path, &self.rust).map_err(|e| e.to_string())
-    }
-    /// The caller owns the destination. Only this generation's files are written.
-    pub fn write_kotlin(&self, root: impl AsRef<std::path::Path>) -> Result<()> {
-        for (path, text) in &self.kotlin {
-            let path = root.as_ref().join(path);
-            std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-            std::fs::write(path, text).map_err(|e| e.to_string())?;
+/// Alias retained for callers of the initial slot prototype.
+pub type Generation = JniGen;
+impl JniGen {
+    /// Relative Rust paths are resolved under Cargo's OUT_DIR, as in the production API.
+    pub fn write_rust(&self, path: impl AsRef<std::path::Path>) -> Result<std::path::PathBuf> {
+        let path = path.as_ref();
+        let path = if path.is_absolute() {
+            path.to_owned()
+        } else {
+            std::path::PathBuf::from(std::env::var_os("OUT_DIR").ok_or("OUT_DIR is not set")?)
+                .join(path)
+        };
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        Ok(())
+        std::fs::write(&path, &self.rust).map_err(|e| e.to_string())?;
+        Ok(path)
+    }
+    pub fn write_kotlin(&self, root: &std::path::Path) -> Result<Vec<std::path::PathBuf>> {
+        let mut written = Vec::new();
+        for (path, text) in &self.kotlin {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+            std::fs::write(&path, text).map_err(|e| e.to_string())?;
+            written.push(path);
+        }
+        Ok(written)
     }
 }
 fn validate_name(s: &str) -> Result<()> {
@@ -370,7 +354,7 @@ fn generate(
     init: &str,
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
-) -> Result<Generation> {
+) -> Result<JniGen> {
     let mut rust = TokenStream::new();
     let mut files = BTreeMap::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
@@ -545,7 +529,7 @@ fn generate(
     }
     let guards = &flat.guards;
     rust.extend(quote!(#(#guards)*));
-    Ok(Generation {
+    Ok(JniGen {
         rust: prebindgen_tools::rust_source(rust)?,
         kotlin: files,
     })

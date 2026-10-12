@@ -84,3 +84,93 @@ fn observations_precede_move_but_wires_keep_order() {
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("insert").unwrap());
 }
+
+#[test]
+fn declarations_reject_unknown_or_mismatched_field_overrides() {
+    let source = "pub struct Payload { pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn read(p: Payload) -> Payload {}";
+    for (field, output, message) in [
+        (
+            "missing",
+            expand_return!(Vec<u8>).field_self(),
+            "unknown output field",
+        ),
+        (
+            "data",
+            expand_return!(String).field_self(),
+            "does not match occurrence",
+        ),
+    ] {
+        let mut flat = Flat::parse(
+            syn::parse_file(source)
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap();
+        let declarations = Declarations::new(&flat, vec![]).unwrap();
+        let function = fun!(read)
+            .expand_return(expand_return!(Payload).fields(fields!(parts).field(field, output)));
+        assert!(declarations
+            .fill(&mut flat, &function)
+            .unwrap_err()
+            .contains(message));
+    }
+}
+#[test]
+fn declarations_preserve_defaults_and_occurrence_overrides() {
+    let mut flat = model();
+    let declarations = Declarations::new(
+        &flat,
+        vec![expand_param!(Payload)
+            .variant(fun!(make))
+            .variant_self()
+            .into()],
+    )
+    .unwrap();
+    declarations
+        .fill(
+            &mut flat,
+            &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
+        )
+        .unwrap();
+    let ready = prepare(flat, &TestCodec).unwrap();
+    let f = ready.function("foo").unwrap();
+    let Prepared::Input(x) = &f.params[0].ty.slot else {
+        panic!()
+    };
+    let Prepared::Input(y) = &f.params[1].ty.slot else {
+        panic!()
+    };
+    assert_eq!(x.wires.len(), 3);
+    assert_eq!(y.wires.len(), 1);
+}
+#[test]
+fn field_defaults_follow_type_expansions() {
+    let source = "pub type Key=String; pub struct Payload { pub key: Key, pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn key_text(k: &Key) -> String {} pub fn read(p: Payload) -> Payload {}";
+    let mut flat = Flat::parse(
+        syn::parse_file(source)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    let declarations = Declarations::new(
+        &flat,
+        vec![expand_return!(Key).field(fun!(key_text)).into()],
+    )
+    .unwrap();
+    declarations
+        .fill(
+            &mut flat,
+            &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
+        )
+        .unwrap();
+    let ready = prepare(flat, &TestCodec).unwrap();
+    let Prepared::Output(output) = &ready.function("read").unwrap().ret.slot else {
+        panic!()
+    };
+    assert!(matches!(output.wires[0].kind, WireKind::Text));
+    assert!(matches!(output.wires[1].kind, WireKind::Bytes));
+}

@@ -1,12 +1,12 @@
 //! The retained JniGen expansion vocabulary translates into tools recipes.
-use crate::FunctionDecl;
+
+use crate::{Input, Output, Slot};
 use prebindgen_flat::{type_key, Flat, Result};
-use prebindgen_tools::{Input, Output, Slot};
 use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub struct ExpandParamDecl {
-    pub(crate) ty: syn::Type,
+    pub ty: syn::Type,
     variants: Vec<Option<FunctionDecl>>,
 }
 impl ExpandParamDecl {
@@ -27,10 +27,40 @@ impl ExpandParamDecl {
 }
 #[derive(Clone)]
 pub struct ExpandReturnDecl {
-    pub(crate) ty: syn::Type,
-    fields: Vec<Option<FunctionDecl>>,
+    pub ty: syn::Type,
+    fields: Vec<ReturnField>,
+}
+#[derive(Clone)]
+enum ReturnField {
+    Identity,
+    Getter(Box<FunctionDecl>),
+    Fields(FieldsDecl),
+}
+#[derive(Clone)]
+pub struct FieldsDecl {
+    function: String,
+    overrides: BTreeMap<String, ExpandReturnDecl>,
+}
+impl FieldsDecl {
+    pub fn new(function: syn::Ident) -> Self {
+        Self {
+            function: function.to_string(),
+            overrides: BTreeMap::new(),
+        }
+    }
+    pub fn field(mut self, name: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
+        assert!(
+            self.overrides.insert(name.as_ref().into(), decl).is_none(),
+            "duplicate field override"
+        );
+        self
+    }
 }
 impl ExpandReturnDecl {
+    pub fn fields(mut self, decl: FieldsDecl) -> Self {
+        self.fields.push(ReturnField::Fields(decl));
+        self
+    }
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
@@ -38,11 +68,11 @@ impl ExpandReturnDecl {
         }
     }
     pub fn field(mut self, f: FunctionDecl) -> Self {
-        self.fields.push(Some(f));
+        self.fields.push(ReturnField::Getter(Box::new(f)));
         self
     }
     pub fn field_self(mut self) -> Self {
-        self.fields.push(None);
+        self.fields.push(ReturnField::Identity);
         self
     }
 }
@@ -61,15 +91,15 @@ impl From<ExpandReturnDecl> for ExpandDecl {
     }
 }
 #[macro_export]
-macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::__type(stringify!($($ty)+)))};}
+macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
-macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::__type(stringify!($($ty)+)))};}
+macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 
-pub(crate) struct Defaults {
+pub struct Declarations {
     inputs: BTreeMap<String, ExpandParamDecl>,
     outputs: BTreeMap<String, ExpandReturnDecl>,
 }
-impl Defaults {
+impl Declarations {
     pub fn new(flat: &Flat<Slot>, decls: Vec<ExpandDecl>) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
@@ -144,15 +174,19 @@ impl Defaults {
             stack.push(key);
             let mut arms = Vec::new();
             for variant in &d.variants {
-                arms.push(match variant{
-    None=>Input::Handle,
-    Some(f)=>{
-     if !f.params.is_empty()||f.ret.is_some()||f.foreign.is_some(){return Err("constructor references only support their source name in this subset".into());}
-     let func=flat.function(&f.name)?;
-     let args=func.params.iter().map(|p|self.input(flat,&p.ty.ty,None,stack)).collect::<Result<Vec<_>>>()?;
-     Input::constructor(&f.name,args)
-    }
-   });
+                arms.push(match variant {
+                    None => Input::Handle,
+                    Some(f) => {
+                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
+                            return Err("constructor references only support their source name in this subset".into());
+                        }
+                        let func = flat.function(&f.name)?;
+                        let args = func.params.iter()
+                            .map(|p| self.input(flat, &p.ty.ty, None, stack))
+                            .collect::<Result<Vec<_>>>()?;
+                        Input::constructor(&f.name, args)
+                    }
+                });
             }
             stack.pop();
             return match arms.len() {
@@ -192,8 +226,8 @@ impl Defaults {
             let mut parts = Vec::new();
             for field in &d.fields {
                 parts.push(match field {
-                    None => Output::Handle,
-                    Some(f) => {
+                    ReturnField::Identity => Output::Handle,
+                    ReturnField::Getter(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err(
                                 "getter references only support their source name in this subset"
@@ -202,6 +236,29 @@ impl Defaults {
                         }
                         let func = flat.function(&f.name)?;
                         Output::getter(&f.name, self.output(flat, &func.ret.ty, None, stack)?)
+                    }
+                    ReturnField::Fields(d) => {
+                        let f = flat.function(&d.function)?;
+                        let record = flat.record(&f.ret.ty)?;
+                        for name in d.overrides.keys() {
+                            if !record.fields.iter().any(|p| p.name == name.as_str()) {
+                                return Err(format!("unknown output field `{name}`"));
+                            }
+                        }
+                        let children = record
+                            .fields
+                            .iter()
+                            .map(|p| {
+                                self.output(
+                                    flat,
+                                    &p.ty.ty,
+                                    d.overrides.get(&p.name.to_string()),
+                                    stack,
+                                )
+                                .map(clone_field_handles)
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+                        Output::getter(&d.function, Output::fields(children))
                     }
                 });
             }
@@ -218,5 +275,67 @@ impl Defaults {
             "()" => Output::fields([]),
             _ => Output::Handle,
         })
+    }
+}
+
+// A value-form field is borrowed. Identity delivery therefore needs an independent handle.
+fn clone_field_handles(output: Output) -> Output {
+    match output {
+        Output::Handle => Output::ClonedHandle,
+        Output::Combine(parts) => Output::combine(parts.into_iter().map(clone_field_handles)),
+        other => other,
+    }
+}
+#[doc(hidden)]
+pub fn parse_type(s: &str) -> syn::Type {
+    syn::parse_str(s).expect("type syntax")
+}
+#[doc(hidden)]
+pub fn parse_ident(s: &str) -> syn::Ident {
+    syn::parse_str(s).expect("identifier syntax")
+}
+#[macro_export]
+macro_rules! fun {
+    ($name:ident) => {
+        $crate::FunctionDecl::new($crate::declarations::parse_ident(stringify!($name)))
+    };
+}
+#[macro_export]
+macro_rules! fields {
+    ($name:ident) => {
+        $crate::FieldsDecl::new($crate::declarations::parse_ident(stringify!($name)))
+    };
+}
+
+#[derive(Clone)]
+pub struct FunctionDecl {
+    pub name: String,
+    pub foreign: Option<String>,
+    pub params: BTreeMap<String, ExpandParamDecl>,
+    pub ret: Option<ExpandReturnDecl>,
+}
+impl FunctionDecl {
+    pub fn new(name: syn::Ident) -> Self {
+        Self {
+            name: name.to_string(),
+            foreign: None,
+            params: BTreeMap::new(),
+            ret: None,
+        }
+    }
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.foreign = Some(name.into());
+        self
+    }
+    pub fn expand_param(mut self, name: impl AsRef<str>, decl: ExpandParamDecl) -> Self {
+        assert!(
+            self.params.insert(name.as_ref().into(), decl).is_none(),
+            "duplicate parameter override"
+        );
+        self
+    }
+    pub fn expand_return(mut self, decl: ExpandReturnDecl) -> Self {
+        self.ret = Some(decl);
+        self
     }
 }

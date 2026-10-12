@@ -15,14 +15,43 @@ impl Codec for CCodec {
 }
 /// The caller pins conversion recipes on the flat model before building.
 pub struct Cbindgen {
-    flat: Flat<Slot>,
+    flat: Option<Flat<Slot>>,
+    source: Option<std::path::PathBuf>,
+    expansions: Vec<prebindgen_tools::ExpandDecl>,
+    functions: Vec<prebindgen_tools::FunctionDecl>,
     prefix: String,
     handles: Vec<(String, syn::Type)>,
 }
 impl Cbindgen {
+    pub fn builder() -> Self {
+        Self {
+            flat: None,
+            source: None,
+            expansions: Vec::new(),
+            functions: Vec::new(),
+            prefix: "pb".into(),
+            handles: Vec::new(),
+        }
+    }
+    pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.source = Some(path.as_ref().to_owned());
+        self
+    }
+    pub fn expand(mut self, decl: impl Into<prebindgen_tools::ExpandDecl>) -> Self {
+        self.expansions.push(decl.into());
+        self
+    }
+    pub fn function(mut self, decl: prebindgen_tools::FunctionDecl) -> Self {
+        self.functions.push(decl);
+        self
+    }
+
     pub fn new(flat: Flat<Slot>) -> Self {
         Self {
-            flat,
+            flat: Some(flat),
+            source: None,
+            expansions: Vec::new(),
+            functions: Vec::new(),
             prefix: "pb".into(),
             handles: Vec::new(),
         }
@@ -37,12 +66,28 @@ impl Cbindgen {
     }
     pub fn build(self) -> Result<Generation> {
         prebindgen_tools::ident(&self.prefix)?;
+        let mut flat = match (self.flat, self.source) {
+            (Some(flat), None) => flat,
+            (None, Some(path)) => Flat::parse(prebindgen::Source::new(path).items_all())?,
+            _ => return Err("supply exactly one source or configured flat model".into()),
+        };
+        let declarations = prebindgen_tools::Declarations::new(&flat, self.expansions)?;
+        let mut names = std::collections::BTreeSet::new();
+        for decl in self.functions {
+            if !names.insert(decl.name.clone()) {
+                return Err("duplicate C function declaration".into());
+            }
+            if decl.foreign.is_some() {
+                return Err("C function renaming is outside this subset".into());
+            }
+            declarations.fill(&mut flat, &decl)?;
+        }
         let handles = self
             .handles
             .into_iter()
-            .map(|(n, t)| Ok((n, self.flat.resolve_type(&t)?)))
+            .map(|(n, t)| Ok((n, flat.resolve_type(&t)?)))
             .collect::<Result<Vec<_>>>()?;
-        let flat = prebindgen_tools::prepare(self.flat, &CCodec)?;
+        let flat = prebindgen_tools::prepare(flat, &CCodec)?;
         generate(flat, &self.prefix, handles)
     }
 }

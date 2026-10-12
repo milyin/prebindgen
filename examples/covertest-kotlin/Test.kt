@@ -71,15 +71,15 @@ fun main() {
     go.countDown(); threads.forEach { it.join() }
     check(won.get() == 1 && shared.isClosed)
     // Existing declaration forms configure slots in the same pipeline.
-    check(echoKey(0, "declared", null) == "declared")
+    check(echoKey(1, null, "declared") == "declared")
     val echoInput = keyexprFromString("handle")
-    check(echoKey(1, null, echoInput) == "handle" && echoInput.isClosed)
+    check(echoKey(0, echoInput, null) == "handle" && echoInput.isClosed)
     val rawInput = keyexprFromString("raw")
     val rawOutput = echoRaw(rawInput)
     check(rawInput.isClosed && keyexprText(rawOutput) == "raw")
     var abandoned: KeyExpr? = null
     try {
-        keyexprPair(0, "builder", null) { h, s ->
+        keyexprPair(1, null, "builder") { h, s ->
             check(s == "builder")
             abandoned = h
             error("builder failed")

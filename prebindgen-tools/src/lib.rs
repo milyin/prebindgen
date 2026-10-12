@@ -433,3 +433,8 @@ pub fn ident(name: &str) -> Result<syn::Ident> {
 
 #[cfg(test)]
 mod tests;
+
+pub mod declarations;
+pub use declarations::{
+    Declarations, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl,
+};

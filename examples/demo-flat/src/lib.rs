@@ -73,3 +73,12 @@ pub fn keyexpr_pair(k: KeyExpr) -> KeyExpr {
 }
 #[prebindgen]
 pub fn noop_extra() {}
+
+#[prebindgen]
+pub fn payload_from_fields(key: KeyExpr, data: Vec<u8>) -> Payload {
+    Payload { key, data }
+}
+#[prebindgen]
+pub fn payload_parts(p: &Payload) -> Payload {
+    p.clone()
+}

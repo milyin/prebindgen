@@ -13,9 +13,7 @@ konst.workspace=true
 demo-flat={path="../demo-flat"}
 
 [build-dependencies]
-prebindgen.workspace=true
-prebindgen-flat.workspace=true
-prebindgen-tools.workspace=true
 prebindgen-c.workspace=true
 syn.workspace=true
 demo-flat={path="../demo-flat"}
+prebindgen-registry.workspace=true
