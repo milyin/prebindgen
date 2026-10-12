@@ -44,9 +44,9 @@ collections and functions can stay in the source crate; selecting one still
 produces a generation error when its shape is unsupported. This lets bindings
 be enabled incrementally without rewriting the real source API.
 
-The old foreign performance drivers and full coverage clients require the
-commented bindings. They are not run in this subset. Focused C and Kotlin smoke
-clients exercise the active declarations; this branch makes no performance or
+The old foreign performance drivers require the commented bindings and have
+been removed. Full coverage clients are replaced with focused C and Kotlin smoke
+clients exercising the active declarations; this branch makes no performance or
 full downstream compatibility claim. Generated artifacts remain under `OUT_DIR`.
 
 ## Supported generator API
