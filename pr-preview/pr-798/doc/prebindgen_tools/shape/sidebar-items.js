@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Access","SequenceKind","Shape","TextKind"],"fn":["shape"]};
