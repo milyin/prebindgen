@@ -4,9 +4,7 @@ pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
 use prebindgen_tools::{
     Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
 };
-#[derive(Clone, Debug)]
-pub struct OpaquePointer;
-type Slot = GenericSlot<OpaquePointer>;
+type Slot = GenericSlot<()>;
 type Prepared = GenericPrepared<PointerWire>;
 type WireKind = GenericWireKind<PointerWire>;
 use proc_macro2::TokenStream;
@@ -14,18 +12,15 @@ use quote::{format_ident, quote};
 
 struct CCodec;
 impl Codec for CCodec {
-    type Leaf = OpaquePointer;
+    type Extra = ();
     type Wire = PointerWire;
-    fn identity(&self, _: &syn::Type) -> Result<OpaquePointer> {
-        Ok(OpaquePointer)
-    }
-    fn consumes(&self, _: &OpaquePointer) -> bool {
+    fn consumes(&self, _: &syn::Type, _: &()) -> bool {
         true
     }
     fn input_foreign(
         &self,
         ty: &syn::Type,
-        _: &OpaquePointer,
+        _: &(),
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
@@ -35,7 +30,7 @@ impl Codec for CCodec {
     fn output_foreign(
         &self,
         ty: &syn::Type,
-        _: &OpaquePointer,
+        _: &(),
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
@@ -48,7 +43,7 @@ impl Codec for CCodec {
             borrowed,
         )
     }
-    fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
+    fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
         let ty = p.rust_type();
         match p {
             Primitive::Bool => quote!(#w != 0),
@@ -59,7 +54,7 @@ impl Codec for CCodec {
             _ => quote!(#w),
         }
     }
-    fn encode_scalar(&self, p: Primitive, v: TokenStream) -> TokenStream {
+    fn encode_scalar(&self, p: Primitive, v: TokenStream, _: &()) -> TokenStream {
         match p {
             Primitive::Bool => quote!(u8::from(#v)),
             Primitive::Char => quote!((#v) as u32),
@@ -69,14 +64,14 @@ impl Codec for CCodec {
             _ => v,
         }
     }
-    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
+    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type, _: &()) -> TokenStream {
         if matches!(_ty, syn::Type::Reference(r) if prebindgen_flat::type_key(&r.elem) == "str") {
             quote!(std::str::from_utf8(unsafe {__pb_read(#w)?}).map_err(|_|"invalid UTF-8")?)
         } else {
             quote!(std::str::from_utf8(unsafe {__pb_read(#w)?}).map_err(|_|"invalid UTF-8")?.to_owned())
         }
     }
-    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
+    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type, _: &()) -> TokenStream {
         if matches!(_ty, syn::Type::Reference(r) if prebindgen_flat::type_key(&r.elem) == "[u8]") {
             quote!(unsafe {__pb_read(#w)?})
         } else {
@@ -162,7 +157,7 @@ impl Cbindgen {
             if decl.foreign.is_some() {
                 return Err("C function renaming is outside this subset".into());
             }
-            declarations.fill(&mut flat, &decl, &CCodec)?;
+            declarations.fill(&mut flat, &decl)?;
         }
         let pointers = self
             .pointers

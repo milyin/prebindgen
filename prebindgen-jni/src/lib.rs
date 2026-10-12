@@ -9,9 +9,7 @@ pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
 use prebindgen_tools::{
     Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, WireKind as GenericWireKind,
 };
-#[derive(Clone, Debug)]
-pub struct Handle;
-type Slot = GenericSlot<Handle>;
+type Slot = GenericSlot<()>;
 type Prepared = GenericPrepared<HandleWire>;
 type WireKind = GenericWireKind<HandleWire>;
 use proc_macro2::TokenStream;
@@ -206,7 +204,7 @@ impl JniGenBuilder {
                 }
             }
             for f in p.functions {
-                defaults.fill(&mut flat, &f, &JniCodec)?;
+                defaults.fill(&mut flat, &f)?;
                 let name = f.foreign.unwrap_or_else(|| camel(&f.name));
                 validate_name(&name)?;
                 if !seen.insert(format!("{pkg}.{name}")) {
@@ -241,18 +239,15 @@ impl Class {
 }
 struct JniCodec;
 impl Codec for JniCodec {
-    type Leaf = Handle;
+    type Extra = ();
     type Wire = HandleWire;
-    fn identity(&self, _: &syn::Type) -> Result<Handle> {
-        Ok(Handle)
-    }
-    fn consumes(&self, _: &Handle) -> bool {
+    fn consumes(&self, _: &syn::Type, _: &()) -> bool {
         true
     }
     fn input_foreign(
         &self,
         ty: &syn::Type,
-        _: &Handle,
+        _: &(),
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
@@ -270,7 +265,7 @@ impl Codec for JniCodec {
     fn output_foreign(
         &self,
         ty: &syn::Type,
-        _: &Handle,
+        _: &(),
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
@@ -285,16 +280,16 @@ impl Codec for JniCodec {
             borrowed,
         )
     }
-    fn decode_scalar(&self, p: Primitive, w: &syn::Ident) -> TokenStream {
+    fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
         scalar::decode(p, w)
     }
-    fn encode_scalar(&self, p: Primitive, v: TokenStream) -> TokenStream {
+    fn encode_scalar(&self, p: Primitive, v: TokenStream, _: &()) -> TokenStream {
         scalar::encode(p, v)
     }
-    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
+    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type, _: &()) -> TokenStream {
         quote!(::prebindgen_jni_runtime::text(&mut env,&#w)?)
     }
-    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type) -> TokenStream {
+    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type, _: &()) -> TokenStream {
         quote!(::prebindgen_jni_runtime::bytes(&mut env,&#w)?)
     }
 }

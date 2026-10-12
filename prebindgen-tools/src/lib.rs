@@ -6,75 +6,80 @@ use syn::Type;
 
 /// Inputs are recipes, not wire layouts. A selector denotes a logical choice.
 #[derive(Clone, Debug)]
-pub enum Input<L> {
+pub enum Input {
     Scalar,
-    Foreign(L),
+    Foreign,
     Text,
     Bytes,
-    Fields(Vec<Input<L>>),
-    Constructor {
-        function: String,
-        args: Vec<Input<L>>,
-    },
-    Selector(Vec<Input<L>>),
+    Fields(Vec<Input>),
+    Constructor { function: String, args: Vec<Input> },
+    Selector(Vec<Input>),
 }
-impl<L> Input<L> {
-    pub fn fields(fields: impl IntoIterator<Item = Input<L>>) -> Self {
+impl Input {
+    pub fn fields(fields: impl IntoIterator<Item = Input>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
-    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input<L>>) -> Self {
+    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input>) -> Self {
         Self::Constructor {
             function: name.into(),
             args: args.into_iter().collect(),
         }
     }
-    pub fn selector(arms: impl IntoIterator<Item = Input<L>>) -> Self {
+    pub fn selector(arms: impl IntoIterator<Item = Input>) -> Self {
         Self::Selector(arms.into_iter().collect())
     }
 }
 #[derive(Clone, Debug)]
-pub enum Output<L> {
+pub enum Output {
     Scalar,
     /// The adapter owns the representation and ownership policy.
-    Foreign(L),
+    Foreign,
     Text,
     Bytes,
-    Fields(Vec<Output<L>>),
+    Fields(Vec<Output>),
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         function: String,
-        output: Box<Output<L>>,
+        output: Box<Output>,
     },
-    Combine(Vec<Output<L>>),
+    Combine(Vec<Output>),
 }
-impl<L> Output<L> {
-    pub fn fields(fields: impl IntoIterator<Item = Output<L>>) -> Self {
+impl Output {
+    pub fn fields(fields: impl IntoIterator<Item = Output>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
-    pub fn getter(name: impl Into<String>, output: Output<L>) -> Self {
+    pub fn getter(name: impl Into<String>, output: Output) -> Self {
         Self::Getter {
             function: name.into(),
             output: Box::new(output),
         }
     }
-    pub fn combine(parts: impl IntoIterator<Item = Output<L>>) -> Self {
+    pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
-    fn consumes<C: Codec<Leaf = L>>(&self, codec: &C) -> bool {
+    fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C) -> bool {
         match self {
-            Self::Foreign(leaf) => codec.consumes(leaf),
-            Self::Combine(p) => p.iter().any(|p| p.consumes(codec)),
+            Self::Foreign => codec.consumes(ty, extra),
+            Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec)),
             _ => false,
         }
     }
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum Slot<L> {
+pub enum Recipe {
     #[default]
     Empty,
-    Input(Input<L>),
-    Output(Output<L>),
+    Input(Input),
+    Output(Output),
+}
+
+/// An occurrence's recipe and adapter data are independent. The same `extra`
+/// is passed through every nested conversion in this occurrence's recipe.
+#[derive(Clone, Debug, Default)]
+pub struct Slot<E> {
+    pub recipe: Recipe,
+    pub extra: E,
 }
 
 /// A wire's role remains available to both sides, even when carriers coincide.
@@ -102,15 +107,13 @@ pub struct Wire<W> {
 /// the supplied activation condition. Output leaves keep ownership in Rust
 /// locals until their infallible `commit` runs after successful delivery.
 pub trait Codec {
-    type Leaf: Clone + std::fmt::Debug;
+    type Extra: Clone + std::fmt::Debug;
     type Wire: Clone + std::fmt::Debug;
-    /// Explicit identity and unexpanded domain types are adapter policy.
-    fn identity(&self, ty: &Type) -> Result<Self::Leaf>;
-    fn consumes(&self, leaf: &Self::Leaf) -> bool;
+    fn consumes(&self, ty: &Type, extra: &Self::Extra) -> bool;
     fn input_foreign(
         &self,
         ty: &Type,
-        leaf: &Self::Leaf,
+        extra: &Self::Extra,
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
@@ -118,15 +121,25 @@ pub trait Codec {
     fn output_foreign(
         &self,
         ty: &Type,
-        leaf: &Self::Leaf,
+        extra: &Self::Extra,
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
     ) -> Result<PreparedOutput<Self::Wire>>;
-    fn decode_scalar(&self, primitive: Primitive, wire: &syn::Ident) -> TokenStream;
-    fn encode_scalar(&self, primitive: Primitive, value: TokenStream) -> TokenStream;
-    fn decode_text(&self, wire: &syn::Ident, ty: &Type) -> TokenStream;
-    fn decode_bytes(&self, wire: &syn::Ident, ty: &Type) -> TokenStream;
+    fn decode_scalar(
+        &self,
+        primitive: Primitive,
+        wire: &syn::Ident,
+        extra: &Self::Extra,
+    ) -> TokenStream;
+    fn encode_scalar(
+        &self,
+        primitive: Primitive,
+        value: TokenStream,
+        extra: &Self::Extra,
+    ) -> TokenStream;
+    fn decode_text(&self, wire: &syn::Ident, ty: &Type, extra: &Self::Extra) -> TokenStream;
+    fn decode_bytes(&self, wire: &syn::Ident, ty: &Type, extra: &Self::Extra) -> TokenStream;
 }
 #[derive(Clone, Debug)]
 pub struct PreparedInput<W> {
@@ -157,12 +170,12 @@ pub enum Prepared<W> {
 
 /// Fill slots on the same flat structure, rejecting incomplete bound functions.
 /// A function is exported iff its result has an output slot, including `fields([])` for unit.
-pub fn prepare<C: Codec>(flat: Flat<Slot<C::Leaf>>, codec: &C) -> Result<Flat<Prepared<C::Wire>>> {
+pub fn prepare<C: Codec>(flat: Flat<Slot<C::Extra>>, codec: &C) -> Result<Flat<Prepared<C::Wire>>> {
     for f in flat.functions.values() {
-        match &f.ret.slot {
-            Slot::Output(_) => {
+        match &f.ret.slot.recipe {
+            Recipe::Output(_) => {
                 for p in &f.params {
-                    if !matches!(p.ty.slot, Slot::Input(_)) {
+                    if !matches!(p.ty.slot.recipe, Recipe::Input(_)) {
                         return Err(format!(
                             "`{}`: parameter `{}` has no input converter",
                             f.name, p.name
@@ -170,7 +183,10 @@ pub fn prepare<C: Codec>(flat: Flat<Slot<C::Leaf>>, codec: &C) -> Result<Flat<Pr
                     }
                 }
             }
-            Slot::Empty if f.params.iter().all(|p| matches!(p.ty.slot, Slot::Empty)) => {}
+            Recipe::Empty
+                if f.params
+                    .iter()
+                    .all(|p| matches!(p.ty.slot.recipe, Recipe::Empty)) => {}
             _ => {
                 return Err(format!(
                     "`{}`: incomplete or wrong-direction conversion slots",
@@ -186,19 +202,23 @@ pub fn prepare<C: Codec>(flat: Flat<Slot<C::Leaf>>, codec: &C) -> Result<Flat<Pr
         next: 0,
     };
     flat.map_slots(|ty, slot| {
-        Ok(match slot {
-            Slot::Empty => Prepared::Empty,
-            Slot::Input(recipe) => {
-                Prepared::Input(compiler.input(ty, &recipe, &Condition::default())?)
+        Ok(match slot.recipe {
+            Recipe::Empty => Prepared::Empty,
+            Recipe::Input(recipe) => {
+                Prepared::Input(compiler.input(ty, &recipe, &slot.extra, &Condition::default())?)
             }
-            Slot::Output(recipe) => {
-                Prepared::Output(compiler.output(ty, &recipe, quote!(__result), false)?)
-            }
+            Recipe::Output(recipe) => Prepared::Output(compiler.output(
+                ty,
+                &recipe,
+                &slot.extra,
+                quote!(__result),
+                false,
+            )?),
         })
     })
 }
 struct Compiler<'a, C: Codec> {
-    flat: &'a Flat<Slot<C::Leaf>>,
+    flat: &'a Flat<Slot<C::Extra>>,
     codec: &'a C,
     next: usize,
 }
@@ -211,7 +231,8 @@ impl<C: Codec> Compiler<'_, C> {
     fn input(
         &mut self,
         ty: &Type,
-        recipe: &Input<C::Leaf>,
+        recipe: &Input,
+        extra: &C::Extra,
         active: &Condition,
     ) -> Result<PreparedInput<C::Wire>> {
         let var = self.name();
@@ -227,7 +248,7 @@ impl<C: Codec> Compiler<'_, C> {
                 let primitive =
                     Primitive::from_type(ty).ok_or("scalar input needs a primitive type")?;
                 let w = self.name();
-                let decode = self.codec.decode_scalar(primitive, &w);
+                let decode = self.codec.decode_scalar(primitive, &w, extra);
                 wires.push(Wire {
                     name: w,
                     kind: WireKind::Scalar(primitive),
@@ -236,9 +257,9 @@ impl<C: Codec> Compiler<'_, C> {
                 validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
                 statements = quote!(let #var:#ty=#var.expect("active scalar"););
             }
-            Input::Foreign(leaf) => {
+            Input::Foreign => {
                 let w = self.name();
-                return self.codec.input_foreign(ty, leaf, w, var, active);
+                return self.codec.input_foreign(ty, extra, w, var, active);
             }
             Input::Text | Input::Bytes => {
                 let text = matches!(recipe, Input::Text);
@@ -274,9 +295,9 @@ impl<C: Codec> Compiler<'_, C> {
                     },
                 });
                 let decode = if text {
-                    self.codec.decode_text(&w, ty)
+                    self.codec.decode_text(&w, ty, extra)
                 } else {
-                    self.codec.decode_bytes(&w, ty)
+                    self.codec.decode_bytes(&w, ty, extra)
                 };
                 validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
                 statements = quote!(let #var=#var.expect("active buffer"););
@@ -306,7 +327,7 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 let mut fields = Vec::new();
                 for (field, child) in r.fields.iter().zip(children) {
-                    let p = self.input(&field.ty.ty, child, active)?;
+                    let p = self.input(&field.ty.ty, child, extra, active)?;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -332,7 +353,7 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 let mut call_args = Vec::new();
                 for (param, child) in f.params.iter().zip(args) {
-                    let p = self.input(&param.ty.ty, child, active)?;
+                    let p = self.input(&param.ty.ty, child, extra, active)?;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -361,7 +382,7 @@ impl<C: Codec> Compiler<'_, C> {
                 validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
-                    let p = self.input(ty, arm, &active.arm(tag.clone(), i as i32))?;
+                    let p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -386,7 +407,8 @@ impl<C: Codec> Compiler<'_, C> {
     fn output(
         &mut self,
         ty: &Type,
-        recipe: &Output<C::Leaf>,
+        recipe: &Output,
+        extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
     ) -> Result<PreparedOutput<C::Wire>> {
@@ -408,7 +430,7 @@ impl<C: Codec> Compiler<'_, C> {
                 } else {
                     value
                 };
-                let expr = self.codec.encode_scalar(primitive, value);
+                let expr = self.codec.encode_scalar(primitive, value, extra);
                 let w = self.name();
                 out.statements.extend(quote!(let #w=#expr;));
                 out.values.push(quote!(#w));
@@ -418,9 +440,9 @@ impl<C: Codec> Compiler<'_, C> {
                     active: Condition::default(),
                 });
             }
-            Output::Foreign(leaf) => {
+            Output::Foreign => {
                 let w = self.name();
-                return self.codec.output_foreign(ty, leaf, w, value, borrowed);
+                return self.codec.output_foreign(ty, extra, w, value, borrowed);
             }
             Output::Text | Output::Bytes => {
                 let text = matches!(recipe, Output::Text);
@@ -455,7 +477,8 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 for (field, child) in r.fields.iter().zip(children) {
                     let name = &field.name;
-                    let p = self.output(&field.ty.ty, child, quote!(&(#value).#name), true)?;
+                    let p =
+                        self.output(&field.ty.ty, child, extra, quote!(&(#value).#name), true)?;
                     append(&mut out, p);
                 }
             }
@@ -475,24 +498,32 @@ impl<C: Codec> Compiler<'_, C> {
                 let path = &f.path;
                 let arg = if borrowed { value } else { quote!(&#value) };
                 out.statements = quote!(let #v=#path(#arg););
-                append(&mut out, self.output(&f.ret.ty, output, quote!(#v), false)?);
+                append(
+                    &mut out,
+                    self.output(&f.ret.ty, output, extra, quote!(#v), false)?,
+                );
             }
             Output::Combine(parts) => {
                 if parts.is_empty() {
                     return Err("an output combination needs at least one part".into());
                 }
-                if parts.iter().filter(|p| p.consumes(self.codec)).count() > 1 {
+                if parts
+                    .iter()
+                    .filter(|p| p.consumes(ty, extra, self.codec))
+                    .count()
+                    > 1
+                {
                     return Err("a combination cannot consume the same value twice".into());
                 }
                 let mut bodies = Vec::new();
                 for child in parts {
-                    let consuming = child.consumes(self.codec);
+                    let consuming = child.consumes(ty, extra, self.codec);
                     let arg = if borrowed || consuming {
                         value.clone()
                     } else {
                         quote!(&#value)
                     };
-                    let mut p = self.output(ty, child, arg, borrowed || !consuming)?;
+                    let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p);
                 }

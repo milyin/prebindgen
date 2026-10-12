@@ -9,7 +9,7 @@ engine behind it.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Flat<Slot<AdapterLeaf>>: syn::Type + conversion recipe at each parameter/result occurrence
+Flat<Slot<Extra>>: source type + conversion recipe + adapter data per occurrence
         ↓ prebindgen-tools: defaults, overrides, validation and composition
 Flat<Prepared<AdapterWire>>: input preparation, access requirements, output delivery
         ↓ C or JNI wrapper writer
@@ -78,14 +78,23 @@ C pointer types and typed destructors. Its old naming and cbindgen postprocessin
 settings remain commented out in the example manifests.
 
 Manual slot configuration remains available for generator development, but none
-of the migrated binding examples requires it. `Input<L>`, `Output<L>` and
-`Slot<L>` carry an adapter's leaf recipe; `WireKind<W>` and `Prepared<W>` carry
-its wire description. Tools compose primitives, text/bytes, adapter leaves,
+of the migrated binding examples requires it. `Input`, `Output` and `Recipe`
+are non-generic conversion recipes. `Slot<E>` stores a recipe beside the
+adapter's extra data; the source type remains on the flat occurrence. Preparation
+receives all three separately. Declaration filling sets or overrides only the
+recipe and preserves the extra data, without consulting a codec.
+
+The same occurrence data is passed through its entire recipe, including nested
+fields, constructors, selectors, getters and combined outputs. It is not replaced
+with the extra data of a referenced field or function declaration. This subset
+does not provide separate metadata per nested recipe node. C and JNI currently
+use `()` as their extra data. `WireKind<W>` and `Prepared<W>` retain the adapter's
+prepared wire description. Tools compose primitives, text/bytes, adapter leaves,
 fields, constructors, input selectors and combined outputs. The composition model
 requires neither handles nor boxed storage. It has no object registry or universal
 `Send` requirement.
 
-The adapter chooses identity/default conversions for domain types and declares
+The adapter implements foreign conversions for domain types and declares
 whether an output consumes its value. Tools run observations before that move
 and reject double consumption. For pointer/handle output from borrowed record
 fields, these adapters make independent owned copies using Rust `Clone`.
