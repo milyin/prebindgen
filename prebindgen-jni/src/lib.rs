@@ -79,6 +79,7 @@ pub struct JniGenBuilder {
     configure: Vec<Configure>,
     flat: Option<Flat<Slot>>,
     source: Option<std::path::PathBuf>,
+    items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     expansions: Vec<ExpandDecl>,
     prefix: String,
     init: String,
@@ -90,6 +91,13 @@ impl JniGenBuilder {
     }
     pub fn configure(mut self, f: impl FnOnce(&mut Flat<Slot>) -> Result<()> + 'static) -> Self {
         self.configure.push(Box::new(f));
+        self
+    }
+    pub fn items(
+        mut self,
+        items: impl IntoIterator<Item = (syn::Item, prebindgen::SourceLocation)>,
+    ) -> Self {
+        self.items.get_or_insert_with(Vec::new).extend(items);
         self
     }
     pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
@@ -117,10 +125,28 @@ impl JniGenBuilder {
         self
     }
     pub fn build(self) -> Result<JniGen> {
-        let mut flat = match (self.flat, self.source) {
-            (Some(flat), None) => flat,
-            (None, Some(path)) => Flat::parse(prebindgen::Source::new(path).items_all())?,
-            _ => return Err("supply exactly one source or configured flat model".into()),
+        let references = prebindgen_tools::declarations::source_functions(
+            &self.expansions,
+            self.packages.iter().flat_map(|p| &p.functions),
+        );
+        let types: Vec<_> = self
+            .packages
+            .iter()
+            .flat_map(|p| p.classes.iter().map(|c| c.ty.clone()))
+            .collect();
+        let mut flat = match (self.flat, self.source, self.items) {
+            (Some(flat), None, None) => flat,
+            (None, Some(path), None) => Flat::parse_selected(
+                prebindgen::Source::new(path).items_all(),
+                &references,
+                &types,
+            )?,
+            (None, None, Some(items)) => Flat::parse_selected(items, &references, &types)?,
+            _ => {
+                return Err(
+                    "supply exactly one source, item stream or configured flat model".into(),
+                )
+            }
         };
         for configure in self.configure {
             configure(&mut flat)?;

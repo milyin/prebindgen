@@ -12,7 +12,7 @@ metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--offline",
 ids = {p["id"]: p["name"] for p in metadata["packages"]}
 outputs = {}
 # Cargo reports the exact output paths; never select a stale build directory.
-process = subprocess.Popen(["cargo", "build", "--offline", "-p", "demo-c", "-p", "covertest-kotlin", "--message-format=json"], stdout=subprocess.PIPE, text=True)
+process = subprocess.Popen(["cargo", "build", "--offline", "--workspace", "--message-format=json"], stdout=subprocess.PIPE, text=True)
 for line in process.stdout:
     message = json.loads(line)
     if message["reason"] == "build-script-executed" and message["package_id"] in ids:
@@ -27,8 +27,13 @@ lib = Path(metadata["target_directory"]) / "debug"
 cc = [os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror"]
 if os.environ.get("SANITIZE") == "1":
     cc += ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
-subprocess.run(cc + ["-I" + str(outputs["demo-c"]), "examples/demo-c/test.c", "-L" + str(lib), "-ldemo_c", "-Wl,-rpath," + str(lib), "-o", str(build / "c-test")], check=True)
-subprocess.run([str(build / "c-test")], check=True)
-kotlin = sorted(outputs["covertest-kotlin"].joinpath("kotlin").rglob("*.kt"))
-subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "examples/covertest-kotlin/Test.kt", "-include-runtime", "-d", str(build / "test.jar")], check=True)
-subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-jar", str(build / "test.jar")], check=True)
+for name in ["example-cbindgen", "perftest-c"]:
+    executable = build / name
+    subprocess.run(cc + ["-I" + str(outputs[name]), f"examples/{name}/c/smoke.c", "-L" + str(lib), "-l" + name.replace("-", "_"), "-Wl,-rpath," + str(lib), "-o", str(executable)], check=True)
+    subprocess.run([str(executable)], check=True)
+for name in ["covertest-kotlin", "perftest-kotlin"]:
+    kotlin = sorted(outputs[name].joinpath("kotlin").rglob("*.kt"))
+    kotlin += sorted(Path(f"examples/{name}/kotlin").rglob("*.kt"))
+    jar = build / (name + ".jar")
+    subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
+    subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-jar", str(jar)], check=True)

@@ -339,3 +339,49 @@ impl FunctionDecl {
         self
     }
 }
+
+/// Every source callable referenced by the binding, including nested recipes.
+pub fn source_functions<'a>(
+    expansions: &[ExpandDecl],
+    functions: impl IntoIterator<Item = &'a FunctionDecl>,
+) -> Vec<String> {
+    fn input(d: &ExpandParamDecl, names: &mut Vec<String>) {
+        for f in d.variants.iter().flatten() {
+            function(f, names);
+        }
+    }
+    fn output(d: &ExpandReturnDecl, names: &mut Vec<String>) {
+        for field in &d.fields {
+            match field {
+                ReturnField::Identity => {}
+                ReturnField::Getter(f) => function(f, names),
+                ReturnField::Fields(d) => {
+                    names.push(d.function.clone());
+                    for d in d.overrides.values() {
+                        output(d, names);
+                    }
+                }
+            }
+        }
+    }
+    fn function(f: &FunctionDecl, names: &mut Vec<String>) {
+        names.push(f.name.clone());
+        for d in f.params.values() {
+            input(d, names);
+        }
+        if let Some(d) = &f.ret {
+            output(d, names);
+        }
+    }
+    let mut names = Vec::new();
+    for f in functions {
+        function(f, &mut names);
+    }
+    for d in expansions {
+        match d {
+            ExpandDecl::Param(d) => input(d, &mut names),
+            ExpandDecl::Return(d) => output(d, &mut names),
+        }
+    }
+    names
+}

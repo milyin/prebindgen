@@ -1,20 +1,16 @@
 [package]
-name="covertest-kotlin"
-version="0.1.0"
-edition="2021"
-publish=false
-
+name = "covertest-kotlin"
+version.workspace = true
+edition.workspace = true
+publish = false
 [lib]
-crate-type=["cdylib"]
-
+crate-type = ["cdylib"]
 [dependencies]
-prebindgen-runtime.workspace=true
-prebindgen-jni-runtime.workspace=true
-konst.workspace=true
-demo-flat={path="../demo-flat"}
-
+prebindgen-runtime.workspace = true
+prebindgen-jni-runtime.workspace = true
+konst.workspace = true
+perftest-flat = {path = "../perftest-flat"}
 [build-dependencies]
-prebindgen-jni.workspace=true
-syn.workspace=true
-demo-flat={path="../demo-flat"}
-prebindgen-registry.workspace=true
+prebindgen-jni.workspace = true
+prebindgen-registry.workspace = true
+perftest-flat = {path = "../perftest-flat"}

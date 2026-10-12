@@ -1,0 +1,12 @@
+[package]
+name = "emitcheck"
+version.workspace = true
+edition.workspace = true
+publish = false
+[dependencies]
+prebindgen-runtime.workspace = true
+prebindgen-jni-runtime.workspace = true
+[build-dependencies]
+prebindgen.workspace = true
+prebindgen-jni.workspace = true
+syn.workspace = true

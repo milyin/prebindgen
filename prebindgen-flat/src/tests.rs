@@ -52,3 +52,36 @@ fn field_syntax_and_slot_survive_mapping() {
     assert_eq!(field.ty.slot, "Vec < u8 >");
     assert_eq!(type_key(&field.ty.ty), field.ty.slot);
 }
+
+#[test]
+fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
+    let source = "pub type Handle = hidden::Private; pub enum Unsupported { A } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
+    let items = || {
+        syn::parse_file(source)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default()))
+    };
+    let flat = Flat::<()>::parse_selected(items(), &["make".into()], &[]).unwrap();
+    assert_eq!(flat.functions.len(), 1);
+    assert!(flat.types.contains_key("Handle"));
+    assert!(!flat.types.contains_key("Unsupported"));
+    assert!(Flat::<()>::parse_selected(items(), &["bad".into()], &[])
+        .unwrap_err()
+        .contains("unsupported flat item"));
+}
+
+#[test]
+fn selected_record_fields_retain_transitive_source_types() {
+    let items = syn::parse_file("pub type Key = hidden::Key; pub struct Record { pub key: Key } pub fn read(r: &Record) -> String {} pub fn unrelated(x: Option<u64>) {}").unwrap().items;
+    let flat = Flat::<()>::parse_selected(
+        items.into_iter().map(|i| (i, Default::default())),
+        &["read".into()],
+        &[],
+    )
+    .unwrap();
+    assert!(flat.types.contains_key("Key"));
+    assert!(flat.types.contains_key("Record"));
+    assert!(!flat.functions.contains_key("unrelated"));
+}

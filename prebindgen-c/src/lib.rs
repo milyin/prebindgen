@@ -68,7 +68,18 @@ impl Cbindgen {
         prebindgen_tools::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
-            (None, Some(path)) => Flat::parse(prebindgen::Source::new(path).items_all())?,
+            (None, Some(path)) => Flat::parse_selected(
+                prebindgen::Source::new(path).items_all(),
+                &prebindgen_tools::declarations::source_functions(
+                    &self.expansions,
+                    &self.functions,
+                ),
+                &self
+                    .handles
+                    .iter()
+                    .map(|(_, ty)| ty.clone())
+                    .collect::<Vec<_>>(),
+            )?,
             _ => return Err("supply exactly one source or configured flat model".into()),
         };
         let declarations = prebindgen_tools::Declarations::new(&flat, self.expansions)?;

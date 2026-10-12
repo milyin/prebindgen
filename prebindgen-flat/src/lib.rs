@@ -38,6 +38,60 @@ pub struct Flat<S> {
 }
 
 impl<S: Default> Flat<S> {
+    /// Select the source declarations needed by this binding before validating
+    /// the supported flat subset. Unbound source items are not language features.
+    pub fn parse_selected(
+        items: impl IntoIterator<Item = (syn::Item, SourceLocation)>,
+        functions: &[String],
+        types: &[Type],
+    ) -> Result<Self> {
+        let items: Vec<_> = items.into_iter().collect();
+        fn name(item: &syn::Item) -> Option<String> {
+            match item {
+                syn::Item::Fn(i) => Some(i.sig.ident.to_string()),
+                syn::Item::Struct(i) => Some(i.ident.to_string()),
+                syn::Item::Enum(i) => Some(i.ident.to_string()),
+                syn::Item::Type(i) => Some(i.ident.to_string()),
+                _ => None,
+            }
+        }
+        struct References<'a>(&'a mut BTreeSet<String>);
+        impl VisitMut for References<'_> {
+            fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
+                if path.qself.is_none() && path.path.segments.len() == 1 {
+                    self.0.insert(path.path.segments[0].ident.to_string());
+                }
+                syn::visit_mut::visit_type_path_mut(self, path);
+            }
+        }
+        let mut needed: BTreeSet<_> = functions.iter().cloned().collect();
+        for ty in types {
+            References(&mut needed).visit_type_mut(&mut ty.clone());
+        }
+        loop {
+            let old = needed.len();
+            for (item, _) in &items {
+                if !name(item).is_some_and(|n| needed.contains(&n)) {
+                    continue;
+                }
+                let mut visitor = References(&mut needed);
+                match item {
+                    syn::Item::Fn(f) => visitor.visit_signature_mut(&mut f.sig.clone()),
+                    syn::Item::Struct(s) => visitor.visit_fields_mut(&mut s.fields.clone()),
+                    // Aliases are opaque: their implementation is not part of the boundary.
+                    _ => {}
+                }
+            }
+            if needed.len() == old {
+                break;
+            }
+        }
+        Self::parse(items.into_iter().filter(|(item, _)| {
+            matches!(item, syn::Item::Const(c) if c.ident == "_")
+                || name(item).is_some_and(|n| needed.contains(&n))
+        }))
+    }
+
     /// Read captured items; only free functions, named records and opaque aliases
     /// belong to this first subset. Unknown forms fail here, not during emission.
     pub fn parse(items: impl IntoIterator<Item = (syn::Item, SourceLocation)>) -> Result<Self> {

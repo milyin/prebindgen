@@ -1,0 +1,16 @@
+[package]
+name = "example-cbindgen"
+version.workspace = true
+edition.workspace = true
+publish = false
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+prebindgen-runtime.workspace = true
+konst.workspace = true
+example-flat = {path = "../example-flat"}
+[build-dependencies]
+prebindgen-c.workspace = true
+prebindgen-registry.workspace = true
+syn.workspace = true
+example-flat = {path = "../example-flat"}

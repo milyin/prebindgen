@@ -2,7 +2,9 @@
 members = [
     "prebindgen", "prebindgen-proc-macro", "prebindgen-flat", "prebindgen-tools",
     "prebindgen-registry", "prebindgen-runtime", "prebindgen-c", "prebindgen-jni", "prebindgen-jni-runtime",
-    "examples/demo-flat", "examples/demo-c", "examples/covertest-kotlin",
+    "examples/example-flat", "examples/example-cbindgen", "examples/covertest-kotlin",
+    "examples/perftest-flat", "examples/perftest-c", "examples/perftest-kotlin",
+    "examples/covertest-helpers", "examples/emitcheck",
 ]
 resolver = "2"
 package.version = "0.5.0"
