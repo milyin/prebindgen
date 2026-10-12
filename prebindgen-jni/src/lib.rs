@@ -2,9 +2,11 @@
 //! The retained declaration subset is `package!`, `ptr_class!`, `fun!`,
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
+#![warn(missing_docs)]
 use prebindgen_flat::{type_key, Flat, Result};
 mod scalar;
 use prebindgen_flat::Primitive;
+/// Source value type and access mode for a JNI allocation-address wire.
 pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
 use prebindgen_tools::{
     Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, Wire as GenericWire, WireKind,
@@ -20,45 +22,70 @@ pub use prebindgen_tools::{
     expand_param, expand_return, fields, fun, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
     FieldsDecl, FunctionDecl,
 };
+/// A Kotlin owning handle class for one nonzero-sized source type.
+///
+/// Generated code requires `Send` because the handle can be closed on any JVM
+/// thread. Foreign output observations also require `Clone`. Inputs may own,
+/// share or exclusively borrow the source value.
 #[derive(Clone)]
 pub struct PtrClassDecl {
+    /// Source type, resolved against the selected flat model.
     pub ty: syn::Type,
+    /// Literal Kotlin class name; absent means the last segment of the source type.
     pub name: Option<String>,
 }
 impl PtrClassDecl {
+    /// Declare a handle class with a name derived from the source type.
     pub fn new(ty: syn::Type) -> Self {
         Self { ty, name: None }
     }
+    /// Override the Kotlin short class name, validated during build.
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
     }
 }
+/// A Kotlin package containing declared handle classes and top-level functions.
+///
+/// Its name is relative to [`JniGenBuilder::set_package_prefix`].
 #[derive(Clone, Default)]
 pub struct PackageDecl {
+    /// Relative dotted package name; empty means the root package prefix.
     pub name: String,
+    /// Owning handle classes to emit in this package.
     pub classes: Vec<PtrClassDecl>,
+    /// Source functions to export as top-level Kotlin functions.
     pub functions: Vec<FunctionDecl>,
 }
 impl PackageDecl {
+    /// Create an empty package relative to the configured root prefix.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
             ..Default::default()
         }
     }
+    /// Add an owning handle class. Duplicate source types or names fail during build.
     pub fn class(mut self, class: PtrClassDecl) -> Self {
         self.classes.push(class);
         self
     }
+    /// Add a top-level Kotlin function with optional occurrence overrides.
+    ///
+    /// Names default to camel case; [`FunctionDecl::name`] overrides that spelling.
     pub fn fun(mut self, f: FunctionDecl) -> Self {
         self.functions.push(f);
         self
     }
 }
 #[macro_export]
+/// Declare a handle class from Rust type syntax, without requiring that type in scope.
+///
+/// Returns [`PtrClassDecl`]. Invalid type syntax panics. See [`JniGen`] for an example.
 macro_rules! ptr_class {($($ty:tt)+)=>{$crate::PtrClassDecl::new($crate::__type(stringify!($($ty)+)))};}
 #[macro_export]
+/// Create a [`PackageDecl`] at the root prefix (`package!()`) or a relative
+/// dotted package (`package!("example.api")`).
 macro_rules! package {
     () => {
         $crate::PackageDecl::new("")
@@ -72,16 +99,54 @@ pub fn __type(s: &str) -> syn::Type {
     syn::parse_str(s).expect("type syntax")
 }
 
+/// Generated Rust/JNI bindings and their Kotlin source files.
+///
+/// Start with [`Self::builder`]. Source capture, expansion declarations and package
+/// placement are resolved before wrapper emission. Selectors keep all alternatives
+/// in one native signature; multiple outputs use a Kotlin builder callback.
+///
+/// ```
+/// use prebindgen_jni::{JniGen, package, ptr_class, fun};
+/// let source = syn::parse_file(r#"
+///     pub struct Counter { pub value: i64 }
+///     pub fn new_counter(value: i64) -> Counter { Counter { value } }
+/// "#)?;
+/// let generated = JniGen::builder()
+///     .items(source.items.into_iter().map(|item| (item, Default::default())))
+///     .set_package_prefix("org.example")
+///     .package(package!()
+///         .class(ptr_class!(Counter))
+///         .fun(fun!(new_counter)))
+///     .build()?;
+/// assert!(generated.kotlin.contains_key("org/example/Counter.kt"));
+/// assert!(generated.kotlin["org/example/Functions.kt"].contains("newCounter"));
+/// syn::parse_file(&generated.rust)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+///
+/// In `build.rs`, replace `.items(...)` with `.source(flat_crate::PREBINDGEN_OUT_DIR)`,
+/// then write both outputs. Include the Rust file in a binding crate depending on
+/// `prebindgen-runtime` and `prebindgen-jni-runtime`. Compile all generated Kotlin
+/// files together. Calls must go through those wrappers: their locks, consumed
+/// state and ownership acknowledgement are part of the native safety contract.
 pub struct JniGen {
+    /// Formatted native Rust source, including conversion code and flat-model guards.
     pub rust: String,
+    /// Kotlin sources keyed by package-relative paths such as `org/example/Counter.kt`.
     pub kotlin: BTreeMap<String, String>,
 }
 impl JniGen {
+    /// Start configuring sources, declarations and output placement.
     pub fn builder() -> JniGenBuilder {
         JniGenBuilder::default()
     }
 }
 type Configure = Box<dyn FnOnce(&mut Flat<Slot>) -> Result<()>>;
+/// Collect declarations before resolving a JNI/Kotlin binding.
+///
+/// Supply exactly one of [`Self::source`], [`Self::items`] or [`Self::flat`], plus
+/// a nonempty package prefix. Type-wide expansions are order-independent. Custom
+/// configuration callbacks run in registration order before declarations fill slots.
 #[derive(Default)]
 pub struct JniGenBuilder {
     configure: Vec<Configure>,
@@ -94,13 +159,24 @@ pub struct JniGenBuilder {
     packages: Vec<PackageDecl>,
 }
 impl JniGenBuilder {
+    /// Create an empty builder; equivalent to [`JniGen::builder`].
     pub fn new() -> Self {
         Self::default()
     }
+    /// Adjust the selected flat model before declaration defaults are applied.
+    ///
+    /// Use this for manual occurrence recipes. Callbacks run in registration order;
+    /// errors stop generation. Source selection has already happened, so references
+    /// introduced here must already exist in the model. Per-function declarations
+    /// can explicitly override the recipes assigned by these callbacks.
     pub fn configure(mut self, f: impl FnOnce(&mut Flat<Slot>) -> Result<()> + 'static) -> Self {
         self.configure.push(Box::new(f));
         self
     }
+    /// Append captured items, each paired with its source location.
+    ///
+    /// Calls accumulate items. Only declared functions, expansion helpers and required
+    /// types are selected for validation. Mutually exclusive with source and flat input.
     pub fn items(
         mut self,
         items: impl IntoIterator<Item = (syn::Item, prebindgen::SourceLocation)>,
@@ -108,30 +184,58 @@ impl JniGenBuilder {
         self.items.get_or_insert_with(Vec::new).extend(items);
         self
     }
+    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`.
+    ///
+    /// Uses the same selection as [`Self::items`]. A repeated call replaces the path;
+    /// combining it with items or a flat model is rejected during build.
     pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
         self.source = Some(path.as_ref().to_owned());
         self
     }
+    /// Register a type-wide input or output default.
+    ///
+    /// Per-function overrides replace defaults. Duplicate declarations for the same
+    /// type and direction are rejected during build.
     pub fn expand(mut self, decl: impl Into<ExpandDecl>) -> Self {
         self.expansions.push(decl.into());
         self
     }
+    /// Supply an already parsed model with `Slot<()>` occurrences.
+    ///
+    /// Configured functions still need a Kotlin package declaration. Mutually
+    /// exclusive with source and item input.
     pub fn flat(mut self, flat: Flat<Slot>) -> Self {
         self.flat = Some(flat);
         self
     }
+    /// Set the required nonempty root Kotlin package, such as `org.example.bindings`.
+    ///
+    /// All package declarations are relative to this prefix. The last setting wins.
     pub fn set_package_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
         self
     }
+    /// Set Kotlin statements for the generated `JNINative` object's initialization.
+    ///
+    /// Typically loads the native library, e.g. `System.loadLibrary("bindings")`.
+    /// The text is emitted verbatim and checked by the Kotlin compiler.
     pub fn set_jni_native_init(mut self, init: impl Into<String>) -> Self {
         self.init = init.into();
         self
     }
+    /// Append a package's class and function declarations.
+    ///
+    /// Multiple declarations may share a package, but their exported names must be unique.
     pub fn package(mut self, package: PackageDecl) -> Self {
         self.packages.push(package);
         self
     }
+    /// Resolve declarations and generate Rust and Kotlin texts without writing files.
+    ///
+    /// Rejects ambiguous source selection, invalid or duplicate names, unsupported
+    /// recipes, undeclared handle types and signatures exceeding JVM parameter limits.
+    /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
+    /// respective compilers when consuming the generated output.
     pub fn build(self) -> Result<JniGen> {
         let references = prebindgen_tools::declarations::source_functions(
             &self.expansions,
@@ -301,7 +405,11 @@ impl Codec for JniCodec {
 /// Alias retained for callers of the initial slot prototype.
 pub type Generation = JniGen;
 impl JniGen {
-    /// Relative Rust paths are resolved under Cargo's OUT_DIR, as in the production API.
+    /// Write native Rust source, returning the destination path.
+    ///
+    /// Relative paths resolve under Cargo's `OUT_DIR`; absolute paths are used
+    /// directly. Creates parent directories and overwrites an existing file.
+    /// Returns an error if `OUT_DIR` is needed but absent, or filesystem access fails.
     pub fn write_rust(&self, path: impl AsRef<std::path::Path>) -> Result<std::path::PathBuf> {
         let path = path.as_ref();
         let path = if path.is_absolute() {
@@ -316,6 +424,11 @@ impl JniGen {
         std::fs::write(&path, &self.rust).map_err(|e| e.to_string())?;
         Ok(path)
     }
+    /// Write all Kotlin files beneath `root`, creating package directories.
+    ///
+    /// Relative roots use the current directory, not `OUT_DIR`. Existing generated
+    /// paths are overwritten; stale files are not removed. Returns the written paths
+    /// or a filesystem error. Earlier writes remain if a later write fails.
     pub fn write_kotlin(&self, root: &std::path::Path) -> Result<Vec<std::path::PathBuf>> {
         let mut written = Vec::new();
         for (path, text) in &self.kotlin {

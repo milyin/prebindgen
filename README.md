@@ -210,6 +210,21 @@ mutable text/byte views, methods, data classes, `convert!`, consuming record
 decomposition, field renaming, local function declarations, domain errors, split
 overloads and shared selector argument storage remain outside this subset.
 
+## API documentation
+
+Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
+`prebindgen_flat::Flat` for occurrence slots, `prebindgen_tools::Declarations`
+for build-script expansions, and `prebindgen_tools::Codec` for adapter authors.
+The codec and prepared-slot contracts explain validation, ownership acquisition
+and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
+
+Runnable rustdoc examples cover occurrence configuration, selector/combined-output
+declarations, a codec without wire metadata, C and JNI generation, boxed borrows,
+and JNI allocation release. `cargo test --workspace --doc` builds and runs them.
+The existing C and Kotlin smoke clients exercise the generated foreign boundaries.
+New pipeline crates enable `missing_docs` warnings so the warnings-as-errors
+Clippy check also detects undocumented public additions.
+
 ## Build and verify
 
 Rust 1.85+, a C compiler, JDK 11+ and a Kotlin compiler are needed for all checks.
@@ -220,6 +235,7 @@ Cargo builds.
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 python3 examples/check.py
 ```
 

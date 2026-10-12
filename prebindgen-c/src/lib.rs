@@ -1,5 +1,7 @@
 //! C adapter for prepared occurrence slots. No recursive type conversion lives here.
+#![warn(missing_docs)]
 use prebindgen_flat::{Flat, Primitive, Result};
+/// Pointee type and access mode used by this adapter's foreign wires.
 pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
 use prebindgen_tools::{
     Codec, Prepared as GenericPrepared, Slot as GenericSlot, Wire as GenericWire, WireKind,
@@ -90,7 +92,35 @@ impl Codec for CCodec {
         }
     }
 }
-/// C declarations resolve domain types to typed opaque pointers.
+/// Configure C bindings, using typed opaque pointers for foreign values.
+///
+/// Start with captured source via [`Self::builder`] and [`Self::source`], or a
+/// configured flat model via [`Self::new`]. Declare each exported function and
+/// each opaque pointee type. Conversion declarations share the tools vocabulary.
+///
+/// ```
+/// use prebindgen_c::Cbindgen;
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{fun, Slot};
+/// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
+/// let flat = Flat::<Slot<()>>::parse(
+///     source.items.into_iter().map(|item| (item, Default::default())),
+/// )?;
+/// let generated = Cbindgen::new(flat)
+///     .prefix("demo")
+///     .function(fun!(add))
+///     .build()?;
+/// assert!(generated.header.contains("demo_add("));
+/// syn::parse_file(&generated.rust)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+///
+/// Generated calls return a status and write results through an output pointer;
+/// `0` means success, `-1` means failure, with a thread-local last-error message.
+/// Owned pointer inputs transfer ownership after all active inputs validate;
+/// later source failures do not restore ownership. References borrow for the
+/// call and require the caller to obey Rust aliasing and lifetime rules.
+/// Returned pointers and buffers must be freed with their generated destructors.
 pub struct Cbindgen {
     flat: Option<Flat<Slot>>,
     source: Option<std::path::PathBuf>,
@@ -100,6 +130,7 @@ pub struct Cbindgen {
     pointers: Vec<(String, syn::Type)>,
 }
 impl Cbindgen {
+    /// Create an unconfigured builder with the symbol prefix `pb`.
     pub fn builder() -> Self {
         Self {
             flat: None,
@@ -110,19 +141,35 @@ impl Cbindgen {
             pointers: Vec::new(),
         }
     }
+    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`.
+    ///
+    /// Only declared functions, referenced constructors/getters and required types
+    /// are selected. Supply exactly one source directory or flat model.
     pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
         self.source = Some(path.as_ref().to_owned());
         self
     }
+    /// Register a type-wide input or output expansion.
+    ///
+    /// Per-function overrides replace this default; duplicate defaults are rejected
+    /// by [`Self::build`]. Registration order does not affect type lookup.
     pub fn expand(mut self, decl: impl Into<prebindgen_tools::ExpandDecl>) -> Self {
         self.expansions.push(decl.into());
         self
     }
+    /// Export a function and fill its occurrence recipes from declarations.
+    ///
+    /// Function renaming is currently unsupported; exports use the symbol prefix
+    /// and original source name.
     pub fn function(mut self, decl: prebindgen_tools::FunctionDecl) -> Self {
         self.functions.push(decl);
         self
     }
 
+    /// Start from a flat model with `Slot<()>` occurrences and prefix `pb`.
+    ///
+    /// Slots can be configured manually or filled by [`Self::function`]. Every
+    /// fully configured function in the supplied model is exported.
     pub fn new(flat: Flat<Slot>) -> Self {
         Self {
             flat: Some(flat),
@@ -133,14 +180,27 @@ impl Cbindgen {
             pointers: Vec::new(),
         }
     }
+    /// Set the prefix for exported functions, C types and destructors.
+    ///
+    /// Defaults to `pb`. The prefix is validated as an identifier during build.
     pub fn prefix(mut self, prefix: &str) -> Self {
         self.prefix = prefix.into();
         self
     }
+    /// Declare an opaque C pointee and its typed destructor for a source type.
+    ///
+    /// Produces `{prefix}_{name}` and `{prefix}_drop_{name}`. Every foreign wire
+    /// needs a matching declaration. Owned values use `Box<T>` directly; they have
+    /// no `Send` requirement. This declaration alone does not export constructors.
     pub fn opaque_ptr(mut self, name: &str, ty: syn::Type) -> Self {
         self.pointers.push((name.into(), ty));
         self
     }
+    /// Resolve declarations, prepare conversions and generate both output texts.
+    ///
+    /// Does not write files. Returns an error for conflicting sources, invalid or
+    /// duplicate declarations, unsupported conversions, or missing opaque pointees.
+    /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn build(self) -> Result<Generation> {
         prebindgen_tools::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
@@ -179,14 +239,24 @@ impl Cbindgen {
         generate(flat, &self.prefix, pointers)
     }
 }
+/// Generated Rust bindings and their corresponding C header.
 pub struct Generation {
+    /// Formatted Rust source to include in a binding crate with `prebindgen-runtime`.
     pub rust: String,
+    /// C declarations matching the generated Rust ABI, with C++ linkage guards.
     pub header: String,
 }
 impl Generation {
+    /// Write Rust source to exactly `path`, replacing any existing file.
+    ///
+    /// Relative paths use the current directory, not `OUT_DIR`. Parent directories
+    /// must already exist. Returns filesystem errors as messages.
     pub fn write_rust(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
         std::fs::write(path, &self.rust).map_err(|e| e.to_string())
     }
+    /// Write the C header to exactly `path`, replacing any existing file.
+    ///
+    /// Uses the same path and error rules as [`Self::write_rust`].
     pub fn write_header(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }

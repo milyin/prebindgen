@@ -2,6 +2,7 @@
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
 //! adapter or conversion chosen. Unit remains available for absence of a value.
+#![warn(missing_docs)]
 use prebindgen::SourceLocation;
 use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,42 +11,85 @@ use syn::{visit_mut::VisitMut, Type};
 mod primitive;
 pub use primitive::Primitive;
 
+/// A model or generation result with a diagnostic suitable for a build script.
 pub type Result<T> = std::result::Result<T, String>;
 
+/// One occurrence of a Rust type, paired with stage-specific data.
+///
+/// Two parameters of the same type have independent slots; the slot is not a
+/// type-table entry.
 #[derive(Clone, Debug)]
 pub struct TypeUse<S> {
+    /// Qualified source type; independent of its chosen conversion.
     pub ty: Type,
+    /// Data for this occurrence, such as a recipe or prepared conversion.
     pub slot: S,
 }
+/// A named function parameter or record field, in source declaration order.
 #[derive(Clone, Debug)]
 pub struct Param<S> {
+    /// Source parameter or field name.
     pub name: syn::Ident,
+    /// Its source type and occurrence slot.
     pub ty: TypeUse<S>,
 }
+/// A validated free function and its independently configurable type occurrences.
 #[derive(Clone, Debug)]
 pub struct Function<S> {
+    /// Unqualified name used by binding declarations.
     pub name: syn::Ident,
+    /// Qualified path used to call the source function from generated Rust.
     pub path: syn::Path,
+    /// Parameters in call order.
     pub params: Vec<Param<S>>,
+    /// Result occurrence; an omitted Rust return type becomes `()`.
     pub ret: TypeUse<S>,
+    /// Origin recorded by source capture, for diagnostics and qualification.
     pub location: SourceLocation,
 }
+/// A named-field record available for field construction and projection.
 #[derive(Clone, Debug)]
 pub struct Record<S> {
+    /// Qualified record type.
     pub ty: Type,
+    /// Public fields in declaration order.
     pub fields: Vec<Param<S>>,
 }
+/// Source structure with a slot at every parameter, result, and record field.
+///
+/// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
+/// qualify declared names. Aliases stay opaque. Named types must have nonzero
+/// Rust size; generated code must emit [`Self::guards`] to enforce that rule.
+///
+/// ```
+/// use prebindgen_flat::{Flat, type_key};
+/// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
+/// let flat = Flat::<()>::parse(items.into_iter().map(|item| (item, Default::default())))?;
+/// let mut flat = flat.map_slots(|ty, ()| Ok(type_key(ty)))?;
+/// flat.function_mut("add")?.params[0].ty.slot = "first input".into();
+/// assert_eq!(flat.function("add")?.params[1].ty.slot, "i64");
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Debug)]
 pub struct Flat<S> {
+    /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<S>>,
+    /// Records indexed by [`type_key`] of their qualified type.
     pub records: BTreeMap<String, Record<S>>,
+    /// Declared type names mapped to qualified Rust types, including opaque aliases.
     pub types: BTreeMap<String, Type>,
+    /// Constants every adapter must emit: captured feature guards and generated
+    /// nonzero-size assertions. Layout assertions run when the bindings compile.
     pub guards: Vec<syn::ItemConst>,
 }
 
 impl<S: Default> Flat<S> {
     /// Select the source declarations needed by this binding before validating
     /// the supported flat subset. Unbound source items are not language features.
+    ///
+    /// Selection follows function signatures and record fields transitively, but
+    /// does not inspect opaque alias implementations. Unnamed constant guards are
+    /// retained. Selected items are validated by [`Self::parse`].
     pub fn parse_selected(
         items: impl IntoIterator<Item = (syn::Item, SourceLocation)>,
         functions: &[String],
@@ -99,7 +143,13 @@ impl<S: Default> Flat<S> {
     }
 
     /// Read captured items; only free functions, named records and opaque aliases
-    /// belong to this first subset. Unknown forms fail here, not during emission.
+    /// belong to this subset. Rejects duplicate names, non-public declarations,
+    /// unsupported signatures and types, and inaccessible record fields.
+    ///
+    /// All slots start at `S::default()`. Unqualified declared types and callable
+    /// paths are qualified with the captured crate name (or `crate` if absent).
+    /// Opaque alias implementations are not inspected. Rust layout and trait
+    /// requirements are checked later when the generated code compiles.
     pub fn parse(items: impl IntoIterator<Item = (syn::Item, SourceLocation)>) -> Result<Self> {
         let items: Vec<_> = items.into_iter().collect();
         let mut names = BTreeSet::new();
@@ -250,22 +300,37 @@ impl<S: Default> Flat<S> {
 }
 
 impl<S> Flat<S> {
+    /// Look up a free function by its unqualified source name.
+    ///
+    /// Returns an error if it was not included in this model.
     pub fn function(&self, name: &str) -> Result<&Function<S>> {
         self.functions
             .get(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
     }
+    /// Look up a function for occurrence-slot configuration.
+    ///
+    /// Returns an error for an unknown source name; changing slots does not change
+    /// the original Rust parameter or result types.
     pub fn function_mut(&mut self, name: &str) -> Result<&mut Function<S>> {
         self.functions
             .get_mut(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
     }
+    /// Look up a named record by its qualified type syntax.
+    ///
+    /// Use [`Self::resolve_type`] first for an unqualified declaration name. Opaque
+    /// aliases have no record entry and return an error.
     pub fn record(&self, ty: &Type) -> Result<&Record<S>> {
         self.records
             .get(&type_key(ty))
             .ok_or_else(|| format!("`{}` is not a record", type_key(ty)))
     }
-    /// Qualify declared names, and validate just the supported grammar.
+    /// Qualify declared names and validate the supported source-type grammar.
+    ///
+    /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
+    /// references without explicit lifetimes. A successful result does not mean
+    /// every adapter or recipe supports the type, and aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
         struct Names<'a>(&'a BTreeMap<String, Type>);
@@ -308,7 +373,11 @@ impl<S> Flat<S> {
             _ => Err(format!("unsupported source type `{}`", type_key(ty))),
         }
     }
-    /// Change only slot payloads; source structure and origins are retained.
+    /// Transform every occurrence slot, preserving source structure and guards.
+    ///
+    /// Calls `f` with the source type and old slot for each function parameter,
+    /// result, and record field. Stops on its first error. This is a stage
+    /// transformation, not dependency-ordered traversal.
     pub fn map_slots<T>(self, mut f: impl FnMut(&Type, S) -> Result<T>) -> Result<Flat<T>> {
         fn param<S, T>(p: Param<S>, f: &mut impl FnMut(&Type, S) -> Result<T>) -> Result<Param<T>> {
             let slot = f(&p.ty.ty, p.ty.slot)?;
@@ -362,9 +431,13 @@ impl<S> Flat<S> {
     }
 }
 
+/// Return the token spelling used to index a type.
+///
+/// This is syntactic identity, not Rust type equivalence or alias resolution.
 pub fn type_key(ty: &Type) -> String {
     ty.to_token_stream().to_string()
 }
+/// Compare token spellings; this does not resolve aliases or normalize types.
 pub fn same_type(a: &Type, b: &Type) -> bool {
     type_key(a) == type_key(b)
 }

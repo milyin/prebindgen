@@ -4,15 +4,20 @@ use crate::{Access, Condition, PreparedInput, PreparedOutput, Resource, Wire, Wi
 use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+/// Optional adapter metadata for a wire carrying a boxed allocation address.
 #[derive(Clone, Debug)]
 pub struct BoxedWire {
+    /// Source value type inside the allocation, without the input reference or storage wrapper.
     pub ty: syn::Type,
+    /// Whether the call moves, shares or exclusively borrows the stored value.
     pub access: Access,
 }
 /// Storage chosen by the adapter. A wrapper must expose a `value` field and
 /// allow construction as `Wrapper { value }`.
 pub enum Storage {
+    /// The allocation is `Box<T>` and its address is exposed directly.
     Direct,
+    /// The allocation is `Box<Wrapper<T>>`; the path identifies `Wrapper`.
     Wrapped(syn::Path),
 }
 impl Storage {
@@ -35,6 +40,29 @@ impl Storage {
         }
     }
 }
+/// Prepare a boxed-address input for `T`, `&T` or `&mut T`.
+///
+/// `T` transfers ownership; references borrow the allocation for the call.
+/// Validation checks only nonnull/aligned encoding. The caller must guarantee
+/// allocation provenance, type, liveness and synchronization. The wrapper must
+/// run call-wide resource validation before acquisition (see [`PreparedInput`]).
+/// The returned resource records the allocation address and required access.
+///
+/// `wire_extra` wraps the optional boxed metadata in any adapter-chosen wire data.
+/// It may discard it entirely. Generated code uses `prebindgen_runtime`.
+///
+/// ```
+/// use prebindgen_tools::{boxed, Access, Condition};
+/// let input = boxed::input(
+///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
+///     syn::parse_quote!(raw), syn::parse_quote!(counter),
+///     &Condition::default(), |metadata| metadata.access,
+/// )?;
+/// assert_eq!(input.wires[0].extra, Access::Shared);
+/// assert!(input.acquire.is_empty());
+/// assert_eq!(input.resources.len(), 1);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn input<W>(
     storage: &Storage,
     ty: &syn::Type,
@@ -101,6 +129,15 @@ pub fn input<W>(
         }],
     })
 }
+/// Prepare an owned boxed-address output with deferred ownership transfer.
+///
+/// When `borrowed` is true, `value` is `&T` and generated code clones `T`; otherwise
+/// it moves the value. A reference source type is rejected. `statements` retains
+/// the box, `values` exposes its address, and `commit` relinquishes ownership only
+/// after successful delivery. The adapter must provide a matching destructor.
+///
+/// `wire_extra` chooses how (or whether) the adapter retains boxed metadata.
+/// Named source types must satisfy the nonzero-size guards from the flat model.
 pub fn output<W>(
     storage: &Storage,
     ty: &syn::Type,
