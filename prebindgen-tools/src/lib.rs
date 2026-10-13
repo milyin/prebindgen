@@ -3,16 +3,19 @@
 //! Fill [`Slot`] recipes using [`Declarations`] or manual configuration, then call
 //! [`prepare`] with a [`Codec`]. Wrappers consume [`Prepared`] slots and follow the
 //! validation/acquisition and delivery/commit ordering documented on those types.
-//! Source types remain in the flat model; recipes and adapter metadata are separate.
-//! [`WireKind`] describes a common role while [`Wire::extra`] holds optional
-//! adapter-defined information. [`boxed`] is an opt-in storage policy.
+//! Each flat occurrence has a source type and a [`Slot`] containing its recipe
+//! and adapter data. Preparation produces wires: individual boundary parameters
+//! or result components. Each [`Wire`] has a common [`WireKind`] and adapter data
+//! in [`Wire::extra`]. [`boxed`] provides conversions for boxed storage.
 #![warn(missing_docs)]
 use prebindgen_flat::{same_type, type_key, Flat, Primitive, Result};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 
-/// Inputs are recipes, not wire layouts. A selector denotes a logical choice.
+/// A recipe for converting boundary inputs into one source argument.
+///
+/// Preparation expands the recipe into wires and Rust conversion code.
 #[derive(Clone, Debug)]
 pub enum Input {
     /// Decode the occurrence's Rust primitive using the adapter's scalar codec.
@@ -141,24 +144,24 @@ pub struct Slot<E> {
     pub extra: E,
 }
 
-/// A wire's role remains available to both sides, even when carriers coincide.
+/// The common role of one generated boundary parameter or result component.
 #[derive(Clone, Debug)]
 pub enum WireKind {
     /// A source primitive; the adapter chooses its ABI carrier.
     Scalar(Primitive),
-    /// An adapter-defined value; this imposes no metadata or ownership requirement.
+    /// An adapter-defined representation of a source value.
     Foreign,
-    /// Text in the adapter's buffer or object representation.
+    /// Text value; the adapter chooses its boundary representation.
     Text,
-    /// Bytes in the adapter's buffer or array representation.
+    /// Byte sequence; the adapter chooses its boundary representation.
     Bytes,
     /// Zero-based input alternative index, carried as an `i32` by current adapters.
     Selector,
 }
-/// One prepared boundary parameter or result with adapter-owned metadata.
+/// One prepared boundary parameter or result component.
 ///
-/// The framework does not inspect `W`. Metadata can be attached to every kind,
-/// or omitted by choosing `()`, including for [`WireKind::Foreign`].
+/// [`Self::kind`] describes its role, and [`Self::extra`] stores data used by
+/// the adapter to emit that component.
 ///
 /// ```
 /// use prebindgen_tools::{Condition, Wire, WireKind};
@@ -176,7 +179,8 @@ pub struct Wire<W> {
     pub name: syn::Ident,
     /// Common role used by native and destination-language emission.
     pub kind: WireKind,
-    /// Adapter-owned data for any wire kind; `()` is valid, including for foreign wires.
+    /// Adapter data used when emitting this wire. Choose `W = ()` when none is needed.
+    /// The framework carries this field through preparation without interpreting it.
     pub extra: W,
     /// Input selector path; outputs normally use the always-active default.
     pub active: Condition,
@@ -212,7 +216,7 @@ pub struct Wire<W> {
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Extra = ();
-///     type Wire = (); // No wire metadata, even though the trait allows it.
+///     type Wire = (); // This adapter needs no per-wire data.
 ///
 ///     fn wire_extra(&self, _: &Type, _: &WireKind, _: &()) {}
 ///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
@@ -257,11 +261,14 @@ pub trait Codec {
     /// Occurrence data stored beside a recipe in [`Slot`]; `()` means no extra data.
     /// This same value is passed through all nested conversions of that occurrence.
     type Extra: Clone + std::fmt::Debug;
-    /// Metadata stored in [`Wire::extra`]. Tools neither inspect it nor require
-    /// `Default`; [`Self::wire_extra`] supplies it for common conversions.
+    /// Per-wire data stored in [`Wire::extra`], such as a destination type name.
+    /// [`Self::wire_extra`] supplies it for common conversions; foreign conversion
+    /// hooks supply it in their returned wires. Use `()` when no data is needed.
     type Wire: Clone + std::fmt::Debug;
-    /// Data for wires emitted by common conversions. Foreign converters supply
-    /// their own wires and data. Tools impose no metadata requirements by kind.
+    /// Create [`Wire::extra`] for a scalar, text, byte or selector wire.
+    ///
+    /// Receives the current source type, wire kind and boundary occurrence data.
+    /// Foreign conversion hooks create their own wires, including their `extra` fields.
     fn wire_extra(&self, ty: &Type, kind: &WireKind, extra: &Self::Extra) -> Self::Wire;
     /// Whether a foreign output consumes the current source value.
     ///
@@ -354,6 +361,12 @@ pub struct PreparedInput<W> {
 ///
 /// Wrappers evaluate `statements`, deliver `values` in `wires` order, then execute
 /// `commit` only after every fallible delivery operation succeeds.
+///
+/// Values for [`WireKind::Text`] and [`WireKind::Bytes`] are owned Rust `String`
+/// and `Vec<u8>` expressions. The wrapper writer must encode them into the
+/// destination representation during delivery and keep delivery allocations
+/// owned until all outputs succeed. Scalar and foreign values use the
+/// representation produced by the codec's output hooks.
 #[derive(Clone, Debug)]
 pub struct PreparedOutput<W> {
     /// Boundary results in delivery order; one entry per expression in `values`.
@@ -893,5 +906,5 @@ pub fn validate_resources(resources: &[Resource]) -> TokenStream {
     result
 }
 
-/// Reusable storage-specific conversions; not a required object model.
+/// Shared conversion helpers for adapters that store foreign values in boxes.
 pub mod boxed;

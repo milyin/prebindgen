@@ -1,4 +1,4 @@
-//! C adapter for prepared occurrence slots. No recursive type conversion lives here.
+//! Generate Rust wrappers and C declarations from prepared occurrence slots.
 #![warn(missing_docs)]
 use prebindgen_flat::{Flat, Primitive, Result};
 /// Pointee type and access mode used by this adapter's foreign wires.
@@ -95,8 +95,11 @@ impl Codec for CCodec {
 /// Configure C bindings, using typed opaque pointers for foreign values.
 ///
 /// Start with captured source via [`Self::builder`] and [`Self::source`], or a
-/// configured flat model via [`Self::new`]. Declare each exported function and
-/// each opaque pointee type. Conversion declarations share the tools vocabulary.
+/// configured flat model via [`Self::new`]. With captured source, declare each
+/// exported function. In either case, declare each opaque pointee type.
+/// Conversion declarations use [`prebindgen_tools::Declarations`]. When reading
+/// captured source, add the source crate as both a build dependency and a normal
+/// dependency: generation reads its captures, and generated code calls its functions.
 ///
 /// ```
 /// use prebindgen_c::Cbindgen;
@@ -144,7 +147,10 @@ impl Cbindgen {
     /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`.
     ///
     /// Only declared functions, referenced constructors/getters and required types
-    /// are selected. Supply exactly one source directory or flat model.
+    /// are selected. Automatic type discovery follows unqualified source names
+    /// (see [`Flat::parse_selected`]). Types referenced only by qualified paths
+    /// can be selected through [`Self::opaque_ptr`] using their unqualified names.
+    /// Supply exactly one source directory or flat model.
     pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
         self.source = Some(path.as_ref().to_owned());
         self
@@ -241,7 +247,8 @@ impl Cbindgen {
 }
 /// Generated Rust bindings and their corresponding C header.
 pub struct Generation {
-    /// Formatted Rust source to include in a binding crate with `prebindgen-runtime`.
+    /// Formatted Rust source to include in a binding crate with `prebindgen-runtime`
+    /// and `konst` (used by captured source feature guards).
     pub rust: String,
     /// C declarations matching the generated Rust ABI, with C++ linkage guards.
     pub header: String,

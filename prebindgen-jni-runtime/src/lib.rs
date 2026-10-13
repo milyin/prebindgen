@@ -1,4 +1,4 @@
-//! Leaf JNI operations used by the new converter pipeline.
+//! String, byte, integer and allocation operations used by generated JNI bindings.
 #![warn(missing_docs)]
 pub use jni;
 use jni::{

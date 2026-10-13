@@ -1,10 +1,11 @@
-//! Optional boxed-value conversions. Adapters opt in; other storage policies
-//! continue to use their own foreign leaves and wire descriptions.
+//! Foreign conversion helpers for adapters using boxed allocations.
+//! Adapters select a [`Storage`](crate::boxed::Storage) policy and map
+//! [`BoxedWire`](crate::boxed::BoxedWire) data into their wire's `extra` field.
 use crate::{Access, Condition, PreparedInput, PreparedOutput, Resource, Wire, WireKind};
 use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-/// Optional adapter metadata for a wire carrying a boxed allocation address.
+/// Source type and access mode for a wire carrying a boxed allocation address.
 #[derive(Clone, Debug)]
 pub struct BoxedWire {
     /// Source value type inside the allocation, without the input reference or storage wrapper.
@@ -48,15 +49,15 @@ impl Storage {
 /// run call-wide resource validation before acquisition (see [`PreparedInput`]).
 /// The returned resource records the allocation address and required access.
 ///
-/// `wire_extra` wraps the optional boxed metadata in any adapter-chosen wire data.
-/// It may discard it entirely. Generated code uses `prebindgen_runtime`.
+/// `wire_extra` receives the pointee type and access mode as [`BoxedWire`]. Its
+/// return value becomes [`Wire::extra`]. Generated code uses `prebindgen_runtime`.
 ///
 /// ```
 /// use prebindgen_tools::{boxed, Access, Condition};
 /// let input = boxed::input(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
-///     &Condition::default(), |metadata| metadata.access,
+///     &Condition::default(), |boxed| boxed.access,
 /// )?;
 /// assert_eq!(input.wires[0].extra, Access::Shared);
 /// assert!(input.acquire.is_empty());
@@ -136,7 +137,7 @@ pub fn input<W>(
 /// the box, `values` exposes its address, and `commit` relinquishes ownership only
 /// after successful delivery. The adapter must provide a matching destructor.
 ///
-/// `wire_extra` chooses how (or whether) the adapter retains boxed metadata.
+/// `wire_extra` receives [`BoxedWire`] and returns the value stored in [`Wire::extra`].
 /// Named source types must satisfy the nonzero-size guards from the flat model.
 pub fn output<W>(
     storage: &Storage,

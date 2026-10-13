@@ -1,4 +1,4 @@
-//! The small flat source model. Types retain Rust syntax and an occurrence slot.
+//! Source types in Rust syntax, with a configurable slot for each occurrence.
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
 //! adapter or conversion chosen. Unit remains available for absence of a value.
@@ -16,8 +16,7 @@ pub type Result<T> = std::result::Result<T, String>;
 
 /// One occurrence of a Rust type, paired with stage-specific data.
 ///
-/// Two parameters of the same type have independent slots; the slot is not a
-/// type-table entry.
+/// Two parameters of the same type have independent slots.
 #[derive(Clone, Debug)]
 pub struct TypeUse<S> {
     /// Qualified source type; independent of its chosen conversion.
@@ -85,11 +84,15 @@ pub struct Flat<S> {
 
 impl<S: Default> Flat<S> {
     /// Select the source declarations needed by this binding before validating
-    /// the supported flat subset. Unbound source items are not language features.
+    /// the supported flat subset. Items outside the selection are skipped without validation.
     ///
-    /// Selection follows function signatures and record fields transitively, but
-    /// does not inspect opaque alias implementations. Unnamed constant guards are
-    /// retained. Selected items are validated by [`Self::parse`].
+    /// Dependency discovery follows unqualified declared type names in function
+    /// signatures and record fields transitively. A type referenced only through
+    /// a qualified path (such as `crate::Foo`) must also be selected explicitly
+    /// through `types` using its unqualified name (`Foo`), or included by parsing
+    /// the complete item set with [`Self::parse`]. Opaque alias implementations
+    /// are not inspected. Unnamed constant guards are retained. Selected items
+    /// are validated by [`Self::parse`].
     pub fn parse_selected(
         items: impl IntoIterator<Item = (syn::Item, SourceLocation)>,
         functions: &[String],

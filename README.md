@@ -1,10 +1,9 @@
 # prebindgen: occurrence conversion slots
 
-This branch replaces the generator engine with a small pipeline. The source
-capture macro and source-reading support remain unchanged. The supported JniGen
-`build.rs` declarations keep their existing syntax and import paths;
-`prebindgen-registry` is a declaration re-export facade, with no old registry
-engine behind it.
+prebindgen generates C and JNI/Kotlin bindings from annotated Rust source.
+The flat model describes source signatures and types. Build-script declarations
+configure conversions for each parameter and result; shared tools prepare the
+conversions, and language adapters emit wrappers and foreign declarations.
 
 ```text
 #[prebindgen] source + build.rs declarations
@@ -18,10 +17,15 @@ Rust wrappers + C header / Kotlin files
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
 can have different input recipes. `Flat<S>` also preserves named record fields,
-source names and locations. There is no parallel `TypeKind` tree. Wrapper
-writers use prepared slots; recursive conversion decisions belong to tools.
+source names and locations. Wrapper writers use prepared slots; recursive
+conversion decisions belong to tools.
 
 ## Examples migrated from main
+
+This branch replaces the generator engine while preserving source capture and
+source-reading support. The supported JniGen `build.rs` declarations keep their
+existing syntax and import paths. `prebindgen-registry` re-exports declaration
+types and macros from `prebindgen-tools`.
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
 been removed. All eight Rust example crates from `main` are in the workspace.
@@ -40,7 +44,11 @@ work. The retained records demonstrate the supported shapes of the real examples
 | [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
 | [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
 
-Source selection happens before subset validation. Unbound enums, callbacks,
+Source selection happens before subset validation. Automatic dependency discovery
+follows unqualified declared type names. Types referenced only through qualified
+paths need explicit selection by their unqualified declaration name, for example
+with `ptr_class!(Foo)` or `.opaque_ptr("foo", syn::parse_quote!(Foo))`; an already
+parsed `Flat` model can also include them. Unbound enums, callbacks,
 collections and functions can stay in the source crate; selecting one still
 produces a generation error when its shape is unsupported. Both annotated flat
 examples also have tests that parse the entire captured surface, ensuring no
@@ -87,15 +95,17 @@ recipe and preserves the extra data, without consulting a codec.
 The same occurrence data is passed through its entire recipe, including nested
 fields, constructors, selectors, getters and combined outputs. It is not replaced
 with the extra data of a referenced field or function declaration. This subset
-does not provide separate metadata per nested recipe node. C and JNI currently
+does not provide separate adapter data per nested recipe node. C and JNI currently
 use `()` as their extra data.
 
-Prepared wires follow the same separation: `WireKind` is non-generic, while
-`Wire<W>` stores the common kind and adapter data in separate `kind` and `extra`
-fields. The adapter supplies data for common conversions through `wire_extra`
-and for foreign conversions in their prepared wires. The framework does not
-interpret this data or require foreign metadata; an adapter can use `W = ()`.
-C and JNI use optional pointer metadata and check their own requirements.
+A wire is one generated boundary parameter or result component. `Wire<W>`
+stores its common role in `kind` and adapter data in `extra`. The adapter supplies
+`extra` for scalar, text, byte and selector wires through `Codec::wire_extra`;
+foreign conversion hooks supply it with their prepared wires. An adapter that
+needs no per-wire data uses `W = ()`.
+C and JNI use `Option<BoxedWire>`: foreign wires store the pointee type and access
+mode in `Some(...)`, while other wires use `None`. Each adapter validates that
+data when generating its wrappers.
 `Prepared<W>` retains these wires. Tools compose primitives, text/bytes, adapter
 leaves, fields, constructors, input selectors and combined outputs. The composition model
 requires neither handles nor boxed storage. It has no object registry or universal
@@ -219,7 +229,7 @@ The codec and prepared-slot contracts explain validation, ownership acquisition
 and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
 
 Runnable rustdoc examples cover occurrence configuration, selector/combined-output
-declarations, a codec without wire metadata, C and JNI generation, boxed borrows,
+declarations, a codec with `()` as its wire data, C and JNI generation, boxed borrows,
 and JNI allocation release. `cargo test --workspace --doc` builds and runs them.
 The existing C and Kotlin smoke clients exercise the generated foreign boundaries.
 New pipeline crates enable `missing_docs` warnings so the warnings-as-errors

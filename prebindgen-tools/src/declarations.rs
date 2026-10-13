@@ -1,4 +1,5 @@
-//! The retained JniGen expansion vocabulary translates into tools recipes.
+//! Build-script declarations for input alternatives and output views.
+//! [`Declarations`] resolves these declarations into occurrence recipes.
 
 use crate::{Input, Output, Recipe, Slot};
 use prebindgen_flat::{type_key, Flat, Primitive, Result};
@@ -144,7 +145,7 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 /// Resolved type defaults used to fill boundary occurrence recipes.
 ///
 /// Per-function overrides replace type defaults. Existing nonempty recipes are
-/// preserved unless explicitly overridden; occurrence metadata is always preserved.
+/// preserved unless explicitly overridden; [`Slot::extra`] is always preserved.
 /// Defaults cover primitives, text, bytes and unit, with other types delegated to
 /// the adapter as foreign values. Recursive expansion cycles are rejected.
 ///

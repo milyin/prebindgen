@@ -1,5 +1,5 @@
-//! JNI/Kotlin adapter over the same prepared conversion slots as C.
-//! The retained declaration subset is `package!`, `ptr_class!`, `fun!`,
+//! Generate Rust/JNI wrappers and Kotlin bindings from prepared occurrence slots.
+//! Supported declarations include `package!`, `ptr_class!`, `fun!`,
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
@@ -125,8 +125,10 @@ pub fn __type(s: &str) -> syn::Type {
 /// ```
 ///
 /// In `build.rs`, replace `.items(...)` with `.source(flat_crate::PREBINDGEN_OUT_DIR)`,
-/// then write both outputs. Include the Rust file in a binding crate depending on
-/// `prebindgen-runtime` and `prebindgen-jni-runtime`. Compile all generated Kotlin
+/// then write both outputs. Add the source crate as both a build dependency and
+/// a normal dependency. Include the Rust file in a binding crate depending on
+/// `prebindgen-runtime`, `prebindgen-jni-runtime` and `konst` (used by captured
+/// source feature guards). Compile all generated Kotlin
 /// files together. Calls must go through those wrappers: their locks, consumed
 /// state and ownership acknowledgement are part of the native safety contract.
 pub struct JniGen {
@@ -176,7 +178,11 @@ impl JniGenBuilder {
     /// Append captured items, each paired with its source location.
     ///
     /// Calls accumulate items. Only declared functions, expansion helpers and required
-    /// types are selected for validation. Mutually exclusive with source and flat input.
+    /// types are selected for validation. Automatic type discovery follows
+    /// unqualified source names (see [`Flat::parse_selected`]); types referenced
+    /// only by qualified paths can be selected with an unqualified `ptr_class!`
+    /// declaration, or included through [`Self::flat`]. Mutually exclusive with
+    /// source and flat input.
     pub fn items(
         mut self,
         items: impl IntoIterator<Item = (syn::Item, prebindgen::SourceLocation)>,
@@ -402,7 +408,7 @@ impl Codec for JniCodec {
         quote!(::prebindgen_jni_runtime::bytes(&mut env,&#w)?)
     }
 }
-/// Alias retained for callers of the initial slot prototype.
+/// Another name for the generated Rust and Kotlin sources in [`JniGen`].
 pub type Generation = JniGen;
 impl JniGen {
     /// Write native Rust source, returning the destination path.
