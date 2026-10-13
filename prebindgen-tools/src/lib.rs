@@ -1,10 +1,10 @@
 //! Conversion composition. Adapters supply leaf codecs; wrappers consume prepared slots.
 //!
 //! Fill [`Slot`] recipes using [`Declarations`] or manual configuration, then call
-//! [`prepare`] with a [`Codec`]. Wrappers consume [`Prepared`] slots and follow the
-//! validation/acquisition and delivery/commit ordering documented on those types.
-//! Each flat occurrence has a source type and a [`Slot`] containing its recipe
-//! and adapter data. Preparation produces wires: individual boundary parameters
+//! [`prepare`] with a [`Codec`]. Wrappers consume a [`Prepared`] model and follow the
+//! ordering documented on [`PreparedInput`] and [`PreparedOutput`].
+//! Before preparation, each function parameter and result has a source type and
+//! a [`Slot`] containing its recipe and adapter data. Preparation produces wires: individual boundary parameters
 //! or result components. Each [`Wire`] has a common [`WireKind`] and adapter data
 //! in [`Wire::extra`]. [`boxed`] provides conversions for boxed storage.
 #![warn(missing_docs)]
@@ -122,27 +122,60 @@ impl Output {
     }
 }
 
-/// The direction and structure of a conversion assigned to a flat occurrence.
-#[derive(Clone, Debug, Default)]
-pub enum Recipe {
-    /// No conversion assigned. An entirely empty function is not exported.
-    #[default]
-    Empty,
-    /// Conversion from foreign inputs to a source argument.
-    Input(Input),
-    /// Conversion from a source result to foreign outputs.
-    Output(Output),
-}
-
-/// An occurrence's recipe and adapter data are independent. The same `extra`
+/// A boundary occurrence's recipe and adapter data.
+///
+/// `R` is [`Input`] for parameters and [`Output`] for results. The same `extra`
 /// is passed through every nested conversion in this occurrence's recipe.
-#[derive(Clone, Debug, Default)]
-pub struct Slot<E> {
-    /// Conversion structure, shared by all adapters.
-    pub recipe: Recipe,
+#[derive(Clone, Debug)]
+pub struct Slot<R, E> {
+    /// Conversion structure; `None` leaves this occurrence unconfigured.
+    pub recipe: Option<R>,
     /// Adapter data for this occurrence, preserved when declarations replace the recipe.
     pub extra: E,
 }
+impl<R, E: Default> Default for Slot<R, E> {
+    fn default() -> Self {
+        Self {
+            recipe: None,
+            extra: E::default(),
+        }
+    }
+}
+
+/// A flat model carrying input and output recipes with occurrence data `E`.
+///
+/// Source-only helpers have no recipes. Bound functions need every parameter and
+/// their result configured; [`prepare`] checks completeness. Direction is enforced
+/// by the slot types, independently of completeness or recipe/type compatibility.
+///
+/// Configure each direction using its own recipe type:
+/// ```
+/// use prebindgen_tools::{Configured, Input, Output};
+/// let source = syn::parse_file("pub fn foo(x: i64) -> i64 { x }")?;
+/// let mut flat = Configured::<()>::parse(
+///     source.items.into_iter().map(|item| (item, Default::default())),
+/// )?;
+/// let function = flat.function_mut("foo")?;
+/// function.params[0].ty.slot.recipe = Some(Input::Scalar);
+/// function.ret.slot.recipe = Some(Output::Scalar);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+///
+/// An output recipe cannot be attached to a parameter:
+/// ```compile_fail
+/// use prebindgen_tools::{Configured, Output};
+/// fn configure(flat: &mut Configured<()>) {
+///     flat.function_mut("foo").unwrap().params[0].ty.slot.recipe = Some(Output::Scalar);
+/// }
+/// ```
+/// An input recipe cannot be attached to a result:
+/// ```compile_fail
+/// use prebindgen_tools::{Configured, Input};
+/// fn configure(flat: &mut Configured<()>) {
+///     flat.function_mut("foo").unwrap().ret.slot.recipe = Some(Input::Scalar);
+/// }
+/// ```
+pub type Configured<E> = Flat<Slot<Input, E>, Slot<Output, E>>;
 
 /// The common role of one generated boundary parameter or result component.
 #[derive(Clone, Debug)]
@@ -204,10 +237,10 @@ pub struct Wire<W> {
 /// return generation errors.
 ///
 /// ```
-/// use prebindgen_flat::{Flat, Primitive, Result};
+/// use prebindgen_flat::{Primitive, Result};
 /// use prebindgen_tools::{
-///     Codec, Condition, Declarations, Prepared, PreparedInput, PreparedOutput,
-///     Slot, WireKind, fun, prepare,
+///     Codec, Condition, Declarations, PreparedInput, PreparedOutput,
+///     Configured, WireKind, fun, prepare,
 /// };
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
@@ -245,14 +278,12 @@ pub struct Wire<W> {
 /// }
 ///
 /// let source = syn::parse_file("pub fn echo(value: i64) -> i64 { value }")?;
-/// let mut flat = Flat::<Slot<()>>::parse(
+/// let mut flat = Configured::<()>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// Declarations::new(&flat, vec![])?.fill(&mut flat, &fun!(echo))?;
 /// let prepared = prepare(flat, &RustCarriers)?;
-/// let Prepared::Input(input) = &prepared.function("echo")?.params[0].ty.slot else {
-///     panic!("expected prepared input");
-/// };
+/// let input = prepared.function("echo")?.params[0].ty.slot.as_ref().unwrap();
 /// assert!(matches!(input.wires[0].kind, WireKind::Scalar(Primitive::I64)));
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -378,80 +409,75 @@ pub struct PreparedOutput<W> {
     /// Delivery expressions in wire order; they must remain valid until commit.
     pub values: Vec<TokenStream>,
 }
-/// A slot after recursive conversion preparation; wrapper writers consume this stage.
-#[derive(Clone, Debug, Default)]
-pub enum Prepared<W> {
-    /// Unconfigured occurrence, such as a function used only as a constructor.
-    #[default]
-    Empty,
-    /// Prepared source argument.
-    Input(PreparedInput<W>),
-    /// Prepared source result.
-    Output(PreparedOutput<W>),
-}
+/// A flat model carrying prepared inputs and outputs for wrapper emission.
+///
+/// Unbound source helpers have `None` slots. After [`prepare`] succeeds, each
+/// bound function has `Some` for its result and every parameter. Record fields
+/// retain only names and source types.
+///
+/// Prepared output data cannot be attached to an input position:
+/// ```compile_fail
+/// use prebindgen_tools::Prepared;
+/// fn swap(flat: &mut Prepared<()>) {
+///     let function = flat.function_mut("foo").unwrap();
+///     function.params[0].ty.slot = function.ret.slot.clone();
+/// }
+/// ```
+pub type Prepared<W> = Flat<Option<PreparedInput<W>>, Option<PreparedOutput<W>>>;
 
-/// Compile recipes into prepared slots, rejecting incomplete bound functions.
+/// Compile configured recipes into prepared input and output data.
 ///
 /// Each conversion receives source type, recipe and occurrence data separately.
 /// Nested recipes inherit their boundary occurrence's data, not the slots of
-/// referenced constructors, getters or record declarations. Output expressions
-/// refer to a wrapper-local `__result` containing the source function's result.
-/// Source guards and locations are preserved.
+/// referenced constructors or getters. Record declarations supply only field names
+/// and source types. Output expressions refer to a wrapper-local `__result`
+/// containing the source function's result. Source guards and locations are preserved.
 ///
-/// Errors include missing/wrong-direction slots, incompatible recipe/type pairs,
-/// invalid constructor/getter signatures, and repeated output consumption.
-/// A function is exported iff its result has an output slot, including `fields([])` for unit.
-pub fn prepare<C: Codec>(flat: Flat<Slot<C::Extra>>, codec: &C) -> Result<Flat<Prepared<C::Wire>>> {
+/// Rejects incomplete functions, incompatible recipe/type pairs, invalid
+/// constructor/getter signatures, and repeated output consumption. Entirely
+/// unconfigured functions remain source-only helpers. A bound function needs a
+/// result recipe even for unit (use `Output::fields([])`).
+pub fn prepare<C: Codec>(flat: Configured<C::Extra>, codec: &C) -> Result<Prepared<C::Wire>> {
     for f in flat.functions.values() {
-        match &f.ret.slot.recipe {
-            Recipe::Output(_) => {
-                for p in &f.params {
-                    if !matches!(p.ty.slot.recipe, Recipe::Input(_)) {
-                        return Err(format!(
-                            "`{}`: parameter `{}` has no input converter",
-                            f.name, p.name
-                        ));
-                    }
+        if f.ret.slot.recipe.is_some() {
+            for p in &f.params {
+                if p.ty.slot.recipe.is_none() {
+                    return Err(format!(
+                        "`{}`: parameter `{}` has no input converter",
+                        f.name, p.name
+                    ));
                 }
             }
-            Recipe::Empty
-                if f.params
-                    .iter()
-                    .all(|p| matches!(p.ty.slot.recipe, Recipe::Empty)) => {}
-            _ => {
-                return Err(format!(
-                    "`{}`: incomplete or wrong-direction conversion slots",
-                    f.name
-                ))
-            }
+        } else if f.params.iter().any(|p| p.ty.slot.recipe.is_some()) {
+            return Err(format!(
+                "`{}`: configured inputs have no output converter",
+                f.name
+            ));
         }
     }
     let source = flat.clone();
-    let mut compiler = Compiler {
+    let compiler = Compiler {
         flat: &source,
         codec,
-        next: 0,
+        next: std::cell::Cell::new(0),
     };
-    flat.map_slots(|ty, slot| {
-        Ok(match slot.recipe {
-            Recipe::Empty => Prepared::Empty,
-            Recipe::Input(recipe) => {
-                Prepared::Input(compiler.input(ty, &recipe, &slot.extra, &Condition::default())?)
-            }
-            Recipe::Output(recipe) => Prepared::Output(compiler.output(
-                ty,
-                &recipe,
-                &slot.extra,
-                quote!(__result),
-                false,
-            )?),
-        })
-    })
+    flat.map_slots(
+        |ty, slot| {
+            slot.recipe
+                .map(|recipe| compiler.input(ty, &recipe, &slot.extra, &Condition::default()))
+                .transpose()
+        },
+        |ty, slot| {
+            slot.recipe
+                .map(|recipe| compiler.output(ty, &recipe, &slot.extra, quote!(__result), false))
+                .transpose()
+        },
+    )
 }
 struct Compiler<'a, C: Codec> {
-    flat: &'a Flat<Slot<C::Extra>>,
+    flat: &'a Configured<C::Extra>,
     codec: &'a C,
-    next: usize,
+    next: std::cell::Cell<usize>,
 }
 impl<C: Codec> Compiler<'_, C> {
     fn wire(
@@ -469,13 +495,14 @@ impl<C: Codec> Compiler<'_, C> {
             active: active.clone(),
         }
     }
-    fn name(&mut self) -> syn::Ident {
-        let n = format_ident!("w{}", self.next);
-        self.next += 1;
+    fn name(&self) -> syn::Ident {
+        let next = self.next.get();
+        let n = format_ident!("w{next}");
+        self.next.set(next + 1);
         n
     }
     fn input(
-        &mut self,
+        &self,
         ty: &Type,
         recipe: &Input,
         extra: &C::Extra,
@@ -571,7 +598,7 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 let mut fields = Vec::new();
                 for (field, child) in r.fields.iter().zip(children) {
-                    let p = self.input(&field.ty.ty, child, extra, active)?;
+                    let p = self.input(&field.ty, child, extra, active)?;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -645,7 +672,7 @@ impl<C: Codec> Compiler<'_, C> {
         })
     }
     fn output(
-        &mut self,
+        &self,
         ty: &Type,
         recipe: &Output,
         extra: &C::Extra,
@@ -721,8 +748,7 @@ impl<C: Codec> Compiler<'_, C> {
                 }
                 for (field, child) in r.fields.iter().zip(children) {
                     let name = &field.name;
-                    let p =
-                        self.output(&field.ty.ty, child, extra, quote!(&(#value).#name), true)?;
+                    let p = self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
                     append(&mut out, p);
                 }
             }

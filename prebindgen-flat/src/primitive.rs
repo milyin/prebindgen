@@ -3,7 +3,7 @@ use syn::Type;
 
 /// Rust scalar classification, independent of any target language carrier.
 ///
-/// Unit is represented separately by an empty field recipe.
+/// Unit is outside this scalar classification.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Primitive {
     /// Boolean value.

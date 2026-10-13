@@ -9,9 +9,10 @@ use prebindgen_flat::Primitive;
 /// Source value type and access mode for a JNI allocation-address wire.
 pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
 use prebindgen_tools::{
-    Access, Codec, Prepared as GenericPrepared, Slot as GenericSlot, Wire as GenericWire, WireKind,
+    Access, Codec, Configured as GenericConfigured, Prepared as GenericPrepared,
+    Wire as GenericWire, WireKind,
 };
-type Slot = GenericSlot<()>;
+type Configured = GenericConfigured<()>;
 type Prepared = GenericPrepared<Option<HandleWire>>;
 type Wire = GenericWire<Option<HandleWire>>;
 use proc_macro2::TokenStream;
@@ -143,7 +144,7 @@ impl JniGen {
         JniGenBuilder::default()
     }
 }
-type Configure = Box<dyn FnOnce(&mut Flat<Slot>) -> Result<()>>;
+type Configure = Box<dyn FnOnce(&mut Configured) -> Result<()>>;
 /// Collect declarations before resolving a JNI/Kotlin binding.
 ///
 /// Supply exactly one of [`Self::source`], [`Self::items`] or [`Self::flat`], plus
@@ -152,7 +153,7 @@ type Configure = Box<dyn FnOnce(&mut Flat<Slot>) -> Result<()>>;
 #[derive(Default)]
 pub struct JniGenBuilder {
     configure: Vec<Configure>,
-    flat: Option<Flat<Slot>>,
+    flat: Option<Configured>,
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     expansions: Vec<ExpandDecl>,
@@ -171,7 +172,7 @@ impl JniGenBuilder {
     /// errors stop generation. Source selection has already happened, so references
     /// introduced here must already exist in the model. Per-function declarations
     /// can explicitly override the recipes assigned by these callbacks.
-    pub fn configure(mut self, f: impl FnOnce(&mut Flat<Slot>) -> Result<()> + 'static) -> Self {
+    pub fn configure(mut self, f: impl FnOnce(&mut Configured) -> Result<()> + 'static) -> Self {
         self.configure.push(Box::new(f));
         self
     }
@@ -206,11 +207,11 @@ impl JniGenBuilder {
         self.expansions.push(decl.into());
         self
     }
-    /// Supply an already parsed model with `Slot<()>` occurrences.
+    /// Supply an already parsed model with separate input and output recipe slots.
     ///
     /// Configured functions still need a Kotlin package declaration. Mutually
     /// exclusive with source and item input.
-    pub fn flat(mut self, flat: Flat<Slot>) -> Self {
+    pub fn flat(mut self, flat: Configured) -> Self {
         self.flat = Some(flat);
         self
     }
@@ -328,7 +329,7 @@ impl JniGenBuilder {
         }
         let flat = prebindgen_tools::prepare(flat, &JniCodec)?;
         for (name, f) in &flat.functions {
-            if matches!(f.ret.slot, Prepared::Output(_)) && !bound.contains(name) {
+            if f.ret.slot.is_some() && !bound.contains(name) {
                 return Err(format!(
                     "configured function `{name}` has no Kotlin declaration"
                 ));
@@ -561,7 +562,7 @@ fn class<'a>(classes: &'a BTreeMap<String, Class>, ty: &syn::Type) -> Result<&'a
         .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))
 }
 fn generate(
-    flat: Flat<Prepared>,
+    flat: Prepared,
     prefix: &str,
     init: &str,
     classes: BTreeMap<String, Class>,
@@ -590,7 +591,7 @@ fn generate(
     }
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let Prepared::Output(output) = &f.ret.slot else {
+        let Some(output) = &f.ret.slot else {
             return Err(format!("`{source}` has no output converter"));
         };
         let method = format!("call{index}");
@@ -607,7 +608,7 @@ fn generate(
         let mut consumed = Vec::new();
         let mut args = Vec::new();
         for p in &f.params {
-            let Prepared::Input(input) = &p.ty.slot else {
+            let Some(input) = &p.ty.slot else {
                 unreachable!()
             };
             for w in &input.wires {
@@ -658,9 +659,7 @@ fn generate(
             + f.params
                 .iter()
                 .map(|p| {
-                    let Prepared::Input(i) = &p.ty.slot else {
-                        unreachable!()
-                    };
+                    let Some(i) = &p.ty.slot else { unreachable!() };
                     i.wires
                         .iter()
                         .map(|w| match w.kind {

@@ -1,5 +1,5 @@
 use super::*;
-fn flat(source: &str) -> Flat<Slot> {
+fn flat(source: &str) -> Configured {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()

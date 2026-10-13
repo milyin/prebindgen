@@ -1,7 +1,8 @@
-//! Source types in Rust syntax, with a configurable slot for each occurrence.
+//! Source types in Rust syntax, with separate data slots for inputs and outputs.
+//! Slot data is chosen by the consumer; record declarations contain only source structure.
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
-//! adapter or conversion chosen. Unit remains available for absence of a value.
+//! slot data types. Unit remains available for absence of a value.
 #![warn(missing_docs)]
 use prebindgen::SourceLocation;
 use quote::ToTokens;
@@ -14,47 +15,58 @@ pub use primitive::Primitive;
 /// A model or generation result with a diagnostic suitable for a build script.
 pub type Result<T> = std::result::Result<T, String>;
 
-/// One occurrence of a Rust type, paired with stage-specific data.
+/// One function parameter or result type, paired with consumer-defined data.
 ///
 /// Two parameters of the same type have independent slots.
 #[derive(Clone, Debug)]
 pub struct TypeUse<S> {
-    /// Qualified source type; independent of its chosen conversion.
+    /// Qualified source type.
     pub ty: Type,
-    /// Data for this occurrence, such as a recipe or prepared conversion.
+    /// Consumer-defined data for this occurrence.
     pub slot: S,
 }
-/// A named function parameter or record field, in source declaration order.
+/// A named function parameter, in source declaration order.
 #[derive(Clone, Debug)]
 pub struct Param<S> {
-    /// Source parameter or field name.
+    /// Source parameter name.
     pub name: syn::Ident,
     /// Its source type and occurrence slot.
     pub ty: TypeUse<S>,
 }
 /// A validated free function and its independently configurable type occurrences.
 #[derive(Clone, Debug)]
-pub struct Function<S> {
+pub struct Function<I, O> {
     /// Unqualified name used by binding declarations.
     pub name: syn::Ident,
     /// Qualified path used to call the source function from generated Rust.
     pub path: syn::Path,
     /// Parameters in call order.
-    pub params: Vec<Param<S>>,
+    pub params: Vec<Param<I>>,
     /// Result occurrence; an omitted Rust return type becomes `()`.
-    pub ret: TypeUse<S>,
+    pub ret: TypeUse<O>,
     /// Origin recorded by source capture, for diagnostics and qualification.
     pub location: SourceLocation,
 }
 /// A named-field record available for field construction and projection.
 #[derive(Clone, Debug)]
-pub struct Record<S> {
+pub struct Record {
     /// Qualified record type.
     pub ty: Type,
     /// Public fields in declaration order.
-    pub fields: Vec<Param<S>>,
+    pub fields: Vec<Field>,
 }
-/// Source structure with a slot at every parameter, result, and record field.
+/// A named record field, independent of function input and output data.
+#[derive(Clone, Debug)]
+pub struct Field {
+    /// Source field name.
+    pub name: syn::Ident,
+    /// Qualified source type.
+    pub ty: Type,
+}
+/// Source structure with independent consumer-defined input and output slot types.
+///
+/// Every parameter carries `I`; every result carries `O`. Record fields have no
+/// slots. Flat does not interpret either data type.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
@@ -63,18 +75,18 @@ pub struct Record<S> {
 /// ```
 /// use prebindgen_flat::{Flat, type_key};
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
-/// let flat = Flat::<()>::parse(items.into_iter().map(|item| (item, Default::default())))?;
-/// let mut flat = flat.map_slots(|ty, ()| Ok(type_key(ty)))?;
+/// let flat = Flat::<(), ()>::parse(items.into_iter().map(|item| (item, Default::default())))?;
+/// let mut flat = flat.map_slots(|ty, ()| Ok(type_key(ty)), |_, ()| Ok(0usize))?;
 /// flat.function_mut("add")?.params[0].ty.slot = "first input".into();
 /// assert_eq!(flat.function("add")?.params[1].ty.slot, "i64");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct Flat<S> {
+pub struct Flat<I, O> {
     /// Free functions indexed by unqualified source name.
-    pub functions: BTreeMap<String, Function<S>>,
+    pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by [`type_key`] of their qualified type.
-    pub records: BTreeMap<String, Record<S>>,
+    pub records: BTreeMap<String, Record>,
     /// Declared type names mapped to qualified Rust types, including opaque aliases.
     pub types: BTreeMap<String, Type>,
     /// Constants every adapter must emit: captured feature guards and generated
@@ -82,7 +94,7 @@ pub struct Flat<S> {
     pub guards: Vec<syn::ItemConst>,
 }
 
-impl<S: Default> Flat<S> {
+impl<I: Default, O: Default> Flat<I, O> {
     /// Select the source declarations needed by this binding before validating
     /// the supported flat subset. Items outside the selection are skipped without validation.
     ///
@@ -149,8 +161,9 @@ impl<S: Default> Flat<S> {
     /// belong to this subset. Rejects duplicate names, non-public declarations,
     /// unsupported signatures and types, and inaccessible record fields.
     ///
-    /// All slots start at `S::default()`. Unqualified declared types and callable
-    /// paths are qualified with the captured crate name (or `crate` if absent).
+    /// Input slots start at `I::default()` and output slots at `O::default()`.
+    /// Unqualified declared types and callable paths are qualified with the captured
+    /// crate name (or `crate` if absent).
     /// Opaque alias implementations are not inspected. Rust layout and trait
     /// requirements are checked later when the generated code compiles.
     pub fn parse(items: impl IntoIterator<Item = (syn::Item, SourceLocation)>) -> Result<Self> {
@@ -231,14 +244,20 @@ impl<S: Default> Flat<S> {
                         }
                         params.push(Param {
                             name: id.ident,
-                            ty: flat.type_use(*p.ty)?,
+                            ty: TypeUse {
+                                ty: flat.resolve_type(&p.ty)?,
+                                slot: I::default(),
+                            },
                         });
                     }
                     let ret = match f.sig.output {
                         syn::ReturnType::Default => syn::parse_quote!(()),
                         syn::ReturnType::Type(_, t) => *t,
                     };
-                    let ret = flat.type_use(ret)?;
+                    let ret = TypeUse {
+                        ty: flat.resolve_type(&ret)?,
+                        slot: O::default(),
+                    };
                     flat.functions.insert(
                         name.to_string(),
                         Function {
@@ -266,9 +285,9 @@ impl<S: Default> Flat<S> {
                         if !matches!(field.vis, syn::Visibility::Public(_)) {
                             return Err("record fields must be public".into());
                         }
-                        out.push(Param {
+                        out.push(Field {
                             name: field.ident.unwrap(),
-                            ty: flat.type_use(field.ty)?,
+                            ty: flat.resolve_type(&field.ty)?,
                         });
                     }
                     flat.records
@@ -294,19 +313,13 @@ impl<S: Default> Flat<S> {
         }
         Ok(flat)
     }
-    fn type_use(&self, ty: Type) -> Result<TypeUse<S>> {
-        Ok(TypeUse {
-            ty: self.resolve_type(&ty)?,
-            slot: S::default(),
-        })
-    }
 }
 
-impl<S> Flat<S> {
+impl<I, O> Flat<I, O> {
     /// Look up a free function by its unqualified source name.
     ///
     /// Returns an error if it was not included in this model.
-    pub fn function(&self, name: &str) -> Result<&Function<S>> {
+    pub fn function(&self, name: &str) -> Result<&Function<I, O>> {
         self.functions
             .get(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
@@ -315,7 +328,7 @@ impl<S> Flat<S> {
     ///
     /// Returns an error for an unknown source name; changing slots does not change
     /// the original Rust parameter or result types.
-    pub fn function_mut(&mut self, name: &str) -> Result<&mut Function<S>> {
+    pub fn function_mut(&mut self, name: &str) -> Result<&mut Function<I, O>> {
         self.functions
             .get_mut(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
@@ -324,7 +337,7 @@ impl<S> Flat<S> {
     ///
     /// Use [`Self::resolve_type`] first for an unqualified declaration name. Opaque
     /// aliases have no record entry and return an error.
-    pub fn record(&self, ty: &Type) -> Result<&Record<S>> {
+    pub fn record(&self, ty: &Type) -> Result<&Record> {
         self.records
             .get(&type_key(ty))
             .ok_or_else(|| format!("`{}` is not a record", type_key(ty)))
@@ -333,7 +346,7 @@ impl<S> Flat<S> {
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
     /// references without explicit lifetimes. A successful result does not mean
-    /// every adapter or recipe supports the type, and aliases remain opaque.
+    /// a consumer can use the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
         struct Names<'a>(&'a BTreeMap<String, Type>);
@@ -376,27 +389,31 @@ impl<S> Flat<S> {
             _ => Err(format!("unsupported source type `{}`", type_key(ty))),
         }
     }
-    /// Transform every occurrence slot, preserving source structure and guards.
+    /// Transform input and output data separately, preserving source structure and guards.
     ///
-    /// Calls `f` with the source type and old slot for each function parameter,
-    /// result, and record field. Stops on its first error. This is a stage
-    /// transformation, not dependency-ordered traversal.
-    pub fn map_slots<T>(self, mut f: impl FnMut(&Type, S) -> Result<T>) -> Result<Flat<T>> {
-        fn param<S, T>(p: Param<S>, f: &mut impl FnMut(&Type, S) -> Result<T>) -> Result<Param<T>> {
-            let slot = f(&p.ty.ty, p.ty.slot)?;
-            Ok(Param {
-                name: p.name,
-                ty: TypeUse { ty: p.ty.ty, slot },
-            })
-        }
+    /// Each callback receives the source type and old slot in its direction.
+    /// Functions are visited by name; within each function, parameters are visited
+    /// in declaration order, followed by its result. Record declarations pass
+    /// through unchanged. Stops on the first error.
+    pub fn map_slots<I2, O2>(
+        self,
+        mut input: impl FnMut(&Type, I) -> Result<I2>,
+        mut output: impl FnMut(&Type, O) -> Result<O2>,
+    ) -> Result<Flat<I2, O2>> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {
             let params = fun
                 .params
                 .into_iter()
-                .map(|p| param(p, &mut f))
+                .map(|p| {
+                    let slot = input(&p.ty.ty, p.ty.slot)?;
+                    Ok(Param {
+                        name: p.name,
+                        ty: TypeUse { ty: p.ty.ty, slot },
+                    })
+                })
                 .collect::<Result<_>>()?;
-            let slot = f(&fun.ret.ty, fun.ret.slot)?;
+            let slot = output(&fun.ret.ty, fun.ret.slot)?;
             functions.insert(
                 name,
                 Function {
@@ -411,23 +428,9 @@ impl<S> Flat<S> {
                 },
             );
         }
-        let mut records = BTreeMap::new();
-        for (name, r) in self.records {
-            records.insert(
-                name,
-                Record {
-                    ty: r.ty,
-                    fields: r
-                        .fields
-                        .into_iter()
-                        .map(|p| param(p, &mut f))
-                        .collect::<Result<_>>()?,
-                },
-            );
-        }
         Ok(Flat {
             functions,
-            records,
+            records: self.records,
             types: self.types,
             guards: self.guards,
         })

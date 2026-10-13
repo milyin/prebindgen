@@ -4,9 +4,10 @@ use prebindgen_flat::{Flat, Primitive, Result};
 /// Pointee type and access mode used by this adapter's foreign wires.
 pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
 use prebindgen_tools::{
-    Codec, Prepared as GenericPrepared, Slot as GenericSlot, Wire as GenericWire, WireKind,
+    Codec, Configured as GenericConfigured, Prepared as GenericPrepared, Wire as GenericWire,
+    WireKind,
 };
-type Slot = GenericSlot<()>;
+type Configured = GenericConfigured<()>;
 type Prepared = GenericPrepared<Option<PointerWire>>;
 type Wire = GenericWire<Option<PointerWire>>;
 use proc_macro2::TokenStream;
@@ -103,10 +104,9 @@ impl Codec for CCodec {
 ///
 /// ```
 /// use prebindgen_c::Cbindgen;
-/// use prebindgen_flat::Flat;
-/// use prebindgen_tools::{fun, Slot};
+/// use prebindgen_tools::{fun, Configured};
 /// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
-/// let flat = Flat::<Slot<()>>::parse(
+/// let flat = Configured::<()>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let generated = Cbindgen::new(flat)
@@ -125,7 +125,7 @@ impl Codec for CCodec {
 /// call and require the caller to obey Rust aliasing and lifetime rules.
 /// Returned pointers and buffers must be freed with their generated destructors.
 pub struct Cbindgen {
-    flat: Option<Flat<Slot>>,
+    flat: Option<Configured>,
     source: Option<std::path::PathBuf>,
     expansions: Vec<prebindgen_tools::ExpandDecl>,
     functions: Vec<prebindgen_tools::FunctionDecl>,
@@ -172,11 +172,11 @@ impl Cbindgen {
         self
     }
 
-    /// Start from a flat model with `Slot<()>` occurrences and prefix `pb`.
+    /// Start from a flat model with separate input and output recipe slots and prefix `pb`.
     ///
     /// Slots can be configured manually or filled by [`Self::function`]. Every
     /// fully configured function in the supplied model is exported.
-    pub fn new(flat: Flat<Slot>) -> Self {
+    pub fn new(flat: Configured) -> Self {
         Self {
             flat: Some(flat),
             source: None,
@@ -327,7 +327,7 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     }
 }
 fn generate(
-    flat: Flat<Prepared>,
+    flat: Prepared,
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
 ) -> Result<Generation> {
@@ -340,14 +340,14 @@ fn generate(
         }
     }
     for f in flat.functions.values() {
-        let Prepared::Output(out) = &f.ret.slot else {
+        let Some(out) = &f.ret.slot else {
             continue;
         };
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
         let inputs = f.params.iter().flat_map(|p| match &p.ty.slot {
-            Prepared::Input(i) => i.wires.iter(),
+            Some(i) => i.wires.iter(),
             _ => unreachable!(),
         });
         for wire in inputs.chain(out.wires.iter()) {
@@ -398,7 +398,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
     for f in flat.functions.values() {
-        let Prepared::Output(output) = &f.ret.slot else {
+        let Some(output) = &f.ret.slot else {
             continue;
         };
         let name = format_ident!("{prefix}_{}", f.name);
@@ -411,7 +411,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         let mut resources = Vec::new();
         let mut args = Vec::new();
         for p in &f.params {
-            let Prepared::Input(input) = &p.ty.slot else {
+            let Some(input) = &p.ty.slot else {
                 unreachable!()
             };
             for w in &input.wires {

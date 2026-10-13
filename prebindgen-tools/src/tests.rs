@@ -89,7 +89,7 @@ impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
         quote!(decode_bytes(#name, #w)?)
     }
 }
-fn model() -> Flat<Slot<Extra>> {
+fn model() -> Configured<Extra> {
     let file=syn::parse_file("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}").unwrap();
     Flat::parse(file.items.into_iter().map(|i| (i, Default::default()))).unwrap()
 }
@@ -97,18 +97,18 @@ fn model() -> Flat<Slot<Extra>> {
 fn different_occurrences_have_different_converters() {
     let mut flat = model();
     let f = flat.function_mut("foo").unwrap();
-    f.params[0].ty.slot.recipe = Recipe::Input(Input::selector([
+    f.params[0].ty.slot.recipe = Some(Input::selector([
         Input::Foreign,
         Input::constructor("make", [Input::Text]),
     ]));
-    f.params[1].ty.slot.recipe = Recipe::Input(Input::Foreign);
-    f.ret.slot.recipe = Recipe::Output(Output::Foreign);
+    f.params[1].ty.slot.recipe = Some(Input::Foreign);
+    f.ret.slot.recipe = Some(Output::Foreign);
     let ready = prepare(flat, &TEST_CODEC).unwrap();
     let f = ready.function("foo").unwrap();
-    let Prepared::Input(x) = &f.params[0].ty.slot else {
+    let Some(x) = &f.params[0].ty.slot else {
         panic!()
     };
-    let Prepared::Input(y) = &f.params[1].ty.slot else {
+    let Some(y) = &f.params[1].ty.slot else {
         panic!()
     };
     assert_eq!(x.wires.len(), 3);
@@ -117,16 +117,43 @@ fn different_occurrences_have_different_converters() {
 #[test]
 fn rejects_incomplete_slots() {
     let mut f = model();
-    f.function_mut("foo").unwrap().ret.slot.recipe = Recipe::Output(Output::Foreign);
+    f.function_mut("foo").unwrap().ret.slot.recipe = Some(Output::Foreign);
     assert!(prepare(f, &TEST_CODEC).unwrap_err().contains("no input"));
 }
+#[test]
+fn rejects_inputs_without_a_result_recipe() {
+    let mut flat = model();
+    flat.function_mut("foo").unwrap().params[0].ty.slot.recipe = Some(Input::Foreign);
+    assert!(prepare(flat, &TEST_CODEC)
+        .unwrap_err()
+        .contains("no output converter"));
+}
+
+#[test]
+fn unbound_helpers_remain_source_only_and_records_survive_preparation() {
+    let mut flat = model();
+    let record = flat.records.values().next().unwrap().clone();
+    Declarations::new(&flat, vec![])
+        .unwrap()
+        .fill(&mut flat, &fun!(foo))
+        .unwrap();
+    let prepared = prepare(flat, &TEST_CODEC).unwrap();
+    let helper = prepared.function("make").unwrap();
+    assert!(helper.ret.slot.is_none());
+    assert!(helper.params.iter().all(|p| p.ty.slot.is_none()));
+    let retained = prepared.record(&record.ty).unwrap();
+    assert_eq!(retained.ty, record.ty);
+    assert_eq!(retained.fields[0].name, record.fields[0].name);
+    assert_eq!(retained.fields[0].ty, record.fields[0].ty);
+}
+
 #[test]
 fn rejects_constructor_arity_mismatch() {
     let mut f = model();
     let foo = f.function_mut("foo").unwrap();
-    foo.params[0].ty.slot.recipe = Recipe::Input(Input::constructor("foo", []));
-    foo.params[1].ty.slot.recipe = Recipe::Input(Input::Foreign);
-    foo.ret.slot.recipe = Recipe::Output(Output::Foreign);
+    foo.params[0].ty.slot.recipe = Some(Input::constructor("foo", []));
+    foo.params[1].ty.slot.recipe = Some(Input::Foreign);
+    foo.ret.slot.recipe = Some(Output::Foreign);
     assert!(prepare(f, &TEST_CODEC)
         .unwrap_err()
         .contains("argument count"));
@@ -140,9 +167,9 @@ fn rejects_double_move_and_field_move() {
         let mut f = model();
         let foo = f.function_mut("foo").unwrap();
         for p in &mut foo.params {
-            p.ty.slot.recipe = Recipe::Input(Input::Foreign);
+            p.ty.slot.recipe = Some(Input::Foreign);
         }
-        foo.ret.slot.recipe = Recipe::Output(output);
+        foo.ret.slot.recipe = Some(output);
         assert!(prepare(f, &TEST_CODEC).is_err());
     }
 }
@@ -151,14 +178,14 @@ fn observations_precede_move_but_wires_keep_order() {
     let mut f = model();
     let foo = f.function_mut("foo").unwrap();
     for p in &mut foo.params {
-        p.ty.slot.recipe = Recipe::Input(Input::Foreign);
+        p.ty.slot.recipe = Some(Input::Foreign);
     }
-    foo.ret.slot.recipe = Recipe::Output(Output::combine([
+    foo.ret.slot.recipe = Some(Output::combine([
         Output::Foreign,
         Output::fields([Output::Bytes]),
     ]));
     let ready = prepare(f, &TEST_CODEC).unwrap();
-    let Prepared::Output(o) = &ready.function("foo").unwrap().ret.slot else {
+    let Some(o) = &ready.function("foo").unwrap().ret.slot else {
         panic!()
     };
     assert!(matches!(o.wires[0].kind, WireKind::Foreign));
@@ -181,7 +208,7 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
             "does not match occurrence",
         ),
     ] {
-        let mut flat = Flat::<Slot<Extra>>::parse(
+        let mut flat = Configured::<Extra>::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items
@@ -222,10 +249,10 @@ fn declarations_preserve_defaults_and_occurrence_overrides() {
         .unwrap();
     let ready = prepare(flat, &TEST_CODEC).unwrap();
     let f = ready.function("foo").unwrap();
-    let Prepared::Input(x) = &f.params[0].ty.slot else {
+    let Some(x) = &f.params[0].ty.slot else {
         panic!()
     };
-    let Prepared::Input(y) = &f.params[1].ty.slot else {
+    let Some(y) = &f.params[1].ty.slot else {
         panic!()
     };
     assert_eq!(x.wires.len(), 3);
@@ -237,9 +264,7 @@ fn declarations_preserve_defaults_and_occurrence_overrides() {
     assert!(matches!(y.wires[0].kind, WireKind::Foreign));
     assert_eq!(y.wires[0].extra.name, "y");
     assert!(x.validation.to_string().contains("\"x\""));
-    let Prepared::Output(result) = &f.ret.slot else {
-        panic!()
-    };
+    let Some(result) = &f.ret.slot else { panic!() };
     assert!(matches!(result.wires[0].kind, WireKind::Foreign));
     assert_eq!(result.wires[0].extra.name, "result");
 }
@@ -266,7 +291,7 @@ fn field_defaults_follow_type_expansions() {
         )
         .unwrap();
     let ready = prepare(flat, &TEST_CODEC).unwrap();
-    let Prepared::Output(output) = &ready.function("read").unwrap().ret.slot else {
+    let Some(output) = &ready.function("read").unwrap().ret.slot else {
         panic!()
     };
     assert!(matches!(output.wires[0].kind, WireKind::Text));
@@ -279,7 +304,7 @@ fn field_defaults_follow_type_expansions() {
 fn explicit_scalar_identity_is_a_value_conversion() {
     let items = syn::parse_file("pub fn f(x:i64)->i64{}").unwrap().items;
     let mut flat =
-        Flat::<Slot<Extra>>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        Configured::<Extra>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
     let f = flat.function_mut("f").unwrap();
     f.params[0].ty.slot.extra.name = "scalar-input";
     f.ret.slot.extra.name = "scalar-output";
@@ -294,12 +319,10 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     defaults.fill(&mut flat, &fun!(f)).unwrap();
     let prepared = prepare(flat, &TEST_CODEC).unwrap();
     let f = prepared.function("f").unwrap();
-    let Prepared::Input(input) = &f.params[0].ty.slot else {
+    let Some(input) = &f.params[0].ty.slot else {
         panic!()
     };
-    let Prepared::Output(output) = &f.ret.slot else {
-        panic!()
-    };
+    let Some(output) = &f.ret.slot else { panic!() };
     assert!(matches!(
         input.wires[0].kind,
         WireKind::Scalar(Primitive::I64)
@@ -320,21 +343,16 @@ fn explicit_scalar_identity_is_a_value_conversion() {
 fn nested_recipes_use_the_boundary_occurrences_extra() {
     let items = syn::parse_file("pub type Key=String; pub struct Payload { pub key:Key } pub fn make(k:Key)->Payload {} pub fn parts(p:&Payload)->Payload {} pub fn foo(x:Payload,y:Payload)->Payload {}").unwrap().items;
     let mut flat =
-        Flat::<Slot<Extra>>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        Configured::<Extra>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
     flat.function_mut("make").unwrap().params[0]
         .ty
         .slot
         .extra
         .name = "constructor declaration";
     flat.function_mut("parts").unwrap().ret.slot.extra.name = "getter declaration";
-    flat.records.values_mut().next().unwrap().fields[0]
-        .ty
-        .slot
-        .extra
-        .name = "field declaration";
     let f = flat.function_mut("foo").unwrap();
     f.params[0].ty.slot = Slot {
-        recipe: Recipe::Input(Input::selector([
+        recipe: Some(Input::selector([
             Input::Foreign,
             Input::constructor("make", [Input::Foreign]),
         ])),
@@ -344,14 +362,14 @@ fn nested_recipes_use_the_boundary_occurrences_extra() {
         },
     };
     f.params[1].ty.slot = Slot {
-        recipe: Recipe::Input(Input::fields([Input::Foreign])),
+        recipe: Some(Input::fields([Input::Foreign])),
         extra: Extra {
             name: "y",
             copy: false,
         },
     };
     f.ret.slot = Slot {
-        recipe: Recipe::Output(Output::combine([
+        recipe: Some(Output::combine([
             Output::Foreign,
             Output::getter("parts", Output::fields([Output::Foreign])),
         ])),
@@ -362,15 +380,13 @@ fn nested_recipes_use_the_boundary_occurrences_extra() {
     };
     let ready = prepare(flat, &TEST_CODEC).unwrap();
     let f = ready.function("foo").unwrap();
-    let Prepared::Input(x) = &f.params[0].ty.slot else {
+    let Some(x) = &f.params[0].ty.slot else {
         panic!()
     };
-    let Prepared::Input(y) = &f.params[1].ty.slot else {
+    let Some(y) = &f.params[1].ty.slot else {
         panic!()
     };
-    let Prepared::Output(result) = &f.ret.slot else {
-        panic!()
-    };
+    let Some(result) = &f.ret.slot else { panic!() };
     let foreign = |wires: &[Wire<WireExtra>]| {
         wires
             .iter()
@@ -404,9 +420,9 @@ fn extra_controls_consumption_without_changing_the_recipe() {
         let mut flat = model();
         let f = flat.function_mut("foo").unwrap();
         for p in &mut f.params {
-            p.ty.slot.recipe = Recipe::Input(Input::Foreign);
+            p.ty.slot.recipe = Some(Input::Foreign);
         }
-        f.ret.slot.recipe = Recipe::Output(recipe.clone());
+        f.ret.slot.recipe = Some(recipe.clone());
         f.ret.slot.extra.copy = copy;
         let prepared = prepare(flat, &TEST_CODEC);
         if copy {
@@ -427,15 +443,11 @@ fn adapter_can_use_unit_data_even_for_foreign_wires() {
     let codec = TestCodec::<()>(std::marker::PhantomData);
     let ready = prepare(flat, &codec).unwrap();
     let f = ready.function("foo").unwrap();
-    let Prepared::Output(output) = &f.ret.slot else {
-        panic!()
-    };
+    let Some(output) = &f.ret.slot else { panic!() };
     let wire: &Wire<()> = &output.wires[0];
     assert!(matches!(wire.kind, WireKind::Foreign));
     for p in &f.params {
-        let Prepared::Input(input) = &p.ty.slot else {
-            panic!()
-        };
+        let Some(input) = &p.ty.slot else { panic!() };
         assert!(matches!(input.wires[0].kind, WireKind::Foreign));
     }
 }
