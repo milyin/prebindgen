@@ -1,5 +1,5 @@
 use super::*;
-fn parse(text: &str) -> Result<Flat<()>> {
+fn parse(text: &str) -> Result<Flat<(), ()>> {
     let items = syn::parse_file(text).unwrap().items;
     Flat::parse(items.into_iter().map(|i| {
         (
@@ -14,7 +14,7 @@ fn parse(text: &str) -> Result<Flat<()>> {
 #[test]
 fn qualifies_names_without_merging_occurrences() {
     let flat = parse("pub type Key = crate::Inner; pub fn f(x:Key,y:Key)->Key{}").unwrap();
-    let mut flat = flat.map_slots(|_, ()| Ok(0u8)).unwrap();
+    let mut flat = flat.map_slots(|_, ()| Ok(0u8), |_, ()| Ok(0u8)).unwrap();
     let f = flat.function_mut("f").unwrap();
     f.params[0].ty.slot = 1;
     f.params[1].ty.slot = 2;
@@ -44,12 +44,34 @@ fn refuses_unsupported_syntax_without_dropping_it() {
     }
 }
 #[test]
-fn field_syntax_and_slot_survive_mapping() {
-    let flat = parse("pub struct Payload{pub data:Vec<u8>} pub fn f(x:Payload){}").unwrap();
-    let mapped = flat.map_slots(|ty, ()| Ok(type_key(ty))).unwrap();
+fn mapping_visits_only_boundary_slots_and_preserves_source_structure() {
+    let flat =
+        parse("pub struct Payload{pub data:Vec<u8>} pub fn f(x:Payload)->Payload{}").unwrap();
+    let guards = flat.guards.clone();
+    let mut inputs = Vec::new();
+    let mut outputs = Vec::new();
+    let mapped = flat
+        .map_slots(
+            |ty, ()| {
+                inputs.push(type_key(ty));
+                Ok(String::from("input"))
+            },
+            |ty, ()| {
+                outputs.push(type_key(ty));
+                Ok(42u32)
+            },
+        )
+        .unwrap();
+    assert_eq!(inputs, ["source_crate :: Payload"]);
+    assert_eq!(outputs, ["source_crate :: Payload"]);
     let field = &mapped.records.values().next().unwrap().fields[0];
-    assert_eq!(field.ty.slot, "Vec < u8 >");
-    assert_eq!(type_key(&field.ty.ty), field.ty.slot);
+    assert_eq!(field.name, "data");
+    assert_eq!(type_key(&field.ty), "Vec < u8 >");
+    let f = mapped.function("f").unwrap();
+    assert_eq!(f.params[0].ty.slot, "input");
+    assert_eq!(f.ret.slot, 42);
+    assert_eq!(f.location.crate_name.as_deref(), Some("source-crate"));
+    assert_eq!(mapped.guards, guards);
 }
 
 #[test]
@@ -62,19 +84,21 @@ fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
             .into_iter()
             .map(|i| (i, Default::default()))
     };
-    let flat = Flat::<()>::parse_selected(items(), &["make".into()], &[]).unwrap();
+    let flat = Flat::<(), ()>::parse_selected(items(), &["make".into()], &[]).unwrap();
     assert_eq!(flat.functions.len(), 1);
     assert!(flat.types.contains_key("Handle"));
     assert!(!flat.types.contains_key("Unsupported"));
-    assert!(Flat::<()>::parse_selected(items(), &["bad".into()], &[])
-        .unwrap_err()
-        .contains("unsupported flat item"));
+    assert!(
+        Flat::<(), ()>::parse_selected(items(), &["bad".into()], &[])
+            .unwrap_err()
+            .contains("unsupported flat item")
+    );
 }
 
 #[test]
 fn selected_record_fields_retain_transitive_source_types() {
     let items = syn::parse_file("pub type Key = hidden::Key; pub struct Record { pub key: Key } pub fn read(r: &Record) -> String {} pub fn unrelated(x: Option<u64>) {}").unwrap().items;
-    let flat = Flat::<()>::parse_selected(
+    let flat = Flat::<(), ()>::parse_selected(
         items.into_iter().map(|i| (i, Default::default())),
         &["read".into()],
         &[],
@@ -116,7 +140,7 @@ fn named_object_size_is_checked_by_rust_layout() {
         ("pub fn no_result() {}", true),
     ] {
         let items = syn::parse_file(source).unwrap().items;
-        let flat = Flat::<()>::parse(items.into_iter().filter_map(|i| {
+        let flat = Flat::<(), ()>::parse(items.into_iter().filter_map(|i| {
             (!matches!(i, syn::Item::Mod(_))).then_some((
                 i,
                 SourceLocation {
@@ -126,7 +150,7 @@ fn named_object_size_is_checked_by_rust_layout() {
             ))
         }))
         .unwrap()
-        .map_slots(|_, ()| Ok(()))
+        .map_slots(|_, ()| Ok(()), |_, ()| Ok(()))
         .unwrap();
         let guards = flat.guards.iter().map(ToTokens::to_token_stream);
         let file = dir.path().join("size_check.rs");

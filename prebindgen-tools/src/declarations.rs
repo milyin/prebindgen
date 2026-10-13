@@ -1,7 +1,7 @@
 //! Build-script declarations for input alternatives and output views.
 //! [`Declarations`] resolves these declarations into occurrence recipes.
 
-use crate::{Input, Output, Recipe, Slot};
+use crate::{Configured, Input, Output};
 use prebindgen_flat::{type_key, Flat, Primitive, Result};
 use std::collections::BTreeMap;
 
@@ -145,14 +145,13 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 /// Resolved type defaults used to fill boundary occurrence recipes.
 ///
 /// Per-function overrides replace type defaults. Existing nonempty recipes are
-/// preserved unless explicitly overridden; [`Slot::extra`] is always preserved.
+/// preserved unless explicitly overridden; [`crate::Slot::extra`] is always preserved.
 /// Defaults cover primitives, text, bytes and unit, with other types delegated to
 /// the adapter as foreign values. Recursive expansion cycles are rejected.
 ///
 /// ```
-/// use prebindgen_flat::Flat;
 /// use prebindgen_tools::{
-///     expand_param, expand_return, fun, Declarations, Input, Output, Recipe, Slot,
+///     expand_param, expand_return, fun, Declarations, Input, Output, Configured,
 /// };
 ///
 /// let source = syn::parse_file(r#"
@@ -161,7 +160,7 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 ///     pub fn key_text(k: &Key) -> String { k.clone() }
 ///     pub fn round_trip(k: Key) -> Key { k }
 /// "#)?;
-/// let mut flat = Flat::<Slot<()>>::parse(
+/// let mut flat = Configured::<()>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let defaults = Declarations::new(&flat, vec![
@@ -171,9 +170,9 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 /// defaults.fill(&mut flat, &fun!(round_trip))?;
 /// let function = flat.function("round_trip")?;
 /// assert!(matches!(&function.params[0].ty.slot.recipe,
-///     Recipe::Input(Input::Selector(arms)) if arms.len() == 2));
+///     Some(Input::Selector(arms)) if arms.len() == 2));
 /// assert!(matches!(&function.ret.slot.recipe,
-///     Recipe::Output(Output::Combine(parts)) if parts.len() == 2));
+///     Some(Output::Combine(parts)) if parts.len() == 2));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct Declarations {
@@ -185,7 +184,7 @@ impl Declarations {
     ///
     /// Returns an error for an unresolved type or duplicate declarations for the
     /// same type and direction. Recipes are resolved later by [`Self::fill`].
-    pub fn new<S>(flat: &Flat<S>, decls: Vec<ExpandDecl>) -> Result<Self> {
+    pub fn new<I, O>(flat: &Flat<I, O>, decls: Vec<ExpandDecl>) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -214,7 +213,7 @@ impl Declarations {
     /// unknown functions/parameters, type mismatches, recursive or empty expansions,
     /// or unsupported constructor/getter options. Full recipe/signature compatibility
     /// is checked by [`crate::prepare`].
-    pub fn fill<E>(&self, flat: &mut Flat<Slot<E>>, decl: &FunctionDecl) -> Result<()> {
+    pub fn fill<E>(&self, flat: &mut Configured<E>, decl: &FunctionDecl) -> Result<()> {
         let source = flat.function(&decl.name)?;
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
@@ -224,15 +223,13 @@ impl Declarations {
         let mut inputs = Vec::new();
         for p in &source.params {
             let explicit = decl.params.get(&p.name.to_string());
-            inputs.push(
-                if explicit.is_some() || matches!(p.ty.slot.recipe, Recipe::Empty) {
-                    Some(self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?)
-                } else {
-                    None
-                },
-            );
+            inputs.push(if explicit.is_some() || p.ty.slot.recipe.is_none() {
+                Some(self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?)
+            } else {
+                None
+            });
         }
-        let output = if decl.ret.is_some() || matches!(source.ret.slot.recipe, Recipe::Empty) {
+        let output = if decl.ret.is_some() || source.ret.slot.recipe.is_none() {
             Some(self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?)
         } else {
             None
@@ -240,17 +237,17 @@ impl Declarations {
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
-                p.ty.slot.recipe = Recipe::Input(input);
+                p.ty.slot.recipe = Some(input);
             }
         }
         if let Some(output) = output {
-            dest.ret.slot.recipe = Recipe::Output(output);
+            dest.ret.slot.recipe = Some(output);
         }
         Ok(())
     }
-    fn input<S>(
+    fn input<I, O>(
         &self,
-        flat: &Flat<S>,
+        flat: &Flat<I, O>,
         ty: &syn::Type,
         explicit: Option<&ExpandParamDecl>,
         stack: &mut Vec<String>,
@@ -303,9 +300,9 @@ impl Declarations {
             _ => Input::Foreign,
         })
     }
-    fn output<S>(
+    fn output<I, O>(
         &self,
-        flat: &Flat<S>,
+        flat: &Flat<I, O>,
         ty: &syn::Type,
         explicit: Option<&ExpandReturnDecl>,
         stack: &mut Vec<String>,
@@ -349,7 +346,7 @@ impl Declarations {
                             .map(|p| {
                                 self.output(
                                     flat,
-                                    &p.ty.ty,
+                                    &p.ty,
                                     d.overrides.get(&p.name.to_string()),
                                     stack,
                                 )

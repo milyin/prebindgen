@@ -8,16 +8,18 @@ conversions, and language adapters emit wrappers and foreign declarations.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Flat<Slot<Extra>>: source type + conversion recipe + adapter data per occurrence
+Configured<E> = Flat<Slot<Input, E>, Slot<Output, E>>
         ↓ prebindgen-tools: defaults, overrides, validation and composition
-Flat<Prepared<AdapterWire>>: input preparation, access requirements, output delivery
+Prepared<W> = Flat<Option<PreparedInput<W>>, Option<PreparedOutput<W>>>
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<S>` also preserves named record fields,
-source names and locations. Wrapper writers use prepared slots; recursive
+can have different input recipes. `Flat<I, O>` attaches consumer-defined `I` data
+to parameters and `O` data to results. Record declarations contain only names and
+source types; their fields have no conversion slots. Flat also preserves source
+names, locations and guards. Wrapper writers use prepared slots; recursive
 conversion decisions belong to tools.
 
 ## Examples migrated from main
@@ -86,15 +88,23 @@ C pointer types and typed destructors. Its old naming and cbindgen postprocessin
 settings remain commented out in the example manifests.
 
 Manual slot configuration remains available for generator development, but none
-of the migrated binding examples requires it. `Input`, `Output` and `Recipe`
-are non-generic conversion recipes. `Slot<E>` stores a recipe beside the
-adapter's extra data; the source type remains on the flat occurrence. Preparation
-receives all three separately. Declaration filling sets or overrides only the
-recipe and preserves the extra data, without consulting a codec.
+of the migrated binding examples requires it. Tools defines independent `Input`
+and `Output` recipes. A `Slot<R, E>` stores an optional recipe of type `R` beside
+adapter data `E`; the source type remains on the flat occurrence.
+`Configured<E>` uses input recipe slots for parameters and output recipe slots
+for results. Declaration filling changes only the recipe, preserving adapter data.
+
+`prepare` converts that model into `Prepared<W>`, with separate optional
+`PreparedInput<W>` and `PreparedOutput<W>` slots. Direction is enforced by Rust's
+types in both models. Entirely unconfigured functions remain source-only helpers;
+partially configured functions are rejected. Recipe compatibility with source
+types is also checked during preparation. Flat itself knows nothing about recipes,
+conversions or processing stages; `map_slots` takes separate input/output callbacks.
 
 The same occurrence data is passed through its entire recipe, including nested
 fields, constructors, selectors, getters and combined outputs. It is not replaced
-with the extra data of a referenced field or function declaration. This subset
+with the extra data of a referenced function declaration. Record fields supply
+only source names and types; the enclosing recipe supplies their conversions. This subset
 does not provide separate adapter data per nested recipe node. C and JNI currently
 use `()` as their extra data.
 
