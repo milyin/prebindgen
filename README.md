@@ -8,9 +8,9 @@ conversions, and language adapters emit wrappers and foreign declarations.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Configured<E> = Flat<Slot<Input, E>, Slot<Output, E>>
-        ↓ prebindgen-tools: defaults, overrides, validation and composition
-Prepared<W> = Flat<Option<PreparedInput<W>>, Option<PreparedOutput<W>>>
+Flat with empty conversion slots
+        ↓ prebindgen-tools builds and attaches converters
+Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<W>>>
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
@@ -19,7 +19,7 @@ A conversion belongs to an occurrence, so two parameters of the same Rust type
 can have different input recipes. `Flat<I, O>` attaches consumer-defined `I` data
 to parameters and `O` data to results. Record declarations contain only names and
 source types; their fields have no conversion slots. Flat also preserves source
-names, locations and guards. Wrapper writers use prepared slots; recursive
+names, locations and guards. Wrapper writers use conversion slots; recursive
 conversion decisions belong to tools.
 
 ## Examples migrated from main
@@ -77,9 +77,9 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `fun!`,
 
 The tools layer also supports `expand_param!` constructor/identity variants,
 `expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
-output overrides, and per-function overrides. These fill slots before preparing
-wrappers. The migrated C and JNI examples exercise Report constructor/handle input
-variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
+output overrides, and per-function overrides. These build converters directly
+in slots before generating wrappers. The migrated C and JNI examples exercise
+Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
 BlobValue and Unsigned use handle classes; data-class generation stays disabled.
 
 C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
@@ -87,26 +87,35 @@ C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`
 C pointer types and typed destructors. Its old naming and cbindgen postprocessing
 settings remain commented out in the example manifests.
 
-Manual slot configuration remains available for generator development, but none
-of the migrated binding examples requires it. Tools defines independent `Input`
-and `Output` recipes. A `Slot<R, E>` stores an optional recipe of type `R` beside
-adapter data `E`; the source type remains on the flat occurrence.
-`Configured<E>` uses input recipe slots for parameters and output recipe slots
-for results. Declaration filling changes only the recipe, preserving adapter data.
+Manual conversion binding remains available for generator development, but none
+of the migrated binding examples requires it. `Bindings<W>` has separate optional
+`InputConversion<W>` and `OutputConversion<W>` slots. Each stores only wires,
+conversion code and resource/ownership steps needed for wrapper emission.
+`bind_input` and `bind_output` compile a recipe directly into one named occurrence.
+`Declarations::fill` resolves defaults and overrides and compiles every needed
+conversion before updating a function. A failed construction leaves its slots
+unchanged. Existing converters survive default filling; explicit overrides replace
+them using the codec input data supplied to that call.
 
-`prepare` converts that model into `Prepared<W>`, with separate optional
-`PreparedInput<W>` and `PreparedOutput<W>` slots. Direction is enforced by Rust's
-types in both models. Entirely unconfigured functions remain source-only helpers;
-partially configured functions are rejected. Recipe compatibility with source
-types is also checked during preparation. Flat itself knows nothing about recipes,
-conversions or processing stages; `map_slots` takes separate input/output callbacks.
+`Input` and `Output` recipes and `Codec::Extra` are construction inputs. Neither is
+stored in Flat, and there is no whole-model recipe-to-prepared transition or source
+model clone. Nested fields, constructors, selectors, getters and combined outputs
+use the enclosing call's extra data. Referenced helpers supply source signatures,
+and record declarations supply field names and types. This subset does not provide
+separate adapter data per nested recipe node. C and JNI use `()` for `Extra`.
 
-The same occurrence data is passed through its entire recipe, including nested
-fields, constructors, selectors, getters and combined outputs. It is not replaced
-with the extra data of a referenced function declaration. Record fields supply
-only source names and types; the enclosing recipe supplies their conversions. This subset
-does not provide separate adapter data per nested recipe node. C and JNI currently
-use `()` as their extra data.
+Direction is enforced by the slot types. `validate_bindings` checks completeness
+before emission: entirely unbound functions remain source-only helpers; partially
+bound functions are rejected. Recipe/type compatibility is checked when attaching
+a converter. Flat itself knows nothing about recipes, conversions or processing
+stages. Names are scoped to parameter positions and the result, so independent
+binding calls and overrides cannot collide with other occurrences in a wrapper.
+
+The manual tools API now uses `Bindings`, `bind_input`/`bind_output` and
+`Declarations::fill(flat, codec, declaration, extra)` instead of `Configured`,
+`Slot` and `prepare`. C exposes `Bindings` and `CCodec`, and JNI exposes `Bindings`
+and `JniCodec`; their manual model/callback APIs accept final conversion slots.
+The supported declarative `build.rs` APIs retain their syntax.
 
 A wire is one generated boundary parameter or result component. `Wire<W>`
 stores its common role in `kind` and adapter data in `extra`. The adapter supplies
@@ -116,7 +125,7 @@ needs no per-wire data uses `W = ()`.
 C and JNI use `Option<BoxedWire>`: foreign wires store the pointee type and access
 mode in `Some(...)`, while other wires use `None`. Each adapter validates that
 data when generating its wrappers.
-`Prepared<W>` retains these wires. Tools compose primitives, text/bytes, adapter
+`Bindings<W>` retains these wires. Tools compose primitives, text/bytes, adapter
 leaves, fields, constructors, input selectors and combined outputs. The composition model
 requires neither handles nor boxed storage. It has no object registry or universal
 `Send` requirement.

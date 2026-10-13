@@ -9,7 +9,8 @@ struct WireExtra {
 impl From<WireExtra> for () {
     fn from(_: WireExtra) {}
 }
-#[derive(Clone, Debug, Default)]
+// Construction-only data needs no Clone or Debug implementation.
+#[derive(Default)]
 struct Extra {
     name: &'static str,
     copy: bool,
@@ -34,8 +35,8 @@ impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
         w: syn::Ident,
         v: syn::Ident,
         active: &Condition,
-    ) -> Result<PreparedInput<Self::Wire>> {
-        Ok(PreparedInput {
+    ) -> Result<InputConversion<Self::Wire>> {
+        Ok(InputConversion {
             wires: vec![Wire {
                 name: w.clone(),
                 kind: WireKind::Foreign,
@@ -56,11 +57,11 @@ impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<PreparedOutput<Self::Wire>> {
+    ) -> Result<OutputConversion<Self::Wire>> {
         if borrowed && !extra.copy {
             return Err("test token cannot be copied".into());
         }
-        Ok(PreparedOutput {
+        Ok(OutputConversion {
             wires: vec![Wire {
                 name: w.clone(),
                 kind: WireKind::Foreign,
@@ -89,110 +90,163 @@ impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
         quote!(decode_bytes(#name, #w)?)
     }
 }
-fn model() -> Configured<Extra> {
-    let file=syn::parse_file("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}").unwrap();
-    Flat::parse(file.items.into_iter().map(|i| (i, Default::default()))).unwrap()
+fn parse<W>(source: &str) -> Bindings<W> {
+    Flat::parse(
+        syn::parse_file(source)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| (i, Default::default())),
+    )
+    .unwrap()
+}
+fn model<W>() -> Bindings<W> {
+    parse("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}")
+}
+fn extra(name: &'static str) -> Extra {
+    Extra { name, copy: false }
+}
+fn fill(flat: &mut Bindings<WireExtra>, decl: &FunctionDecl) -> Result<()> {
+    Declarations::new(flat, vec![])?.fill(flat, &TEST_CODEC, decl, &Extra::default())
 }
 #[test]
 fn different_occurrences_have_different_converters() {
     let mut flat = model();
-    let f = flat.function_mut("foo").unwrap();
-    f.params[0].ty.slot.recipe = Some(Input::selector([
-        Input::Foreign,
-        Input::constructor("make", [Input::Text]),
-    ]));
-    f.params[1].ty.slot.recipe = Some(Input::Foreign);
-    f.ret.slot.recipe = Some(Output::Foreign);
-    let ready = prepare(flat, &TEST_CODEC).unwrap();
-    let f = ready.function("foo").unwrap();
-    let Some(x) = &f.params[0].ty.slot else {
-        panic!()
-    };
-    let Some(y) = &f.params[1].ty.slot else {
-        panic!()
-    };
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "x",
+        &Input::selector([Input::Foreign, Input::constructor("make", [Input::Text])]),
+        &extra("x"),
+    )
+    .unwrap();
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "y",
+        &Input::Foreign,
+        &extra("y"),
+    )
+    .unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        &Output::Foreign,
+        &extra("result"),
+    )
+    .unwrap();
+    validate_bindings(&flat).unwrap();
+    let f = flat.function("foo").unwrap();
+    let x = f.params[0].ty.slot.as_ref().unwrap();
+    let y = f.params[1].ty.slot.as_ref().unwrap();
     assert_eq!(x.wires.len(), 3);
     assert_eq!(y.wires.len(), 1);
+    assert!(x.wires.iter().all(|w| w.extra.name == "x"));
+    assert_eq!(y.wires[0].extra.name, "y");
 }
 #[test]
 fn rejects_incomplete_slots() {
-    let mut f = model();
-    f.function_mut("foo").unwrap().ret.slot.recipe = Some(Output::Foreign);
-    assert!(prepare(f, &TEST_CODEC).unwrap_err().contains("no input"));
+    let mut flat = model();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        &Output::Foreign,
+        &Extra::default(),
+    )
+    .unwrap();
+    assert!(validate_bindings(&flat).unwrap_err().contains("no input"));
 }
 #[test]
-fn rejects_inputs_without_a_result_recipe() {
+fn rejects_inputs_without_a_result_converter() {
     let mut flat = model();
-    flat.function_mut("foo").unwrap().params[0].ty.slot.recipe = Some(Input::Foreign);
-    assert!(prepare(flat, &TEST_CODEC)
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "x",
+        &Input::Foreign,
+        &Extra::default(),
+    )
+    .unwrap();
+    assert!(validate_bindings(&flat)
         .unwrap_err()
         .contains("no output converter"));
 }
-
 #[test]
-fn unbound_helpers_remain_source_only_and_records_survive_preparation() {
+fn binding_keeps_helpers_records_locations_and_guards() {
     let mut flat = model();
-    let record = flat.records.values().next().unwrap().clone();
-    Declarations::new(&flat, vec![])
-        .unwrap()
-        .fill(&mut flat, &fun!(foo))
-        .unwrap();
-    let prepared = prepare(flat, &TEST_CODEC).unwrap();
-    let helper = prepared.function("make").unwrap();
+    let before = flat.clone();
+    fill(&mut flat, &fun!(foo)).unwrap();
+    validate_bindings(&flat).unwrap();
+    let helper = flat.function("make").unwrap();
     assert!(helper.ret.slot.is_none());
     assert!(helper.params.iter().all(|p| p.ty.slot.is_none()));
-    let retained = prepared.record(&record.ty).unwrap();
+    let record = before.records.values().next().unwrap();
+    let retained = flat.record(&record.ty).unwrap();
     assert_eq!(retained.ty, record.ty);
     assert_eq!(retained.fields[0].name, record.fields[0].name);
     assert_eq!(retained.fields[0].ty, record.fields[0].ty);
-}
-
-#[test]
-fn rejects_constructor_arity_mismatch() {
-    let mut f = model();
-    let foo = f.function_mut("foo").unwrap();
-    foo.params[0].ty.slot.recipe = Some(Input::constructor("foo", []));
-    foo.params[1].ty.slot.recipe = Some(Input::Foreign);
-    foo.ret.slot.recipe = Some(Output::Foreign);
-    assert!(prepare(f, &TEST_CODEC)
-        .unwrap_err()
-        .contains("argument count"));
+    assert_eq!(flat.guards, before.guards);
+    assert_eq!(flat.types, before.types);
+    assert_eq!(
+        format!("{:?}", flat.function("foo").unwrap().location),
+        format!("{:?}", before.function("foo").unwrap().location)
+    );
 }
 #[test]
-fn rejects_double_move_and_field_move() {
+fn failed_rebinding_preserves_existing_converter() {
+    let mut flat = model();
+    fill(&mut flat, &fun!(foo)).unwrap();
+    let before = format!("{flat:?}");
+    let error = bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "x",
+        &Input::constructor("foo", []),
+        &Extra::default(),
+    )
+    .unwrap_err();
+    assert!(error.contains("argument count"));
+    assert_eq!(format!("{flat:?}"), before);
     for output in [
         Output::combine([Output::Foreign, Output::Foreign]),
         Output::fields([Output::Foreign]),
     ] {
-        let mut f = model();
-        let foo = f.function_mut("foo").unwrap();
-        for p in &mut foo.params {
-            p.ty.slot.recipe = Some(Input::Foreign);
-        }
-        foo.ret.slot.recipe = Some(output);
-        assert!(prepare(f, &TEST_CODEC).is_err());
+        assert!(bind_output(&mut flat, &TEST_CODEC, "foo", &output, &Extra::default()).is_err());
+        assert_eq!(format!("{flat:?}"), before);
     }
+    assert!(bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "missing",
+        &Input::Foreign,
+        &Extra::default()
+    )
+    .unwrap_err()
+    .contains("unknown parameter"));
 }
 #[test]
 fn observations_precede_move_but_wires_keep_order() {
-    let mut f = model();
-    let foo = f.function_mut("foo").unwrap();
-    for p in &mut foo.params {
-        p.ty.slot.recipe = Some(Input::Foreign);
-    }
-    foo.ret.slot.recipe = Some(Output::combine([
-        Output::Foreign,
-        Output::fields([Output::Bytes]),
-    ]));
-    let ready = prepare(f, &TEST_CODEC).unwrap();
-    let Some(o) = &ready.function("foo").unwrap().ret.slot else {
-        panic!()
-    };
+    let mut flat = model();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        &Output::combine([Output::Foreign, Output::fields([Output::Bytes])]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
     assert!(matches!(o.wires[0].kind, WireKind::Foreign));
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
-
 #[test]
 fn declarations_reject_unknown_or_mismatched_field_overrides() {
     let source = "pub struct Payload { pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn read(p: Payload) -> Payload {}";
@@ -208,30 +262,35 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
             "does not match occurrence",
         ),
     ] {
-        let mut flat = Configured::<Extra>::parse(
-            syn::parse_file(source)
-                .unwrap()
-                .items
-                .into_iter()
-                .map(|i| (i, Default::default())),
-        )
-        .unwrap();
-        let declarations = Declarations::new(&flat, vec![]).unwrap();
+        let mut flat = parse(source);
         let function = fun!(read)
             .expand_return(expand_return!(Payload).fields(fields!(parts).field(field, output)));
-        assert!(declarations
-            .fill(&mut flat, &function)
-            .unwrap_err()
-            .contains(message));
+        assert!(fill(&mut flat, &function).unwrap_err().contains(message));
+        let f = flat.function("read").unwrap();
+        assert!(f.params[0].ty.slot.is_none());
+        assert!(f.ret.slot.is_none());
     }
 }
 #[test]
-fn declarations_preserve_defaults_and_occurrence_overrides() {
+fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let mut flat = model();
-    let f = flat.function_mut("foo").unwrap();
-    f.params[0].ty.slot.extra.name = "x";
-    f.params[1].ty.slot.extra.name = "y";
-    f.ret.slot.extra.name = "result";
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "x",
+        &Input::selector([Input::constructor("make", [Input::Text]), Input::Foreign]),
+        &extra("x"),
+    )
+    .unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        &Output::Foreign,
+        &extra("result"),
+    )
+    .unwrap();
     let declarations = Declarations::new(
         &flat,
         vec![expand_param!(Payload)
@@ -240,74 +299,125 @@ fn declarations_preserve_defaults_and_occurrence_overrides() {
             .into()],
     )
     .unwrap();
-    declarations.fill(&mut flat, &fun!(foo)).unwrap();
+    declarations
+        .fill(&mut flat, &TEST_CODEC, &fun!(foo), &extra("defaults"))
+        .unwrap();
+    assert_eq!(
+        flat.function("foo").unwrap().params[1]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap()
+            .wires
+            .len(),
+        3
+    );
     declarations
         .fill(
             &mut flat,
+            &TEST_CODEC,
             &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
+            &extra("override"),
         )
         .unwrap();
-    let ready = prepare(flat, &TEST_CODEC).unwrap();
-    let f = ready.function("foo").unwrap();
-    let Some(x) = &f.params[0].ty.slot else {
-        panic!()
-    };
-    let Some(y) = &f.params[1].ty.slot else {
-        panic!()
-    };
+    let f = flat.function("foo").unwrap();
+    let x = f.params[0].ty.slot.as_ref().unwrap();
+    let y = f.params[1].ty.slot.as_ref().unwrap();
     assert_eq!(x.wires.len(), 3);
-    assert_eq!(y.wires.len(), 1);
     assert!(matches!(x.wires[2].kind, WireKind::Foreign));
-    assert_eq!(x.wires[2].extra.name, "x");
-    assert_eq!(x.wires[0].extra.name, "x");
-    assert_eq!(x.wires[1].extra.name, "x");
-    assert!(matches!(y.wires[0].kind, WireKind::Foreign));
-    assert_eq!(y.wires[0].extra.name, "y");
+    assert!(x.wires.iter().all(|w| w.extra.name == "x"));
+    assert_eq!(y.wires.len(), 1);
+    assert_eq!(y.wires[0].extra.name, "override");
+    assert_eq!(f.ret.slot.as_ref().unwrap().wires[0].extra.name, "result");
     assert!(x.validation.to_string().contains("\"x\""));
-    let Some(result) = &f.ret.slot else { panic!() };
-    assert!(matches!(result.wires[0].kind, WireKind::Foreign));
-    assert_eq!(result.wires[0].extra.name, "result");
+}
+#[test]
+fn declaration_compilation_is_atomic_even_when_output_fails() {
+    let mut flat = model();
+    fill(&mut flat, &fun!(foo)).unwrap();
+    let before = format!("{flat:?}");
+    let function = fun!(foo)
+        .expand_param("x", expand_param!(Payload).variant(fun!(make)))
+        .expand_return(expand_return!(Payload).field(fun!(make)));
+    assert!(fill(&mut flat, &function)
+        .unwrap_err()
+        .contains("must take exactly"));
+    assert_eq!(format!("{flat:?}"), before);
+}
+#[test]
+fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
+    let mut flat = model();
+    let mut reversed = model();
+    for (model, order) in [(&mut flat, ["x", "y"]), (&mut reversed, ["y", "x"])] {
+        for parameter in order {
+            bind_input(
+                model,
+                &TEST_CODEC,
+                "foo",
+                parameter,
+                &Input::Foreign,
+                &Extra::default(),
+            )
+            .unwrap();
+        }
+        bind_output(
+            model,
+            &TEST_CODEC,
+            "foo",
+            &Output::Foreign,
+            &Extra::default(),
+        )
+        .unwrap();
+    }
+    assert_eq!(format!("{flat:?}"), format!("{reversed:?}"));
+    let old_y = format!("{:?}", flat.function("foo").unwrap().params[1].ty.slot);
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "x",
+        &Input::selector([Input::Foreign, Input::constructor("make", [Input::Text])]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let f = flat.function("foo").unwrap();
+    assert_eq!(format!("{:?}", f.params[1].ty.slot), old_y);
+    let wires = f
+        .params
+        .iter()
+        .flat_map(|p| &p.ty.slot.as_ref().unwrap().wires)
+        .chain(&f.ret.slot.as_ref().unwrap().wires)
+        .collect::<Vec<_>>();
+    let names = wires
+        .iter()
+        .map(|w| w.name.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(names.len(), wires.len());
 }
 #[test]
 fn field_defaults_follow_type_expansions() {
-    let source = "pub type Key=String; pub struct Payload { pub key: Key, pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn key_text(k: &Key) -> String {} pub fn read(p: Payload) -> Payload {}";
-    let mut flat = Flat::parse(
-        syn::parse_file(source)
-            .unwrap()
-            .items
-            .into_iter()
-            .map(|i| (i, Default::default())),
-    )
-    .unwrap();
-    let declarations = Declarations::new(
+    let mut flat = parse("pub type Key=String; pub struct Payload { pub key: Key, pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn key_text(k: &Key) -> String {} pub fn read(p: Payload) -> Payload {}");
+    Declarations::new(
         &flat,
         vec![expand_return!(Key).field(fun!(key_text)).into()],
     )
+    .unwrap()
+    .fill(
+        &mut flat,
+        &TEST_CODEC,
+        &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
+        &Extra::default(),
+    )
     .unwrap();
-    declarations
-        .fill(
-            &mut flat,
-            &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
-        )
-        .unwrap();
-    let ready = prepare(flat, &TEST_CODEC).unwrap();
-    let Some(output) = &ready.function("read").unwrap().ret.slot else {
-        panic!()
-    };
+    let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
     assert!(matches!(output.wires[0].kind, WireKind::Text));
     assert!(matches!(output.wires[1].kind, WireKind::Bytes));
     assert_eq!(output.wires[0].extra.ty, "String");
     assert_eq!(output.wires[1].extra.ty, "Vec < u8 >");
 }
-
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
-    let items = syn::parse_file("pub fn f(x:i64)->i64{}").unwrap().items;
-    let mut flat =
-        Configured::<Extra>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
-    let f = flat.function_mut("f").unwrap();
-    f.params[0].ty.slot.extra.name = "scalar-input";
-    f.ret.slot.extra.name = "scalar-output";
+    let mut flat = parse("pub fn f(x:i64)->i64{}");
     let defaults = Declarations::new(
         &flat,
         vec![
@@ -316,13 +426,12 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         ],
     )
     .unwrap();
-    defaults.fill(&mut flat, &fun!(f)).unwrap();
-    let prepared = prepare(flat, &TEST_CODEC).unwrap();
-    let f = prepared.function("f").unwrap();
-    let Some(input) = &f.params[0].ty.slot else {
-        panic!()
-    };
-    let Some(output) = &f.ret.slot else { panic!() };
+    defaults
+        .fill(&mut flat, &TEST_CODEC, &fun!(f), &extra("scalar"))
+        .unwrap();
+    let f = flat.function("f").unwrap();
+    let input = f.params[0].ty.slot.as_ref().unwrap();
+    let output = f.ret.slot.as_ref().unwrap();
     assert!(matches!(
         input.wires[0].kind,
         WireKind::Scalar(Primitive::I64)
@@ -331,62 +440,67 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         output.wires[0].kind,
         WireKind::Scalar(Primitive::I64)
     ));
-    assert_eq!(input.wires[0].extra.name, "scalar-input");
+    assert_eq!(input.wires[0].extra.name, "scalar");
     assert_eq!(input.wires[0].extra.ty, "i64");
-    assert_eq!(output.wires[0].extra.name, "scalar-output");
+    assert_eq!(output.wires[0].extra.name, "scalar");
     assert_eq!(output.wires[0].extra.ty, "i64");
-    assert!(input.validation.to_string().contains("scalar-input"));
-    assert!(output.statements.to_string().contains("scalar-output"));
+    assert!(input.validation.to_string().contains("scalar"));
+    assert!(output.statements.to_string().contains("scalar"));
 }
-
 #[test]
-fn nested_recipes_use_the_boundary_occurrences_extra() {
-    let items = syn::parse_file("pub type Key=String; pub struct Payload { pub key:Key } pub fn make(k:Key)->Payload {} pub fn parts(p:&Payload)->Payload {} pub fn foo(x:Payload,y:Payload)->Payload {}").unwrap().items;
-    let mut flat =
-        Configured::<Extra>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
-    flat.function_mut("make").unwrap().params[0]
-        .ty
-        .slot
-        .extra
-        .name = "constructor declaration";
-    flat.function_mut("parts").unwrap().ret.slot.extra.name = "getter declaration";
-    let f = flat.function_mut("foo").unwrap();
-    f.params[0].ty.slot = Slot {
-        recipe: Some(Input::selector([
-            Input::Foreign,
-            Input::constructor("make", [Input::Foreign]),
-        ])),
-        extra: Extra {
-            name: "x",
-            copy: false,
-        },
-    };
-    f.params[1].ty.slot = Slot {
-        recipe: Some(Input::fields([Input::Foreign])),
-        extra: Extra {
-            name: "y",
-            copy: false,
-        },
-    };
-    f.ret.slot = Slot {
-        recipe: Some(Output::combine([
+fn nested_recipes_use_only_the_callers_extra() {
+    let mut flat = parse("pub type Key=String; pub struct Payload { pub key:Key } pub fn make(k:Key)->Payload {} pub fn parts(p:&Payload)->Payload {} pub fn foo(x:Payload,y:Payload)->Payload {}");
+    // Independently bound helpers must not affect the enclosing conversion.
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "make",
+        "k",
+        &Input::Foreign,
+        &extra("constructor declaration"),
+    )
+    .unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "parts",
+        &Output::Foreign,
+        &extra("getter declaration"),
+    )
+    .unwrap();
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "x",
+        &Input::selector([Input::Foreign, Input::constructor("make", [Input::Foreign])]),
+        &extra("x"),
+    )
+    .unwrap();
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        "y",
+        &Input::fields([Input::Foreign]),
+        &extra("y"),
+    )
+    .unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "foo",
+        &Output::combine([
             Output::Foreign,
             Output::getter("parts", Output::fields([Output::Foreign])),
-        ])),
-        extra: Extra {
+        ]),
+        &Extra {
             name: "result",
             copy: true,
         },
-    };
-    let ready = prepare(flat, &TEST_CODEC).unwrap();
-    let f = ready.function("foo").unwrap();
-    let Some(x) = &f.params[0].ty.slot else {
-        panic!()
-    };
-    let Some(y) = &f.params[1].ty.slot else {
-        panic!()
-    };
-    let Some(result) = &f.ret.slot else { panic!() };
+    )
+    .unwrap();
+    let f = flat.function("foo").unwrap();
     let foreign = |wires: &[Wire<WireExtra>]| {
         wires
             .iter()
@@ -397,57 +511,61 @@ fn nested_recipes_use_the_boundary_occurrences_extra() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        foreign(&x.wires),
+        foreign(&f.params[0].ty.slot.as_ref().unwrap().wires),
         vec![
             ("x", "crate :: Payload".into()),
             ("x", "crate :: Key".into())
         ]
     );
-    assert_eq!(foreign(&y.wires), vec![("y", "crate :: Key".into())]);
     assert_eq!(
-        foreign(&result.wires),
+        foreign(&f.params[1].ty.slot.as_ref().unwrap().wires),
+        vec![("y", "crate :: Key".into())]
+    );
+    assert_eq!(
+        foreign(&f.ret.slot.as_ref().unwrap().wires),
         vec![
             ("result", "crate :: Payload".into()),
             ("result", "crate :: Key".into())
         ]
     );
 }
-
 #[test]
 fn extra_controls_consumption_without_changing_the_recipe() {
     let recipe = Output::combine([Output::Foreign, Output::Foreign]);
     for copy in [false, true] {
         let mut flat = model();
-        let f = flat.function_mut("foo").unwrap();
-        for p in &mut f.params {
-            p.ty.slot.recipe = Some(Input::Foreign);
-        }
-        f.ret.slot.recipe = Some(recipe.clone());
-        f.ret.slot.extra.copy = copy;
-        let prepared = prepare(flat, &TEST_CODEC);
+        let result = bind_output(
+            &mut flat,
+            &TEST_CODEC,
+            "foo",
+            &recipe,
+            &Extra {
+                copy,
+                ..Extra::default()
+            },
+        );
         if copy {
-            assert!(prepared.is_ok(), "{prepared:?}");
+            assert!(result.is_ok());
         } else {
-            assert!(prepared
-                .unwrap_err()
-                .contains("consume the same value twice"));
+            assert!(result.unwrap_err().contains("consume the same value twice"));
         }
     }
 }
-
 #[test]
 fn adapter_can_use_unit_data_even_for_foreign_wires() {
     let mut flat = model();
-    let declarations = Declarations::new(&flat, vec![]).unwrap();
-    declarations.fill(&mut flat, &fun!(foo)).unwrap();
     let codec = TestCodec::<()>(std::marker::PhantomData);
-    let ready = prepare(flat, &codec).unwrap();
-    let f = ready.function("foo").unwrap();
-    let Some(output) = &f.ret.slot else { panic!() };
-    let wire: &Wire<()> = &output.wires[0];
+    Declarations::new(&flat, vec![])
+        .unwrap()
+        .fill(&mut flat, &codec, &fun!(foo), &Extra::default())
+        .unwrap();
+    let f = flat.function("foo").unwrap();
+    let wire: &Wire<()> = &f.ret.slot.as_ref().unwrap().wires[0];
     assert!(matches!(wire.kind, WireKind::Foreign));
     for p in &f.params {
-        let Some(input) = &p.ty.slot else { panic!() };
-        assert!(matches!(input.wires[0].kind, WireKind::Foreign));
+        assert!(matches!(
+            p.ty.slot.as_ref().unwrap().wires[0].kind,
+            WireKind::Foreign
+        ));
     }
 }

@@ -1,12 +1,12 @@
-//! Conversion composition. Adapters supply leaf codecs; wrappers consume prepared slots.
+//! Conversion composition. Adapters supply leaf codecs; wrappers consume conversion slots.
 //!
-//! Fill [`Slot`] recipes using [`Declarations`] or manual configuration, then call
-//! [`prepare`] with a [`Codec`]. Wrappers consume a [`Prepared`] model and follow the
-//! ordering documented on [`PreparedInput`] and [`PreparedOutput`].
-//! Before preparation, each function parameter and result has a source type and
-//! a [`Slot`] containing its recipe and adapter data. Preparation produces wires: individual boundary parameters
-//! or result components. Each [`Wire`] has a common [`WireKind`] and adapter data
-//! in [`Wire::extra`]. [`boxed`] provides conversions for boxed storage.
+//! [`Declarations::fill`], [`bind_input`] and [`bind_output`] build conversions
+//! directly in a [`Bindings`] model. Recipes and codec input data are used only
+//! during construction; slots retain wires and code needed by wrapper writers.
+//! Before emission, call [`validate_bindings`] and follow the execution ordering
+//! documented on [`InputConversion`] and [`OutputConversion`].
+//! Each [`Wire`] has a common [`WireKind`] and adapter data in [`Wire::extra`].
+//! [`boxed`] provides conversions for boxed storage.
 #![warn(missing_docs)]
 use prebindgen_flat::{same_type, type_key, Flat, Primitive, Result};
 use proc_macro2::TokenStream;
@@ -15,7 +15,7 @@ use syn::Type;
 
 /// A recipe for converting boundary inputs into one source argument.
 ///
-/// Preparation expands the recipe into wires and Rust conversion code.
+/// Binding expands the recipe into wires and Rust conversion code.
 #[derive(Clone, Debug)]
 pub enum Input {
     /// Decode the occurrence's Rust primitive using the adapter's scalar codec.
@@ -42,13 +42,13 @@ pub enum Input {
 impl Input {
     /// Construct a record from field recipes, or unit from an empty list.
     ///
-    /// Preparation verifies the child count against the source record.
+    /// Binding verifies the child count against the source record.
     pub fn fields(fields: impl IntoIterator<Item = Input>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
     /// Call a named source constructor with the supplied argument recipes.
     ///
-    /// Preparation checks its result type and argument count. Argument validation and
+    /// Binding checks its result type and argument count. Argument validation and
     /// ownership acquisition precede the source call.
     pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input>) -> Self {
         Self::Constructor {
@@ -64,7 +64,7 @@ impl Input {
         Self::Selector(arms.into_iter().collect())
     }
 }
-/// A result conversion recipe, interpreted together with its source type and slot data.
+/// A result conversion recipe, interpreted together with its source type and codec input data.
 ///
 /// Field projections are observations rather than moves. Adapters decide how to
 /// copy or otherwise expose a foreign value observed through a shared reference.
@@ -99,7 +99,7 @@ impl Output {
     /// Observe a value through a source getter and convert the getter's result.
     ///
     /// The getter must take exactly `&T` for the current type `T`, and return an
-    /// owned value. Preparation rejects mismatched signatures.
+    /// owned value. Binding rejects mismatched signatures.
     pub fn getter(name: impl Into<String>, output: Output) -> Self {
         Self::Getter {
             function: name.into(),
@@ -108,7 +108,7 @@ impl Output {
     }
     /// Produce multiple outputs from one value.
     ///
-    /// Preparation rejects an empty list or more than one consuming branch. The
+    /// Binding rejects an empty list or more than one consuming branch. The
     /// framework uses [`Codec::consumes`] to order observations before a move.
     pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
         Self::Combine(parts.into_iter().collect())
@@ -121,61 +121,6 @@ impl Output {
         }
     }
 }
-
-/// A boundary occurrence's recipe and adapter data.
-///
-/// `R` is [`Input`] for parameters and [`Output`] for results. The same `extra`
-/// is passed through every nested conversion in this occurrence's recipe.
-#[derive(Clone, Debug)]
-pub struct Slot<R, E> {
-    /// Conversion structure; `None` leaves this occurrence unconfigured.
-    pub recipe: Option<R>,
-    /// Adapter data for this occurrence, preserved when declarations replace the recipe.
-    pub extra: E,
-}
-impl<R, E: Default> Default for Slot<R, E> {
-    fn default() -> Self {
-        Self {
-            recipe: None,
-            extra: E::default(),
-        }
-    }
-}
-
-/// A flat model carrying input and output recipes with occurrence data `E`.
-///
-/// Source-only helpers have no recipes. Bound functions need every parameter and
-/// their result configured; [`prepare`] checks completeness. Direction is enforced
-/// by the slot types, independently of completeness or recipe/type compatibility.
-///
-/// Configure each direction using its own recipe type:
-/// ```
-/// use prebindgen_tools::{Configured, Input, Output};
-/// let source = syn::parse_file("pub fn foo(x: i64) -> i64 { x }")?;
-/// let mut flat = Configured::<()>::parse(
-///     source.items.into_iter().map(|item| (item, Default::default())),
-/// )?;
-/// let function = flat.function_mut("foo")?;
-/// function.params[0].ty.slot.recipe = Some(Input::Scalar);
-/// function.ret.slot.recipe = Some(Output::Scalar);
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-///
-/// An output recipe cannot be attached to a parameter:
-/// ```compile_fail
-/// use prebindgen_tools::{Configured, Output};
-/// fn configure(flat: &mut Configured<()>) {
-///     flat.function_mut("foo").unwrap().params[0].ty.slot.recipe = Some(Output::Scalar);
-/// }
-/// ```
-/// An input recipe cannot be attached to a result:
-/// ```compile_fail
-/// use prebindgen_tools::{Configured, Input};
-/// fn configure(flat: &mut Configured<()>) {
-///     flat.function_mut("foo").unwrap().ret.slot.recipe = Some(Input::Scalar);
-/// }
-/// ```
-pub type Configured<E> = Flat<Slot<Input, E>, Slot<Output, E>>;
 
 /// The common role of one generated boundary parameter or result component.
 #[derive(Clone, Debug)]
@@ -239,8 +184,8 @@ pub struct Wire<W> {
 /// ```
 /// use prebindgen_flat::{Primitive, Result};
 /// use prebindgen_tools::{
-///     Codec, Condition, Declarations, PreparedInput, PreparedOutput,
-///     Configured, WireKind, fun, prepare,
+///     Codec, Condition, Declarations, InputConversion, OutputConversion,
+///     Bindings, WireKind, fun, bind_input, Input, validate_bindings,
 /// };
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
@@ -255,12 +200,12 @@ pub struct Wire<W> {
 ///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
 ///     fn input_foreign(
 ///         &self, _: &Type, _: &(), _: Ident, _: Ident, _: &Condition,
-///     ) -> Result<PreparedInput<()>> {
+///     ) -> Result<InputConversion<()>> {
 ///         Err("this codec supports only scalars, text and bytes".into())
 ///     }
 ///     fn output_foreign(
 ///         &self, _: &Type, _: &(), _: Ident, _: TokenStream, _: bool,
-///     ) -> Result<PreparedOutput<()>> {
+///     ) -> Result<OutputConversion<()>> {
 ///         Err("this codec supports only scalars, text and bytes".into())
 ///     }
 ///     fn decode_scalar(&self, _: Primitive, wire: &Ident, _: &()) -> TokenStream {
@@ -278,20 +223,23 @@ pub struct Wire<W> {
 /// }
 ///
 /// let source = syn::parse_file("pub fn echo(value: i64) -> i64 { value }")?;
-/// let mut flat = Configured::<()>::parse(
+/// let mut flat = Bindings::<()>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
-/// Declarations::new(&flat, vec![])?.fill(&mut flat, &fun!(echo))?;
-/// let prepared = prepare(flat, &RustCarriers)?;
-/// let input = prepared.function("echo")?.params[0].ty.slot.as_ref().unwrap();
+/// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Scalar, &())?;
+/// // Declarations retain the existing input and fill the missing result.
+/// Declarations::new(&flat, vec![])?.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
+/// validate_bindings(&flat)?;
+/// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
 /// assert!(matches!(input.wires[0].kind, WireKind::Scalar(Primitive::I64)));
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Codec {
-    /// Occurrence data stored beside a recipe in [`Slot`]; `()` means no extra data.
-    /// This same value is passed through all nested conversions of that occurrence.
-    type Extra: Clone + std::fmt::Debug;
+    /// Input data borrowed while building one occurrence's conversion; use `()` if unused.
+    /// The same value is passed through nested conversions. It is not stored in Flat;
+    /// hooks retain only the data needed for emission in their code and wires.
+    type Extra;
     /// Per-wire data stored in [`Wire::extra`], such as a destination type name.
     /// [`Self::wire_extra`] supplies it for common conversions; foreign conversion
     /// hooks supply it in their returned wires. Use `()` when no data is needed.
@@ -310,7 +258,7 @@ pub trait Codec {
     ///
     /// `wire` and `var` are fresh identifiers for a boundary input and source local.
     /// Preserve `active` on every returned wire and resource. All fallible checks
-    /// belong in [`PreparedInput::validation`]; do not consume values there. Return
+    /// belong in [`InputConversion::validation`]; do not consume values there. Return
     /// a generation error when this type or access mode is unsupported.
     fn input_foreign(
         &self,
@@ -319,12 +267,12 @@ pub trait Codec {
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
-    ) -> Result<PreparedInput<Self::Wire>>;
+    ) -> Result<InputConversion<Self::Wire>>;
     /// Prepare delivery of the Rust expression `value` as one or more foreign wires.
     ///
     /// When `borrowed` is true, the expression is a shared reference to `ty`; do not
     /// move out of it. Keep unpublished allocations under Rust ownership and transfer
-    /// them only in [`PreparedOutput::commit`]. Return a generation error for
+    /// them only in [`OutputConversion::commit`]. Return a generation error for
     /// unsupported conversions. The source value is owned when `borrowed` is false.
     fn output_foreign(
         &self,
@@ -333,7 +281,7 @@ pub trait Codec {
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<PreparedOutput<Self::Wire>>;
+    ) -> Result<OutputConversion<Self::Wire>>;
     /// Emit a Rust expression decoding one carrier to the requested primitive.
     ///
     /// It runs during active-input validation, before object acquisition, and may
@@ -374,7 +322,7 @@ pub trait Codec {
 /// executing any acquisition, then acquire all consuming inputs before evaluating
 /// argument construction. This preserves caller ownership on validation failure.
 #[derive(Clone, Debug)]
-pub struct PreparedInput<W> {
+pub struct InputConversion<W> {
     /// Flattened boundary parameters in signature order.
     pub wires: Vec<Wire<W>>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -399,7 +347,7 @@ pub struct PreparedInput<W> {
 /// owned until all outputs succeed. Scalar and foreign values use the
 /// representation produced by the codec's output hooks.
 #[derive(Clone, Debug)]
-pub struct PreparedOutput<W> {
+pub struct OutputConversion<W> {
     /// Boundary results in delivery order; one entry per expression in `values`.
     pub wires: Vec<Wire<W>>,
     /// Transfer ownership only after all foreign delivery operations succeed.
@@ -409,77 +357,145 @@ pub struct PreparedOutput<W> {
     /// Delivery expressions in wire order; they must remain valid until commit.
     pub values: Vec<TokenStream>,
 }
-/// A flat model carrying prepared inputs and outputs for wrapper emission.
+/// A flat model whose slots contain only conversion data for wrapper emission.
 ///
-/// Unbound source helpers have `None` slots. After [`prepare`] succeeds, each
-/// bound function has `Some` for its result and every parameter. Record fields
-/// retain only names and source types.
+/// Unbound source helpers have `None` slots. Bound functions need `Some` for their
+/// result and every parameter; [`validate_bindings`] checks this before emission.
+/// Record fields retain only names and source types. Recipes and [`Codec::Extra`]
+/// are construction inputs, not stored in this model.
 ///
-/// Prepared output data cannot be attached to an input position:
+/// Output conversion data cannot be attached to an input position:
 /// ```compile_fail
-/// use prebindgen_tools::Prepared;
-/// fn swap(flat: &mut Prepared<()>) {
+/// use prebindgen_tools::Bindings;
+/// fn swap(flat: &mut Bindings<()>) {
 ///     let function = flat.function_mut("foo").unwrap();
 ///     function.params[0].ty.slot = function.ret.slot.clone();
 /// }
 /// ```
-pub type Prepared<W> = Flat<Option<PreparedInput<W>>, Option<PreparedOutput<W>>>;
+/// Nor can a recipe be stored in a slot:
+/// ```compile_fail
+/// use prebindgen_tools::{Bindings, Input};
+/// fn configure(flat: &mut Bindings<()>) {
+///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Scalar);
+/// }
+/// ```
+pub type Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<W>>>;
 
-/// Compile configured recipes into prepared input and output data.
+/// Build and attach a converter to a named function parameter.
 ///
-/// Each conversion receives source type, recipe and occurrence data separately.
-/// Nested recipes inherit their boundary occurrence's data, not the slots of
-/// referenced constructors or getters. Record declarations supply only field names
-/// and source types. Output expressions refer to a wrapper-local `__result`
-/// containing the source function's result. Source guards and locations are preserved.
+/// Resolves the occurrence's source type from `flat`, checks recipe compatibility,
+/// and recursively composes wires and code. Nested conversions use the supplied
+/// `extra`, not data from referenced constructors or getters. Recipes and `extra`
+/// are borrowed only for this call. A failure leaves the existing slot unchanged.
+/// Rebinding an occurrence replaces its converter without changing other slots.
+/// Generated names are scoped by parameter position, so separate calls cannot
+/// collide within the wrapper. Keep the function signature fixed after binding.
+/// Check completeness with [`validate_bindings`].
 ///
-/// Rejects incomplete functions, incompatible recipe/type pairs, invalid
-/// constructor/getter signatures, and repeated output consumption. Entirely
-/// unconfigured functions remain source-only helpers. A bound function needs a
-/// result recipe even for unit (use `Output::fields([])`).
-pub fn prepare<C: Codec>(flat: Configured<C::Extra>, codec: &C) -> Result<Prepared<C::Wire>> {
+/// Input binding rejects output recipes:
+/// ```compile_fail
+/// use prebindgen_tools::{bind_input, Bindings, Codec, Output};
+/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
+///     bind_input(flat, codec, "foo", "x", &Output::Scalar, extra).unwrap();
+/// }
+/// ```
+pub fn bind_input<C: Codec>(
+    flat: &mut Bindings<C::Wire>,
+    codec: &C,
+    function: &str,
+    parameter: &str,
+    recipe: &Input,
+    extra: &C::Extra,
+) -> Result<()> {
+    let f = flat.function(function)?;
+    let index = f
+        .params
+        .iter()
+        .position(|p| p.name == parameter)
+        .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
+    let conversion = Compiler::new(flat, codec, format!("p{index}")).input(
+        &f.params[index].ty.ty,
+        recipe,
+        extra,
+        &Condition::default(),
+    )?;
+    flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
+    Ok(())
+}
+
+/// Build and attach a converter to a function result, replacing any existing one.
+///
+/// Uses the same construction and failure rules as [`bind_input`]. Output code
+/// refers to the wrapper-local `__result` containing the source call's result.
+/// The recipe is checked for compatible types and signatures, and for repeated
+/// consumption of the same value. Unit results use `Output::fields([])`.
+///
+/// Output binding rejects input recipes:
+/// ```compile_fail
+/// use prebindgen_tools::{bind_output, Bindings, Codec, Input};
+/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
+///     bind_output(flat, codec, "foo", &Input::Scalar, extra).unwrap();
+/// }
+/// ```
+pub fn bind_output<C: Codec>(
+    flat: &mut Bindings<C::Wire>,
+    codec: &C,
+    function: &str,
+    recipe: &Output,
+    extra: &C::Extra,
+) -> Result<()> {
+    let conversion = Compiler::new(flat, codec, "ret".into()).output(
+        &flat.function(function)?.ret.ty,
+        recipe,
+        extra,
+        quote!(__result),
+        false,
+    )?;
+    flat.function_mut(function)?.ret.slot = Some(conversion);
+    Ok(())
+}
+
+/// Check that every bound function has an input converter for each parameter
+/// and an output converter, including unit results.
+///
+/// Functions with entirely empty slots remain source-only helpers. This check
+/// neither builds conversions nor changes the model. Adapters call it before
+/// writing wrappers. It does not validate code fragments supplied directly by callers.
+pub fn validate_bindings<W>(flat: &Bindings<W>) -> Result<()> {
     for f in flat.functions.values() {
-        if f.ret.slot.recipe.is_some() {
+        if f.ret.slot.is_some() {
             for p in &f.params {
-                if p.ty.slot.recipe.is_none() {
+                if p.ty.slot.is_none() {
                     return Err(format!(
                         "`{}`: parameter `{}` has no input converter",
                         f.name, p.name
                     ));
                 }
             }
-        } else if f.params.iter().any(|p| p.ty.slot.recipe.is_some()) {
+        } else if f.params.iter().any(|p| p.ty.slot.is_some()) {
             return Err(format!(
                 "`{}`: configured inputs have no output converter",
                 f.name
             ));
         }
     }
-    let source = flat.clone();
-    let compiler = Compiler {
-        flat: &source,
-        codec,
-        next: std::cell::Cell::new(0),
-    };
-    flat.map_slots(
-        |ty, slot| {
-            slot.recipe
-                .map(|recipe| compiler.input(ty, &recipe, &slot.extra, &Condition::default()))
-                .transpose()
-        },
-        |ty, slot| {
-            slot.recipe
-                .map(|recipe| compiler.output(ty, &recipe, &slot.extra, quote!(__result), false))
-                .transpose()
-        },
-    )
+    Ok(())
 }
 struct Compiler<'a, C: Codec> {
-    flat: &'a Configured<C::Extra>,
+    flat: &'a Bindings<C::Wire>,
     codec: &'a C,
+    prefix: String,
     next: std::cell::Cell<usize>,
 }
-impl<C: Codec> Compiler<'_, C> {
+impl<'a, C: Codec> Compiler<'a, C> {
+    fn new(flat: &'a Bindings<C::Wire>, codec: &'a C, prefix: String) -> Self {
+        Self {
+            flat,
+            codec,
+            prefix,
+            next: std::cell::Cell::new(0),
+        }
+    }
     fn wire(
         &self,
         name: syn::Ident,
@@ -497,7 +513,7 @@ impl<C: Codec> Compiler<'_, C> {
     }
     fn name(&self) -> syn::Ident {
         let next = self.next.get();
-        let n = format_ident!("w{next}");
+        let n = format_ident!("{}_w{next}", self.prefix);
         self.next.set(next + 1);
         n
     }
@@ -507,7 +523,7 @@ impl<C: Codec> Compiler<'_, C> {
         recipe: &Input,
         extra: &C::Extra,
         active: &Condition,
-    ) -> Result<PreparedInput<C::Wire>> {
+    ) -> Result<InputConversion<C::Wire>> {
         let var = self.name();
         let mut wires = Vec::new();
         let mut validation = TokenStream::new();
@@ -578,7 +594,7 @@ impl<C: Codec> Compiler<'_, C> {
             }
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
-                    return Ok(PreparedInput {
+                    return Ok(InputConversion {
                         wires,
                         validation,
                         acquire,
@@ -587,7 +603,7 @@ impl<C: Codec> Compiler<'_, C> {
                         argument: quote!(()),
                     });
                 }
-                let r = self.flat.record(ty)?.clone();
+                let r = self.flat.record(ty)?;
                 if r.fields.len() != children.len() {
                     return Err(format!(
                         "`{}`: expected {} field converters, got {}",
@@ -611,7 +627,7 @@ impl<C: Codec> Compiler<'_, C> {
                 statements.extend(quote!(let #var:#ty=#ty{#(#fields),*};));
             }
             Input::Constructor { function, args } => {
-                let f = self.flat.function(function)?.clone();
+                let f = self.flat.function(function)?;
                 if !same_type(&f.ret.ty, ty) {
                     return Err(format!(
                         "constructor `{function}` returns `{}`, expected `{}`",
@@ -662,7 +678,7 @@ impl<C: Codec> Compiler<'_, C> {
                 statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
-        Ok(PreparedInput {
+        Ok(InputConversion {
             wires,
             validation,
             acquire,
@@ -678,8 +694,8 @@ impl<C: Codec> Compiler<'_, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<PreparedOutput<C::Wire>> {
-        let mut out = PreparedOutput {
+    ) -> Result<OutputConversion<C::Wire>> {
+        let mut out = OutputConversion {
             commit: TokenStream::new(),
             wires: Vec::new(),
             statements: TokenStream::new(),
@@ -742,7 +758,7 @@ impl<C: Codec> Compiler<'_, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(out);
                 }
-                let r = self.flat.record(ty)?.clone();
+                let r = self.flat.record(ty)?;
                 if r.fields.len() != children.len() {
                     return Err("wrong output field count".into());
                 }
@@ -753,7 +769,7 @@ impl<C: Codec> Compiler<'_, C> {
                 }
             }
             Output::Getter { function, output } => {
-                let f = self.flat.function(function)?.clone();
+                let f = self.flat.function(function)?;
                 let expected: Type = syn::parse_quote!(&#ty);
                 if f.params.len() != 1 || !same_type(&f.params[0].ty.ty, &expected) {
                     return Err(format!(
@@ -807,7 +823,7 @@ impl<C: Codec> Compiler<'_, C> {
         Ok(out)
     }
 }
-fn append<W>(to: &mut PreparedOutput<W>, from: PreparedOutput<W>) {
+fn append<W>(to: &mut OutputConversion<W>, from: OutputConversion<W>) {
     to.commit.extend(from.commit);
     to.wires.extend(from.wires);
     to.statements.extend(from.statements);
