@@ -149,7 +149,8 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 /// unless explicitly overridden. Defaults cover primitives, text, bytes and unit;
 /// other types are delegated to the adapter as foreign values. Recursive expansion
 /// cycles are rejected. Recipes are local to [`Self::fill`]; only compiled conversion
-/// data is attached to Flat. See [`Codec`] for a buildable example.
+/// data is attached to Flat. See [`Codec`] for a buildable example of constructor
+/// alternatives, combined outputs and manual overrides.
 pub struct Declarations {
     inputs: BTreeMap<String, ExpandParamDecl>,
     outputs: BTreeMap<String, ExpandReturnDecl>,

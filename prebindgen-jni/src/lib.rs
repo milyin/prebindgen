@@ -1,4 +1,4 @@
-//! Generate Rust/JNI wrappers and Kotlin bindings from prepared occurrence slots.
+//! Generate Rust/JNI wrappers and Kotlin bindings from conversion slots.
 //! Supported declarations include `package!`, `ptr_class!`, `fun!`,
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
@@ -7,9 +7,42 @@ use prebindgen_flat::{type_key, Flat, Result};
 mod scalar;
 use prebindgen_flat::Primitive;
 /// Source value type and access mode for a JNI allocation-address wire.
-pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
+///
+/// This adapter-specific type keeps C and JNI converters from being mixed in
+/// one model: their codecs use different allocation layouts.
+#[derive(Clone, Debug)]
+pub struct HandleWire {
+    /// Source value type stored in the allocation, without an input reference.
+    pub ty: syn::Type,
+    /// Whether the call moves, shares or exclusively borrows the value.
+    pub access: prebindgen_tools::Access,
+}
+impl From<prebindgen_tools::boxed::BoxedWire> for HandleWire {
+    fn from(wire: prebindgen_tools::boxed::BoxedWire) -> Self {
+        Self {
+            ty: wire.ty,
+            access: wire.access,
+        }
+    }
+}
 use prebindgen_tools::{Access, Bindings as GenericBindings, Codec, Wire as GenericWire, WireKind};
 /// Flat source model with JNI handle conversion data for wrapper emission.
+///
+/// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
+/// wire type belongs to a different adapter:
+/// ```compile_fail
+/// use prebindgen_jni::Bindings;
+/// use prebindgen_tools::{bind_input, Input};
+/// fn wrong(flat: &mut Bindings) {
+///     bind_input(flat, &prebindgen_c::CCodec, "echo", "x", &Input::Foreign, &()).unwrap();
+/// }
+/// ```
+/// A completed JNI model also cannot be passed to the C generator:
+/// ```compile_fail
+/// fn wrong(flat: prebindgen_jni::Bindings) {
+///     prebindgen_c::Cbindgen::new(flat);
+/// }
+/// ```
 pub type Bindings = GenericBindings<Option<HandleWire>>;
 type Wire = GenericWire<Option<HandleWire>>;
 use proc_macro2::TokenStream;
@@ -390,7 +423,7 @@ impl Codec for JniCodec {
             w,
             v,
             active,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn output_foreign(
@@ -409,7 +442,7 @@ impl Codec for JniCodec {
             w,
             v,
             borrowed,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {

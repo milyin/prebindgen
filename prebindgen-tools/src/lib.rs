@@ -136,7 +136,7 @@ pub enum WireKind {
     /// Zero-based input alternative index, carried as an `i32` by current adapters.
     Selector,
 }
-/// One prepared boundary parameter or result component.
+/// One boundary parameter or result component used by wrapper emission.
 ///
 /// [`Self::kind`] describes its role, and [`Self::extra`] stores data used by
 /// the adapter to emit that component.
@@ -158,7 +158,7 @@ pub struct Wire<W> {
     /// Common role used by native and destination-language emission.
     pub kind: WireKind,
     /// Adapter data used when emitting this wire. Choose `W = ()` when none is needed.
-    /// The framework carries this field through preparation without interpreting it.
+    /// The framework carries this field into the conversion without interpreting it.
     pub extra: W,
     /// Input selector path; outputs normally use the always-active default.
     pub active: Condition,
@@ -176,7 +176,7 @@ pub struct Wire<W> {
 /// # Implementing a codec
 ///
 /// This minimal codec uses Rust primitives, `String` and `Vec<u8>` as its wire
-/// carriers. It illustrates preparation without a foreign ABI or object storage.
+/// carriers. It illustrates converter construction without a foreign ABI or object storage.
 /// A language adapter additionally writes wrappers and chooses corresponding
 /// native and destination-language carrier types. Unsupported foreign leaves
 /// return generation errors.
@@ -185,7 +185,7 @@ pub struct Wire<W> {
 /// use prebindgen_flat::{Primitive, Result};
 /// use prebindgen_tools::{
 ///     Codec, Condition, Declarations, InputConversion, OutputConversion,
-///     Bindings, WireKind, fun, bind_input, Input, validate_bindings,
+///     Bindings, WireKind, fun, expand_param, expand_return, bind_input, Input, validate_bindings,
 /// };
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
@@ -222,15 +222,29 @@ pub struct Wire<W> {
 ///     }
 /// }
 ///
-/// let source = syn::parse_file("pub fn echo(value: i64) -> i64 { value }")?;
+/// let source = syn::parse_file(r#"
+///     pub fn from_i32(value: i32) -> i64 { value as i64 }
+///     pub fn to_i32(value: &i64) -> i32 { *value as i32 }
+///     pub fn echo(value: i64) -> i64 { value }
+/// "#)?;
 /// let mut flat = Bindings::<()>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
+/// let defaults = Declarations::new(&flat, vec![
+///     expand_param!(i64).variant(fun!(from_i32)).variant_self().into(),
+///     expand_return!(i64).field(fun!(to_i32)).field_self().into(),
+/// ])?;
+/// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
+/// let function = flat.function("echo")?;
+/// // Input: selector, constructor argument, direct scalar. Output: two scalar views.
+/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().wires.len(), 3);
+/// assert_eq!(function.ret.slot.as_ref().unwrap().wires.len(), 2);
+/// // Replace just this parameter's converter; later default filling preserves it.
 /// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Scalar, &())?;
-/// // Declarations retain the existing input and fill the missing result.
-/// Declarations::new(&flat, vec![])?.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
+/// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
+/// assert_eq!(input.wires.len(), 1);
 /// assert!(matches!(input.wires[0].kind, WireKind::Scalar(Primitive::I64)));
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -336,7 +350,7 @@ pub struct InputConversion<W> {
     /// Rust expression passed to the source function after `statements`.
     pub argument: TokenStream,
 }
-/// Output preparation whose owned temporaries survive until successful delivery.
+/// Output conversion whose owned temporaries survive until successful delivery.
 ///
 /// Wrappers evaluate `statements`, deliver `values` in `wires` order, then execute
 /// `commit` only after every fallible delivery operation succeeds.
@@ -474,7 +488,7 @@ pub fn validate_bindings<W>(flat: &Bindings<W>) -> Result<()> {
             }
         } else if f.params.iter().any(|p| p.ty.slot.is_some()) {
             return Err(format!(
-                "`{}`: configured inputs have no output converter",
+                "`{}`: bound inputs have no output converter",
                 f.name
             ));
         }
@@ -855,7 +869,7 @@ pub use declarations::{
 };
 
 /// A leaf is active only on its selected path. Adapters use the same condition
-/// for foreign-side resource locking and native preparation.
+/// for foreign-side resource locking and native conversion code.
 #[derive(Clone, Debug, Default)]
 pub struct Condition(
     /// Conjunction of `(selector identifier, required arm index)` terms.

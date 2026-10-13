@@ -1,8 +1,25 @@
-//! Generate Rust wrappers and C declarations from prepared occurrence slots.
+//! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
 use prebindgen_flat::{Flat, Primitive, Result};
 /// Pointee type and access mode used by this adapter's foreign wires.
-pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
+///
+/// This adapter-specific type keeps C and JNI converters from being mixed in
+/// one model: their codecs use different allocation layouts.
+#[derive(Clone, Debug)]
+pub struct PointerWire {
+    /// Source value type stored in the allocation, without an input reference.
+    pub ty: syn::Type,
+    /// Whether the call moves, shares or exclusively borrows the value.
+    pub access: prebindgen_tools::Access,
+}
+impl From<prebindgen_tools::boxed::BoxedWire> for PointerWire {
+    fn from(wire: prebindgen_tools::boxed::BoxedWire) -> Self {
+        Self {
+            ty: wire.ty,
+            access: wire.access,
+        }
+    }
+}
 use prebindgen_tools::{Bindings as GenericBindings, Codec, Wire as GenericWire, WireKind};
 /// Flat source model with C pointer conversion data for wrapper emission.
 pub type Bindings = GenericBindings<Option<PointerWire>>;
@@ -52,7 +69,7 @@ impl Codec for CCodec {
             w,
             v,
             active,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn output_foreign(
@@ -69,7 +86,7 @@ impl Codec for CCodec {
             w,
             v,
             borrowed,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
@@ -190,7 +207,8 @@ impl Cbindgen {
     /// Start from a flat model with input and output conversion slots and prefix `pb`.
     ///
     /// Attach converters with [`prebindgen_tools::bind_input`] and
-    /// [`prebindgen_tools::bind_output`], or fill defaults with [`Self::function`].
+    /// [`prebindgen_tools::bind_output`] with [`CCodec`], or fill defaults with
+    /// [`Self::function`].
     /// Every fully bound function in the supplied model is exported.
     pub fn new(flat: Bindings) -> Self {
         Self {
@@ -218,7 +236,7 @@ impl Cbindgen {
         self.pointers.push((name.into(), ty));
         self
     }
-    /// Resolve declarations, prepare conversions and generate both output texts.
+    /// Resolve declarations, build converters and generate both output texts.
     ///
     /// Does not write files. Returns an error for conflicting sources, invalid or
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.

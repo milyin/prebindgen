@@ -2,7 +2,7 @@
 
 prebindgen generates C and JNI/Kotlin bindings from annotated Rust source.
 The flat model describes source signatures and types. Build-script declarations
-configure conversions for each parameter and result; shared tools prepare the
+configure conversions for each parameter and result; shared tools build the
 conversions, and language adapters emit wrappers and foreign declarations.
 
 ```text
@@ -120,11 +120,14 @@ The supported declarative `build.rs` APIs retain their syntax.
 A wire is one generated boundary parameter or result component. `Wire<W>`
 stores its common role in `kind` and adapter data in `extra`. The adapter supplies
 `extra` for scalar, text, byte and selector wires through `Codec::wire_extra`;
-foreign conversion hooks supply it with their prepared wires. An adapter that
+foreign conversion hooks supply it with their generated wires. An adapter that
 needs no per-wire data uses `W = ()`.
-C and JNI use `Option<BoxedWire>`: foreign wires store the pointee type and access
-mode in `Some(...)`, while other wires use `None`. Each adapter validates that
-data when generating its wrappers.
+C uses `Option<PointerWire>` and JNI uses `Option<HandleWire>`. These are distinct
+adapter types: Rust rejects attaching a C converter to JNI bindings or passing a
+JNI model to the C generator. Foreign wires store the source value type and access
+mode in `Some(...)`, while other wires use `None`. Each adapter maps the shared
+boxed helper's `BoxedWire` into its own type and validates the data when emitting
+wrappers.
 `Bindings<W>` retains these wires. Tools compose primitives, text/bytes, adapter
 leaves, fields, constructors, input selectors and combined outputs. The composition model
 requires neither handles nor boxed storage. It has no object registry or universal
@@ -244,7 +247,7 @@ overloads and shared selector argument storage remain outside this subset.
 Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
 `prebindgen_flat::Flat` for occurrence slots, `prebindgen_tools::Declarations`
 for build-script expansions, and `prebindgen_tools::Codec` for adapter authors.
-The codec and prepared-slot contracts explain validation, ownership acquisition
+The codec and conversion-slot contracts explain validation, ownership acquisition
 and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
 
 Runnable rustdoc examples cover occurrence configuration, selector/combined-output
