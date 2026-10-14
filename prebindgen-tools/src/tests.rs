@@ -1,13 +1,18 @@
 use super::*;
-struct TestCodec<W>(std::marker::PhantomData<W>);
-const TEST_CODEC: TestCodec<WireExtra> = TestCodec(std::marker::PhantomData);
+use value::Value;
+struct TestCodec;
+const TEST_CODEC: TestCodec = TestCodec;
+#[derive(Clone, Debug, PartialEq)]
+enum Kind {
+    Value(Value),
+    Token,
+    Selector,
+}
 #[derive(Clone, Debug)]
-struct WireExtra {
+struct TestWire {
+    kind: Kind,
     name: &'static str,
     ty: String,
-}
-impl From<WireExtra> for () {
-    fn from(_: WireExtra) {}
 }
 // Construction-only data needs no Clone or Debug implementation.
 #[derive(Default)]
@@ -15,32 +20,50 @@ struct Extra {
     name: &'static str,
     copy: bool,
 }
-impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
+fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
+    TestWire {
+        kind,
+        name: extra.name,
+        ty: type_key(ty),
+    }
+}
+impl Codec for TestCodec {
     type Extra = Extra;
-    type Wire = W;
-    fn wire_extra(&self, ty: &Type, _: &WireKind, extra: &Extra) -> W {
-        WireExtra {
+    type Wire = TestWire;
+    fn selector(&self, extra: &Extra) -> TestWire {
+        TestWire {
+            kind: Kind::Selector,
             name: extra.name,
-            ty: type_key(ty),
+            ty: "i32".into(),
         }
-        .into()
     }
-    fn consumes(&self, _: &Type, extra: &Extra) -> bool {
-        !extra.copy
+    fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
+        Value::of(ty).is_none() && !extra.copy
     }
-    fn input_foreign(
+    fn input_leaf(
         &self,
         ty: &Type,
         extra: &Extra,
         w: syn::Ident,
         v: syn::Ident,
         active: &Condition,
-    ) -> Result<InputConversion<Self::Wire>> {
+    ) -> Result<InputConversion<TestWire>> {
+        let name = extra.name;
+        if let Some(value) = Value::of(ty) {
+            let decode = quote!(decode(#name, #w)?);
+            return value::input(
+                ty,
+                w,
+                v,
+                active,
+                decode,
+                wire(Kind::Value(value), ty, extra),
+            );
+        }
         Ok(InputConversion {
             wires: vec![Wire {
                 name: w.clone(),
-                kind: WireKind::Foreign,
-                extra: self.wire_extra(ty, &WireKind::Foreign, extra),
+                kind: wire(Kind::Token, ty, extra),
                 active: active.clone(),
             }],
             validation: quote!(),
@@ -50,22 +73,26 @@ impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
             argument: quote!(#v),
         })
     }
-    fn output_foreign(
+    fn output_leaf(
         &self,
         ty: &Type,
         extra: &Extra,
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputConversion<Self::Wire>> {
+    ) -> Result<OutputConversion<TestWire>> {
+        let name = extra.name;
+        if let Some(value) = Value::of(ty) {
+            let kind = wire(Kind::Value(value), ty, extra);
+            return value::output(ty, w, v, borrowed, |v| quote!(encode(#name, #v)), kind);
+        }
         if borrowed && !extra.copy {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputConversion {
             wires: vec![Wire {
                 name: w.clone(),
-                kind: WireKind::Foreign,
-                extra: self.wire_extra(ty, &WireKind::Foreign, extra),
+                kind: wire(Kind::Token, ty, extra),
                 active: Condition::default(),
             }],
             statements: quote!(let #w=send_token(#v);),
@@ -73,24 +100,8 @@ impl<W: From<WireExtra> + Clone + std::fmt::Debug> Codec for TestCodec<W> {
             commit: quote!(),
         })
     }
-    fn decode_scalar(&self, _: Primitive, w: &syn::Ident, extra: &Extra) -> TokenStream {
-        let name = extra.name;
-        quote!(decode_scalar(#name, #w))
-    }
-    fn encode_scalar(&self, _: Primitive, v: TokenStream, extra: &Extra) -> TokenStream {
-        let name = extra.name;
-        quote!(encode_scalar(#name, #v))
-    }
-    fn decode_text(&self, w: &syn::Ident, _ty: &syn::Type, extra: &Extra) -> TokenStream {
-        let name = extra.name;
-        quote!(decode_text(#name, #w)?)
-    }
-    fn decode_bytes(&self, w: &syn::Ident, _ty: &syn::Type, extra: &Extra) -> TokenStream {
-        let name = extra.name;
-        quote!(decode_bytes(#name, #w)?)
-    }
 }
-fn parse<W>(source: &str) -> Bindings<W> {
+fn parse(source: &str) -> Bindings<TestWire> {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()
@@ -100,13 +111,13 @@ fn parse<W>(source: &str) -> Bindings<W> {
     )
     .unwrap()
 }
-fn model<W>() -> Bindings<W> {
+fn model() -> Bindings<TestWire> {
     parse("pub struct Payload { pub data: Vec<u8> } pub fn make(s: String) -> Payload {} pub fn foo(x: Payload, y: Payload) -> Payload {}")
 }
 fn extra(name: &'static str) -> Extra {
     Extra { name, copy: false }
 }
-fn fill(flat: &mut Bindings<WireExtra>, decl: &FunctionDecl) -> Result<()> {
+fn fill(flat: &mut Bindings<TestWire>, decl: &FunctionDecl) -> Result<()> {
     Declarations::new(flat, vec![])?.fill(flat, &TEST_CODEC, decl, &Extra::default())
 }
 #[test]
@@ -117,7 +128,7 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([Input::Foreign, Input::constructor("make", [Input::Text])]),
+        &Input::selector([Input::Leaf, Input::constructor("make", [Input::Leaf])]),
         &extra("x"),
     )
     .unwrap();
@@ -126,7 +137,7 @@ fn different_occurrences_have_different_converters() {
         &TEST_CODEC,
         "foo",
         "y",
-        &Input::Foreign,
+        &Input::Leaf,
         &extra("y"),
     )
     .unwrap();
@@ -134,7 +145,7 @@ fn different_occurrences_have_different_converters() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::Foreign,
+        &Output::Leaf,
         &extra("result"),
     )
     .unwrap();
@@ -144,8 +155,8 @@ fn different_occurrences_have_different_converters() {
     let y = f.params[1].ty.slot.as_ref().unwrap();
     assert_eq!(x.wires.len(), 3);
     assert_eq!(y.wires.len(), 1);
-    assert!(x.wires.iter().all(|w| w.extra.name == "x"));
-    assert_eq!(y.wires[0].extra.name, "y");
+    assert!(x.wires.iter().all(|w| w.kind.name == "x"));
+    assert_eq!(y.wires[0].kind.name, "y");
 }
 #[test]
 fn rejects_incomplete_slots() {
@@ -154,7 +165,7 @@ fn rejects_incomplete_slots() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::Foreign,
+        &Output::Leaf,
         &Extra::default(),
     )
     .unwrap();
@@ -168,7 +179,7 @@ fn rejects_inputs_without_a_result_converter() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::Foreign,
+        &Input::Leaf,
         &Extra::default(),
     )
     .unwrap();
@@ -214,8 +225,8 @@ fn failed_rebinding_preserves_existing_converter() {
     assert!(error.contains("argument count"));
     assert_eq!(format!("{flat:?}"), before);
     for output in [
-        Output::combine([Output::Foreign, Output::Foreign]),
-        Output::fields([Output::Foreign]),
+        Output::combine([Output::Leaf, Output::Leaf]),
+        Output::fields([Output::Leaf, Output::Leaf]),
     ] {
         assert!(bind_output(&mut flat, &TEST_CODEC, "foo", &output, &Extra::default()).is_err());
         assert_eq!(format!("{flat:?}"), before);
@@ -225,7 +236,7 @@ fn failed_rebinding_preserves_existing_converter() {
         &TEST_CODEC,
         "foo",
         "missing",
-        &Input::Foreign,
+        &Input::Leaf,
         &Extra::default()
     )
     .unwrap_err()
@@ -238,12 +249,12 @@ fn observations_precede_move_but_wires_keep_order() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::combine([Output::Foreign, Output::fields([Output::Bytes])]),
+        &Output::combine([Output::Leaf, Output::fields([Output::Leaf])]),
         &Extra::default(),
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(matches!(o.wires[0].kind, WireKind::Foreign));
+    assert!(o.wires[0].kind.kind == Kind::Token);
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -279,7 +290,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([Input::constructor("make", [Input::Text]), Input::Foreign]),
+        &Input::selector([Input::constructor("make", [Input::Leaf]), Input::Leaf]),
         &extra("x"),
     )
     .unwrap();
@@ -287,7 +298,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         &mut flat,
         &TEST_CODEC,
         "foo",
-        &Output::Foreign,
+        &Output::Leaf,
         &extra("result"),
     )
     .unwrap();
@@ -324,11 +335,11 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
     assert_eq!(x.wires.len(), 3);
-    assert!(matches!(x.wires[2].kind, WireKind::Foreign));
-    assert!(x.wires.iter().all(|w| w.extra.name == "x"));
+    assert!(x.wires[2].kind.kind == Kind::Token);
+    assert!(x.wires.iter().all(|w| w.kind.name == "x"));
     assert_eq!(y.wires.len(), 1);
-    assert_eq!(y.wires[0].extra.name, "override");
-    assert_eq!(f.ret.slot.as_ref().unwrap().wires[0].extra.name, "result");
+    assert_eq!(y.wires[0].kind.name, "override");
+    assert_eq!(f.ret.slot.as_ref().unwrap().wires[0].kind.name, "result");
     assert!(x.validation.to_string().contains("\"x\""));
 }
 #[test]
@@ -355,19 +366,12 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
                 &TEST_CODEC,
                 "foo",
                 parameter,
-                &Input::Foreign,
+                &Input::Leaf,
                 &Extra::default(),
             )
             .unwrap();
         }
-        bind_output(
-            model,
-            &TEST_CODEC,
-            "foo",
-            &Output::Foreign,
-            &Extra::default(),
-        )
-        .unwrap();
+        bind_output(model, &TEST_CODEC, "foo", &Output::Leaf, &Extra::default()).unwrap();
     }
     assert_eq!(format!("{flat:?}"), format!("{reversed:?}"));
     let old_y = format!("{:?}", flat.function("foo").unwrap().params[1].ty.slot);
@@ -376,7 +380,7 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([Input::Foreign, Input::constructor("make", [Input::Text])]),
+        &Input::selector([Input::Leaf, Input::constructor("make", [Input::Leaf])]),
         &Extra::default(),
     )
     .unwrap();
@@ -410,10 +414,10 @@ fn field_defaults_follow_type_expansions() {
     )
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
-    assert!(matches!(output.wires[0].kind, WireKind::Text));
-    assert!(matches!(output.wires[1].kind, WireKind::Bytes));
-    assert_eq!(output.wires[0].extra.ty, "String");
-    assert_eq!(output.wires[1].extra.ty, "Vec < u8 >");
+    assert!(output.wires[0].kind.kind == Kind::Value(Value::Text));
+    assert!(output.wires[1].kind.kind == Kind::Value(Value::Bytes));
+    assert_eq!(output.wires[0].kind.ty, "String");
+    assert_eq!(output.wires[1].kind.ty, "Vec < u8 >");
 }
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
@@ -432,18 +436,13 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let f = flat.function("f").unwrap();
     let input = f.params[0].ty.slot.as_ref().unwrap();
     let output = f.ret.slot.as_ref().unwrap();
-    assert!(matches!(
-        input.wires[0].kind,
-        WireKind::Scalar(Primitive::I64)
-    ));
-    assert!(matches!(
-        output.wires[0].kind,
-        WireKind::Scalar(Primitive::I64)
-    ));
-    assert_eq!(input.wires[0].extra.name, "scalar");
-    assert_eq!(input.wires[0].extra.ty, "i64");
-    assert_eq!(output.wires[0].extra.name, "scalar");
-    assert_eq!(output.wires[0].extra.ty, "i64");
+    let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
+    assert_eq!(input.wires[0].kind.kind, scalar);
+    assert_eq!(output.wires[0].kind.kind, scalar);
+    assert_eq!(input.wires[0].kind.name, "scalar");
+    assert_eq!(input.wires[0].kind.ty, "i64");
+    assert_eq!(output.wires[0].kind.name, "scalar");
+    assert_eq!(output.wires[0].kind.ty, "i64");
     assert!(input.validation.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
@@ -456,7 +455,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "make",
         "k",
-        &Input::Foreign,
+        &Input::Leaf,
         &extra("constructor declaration"),
     )
     .unwrap();
@@ -464,7 +463,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &mut flat,
         &TEST_CODEC,
         "parts",
-        &Output::Foreign,
+        &Output::Leaf,
         &extra("getter declaration"),
     )
     .unwrap();
@@ -473,7 +472,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "x",
-        &Input::selector([Input::Foreign, Input::constructor("make", [Input::Foreign])]),
+        &Input::selector([Input::Leaf, Input::constructor("make", [Input::Leaf])]),
         &extra("x"),
     )
     .unwrap();
@@ -482,7 +481,7 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         "y",
-        &Input::fields([Input::Foreign]),
+        &Input::fields([Input::Leaf]),
         &extra("y"),
     )
     .unwrap();
@@ -491,8 +490,8 @@ fn nested_recipes_use_only_the_callers_extra() {
         &TEST_CODEC,
         "foo",
         &Output::combine([
-            Output::Foreign,
-            Output::getter("parts", Output::fields([Output::Foreign])),
+            Output::Leaf,
+            Output::getter("parts", Output::fields([Output::Leaf])),
         ]),
         &Extra {
             name: "result",
@@ -501,11 +500,11 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &[Wire<WireExtra>]| {
+    let foreign = |wires: &[Wire<TestWire>]| {
         wires
             .iter()
-            .filter_map(|w| match &w.kind {
-                WireKind::Foreign => Some((w.extra.name, w.extra.ty.clone())),
+            .filter_map(|w| match &w.kind.kind {
+                Kind::Token => Some((w.kind.name, w.kind.ty.clone())),
                 _ => None,
             })
             .collect::<Vec<_>>()
@@ -531,7 +530,7 @@ fn nested_recipes_use_only_the_callers_extra() {
 }
 #[test]
 fn extra_controls_consumption_without_changing_the_recipe() {
-    let recipe = Output::combine([Output::Foreign, Output::Foreign]);
+    let recipe = Output::combine([Output::Leaf, Output::Leaf]);
     for copy in [false, true] {
         let mut flat = model();
         let result = bind_output(
@@ -549,23 +548,5 @@ fn extra_controls_consumption_without_changing_the_recipe() {
         } else {
             assert!(result.unwrap_err().contains("consume the same value twice"));
         }
-    }
-}
-#[test]
-fn adapter_can_use_unit_data_even_for_foreign_wires() {
-    let mut flat = model();
-    let codec = TestCodec::<()>(std::marker::PhantomData);
-    Declarations::new(&flat, vec![])
-        .unwrap()
-        .fill(&mut flat, &codec, &fun!(foo), &Extra::default())
-        .unwrap();
-    let f = flat.function("foo").unwrap();
-    let wire: &Wire<()> = &f.ret.slot.as_ref().unwrap().wires[0];
-    assert!(matches!(wire.kind, WireKind::Foreign));
-    for p in &f.params {
-        assert!(matches!(
-            p.ty.slot.as_ref().unwrap().wires[0].kind,
-            WireKind::Foreign
-        ));
     }
 }

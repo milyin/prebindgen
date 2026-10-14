@@ -1,7 +1,7 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`](crate::boxed::Storage) policy and map
-//! [`BoxedWire`](crate::boxed::BoxedWire) data into their wire's `extra` field.
-use crate::{Access, Condition, InputConversion, OutputConversion, Resource, Wire, WireKind};
+//! [`BoxedWire`](crate::boxed::BoxedWire) data into their own wire kind.
+use crate::{Access, Condition, InputConversion, OutputConversion, Resource, Wire};
 use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -49,8 +49,8 @@ impl Storage {
 /// run call-wide resource validation before acquisition (see [`InputConversion`]).
 /// The returned resource records the allocation address and required access.
 ///
-/// `wire_extra` receives the pointee type and access mode as [`BoxedWire`]. Its
-/// return value becomes [`Wire::extra`]. Generated code uses `prebindgen_runtime`.
+/// `wire_kind` receives the pointee type and access mode as [`BoxedWire`]. Its
+/// return value becomes [`Wire::kind`]. Generated code uses `prebindgen_runtime`.
 ///
 /// ```
 /// use prebindgen_tools::{boxed, Access, Condition};
@@ -59,7 +59,7 @@ impl Storage {
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     &Condition::default(), |boxed| boxed.access,
 /// )?;
-/// assert_eq!(input.wires[0].extra, Access::Shared);
+/// assert_eq!(input.wires[0].kind, Access::Shared);
 /// assert!(input.acquire.is_empty());
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -70,7 +70,7 @@ pub fn input<W>(
     w: syn::Ident,
     v: syn::Ident,
     active: &Condition,
-    wire_extra: impl FnOnce(BoxedWire) -> W,
+    wire_kind: impl FnOnce(BoxedWire) -> W,
 ) -> Result<InputConversion<W>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
@@ -112,8 +112,7 @@ pub fn input<W>(
     Ok(InputConversion {
         wires: vec![Wire {
             name: w.clone(),
-            kind: WireKind::Foreign,
-            extra: wire_extra(BoxedWire {
+            kind: wire_kind(BoxedWire {
                 ty: target.clone(),
                 access,
             }),
@@ -137,7 +136,7 @@ pub fn input<W>(
 /// the box, `values` exposes its address, and `commit` relinquishes ownership only
 /// after successful delivery. The adapter must provide a matching destructor.
 ///
-/// `wire_extra` receives [`BoxedWire`] and returns the value stored in [`Wire::extra`].
+/// `wire_kind` receives [`BoxedWire`] and returns the value stored in [`Wire::kind`].
 /// Named source types must satisfy the nonzero-size guards from the flat model.
 pub fn output<W>(
     storage: &Storage,
@@ -145,7 +144,7 @@ pub fn output<W>(
     w: syn::Ident,
     value: TokenStream,
     borrowed: bool,
-    wire_extra: impl FnOnce(BoxedWire) -> W,
+    wire_kind: impl FnOnce(BoxedWire) -> W,
 ) -> Result<OutputConversion<W>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
@@ -160,8 +159,7 @@ pub fn output<W>(
     Ok(OutputConversion {
         wires: vec![Wire {
             name: w.clone(),
-            kind: WireKind::Foreign,
-            extra: wire_extra(BoxedWire {
+            kind: wire_kind(BoxedWire {
                 ty: ty.clone(),
                 access: Access::Move,
             }),

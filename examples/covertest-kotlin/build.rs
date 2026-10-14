@@ -71,10 +71,13 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
+//! | `&String` param (converted, then borrowed) | `string_len` |
+//! | shared primitive param (`&i64`) as a Kotlin scalar | `i64_ref_double` |
+//! | `variant_self()` / `field_self()` on `String` and `Vec<u8>` → text/bytes | `text_echo` / `bytes_echo` |
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
-//! | `JniGenBuilder::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGenBuilder::ignore` (exact)              | `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
 //! | `JniGenBuilder::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
 //! One feature is deliberately left at its default and documented rather than
@@ -93,11 +96,10 @@
 //! per-kind name hooks (≡ the identity closures registered here) — which are
 //! binding-exclusive like the lock toggle above and add no code-path coverage.
 //!
-//! Four functions are deliberately NOT wrapped — their shapes are C-tier
-//! with no JVM mapping (`string_len`'s `&String` param / `usize` return, the
-//! `storage_get_into_*` out-param group, `storage_put_by_read_and_update`'s
-//! read-write borrow). The two loners are acknowledged per-name via
-//! `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
+//! Some functions are deliberately NOT wrapped — their shapes are C-tier
+//! with no JVM mapping (the `storage_get_into_*` out-param group,
+//! `storage_put_by_read_and_update`'s read-write borrow). The loner is
+//! acknowledged by name via `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
 //! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
@@ -1126,7 +1128,23 @@ fn main() {
         )
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
-        .package(package!().fun(fun!(string_new)))
+        .package(
+            package!()
+                .fun(fun!(string_new))
+                .fun(fun!(string_len))
+                .fun(fun!(i64_ref_double))
+                // Explicit identity declarations give text and bytes, like the defaults.
+                .fun(
+                    fun!(text_echo)
+                        .expand_param("s", expand_param!(String).variant_self())
+                        .expand_return(expand_return!(String).field_self()),
+                )
+                .fun(
+                    fun!(bytes_echo)
+                        .expand_param("b", expand_param!(Vec<u8>).variant_self())
+                        .expand_return(expand_return!(Vec<u8>).field_self()),
+                ),
+        )
         // Report projects its supported Summary, Stamp and label fields.
         // Project those fields before handing ownership of the Report to Kotlin.
         .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
@@ -1165,9 +1183,6 @@ fn main() {
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
-        /* Unsupported: ignore diagnostics are not implemented.
-.ignore(fun!(string_len))
-*/
         /* Unsupported: ignore diagnostics are not implemented.
 .ignore(matching(|name| name.starts_with("storage_get_into_")))
 */

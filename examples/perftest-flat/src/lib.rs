@@ -312,13 +312,29 @@ pub fn string_new(s: &str) -> String {
     s.to_string()
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Byte length of an opaque string — lets the C benchmark read it through the
-// /// `string_t *` handle.
-// #[prebindgen]
-// pub fn string_len(s: &String) -> usize {
-//     s.len()
-// }
+/// Byte length of a string.
+#[prebindgen]
+pub fn string_len(s: &String) -> usize {
+    s.len()
+}
+
+/// Double a scalar passed by shared reference.
+#[prebindgen]
+pub fn i64_ref_double(x: &i64) -> i64 {
+    x.wrapping_mul(2)
+}
+
+/// Return text unchanged.
+#[prebindgen]
+pub fn text_echo(s: String) -> String {
+    s
+}
+
+/// Return bytes unchanged.
+#[prebindgen]
+pub fn bytes_echo(b: Vec<u8>) -> Vec<u8> {
+    b
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Minimal opaque handle for LIFECYCLE benchmarking: the plain variant of a

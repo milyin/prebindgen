@@ -117,27 +117,38 @@ The manual tools API now uses `Bindings`, `bind_input`/`bind_output` and
 and `JniCodec`; their manual model/callback APIs accept final conversion slots.
 The supported declarative `build.rs` APIs retain their syntax.
 
-A wire is one generated boundary parameter or result component. `Wire<W>`
-stores its common role in `kind` and adapter data in `extra`. The adapter supplies
-`extra` for scalar, text, byte and selector wires through `Codec::wire_extra`;
-foreign conversion hooks supply it with their generated wires. An adapter that
-needs no per-wire data uses `W = ()`.
-C uses `Option<PointerWire>` and JNI uses `Option<HandleWire>`. These are distinct
-adapter types: Rust rejects attaching a C converter to JNI bindings or passing a
-JNI model to the C generator. Foreign wires store the source value type and access
-mode in `Some(...)`, while other wires use `None`. Each adapter maps the shared
-boxed helper's `BoxedWire` into its own type and validates the data when emitting
-wrappers.
-`Bindings<W>` retains these wires. Tools compose primitives, text/bytes, adapter
-leaves, fields, constructors, input selectors and combined outputs. The composition model
-requires neither handles nor boxed storage. It has no object registry or universal
-`Send` requirement.
+A leaf is a source type the adapter converts itself rather than composing it
+from parts. Recipes mark where the leaves are (`Input::Leaf`, `Output::Leaf`);
+the codec chooses each leaf's conversion from its type. `Codec` has four
+methods: `input_leaf`, `output_leaf`, `consumes` and `selector`. Tools offer two
+helpers for leaves:
 
-The adapter implements foreign conversions for domain types and declares
-whether an output consumes its value. Tools run observations before that move
-and reject double consumption. For pointer/handle output from borrowed record
-fields, these adapters make independent owned copies using Rust `Clone`.
-A standalone owned text/byte result moves its buffer; an observed field is copied.
+- `prebindgen_tools::value` copies values across the boundary. `Value::of`
+  classifies primitives, text (`String`, `&String`, `&str`) and bytes
+  (`Vec<u8>`, `&Vec<u8>`, `&[u8]`). The adapter supplies only the decode and
+  encode expressions; the helper adapts them to owned and borrowed targets, so a
+  `&str` target can borrow the caller's buffer without copying.
+- `prebindgen_tools::boxed` keeps objects in Rust-owned allocations.
+
+Both adapters treat values as copies and every other leaf type as a boxed object,
+so a type alias such as `type Key = String` crosses as an object.
+
+A wire is one generated boundary parameter or result component. `Wire<W>`
+stores the adapter's description of its carrier in `kind`. C uses `CWire`
+(scalar, buffer, pointer or selector) and JNI uses `JniWire` (scalar, string,
+byte array, handle or selector); C passes text and bytes in the same buffer type.
+These are distinct types: Rust rejects attaching a C converter to JNI bindings
+or passing a JNI model to the C generator.
+`Bindings<W>` retains these wires. Tools compose leaves, fields, constructors,
+input selectors and combined outputs. The composition model requires neither
+handles nor boxed storage. It has no object registry or universal `Send`
+requirement.
+
+The adapter declares whether a leaf output consumes its value; values do not.
+Tools run observations before that move and reject double consumption. For
+pointer/handle output from borrowed record fields, these adapters make
+independent owned copies using Rust `Clone`. A standalone owned text/byte result
+moves its buffer; an observed field is copied.
 
 ## Primitive conversions
 
@@ -205,8 +216,8 @@ C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
 Both current adapters opt into `prebindgen_tools::boxed`, which shares pointer
 validation, borrow/move acquisition, cloned observations and output commit.
 C stores objects directly in `Box<T>`; its header exposes typed opaque pointers.
-Other adapters can choose different storage through their foreign conversion
-hooks; there is no universal `Object` operation or required allocation policy.
+Other adapters can choose different storage in their leaf conversions; there is
+no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
 C wrappers still return status and write output structs only on success. Text

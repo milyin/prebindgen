@@ -15,9 +15,17 @@ private fun expectInvalid(action: () -> Unit) {
 fun main() {
     for (text in listOf("", "ordinary", "héllo 世界", "embedded\u0000nul")) {
         check(stringNew(text) == text)
+        check(stringLen(text) == text.encodeToByteArray().size.toULong())
+        check(textEcho(text) == text)
     }
     try { stringNew(null); error("expected null input failure") }
     catch (_: IllegalArgumentException) { }
+    for (value in listOf(0L, 21L, -7L, Long.MAX_VALUE)) {
+        check(i64RefDouble(value) == value * 2)
+    }
+    val bytes = byteArrayOf(0, -1, 127, -128, 7)
+    check(bytesEcho(bytes).contentEquals(bytes))
+    check(bytesEcho(ByteArray(0)).isEmpty())
     val storage = io.prebindgen.covertest.storage.storageNew()
     check(!storage.isClosed)
     val workers = (0 until 8).map { Thread { storage.close() }.also { it.start() } }

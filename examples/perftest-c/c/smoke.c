@@ -15,6 +15,9 @@ int main(void) {
     assert(result.v0.len == sizeof(text));
     assert(memcmp(result.v0.data, text, sizeof(text)) == 0);
     perftest_free_buffer(result.v0);
+    perftest_string_len_result len = {0};
+    assert(perftest_string_len((perftest_buffer){text, sizeof(text)}, &len) == 0);
+    assert(len.v0 == sizeof(text));
     result.v0 = (perftest_buffer){NULL, 42};
     const unsigned char invalid[] = {255};
     assert(perftest_string_new((perftest_buffer){invalid, 1}, &result) != 0);
