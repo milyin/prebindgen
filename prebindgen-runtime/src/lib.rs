@@ -5,7 +5,8 @@ pub type Result<T> = std::result::Result<T, String>;
 
 /// Run a boundary operation, converting unwinding panics into a generic error.
 ///
-/// Ordinary errors pass through unchanged. This does not roll back side effects
+/// `f` is the body of the exported call; its error message passes through to
+/// the adapter's error channel. Ordinary errors pass through unchanged. This does not roll back side effects
 /// or ownership transfers, and cannot catch a panic configured to abort.
 ///
 /// ```
@@ -19,6 +20,9 @@ pub fn boundary<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
         .unwrap_or_else(|_| Err("Rust operation panicked".into()))
 }
 
+/// Check that `pointer`, an allocation address read from a boundary wire, is
+/// non-null and aligned for `T`.
+///
 /// Check encoding only; the adapter/caller must guarantee type, liveness and
 /// synchronization. This helper neither registers objects nor tracks ownership.
 /// It never dereferences the pointer. Success does not establish that dereferencing

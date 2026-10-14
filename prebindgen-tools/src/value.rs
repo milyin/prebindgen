@@ -47,10 +47,21 @@ impl Value {
 
 /// Decode one wire into the value type `ty` during validation.
 ///
-/// `decode` runs only on the active path and may use `?`. It may yield the owned
-/// value or, for text and bytes, a view (`&str`, `&[u8]`): the generated code
-/// converts it with `Into` for owned targets and `AsRef` for views, so a view
-/// target borrows without copying. `ty` must satisfy [`Value::of`].
+/// The generated code converts the decoded value with `Into` for owned targets and
+/// `AsRef` for views, so a view target borrows without copying.
+///
+/// # Arguments
+///
+/// * `ty` — the source parameter type; it must satisfy [`Value::of`].
+/// * `wire` — identifier of the boundary parameter `decode` reads.
+/// * `var` — identifier of the Rust local that holds the argument.
+/// * `active` — the selector arms under which this input is used, as given to
+///   [`Codec::input_leaf`](crate::Codec::input_leaf). `decode` runs only when
+///   they are selected.
+/// * `decode` — Rust expression that reads `wire` and yields the owned value or,
+///   for text and bytes, a view (`&str`, `&[u8]`). It runs during validation and
+///   may return a `String` error with `?`.
+/// * `kind` — the adapter's [`Wire::kind`] for the wire.
 ///
 /// ```
 /// use prebindgen_tools::{value, Condition};
@@ -64,8 +75,8 @@ impl Value {
 /// ```
 pub fn input<W>(
     ty: &Type,
-    w: syn::Ident,
-    v: syn::Ident,
+    wire: syn::Ident,
+    var: syn::Ident,
     active: &Condition,
     decode: TokenStream,
     kind: W,
@@ -74,34 +85,34 @@ pub fn input<W>(
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
     let condition = active.rust();
-    let taken = quote!(#v.expect("active value"));
+    let taken = quote!(#var.expect("active value"));
     let (statements, argument) = match ty {
         Type::Reference(r) if matches!(type_key(&r.elem).as_str(), "str" | "[u8]") => {
             let target = &r.elem;
             (
-                quote!(let #v = #taken;),
-                quote!(::core::convert::AsRef::<#target>::as_ref(&#v)),
+                quote!(let #var = #taken;),
+                quote!(::core::convert::AsRef::<#target>::as_ref(&#var)),
             )
         }
         Type::Reference(r) => {
             let owned = &r.elem;
             (
-                quote!(let #v: #owned = ::core::convert::Into::into(#taken);),
-                quote!(&#v),
+                quote!(let #var: #owned = ::core::convert::Into::into(#taken);),
+                quote!(&#var),
             )
         }
         _ => (
-            quote!(let #v: #ty = ::core::convert::Into::into(#taken);),
-            quote!(#v),
+            quote!(let #var: #ty = ::core::convert::Into::into(#taken);),
+            quote!(#var),
         ),
     };
     Ok(InputConversion {
         wires: vec![Wire {
-            name: w,
+            name: wire,
             kind,
             active: active.clone(),
         }],
-        validation: quote!(let #v = if #condition {Some(#decode)} else {None};),
+        validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
         acquire: quote!(),
         resources: vec![],
         statements,
@@ -112,11 +123,22 @@ pub fn input<W>(
 /// Deliver an owned value type. A borrowed `value` is copied first: scalars by
 /// dereference, text and bytes by `Clone`.
 ///
-/// `encode` maps the owned Rust value to the delivered expression. The adapter
-/// may adjust the result, for example to defer an allocation's transfer to `commit`.
+/// The adapter may adjust the result, for example to defer an allocation's
+/// transfer to `commit`.
+///
+/// # Arguments
+///
+/// * `ty` — the owned source type; it must satisfy [`Value::of`].
+/// * `wire` — identifier of the delivered wire, also used for the local holding it.
+/// * `value` — Rust expression producing the value.
+/// * `borrowed` — `true` when `value` is a shared reference to `ty`, `false` when
+///   it is owned.
+/// * `encode` — maps a Rust expression of the owned value to the expression
+///   delivered on the wire.
+/// * `kind` — the adapter's [`Wire::kind`] for the wire.
 pub fn output<W>(
     ty: &Type,
-    w: syn::Ident,
+    wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
@@ -130,21 +152,21 @@ pub fn output<W>(
         (false, _) => value,
         // Bound first: dereferencing `&place` in place is `clippy::deref_addrof`.
         (true, Value::Scalar(_)) => {
-            statements.extend(quote!(let #w: &#ty = #value;));
-            quote!(*#w)
+            statements.extend(quote!(let #wire: &#ty = #value;));
+            quote!(*#wire)
         }
         (true, _) => quote!(::core::clone::Clone::clone(#value)),
     };
     let expr = encode(value);
-    statements.extend(quote!(let #w = #expr;));
+    statements.extend(quote!(let #wire = #expr;));
     Ok(OutputConversion {
         wires: vec![Wire {
-            name: w.clone(),
+            name: wire.clone(),
             kind,
             active: Condition::default(),
         }],
         statements,
-        values: vec![quote!(#w)],
+        values: vec![quote!(#wire)],
         commit: quote!(),
     })
 }

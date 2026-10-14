@@ -60,6 +60,10 @@ impl SourceLocation {
         !self.file.is_empty()
     }
 
+    /// Record where `span`, the span of a captured item, starts in its source file.
+    ///
+    /// Before Rust 1.88 the file is unavailable; the location is then file
+    /// `<unknown>`, line 0, column 0.
     pub fn from_span(span: &proc_macro2::Span) -> Self {
         if_rust_version::if_rust_version! { >= 1.88 {
             // Convert proc_macro2::Span to proc_macro::Span to access file() method
