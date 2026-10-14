@@ -22,6 +22,7 @@ pub use crate::api::{
     utils::{edition::RustEdition, target_triple::TargetTriple},
 };
 
+/// Utilities shared with consumers of captured source records.
 pub mod utils {
     #[doc(hidden)]
     pub use crate::api::utils::jsonl::{read_jsonl_file, write_to_jsonl_file};

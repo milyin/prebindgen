@@ -45,17 +45,18 @@ mod handles {
         pub(super) total: f64,
     }
 
-    #[derive(Default)]
-    pub struct Archive {
-        // Unsupported field/value:         pub(super) latest: Option<Summary>,
-        // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-        // — the return shape whose encoder must match on the value behind the
-        // reference rather than moving it.
-        // Unsupported field/value:         pub(super) reading: Reading,
-        // The same, optional, for the `Option<&Reading>` shape.
-        // Unsupported field/value:         pub(super) fallback: Option<Reading>,
-    }
-
+    // Disabled: the reduced Archive is zero-sized; flat objects must have nonzero size.
+    // #[derive(Default)]
+    // pub struct Archive {
+    //     // Unsupported field/value:         pub(super) latest: Option<Summary>,
+    //     // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
+    //     // — the return shape whose encoder must match on the value behind the
+    //     // reference rather than moving it.
+    //     // Unsupported field/value:         pub(super) reading: Reading,
+    //     // The same, optional, for the `Option<&Reading>` shape.
+    //     // Unsupported field/value:         pub(super) fallback: Option<Reading>,
+    // }
+    //
     // Disabled: unsupported by the current binding subset
     // pub struct Ledger {
     //         pub(super) filed: Option<Report>,
@@ -716,16 +717,15 @@ pub fn summary_total(s: &Summary) -> f64 {
 //     (count >= 0).then(|| summary_series(count, start))
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// Summarize a storage (returns a `Summary`; the binding's **default
-// /// flatten-output** turns it into `(count, total)` leaves).
-// #[prebindgen]
-// pub fn storage_summary(s: &Storage) -> Summary {
-//     Summary {
-//         count: s.payloads.len() as i64,
-//         total: s.payloads.iter().map(|p| p.value).sum(),
-//     }
-// }
+/// Summarize a storage (returns a `Summary`; the binding's **default
+/// flatten-output** turns it into `(count, total)` leaves).
+#[prebindgen]
+pub fn storage_summary(s: &Storage) -> Summary {
+    Summary {
+        count: s.payloads.len() as i64,
+        total: s.payloads.iter().map(|p| p.value).sum(),
+    }
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Whether `expected` matches the storage's live summary (takes a `Summary`
@@ -737,26 +737,24 @@ pub fn summary_total(s: &Summary) -> f64 {
 //     live.count == expected.count && (live.total - expected.total).abs() < f64::EPSILON
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// Combine two summaries (#87 regression: BOTH parameters are splittable under
-// /// the `Summary` flatten-input default AND the `Summary` return is delivered
-// /// through the decomposed builder — the wrapper is generic over `<R>`, and
-// /// every split overload must re-declare it).
-// #[prebindgen]
-// pub fn summary_merge(primary: Summary, fallback: Summary) -> Summary {
-//     Summary {
-//         count: primary.count + fallback.count,
-//         total: primary.total + fallback.total,
-//     }
-// }
+/// Combine two summaries (#87 regression: BOTH parameters are splittable under
+/// the `Summary` flatten-input default AND the `Summary` return is delivered
+/// through the decomposed builder — the wrapper is generic over `<R>`, and
+/// every split overload must re-declare it).
+#[prebindgen]
+pub fn summary_merge(primary: Summary, fallback: Summary) -> Summary {
+    Summary {
+        count: primary.count + fallback.count,
+        total: primary.total + fallback.total,
+    }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Like [`storage_summary`] but the binding keeps the result as a raw opaque
-// /// handle (per-fn **flatten-output-suppress**).
-// #[prebindgen]
-// pub fn storage_summary_handle(s: &Storage) -> Summary {
-//     storage_summary(s)
-// }
+/// Like [`storage_summary`] but the binding keeps the result as a raw opaque
+/// handle (per-fn **flatten-output-suppress**).
+#[prebindgen]
+pub fn storage_summary_handle(s: &Storage) -> Summary {
+    storage_summary(s)
+}
 
 // Read a summary's total through a raw handle (per-fn **flatten-input-suppress**
 // on the `Summary` parameter).
@@ -798,19 +796,17 @@ pub fn summary_total_raw(s: Summary) -> f64 {
 // opaque handle.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Number of stored payloads (an **accessor** on `Storage`).
-// #[prebindgen]
-// pub fn storage_len(s: &Storage) -> i64 {
-//     s.payloads.len() as i64
-// }
+/// Number of stored payloads (an **accessor** on `Storage`).
+#[prebindgen]
+pub fn storage_len(s: &Storage) -> i64 {
+    s.payloads.len() as i64
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Whether any stored payload has the given id (a **method** on `Storage`).
-// #[prebindgen]
-// pub fn storage_contains(s: &Storage, id: i64) -> bool {
-//     s.payloads.iter().any(|p| p.id == id)
-// }
+/// Whether any stored payload has the given id (a **method** on `Storage`).
+#[prebindgen]
+pub fn storage_contains(s: &Storage, id: i64) -> bool {
+    s.payloads.iter().any(|p| p.id == id)
+}
 
 // Build a storage holding a single payload (a **constructor** / companion
 // factory on `Storage`).
@@ -1552,8 +1548,9 @@ pub fn unsigned_round_trip(
 // **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 // zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 // owned handle (the JVM keeps its handle past the call).
-#[prebindgen]
-pub type Archive = handles::Archive;
+// Disabled: the reduced Archive is zero-sized.
+// #[prebindgen]
+// pub type Archive = handles::Archive;
 
 // Disabled: unsupported by the current binding subset
 // impl Default for Archive {
@@ -1566,11 +1563,12 @@ pub type Archive = handles::Archive;
 //     }
 // }
 
+// Disabled: the reduced Archive is zero-sized.
 // Create an empty archive.
-#[prebindgen]
-pub fn archive_new() -> Archive {
-    Archive::default()
-}
+// #[prebindgen]
+// pub fn archive_new() -> Archive {
+//     Archive::default()
+// }
 
 // Disabled: unsupported by the current binding subset
 // /// Store a summary, consuming it (owned-handle input).
@@ -1622,13 +1620,12 @@ pub fn archive_new() -> Archive {
 // input.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Combined length of three storages (a **3-opaque-handle** call — the
-// /// generated wrapper must sort-lock all three).
-// #[prebindgen]
-// pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
-//     (a.payloads.len() + b.payloads.len() + c.payloads.len()) as i64
-// }
+/// Combined length of three storages (a **3-opaque-handle** call — the
+/// generated wrapper must sort-lock all three).
+#[prebindgen]
+pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
+    (a.payloads.len() + b.payloads.len() + c.payloads.len()) as i64
+}
 
 // Disabled: unsupported by the current binding subset
 // /// All present labels, in storage order (`Vec<String>` **return** — the
@@ -2432,3 +2429,25 @@ pub fn primitive_char(value: char) -> char {
 }
 #[prebindgen]
 pub fn primitive_unit() {}
+
+// Consuming input followed by a fallible wire conversion: invalid text must
+// leave the report owned by the caller, before any source function executes.
+#[prebindgen]
+pub fn report_relabel(mut report: Report, label: &str) -> Report {
+    report.label = label.to_owned();
+    report
+}
+
+// A constructor with an adapter-owned input nested under another conversion.
+#[prebindgen]
+pub fn report_from_summary(summary: Summary, label: &str) -> Report {
+    Report {
+        summary,
+        origin: stamp_new(1, 2),
+        label: label.to_owned(),
+    }
+}
+#[prebindgen]
+pub fn report_label(report: Report) -> String {
+    report.label
+}

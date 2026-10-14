@@ -37,7 +37,7 @@ fn main() {
         .prefix("example");
 
     // The opaque `Calculator` handle (Box-owned; `calculator_drop` generated).
-    cbindgen = cbindgen.handle("calculator", pq!(Calculator));
+    cbindgen = cbindgen.opaque_ptr("calculator", pq!(Calculator));
 
     // `Error` is opaque (a boxed std error), marshalled to C as a `char*` message
     // via `error_get_message(&e)`; each fallible wrapper gains a `char **e` out-param.
@@ -192,8 +192,12 @@ fn main() {
     */
 
     cbindgen = cbindgen
-        .handle("caption", pq!(Caption))
-        .handle("foo", pq!(Foo));
+        .opaque_ptr("local_counter", pq!(LocalCounter))
+        .function(fun!(local_counter_new))
+        .function(fun!(local_counter_value))
+        .function(fun!(local_counter_label))
+        .opaque_ptr("caption", pq!(Caption))
+        .opaque_ptr("foo", pq!(Foo));
 
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");

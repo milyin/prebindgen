@@ -8,7 +8,7 @@ int main(void) {
     perftest_storage_new_result storage = {0};
     assert(perftest_storage_new(&storage) == 0);
     assert(perftest_drop_storage(storage.v0) == 0);
-    assert(perftest_drop_storage(storage.v0) == 0);
+    assert(perftest_drop_storage(NULL) == 0);
     const unsigned char text[] = {'h', 'i', 0, 'x'};
     perftest_string_new_result result = {0};
     assert(perftest_string_new((perftest_buffer){text, sizeof(text)}, &result) == 0);
@@ -28,30 +28,21 @@ int main(void) {
     perftest_blob_value_echo_result echoed = {0};
     assert(perftest_blob_value_new(INT64_MIN, (perftest_buffer){bytes, sizeof(bytes)}, &blob) == 0);
     assert(perftest_blob_value_echo(blob.v0, &echoed) == 0);
-    assert(echoed.v0 != blob.v0);
-    assert(perftest_blob_value_echo(blob.v0, &echoed) != 0);
+    assert(perftest_blob_value_echo(NULL, &echoed) != 0);
     assert(perftest_drop_blob(echoed.v0) == 0);
-    assert(perftest_drop_blob(blob.v0) == 0);
-    // Wrong-type input must not consume the unrelated live handle.
-    assert(perftest_storage_new(&storage) == 0);
-    assert(perftest_blob_value_echo(storage.v0, &echoed) != 0);
-    assert(perftest_drop_storage(storage.v0) == 0);
-
     perftest_report_new_result report = {0};
     assert(perftest_report_new(42, 3.5, (perftest_buffer){text, sizeof(text)}, &report) == 0);
     assert(report.v0 == 42 && report.v1 == 3.5 && report.v2 == 1 && report.v3 == 2);
     assert(report.v4.len == sizeof(text));
     assert(memcmp(report.v4.data, text, sizeof(text)) == 0);
     perftest_free_buffer(report.v4);
-    perftest_report_into_struct_result parts = {42};
+    perftest_report_into_struct_result parts = {0};
     // Invalid selection leaves the handle unvisited and output untouched.
     assert(perftest_report_into_struct(2, report.v5, 0, 0.0, (perftest_buffer){NULL, 0}, &parts) != 0);
-    assert(parts.v0 == 42);
+    assert(parts.v0 == NULL);
     // The selected handle arm ignores even an invalid buffer in the other arm.
     assert(perftest_report_into_struct(0, report.v5, 0, 0.0, (perftest_buffer){NULL, 1}, &parts) == 0);
     assert(perftest_drop_report_struct(parts.v0) == 0);
-    assert(perftest_report_into_struct(0, report.v5, 0, 0.0, (perftest_buffer){NULL, 0}, &parts) != 0);
-    assert(perftest_drop_report(report.v5) == 0);
     // Constructor arm receives the reduced label argument directly.
     assert(perftest_report_into_struct(1, 0, 7, 2.5, (perftest_buffer){text, sizeof(text)}, &parts) == 0);
     assert(perftest_drop_report_struct(parts.v0) == 0);
@@ -73,6 +64,35 @@ int main(void) {
     perftest_storage_with_payload_result stored = {0};
     assert(perftest_storage_with_payload(INT64_MAX, INT32_MIN, INFINITY, 0, &stored) == 0);
     assert(perftest_drop_storage(stored.v0) == 0);
+    perftest_storage_with_payload_result borrowed = {0};
+    assert(perftest_storage_with_payload(42, 1, 2.5, 0, &borrowed) == 0);
+    perftest_storage_len_result length = {0};
+    assert(perftest_storage_len(borrowed.v0, &length) == 0 && length.v0 == 1);
+    perftest_storage_put_by_take_result put = {0};
+    assert(perftest_storage_put_by_take(borrowed.v0, 7, 2, 4.0, 1, &put) == 0);
+    perftest_storage_contains_result contains = {0};
+    assert(perftest_storage_contains(borrowed.v0, 7, &contains) == 0 && contains.v0 == 1);
+    perftest_storage_total_len_result lengths = {0};
+    assert(perftest_storage_total_len(borrowed.v0, borrowed.v0, borrowed.v0, &lengths) == 0 && lengths.v0 == 3);
+    perftest_storage_summary_handle_result first = {0}, second = {0};
+    assert(perftest_storage_summary_handle(borrowed.v0, &first) == 0);
+    assert(perftest_storage_summary_handle(borrowed.v0, &second) == 0);
+    perftest_summary_merge_result merged = {0};
+    assert(perftest_summary_merge(1, 0, 0, first.v0, 2, 0, 0, second.v0, &merged) != 0);
+    assert(perftest_summary_merge(1, 0, 0, first.v0, 1, 0, 0, NULL, &merged) != 0);
+    assert(perftest_summary_merge(1, 0, 0, first.v0, 1, 0, 0, first.v0, &merged) != 0);
+    // Both pointers survived validation failures, including duplicate consumption.
+    assert(perftest_summary_merge(1, 0, 0, first.v0, 1, 0, 0, second.v0, &merged) == 0);
+    assert(merged.v0 == 2 && merged.v1 == 8.0);
+    perftest_storage_summary_handle_result nested = {0};
+    perftest_report_label_result labeled_report = {0};
+    assert(perftest_storage_summary_handle(borrowed.v0, &nested) == 0);
+    assert(perftest_report_label(1, 0, 0, nested.v0, (perftest_buffer){invalid, 1}, &labeled_report) != 0);
+    assert(perftest_report_label(1, 0, 0, nested.v0, (perftest_buffer){text, sizeof(text)}, &labeled_report) == 0);
+    assert(labeled_report.v0.len == sizeof(text));
+    perftest_free_buffer(labeled_report.v0);
+    assert(perftest_drop_storage(borrowed.v0) == 0);
+
     perftest_primitive_i8_result i8 = {0};
     assert(perftest_primitive_i8(INT8_MIN, &i8) == 0 && i8.v0 == INT8_MIN);
     assert(perftest_primitive_i8(0, &i8) == 0 && i8.v0 == 0);

@@ -1,125 +1,48 @@
-//! Owned, typed handles and cleanup shared by generated C and JNI bindings.
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    sync::{Mutex, OnceLock},
-};
-
+//! Panic containment and pointer validation for foreign adapters.
+#![warn(missing_docs)]
+/// Runtime failure represented as a message for the adapter's error channel.
 pub type Result<T> = std::result::Result<T, String>;
-type Value = Box<dyn Any + Send>;
-#[derive(Default)]
-struct Store {
-    next: u64,
-    values: HashMap<u64, Value>,
-}
-fn store() -> &'static Mutex<Store> {
-    static STORE: OnceLock<Mutex<Store>> = OnceLock::new();
-    STORE.get_or_init(Mutex::default)
-}
 
-/// A wrong-type handle is rejected without consuming it. Removed values are
-/// dropped outside the lock, including on error paths.
-pub fn take<T: Any + Send>(id: u64) -> Result<T> {
-    let value = {
-        let mut store = store().lock().map_err(|_| "handle store poisoned")?;
-        let value = store
-            .values
-            .get(&id)
-            .ok_or_else(|| format!("invalid or consumed handle {id}"))?;
-        if (**value).type_id() != TypeId::of::<T>() {
-            return Err("wrong handle type".into());
-        }
-        store.values.remove(&id).unwrap()
-    };
-    Ok(*value.downcast::<T>().map_err(|_| "wrong handle type")?)
-}
-pub fn is_alive(id: u64) -> bool {
-    store()
-        .lock()
-        .map(|s| s.values.contains_key(&id))
-        .unwrap_or(false)
-}
-pub fn release<T: Any + Send>(id: u64) -> Result<()> {
-    let value = {
-        let mut store = store().lock().map_err(|_| "handle store poisoned")?;
-        let Some(value) = store.values.get(&id) else {
-            return Ok(());
-        };
-        if (**value).type_id() != TypeId::of::<T>() {
-            return Err("wrong handle type".into());
-        }
-        store.values.remove(&id)
-    };
-    drop(value);
-    Ok(())
-}
-
-/// Output handles become caller-owned only after the whole result is encoded.
-/// Until then, a failed conversion or failed foreign delivery releases them.
-#[derive(Default)]
-pub struct Outputs {
-    pending: Vec<u64>,
-}
-impl Outputs {
-    pub fn insert<T: Any + Send>(&mut self, value: T) -> Result<u64> {
-        let mut store = store().lock().map_err(|_| "handle store poisoned")?;
-        let id = store
-            .next
-            .checked_add(1)
-            .filter(|id| *id <= i64::MAX as u64)
-            .ok_or("handle space exhausted")?;
-        store.next = id;
-        store.values.insert(id, Box::new(value));
-        self.pending.push(id);
-        Ok(id)
-    }
-    pub fn commit(mut self) {
-        self.pending.clear();
-    }
-}
-impl Drop for Outputs {
-    fn drop(&mut self) {
-        let removed = if let Ok(mut store) = store().lock() {
-            self.pending
-                .drain(..)
-                .filter_map(|id| store.values.remove(&id))
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
-        drop(removed);
-    }
-}
-
-/// An exported boundary never unwinds through a foreign caller.
+/// Run a boundary operation, converting unwinding panics into a generic error.
+///
+/// Ordinary errors pass through unchanged. This does not roll back side effects
+/// or ownership transfers, and cannot catch a panic configured to abort.
+///
+/// ```
+/// use prebindgen_runtime::boundary;
+/// assert_eq!(boundary(|| Ok(42)), Ok(42));
+/// assert_eq!(boundary::<()>(|| Err("invalid input".into())),
+///            Err("invalid input".into()));
+/// ```
 pub fn boundary<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
         .unwrap_or_else(|_| Err("Rust operation panicked".into()))
+}
+
+/// Check encoding only; the adapter/caller must guarantee type, liveness and
+/// synchronization. This helper neither registers objects nor tracks ownership.
+/// It never dereferences the pointer. Success does not establish that dereferencing
+/// or freeing it is safe; zero-sized pointees are not rejected by this check.
+pub fn validate_pointer<T>(pointer: *const T) -> Result<()> {
+    if pointer.is_null() || !pointer.is_aligned() {
+        return Err("null or misaligned allocation pointer".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn handles_are_typed_and_consumed_once() {
-        let mut out = Outputs::default();
-        let id = out.insert(String::from("abc")).unwrap();
-        out.commit();
-        assert!(take::<Vec<u8>>(id).is_err());
-        assert_eq!(take::<String>(id).unwrap(), "abc");
-        assert!(take::<String>(id).is_err());
-    }
-    #[test]
-    fn failed_output_reclaims_handles() {
-        let id;
-        {
-            let mut out = Outputs::default();
-            id = out.insert(42u32).unwrap();
-        }
-        assert!(take::<u32>(id).is_err());
-    }
-    #[test]
     fn panics_do_not_escape() {
-        assert!(boundary::<()>(|| panic!("test")).is_err());
+        assert!(super::boundary::<()>(|| panic!("test")).is_err());
+    }
+    #[test]
+    fn pointer_encoding_checks() {
+        let value = 1u64;
+        let pointer = &value as *const u64;
+        assert!(validate_pointer(pointer).is_ok());
+        assert!(validate_pointer((pointer as usize | 1) as *const u64).is_err());
+        assert!(validate_pointer::<u64>(std::ptr::null()).is_err());
     }
 }

@@ -5,8 +5,10 @@ import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.blobValueEcho
 
 private fun expectInvalid(action: () -> Unit) {
-    try { action(); error("expected conversion failure") }
-    catch (_: IllegalArgumentException) { }
+    try { action() }
+    catch (_: IllegalArgumentException) { return }
+    catch (_: IllegalStateException) { return }
+    error("expected conversion failure")
 }
 
 // Exercises the active subset of the migrated source and build declarations.
@@ -22,10 +24,6 @@ fun main() {
     workers.forEach { it.join() }
     check(storage.isClosed)
     storage.close()
-    val archive = io.prebindgen.covertest.analytics.archiveNew()
-    check(!archive.isClosed)
-    archive.close()
-    check(archive.isClosed)
     for (bytes in listOf(byteArrayOf(), byteArrayOf(0, 127, -128, -1))) {
         val blob = blobValueNew(Long.MIN_VALUE, bytes)
         val echoed = blobValueEcho(blob)
@@ -67,6 +65,7 @@ fun main() {
     expectInvalid { io.prebindgen.covertest.model.unsignedRoundTrip(256, 0, 0, 0UL) }
     summaryNew(Long.MAX_VALUE, -1.25) { count, total -> check(count == Long.MAX_VALUE && total == -1.25) }
     check(summaryTotalRaw(0, 42, -1.25, null) == -1.25)
+    checkOwnership()
     checkPrimitives()
     payloadNew(Long.MIN_VALUE, Int.MAX_VALUE, -0.0, true) { id, seq, value, flag ->
         check(id == Long.MIN_VALUE && seq == Int.MAX_VALUE && value.toRawBits() == (-0.0).toRawBits() && flag)

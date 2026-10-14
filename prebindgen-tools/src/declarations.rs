@@ -1,32 +1,51 @@
-//! The retained JniGen expansion vocabulary translates into tools recipes.
+//! Build-script declarations for input alternatives and output views.
+//! [`Declarations`] builds converters directly in boundary occurrence slots.
 
-use crate::{Input, Output, Slot};
+use crate::{Bindings, Codec, Compiler, Condition, Input, Output};
 use prebindgen_flat::{type_key, Flat, Primitive, Result};
+use quote::quote;
 use std::collections::BTreeMap;
 
+/// An ordered list of input representations for one source type.
+///
+/// One variant becomes a direct recipe; multiple variants become a selector.
+/// Constructor arguments recursively use the registered type defaults.
 #[derive(Clone)]
 pub struct ExpandParamDecl {
+    /// Source type to which this declaration applies, resolved against the flat model.
     pub ty: syn::Type,
     variants: Vec<Option<FunctionDecl>>,
 }
 impl ExpandParamDecl {
+    /// Start an input expansion with no variants. Add at least one before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
             variants: Vec::new(),
         }
     }
+    /// Append a source constructor as an input alternative.
+    ///
+    /// Only the constructor name is supported here; renaming and per-function
+    /// overrides on this reference are rejected when resolving declarations.
     pub fn variant(mut self, f: FunctionDecl) -> Self {
         self.variants.push(Some(f));
         self
     }
+    /// Append the type itself: a scalar recipe for primitives, otherwise a foreign recipe.
+    ///
+    /// This bypasses recursive expansion of the same type.
     pub fn variant_self(mut self) -> Self {
         self.variants.push(None);
         self
     }
 }
+/// An ordered list of simultaneous output views for one source type.
+///
+/// One view becomes a direct recipe; multiple views become [`Output::Combine`].
 #[derive(Clone)]
 pub struct ExpandReturnDecl {
+    /// Source type whose result occurrences use this expansion.
     pub ty: syn::Type,
     fields: Vec<ReturnField>,
 }
@@ -36,18 +55,28 @@ enum ReturnField {
     Getter(Box<FunctionDecl>),
     Fields(FieldsDecl),
 }
+/// Project the named fields of a source getter's returned record.
+///
+/// The getter must accept a shared reference to the converted type. Fields use
+/// their type defaults unless overridden with [`Self::field`].
 #[derive(Clone)]
 pub struct FieldsDecl {
     function: String,
     overrides: BTreeMap<String, ExpandReturnDecl>,
 }
 impl FieldsDecl {
+    /// Select the source getter whose returned record will be projected.
     pub fn new(function: syn::Ident) -> Self {
         Self {
             function: function.to_string(),
             overrides: BTreeMap::new(),
         }
     }
+    /// Replace the output expansion for one named field of the returned record.
+    ///
+    /// # Panics
+    /// Panics if the same field is overridden twice. Unknown fields and mismatched
+    /// source types are rejected during declaration resolution.
     pub fn field(mut self, name: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
         assert!(
             self.overrides.insert(name.as_ref().into(), decl).is_none(),
@@ -57,27 +86,38 @@ impl FieldsDecl {
     }
 }
 impl ExpandReturnDecl {
+    /// Append the fields of a getter's returned record as output views.
     pub fn fields(mut self, decl: FieldsDecl) -> Self {
         self.fields.push(ReturnField::Fields(decl));
         self
     }
+    /// Start an output expansion with no views. Add at least one before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
             fields: Vec::new(),
         }
     }
+    /// Append a shared-borrow getter, recursively expanding its owned result.
+    ///
+    /// The reference supports only the source name, without renaming or overrides.
     pub fn field(mut self, f: FunctionDecl) -> Self {
         self.fields.push(ReturnField::Getter(Box::new(f)));
         self
     }
+    /// Append the value itself: a scalar recipe for primitives, otherwise a foreign recipe.
+    ///
+    /// For an owning adapter this consumes the value, after observing other views.
     pub fn field_self(mut self) -> Self {
         self.fields.push(ReturnField::Identity);
         self
     }
 }
+/// A generator-wide input or output expansion, registered by source type.
 pub enum ExpandDecl {
+    /// Default input alternatives.
     Param(ExpandParamDecl),
+    /// Default simultaneous output views.
     Return(ExpandReturnDecl),
 }
 impl From<ExpandParamDecl> for ExpandDecl {
@@ -91,16 +131,36 @@ impl From<ExpandReturnDecl> for ExpandDecl {
     }
 }
 #[macro_export]
+/// Create an [`ExpandParamDecl`] from Rust type syntax.
+///
+/// The tokens are parsed, not evaluated: the source type need not be in scope
+/// in `build.rs`. Invalid type syntax panics. See [`Declarations`] for resolution rules.
 macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
+/// Create an [`ExpandReturnDecl`] from Rust type syntax.
+///
+/// Like [`expand_param!`], this does not require the source type to be in scope.
+/// Invalid type syntax panics.
 macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 
+/// Resolved type defaults used to build boundary converters.
+///
+/// Per-function overrides replace type defaults. Existing converters are preserved
+/// unless explicitly overridden. Defaults cover primitives, text, bytes and unit;
+/// other types are delegated to the adapter as foreign values. Recursive expansion
+/// cycles are rejected. Recipes are local to [`Self::fill`]; only compiled conversion
+/// data is attached to Flat. See [`Codec`] for a buildable example of constructor
+/// alternatives, combined outputs and manual overrides.
 pub struct Declarations {
     inputs: BTreeMap<String, ExpandParamDecl>,
     outputs: BTreeMap<String, ExpandReturnDecl>,
 }
 impl Declarations {
-    pub fn new(flat: &Flat<Slot>, decls: Vec<ExpandDecl>) -> Result<Self> {
+    /// Index expansions by resolved source type.
+    ///
+    /// Returns an error for an unresolved type or duplicate declarations for the
+    /// same type and direction. Recipes are resolved later by [`Self::fill`].
+    pub fn new<I, O>(flat: &Flat<I, O>, decls: Vec<ExpandDecl>) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -123,41 +183,71 @@ impl Declarations {
         }
         Ok(out)
     }
-    pub fn fill(&self, flat: &mut Flat<Slot>, decl: &FunctionDecl) -> Result<()> {
-        let source = flat.function(&decl.name)?.clone();
+    /// Build one function's input and output converters from its declarations.
+    ///
+    /// Existing converters are retained unless explicitly overridden. `extra` is
+    /// used for every converter built by this call; retained converters are untouched.
+    /// For different data at individual occurrences, use [`crate::bind_input`] and
+    /// [`crate::bind_output`] before filling defaults, or after applying overrides.
+    /// No construction data is retained for later overrides.
+    ///
+    /// Resolves and compiles all required conversions before modifying any slot.
+    /// An unknown parameter, recursive expansion, incompatible type or invalid
+    /// constructor/getter leaves the entire function unchanged.
+    pub fn fill<C: Codec>(
+        &self,
+        flat: &mut Bindings<C::Wire>,
+        codec: &C,
+        decl: &FunctionDecl,
+        extra: &C::Extra,
+    ) -> Result<()> {
+        let source = flat.function(&decl.name)?;
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
                 return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
             }
         }
         let mut inputs = Vec::new();
-        for p in &source.params {
+        for (index, p) in source.params.iter().enumerate() {
             let explicit = decl.params.get(&p.name.to_string());
-            inputs.push(if explicit.is_some() || matches!(p.ty.slot, Slot::Empty) {
-                Some(self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?)
+            inputs.push(if explicit.is_some() || p.ty.slot.is_none() {
+                let recipe = self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?;
+                Some(Compiler::new(flat, codec, format!("p{index}")).input(
+                    &p.ty.ty,
+                    &recipe,
+                    extra,
+                    &Condition::default(),
+                )?)
             } else {
                 None
             });
         }
-        let output = if decl.ret.is_some() || matches!(source.ret.slot, Slot::Empty) {
-            Some(self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?)
+        let output = if decl.ret.is_some() || source.ret.slot.is_none() {
+            let recipe = self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?;
+            Some(Compiler::new(flat, codec, "ret".into()).output(
+                &source.ret.ty,
+                &recipe,
+                extra,
+                quote!(__result),
+                false,
+            )?)
         } else {
             None
         };
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
-                p.ty.slot = Slot::Input(input);
+                p.ty.slot = Some(input);
             }
         }
         if let Some(output) = output {
-            dest.ret.slot = Slot::Output(output);
+            dest.ret.slot = Some(output);
         }
         Ok(())
     }
-    fn input(
+    fn input<I, O>(
         &self,
-        flat: &Flat<Slot>,
+        flat: &Flat<I, O>,
         ty: &syn::Type,
         explicit: Option<&ExpandParamDecl>,
         stack: &mut Vec<String>,
@@ -176,7 +266,7 @@ impl Declarations {
             for variant in &d.variants {
                 arms.push(match variant {
                     None if Primitive::from_type(ty).is_some() => Input::Scalar,
-                    None => Input::Handle,
+                    None => Input::Foreign,
                     Some(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err("constructor references only support their source name in this subset".into());
@@ -207,12 +297,12 @@ impl Declarations {
             "String" | "str" => Input::Text,
             "Vec < u8 >" | "[u8]" => Input::Bytes,
             "()" => Input::fields([]),
-            _ => Input::Handle,
+            _ => Input::Foreign,
         })
     }
-    fn output(
+    fn output<I, O>(
         &self,
-        flat: &Flat<Slot>,
+        flat: &Flat<I, O>,
         ty: &syn::Type,
         explicit: Option<&ExpandReturnDecl>,
         stack: &mut Vec<String>,
@@ -231,7 +321,7 @@ impl Declarations {
             for field in &d.fields {
                 parts.push(match field {
                     ReturnField::Identity if Primitive::from_type(ty).is_some() => Output::Scalar,
-                    ReturnField::Identity => Output::Handle,
+                    ReturnField::Identity => Output::Foreign,
                     ReturnField::Getter(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err(
@@ -256,11 +346,10 @@ impl Declarations {
                             .map(|p| {
                                 self.output(
                                     flat,
-                                    &p.ty.ty,
+                                    &p.ty,
                                     d.overrides.get(&p.name.to_string()),
                                     stack,
                                 )
-                                .map(clone_field_handles)
                             })
                             .collect::<Result<Vec<_>>>()?;
                         Output::getter(&d.function, Output::fields(children))
@@ -281,19 +370,11 @@ impl Declarations {
             "String" => Output::Text,
             "Vec < u8 >" => Output::Bytes,
             "()" => Output::fields([]),
-            _ => Output::Handle,
+            _ => Output::Foreign,
         })
     }
 }
 
-// A value-form field is borrowed. Identity delivery therefore needs an independent handle.
-fn clone_field_handles(output: Output) -> Output {
-    match output {
-        Output::Handle => Output::ClonedHandle,
-        Output::Combine(parts) => Output::combine(parts.into_iter().map(clone_field_handles)),
-        other => other,
-    }
-}
 #[doc(hidden)]
 pub fn parse_type(s: &str) -> syn::Type {
     syn::parse_str(s).expect("type syntax")
@@ -303,26 +384,38 @@ pub fn parse_ident(s: &str) -> syn::Ident {
     syn::parse_str(s).expect("identifier syntax")
 }
 #[macro_export]
+/// Reference a source function by its unqualified Rust identifier.
+///
+/// Returns a [`FunctionDecl`]; the function need not be in `build.rs` scope.
 macro_rules! fun {
     ($name:ident) => {
         $crate::FunctionDecl::new($crate::declarations::parse_ident(stringify!($name)))
     };
 }
 #[macro_export]
+/// Reference a source getter returning a record whose fields should be exposed.
+///
+/// Returns a [`FieldsDecl`] for use with [`ExpandReturnDecl::fields`].
 macro_rules! fields {
     ($name:ident) => {
         $crate::FieldsDecl::new($crate::declarations::parse_ident(stringify!($name)))
     };
 }
 
+/// A source callable to export, with optional destination name and occurrence overrides.
 #[derive(Clone)]
 pub struct FunctionDecl {
+    /// Unqualified source function name in the flat namespace.
     pub name: String,
+    /// Explicit destination name; supported by JNI, currently rejected by C.
     pub foreign: Option<String>,
+    /// Input expansion overrides keyed by source parameter name.
     pub params: BTreeMap<String, ExpandParamDecl>,
+    /// Result expansion override, replacing the type default.
     pub ret: Option<ExpandReturnDecl>,
 }
 impl FunctionDecl {
+    /// Reference a source function without overriding names or conversions.
     pub fn new(name: syn::Ident) -> Self {
         Self {
             name: name.to_string(),
@@ -331,10 +424,18 @@ impl FunctionDecl {
             ret: None,
         }
     }
+    /// Set a literal destination name, subject to adapter validation.
+    ///
+    /// The JNI adapter uses it instead of its default camel-case name.
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.foreign = Some(name.into());
         self
     }
+    /// Replace the expansion for one source parameter.
+    ///
+    /// # Panics
+    /// Panics if that parameter already has an override. Resolution checks that the
+    /// parameter exists and the expansion type matches.
     pub fn expand_param(mut self, name: impl AsRef<str>, decl: ExpandParamDecl) -> Self {
         assert!(
             self.params.insert(name.as_ref().into(), decl).is_none(),
@@ -342,13 +443,18 @@ impl FunctionDecl {
         );
         self
     }
+    /// Replace the result expansion, including any previously assigned override.
     pub fn expand_return(mut self, decl: ExpandReturnDecl) -> Self {
         self.ret = Some(decl);
         self
     }
 }
 
-/// Every source callable referenced by the binding, including nested recipes.
+/// Collect source callable names referenced by bindings and nested expansions.
+///
+/// Used when selecting captured items before constructing a flat model. The
+/// returned list can contain duplicates; collecting names does not resolve or
+/// validate the recipes or export their helper functions.
 pub fn source_functions<'a>(
     expansions: &[ExpandDecl],
     functions: impl IntoIterator<Item = &'a FunctionDecl>,
