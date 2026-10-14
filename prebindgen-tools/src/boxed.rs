@@ -1,7 +1,7 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`](crate::boxed::Storage) policy and map
 //! [`BoxedWire`](crate::boxed::BoxedWire) data into their wire's `extra` field.
-use crate::{Access, Condition, PreparedInput, PreparedOutput, Resource, Wire, WireKind};
+use crate::{Access, Condition, InputConversion, OutputConversion, Resource, Wire, WireKind};
 use prebindgen_flat::Result;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -46,7 +46,7 @@ impl Storage {
 /// `T` transfers ownership; references borrow the allocation for the call.
 /// Validation checks only nonnull/aligned encoding. The caller must guarantee
 /// allocation provenance, type, liveness and synchronization. The wrapper must
-/// run call-wide resource validation before acquisition (see [`PreparedInput`]).
+/// run call-wide resource validation before acquisition (see [`InputConversion`]).
 /// The returned resource records the allocation address and required access.
 ///
 /// `wire_extra` receives the pointee type and access mode as [`BoxedWire`]. Its
@@ -71,7 +71,7 @@ pub fn input<W>(
     v: syn::Ident,
     active: &Condition,
     wire_extra: impl FnOnce(BoxedWire) -> W,
-) -> Result<PreparedInput<W>> {
+) -> Result<InputConversion<W>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -109,7 +109,7 @@ pub fn input<W>(
             quote!(let #v: #ty = unsafe { &mut (*#pointer)#field };),
         ),
     };
-    Ok(PreparedInput {
+    Ok(InputConversion {
         wires: vec![Wire {
             name: w.clone(),
             kind: WireKind::Foreign,
@@ -146,7 +146,7 @@ pub fn output<W>(
     value: TokenStream,
     borrowed: bool,
     wire_extra: impl FnOnce(BoxedWire) -> W,
-) -> Result<PreparedOutput<W>> {
+) -> Result<OutputConversion<W>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -157,7 +157,7 @@ pub fn output<W>(
     };
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
-    Ok(PreparedOutput {
+    Ok(OutputConversion {
         wires: vec![Wire {
             name: w.clone(),
             kind: WireKind::Foreign,

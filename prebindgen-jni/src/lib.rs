@@ -1,4 +1,4 @@
-//! Generate Rust/JNI wrappers and Kotlin bindings from prepared occurrence slots.
+//! Generate Rust/JNI wrappers and Kotlin bindings from conversion slots.
 //! Supported declarations include `package!`, `ptr_class!`, `fun!`,
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
@@ -7,13 +7,43 @@ use prebindgen_flat::{type_key, Flat, Result};
 mod scalar;
 use prebindgen_flat::Primitive;
 /// Source value type and access mode for a JNI allocation-address wire.
-pub use prebindgen_tools::boxed::BoxedWire as HandleWire;
-use prebindgen_tools::{
-    Access, Codec, Configured as GenericConfigured, Prepared as GenericPrepared,
-    Wire as GenericWire, WireKind,
-};
-type Configured = GenericConfigured<()>;
-type Prepared = GenericPrepared<Option<HandleWire>>;
+///
+/// This adapter-specific type keeps C and JNI converters from being mixed in
+/// one model: their codecs use different allocation layouts.
+#[derive(Clone, Debug)]
+pub struct HandleWire {
+    /// Source value type stored in the allocation, without an input reference.
+    pub ty: syn::Type,
+    /// Whether the call moves, shares or exclusively borrows the value.
+    pub access: prebindgen_tools::Access,
+}
+impl From<prebindgen_tools::boxed::BoxedWire> for HandleWire {
+    fn from(wire: prebindgen_tools::boxed::BoxedWire) -> Self {
+        Self {
+            ty: wire.ty,
+            access: wire.access,
+        }
+    }
+}
+use prebindgen_tools::{Access, Bindings as GenericBindings, Codec, Wire as GenericWire, WireKind};
+/// Flat source model with JNI handle conversion data for wrapper emission.
+///
+/// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
+/// wire type belongs to a different adapter:
+/// ```compile_fail
+/// use prebindgen_jni::Bindings;
+/// use prebindgen_tools::{bind_input, Input};
+/// fn wrong(flat: &mut Bindings) {
+///     bind_input(flat, &prebindgen_c::CCodec, "echo", "x", &Input::Foreign, &()).unwrap();
+/// }
+/// ```
+/// A completed JNI model also cannot be passed to the C generator:
+/// ```compile_fail
+/// fn wrong(flat: prebindgen_jni::Bindings) {
+///     prebindgen_c::Cbindgen::new(flat);
+/// }
+/// ```
+pub type Bindings = GenericBindings<Option<HandleWire>>;
 type Wire = GenericWire<Option<HandleWire>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -144,7 +174,7 @@ impl JniGen {
         JniGenBuilder::default()
     }
 }
-type Configure = Box<dyn FnOnce(&mut Configured) -> Result<()>>;
+type Configure = Box<dyn FnOnce(&mut Bindings) -> Result<()>>;
 /// Collect declarations before resolving a JNI/Kotlin binding.
 ///
 /// Supply exactly one of [`Self::source`], [`Self::items`] or [`Self::flat`], plus
@@ -153,7 +183,7 @@ type Configure = Box<dyn FnOnce(&mut Configured) -> Result<()>>;
 #[derive(Default)]
 pub struct JniGenBuilder {
     configure: Vec<Configure>,
-    flat: Option<Configured>,
+    flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
     expansions: Vec<ExpandDecl>,
@@ -168,11 +198,31 @@ impl JniGenBuilder {
     }
     /// Adjust the selected flat model before declaration defaults are applied.
     ///
-    /// Use this for manual occurrence recipes. Callbacks run in registration order;
-    /// errors stop generation. Source selection has already happened, so references
+    /// Use this to attach converters with [`prebindgen_tools::bind_input`] and
+    /// [`prebindgen_tools::bind_output`], using [`JniCodec`]. Callbacks run in
+    /// registration order; errors stop generation. Source selection has already happened, so references
     /// introduced here must already exist in the model. Per-function declarations
-    /// can explicitly override the recipes assigned by these callbacks.
-    pub fn configure(mut self, f: impl FnOnce(&mut Configured) -> Result<()> + 'static) -> Self {
+    /// can explicitly override the converters assigned by these callbacks.
+    ///
+    /// ```
+    /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
+    /// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+    /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
+    /// let flat = Bindings::parse(
+    ///     source.items.into_iter().map(|item| (item, Default::default())),
+    /// )?;
+    /// let generated = JniGen::builder().flat(flat)
+    ///     .set_package_prefix("example")
+    ///     .configure(|flat| {
+    ///         bind_input(flat, &JniCodec, "echo", "x", &Input::Scalar, &())?;
+    ///         bind_output(flat, &JniCodec, "echo", &Output::Scalar, &())
+    ///     })
+    ///     .package(package!().fun(fun!(echo)))
+    ///     .build()?;
+    /// syn::parse_file(&generated.rust)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn configure(mut self, f: impl FnOnce(&mut Bindings) -> Result<()> + 'static) -> Self {
         self.configure.push(Box::new(f));
         self
     }
@@ -207,11 +257,11 @@ impl JniGenBuilder {
         self.expansions.push(decl.into());
         self
     }
-    /// Supply an already parsed model with separate input and output recipe slots.
+    /// Supply an already parsed model with input and output conversion slots.
     ///
-    /// Configured functions still need a Kotlin package declaration. Mutually
+    /// Bound functions still need a Kotlin package declaration. Mutually
     /// exclusive with source and item input.
-    pub fn flat(mut self, flat: Configured) -> Self {
+    pub fn flat(mut self, flat: Bindings) -> Self {
         self.flat = Some(flat);
         self
     }
@@ -261,11 +311,7 @@ impl JniGenBuilder {
                 &types,
             )?,
             (None, None, Some(items)) => Flat::parse_selected(items, &references, &types)?,
-            _ => {
-                return Err(
-                    "supply exactly one source, item stream or configured flat model".into(),
-                )
-            }
+            _ => return Err("supply exactly one source, item stream or flat model".into()),
         };
         for configure in self.configure {
             configure(&mut flat)?;
@@ -315,7 +361,7 @@ impl JniGenBuilder {
                 }
             }
             for f in p.functions {
-                defaults.fill(&mut flat, &f)?;
+                defaults.fill(&mut flat, &JniCodec, &f, &())?;
                 let name = f.foreign.unwrap_or_else(|| camel(&f.name));
                 validate_name(&name)?;
                 if !seen.insert(format!("{pkg}.{name}")) {
@@ -327,7 +373,7 @@ impl JniGenBuilder {
                 functions.push((f.name, pkg.clone(), name));
             }
         }
-        let flat = prebindgen_tools::prepare(flat, &JniCodec)?;
+        prebindgen_tools::validate_bindings(&flat)?;
         for (name, f) in &flat.functions {
             if f.ret.slot.is_some() && !bound.contains(name) {
                 return Err(format!(
@@ -348,7 +394,10 @@ impl Class {
         format!("{}.{}", self.pkg, self.name)
     }
 }
-struct JniCodec;
+/// Leaf conversions used by [`JniGen`].
+/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+/// to fill [`Bindings`] manually.
+pub struct JniCodec;
 impl Codec for JniCodec {
     type Extra = ();
     type Wire = Option<HandleWire>;
@@ -365,7 +414,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
-    ) -> Result<prebindgen_tools::PreparedInput<Option<HandleWire>>> {
+    ) -> Result<prebindgen_tools::InputConversion<Option<HandleWire>>> {
         prebindgen_tools::boxed::input(
             &prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
                 ::prebindgen_jni_runtime::Allocation
@@ -374,7 +423,7 @@ impl Codec for JniCodec {
             w,
             v,
             active,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn output_foreign(
@@ -384,7 +433,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_tools::PreparedOutput<Option<HandleWire>>> {
+    ) -> Result<prebindgen_tools::OutputConversion<Option<HandleWire>>> {
         prebindgen_tools::boxed::output(
             &prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
                 ::prebindgen_jni_runtime::Allocation
@@ -393,7 +442,7 @@ impl Codec for JniCodec {
             w,
             v,
             borrowed,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
@@ -562,7 +611,7 @@ fn class<'a>(classes: &'a BTreeMap<String, Class>, ty: &syn::Type) -> Result<&'a
         .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))
 }
 fn generate(
-    flat: Prepared,
+    flat: Bindings,
     prefix: &str,
     init: &str,
     classes: BTreeMap<String, Class>,

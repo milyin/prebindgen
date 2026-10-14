@@ -1,5 +1,5 @@
 use super::*;
-fn flat(source: &str) -> Configured {
+fn flat(source: &str) -> Bindings {
     Flat::parse(
         syn::parse_file(source)
             .unwrap()

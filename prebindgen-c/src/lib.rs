@@ -1,19 +1,51 @@
-//! Generate Rust wrappers and C declarations from prepared occurrence slots.
+//! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
 use prebindgen_flat::{Flat, Primitive, Result};
 /// Pointee type and access mode used by this adapter's foreign wires.
-pub use prebindgen_tools::boxed::BoxedWire as PointerWire;
-use prebindgen_tools::{
-    Codec, Configured as GenericConfigured, Prepared as GenericPrepared, Wire as GenericWire,
-    WireKind,
-};
-type Configured = GenericConfigured<()>;
-type Prepared = GenericPrepared<Option<PointerWire>>;
+///
+/// This adapter-specific type keeps C and JNI converters from being mixed in
+/// one model: their codecs use different allocation layouts.
+#[derive(Clone, Debug)]
+pub struct PointerWire {
+    /// Source value type stored in the allocation, without an input reference.
+    pub ty: syn::Type,
+    /// Whether the call moves, shares or exclusively borrows the value.
+    pub access: prebindgen_tools::Access,
+}
+impl From<prebindgen_tools::boxed::BoxedWire> for PointerWire {
+    fn from(wire: prebindgen_tools::boxed::BoxedWire) -> Self {
+        Self {
+            ty: wire.ty,
+            access: wire.access,
+        }
+    }
+}
+use prebindgen_tools::{Bindings as GenericBindings, Codec, Wire as GenericWire, WireKind};
+/// Flat source model with C pointer conversion data for wrapper emission.
+pub type Bindings = GenericBindings<Option<PointerWire>>;
 type Wire = GenericWire<Option<PointerWire>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-struct CCodec;
+/// Leaf conversions used by [`Cbindgen`].
+/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+/// to fill [`Bindings`] manually.
+///
+/// ```
+/// use prebindgen_c::{Bindings, Cbindgen, CCodec};
+/// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+/// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
+/// let mut flat = Bindings::parse(
+///     source.items.into_iter().map(|item| (item, Default::default())),
+/// )?;
+/// bind_input(&mut flat, &CCodec, "echo", "x", &Input::Scalar, &())?;
+/// bind_output(&mut flat, &CCodec, "echo", &Output::Scalar, &())?;
+/// let generated = Cbindgen::new(flat).build()?;
+/// assert!(generated.header.contains("pb_echo("));
+/// syn::parse_file(&generated.rust)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub struct CCodec;
 impl Codec for CCodec {
     type Extra = ();
     type Wire = Option<PointerWire>;
@@ -30,14 +62,14 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_tools::Condition,
-    ) -> Result<prebindgen_tools::PreparedInput<Option<PointerWire>>> {
+    ) -> Result<prebindgen_tools::InputConversion<Option<PointerWire>>> {
         prebindgen_tools::boxed::input(
             &prebindgen_tools::boxed::Storage::Direct,
             ty,
             w,
             v,
             active,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn output_foreign(
@@ -47,14 +79,14 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_tools::PreparedOutput<Option<PointerWire>>> {
+    ) -> Result<prebindgen_tools::OutputConversion<Option<PointerWire>>> {
         prebindgen_tools::boxed::output(
             &prebindgen_tools::boxed::Storage::Direct,
             ty,
             w,
             v,
             borrowed,
-            Some,
+            |wire| Some(wire.into()),
         )
     }
     fn decode_scalar(&self, p: Primitive, w: &syn::Ident, _: &()) -> TokenStream {
@@ -96,17 +128,17 @@ impl Codec for CCodec {
 /// Configure C bindings, using typed opaque pointers for foreign values.
 ///
 /// Start with captured source via [`Self::builder`] and [`Self::source`], or a
-/// configured flat model via [`Self::new`]. With captured source, declare each
+/// flat model via [`Self::new`]. With captured source, declare each
 /// exported function. In either case, declare each opaque pointee type.
 /// Conversion declarations use [`prebindgen_tools::Declarations`]. When reading
 /// captured source, add the source crate as both a build dependency and a normal
 /// dependency: generation reads its captures, and generated code calls its functions.
 ///
 /// ```
-/// use prebindgen_c::Cbindgen;
-/// use prebindgen_tools::{fun, Configured};
+/// use prebindgen_c::{Bindings, Cbindgen};
+/// use prebindgen_tools::fun;
 /// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
-/// let flat = Configured::<()>::parse(
+/// let flat = Bindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let generated = Cbindgen::new(flat)
@@ -125,7 +157,7 @@ impl Codec for CCodec {
 /// call and require the caller to obey Rust aliasing and lifetime rules.
 /// Returned pointers and buffers must be freed with their generated destructors.
 pub struct Cbindgen {
-    flat: Option<Configured>,
+    flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
     expansions: Vec<prebindgen_tools::ExpandDecl>,
     functions: Vec<prebindgen_tools::FunctionDecl>,
@@ -163,7 +195,7 @@ impl Cbindgen {
         self.expansions.push(decl.into());
         self
     }
-    /// Export a function and fill its occurrence recipes from declarations.
+    /// Export a function and build its occurrence converters from declarations.
     ///
     /// Function renaming is currently unsupported; exports use the symbol prefix
     /// and original source name.
@@ -172,11 +204,13 @@ impl Cbindgen {
         self
     }
 
-    /// Start from a flat model with separate input and output recipe slots and prefix `pb`.
+    /// Start from a flat model with input and output conversion slots and prefix `pb`.
     ///
-    /// Slots can be configured manually or filled by [`Self::function`]. Every
-    /// fully configured function in the supplied model is exported.
-    pub fn new(flat: Configured) -> Self {
+    /// Attach converters with [`prebindgen_tools::bind_input`] and
+    /// [`prebindgen_tools::bind_output`] with [`CCodec`], or fill defaults with
+    /// [`Self::function`].
+    /// Every fully bound function in the supplied model is exported.
+    pub fn new(flat: Bindings) -> Self {
         Self {
             flat: Some(flat),
             source: None,
@@ -202,7 +236,7 @@ impl Cbindgen {
         self.pointers.push((name.into(), ty));
         self
     }
-    /// Resolve declarations, prepare conversions and generate both output texts.
+    /// Resolve declarations, build converters and generate both output texts.
     ///
     /// Does not write files. Returns an error for conflicting sources, invalid or
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
@@ -223,7 +257,7 @@ impl Cbindgen {
                     .map(|(_, ty)| ty.clone())
                     .collect::<Vec<_>>(),
             )?,
-            _ => return Err("supply exactly one source or configured flat model".into()),
+            _ => return Err("supply exactly one source or flat model".into()),
         };
         let declarations = prebindgen_tools::Declarations::new(&flat, self.expansions)?;
         let mut names = std::collections::BTreeSet::new();
@@ -234,14 +268,14 @@ impl Cbindgen {
             if decl.foreign.is_some() {
                 return Err("C function renaming is outside this subset".into());
             }
-            declarations.fill(&mut flat, &decl)?;
+            declarations.fill(&mut flat, &CCodec, &decl, &())?;
         }
         let pointers = self
             .pointers
             .into_iter()
             .map(|(n, t)| Ok((n, flat.resolve_type(&t)?)))
             .collect::<Result<Vec<_>>>()?;
-        let flat = prebindgen_tools::prepare(flat, &CCodec)?;
+        prebindgen_tools::validate_bindings(&flat)?;
         generate(flat, &self.prefix, pointers)
     }
 }
@@ -327,7 +361,7 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     }
 }
 fn generate(
-    flat: Prepared,
+    flat: Bindings,
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
 ) -> Result<Generation> {

@@ -1,8 +1,9 @@
 //! Build-script declarations for input alternatives and output views.
-//! [`Declarations`] resolves these declarations into occurrence recipes.
+//! [`Declarations`] builds converters directly in boundary occurrence slots.
 
-use crate::{Configured, Input, Output};
+use crate::{Bindings, Codec, Compiler, Condition, Input, Output};
 use prebindgen_flat::{type_key, Flat, Primitive, Result};
+use quote::quote;
 use std::collections::BTreeMap;
 
 /// An ordered list of input representations for one source type.
@@ -133,7 +134,7 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// Create an [`ExpandParamDecl`] from Rust type syntax.
 ///
 /// The tokens are parsed, not evaluated: the source type need not be in scope
-/// in `build.rs`. Invalid type syntax panics. See [`Declarations`] for an example.
+/// in `build.rs`. Invalid type syntax panics. See [`Declarations`] for resolution rules.
 macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
 /// Create an [`ExpandReturnDecl`] from Rust type syntax.
@@ -142,39 +143,14 @@ macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::d
 /// Invalid type syntax panics.
 macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 
-/// Resolved type defaults used to fill boundary occurrence recipes.
+/// Resolved type defaults used to build boundary converters.
 ///
-/// Per-function overrides replace type defaults. Existing nonempty recipes are
-/// preserved unless explicitly overridden; [`crate::Slot::extra`] is always preserved.
-/// Defaults cover primitives, text, bytes and unit, with other types delegated to
-/// the adapter as foreign values. Recursive expansion cycles are rejected.
-///
-/// ```
-/// use prebindgen_tools::{
-///     expand_param, expand_return, fun, Declarations, Input, Output, Configured,
-/// };
-///
-/// let source = syn::parse_file(r#"
-///     pub type Key = String;
-///     pub fn key_from_text(s: String) -> Key { s }
-///     pub fn key_text(k: &Key) -> String { k.clone() }
-///     pub fn round_trip(k: Key) -> Key { k }
-/// "#)?;
-/// let mut flat = Configured::<()>::parse(
-///     source.items.into_iter().map(|item| (item, Default::default())),
-/// )?;
-/// let defaults = Declarations::new(&flat, vec![
-///     expand_param!(Key).variant(fun!(key_from_text)).variant_self().into(),
-///     expand_return!(Key).field(fun!(key_text)).field_self().into(),
-/// ])?;
-/// defaults.fill(&mut flat, &fun!(round_trip))?;
-/// let function = flat.function("round_trip")?;
-/// assert!(matches!(&function.params[0].ty.slot.recipe,
-///     Some(Input::Selector(arms)) if arms.len() == 2));
-/// assert!(matches!(&function.ret.slot.recipe,
-///     Some(Output::Combine(parts)) if parts.len() == 2));
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
+/// Per-function overrides replace type defaults. Existing converters are preserved
+/// unless explicitly overridden. Defaults cover primitives, text, bytes and unit;
+/// other types are delegated to the adapter as foreign values. Recursive expansion
+/// cycles are rejected. Recipes are local to [`Self::fill`]; only compiled conversion
+/// data is attached to Flat. See [`Codec`] for a buildable example of constructor
+/// alternatives, combined outputs and manual overrides.
 pub struct Declarations {
     inputs: BTreeMap<String, ExpandParamDecl>,
     outputs: BTreeMap<String, ExpandReturnDecl>,
@@ -207,13 +183,24 @@ impl Declarations {
         }
         Ok(out)
     }
-    /// Fill one function's argument and result recipes, retaining each slot's `extra`.
+    /// Build one function's input and output converters from its declarations.
     ///
-    /// All recipes are resolved before modifying the function. Returns an error for
-    /// unknown functions/parameters, type mismatches, recursive or empty expansions,
-    /// or unsupported constructor/getter options. Full recipe/signature compatibility
-    /// is checked by [`crate::prepare`].
-    pub fn fill<E>(&self, flat: &mut Configured<E>, decl: &FunctionDecl) -> Result<()> {
+    /// Existing converters are retained unless explicitly overridden. `extra` is
+    /// used for every converter built by this call; retained converters are untouched.
+    /// For different data at individual occurrences, use [`crate::bind_input`] and
+    /// [`crate::bind_output`] before filling defaults, or after applying overrides.
+    /// No construction data is retained for later overrides.
+    ///
+    /// Resolves and compiles all required conversions before modifying any slot.
+    /// An unknown parameter, recursive expansion, incompatible type or invalid
+    /// constructor/getter leaves the entire function unchanged.
+    pub fn fill<C: Codec>(
+        &self,
+        flat: &mut Bindings<C::Wire>,
+        codec: &C,
+        decl: &FunctionDecl,
+        extra: &C::Extra,
+    ) -> Result<()> {
         let source = flat.function(&decl.name)?;
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
@@ -221,27 +208,40 @@ impl Declarations {
             }
         }
         let mut inputs = Vec::new();
-        for p in &source.params {
+        for (index, p) in source.params.iter().enumerate() {
             let explicit = decl.params.get(&p.name.to_string());
-            inputs.push(if explicit.is_some() || p.ty.slot.recipe.is_none() {
-                Some(self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?)
+            inputs.push(if explicit.is_some() || p.ty.slot.is_none() {
+                let recipe = self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?;
+                Some(Compiler::new(flat, codec, format!("p{index}")).input(
+                    &p.ty.ty,
+                    &recipe,
+                    extra,
+                    &Condition::default(),
+                )?)
             } else {
                 None
             });
         }
-        let output = if decl.ret.is_some() || source.ret.slot.recipe.is_none() {
-            Some(self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?)
+        let output = if decl.ret.is_some() || source.ret.slot.is_none() {
+            let recipe = self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?;
+            Some(Compiler::new(flat, codec, "ret".into()).output(
+                &source.ret.ty,
+                &recipe,
+                extra,
+                quote!(__result),
+                false,
+            )?)
         } else {
             None
         };
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
-                p.ty.slot.recipe = Some(input);
+                p.ty.slot = Some(input);
             }
         }
         if let Some(output) = output {
-            dest.ret.slot.recipe = Some(output);
+            dest.ret.slot = Some(output);
         }
         Ok(())
     }
