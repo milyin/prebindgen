@@ -1,155 +1,47 @@
-name: Rust
-
-# A stacked feature branch is reviewed as a chain of PRs targeting the branch
-# below it, not `main`. With a `branches: [main]` filter on `pull_request` none
-# of those PRs ran CI, so an umbrella branch could accumulate a whole feature
-# and meet clippy / fmt / the golden-diff check for the first time only at the
-# merge to `main`. The filter is therefore on `push` only (where it keeps the
-# duplicate run off feature branches); every PR runs, whatever it targets.
-# `workflow_dispatch` allows a manual run on a long-lived integration branch.
+name: Converter pipeline
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
   workflow_dispatch:
-
-# Every PR running means a push to a branch with an open PR would otherwise
-# queue a second identical run; keep only the newest per ref.
+permissions:
+  contents: read
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  build:
-
+  rust:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: prebindgen
     strategy:
       matrix:
-        rust: [1.85.0, stable]
-
+        rust: ["1.85.0", stable]
     steps:
-    - uses: actions/checkout@v4
-      with:
-        path: prebindgen
-    - name: Install Rust ${{ matrix.rust }}
-      run: |
-        rustup toolchain install ${{ matrix.rust }}
-        rustup default ${{ matrix.rust }}
-
-    - name: Install Rust toolchain
-      run: rustup component add rustfmt clippy
-
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- --deny warnings
-
-    - name: Run rustfmt
-      run: cargo fmt --check -- --config "unstable_features=true,imports_granularity=Crate,group_imports=StdExternalCrate"
-
-    - name: Build
-      run: cargo build
-    # `unstable-cbindgen` is gone, so the C adapter's ~60 tests are always
-    # compiled and a single run covers everything.
-    - name: Run tests
-      run: cargo test --all
-
-  docs:
-    # `RUSTDOCFLAGS=-D warnings cargo doc` is one of the release checks
-    # publish.yml runs, and it fails on things no other job looks at: an
-    # intra-doc link to an item that was renamed, moved to another crate, or
-    # is private. The crate split made a lot of those and nothing caught them,
-    # so run it per PR rather than discovering them at release time.
-    #
-    # Stable only, matching publish.yml — rustdoc's lint set moves with the
-    # toolchain, so the MSRV leg would only disagree about which warnings exist.
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install ${{ matrix.rust }} --component clippy --component rustfmt
+      - run: cargo +${{ matrix.rust }} test --workspace
+      - run: cargo +${{ matrix.rust }} clippy --workspace --all-targets -- -D warnings
+      - if: matrix.rust == 'stable'
+        run: cargo fmt --all -- --check
+      # Documents the published crates in dependency order, then checks the
+      # rendered links: rustdoc does not warn when a link into another crate
+      # fails to resolve. The Pages workflows build the site with this script.
+      - if: matrix.rust == 'stable'
+        run: ./site/build.sh site-build
+        env:
+          RUSTDOCFLAGS: -D warnings
+  boundaries:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        path: prebindgen
-    - name: Install Rust
-      run: rustup toolchain install stable && rustup default stable
-    - name: Document every crate
-      working-directory: prebindgen
-      env:
-        RUSTDOCFLAGS: -D warnings
-      run: cargo doc --no-deps
-
-  package:
-    # Catch packaging breakage on the PR that causes it, not at release time.
-    # `cargo package` is what the publish workflow runs, and it fails on
-    # metadata a normal build never looks at — a missing description or
-    # license, or a path dependency with no version. `--no-verify` skips the
-    # rebuild-from-tarball step the other jobs already cover.
-    #
-    # Example crates are excluded: they are never published, and
-    # `covertest-helpers` deliberately path-depends on an unversioned sibling.
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        path: prebindgen
-    - name: Install Rust
-      run: rustup toolchain install stable && rustup default stable
-    - name: Package every publishable crate
-      working-directory: prebindgen
-      run: |
-        for crate in prebindgen prebindgen-c-runtime prebindgen-jni-runtime \
-                     prebindgen-proc-macro prebindgen-flat prebindgen-registry \
-                     prebindgen-c prebindgen-jni; do
-          echo "== $crate"
-          # Unpublished sibling crates make `cargo package` fail on the
-          # version lookup, which says nothing about this crate's own
-          # metadata. Report that case and keep going; anything else fails.
-          if ! out=$(cargo package -p "$crate" --no-verify --allow-dirty 2>&1); then
-            printf '%s\n' "$out"
-            printf '%s\n' "$out" | grep -qE "no matching package named \`prebindgen(-[a-z-]+)?\`|failed to select a version for the requirement \`prebindgen(-[a-z-]+)?" || exit 1
-            echo "   (unpublished dependency — expected until the release order completes)"
-          fi
-        done
-
-  covertest:
-    # JVM-runtime coverage: regenerate every binding that commits its
-    # generated output, fail on drift (the golden-diff invariant), then run
-    # the covertest-kotlin assert harness on a real JVM.
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: prebindgen
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        path: prebindgen
-    - name: Install Rust
-      run: rustup toolchain install stable && rustup default stable
-    - uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: 21
-    - name: Regen check (golden diff of committed generated bindings)
-      run: ./examples/regen-check.sh
-    - name: Run covertest-kotlin assert harness
-      working-directory: prebindgen/examples/covertest-kotlin
-      run: ./gradlew run --console=plain
-
-  smoke-asan:
-    # C-runtime coverage: the ownership contract the generated layer promises,
-    # checked by a leak detector rather than by reading `smoke.c`. Its own job
-    # so a leak is reported as a leak, not buried in the covertest log.
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: prebindgen
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        path: prebindgen
-    - name: Install Rust
-      run: rustup toolchain install stable && rustup default stable
-    - name: Run the C smoke test under ASan/LSan/UBSan
-      run: ./examples/smoke-asan.sh
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: |
+          curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.1.0/kotlin-compiler-2.1.0.zip -o /tmp/kotlin.zip
+          unzip -q /tmp/kotlin.zip -d /tmp/kotlin
+      - run: cargo build --workspace
+      - run: python3 examples/check.py
+        env:
+          KOTLINC: /tmp/kotlin/kotlinc/bin/kotlinc
+          SANITIZE: "1"

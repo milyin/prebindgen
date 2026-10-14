@@ -1,3 +1,7 @@
+//! Active coverage: primitives, strings/bytes, owned handles, selectors and field outputs.
+//! The original coverage inventory below includes features now commented out.
+//!
+//! Migrated from main. Unsupported declarations remain commented below.
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
 //! separate `prebindgen-jni` crate's `JniGenBuilder` adapter — exercising **every**
 //! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
@@ -39,7 +43,7 @@
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
-//! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
+//! | per-class `.name()`                  | `Summary` → Kotlin `SummaryValue` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
 //! | `.interface_name(…)`                  | `Priority` → generated `PriorityKind` interface (#54) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
@@ -67,10 +71,13 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
+//! | `&String` param (converted, then borrowed) | `string_len` |
+//! | shared primitive param (`&i64`) as a Kotlin scalar | `i64_ref_double` |
+//! | `variant_self()` / `field_self()` on `String` and `Vec<u8>` → text/bytes | `text_echo` / `bytes_echo` |
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
-//! | `JniGenBuilder::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGenBuilder::ignore` (exact)              | `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
 //! | `JniGenBuilder::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
 //! One feature is deliberately left at its default and documented rather than
@@ -89,14 +96,14 @@
 //! per-kind name hooks (≡ the identity closures registered here) — which are
 //! binding-exclusive like the lock toggle above and add no code-path coverage.
 //!
-//! Four functions are deliberately NOT wrapped — their shapes are C-tier
-//! with no JVM mapping (`string_len`'s `&String` param / `usize` return, the
-//! `storage_get_into_*` out-param group, `storage_put_by_read_and_update`'s
-//! read-write borrow). The two loners are acknowledged per-name via
-//! `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
+//! Some functions are deliberately NOT wrapped — their shapes are C-tier
+//! with no JVM mapping (the `storage_get_into_*` out-param group,
+//! `storage_put_by_read_and_update`'s read-write borrow). The loner is
+//! acknowledged by name via `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
 //! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
+/* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
 };
@@ -118,10 +125,17 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
     name.to_string()
 }
 
+
+*/
+use prebindgen_jni::{package, ptr_class, JniGen};
+use prebindgen_registry::{expand_param, expand_return, fields, fun};
+
 fn main() {
     let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+        /* Unsupported: multiple source streams.
+.source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+*/
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
@@ -131,12 +145,23 @@ fn main() {
         // (the domain names are already the desired Kotlin names) — registering
         // closures, and the method hook strips the flat class prefix. The
         // generated-interface hook deliberately keeps its `ClassApi` default.
-        .set_harness_name_mangle(|_| "CovNative".to_string())
-        .set_fun_name_mangle(|_, n| n.to_string())
-        .set_ptr_class_name_mangle(|_, n| n.to_string())
-        .set_data_class_name_mangle(|_, n| n.to_string())
-        .set_enum_name_mangle(|_, n| n.to_string())
-        .set_method_name_mangle(|_, class, n| {
+        /* Unsupported: this builder feature is not implemented.
+.set_harness_name_mangle(|_| "CovNative".to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_fun_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_ptr_class_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_data_class_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_enum_name_mangle(|_, n| n.to_string())
+*/
+        /* Unsupported: this builder feature is not implemented.
+.set_method_name_mangle(|_, class, n| {
             // #86: force an underscored method name onto ONE harness extern —
             // the Kotlin `external fun` keeps this verbatim name while the
             // Rust export symbol needs the JNI `_1` escape
@@ -146,44 +171,54 @@ fn main() {
             }
             strip_flat_class_prefix(class, n)
         })
+*/
         // `Millis` newtype: a canonical single-value conversion to a bare
         // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
         // defined in the SEPARATE `covertest-helpers` source crate, proving
         // the multi-source model (generated calls carry the
         // `cov_helpers::` prefix). The Kotlin surface (`Long`) derives
         // from the fns' `i64` side; nothing is stated verbatim.
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Millis)
                 .input(fun!(millis_from_long))
                 .output(fun!(millis_value)),
         )
+*/
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
-        .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
+        /* Unsupported: this builder feature is not implemented.
+.convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
+*/
         // `Percent`: fallible in BOTH directions. `Option<Percent>` below
         // forces both raw stage error types through the structural Option
         // converter, where they normalize to the binding error channel.
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Percent)
                 .input(try_from!(i32))
                 .output(fun!(crate::percent_out).sig(sig!((p: Percent) -> Result<i32, String>))),
         )
+*/
         // `Label`: conversions are plain fns in THIS binding crate (see
         // src/lib.rs) — no #[prebindgen], no helper crate — declared with
         // the ONE binding-local vocabulary, `fun!(crate::…).sig(sig!(…))`.
         // The input is FALLIBLE: the sig's `Result<Label, String>` return IS
         // the error channel (empty labels route the Err to onError).
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Label)
                 .input(fun!(crate::label_in).sig(sig!((s: String) -> Result<Label, String>)))
                 .output(fun!(crate::label_out).sig(sig!((l: Label) -> String))),
         )
+*/
         // Keep Rust's standard `Duration` as the semantic type while exposing
         // bounded u64 milliseconds. Values above one day are invalid; one of
         // those representations becomes the `Option<Duration>` None marker,
         // so nullable Kotlin `ULong?` crosses JNI as a raw primitive `Long`
         // without JObject/boxed-Long allocation.
-        .convert(
+        /* Unsupported: this builder feature is not implemented.
+.convert(
             convert!(Duration)
                 .input(fun!(crate::duration_from_millis).sig(sig!((ms: u64) -> Duration)))
                 .output(
@@ -191,6 +226,7 @@ fn main() {
                 )
                 .valid_range(0u64..=86_400_000u64),
         )
+*/
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
         // reassembled via a generated `fromParts`). A data class can carry
@@ -200,30 +236,38 @@ fn main() {
         // `PayloadApi` exposes its fields + `labelLen()`, and the
         // hand-written `Timestamped` interface extends it (#54).
         .package(
-            package!().class(
+            package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(
                 data_class!(Payload)
                     .interface()
                     .implements("io.prebindgen.covertest.Timestamped")
                     .method(fun!(payload_label_len)),
-            ),
+            )
+*/,
         )
         // `Option<Holder>` where `Holder` has a REQUIRED handle field: the
         // absent case passes pointer 0 for it, so the field decodes must stay
         // inside the presence gate or `null` becomes a binding error instead of
         // `None` (PR#294 review).
-        .package(package!().class(data_class!(Holder)))
+        .package(package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Holder))
+*/)
         // #218's last row: a data class that only REACHES a handle, through
         // another data class. `Dossier`'s cascade is a one-liner that assumes
         // `Holder` above was independently made `AutoCloseable` — the JVM
         // harness is what ties the two decisions together, since an emission
         // test never compiles the inner class.
-        .package(package!().class(data_class!(Dossier)))
+        .package(package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Dossier))
+*/)
         // A data class whose FIELDS carry transparent wrappers (#289 + #292):
         // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
         // does — the decoupled `(present, value)` pair — with the `Box` put back
         // on the Rust side. Peeling the field by path segment answered "not
         // optional" and boxed it instead.
-        .package(package!().class(data_class!(WrappedFields)))
+        .package(package!()/* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(WrappedFields))
+*/)
         // ── Subpackage `model`: enum + value class + nested data class ──────
         .package(
             package!("model")
@@ -232,122 +276,187 @@ fn main() {
                 // generated interface on an ENUM with a per-decl name, and the
                 // hand-written `Ranked` (which extends `PriorityKind`) is
                 // attached via `.implements` (#54).
-                .class(
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(
                     enum_class!(Priority)
                         .interface_name("PriorityKind")
                         .implements("io.prebindgen.covertest.Ranked"),
                 )
+*/
                 // `Reading` as a Kotlin `sealed interface` — a data-carrying
                 // enum whose alternatives are nested classes, with the
                 // payload-less one a `data object`. `variant!(Labeled)
                 // .name("Tagged")` exercises the per-variant rename (which
                 // also renames its `fromParts` slots).
-                .class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
+*/
                 // `Lookup` is the sum in RETURN position whose groups own
                 // resources: one alternative carries an opaque handle, one
                 // carries nothing at all. Because it reaches an owned handle it
                 // is emitted `AutoCloseable`, and each variant class overrides
                 // `close()` — that is what lets a container cascade into it
                 // with the same one-liner a handle field gets (#218).
-                .class(sealed_class!(Lookup))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Lookup))
+*/
                 // …and `Verdict` is that container: the sum in DATA-CLASS FIELD
                 // position, the third place a handle is reached through.
                 // `Holder` above is the plain-handle field it must match.
-                .class(data_class!(Verdict))
-                // `Report`'s output boundary is DERIVED from its value form
-                // (`.fields_self_into(fields!(report_into_struct))` below) instead of
-                // being restated field by field — #213. The form it names is
-                // the CONSUMING one, so the fields are moved, not cloned.
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Verdict))
+*/
+                // Report now projects the reduced value form through a borrowing
+                // getter, then delivers its owned handle. The original consuming
+                // expansion remains commented below.
                 .class(ptr_class!(Report))
+                .class(ptr_class!(ReportStruct))
                 // #220: the same derived-boundary idea with an `Option<sum>`
                 // FIELD — the shape that used to be refused on a value form
                 // while a `data_class` accepted it.
-                .class(ptr_class!(Probe))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(Probe))
+*/
                 // #142: two bounded-`convert!` leaves — one with a niche of its
                 // own, one without — reached through a CONDITIONAL hoist, so both
                 // are nullable. Only the niche-carrying one keeps a sentinel in
                 // its wrap; the other's absence is the ancestor's `?.`.
-                .class(ptr_class!(Span))
-                .class(ptr_class!(SpanHolder))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(Span))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(SpanHolder))
+*/
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
-                .class(sealed_class!(Hold))
-                .class(data_class!(HoldPolicy))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Hold))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(HoldPolicy))
+*/
                 // `Observation` carries that sum as a data-class FIELD —
                 // required (`reading`) and optional (`fallback`) — beside
                 // ordinary flattened leaves, so the tag-gated groups must
                 // interleave with them on one `fromParts` call.
-                .class(data_class!(Observation))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Observation))
+*/
                 // `Marker`'s `Option<enum>` payload is not leaf-shaped, so the
                 // sum degrades to a whole-object crossing instead of failing —
                 // and that path is what reads an enum property back.
-                .class(sealed_class!(Marker))
-                .class(data_class!(Tagged))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(sealed_class!(Marker))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Tagged))
+*/
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
-                .class(data_class!(Annotated))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Annotated))
+*/
                 // #144: a NON-NULL enum field (`RepliesConfig.priority`) reached
                 // through an outer `Option<CacheConfig>` param. The outer
                 // optional propagates `nullable_context` into the non-optional
                 // nested struct, so its enum field must decode with exactly one
                 // Elvis default (regression guard for the dead `?: 0 ?: 0`).
-                .class(data_class!(RepliesConfig))
-                .class(data_class!(CacheConfig))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(RepliesConfig))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(CacheConfig))
+*/
                 // Compose the bounded `Option<Duration>` niche through a
                 // data-class field. Explicit JObject input makes the runtime
                 // execute the whole-object decoder as well as the primitive-
                 // niche `fromParts` encoder (#138).
-                .class(data_class!(DurationBoundary).jobject_input())
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(DurationBoundary).jobject_input())
+*/
                 // These small nested classes form a 127-Long-leaf tree. Its
                 // constructor is legal, but flattening the root function input
                 // would consume 256 JVM slots, so it keeps one JObject input.
-                .class(data_class!(ObjectBoundaryLeaf))
-                .class(data_class!(ObjectBoundary2))
-                .class(data_class!(ObjectBoundary4))
-                .class(data_class!(ObjectBoundary8))
-                .class(data_class!(ObjectBoundary16))
-                .class(data_class!(ObjectBoundary32))
-                .class(data_class!(ObjectBoundary64))
-                .class(data_class!(ObjectBoundary63))
-                .class(data_class!(ObjectBoundary).jobject_input())
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundaryLeaf))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary2))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary4))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary8))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary16))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary32))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary64))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary63))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(ObjectBoundary).jobject_input())
+*/
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
-                .class(data_class!(Unsigned))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Unsigned))
+*/
+                .class(ptr_class!(Unsigned))
                 // `Stamp` is a small `Copy` struct of two scalars, so it crosses
                 // as its FIELDS — no array, no raw-memory image. Its readers stay
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
                 // as those field leaves, and `Vec<Stamp>` surfaces as
                 // `List<Stamp>`.
-                .class(
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(
                     data_class!(Stamp)
                         .method(fun!(stamp_secs))
                         .method(fun!(stamp_nanos)),
                 )
+*/
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                .class(data_class!(BlobValue).jobject_input())
+                /* Unsupported: data classes are not available yet.
+.class(data_class!(BlobValue).jobject_input())
+*/
+                // The reduced byte-vector record can already travel as a handle.
+                .class(ptr_class!(BlobValue))
                 // Fixed-size arrays of every JNI-primitive element.
-                .class(data_class!(Arrays)),
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(data_class!(Arrays))
+*/,
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
-        .package(package!("errors").class(
+        .package(package!("errors")/* Unsupported: this class kind or its binding is not available yet.
+.class(
             // `StorageError` is the `E` of a fallible `Result`; its
             // boundary shape is declared with `expand_return!` below.
             ptr_class!(StorageError).method(fun!(storage_error_message)),
-        ))
+        )
+*/)
         // `StorageError`'s default return fields make the generated `onError`
         // handler receive the decomposed error: the `message` string (name
         // inherited from the class member) plus — via `.field_self()` — the
         // error handle itself (an owned `StorageError` the handler must
         // `close()`).
-        .expand(
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(
             expand_return!(StorageError)
                 .field(fun!(storage_error_message))
                 .field_self(),
         )
+*/
         // ── Subpackage `analytics`: param-variant / return-field defaults on `Summary`
         .package(
             package!("analytics")
@@ -358,7 +467,8 @@ fn main() {
                 // `.gc_managed()` exercise: unreachable Summary handles are
                 // freed by the shared Cleaner; close/take/by-value consumption
                 // settle the release ticket first (see the Test.kt section).
-                .class(
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(
                     ptr_class!(Summary)
                         .gc_managed()
                         .constructor(fun!(summary_new).name("of"))
@@ -383,12 +493,15 @@ fn main() {
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
                         ),
                 )
+*/
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-                .class(ptr_class!(Archive).name("SummaryVault")),
+                // Disabled: the reduced Archive is zero-sized.
+                // .class(ptr_class!(Archive).name("SummaryVault"))
+                .class(ptr_class!(Summary).name("SummaryValue")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
         // ingredients OR passed as an existing handle (runtime-selected). This
@@ -401,6 +514,7 @@ fn main() {
                 .variant(fun!(summary_new))
                 .variant_self(),
         )
+
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
         .expand(
@@ -408,6 +522,7 @@ fn main() {
                 .field(fun!(summary_count))
                 .field(fun!(summary_total)),
         )
+
         // `Report` default output DERIVED from its value form (#213): the
         // leaves come from `ReportStruct`'s fields, so the list cannot drift
         // from the struct the way a restated one does. Each field still crosses
@@ -415,18 +530,26 @@ fn main() {
         // into `(count, total)` rather than becoming a handle, `origin` inlines
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
-        .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+*/
         // #142: `Span`'s value form is two bounded leaves; `SpanHolder` reaches
         // it through an `Option`, so both become nullable. `delay` keeps its own
         // niche sentinel, `required` takes none — a sentinel is the leaf's own
         // `None`, never an ancestor's.
-        .expand(expand_return!(Span).fields(fields!(span_to_struct)))
-        .expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(Span).fields(fields!(span_to_struct)))
+*/
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
+*/
         // #220: `ProbeStruct.outcome` is `Option<Lookup>`. Its whole segment
         // gates together — one tuple bind whose absent arm defaults every slot
         // — because a sum's leaves are not independent. The selector boxes, so
         // JVM null is "no sum" and cannot be read as `Lookup.Absent` (tag 0).
-        .expand(expand_return!(Probe).fields(fields!(probe_to_struct)))
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(expand_return!(Probe).fields(fields!(probe_to_struct)))
+*/
         // `Ledger` reaches that same derived boundary through an `Option`, so
         // `Report`'s value form is hoisted CONDITIONALLY — built in the `Some`
         // arm, its leaves (the sum among them) sharing one `match`, null in the
@@ -434,11 +557,13 @@ fn main() {
         // hands over a borrow, `archived` an owned report the by-value form
         // takes directly — `Report` is not `Clone`, so cloning it here would not
         // compile.
-        .expand(
+        /* Unsupported: this expansion needs unsupported conversions.
+.expand(
             expand_return!(Ledger)
                 .field(fun!(ledger_filed))
                 .field(fun!(ledger_archived)),
         )
+*/
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Back in the base package so the typed handle classes live alongside
         // `Payload`.
@@ -447,25 +572,35 @@ fn main() {
                 // `#[prebindgen]` consts: each surfaces as a generated nullary JNI
                 // getter extern + an eagerly-initialized top-level Kotlin `val`
                 // (`COVER_MAGIC: Long`, `COVER_TAG: String`) in the base package.
-                .constant(constant!(COVER_MAGIC))
-                .constant(constant!(COVER_TAG))
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_MAGIC))
+*/
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_TAG))
+*/
                 // Fn-sourced constant: a nullary `#[prebindgen]` fn surfaced
                 // as an eagerly-initialized top-level `val`
                 // (`COVER_TAG_RUNTIME: String`) — the value comes from the
                 // fn at class-load, not from a Rust `const`.
-                .constant(constant!(COVER_TAG_RUNTIME).fun(fun!(cover_tag_runtime)))
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_TAG_RUNTIME).fun(fun!(cover_tag_runtime)))
+*/
                 // Binding-local-fn-sourced constant (`.with`, the const
                 // analog of convert!'s `_with`): a nullary fn in THIS crate,
                 // named by path, stated value type.
-                .constant(constant!(COVER_VERSION).with(ty!(String), path!(crate::cover_version)))
+                /* Unsupported: this builder feature is not implemented.
+.constant(constant!(COVER_VERSION).with(ty!(String), path!(crate::cover_version)))
+*/
                 // Expression-sourced constant: an arbitrary binding-defined
                 // expression (composing source-crate items via
                 // `use perftest_flat::*;`) evaluated once at class-load —
                 // no dedicated accessor fn in the source crate.
-                .constant(
+                /* Unsupported: this builder feature is not implemented.
+.constant(
                     constant!(COVER_BANNER)
                         .expr(ty!(String), expr!(format!("{COVER_TAG}:{COVER_MAGIC:#x}"))),
                 )
+*/
                 .class(
                     ptr_class!(Storage)
                         // #54: emit the generated `StorageApi` interface (the
@@ -474,20 +609,36 @@ fn main() {
                         // `StorageApi` — so its defaults call `len()`/`peek()`
                         // with full compiler checking, no hand-editing of
                         // generated code.
-                        .interface()
-                        .implements("io.prebindgen.covertest.CovResource")
-                        .method(fun!(storage_len))
-                        .method(fun!(storage_contains))
-                        .constructor(fun!(storage_with_payload)),
+                        /* Unsupported: this builder feature is not implemented.
+.interface()
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.implements("io.prebindgen.covertest.CovResource")
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.method(fun!(storage_len))
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.method(fun!(storage_contains))
+*/
+                        /* Unsupported: this builder feature is not implemented.
+.constructor(fun!(storage_with_payload))
+*/,
                 )
                 // The callback-handler handles (single payload / whole batch / owned
                 // storage handle).
-                .class(ptr_class!(PayloadHandler))
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(PayloadHandler))
+*/
                 // `StorageHandler`'s callback receives an OWNED opaque handle
                 // (`Fn(Storage)`): the raw pointer crosses and the generated Kotlin
                 // proxy wraps it into a typed `Storage` and closes it after `run`.
-                .class(ptr_class!(StorageHandler))
-                .class(ptr_class!(PayloadVecHandler)),
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(StorageHandler))
+*/
+                /* Unsupported: this class kind or its binding is not available yet.
+.class(ptr_class!(PayloadVecHandler))
+*/,
         )
         // ── JNI native-symbol escaping probe (#86) ──────────────────────────
         // Underscores in EVERY symbol component: the `esc_pkg` subpackage and
@@ -497,90 +648,162 @@ fn main() {
         // extern (`…_escape_1probe_1value`). Kotlin names stay verbatim; the
         // JVM only resolves these if the generator escapes per the JNI spec.
         .package(
-            package!("esc_pkg").class(
+            package!("esc_pkg")/* Unsupported: this class kind or its binding is not available yet.
+.class(
                 ptr_class!(EscapeProbe)
                     .name("Esc_Probe")
                     .constructor(fun!(escape_probe_new))
                     .method(fun!(escape_probe_value)),
-            ),
+            )
+*/,
         )
         // ── Free functions, grouped by subpackage ───────────────────────────
         // model: enum return/param/option + value-class return + Vec<value> +
         //        Option<scalar>.
         .package(
             package!("model")
-                .fun(fun!(payload_priority))
-                .fun(fun!(priority_weight))
-                .fun(fun!(priority_or))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(payload_priority))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(priority_weight))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(priority_or))
+*/
                 .fun(fun!(stamp_new))
-                .fun(fun!(stamp_series))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(stamp_series))
+*/
                 // The three convert!-source-kind fns (conversions declared
                 // below): Into/From traits, TryFrom trait, binding-local fns.
-                .fun(fun!(celsius_double))
-                .fun(fun!(percent_scale))
-                .fun(fun!(percent_optional))
-                .fun(fun!(percent_invalid_output))
-                .fun(fun!(label_reverse))
-                .fun(fun!(label_series_echo))
-                .fun(fun!(annotated_new))
-                .fun(fun!(annotated_alternate_value))
-                .fun(fun!(annotated_ttl))
-                .fun(fun!(annotated_priority))
-                .fun(fun!(annotated_payload_value))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(celsius_double))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(percent_scale))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(percent_optional))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(percent_invalid_output))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(label_reverse))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(label_series_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_alternate_value))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_ttl))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_priority))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(annotated_payload_value))
+*/
                 // A sum as a data-class field, crossing OUT: the tag plus every
                 // variant's group ride the parent's single `fromParts`.
-                .fun(fun!(observation_new))
-                .fun(fun!(observation_which))
-                .fun(fun!(tagged_new))
-                .fun(fun!(tagged_rank))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(observation_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(observation_which))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(tagged_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(tagged_rank))
+*/
                 // The same `Option<enum>` payload in RETURN position — the
                 // `synth_sum_leaves` path, which the struct field above does
                 // not reach (it degrades to the whole-object crossing).
-                .fun(fun!(marker_of))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(marker_of))
+*/
                 // A sum as the function's OWN return (and callback argument):
                 // the tag + groups ride the hoisted builder / folder singleton
                 // instead of a parent's `fromParts`. All four positions —
                 // bare, `Option`, `Vec`, callback — plus a group owning a
                 // native handle.
-                .fun(fun!(reading_of))
-                .fun(fun!(reading_maybe))
-                .fun(fun!(reading_series))
-                .fun(fun!(reading_each))
-                .fun(fun!(lookup_of))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_of))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_maybe))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_series))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(reading_each))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(lookup_of))
+*/
                 // #161: the two positions the four above do not reach — a
                 // handle-carrying sum arriving through a CALLBACK, and a sum
                 // returned BORROWED (`&E` / `Option<&E>`).
-                .fun(fun!(lookup_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(lookup_each))
+*/
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
-                .fun(fun!(verdict_new))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(verdict_new))
+*/
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
-                .fun(fun!(dossier_new))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(dossier_new))
+*/
                 // #213: the output boundary DERIVED from the type's value form
                 // rather than restated. `report_each` delivers the decomposed
                 // `Report` in one crossing; the leaf list comes from
                 // `ReportStruct`'s fields, so it cannot drift from it.
-                .fun(fun!(report_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(report_each))
+*/
                 // #220: the value form whose `outcome` field is `Option<sum>`.
                 // `probe_each` walks the absent case and every alternative, so
                 // one crossing covers the gate and the groups it gates.
-                .fun(fun!(probe_new))
-                .fun(fun!(probe_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(probe_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(probe_each))
+*/
                 // The same derived boundary reached through an `Option` — a
                 // CONDITIONAL hoist. `ledger_each` delivers both at once, so one
                 // crossing covers the borrowed payload, the owned one, and the
                 // sum each report carries.
-                .fun(fun!(ledger_each))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(ledger_each))
+*/
                 // #142: the holder whose span is optional.
-                .fun(fun!(span_holder_new))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(span_holder_new))
+*/
                 // A transparent wrapper (`Box<Option<String>>`) in and out. The
                 // model erases the `Box`, so this must cross exactly as a
                 // `String?` — and because this crate compiles its generated
                 // binding, a converter that named the wrong type or bridged it
                 // with the wrong number of dereferences fails the build (#270).
-                .fun(fun!(boxed_note_echo))
-                .fun(fun!(plain_note_echo))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_note_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(plain_note_echo))
+*/
                 // Transparent wrappers on the INPUT side (#292 item 3), one per
                 // specialized lowering. These rebuild their parameter rather
                 // than decoding it, so the erased wrapper has to go back on
@@ -589,55 +812,111 @@ fn main() {
                 // one shape cannot cover them all. Compiling this crate is the
                 // check: a missing `Box::new` is an `E0308`, invisible to any
                 // text assertion.
-                .fun(fun!(wrapped_fields_sum))
-                .fun(fun!(holder_tag_or))
-                .fun(fun!(boxed_payload_id))
-                .fun(fun!(boxed_opt_payload_id))
-                .fun(fun!(boxed_opt_priority_weight))
-                .fun(fun!(boxed_elem_id_sum))
-                .fun(fun!(boxed_run_id_sum))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(wrapped_fields_sum))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(holder_tag_or))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_payload_id))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_opt_payload_id))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_opt_priority_weight))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_elem_id_sum))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_run_id_sum))
+*/
                 // The two spellings of a borrowed run (#384). One type to the
                 // model, so both take the Vec-build path — and the compiled
                 // binding is what proves the emitter serves both, since the
                 // failure was an `E0308` rather than a wrong answer.
-                .fun(fun!(slice_id_sum))
-                .fun(fun!(ref_vec_id_sum))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(slice_id_sum))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(ref_vec_id_sum))
+*/
                 // The same wrapper over a DECOMPOSED return (#292). `Summary`
                 // has an output expansion, so this return takes no converter to
                 // name the spelling for it — the extern binds the value and
                 // matches it, and a `Box` match ergonomics cannot see through
                 // is an `E0308` that only compiling this crate catches.
-                .fun(fun!(boxed_latest))
-                .fun(fun!(ledger_new))
-                .fun(fun!(archive_set_reading))
-                .fun(fun!(archive_reading))
-                .fun(fun!(archive_reading_maybe))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_latest))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(ledger_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_set_reading))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_reading))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_reading_maybe))
+*/
                 // A sum payload that is a CONVERTED type (`convert!(Duration)`),
                 // so its boundary conversion is a chain rather than one wire
                 // converter — exercised as the function's own return and as a
                 // (required + optional) data-class field, the two encoders.
-                .fun(fun!(hold_echo))
-                .fun(fun!(hold_policy_echo))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(hold_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(hold_policy_echo))
+*/
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
-                .fun(fun!(cache_config_weight))
-                .fun(fun!(object_boundary_value))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(cache_config_weight))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(object_boundary_value))
+*/
                 .fun(fun!(unsigned_round_trip))
-                .fun(fun!(unsigned_optional))
-                .fun(fun!(unsigned_data_maybe))
-                .fun(fun!(unsigned_emit))
-                .fun(fun!(unsigned_series))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(unsigned_optional))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(unsigned_data_maybe))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(unsigned_emit))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(unsigned_series))
+*/
                 .fun(fun!(blob_value_new))
                 .fun(fun!(blob_value_echo))
-                .fun(fun!(arrays_echo))
-                .fun(fun!(duration_optional))
-                .fun(fun!(boxed_duration_echo))
-                .fun(fun!(duration_boundary_echo))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(arrays_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_optional))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(boxed_duration_echo))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_boundary_echo))
+*/
                 // The converted analogue of `unsigned_emit`: a whole-value
                 // callback argument, which encodes on its own path rather than
                 // through the data-class or sum emitters.
-                .fun(fun!(duration_emit))
-                .fun(fun!(duration_out_of_range)),
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_emit))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(duration_out_of_range))
+*/,
         )
         // analytics: the param-variant / return-field matrix (type default /
         // per-fn override, in + out). Per-fn overrides reuse the SAME
@@ -645,28 +924,39 @@ fn main() {
         // identity-only set is the plain form.
         .package(
             package!("analytics")
-                .fun(fun!(storage_summary))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_summary))
+*/
                 // Binding-local FREE FUNCTION: exported like any package fn;
                 // its `&Summary` param resolves through the ordinary borrow
                 // converter, its String return through the ordinary output
                 // converter.
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(crate::summary_describe)
                         .sig(sig!((s: &Summary, verbose: bool) -> String))
                         .name("describeSummary"),
                 )
+*/
                 // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
                 // `storageMatchesSummary(count, total, …)` / `(expected, …)`.
-                .fun(fun!(storage_matches_summary).split_on_param("expected"))
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_matches_summary).split_on_param("expected"))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_summary_handle)
                         .expand_return(expand_return!(Summary).field_self()),
                 )
-                .fun(
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(summary_total_raw)
                         .expand_param("s", expand_param!(Summary).variant_self()),
                 )
-                .fun(
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_summary_full).expand_return(
                         expand_return!(Summary)
                             .field(fun!(summary_count).name("count"))
@@ -674,13 +964,15 @@ fn main() {
                             .field_self(),
                     ),
                 )
+*/
                 // Binding-local CONDITIONAL field (`field!` + `.with(ty, path)`):
                 // the handle leaf is delivered only when the binding-side
                 // predicate (`crate::summary_if_nonempty`, src/lib.rs) says
                 // re-using the value is worth it — nullable identity leaf,
                 // null when the condition fails. The condition is binding
                 // policy, so it lives in THIS crate, not the source crate.
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_summary_probe).expand_return(
                         expand_return!(Summary)
                             .field(fun!(summary_count).name("count"))
@@ -692,12 +984,14 @@ fn main() {
                             ),
                     ),
                 )
+*/
                 // Per-fn split (#52): a per-fn `.expand_param` variant override
                 // (demoing the override) whose `expected` param is then split
                 // into typed overloads `storageExpectSummary(count, total, …)` /
                 // `(expected, …)` on top of the selector form (which Test.kt
                 // still calls directly).
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(storage_expect_summary)
                         .expand_param(
                             "expected",
@@ -707,86 +1001,194 @@ fn main() {
                         )
                         .split_on_param("expected"),
                 )
+*/
                 // Cartesian-product split (#52): TWO `Summary` params each split
                 // → the 2×2 product of typed overloads (all combinations
                 // distinct: build/build, build/handle, handle/build, handle/handle).
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(summary_prefer)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 )
+*/
                 // Split × builder-delivered return (#87): both params split AND
                 // the `Summary` return crosses via the decomposed builder, so
                 // the wrapper is generic — every overload must re-declare `<R>`.
-                .fun(
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(
                     fun!(summary_merge)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 )
+*/
                 // Optional combined-selector expansion: `Option<&Summary>` under
                 // the dual-arm type default — the selector also encodes absence
                 // (`-1` = `None`); the borrow-identity arm clones, so the
                 // caller's handle survives the call.
-                .fun(fun!(summary_total_opt))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(summary_total_opt))
+*/
                 // Record-built generic folds (#105): `Vec<Summary>` and
                 // `Option<Vec<Summary>>` returns cross as the caller-supplied
                 // `<A>(acc, fold)` surface — decomposed `(count, total)`
                 // leaves per element. The `Option` form returns `A?`: null =
                 // `None` (the fold never invoked), `Some(empty)` = the
                 // untouched accumulator.
-                .fun(fun!(summary_series))
-                .fun(fun!(summary_series_opt))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(summary_series))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(summary_series_opt))
+*/
                 // The borrowed-accessor trio. `archive_latest` suppresses the default
                 // Summary return-field default so the BORROWED handle path (clone into a
                 // fresh owned handle, null when absent) is what crosses.
-                .fun(fun!(archive_new))
+                // Disabled: the reduced Archive is zero-sized.
+                // .fun(fun!(archive_new))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
-                .fun(fun!(archive_store).split_on_param("s"))
-                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self())),
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_store).split_on_param("s"))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self()))
+*/,
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
         // fallible constructor and the Millis wrapper.
         .package(
             package!("storage")
                 .fun(fun!(storage_new))
-                .fun(fun!(storage_get))
-                .fun(fun!(storage_put_by_take))
-                .fun(fun!(storage_put_by_read))
-                .fun(fun!(storage_put_slice))
-                .fun(fun!(storage_get_vec))
-                .fun(fun!(payload_handler_new))
-                .fun(fun!(storage_callback))
-                .fun(fun!(payload_vec_handler_new))
-                .fun(fun!(storage_callback_vec))
-                .fun(fun!(storage_try_with_label))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_get))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_by_take))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_by_read))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_slice))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_get_vec))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(payload_handler_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_callback))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(payload_vec_handler_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_callback_vec))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_try_with_label))
+*/
                 // Two-caller error split (#45): both channels on one wrapper.
-                .fun(fun!(storage_try_from_stamp))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_try_from_stamp))
+*/
                 // Vec<opaque-handle> returns (plain + under the Option niche).
-                .fun(fun!(storage_shards))
-                .fun(fun!(storage_shards_opt))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_shards))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_shards_opt))
+*/
                 // Owned-handle-in-callback pair.
-                .fun(fun!(storage_handler_new))
-                .fun(fun!(storage_emit))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_handler_new))
+*/
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_emit))
+*/
                 // A 3-opaque-handle call (sorted N-ary handle locking).
-                .fun(fun!(storage_total_len))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_total_len))
+*/
                 // Vec<String> return (single-leaf string fold).
-                .fun(fun!(storage_labels))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_labels))
+*/
                 // Option<data-class> input.
-                .fun(fun!(storage_put_opt))
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(storage_put_opt))
+*/
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).
-                .fun(fun!(millis_add).name("addMillis")),
+                /* Unsupported: the signature or function options need unsupported conversions.
+.fun(fun!(millis_add).name("addMillis"))
+*/,
         )
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
-        .package(package!().fun(fun!(string_new)))
+        .package(
+            package!()
+                .fun(fun!(string_new))
+                .fun(fun!(string_len))
+                .fun(fun!(i64_ref_double))
+                // Explicit identity declarations give text and bytes, like the defaults.
+                .fun(
+                    fun!(text_echo)
+                        .expand_param("s", expand_param!(String).variant_self())
+                        .expand_return(expand_return!(String).field_self()),
+                )
+                .fun(
+                    fun!(bytes_echo)
+                        .expand_param("b", expand_param!(Vec<u8>).variant_self())
+                        .expand_return(expand_return!(Vec<u8>).field_self()),
+                ),
+        )
+        // Report projects its supported Summary, Stamp and label fields.
+        // Project those fields before handing ownership of the Report to Kotlin.
+        .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
+        .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
+        .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
+        .expand(expand_return!(Stamp).field(fun!(stamp_secs)).field(fun!(stamp_nanos)))
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .package(package!().fun(fun!(payload_new)).fun(fun!(storage_with_payload)).fun(fun!(summary_new)).fun(fun!(summary_total_raw)))
+        .package(
+            package!("primitives")
+                .fun(fun!(primitive_i8))
+                .fun(fun!(primitive_i16))
+                .fun(fun!(primitive_i32))
+                .fun(fun!(primitive_i64))
+                .fun(fun!(primitive_i128))
+                .fun(fun!(primitive_isize))
+                .fun(fun!(primitive_u8))
+                .fun(fun!(primitive_u16))
+                .fun(fun!(primitive_u32))
+                .fun(fun!(primitive_u64))
+                .fun(fun!(primitive_u128))
+                .fun(fun!(primitive_usize))
+                .fun(fun!(primitive_f32))
+                .fun(fun!(primitive_f64))
+                .fun(fun!(primitive_bool))
+                .fun(fun!(primitive_char))
+                .fun(fun!(primitive_unit)),
+        )
+        .package(package!()
+            .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
+            .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
+            .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
+            .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
+            .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
-        .ignore(fun!(string_len))
-        .ignore(matching(|name| name.starts_with("storage_get_into_")))
-        .ignore(fun!(storage_put_by_read_and_update));
+        /* Unsupported: ignore diagnostics are not implemented.
+.ignore(matching(|name| name.starts_with("storage_get_into_")))
+*/
+        /* Unsupported: ignore diagnostics are not implemented.
+.ignore(fun!(storage_put_by_read_and_update))
+*/;
 
     // Two prebindgen sources: the flat crate plus the binding-side helper crate
     // (conversion fns for `convert!`). The registry records each fn's origin from
@@ -796,36 +1198,43 @@ fn main() {
     // so the stamp recorded at capture time (`covertest-helpers`) would not
     // resolve from this crate — `source_named` overrides it with the name this
     // crate actually uses, per directory.
-    let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    /* Unsupported: source-tree artifact publishing and the old surface report.
+        let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
-    let rust_dest = std::path::Path::new(&crate_dir)
-        .join("src")
-        .join("generated_bindings.rs");
-    let jni = binding.build().expect("build failed");
-    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
-    println!(
-        "cargo:warning=Generated bindings at: {}",
-        rust_path.display()
-    );
+        // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
+        let rust_dest = std::path::Path::new(&crate_dir)
+            .join("src")
+            .join("generated_bindings.rs");
+        let jni = binding.build().expect("build failed");
+        let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
+        println!(
+            "cargo:warning=Generated bindings at: {}",
+            rust_path.display()
+        );
 
-    // Kotlin classes → kotlin/generated/** (picked up by the Gradle source set).
-    let kotlin_root = std::path::Path::new(&crate_dir)
-        .join("kotlin")
-        .join("generated");
-    // The root is prebindgen-owned: `write_kotlin` replaces marked output,
-    // so no consumer-side cleanup is needed.
-    for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
-        println!("cargo:warning=Wrote {}", path.display());
-    }
-
-    // The resolved-surface report (C7): committed next to the regen so a
-    // decl's effect is reviewable in a PR without reading generated Kotlin.
-    std::fs::write(
-        std::path::Path::new(&crate_dir)
+        // Kotlin classes → kotlin/generated/ ** (picked up by the Gradle source set).
+        let kotlin_root = std::path::Path::new(&crate_dir)
             .join("kotlin")
-            .join("REPORT.md"),
-        jni.report(),
-    )
-    .expect("write REPORT.md");
+            .join("generated");
+        // The root is prebindgen-owned: `write_kotlin` replaces marked output,
+        // so no consumer-side cleanup is needed.
+        for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
+            println!("cargo:warning=Wrote {}", path.display());
+        }
+
+        // The resolved-surface report (C7): committed next to the regen so a
+        // decl's effect is reviewable in a PR without reading generated Kotlin.
+        std::fs::write(
+            std::path::Path::new(&crate_dir)
+                .join("kotlin")
+                .join("REPORT.md"),
+            jni.report(),
+        )
+        .expect("write REPORT.md");
+
+    */
+    let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    let jni = binding.build().expect("build supported declarations");
+    jni.write_rust("bindings.rs").unwrap();
+    jni.write_kotlin(&out.join("kotlin")).unwrap();
 }

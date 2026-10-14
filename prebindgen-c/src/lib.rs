@@ -1,805 +1,534 @@
-//! `CbindgenBuilder` — the C / cbindgen language adapter.
-//!
-//! # Experimental API
-//!
-//! This module is a proof of concept. Its Rust builder API may change in a
-//! minor release; do not rely on it as part of the stable 0.5 API.
-//!
-//! A [`Prebindgen`] back-end that turns a "flat" `#[prebindgen]` library into a
-//! Rust file suitable for [`cbindgen`](https://github.com/mozilla/cbindgen) to
-//! parse into a C header plus a static / dynamic library.
-//!
-//! Items are **opt-in**: nothing is converted unless it is explicitly declared
-//! with [`CbindgenBuilder::function`] / [`CbindgenBuilder::opaque_ptr`] /
-//! [`CbindgenBuilder::data_struct`] / [`CbindgenBuilder::enum_type`] /
-//! [`CbindgenBuilder::tagged_union`]. The C name of a declared
-//! type's generated destructor can be pinned by chaining [`CbindgenBuilder::base_name`].
-//!
-//! ## C ABI conventions
-//!
-//! * **Pointer struct** (declared with [`CbindgenBuilder::opaque_ptr`]): a `Box`-owned
-//!   Rust value whose lifecycle is owned by the C side. The C type `T` is
-//!   **opaque/incomplete** and the handle is a bare `T *` = `Box::into_raw`. A
-//!   typed `<name>_drop(T *)` destructor (running the Rust `Drop`) is generated
-//!   per handle.
-//! * **Data struct** (declared with [`CbindgenBuilder::data_struct`]): a by-value
-//!   `#[repr(C)]` struct whose fields are mapped to C-ABI wire types
-//!   (`String` → `*mut c_char`). No per-struct destructor — each `char*` field
-//!   is released individually via the [`CbindgenBuilder::free_memory_function`].
-//! * **Enum type** (declared with [`CbindgenBuilder::enum_type`]): a fieldless enum,
-//!   mirrored as a `#[repr(C)]` enum that cbindgen renders as the C enum.
-//!   Rust → C hands over the mirror directly (Rust only ever builds declared
-//!   variants). C → Rust must **not** do the reverse: a C `enum` is an `int` at
-//!   the ABI, so materialising a caller-supplied discriminant as a Rust enum is
-//!   undefined behaviour when it matches no variant — before any `match` could
-//!   check it. An enum parameter is therefore taken as
-//!   `MaybeUninit<mirror>` — the same ABI and the same C spelling (cbindgen
-//!   renders `MaybeUninit<T>` as `T`), but legal to hold any bit pattern — and
-//!   its raw `c_int` is validated against the mirror's variants before the Rust
-//!   value is built. An unmatched value is a fallible-input error (see below),
-//!   so a function taking an enum by value needs either a `Result` return or
-//!   [`CbindgenBuilder::panic`]. This relies on cbindgen's C rendering; the `C++`
-//!   language mode is not supported.
-//! * **Tagged union** (declared with [`CbindgenBuilder::tagged_union`]): a
-//!   data-carrying enum crossing by value as a `#[repr(C)]` enum with payload
-//!   variants, which cbindgen renders as a tag enum plus a `union` of the
-//!   variant bodies. When any variant's payload wire owns memory, a typed
-//!   `<name>_drop` frees the **active arm**. Inbound it obeys the same rule as
-//!   a plain enum, one level up: the mirror arrives as `MaybeUninit<mirror>`,
-//!   its leading `c_int` tag is range-checked against the variants, and only
-//!   then is the value `assume_init`ed and matched. Every payload wire is
-//!   bit-pattern-agnostic (a declared `enum_type` payload rides as
-//!   `MaybeUninit` too, and is validated by its own converter), so the tag is
-//!   the sole obligation. The typed drop checks it as well and treats an
-//!   out-of-range one as nothing to release.
-//! * **Direct `String` output**: a bare `char *` — a `malloc`'d, null-terminated
-//!   raw block (no wrapper struct), freed via the `free_memory_function`.
-//! * **[`CbindgenBuilder::free_memory_function`]**: the single, type-agnostic raw memory
-//!   freer (C `free`) for every `char*` the layer hands out (string returns and
-//!   data-struct `String` fields). It runs no destructor and needs no length.
-//!   Required whenever such string memory is produced.
-//! * **`Result<T, E>` return** lowers by the success wire kind:
-//!   - **pointer wire** (opaque handle, `char*`) → `T f(<inputs>, E *e)`, where a
-//!     **NULL return signals error** (details written to `*e`);
-//!   - **unit** → `bool f(<inputs>, E *e)`;
-//!   - **value wire** (data struct, scalar, enum) → `bool f(T *out, <inputs>, E *e)`
-//!     filling a caller-allocated `*out`.
-//!
-//!   `e` may be `NULL`, in which case the error value is dropped. Infallible
-//!   producers return the value/pointer directly (no out-param).
-//!
-//! ## Error handling (multiple error types)
-//!
-//! Any type used as the `E` of a `Result<T, E>` return **must be declared** as an
-//! error type via [`CbindgenBuilder::data_struct`] + [`CbindgenBuilder::error`] — otherwise the
-//! build fails. Error types are ordinary data structs (marshalled by value) and
-//! must additionally implement `From<String>`.
-//!
-//! Built-in input converters that can fail (a `String` arg, an opaque handle
-//! passed by value, a declared enum whose discriminant the caller chose) are
-//! **error-type-agnostic**: they return `Result<_, String>`
-//! where the `Err` is just a message. The generated wrapper for a `Result<T, E>`
-//! function converts such a message into *that function's* `E` via
-//! `<E as From<String>>::from(msg)`; the function's own `Err(E)` is marshalled
-//! directly through `E`'s output converter.
-//!
-//! If a function can produce such an internal message but does **not** return
-//! `Result`, that is a build error — suppress it by chaining [`CbindgenBuilder::panic`]
-//! after the function declaration, which makes the wrapper `panic!` on the
-//! internal error instead.
-//!
-//! References to the original Rust types in generated bodies are written
-//! fully-qualified against [`CbindgenBuilder::source_module`] so the generated file can
-//! define its own identically-named `#[repr(C)]` wrapper structs without
-//! colliding with the source crate's types.
-
-use std::collections::{HashMap, HashSet};
-
-// Shared `syn::Type` shape predicates live in `core::types_util`; re-exported
-// here under this back-end's historical names so the submodules (`use super::*`)
-// keep their call sites. `pub(crate) use` so the glob re-export reaches them.
-//
-// Down from seven: the shape questions this back-end asks are asked of a
-// `TypeRef` now, so what is left here serves the two node populations that
-// remain — a build-script declaration, and a converter's own generated
-// signature.
-pub(crate) use prebindgen_registry::types_util::{
-    is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
-};
-use prebindgen_registry::{
-    decl::{ConvertDecl, ConvertSpec},
-    flat::{extract_fn_trait_args, Field, Origin, ScalarKind, TypeKind, TypeRef},
-    Conversions, ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, TypeKey,
-};
+//! Generate Rust wrappers and C declarations from conversion slots.
+#![warn(missing_docs)]
+use prebindgen_flat::{Flat, Primitive, Result};
+use prebindgen_tools::{boxed::BoxedWire, value::Value};
+/// The carrier of one C wire.
+///
+/// This adapter-specific type keeps C and JNI converters from being mixed in
+/// one model: their codecs use different carriers and allocation layouts.
+#[derive(Clone, Debug)]
+pub enum CWire {
+    /// A primitive in its C scalar type.
+    Scalar(Primitive),
+    /// Text or bytes as a pointer/length buffer.
+    Buffer,
+    /// A typed opaque pointer to a boxed source value.
+    Pointer(Box<BoxedWire>),
+    /// An `int32_t` selector arm index.
+    Selector,
+}
+use prebindgen_tools::{Bindings as GenericBindings, Codec, Wire as GenericWire};
+/// Flat source model with C conversion data for wrapper emission.
+pub type Bindings = GenericBindings<CWire>;
+type Wire = GenericWire<CWire>;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 
-/// The origin of a type a **build script** wrote: real tokens, and deliberately
-/// no source position — `SourceLocation::default()` is the sanctioned placeless
-/// location for a type that was never in a captured file.
-fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
-    Origin::new(ty, std::rc::Rc::new(prebindgen::SourceLocation::default()))
-}
-
-/// Identity of a declared callback signature: its argument-type list (the
-/// dedup key, since two `impl Fn` params with the same args share one closure
-/// struct). The return is always unit for the supported callbacks.
-type CallbackKey = Vec<TypeKey>;
-
-/// Per-opaque-handle / per-data-struct / per-enum configuration.
-#[derive(Clone)]
-struct TypeCfg {
-    /// The type this declaration was **written with** — the `ty` handed to
-    /// `opaque_ptr` / `data_struct` / `enum_type` / `tagged_union`.
-    ///
-    /// A declarator receives a real `syn::Type` and used to keep only the key
-    /// derived from it, so later sites had to ask the key for the tokens back.
-    /// The declaration is where the type came from, and this is where it stays
-    /// (#291).
-    rust_type: Origin<syn::Type>,
-    /// Per-declaration **base** token override, fed to the name manglers
-    /// (`mangle_type_name` / `mangle_destructor` / `mangle_take`) in place of the
-    /// `mangle_rust_type`-derived base. Set by [`CbindgenBuilder::base_name`]. `None` ⇒
-    /// the base comes from `mangle_rust_type(short)` (or the short name).
-    base: Option<String>,
-}
-
-impl TypeCfg {
-    /// A freshly declared type, no naming override yet.
-    fn new(rust_type: syn::Type) -> Self {
-        Self {
-            rust_type: declared_origin(rust_type),
-            base: None,
-        }
-    }
-}
-
-/// What an inline-opaque by-value type holds, which decides whether its consume
-/// path needs a gravestone write-back (and thus a `prebindgen_c_runtime::Gravestone`
-/// impl). See [`CbindgenBuilder::opaque_data_struct`] / [`CbindgenBuilder::opaque_owned_struct`].
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum OpaqueKind {
-    /// **Plain data** — holds no external resource (typically `Copy`, e.g. a
-    /// timestamp). Drop is a no-op, so consuming (moving out) leaves the source's
-    /// bitwise duplicate harmlessly droppable: **no gravestone write-back, no
-    /// `Gravestone` impl required** (only the autogenerated `Transmute`).
-    Data,
-    /// **Owns external data** — refcounts / heap (e.g. a byte buffer, a sample).
-    /// Consuming must write a `prebindgen_c_runtime::Gravestone` back over the moved-from
-    /// source so a later drop is a no-op (double-free safe). Requires the consumer
-    /// to implement `Gravestone` for the opaque counterpart (its *logic* only).
-    Owned,
-}
-
-/// Per-inline-opaque configuration: the opaque `#[repr(C, align(_))]` counterpart
-/// type the Rust value is transmuted to/from, whether it owns external data, plus
-/// the usual name config.
-#[derive(Clone)]
-struct ValueOpaqueCfg {
-    /// The opaque counterpart type (defined elsewhere — e.g. by a size/align
-    /// probe generator). Used verbatim as the by-value wire type. Must have
-    /// identical size+align to the Rust type (a `const _` assert is emitted to
-    /// enforce that, fail-closed) and — for [`OpaqueKind::Owned`] — implement
-    /// `prebindgen_c_runtime::Gravestone`.
-    opaque: syn::Type,
-    /// Plain-data vs owns-external-data (gravestone write-back on consume).
-    kind: OpaqueKind,
-    /// When `true`, the `opaque` counterpart is **not** supplied externally but is
-    /// an auto-generated **visible-field** `#[repr(C)]` mirror of the source struct,
-    /// emitted by [`CbindgenBuilder::prereq_value_opaque`]. Set by
-    /// [`CbindgenBuilder::repr_c_struct`]; `false` for `opaque_data_struct` /
-    /// `opaque_owned_struct` (counterpart defined elsewhere).
-    generate_mirror: bool,
-    /// Opt-out of the restricted-validity field audit (#170 instance 3, #158
-    /// instance 3). Set by [`CbindgenBuilder::assume_c_field_validity`]. See
-    /// [`CbindgenBuilder::restricted_validity_field`] for what the audit rejects and
-    /// why the escape hatch exists.
-    assume_c_field_validity: bool,
-    /// Name config (`.base_name()` override; default naming via the manglers).
-    cfg: TypeCfg,
-}
-
-/// Per-declared-callback configuration.
-#[derive(Clone)]
-struct CbCfg {
-    /// The argument types this callback was declared with, in order.
-    ///
-    /// `CallbackKey` is a `Vec<TypeKey>` — a list of identities, which is what
-    /// the map is keyed by. Emission needs the argument *types*, and these are
-    /// the ones `extract_fn_trait_args` produced at declaration time (#291).
-    args: Vec<syn::Type>,
-    /// Per-declaration **base** token override fed to `mangle_callback` (as the
-    /// sole base, replacing the args' derived bases). Set by
-    /// [`CbindgenBuilder::base_name`]. `None` ⇒ bases come from the arguments.
-    base: Option<String>,
-    /// Argument indices delivered to the C `call` as a **takeable owned pointer**
-    /// (`*mut z_x_t`) instead of by value: the callee may take the value (move it
-    /// out via `z_x_take`, leaving a gravestone) or just read it, and the
-    /// trampoline drops it after the call (no-op if taken). Set by
-    /// [`CbindgenBuilder::takeable_param`]; each such arg type must be an inline-opaque
-    /// type ([`CbindgenBuilder::opaque_owned_struct`] / [`CbindgenBuilder::opaque_data_struct`]).
-    takeable: std::collections::BTreeSet<usize>,
-}
-
-impl CbCfg {
-    /// A freshly declared callback signature, no naming or takeable overrides yet.
-    fn new(args: Vec<syn::Type>) -> Self {
-        Self {
-            args,
-            base: None,
-            takeable: std::collections::BTreeSet::new(),
-        }
-    }
-}
-
-/// Per-declared-function configuration.
-#[derive(Clone, Default)]
-struct FnCfg {
-    /// Per-declaration **base** token override fed to `mangle_function` in place of
-    /// the Rust fn ident. Set by [`CbindgenBuilder::base_name`]. `None` ⇒ the fn ident.
-    base: Option<String>,
-    /// Allow the generated wrapper to `panic!` on an internal error message
-    /// (set by [`CbindgenBuilder::panic`]). Only meaningful for non-`Result` functions
-    /// that have a fallible input.
-    panic: bool,
-}
-
-/// The declaration a chained modifier ([`CbindgenBuilder::name`] / [`CbindgenBuilder::error`]
-/// / [`CbindgenBuilder::panic`]) applies to. Set by each declaration method, reset to
-/// `None` by root-level modifiers (e.g. [`CbindgenBuilder::source_module`]).
-#[derive(Clone)]
-enum CurrentDecl {
-    Ptr(TypeKey),
-    Data(TypeKey),
-    ValueOpaque(TypeKey),
-    Enum(TypeKey),
-    TaggedUnion(TypeKey),
-    Callback(CallbackKey),
-    Function(syn::Ident),
-    Convert(TypeKey),
-}
-
-/// Where a fallible input-decode failure is routed in a generated wrapper.
-#[allow(clippy::large_enum_variant)]
-enum ErrRoute<'a> {
-    /// `Result<T, E>` function: convert the message to `E`, write `*e`, and
-    /// return `fail_return` (`false` for a `bool`/out-param wrapper,
-    /// `::core::ptr::null_mut()` for a pointer-returning wrapper).
-    Result {
-        e_conv: &'a syn::Ident,
-        e_ty_src: syn::Type,
-        fail_return: TokenStream,
-    },
-    /// Non-`Result` function declared `.panic()`: abort via `panic!`.
-    Panic,
-}
-
-/// Emit the statements that report `__msg` — a `String` already in scope — per
-/// `route`, and leave the wrapper.
+/// Leaf conversions used by [`Cbindgen`].
+/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+/// to fill [`Bindings`] manually.
 ///
-/// Shared by the per-input decode failure and by the alias preflight, so the
-/// two cannot drift on how a binding error reaches the caller.
-fn route_message(route: &ErrRoute<'_>) -> TokenStream {
-    match route {
-        ErrRoute::Result {
-            e_conv,
-            e_ty_src,
-            fail_return,
-        } => quote!(
-            if !e.is_null() {
-                *e = #e_conv(
-                    <#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg),
-                );
-            }
-            return #fail_return;
-        ),
-        ErrRoute::Panic => quote!(panic!("{}", __msg);),
+/// ```
+/// use prebindgen_c::{Bindings, Cbindgen, CCodec};
+/// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+/// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
+/// let mut flat = Bindings::parse(
+///     source.items.into_iter().map(|item| (item, Default::default())),
+/// )?;
+/// bind_input(&mut flat, &CCodec, "echo", "x", &Input::Leaf, &())?;
+/// bind_output(&mut flat, &CCodec, "echo", &Output::Leaf, &())?;
+/// let generated = Cbindgen::new(flat).build()?;
+/// assert!(generated.header.contains("pb_echo("));
+/// syn::parse_file(&generated.rust)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub struct CCodec;
+impl Codec for CCodec {
+    type Extra = ();
+    type Wire = CWire;
+    fn selector(&self, _: &()) -> CWire {
+        CWire::Selector
     }
-}
-
-/// How a parameter uses the resource it names — the axis
-/// [`CbindgenBuilder::alias_preflight`] states its rule on.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum AliasAccess {
-    /// Taken by value: the callee owns it afterwards, and the C-side handle is
-    /// dead.
-    Consume,
-    /// `&mut T`: exclusive for the duration of the call.
-    Exclusive,
-    /// `&T`: shared, and the only access that may legally coexist with another
-    /// of its own kind.
-    Shared,
-}
-
-impl AliasAccess {
-    /// The word used for this access in a preflight rejection message.
-    fn describe(self) -> &'static str {
-        match self {
-            AliasAccess::Consume => "consumed",
-            AliasAccess::Exclusive => "exclusively borrowed",
-            AliasAccess::Shared => "borrowed",
-        }
+    fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
+        Value::of(ty).is_none()
     }
-}
-
-/// C / cbindgen language adapter. Build it with [`CbindgenBuilder::new`], declare the
-/// items to convert with the fluent methods, then drive it through
-/// [`CbindgenBuilder::build`] → [`Cbindgen::write_rust`].
-///
-/// A resolved C binding: every crossing has a conversion, and the header-facing
-/// Rust file can be written.
-///
-/// Built by [`CbindgenBuilder::build`]. Read-only, so `write_rust` is a pure
-/// emission over a complete registry.
-pub struct Cbindgen {
-    pub(crate) gen: CbindgenBuilder,
-    pub(crate) registry: prebindgen_registry::Registry<()>,
-}
-
-// Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.
-impl std::fmt::Debug for Cbindgen {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Cbindgen(..)")
-    }
-}
-
-impl Cbindgen {
-    /// Describe a C binding.
-    pub fn builder() -> CbindgenBuilder {
-        CbindgenBuilder::new()
-    }
-
-    /// Write the generated Rust file — the `extern "C"` wrappers and their
-    /// converters, which `cbindgen` then reads to emit the header.
-    pub fn write_rust(
+    fn input_leaf(
         &self,
-        out_path: impl AsRef<std::path::Path>,
-    ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
-        Ok(prebindgen_registry::write::write_rust(
-            &self.registry,
-            &self.gen,
-            out_path,
-        )?)
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &prebindgen_tools::Condition,
+    ) -> Result<prebindgen_tools::InputConversion<CWire>> {
+        let (decode, kind) = match Value::of(ty) {
+            Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::Scalar(p)),
+            // Text and bytes borrow the caller's buffer; owned targets copy it.
+            Some(Value::Text) => (
+                quote!(std::str::from_utf8(unsafe {__pb_read(#w)?}).map_err(|_|"invalid UTF-8")?),
+                CWire::Buffer,
+            ),
+            Some(Value::Bytes) => (quote!(unsafe {__pb_read(#w)?}), CWire::Buffer),
+            None => {
+                return prebindgen_tools::boxed::input(
+                    &prebindgen_tools::boxed::Storage::Direct,
+                    ty,
+                    w,
+                    v,
+                    active,
+                    |b| CWire::Pointer(Box::new(b)),
+                )
+            }
+        };
+        prebindgen_tools::value::input(ty, w, v, active, decode, kind)
     }
-
-    /// The resolved registry — conversions, decompositions, and the model.
-    pub fn registry(&self) -> &prebindgen_registry::Registry<()> {
-        &self.registry
-    }
-
-    /// What the binding declared.
-    pub fn declarations(&self) -> &CbindgenBuilder {
-        &self.gen
-    }
-}
-
-#[derive(Default)]
-pub struct CbindgenBuilder {
-    /// Module path the original `#[prebindgen]` items live under. Used to
-    /// fully-qualify bare references to source types in generated bodies.
-    source_module: Option<syn::Path>,
-    /// `#[prebindgen]` functions explicitly declared for conversion.
-    functions: HashMap<syn::Ident, FnCfg>,
-    /// Canonical scalar conversions shared with JniGenBuilder.
-    convert_decls: Vec<ConvertDecl>,
-    /// Per-conversion C naming base used for generated niche constants.
-    convert_bases: HashMap<TypeKey, String>,
-    /// `#[prebindgen]` functions intentionally not exported by this adapter.
-    ignored_functions: HashSet<syn::Ident>,
-    /// Opaque-handle types (`Box` + `void*` lifecycle, auto `_drop`).
-    opaque: HashMap<TypeKey, TypeCfg>,
-    /// By-value `#[repr(C)]` data structs.
-    data: HashMap<TypeKey, TypeCfg>,
-    /// Inline-opaque by-value types: the Rust value is transmuted to/from an
-    /// opaque `#[repr(C, align(_))]` counterpart of identical size+align (no
-    /// `Box`). Keyed by the Rust type; the value carries the opaque counterpart.
-    value_opaque: HashMap<TypeKey, ValueOpaqueCfg>,
-    /// Enum types (unit-variant only — a C `enum` is a bare discriminant).
-    enums: HashMap<TypeKey, TypeCfg>,
-    /// Data-carrying enum types crossing by value as a `#[repr(C)]` enum with
-    /// payload variants, which cbindgen renders as the idiomatic C tag +
-    /// `union`. Declared with [`CbindgenBuilder::tagged_union`].
-    tagged_unions: HashMap<TypeKey, TypeCfg>,
-    /// Declared callback signatures (`impl Fn(...) + Send + Sync + 'static`),
-    /// keyed by their argument-type list. Each emits one `#[repr(C)]` closure
-    /// struct.
-    callbacks: HashMap<CallbackKey, CbCfg>,
-    /// Types intentionally not exported by this adapter.
-    ignored_types: HashSet<TypeKey>,
-    /// Data structs additionally marked as error types (allowlist for the
-    /// "Result error type must be declared" rule).
-    error: HashSet<TypeKey>,
-    /// Opaque error types (e.g. `ZError = Box<dyn Error>`) that are NOT by-value
-    /// data structs: they appear as the `E` of a `Result<_, E>` but are
-    /// marshalled to C as a `char*` message obtained by calling the recorded
-    /// accessor `fn(&E) -> String`. Keyed by the error type; the value is the
-    /// message-accessor function ident. Also inserted into [`Self::error`].
-    opaque_errors: HashMap<TypeKey, syn::Ident>,
-    /// Name of the universal raw-memory freer (C `free`) for `char*` data the
-    /// generated code hands out. Set by [`Self::free_memory_function`]. Required
-    /// (build error otherwise) whenever string memory is produced.
-    free_fn: Option<String>,
-    /// The declaration that chained modifiers apply to. Set by declaration
-    /// methods; reset to `None` by root-level modifiers.
-    current: Option<CurrentDecl>,
-    /// Optional name-mangling rules (all `None` ⇒ the built-in defaults below,
-    /// which carry no target-language convention). A per-declaration
-    /// [`.base_name()`](Self::base_name) replaces the *base* token fed to these
-    /// manglers. See [[the builder methods]](Self::mangle_rust_type).
-    ///
-    /// Base: Rust short name → canonical token, feeding the three type manglers.
-    mangle_rust_type: Option<Mangle1>,
-    /// Base → C type name (struct / enum / data).
-    mangle_type_name: Option<Mangle1>,
-    /// Base → opaque-handle destructor symbol.
-    mangle_destructor: Option<Mangle1>,
-    /// Base → value_opaque "take" (move) symbol, for takeable callback params.
-    mangle_take: Option<Mangle1>,
-    /// Callback arg bases → closure-struct name.
-    mangle_callback: Option<MangleN>,
-    /// Rust function ident → exported `#[no_mangle]` symbol.
-    mangle_function: Option<Mangle1>,
-    /// Where the `#[prebindgen]` items come from — see
-    /// `JniGenBuilder::source`.
-    pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
-}
-
-/// A mangler over a single name component (Rust short name, base, or fn ident).
-type Mangle1 = Box<dyn Fn(&str) -> String>;
-/// A mangler over a callback's argument bases.
-type MangleN = Box<dyn Fn(&[String]) -> String>;
-
-mod builder;
-mod convert;
-mod emit;
-mod selector;
-#[cfg(test)]
-mod test_util;
-#[cfg(test)]
-mod tests;
-mod trait_impl;
-
-// ── Free helpers ───────────────────────────────────────────────────────
-
-/// Iterate a `TypeKey`-keyed map in deterministic (key-string) order.
-fn sorted_by_key(map: &HashMap<TypeKey, TypeCfg>) -> Vec<(&TypeKey, &TypeCfg)> {
-    let mut entries: Vec<(&TypeKey, &TypeCfg)> = map.iter().collect();
-    entries.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
-    entries
-}
-
-/// Turn a `TypeKey` into a valid ident fragment (non-alphanumerics → `_`).
-fn sanitize(key: &TypeKey) -> String {
-    key.as_str()
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect()
-}
-
-/// Last path-segment ident of a type as a `String` (e.g. `ZKeyExpr`).
-/// The short name a C symbol is built from — the key's last path segment, or a
-/// sanitized rendering of the whole key when it is not a path.
-///
-/// Off the **identity**: `type_path_tail` took the last segment of a node, and
-/// `TypeKey::short_name` is the same question asked of the canonical string, so
-/// the name no longer depends on holding the node it was derived from.
-fn type_short(key: &TypeKey) -> String {
-    key.short_name().unwrap_or_else(|| sanitize(key))
-}
-
-/// The declared **payload-carrying** enum under `key`, or a panic naming the
-/// right declarator when it is fieldless.
-///
-/// The mirror image of [`unit_enum`], and the same act: the model split the two
-/// enum shapes into two elements at parse time, so the lookup answers the shape
-/// question. This was `enum_item` + `assert_payload_enum`, the second running
-/// `enum_shape` over a `syn::ItemEnum` to re-derive what the first had thrown
-/// away.
-fn payload_enum<'r>(
-    registry: &'r impl Conversions<()>,
-    key: &TypeKey,
-) -> Option<&'r prebindgen_registry::flat::Variant> {
-    match registry.flat().declared_type(&key.ident()?)? {
-        prebindgen_registry::flat::Type::Variant(v) => Some(v),
-        prebindgen_registry::flat::Type::Enum(e) => panic!(
-            "Cbindgen: `{}` has no payload variants: declare it with `.enum_type()`, \
-             not `.tagged_union()` — a fieldless enum crosses as a plain C `enum`",
-            e.name
-        ),
-        _ => None,
-    }
-}
-
-/// Hard error when an `.enum_type()`-declared enum is not the shape that
-/// declarator describes. A plain C `enum` is exactly a discriminant, which
-/// is [`EnumShape::Unit`]; a data-carrying enum crosses as a tag plus a
-/// `union` and is reached through a different declarator, so this names
-/// that declarator rather than asserting on `syn::Fields`.
-/// The declared **fieldless** enum under `ty`'s name, or a panic naming the
-/// right declarator when it is a sum.
-///
-/// The lookup and the check are the same act: the model decided which of the
-/// two shapes an item is at parse time, and expresses it as two elements. This
-/// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
-/// `syn::ItemEnum` to re-derive what the first had already thrown away.
-fn unit_enum<'r>(
-    registry: &'r impl Conversions<()>,
-    key: &TypeKey,
-) -> Option<&'r prebindgen_registry::flat::Enum> {
-    match registry.flat().declared_type(&key.ident()?)? {
-        prebindgen_registry::flat::Type::Enum(e) => Some(e),
-        prebindgen_registry::flat::Type::Variant(v) => {
-            let offender = v
-                .alternatives
-                .iter()
-                .find(|a| !a.is_empty())
-                .map(|a| a.name.to_string())
-                .unwrap_or_default();
-            panic!(
-                "Cbindgen: `{}` is a data-carrying enum (variant `{offender}` has fields): \
-                 declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` is a bare \
-                 discriminant and has no room for a payload",
-                v.name
-            )
+    fn output_leaf(
+        &self,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<prebindgen_tools::OutputConversion<CWire>> {
+        match Value::of(ty) {
+            Some(Value::Scalar(p)) => prebindgen_tools::value::output(
+                ty,
+                w,
+                v,
+                borrowed,
+                |v| encode_scalar(p, v),
+                CWire::Scalar(p),
+            ),
+            Some(_) => {
+                // The buffer stays owned by Rust until every output is delivered.
+                let mut out = prebindgen_tools::value::output(
+                    ty,
+                    w.clone(),
+                    v,
+                    borrowed,
+                    |v| quote!(::core::convert::Into::<Vec<u8>>::into(#v).into_boxed_slice()),
+                    CWire::Buffer,
+                )?;
+                out.values = vec![quote!(__PbBuffer {data: #w.as_ptr(), len: #w.len()})];
+                out.commit = quote!(let _ = Box::into_raw(#w););
+                Ok(out)
+            }
+            None => prebindgen_tools::boxed::output(
+                &prebindgen_tools::boxed::Storage::Direct,
+                ty,
+                w,
+                v,
+                borrowed,
+                |b| CWire::Pointer(Box::new(b)),
+            ),
         }
-        _ => None,
     }
 }
-
-/// PascalCase → snake_case (`ZKeyExpr` → `z_key_expr`).
-/// Convert a `PascalCase` / `camelCase` identifier to `snake_case` (a
-/// convention-free helper, re-exported for consumers composing their own
-/// [`CbindgenBuilder::mangle_rust_type`] rules).
-/// Thin alias for the core spelling, which sum-variant leaf naming shares.
-pub fn snake_case(s: &str) -> String {
-    prebindgen_registry::types_util::pascal_to_snake(s)
+fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
+    let ty = p.rust_type();
+    match p {
+        Primitive::Bool => quote!(#w != 0),
+        Primitive::Char => quote!(char::from_u32(#w).ok_or("invalid Unicode scalar")?),
+        Primitive::I128 | Primitive::U128 => {
+            quote!(((u128::from(#w.hi) << 64) | u128::from(#w.lo)) as #ty)
+        }
+        _ => quote!(#w),
+    }
 }
-
-/// A reading spelled back as a `syn::Type`.
+fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
+    match p {
+        Primitive::Bool => quote!(u8::from(#v)),
+        Primitive::Char => quote!((#v) as u32),
+        Primitive::I128 | Primitive::U128 => {
+            quote!({ let bits = (#v) as u128; __Pb128 { hi: (bits >> 64) as u64, lo: bits as u64 } })
+        }
+        _ => v,
+    }
+}
+/// Configure C bindings, using typed opaque pointers for foreign values.
 ///
-/// The source's **own tokens**, re-parsed — not [`TypeKind::to_syn`], which
-/// exists to check the lowering rather than to generate with. Every wire this
-/// back-end builds from a field's own type goes through here, so what C sees
-/// is what the source wrote.
-fn spelled(t: &TypeRef, emit: &prebindgen_registry::Emit) -> syn::Type {
-    let toks = emit.spell(t);
-    syn::parse_quote!(#toks)
-}
-
-/// `String`, off the classification.
-fn r_is_string(t: &TypeRef) -> bool {
-    matches!(t.kind(), TypeKind::String)
-}
-
-/// `str`, off the classification.
-fn r_is_str(t: &TypeRef) -> bool {
-    matches!(t.kind(), TypeKind::Str)
-}
-
-/// `bool`, off the classification — the one scalar with a restricted domain.
-fn r_is_bool(t: &TypeRef) -> bool {
-    matches!(t.kind(), TypeKind::Scalar(ScalarKind::Bool))
-}
-
-/// A scalar's Rust type, built from its **kind**.
+/// Start with captured source via [`Self::builder`] and [`Self::source`], or a
+/// flat model via [`Self::new`]. With captured source, declare each
+/// exported function. In either case, declare each opaque pointee type.
+/// Conversion declarations use [`prebindgen_tools::Declarations`]. When reading
+/// captured source, add the source crate as both a build dependency and a normal
+/// dependency: generation reads its captures, and generated code calls its functions.
 ///
-/// A scalar's spelling is its name — `ScalarKind::as_str` is the closed set the
-/// source can have written — so this needs no captured syntax and no `Emit`.
-/// Three wire policies asked `spelled()` for exactly this behind an
-/// `r_is_scalar` guard, which was a source spelling standing in for an
-/// identity that could answer.
-fn scalar_ty(t: &TypeRef) -> Option<syn::Type> {
-    let TypeKind::Scalar(k) = t.kind() else {
-        return None;
-    };
-    let id = syn::Ident::new(k.as_str(), proc_macro2::Span::call_site());
-    Some(syn::parse_quote!(#id))
-}
-
-/// An FFI-safe scalar primitive, off the classification. `ScalarKind` IS the
-/// closed set the name table below was spelling out by hand.
-fn r_is_scalar(t: &TypeRef) -> bool {
-    matches!(t.kind(), TypeKind::Scalar(_))
-}
-
-/// `Vec<T>`, off the classification.
-fn r_is_vec(t: &TypeRef) -> bool {
-    matches!(t.kind(), TypeKind::Vec(_))
-}
-
-/// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
-/// classification, returning the reading of `T`.
+/// ```
+/// use prebindgen_c::{Bindings, Cbindgen};
+/// use prebindgen_tools::fun;
+/// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
+/// let flat = Bindings::parse(
+///     source.items.into_iter().map(|item| (item, Default::default())),
+/// )?;
+/// let generated = Cbindgen::new(flat)
+///     .prefix("demo")
+///     .function(fun!(add))
+///     .build()?;
+/// assert!(generated.header.contains("demo_add("));
+/// syn::parse_file(&generated.rust)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 ///
-/// The model peer of [`opaque_ptr_payload_inner`]: same shape question, asked
-/// of `TypeKind` instead of of a path's tail ident.
-fn r_boxed_inner(t: &TypeRef) -> Option<&TypeRef> {
-    let core = t.optional_inner().unwrap_or(t);
-    match core.kind() {
-        TypeKind::Boxed(inner) => Some(inner),
-        _ => None,
+/// Generated calls return a status and write results through an output pointer;
+/// `0` means success, `-1` means failure, with a thread-local last-error message.
+/// Owned pointer inputs transfer ownership after all active inputs validate;
+/// later source failures do not restore ownership. References borrow for the
+/// call and require the caller to obey Rust aliasing and lifetime rules.
+/// Returned pointers and buffers must be freed with their generated destructors.
+pub struct Cbindgen {
+    flat: Option<Bindings>,
+    source: Option<std::path::PathBuf>,
+    expansions: Vec<prebindgen_tools::ExpandDecl>,
+    functions: Vec<prebindgen_tools::FunctionDecl>,
+    prefix: String,
+    pointers: Vec<(String, syn::Type)>,
+}
+impl Cbindgen {
+    /// Create an unconfigured builder with the symbol prefix `pb`.
+    pub fn builder() -> Self {
+        Self {
+            flat: None,
+            source: None,
+            expansions: Vec::new(),
+            functions: Vec::new(),
+            prefix: "pb".into(),
+            pointers: Vec::new(),
+        }
+    }
+    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
+    ///
+    /// Only declared functions, referenced constructors/getters and required types
+    /// are selected. Automatic type discovery follows unqualified source names
+    /// (see [`Flat::parse_selected`]). Types referenced only by qualified paths
+    /// can be selected through [`Self::opaque_ptr`] using their unqualified names.
+    /// Supply exactly one source directory or flat model.
+    pub fn source(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.source = Some(path.as_ref().to_owned());
+        self
+    }
+    /// Register a type-wide input or output expansion, built with `expand_param!`
+    /// or `expand_return!`.
+    ///
+    /// Per-function overrides replace this default; duplicate defaults are rejected
+    /// by [`Self::build`]. Registration order does not affect type lookup.
+    pub fn expand(mut self, decl: impl Into<prebindgen_tools::ExpandDecl>) -> Self {
+        self.expansions.push(decl.into());
+        self
+    }
+    /// Export a function and build its occurrence converters from declarations.
+    ///
+    /// `decl` names the function, normally with `fun!`, and carries its overrides.
+    ///
+    /// Function renaming is currently unsupported; exports use the symbol prefix
+    /// and original source name.
+    pub fn function(mut self, decl: prebindgen_tools::FunctionDecl) -> Self {
+        self.functions.push(decl);
+        self
+    }
+
+    /// Start from a flat model with input and output conversion slots and prefix `pb`.
+    ///
+    /// `flat` is the parsed source, with any converters already attached.
+    ///
+    /// Attach converters with [`prebindgen_tools::bind_input`] and
+    /// [`prebindgen_tools::bind_output`] with [`CCodec`], or fill defaults with
+    /// [`Self::function`].
+    /// Every fully bound function in the supplied model is exported.
+    pub fn new(flat: Bindings) -> Self {
+        Self {
+            flat: Some(flat),
+            source: None,
+            expansions: Vec::new(),
+            functions: Vec::new(),
+            prefix: "pb".into(),
+            pointers: Vec::new(),
+        }
+    }
+    /// Set the prefix for exported functions, C types and destructors.
+    ///
+    /// Defaults to `pb`. The prefix is validated as an identifier during build.
+    pub fn prefix(mut self, prefix: &str) -> Self {
+        self.prefix = prefix.into();
+        self
+    }
+    /// Declare an opaque C pointee and its typed destructor for a source type.
+    ///
+    /// Every leaf type other than a primitive, text or bytes needs a matching
+    /// declaration. Owned values use `Box<T>` directly; they have no `Send`
+    /// requirement. This declaration alone does not export constructors.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — the C name, without the prefix: the header declares the type
+    ///   `{prefix}_{name}` and the destructor `{prefix}_drop_{name}`.
+    /// * `ty` — the source type behind the pointer, as written in the source crate.
+    pub fn opaque_ptr(mut self, name: &str, ty: syn::Type) -> Self {
+        self.pointers.push((name.into(), ty));
+        self
+    }
+    /// Resolve declarations, build converters and generate both output texts.
+    ///
+    /// Does not write files. Returns an error for conflicting sources, invalid or
+    /// duplicate declarations, unsupported conversions, or missing opaque pointees.
+    /// Rust layout/trait requirements are checked when the generated Rust compiles.
+    pub fn build(self) -> Result<Generation> {
+        prebindgen_tools::ident(&self.prefix)?;
+        let mut flat = match (self.flat, self.source) {
+            (Some(flat), None) => flat,
+            (None, Some(path)) => Flat::parse_selected(
+                prebindgen::Source::new(path).items_all(),
+                &prebindgen_tools::declarations::source_functions(
+                    &self.expansions,
+                    &self.functions,
+                ),
+                &self
+                    .pointers
+                    .iter()
+                    .map(|(_, ty)| ty.clone())
+                    .collect::<Vec<_>>(),
+            )?,
+            _ => return Err("supply exactly one source or flat model".into()),
+        };
+        let declarations = prebindgen_tools::Declarations::new(&flat, self.expansions)?;
+        let mut names = std::collections::BTreeSet::new();
+        for decl in self.functions {
+            if !names.insert(decl.name.clone()) {
+                return Err("duplicate C function declaration".into());
+            }
+            if decl.foreign.is_some() {
+                return Err("C function renaming is outside this subset".into());
+            }
+            declarations.fill(&mut flat, &CCodec, &decl, &())?;
+        }
+        let pointers = self
+            .pointers
+            .into_iter()
+            .map(|(n, t)| Ok((n, flat.resolve_type(&t)?)))
+            .collect::<Result<Vec<_>>>()?;
+        prebindgen_tools::validate_bindings(&flat)?;
+        generate(flat, &self.prefix, pointers)
     }
 }
-
-fn is_string(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
+/// Generated Rust bindings and their corresponding C header.
+pub struct Generation {
+    /// Formatted Rust source to include in a binding crate with `prebindgen-runtime`
+    /// and `konst` (used by captured source feature guards).
+    pub rust: String,
+    /// C declarations matching the generated Rust ABI, with C++ linkage guards.
+    pub header: String,
 }
-
-/// The C wire for a `bool` in any position C can write: `MaybeUninit<bool>`.
-///
-/// `bool` is the one FFI-safe scalar with a restricted domain — only `0` and
-/// `1` are valid — so a byte a C caller supplies may not be **held** in a Rust
-/// `bool` at all, let alone read from one. `MaybeUninit<bool>` holds any byte
-/// legally, has `bool`'s size and alignment (so a layout-preserving mirror
-/// still transmutes), and is invisible in the header: cbindgen simplifies
-/// `MaybeUninit<T>` to `T`, so the C prototype keeps saying `bool`.
-///
-/// The counterpart read is [`bool_in_expr`]. Together they are the single
-/// policy for #170; every position that lets C hand over a `bool` — a
-/// parameter, a `data_struct` field, a tagged-union payload — uses this pair
-/// and nothing else.
-fn bool_wire() -> syn::Type {
-    syn::parse_quote!(::core::mem::MaybeUninit<bool>)
-}
-
-/// Read a [`bool_wire`] slot the way C converts to `_Bool`: nonzero is true.
-///
-/// `access` must evaluate to a `MaybeUninit<bool>` place. The byte is read out
-/// as a `u8` — legal for any bit pattern — so no invalid `bool` ever exists.
-/// Unlike an enum discriminant there is nothing to reject: every byte has an
-/// unambiguous C meaning.
-///
-/// The read is `unsafe`; every caller emits it inside an `unsafe fn` body.
-fn bool_in_expr(access: TokenStream) -> TokenStream {
-    quote!(::core::ptr::read(#access.as_ptr() as *const u8) != 0)
-}
-
-/// Wrap a Rust `bool` for a [`bool_wire`] slot. Rust only ever writes `0`/`1`,
-/// so the outbound direction is a pure wrap.
-fn bool_out_expr(value: TokenStream) -> TokenStream {
-    quote!(::core::mem::MaybeUninit::new(#value))
-}
-
-/// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
-/// (`bool`, the fixed-width / pointer-width integers, and floats).
-fn is_scalar(ty: &syn::Type) -> bool {
-    type_path_tail(ty)
-        .map(|i| {
-            matches!(
-                i.to_string().as_str(),
-                "bool"
-                    | "i8"
-                    | "i16"
-                    | "i32"
-                    | "i64"
-                    | "isize"
-                    | "u8"
-                    | "u16"
-                    | "u32"
-                    | "u64"
-                    | "usize"
-                    | "f32"
-                    | "f64"
-            )
-        })
-        .unwrap_or(false)
-}
-
-/// The element of a shared slice borrow (`&[E]`), off the classification.
-fn r_shared_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    let TypeKind::Ref {
-        mutable: false,
-        inner,
-        ..
-    } = t.kind()
-    else {
-        return None;
-    };
-    match inner.kind() {
-        TypeKind::Slice(e) => Some(e),
-        _ => None,
+impl Generation {
+    /// Write Rust source to exactly `path`, replacing any existing file.
+    ///
+    /// Relative paths use the current directory, not `OUT_DIR`. Parent directories
+    /// must already exist. Returns filesystem errors as messages.
+    pub fn write_rust(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        std::fs::write(path, &self.rust).map_err(|e| e.to_string())
+    }
+    /// Write the C header to exactly `path`, replacing any existing file.
+    ///
+    /// Uses the same path and error rules as [`Self::write_rust`].
+    pub fn write_header(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-
-/// [`cow_slice_elem`] off the classification: `Cow<'_, [E]>` with scalar `E`.
-fn r_cow_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    let TypeKind::Cow { inner, .. } = t.kind() else {
-        return None;
-    };
-    match inner.kind() {
-        TypeKind::Slice(e) if r_is_scalar(e) => Some(e),
-        _ => None,
+fn rust_ty(wire: &Wire) -> TokenStream {
+    match &wire.kind {
+        CWire::Scalar(p) => match p {
+            Primitive::Bool => quote!(u8),
+            Primitive::Char => quote!(u32),
+            Primitive::I128 | Primitive::U128 => quote!(__Pb128),
+            p => {
+                let ty = p.rust_type();
+                quote!(#ty)
+            }
+        },
+        CWire::Pointer(p) => {
+            let ty = &p.ty;
+            if p.access == prebindgen_tools::Access::Shared {
+                quote!(*const #ty)
+            } else {
+                quote!(*mut #ty)
+            }
+        }
+        CWire::Selector => quote!(i32),
+        CWire::Buffer => quote!(__PbBuffer),
     }
 }
-
-/// [`scalar_slice_elem`] off the classification.
-fn r_scalar_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
-    r_shared_slice_elem(t).filter(|e| r_is_scalar(e))
-}
-
-/// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
-fn scalar_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Reference(r) = ty else {
-        return None;
-    };
-    if r.mutability.is_some() {
-        return None;
-    }
-    let syn::Type::Slice(s) = &*r.elem else {
-        return None;
-    };
-    let elem = (*s.elem).clone();
-    is_scalar(&elem).then_some(elem)
-}
-
-/// C name for an out-parameter field. When the value's primary field (suffix
-/// `""`) is itself an out-param the whole group is `out`-prefixed (`out`,
-/// `out_len`, `out_present`); otherwise the accompanying fields use bare names
-/// (`len`, `present`).
-fn out_param_name(suffix: &str, prefixed: bool) -> syn::Ident {
-    if prefixed {
-        format_ident!("out{}", suffix)
-    } else {
-        format_ident!("{}", suffix.trim_start_matches('_'))
-    }
-}
-
-/// NULL literal matching a raw-pointer wire: `null_mut()` for `*mut`, else `null()`.
-fn null_for(wire: &syn::Type) -> TokenStream {
-    match wire {
-        syn::Type::Ptr(p) if p.mutability.is_some() => quote!(::core::ptr::null_mut()),
-        _ => quote!(::core::ptr::null()),
+fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
+    match &wire.kind {
+        CWire::Scalar(p) => match p {
+            Primitive::Bool | Primitive::U8 => "uint8_t".into(),
+            Primitive::Char | Primitive::U32 => "uint32_t".into(),
+            Primitive::I8 => "int8_t".into(),
+            Primitive::I16 => "int16_t".into(),
+            Primitive::I32 => "int32_t".into(),
+            Primitive::I64 => "int64_t".into(),
+            Primitive::U16 => "uint16_t".into(),
+            Primitive::U64 => "uint64_t".into(),
+            Primitive::Isize => "intptr_t".into(),
+            Primitive::Usize => "uintptr_t".into(),
+            Primitive::F32 => "float".into(),
+            Primitive::F64 => "double".into(),
+            Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
+        },
+        CWire::Pointer(p) => {
+            let (name, _) = pointers
+                .iter()
+                .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
+                .expect("validated pointer declaration");
+            let qualifier = if p.access == prebindgen_tools::Access::Shared {
+                "const "
+            } else {
+                ""
+            };
+            format!("{qualifier}{prefix}_{name} *")
+        }
+        CWire::Selector => "int32_t".into(),
+        CWire::Buffer => format!("{prefix}_buffer"),
     }
 }
-
-/// One C-ABI wire component of a lowered return value. `suffix` names it
-/// relative to a base (`""` → `out`, `"_len"` → `len`, `"_present"` → `present`).
-struct WireField {
-    suffix: &'static str,
-    wire: syn::Type,
-}
-
-/// How a *present / ok* value of a return type is carried over the C ABI: an
-/// ordered list of wire components plus the representation niches still free
-/// for enclosing `Option`/`Result` layers.
-struct ValueShape {
-    fields: Vec<WireField>,
-    niches: Niches,
-}
-
-/// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
-fn returns_result(output: &syn::ReturnType) -> bool {
-    match output {
-        syn::ReturnType::Type(_, ty) => is_result(ty),
-        syn::ReturnType::Default => false,
+fn generate(
+    flat: Bindings,
+    prefix: &str,
+    pointers: Vec<(String, syn::Type)>,
+) -> Result<Generation> {
+    let error = format_ident!("{prefix}_last_error");
+    let free = format_ident!("{prefix}_free_buffer");
+    let mut symbols = std::collections::BTreeSet::from([error.to_string(), free.to_string()]);
+    for (name, _) in &pointers {
+        if !symbols.insert(format!("{prefix}_drop_{name}")) {
+            return Err("duplicate C destructor".into());
+        }
     }
-}
-
-fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {
-    match route {
-        ErrRoute::Result {
-            e_conv,
-            e_ty_src,
-            fail_return,
-        } => quote! {
-            match #call {
-                ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(message) => {
-                    if !e.is_null() {
-                        *e = #e_conv(
-                            <#e_ty_src as ::core::convert::From<
-                                ::std::string::String
-                            >>::from(message)
-                        );
-                    }
-                    return #fail_return;
+    for f in flat.functions.values() {
+        let Some(out) = &f.ret.slot else {
+            continue;
+        };
+        if !symbols.insert(format!("{prefix}_{}", f.name)) {
+            return Err("duplicate C export".into());
+        }
+        let inputs = f.params.iter().flat_map(|p| match &p.ty.slot {
+            Some(i) => i.wires.iter(),
+            _ => unreachable!(),
+        });
+        for wire in inputs.chain(out.wires.iter()) {
+            if let CWire::Pointer(pointer) = &wire.kind {
+                if !pointers
+                    .iter()
+                    .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
+                {
+                    return Err(format!(
+                        "declare a C opaque pointer for `{}`",
+                        prebindgen_flat::type_key(&pointer.ty)
+                    ));
                 }
             }
-        },
-        ErrRoute::Panic => quote! {
-            match #call {
-                ::core::result::Result::Ok(value) => value,
-                ::core::result::Result::Err(message) => panic!("{}", message),
-            }
-        },
+        }
     }
+    let mut tokens = quote! {
+       #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
+       #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
+       std::thread_local! {static __PB_ERROR:std::cell::RefCell<Option<std::ffi::CString>>=const {std::cell::RefCell::new(None)};}
+       fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=if e.is_empty(){None}else{Some(std::ffi::CString::new(e.replace('\0',"?")).unwrap())});}
+       #[no_mangle] pub extern "C" fn #error()->*const std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ref().map_or(c"".as_ptr(),|e| e.as_ptr()))}
+       // Input pointers are borrowed only during the call; output buffers are owned.
+       unsafe fn __pb_read<'a>(b:__PbBuffer)->Result<&'a [u8],String>{
+        if b.len==0{return Ok(&[]);}
+        if b.data.is_null()||b.len>isize::MAX as usize{return Err("invalid buffer".into());}
+        Ok(std::slice::from_raw_parts(b.data,b.len))
+       }
+       #[doc = "# Safety
+    The buffer must have been returned by this library and not already freed."]
+    #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
+      };
+    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
+    for (name, ty) in &pointers {
+        prebindgen_tools::ident(name)?;
+        let drop = format_ident!("{prefix}_drop_{name}");
+        tokens.extend(quote!{
+            #[doc = "# Safety
+The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call."]
+            #[no_mangle] pub unsafe extern "C" fn #drop(ptr:*mut #ty)->i32{
+                match ::prebindgen_runtime::boundary(||{if !ptr.is_null(){drop(Box::from_raw(ptr));}Ok(())}){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
+            }
+        });
+        header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
+    }
+    for f in flat.functions.values() {
+        let Some(output) = &f.ret.slot else {
+            continue;
+        };
+        let name = format_ident!("{prefix}_{}", f.name);
+        let result = format_ident!("{name}_result");
+        let mut params = Vec::new();
+        let mut cparams = Vec::new();
+        let mut body = TokenStream::new();
+        let mut validation = TokenStream::new();
+        let mut acquire = TokenStream::new();
+        let mut resources = Vec::new();
+        let mut args = Vec::new();
+        for p in &f.params {
+            let Some(input) = &p.ty.slot else {
+                unreachable!()
+            };
+            for w in &input.wires {
+                let n = &w.name;
+                let ty = rust_ty(w);
+                params.push(quote!(#n:#ty));
+                cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
+            }
+            validation.extend(input.validation.clone());
+            acquire.extend(input.acquire.clone());
+            resources.extend(input.resources.clone());
+            body.extend(input.statements.clone());
+            args.push(input.argument.clone());
+        }
+        let mut fields = Vec::new();
+        let mut values = Vec::new();
+        header.push_str("typedef struct {\n");
+        for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
+            let field = format_ident!("v{i}");
+            let ty = rust_ty(w);
+            fields.push(quote!(pub #field:#ty));
+            values.push(quote!(#field:#v));
+            header.push_str(&format!("    {} v{i};\n", c_ty(w, prefix, &pointers)));
+        }
+        if fields.is_empty() {
+            fields.push(quote!(pub unused:u8));
+            values.push(quote!(unused:0));
+            header.push_str("    uint8_t unused;\n");
+        }
+        header.push_str(&format!("}} {result};\n"));
+        cparams.push(format!("{result} *out"));
+        header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
+        let call = &f.path;
+        let output_body = &output.statements;
+        let commit = &output.commit;
+        let aliases = prebindgen_tools::validate_resources(&resources);
+        tokens.extend(quote! {
+         #[repr(C)] pub struct #result {#(#fields),*}
+         #[doc = "# Safety
+The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."]
+   #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+   #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)*out:*mut #result)->i32{
+          if out.is_null(){__pb_error("null result pointer");return -1;}
+          match ::prebindgen_runtime::boundary(||{
+           #validation #aliases #acquire #body
+           let __result=#call(#(#args),*);
+           #output_body
+           let result=#result{#(#values),*};
+           std::ptr::write(out,result);
+           #commit Ok(())
+          }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
+         }
+        });
+    }
+    let guards = &flat.guards;
+    tokens.extend(quote!(#(#guards)*));
+    header.push_str("#ifdef __cplusplus\n}\n#endif\n#endif\n");
+    Ok(Generation {
+        rust: prebindgen_tools::rust_source(tokens)?,
+        header,
+    })
 }

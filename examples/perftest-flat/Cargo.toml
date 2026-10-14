@@ -10,3 +10,6 @@ prebindgen-proc-macro = { workspace = true }
 
 [build-dependencies]
 prebindgen = { workspace = true }
+
+[dev-dependencies]
+prebindgen-flat = { workspace = true }

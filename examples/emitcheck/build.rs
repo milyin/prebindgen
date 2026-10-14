@@ -23,8 +23,9 @@
 //! One file is therefore both the compiled definitions and the model input,
 //! and adding a spelling means editing `src/myflat.rs` alone.
 
-use prebindgen_jni::{matching, package, ptr_class, JniGen};
-use prebindgen_registry::{expand_return, fields, fun};
+// Unsupported callback declarations: use prebindgen_jni::{matching, package, ptr_class};
+use prebindgen_jni::JniGen;
+// Unsupported: use prebindgen_registry::{expand_return, fields, fun};
 
 /// The crate name stamped on every item, and so the qualifier the generated
 /// code calls through (`myflat::z_keyexpr_as_str(..)`). `src/lib.rs` mounts
@@ -65,6 +66,7 @@ fn main() {
         // builder documents for "synthetic items in a test".
         .items(items)
         .set_package_prefix("io.prebindgen.emitcheck")
+/* Unsupported: callback and wrapped value-form conversions.
         .package(
             package!()
                 .class(ptr_class!(ZSample))
@@ -83,7 +85,8 @@ fn main() {
         // The value form is read through `fields!`, never emitted as a class of
         // its own — acknowledge it so the build log carries no standing
         // "skipping undeclared" warning to hide a real one behind.
-        .ignore(matching(|name| name == "ZSampleStruct"));
+        .ignore(matching(|name| name == "ZSampleStruct"))
+*/;
 
     let generation = jni.build().unwrap_or_else(|err| {
         // A resolve failure names its own item; surface it as the build error
@@ -94,9 +97,8 @@ fn main() {
     // Committed next to the source (not `OUT_DIR`) for the same two reasons the
     // other examples do it: `examples/regen-check.sh` can diff it, and a rustc
     // error lands on a stable reviewable path instead of a build hash.
-    let dest = std::path::Path::new(&manifest_dir)
-        .join("src")
-        .join("generated_bindings.rs");
-    let written = generation.write_rust(&dest).expect("write_rust failed");
+    // Generated files now remain under OUT_DIR.
+    let dest = "bindings.rs";
+    let written = generation.write_rust(dest).expect("write_rust failed");
     println!("cargo:warning=emitcheck: wrote {}", written.display());
 }

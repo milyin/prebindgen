@@ -1,26 +1,16 @@
 [package]
 name = "example-cbindgen"
-version = { workspace = true }
-edition = { workspace = true }
-build = "build.rs"
-
-[features]
-unstable = ["example-flat/unstable"]
-internal = ["example-flat/internal"]
-
+version.workspace = true
+edition.workspace = true
+publish = false
 [lib]
-crate-type = ["staticlib", "cdylib"]
-
+crate-type = ["cdylib"]
 [dependencies]
-prebindgen = { workspace = true }
-prebindgen-c-runtime = { workspace = true }
-example-flat = { path = "../example-flat" }
-konst = "0.3.0"
-
+prebindgen-runtime.workspace = true
+konst.workspace = true
+example-flat = {path = "../example-flat"}
 [build-dependencies]
-prebindgen = { workspace = true }
-prebindgen-registry = { workspace = true }
-prebindgen-c = { workspace = true }
-syn = { workspace = true }
-cbindgen = "=0.29.4"
-example-flat = { path = "../example-flat" }
+prebindgen-c.workspace = true
+prebindgen-registry.workspace = true
+syn.workspace = true
+example-flat = {path = "../example-flat"}
