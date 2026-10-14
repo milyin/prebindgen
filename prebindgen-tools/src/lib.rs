@@ -5,10 +5,11 @@
 //! during construction; slots retain wires and code needed by wrapper writers.
 //! Before emission, call [`validate_bindings`] and follow the execution ordering
 //! documented on [`InputConversion`] and [`OutputConversion`].
-//! Each [`Wire`] has a common [`WireKind`] and adapter data in [`Wire::extra`].
-//! [`boxed`] provides conversions for boxed storage.
+//! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
+//! [`value`] provides conversions for values copied across the boundary and
+//! [`boxed`] for values kept in Rust-owned allocations.
 #![warn(missing_docs)]
-use prebindgen_flat::{same_type, type_key, Flat, Primitive, Result};
+use prebindgen_flat::{same_type, type_key, Flat, Result};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -18,14 +19,8 @@ use syn::Type;
 /// Binding expands the recipe into wires and Rust conversion code.
 #[derive(Clone, Debug)]
 pub enum Input {
-    /// Decode the occurrence's Rust primitive using the adapter's scalar codec.
-    Scalar,
-    /// Delegate this source type and occurrence data to [`Codec::input_foreign`].
-    Foreign,
-    /// Decode `String` or shared string input using the adapter's text codec.
-    Text,
-    /// Decode `Vec<u8>` or shared byte input using the adapter's byte codec.
-    Bytes,
+    /// Convert the occurrence type itself with [`Codec::input_leaf`].
+    Leaf,
     /// Construct a named record from children in field order; an empty list builds unit.
     Fields(Vec<Input>),
     /// Call a source function after preparing its arguments with the child recipes.
@@ -70,14 +65,8 @@ impl Input {
 /// copy or otherwise expose a foreign value observed through a shared reference.
 #[derive(Clone, Debug)]
 pub enum Output {
-    /// Encode the occurrence's Rust primitive using the adapter's scalar codec.
-    Scalar,
-    /// Delegate to [`Codec::output_foreign`]; the adapter owns representation and ownership.
-    Foreign,
-    /// Move an owned `String`, or clone it when observing a borrowed value.
-    Text,
-    /// Move an owned `Vec<u8>`, or clone it when observing a borrowed value.
-    Bytes,
+    /// Convert the occurrence type itself with [`Codec::output_leaf`].
+    Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
     Fields(Vec<Output>),
     /// A shared-borrow accessor, followed by the output conversion of its result.
@@ -115,77 +104,61 @@ impl Output {
     }
     fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C) -> bool {
         match self {
-            Self::Foreign => codec.consumes(ty, extra),
+            Self::Leaf => codec.consumes(ty, extra),
             Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec)),
             _ => false,
         }
     }
 }
 
-/// The common role of one generated boundary parameter or result component.
-#[derive(Clone, Debug)]
-pub enum WireKind {
-    /// A source primitive; the adapter chooses its ABI carrier.
-    Scalar(Primitive),
-    /// An adapter-defined representation of a source value.
-    Foreign,
-    /// Text value; the adapter chooses its boundary representation.
-    Text,
-    /// Byte sequence; the adapter chooses its boundary representation.
-    Bytes,
-    /// Zero-based input alternative index, carried as an `i32` by current adapters.
-    Selector,
-}
 /// One boundary parameter or result component used by wrapper emission.
 ///
-/// [`Self::kind`] describes its role, and [`Self::extra`] stores data used by
-/// the adapter to emit that component.
-///
 /// ```
-/// use prebindgen_tools::{Condition, Wire, WireKind};
+/// use prebindgen_tools::{Condition, Wire};
 /// let wire = Wire {
 ///     name: syn::parse_quote!(value),
-///     kind: WireKind::Foreign,
-///     extra: (),
+///     kind: "i64",
 ///     active: Condition::default(),
 /// };
-/// assert!(matches!(wire.kind, WireKind::Foreign));
+/// assert_eq!(wire.kind, "i64");
 /// ```
 #[derive(Clone, Debug)]
 pub struct Wire<W> {
     /// Generated identifier used by conversion code and wrapper signatures.
     pub name: syn::Ident,
-    /// Common role used by native and destination-language emission.
-    pub kind: WireKind,
-    /// Adapter data used when emitting this wire. Choose `W = ()` when none is needed.
-    /// The framework carries this field into the conversion without interpreting it.
-    pub extra: W,
+    /// Adapter description of the carrier, supplied by [`Codec::input_leaf`],
+    /// [`Codec::output_leaf`] or [`Codec::selector`].
+    /// The framework carries it into the conversion without interpreting it.
+    pub kind: W,
     /// Input selector path; outputs normally use the always-active default.
     pub active: Condition,
 }
 
-/// Language-specific terminal operations. Recursive composition stays in tools.
+/// Language-specific leaf conversions. Recursive composition stays in tools.
 ///
-/// Foreign input leaves must validate without consuming in `validation`, then
+/// A leaf is a source type the adapter converts itself: a value copied across
+/// the boundary (see [`value`]) or an object kept in Rust (see [`boxed`]). The
+/// adapter chooses by type; a recipe only says where the leaves are.
+///
+/// Input leaves must validate without consuming in `validation`, then
 /// acquire ownership without failure or source calls in `acquire`. Each acquired
 /// value needs an ordinary Rust owner so later failures drop it. `statements`
-/// can construct arguments from those owners. Every foreign wire must retain
+/// can construct arguments from those owners. Every input wire must retain
 /// the supplied activation condition. Output leaves keep ownership in Rust
 /// locals until their infallible `commit` runs after successful delivery.
 ///
 /// # Implementing a codec
 ///
-/// This minimal codec uses Rust primitives, `String` and `Vec<u8>` as its wire
-/// carriers. It illustrates converter construction without a foreign ABI or object storage.
-/// A language adapter additionally writes wrappers and chooses corresponding
-/// native and destination-language carrier types. Unsupported foreign leaves
-/// return generation errors.
+/// This minimal codec uses Rust values as its carriers. It illustrates converter
+/// construction without a foreign ABI or object storage. A language adapter
+/// additionally writes wrappers and chooses native and destination-language
+/// carrier types for its wire kinds.
 ///
 /// ```
-/// use prebindgen_flat::{Primitive, Result};
+/// use prebindgen_flat::Result;
 /// use prebindgen_tools::{
-///     Codec, Condition, Declarations, InputConversion, OutputConversion,
-///     Bindings, WireKind, fun, expand_param, expand_return, bind_input, Input, validate_bindings,
+///     value, Codec, Condition, Declarations, InputConversion, OutputConversion,
+///     Bindings, fun, expand_param, expand_return, bind_input, Input, validate_bindings,
 /// };
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
@@ -194,31 +167,22 @@ pub struct Wire<W> {
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Extra = ();
-///     type Wire = (); // This adapter needs no per-wire data.
+///     type Wire = Option<value::Value>; // `None` marks a selector.
 ///
-///     fn wire_extra(&self, _: &Type, _: &WireKind, _: &()) {}
+///     fn selector(&self, _: &()) -> Self::Wire { None }
 ///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
-///     fn input_foreign(
-///         &self, _: &Type, _: &(), _: Ident, _: Ident, _: &Condition,
-///     ) -> Result<InputConversion<()>> {
-///         Err("this codec supports only scalars, text and bytes".into())
+///     fn input_leaf(
+///         &self, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
+///     ) -> Result<InputConversion<Self::Wire>> {
+///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
+///         let decode = quote!(#wire.clone());
+///         value::input(ty, wire, var, active, decode, Some(kind))
 ///     }
-///     fn output_foreign(
-///         &self, _: &Type, _: &(), _: Ident, _: TokenStream, _: bool,
-///     ) -> Result<OutputConversion<()>> {
-///         Err("this codec supports only scalars, text and bytes".into())
-///     }
-///     fn decode_scalar(&self, _: Primitive, wire: &Ident, _: &()) -> TokenStream {
-///         quote!(#wire)
-///     }
-///     fn encode_scalar(&self, _: Primitive, value: TokenStream, _: &()) -> TokenStream {
-///         value
-///     }
-///     fn decode_text(&self, wire: &Ident, _: &Type, _: &()) -> TokenStream {
-///         quote!(#wire.clone())
-///     }
-///     fn decode_bytes(&self, wire: &Ident, _: &Type, _: &()) -> TokenStream {
-///         quote!(#wire.clone())
+///     fn output_leaf(
+///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
+///     ) -> Result<OutputConversion<Self::Wire>> {
+///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
+///         value::output(ty, wire, v, borrowed, |v| v, Some(kind))
 ///     }
 /// }
 ///
@@ -227,7 +191,7 @@ pub struct Wire<W> {
 ///     pub fn to_i32(value: &i64) -> i32 { *value as i32 }
 ///     pub fn echo(value: i64) -> i64 { value }
 /// "#)?;
-/// let mut flat = Bindings::<()>::parse(
+/// let mut flat = Bindings::<Option<value::Value>>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let defaults = Declarations::new(&flat, vec![
@@ -236,16 +200,16 @@ pub struct Wire<W> {
 /// ])?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// let function = flat.function("echo")?;
-/// // Input: selector, constructor argument, direct scalar. Output: two scalar views.
+/// // Input: selector, constructor argument, direct value. Output: two values.
 /// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().wires.len(), 3);
 /// assert_eq!(function.ret.slot.as_ref().unwrap().wires.len(), 2);
 /// // Replace just this parameter's converter; later default filling preserves it.
-/// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Scalar, &())?;
+/// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Leaf, &())?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
 /// assert_eq!(input.wires.len(), 1);
-/// assert!(matches!(input.wires[0].kind, WireKind::Scalar(Primitive::I64)));
+/// assert!(matches!(input.wires[0].kind, Some(value::Value::Scalar(_))));
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -254,27 +218,24 @@ pub trait Codec {
     /// The same value is passed through nested conversions. It is not stored in Flat;
     /// hooks retain only the data needed for emission in their code and wires.
     type Extra;
-    /// Per-wire data stored in [`Wire::extra`], such as a destination type name.
-    /// [`Self::wire_extra`] supplies it for common conversions; foreign conversion
-    /// hooks supply it in their returned wires. Use `()` when no data is needed.
+    /// The adapter's description of one wire, stored in [`Wire::kind`], such as
+    /// its carrier type or a destination type name.
     type Wire: Clone + std::fmt::Debug;
-    /// Create [`Wire::extra`] for a scalar, text, byte or selector wire.
+    /// Describe the `i32` arm index wire that tools create for [`Input::Selector`].
+    fn selector(&self, extra: &Self::Extra) -> Self::Wire;
+    /// Whether a leaf output consumes the current source value.
     ///
-    /// Receives the current source type, wire kind and boundary occurrence data.
-    /// Foreign conversion hooks create their own wires, including their `extra` fields.
-    fn wire_extra(&self, ty: &Type, kind: &WireKind, extra: &Self::Extra) -> Self::Wire;
-    /// Whether a foreign output consumes the current source value.
-    ///
-    /// This must agree with [`Self::output_foreign`]. It governs move ordering and
+    /// This must agree with [`Self::output_leaf`]. It governs move ordering and
     /// double-consumption rejection in [`Output::Combine`], not input ownership.
+    /// A non-consuming leaf receives a shared reference with `borrowed` set.
     fn consumes(&self, ty: &Type, extra: &Self::Extra) -> bool;
-    /// Prepare a foreign input of source type `ty` using occurrence data `extra`.
+    /// Prepare a leaf input of source type `ty` using occurrence data `extra`.
     ///
     /// `wire` and `var` are fresh identifiers for a boundary input and source local.
     /// Preserve `active` on every returned wire and resource. All fallible checks
     /// belong in [`InputConversion::validation`]; do not consume values there. Return
     /// a generation error when this type or access mode is unsupported.
-    fn input_foreign(
+    fn input_leaf(
         &self,
         ty: &Type,
         extra: &Self::Extra,
@@ -282,13 +243,13 @@ pub trait Codec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputConversion<Self::Wire>>;
-    /// Prepare delivery of the Rust expression `value` as one or more foreign wires.
+    /// Prepare delivery of the Rust expression `value` as one or more wires.
     ///
     /// When `borrowed` is true, the expression is a shared reference to `ty`; do not
     /// move out of it. Keep unpublished allocations under Rust ownership and transfer
     /// them only in [`OutputConversion::commit`]. Return a generation error for
     /// unsupported conversions. The source value is owned when `borrowed` is false.
-    fn output_foreign(
+    fn output_leaf(
         &self,
         ty: &Type,
         extra: &Self::Extra,
@@ -296,39 +257,6 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<OutputConversion<Self::Wire>>;
-    /// Emit a Rust expression decoding one carrier to the requested primitive.
-    ///
-    /// It runs during active-input validation, before object acquisition, and may
-    /// use `?` to return a `String` error. It must not consume foreign objects.
-    fn decode_scalar(
-        &self,
-        primitive: Primitive,
-        wire: &syn::Ident,
-        extra: &Self::Extra,
-    ) -> TokenStream;
-    /// Emit a Rust expression encoding an owned primitive value for output.
-    ///
-    /// The adapter's wrapper writer must use the matching carrier for the resulting
-    /// [`WireKind::Scalar`] wire.
-    fn encode_scalar(
-        &self,
-        primitive: Primitive,
-        value: TokenStream,
-        extra: &Self::Extra,
-    ) -> TokenStream;
-    /// Emit text decoding for `String` or a shared string input.
-    ///
-    /// The result must own or safely borrow text for the entire source call. Tools
-    /// pass it by shared reference when `ty` is a reference. The expression executes
-    /// only for an active input, may return a `String` error with `?`, and must not
-    /// consume foreign objects.
-    fn decode_text(&self, wire: &syn::Ident, ty: &Type, extra: &Self::Extra) -> TokenStream;
-    /// Emit byte decoding for `Vec<u8>` or a shared byte input.
-    ///
-    /// The result must remain valid for the entire source call. Tools pass it by
-    /// shared reference when `ty` is a reference. Like [`Self::decode_text`], this
-    /// runs during validation and must not acquire foreign ownership.
-    fn decode_bytes(&self, wire: &syn::Ident, ty: &Type, extra: &Self::Extra) -> TokenStream;
 }
 /// An input conversion split into call-wide validation, acquisition and construction.
 ///
@@ -353,13 +281,8 @@ pub struct InputConversion<W> {
 /// Output conversion whose owned temporaries survive until successful delivery.
 ///
 /// Wrappers evaluate `statements`, deliver `values` in `wires` order, then execute
-/// `commit` only after every fallible delivery operation succeeds.
-///
-/// Values for [`WireKind::Text`] and [`WireKind::Bytes`] are owned Rust `String`
-/// and `Vec<u8>` expressions. The wrapper writer must encode them into the
-/// destination representation during delivery and keep delivery allocations
-/// owned until all outputs succeed. Scalar and foreign values use the
-/// representation produced by the codec's output hooks.
+/// `commit` only after every fallible delivery operation succeeds. Values use
+/// the representation produced by the codec's output leaves.
 #[derive(Clone, Debug)]
 pub struct OutputConversion<W> {
     /// Boundary results in delivery order; one entry per expression in `values`.
@@ -390,7 +313,7 @@ pub struct OutputConversion<W> {
 /// ```compile_fail
 /// use prebindgen_tools::{Bindings, Input};
 /// fn configure(flat: &mut Bindings<()>) {
-///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Scalar);
+///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
 pub type Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<W>>>;
@@ -448,7 +371,7 @@ pub fn bind_input<C: Codec>(
 /// ```compile_fail
 /// use prebindgen_tools::{bind_output, Bindings, Codec, Input};
 /// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
-///     bind_output(flat, codec, "foo", &Input::Scalar, extra).unwrap();
+///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_output<C: Codec>(
@@ -510,21 +433,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
             next: std::cell::Cell::new(0),
         }
     }
-    fn wire(
-        &self,
-        name: syn::Ident,
-        ty: &Type,
-        kind: WireKind,
-        extra: &C::Extra,
-        active: &Condition,
-    ) -> Wire<C::Wire> {
-        Wire {
-            name,
-            extra: self.codec.wire_extra(ty, &kind, extra),
-            kind,
-            active: active.clone(),
-        }
-    }
     fn name(&self) -> syn::Ident {
         let next = self.next.get();
         let n = format_ident!("{}_w{next}", self.prefix);
@@ -543,68 +451,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
         let mut resources = Vec::new();
-        let condition = active.rust();
         let mut statements = TokenStream::new();
-        let mut argument = quote!(#var);
+        let argument = quote!(#var);
         match recipe {
-            Input::Scalar => {
-                let primitive =
-                    Primitive::from_type(ty).ok_or("scalar input needs a primitive type")?;
+            Input::Leaf => {
                 let w = self.name();
-                let decode = self.codec.decode_scalar(primitive, &w, extra);
-                wires.push(self.wire(w, ty, WireKind::Scalar(primitive), extra, active));
-                validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
-                statements = quote!(let #var:#ty=#var.expect("active scalar"););
-            }
-            Input::Foreign => {
-                let w = self.name();
-                return self.codec.input_foreign(ty, extra, w, var, active);
-            }
-            Input::Text | Input::Bytes => {
-                let text = matches!(recipe, Input::Text);
-                if matches!(ty, Type::Reference(r) if r.mutability.is_some()) {
-                    return Err(
-                        "mutable text/byte views require an adapter-specific converter".into(),
-                    );
-                }
-                let (core, borrowed) = match ty {
-                    Type::Reference(r) => (&*r.elem, true),
-                    _ => (ty, false),
-                };
-                let key = type_key(core);
-                if !(if text {
-                    key == "String" || (borrowed && key == "str")
-                } else {
-                    key == "Vec < u8 >" || (borrowed && key == "[u8]")
-                }) {
-                    return Err(format!(
-                        "{} input cannot produce `{}`",
-                        if text { "text" } else { "bytes" },
-                        type_key(ty)
-                    ));
-                }
-                let w = self.name();
-                wires.push(self.wire(
-                    w.clone(),
-                    ty,
-                    if text {
-                        WireKind::Text
-                    } else {
-                        WireKind::Bytes
-                    },
-                    extra,
-                    active,
-                ));
-                let decode = if text {
-                    self.codec.decode_text(&w, ty, extra)
-                } else {
-                    self.codec.decode_bytes(&w, ty, extra)
-                };
-                validation = quote!(let #var = if #condition {Some(#decode)} else {None};);
-                statements = quote!(let #var=#var.expect("active buffer"););
-                if borrowed {
-                    argument = quote!(&#var);
-                }
+                return self.codec.input_leaf(ty, extra, w, var, active);
             }
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -673,7 +525,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("selector results must be owned in this subset".into());
                 }
                 let tag = self.name();
-                wires.push(self.wire(tag.clone(), ty, WireKind::Selector, extra, active));
+                wires.push(Wire {
+                    name: tag.clone(),
+                    kind: self.codec.selector(extra),
+                    active: active.clone(),
+                });
                 let count = arms.len() as i32;
                 let invalid = active.and(quote!(!(0..#count).contains(&#tag)));
                 validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
@@ -716,57 +572,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
-            Output::Scalar => {
-                let primitive =
-                    Primitive::from_type(ty).ok_or("scalar output needs a primitive type")?;
-                let value = if borrowed {
-                    let reference = self.name();
-                    out.statements
-                        .extend(quote!(let #reference: &#ty = #value;));
-                    quote!(*#reference)
-                } else {
-                    value
-                };
-                let expr = self.codec.encode_scalar(primitive, value, extra);
+            Output::Leaf => {
                 let w = self.name();
-                out.statements.extend(quote!(let #w=#expr;));
-                out.values.push(quote!(#w));
-                out.wires.push(self.wire(
-                    w,
-                    ty,
-                    WireKind::Scalar(primitive),
-                    extra,
-                    &Condition::default(),
-                ));
-            }
-            Output::Foreign => {
-                let w = self.name();
-                return self.codec.output_foreign(ty, extra, w, value, borrowed);
-            }
-            Output::Text | Output::Bytes => {
-                let text = matches!(recipe, Output::Text);
-                if type_key(ty) != if text { "String" } else { "Vec < u8 >" } {
-                    return Err(format!("wrong output type `{}`", type_key(ty)));
-                }
-                let expr = if borrowed {
-                    quote!(::core::clone::Clone::clone(#value))
-                } else {
-                    value
-                };
-                let w = self.name();
-                out.statements = quote!(let #w = #expr;);
-                out.values.push(quote!(#w));
-                out.wires.push(self.wire(
-                    w,
-                    ty,
-                    if text {
-                        WireKind::Text
-                    } else {
-                        WireKind::Bytes
-                    },
-                    extra,
-                    &Condition::default(),
-                ));
+                return self.codec.output_leaf(ty, extra, w, value, borrowed);
             }
             Output::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
@@ -964,3 +772,5 @@ pub fn validate_resources(resources: &[Resource]) -> TokenStream {
 
 /// Shared conversion helpers for adapters that store foreign values in boxes.
 pub mod boxed;
+/// Shared conversion helpers for values copied across the boundary.
+pub mod value;

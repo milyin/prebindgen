@@ -2,7 +2,7 @@
 //! [`Declarations`] builds converters directly in boundary occurrence slots.
 
 use crate::{Bindings, Codec, Compiler, Condition, Input, Output};
-use prebindgen_flat::{type_key, Flat, Primitive, Result};
+use prebindgen_flat::{type_key, Flat, Result};
 use quote::quote;
 use std::collections::BTreeMap;
 
@@ -32,7 +32,7 @@ impl ExpandParamDecl {
         self.variants.push(Some(f));
         self
     }
-    /// Append the type itself: a scalar recipe for primitives, otherwise a foreign recipe.
+    /// Append the type itself as a leaf, converted by the adapter's codec.
     ///
     /// This bypasses recursive expansion of the same type.
     pub fn variant_self(mut self) -> Self {
@@ -105,7 +105,7 @@ impl ExpandReturnDecl {
         self.fields.push(ReturnField::Getter(Box::new(f)));
         self
     }
-    /// Append the value itself: a scalar recipe for primitives, otherwise a foreign recipe.
+    /// Append the value itself as a leaf, converted by the adapter's codec.
     ///
     /// For an owning adapter this consumes the value, after observing other views.
     pub fn field_self(mut self) -> Self {
@@ -265,8 +265,7 @@ impl Declarations {
             let mut arms = Vec::new();
             for variant in &d.variants {
                 arms.push(match variant {
-                    None if Primitive::from_type(ty).is_some() => Input::Scalar,
-                    None => Input::Foreign,
+                    None => Input::Leaf,
                     Some(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err("constructor references only support their source name in this subset".into());
@@ -286,18 +285,14 @@ impl Declarations {
                 _ => Ok(Input::selector(arms)),
             };
         }
-        if Primitive::from_type(ty).is_some() {
-            return Ok(Input::Scalar);
-        }
         let key = match ty {
             syn::Type::Reference(r) => type_key(&r.elem),
             _ => key,
         };
-        Ok(match key.as_str() {
-            "String" | "str" => Input::Text,
-            "Vec < u8 >" | "[u8]" => Input::Bytes,
-            "()" => Input::fields([]),
-            _ => Input::Foreign,
+        Ok(if key == "()" {
+            Input::fields([])
+        } else {
+            Input::Leaf
         })
     }
     fn output<I, O>(
@@ -320,8 +315,7 @@ impl Declarations {
             let mut parts = Vec::new();
             for field in &d.fields {
                 parts.push(match field {
-                    ReturnField::Identity if Primitive::from_type(ty).is_some() => Output::Scalar,
-                    ReturnField::Identity => Output::Foreign,
+                    ReturnField::Identity => Output::Leaf,
                     ReturnField::Getter(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err(
@@ -363,14 +357,10 @@ impl Declarations {
                 _ => Ok(Output::combine(parts)),
             };
         }
-        if Primitive::from_type(ty).is_some() {
-            return Ok(Output::Scalar);
-        }
-        Ok(match key.as_str() {
-            "String" => Output::Text,
-            "Vec < u8 >" => Output::Bytes,
-            "()" => Output::fields([]),
-            _ => Output::Foreign,
+        Ok(if key == "()" {
+            Output::fields([])
+        } else {
+            Output::Leaf
         })
     }
 }
