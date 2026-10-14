@@ -85,7 +85,7 @@ pub struct Field {
 pub struct Flat<I, O> {
     /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<I, O>>,
-    /// Records indexed by [`type_key`] of their qualified type.
+    /// Records indexed by `type_key` of their qualified type.
     pub records: BTreeMap<String, Record>,
     /// Declared type names mapped to qualified Rust types, including opaque aliases.
     pub types: BTreeMap<String, Type>,

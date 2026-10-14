@@ -6,7 +6,7 @@ set -euo pipefail
 
 out="${1:?usage: build.sh <out-dir>}"
 
-# The published workspace crates from .github/workflows/rust.yml. No examples/*.
+# The workspace's library crates. No examples/*.
 #
 # In dependency order, and documented one at a time: rustdoc links into
 # another crate only when that crate's `target/doc/<crate>/` exists before it
@@ -15,11 +15,12 @@ out="${1:?usage: build.sh <out-dir>}"
 # renders as plain text, without a warning.
 crates=(
   prebindgen
-  prebindgen-c-runtime
+  prebindgen-runtime
   prebindgen-jni-runtime
   prebindgen-proc-macro
   prebindgen-flat
   prebindgen-tools
+  prebindgen-registry
   prebindgen-c
   prebindgen-jni
 )
