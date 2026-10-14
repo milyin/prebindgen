@@ -318,6 +318,24 @@ pub fn string_len(s: &String) -> usize {
     s.len()
 }
 
+/// Double a scalar passed by shared reference.
+#[prebindgen]
+pub fn i64_ref_double(x: &i64) -> i64 {
+    x.wrapping_mul(2)
+}
+
+/// Return text unchanged.
+#[prebindgen]
+pub fn text_echo(s: String) -> String {
+    s
+}
+
+/// Return bytes unchanged.
+#[prebindgen]
+pub fn bytes_echo(b: Vec<u8>) -> Vec<u8> {
+    b
+}
+
 // Disabled: unsupported by the current binding subset
 // /// Minimal opaque handle for LIFECYCLE benchmarking: the plain variant of a
 // /// twin pair whose only difference is the Kotlin-side `.gc_managed()` flag —
