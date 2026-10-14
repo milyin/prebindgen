@@ -105,6 +105,14 @@ impl<I: Default, O: Default> Flat<I, O> {
     /// the complete item set with [`Self::parse`]. Opaque alias implementations
     /// are not inspected. Unnamed constant guards are retained. Selected items
     /// are validated by [`Self::parse`].
+    ///
+    /// # Arguments
+    ///
+    /// * `items` — captured source items with their locations, as returned by
+    ///   `prebindgen::Source::items_all`.
+    /// * `functions` — unqualified names of the functions to keep, including the
+    ///   constructors and getters that declarations refer to.
+    /// * `types` — further types to keep, with the types they refer to.
     pub fn parse_selected(
         items: impl IntoIterator<Item = (syn::Item, SourceLocation)>,
         functions: &[String],
@@ -166,6 +174,9 @@ impl<I: Default, O: Default> Flat<I, O> {
     /// crate name (or `crate` if absent).
     /// Opaque alias implementations are not inspected. Rust layout and trait
     /// requirements are checked later when the generated code compiles.
+    ///
+    /// `items` are captured source items with their locations, as returned by
+    /// `prebindgen::Source::items_all`.
     pub fn parse(items: impl IntoIterator<Item = (syn::Item, SourceLocation)>) -> Result<Self> {
         let items: Vec<_> = items.into_iter().collect();
         let mut names = BTreeSet::new();
@@ -333,7 +344,7 @@ impl<I, O> Flat<I, O> {
             .get_mut(name)
             .ok_or_else(|| format!("unknown function `{name}`"))
     }
-    /// Look up a named record by its qualified type syntax.
+    /// Look up a named record by its qualified type syntax, `ty`.
     ///
     /// Use [`Self::resolve_type`] first for an unqualified declaration name. Opaque
     /// aliases have no record entry and return an error.
@@ -342,7 +353,7 @@ impl<I, O> Flat<I, O> {
             .get(&type_key(ty))
             .ok_or_else(|| format!("`{}` is not a record", type_key(ty)))
     }
-    /// Qualify declared names and validate the supported source-type grammar.
+    /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
     /// references without explicit lifetimes. A successful result does not mean
@@ -391,10 +402,16 @@ impl<I, O> Flat<I, O> {
     }
     /// Transform input and output data separately, preserving source structure and guards.
     ///
-    /// Each callback receives the source type and old slot in its direction.
     /// Functions are visited by name; within each function, parameters are visited
     /// in declaration order, followed by its result. Record declarations pass
     /// through unchanged. Stops on the first error.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` — called for each parameter with its source type and old input
+    ///   slot; returns the new slot.
+    /// * `output` — called for each result with its source type and old output
+    ///   slot; returns the new slot.
     pub fn map_slots<I2, O2>(
         self,
         mut input: impl FnMut(&Type, I) -> Result<I2>,
@@ -437,13 +454,14 @@ impl<I, O> Flat<I, O> {
     }
 }
 
-/// Return the token spelling used to index a type.
+/// Return the token spelling of `ty`, used to index types.
 ///
 /// This is syntactic identity, not Rust type equivalence or alias resolution.
 pub fn type_key(ty: &Type) -> String {
     ty.to_token_stream().to_string()
 }
-/// Compare token spellings; this does not resolve aliases or normalize types.
+/// Whether types `a` and `b` have the same token spelling; this does not resolve
+/// aliases or normalize types.
 pub fn same_type(a: &Type, b: &Type) -> bool {
     type_key(a) == type_key(b)
 }

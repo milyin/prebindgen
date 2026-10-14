@@ -1,4 +1,8 @@
 //! String, byte, integer and allocation operations used by generated JNI bindings.
+//!
+//! Functions that take `env` use it for the JNI calls they make; generated code
+//! passes the environment of the native call it is running in. Objects they
+//! return are local references in that environment.
 #![warn(missing_docs)]
 pub use jni;
 use jni::{
@@ -7,19 +11,21 @@ use jni::{
 };
 use prebindgen_runtime::Result;
 
-/// Copy a Java string into an owned Rust string. JNI failures become messages.
+/// Copy the Java string `value` into an owned Rust string. JNI failures become messages.
 pub fn text(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Result<String> {
     env.get_string(value)
         .map(|s| s.into())
         .map_err(|e| e.to_string())
 }
-/// Copy a Java byte array into an owned byte vector, preserving all eight bits.
+/// Copy the Java byte array `value` into an owned byte vector, preserving all eight bits.
 ///
 /// Returns a message on JNI failure.
 pub fn bytes(env: &mut JNIEnv<'_>, value: &JByteArray<'_>) -> Result<Vec<u8>> {
     env.convert_byte_array(value).map_err(|e| e.to_string())
 }
 /// Box address bits as a Java `Long` and return a local JNI reference.
+///
+/// `value` is the address of the allocation being delivered to Kotlin.
 ///
 /// This does not validate the address or transfer ownership. The caller must
 /// commit any transfer after all fallible delivery operations have succeeded.
@@ -33,19 +39,21 @@ pub fn handle_object<'a>(env: &mut JNIEnv<'a>, value: u64) -> Result<JObject<'a>
     .and_then(|v| v.l())
     .map_err(|e| e.to_string())
 }
-/// Copy UTF-8 text into a Java string, returning a local JNI reference or a JNI error.
+/// Copy the UTF-8 text `value` into a Java string, returning a local JNI
+/// reference or a JNI error.
 pub fn text_object<'a>(env: &mut JNIEnv<'a>, value: &str) -> Result<JObject<'a>> {
     env.new_string(value)
         .map(Into::into)
         .map_err(|e| e.to_string())
 }
-/// Copy bytes into a Java byte array, returning a local JNI reference or a JNI error.
+/// Copy the bytes in `value` into a Java byte array, returning a local JNI
+/// reference or a JNI error.
 pub fn bytes_object<'a>(env: &mut JNIEnv<'a>, value: &[u8]) -> Result<JObject<'a>> {
     env.byte_array_from_slice(value)
         .map(Into::into)
         .map_err(|e| e.to_string())
 }
-/// Allocate a null-filled Java `Object[]` as a local JNI reference.
+/// Allocate a null-filled Java `Object[]` of `len` elements as a local JNI reference.
 ///
 /// Returns an error when `len` exceeds `i32::MAX` or JNI allocation fails.
 pub fn array<'a>(env: &mut JNIEnv<'a>, len: usize) -> Result<JObjectArray<'a>> {
@@ -53,7 +61,8 @@ pub fn array<'a>(env: &mut JNIEnv<'a>, len: usize) -> Result<JObjectArray<'a>> {
     env.new_object_array(len, "java/lang/Object", JObject::null())
         .map_err(|e| e.to_string())
 }
-/// Raise `IllegalArgumentException` unless a JVM exception is already pending.
+/// Raise `IllegalArgumentException` with `message` unless a JVM exception is
+/// already pending.
 ///
 /// Existing exceptions, including allocation failures, are preserved. Errors
 /// while checking or raising the exception are ignored.
@@ -64,7 +73,8 @@ pub fn fail(env: &mut JNIEnv<'_>, message: &str) {
     }
 }
 
-/// Decode BigInteger's big-endian two's-complement bytes without narrowing.
+/// Decode `value`, the bytes of `BigInteger.toByteArray()` (big-endian two's
+/// complement), into an `i128` without narrowing.
 pub fn signed128(env: &mut JNIEnv<'_>, value: &JByteArray<'_>) -> Result<i128> {
     parse_signed128(&bytes(env, value)?)
 }
@@ -84,6 +94,8 @@ fn parse_signed128(mut bytes: &[u8]) -> Result<i128> {
     result[16 - bytes.len()..].copy_from_slice(bytes);
     Ok(i128::from_be_bytes(result))
 }
+/// Decode `value`, the bytes of `BigInteger.toByteArray()`, into a `u128`.
+///
 /// Unsigned input still uses BigInteger's signed encoding; negatives are rejected.
 pub fn unsigned128(env: &mut JNIEnv<'_>, value: &JByteArray<'_>) -> Result<u128> {
     parse_unsigned128(&bytes(env, value)?)

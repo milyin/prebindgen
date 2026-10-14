@@ -37,7 +37,8 @@ pub enum Input {
 impl Input {
     /// Construct a record from field recipes, or unit from an empty list.
     ///
-    /// Binding verifies the child count against the source record.
+    /// `fields` holds one recipe per field of the source record, in declaration
+    /// order. Binding verifies the count against the record.
     pub fn fields(fields: impl IntoIterator<Item = Input>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
@@ -45,6 +46,12 @@ impl Input {
     ///
     /// Binding checks its result type and argument count. Argument validation and
     /// ownership acquisition precede the source call.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — unqualified name of a source function whose result type is the
+    ///   input's type.
+    /// * `args` — one recipe per parameter of that function, in order.
     pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input>) -> Self {
         Self::Constructor {
             function: name.into(),
@@ -52,6 +59,10 @@ impl Input {
         }
     }
     /// Choose between owned representations of the same input type.
+    ///
+    /// `arms` holds one recipe per alternative; each must produce the input's
+    /// type. The caller passes the zero-based index of the chosen alternative in an
+    /// extra wire ahead of all arms' wires.
     ///
     /// Requires at least one arm. Each arm retains its own wires; this does not
     /// merge equivalent wire parameters or generate destination-language overloads.
@@ -82,6 +93,8 @@ pub enum Output {
 }
 impl Output {
     /// Observe record fields in declaration order; use an empty list for unit.
+    ///
+    /// `fields` holds one recipe per field of the source record, in declaration order.
     pub fn fields(fields: impl IntoIterator<Item = Output>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
@@ -89,6 +102,11 @@ impl Output {
     ///
     /// The getter must take exactly `&T` for the current type `T`, and return an
     /// owned value. Binding rejects mismatched signatures.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — unqualified name of the source getter.
+    /// * `output` — recipe for the getter's result.
     pub fn getter(name: impl Into<String>, output: Output) -> Self {
         Self::Getter {
             function: name.into(),
@@ -97,7 +115,8 @@ impl Output {
     }
     /// Produce multiple outputs from one value.
     ///
-    /// Binding rejects an empty list or more than one consuming branch. The
+    /// `parts` holds one recipe per view of the value; their wires appear in this
+    /// order. Binding rejects an empty list or more than one consuming part. The
     /// framework uses [`Codec::consumes`] to order observations before a move.
     pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
         Self::Combine(parts.into_iter().collect())
@@ -222,19 +241,38 @@ pub trait Codec {
     /// its carrier type or a destination type name.
     type Wire: Clone + std::fmt::Debug;
     /// Describe the `i32` arm index wire that tools create for [`Input::Selector`].
+    ///
+    /// `extra` is the occurrence data of the conversion that contains the selector.
     fn selector(&self, extra: &Self::Extra) -> Self::Wire;
     /// Whether a leaf output consumes the current source value.
     ///
     /// This must agree with [`Self::output_leaf`]. It governs move ordering and
     /// double-consumption rejection in [`Output::Combine`], not input ownership.
     /// A non-consuming leaf receives a shared reference with `borrowed` set.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` — owned source type of the value being delivered.
+    /// * `extra` — occurrence data of the conversion, as passed to [`bind_output`].
     fn consumes(&self, ty: &Type, extra: &Self::Extra) -> bool;
     /// Prepare a leaf input of source type `ty` using occurrence data `extra`.
     ///
-    /// `wire` and `var` are fresh identifiers for a boundary input and source local.
-    /// Preserve `active` on every returned wire and resource. All fallible checks
-    /// belong in [`InputConversion::validation`]; do not consume values there. Return
-    /// a generation error when this type or access mode is unsupported.
+    /// All fallible checks belong in [`InputConversion::validation`]; do not
+    /// consume values there. Return a generation error when this type or access
+    /// mode is unsupported.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` — the source parameter type at this position, as written: `T`,
+    ///   `&T` or `&mut T`.
+    /// * `extra` — occurrence data of the conversion, as passed to [`bind_input`]
+    ///   or [`Declarations::fill`].
+    /// * `wire` — fresh identifier for the boundary parameter this leaf adds.
+    ///   A leaf that needs more wires or locals derives their names from it.
+    /// * `var` — fresh identifier for the Rust local that holds the converted value.
+    ///   [`InputConversion::argument`] normally refers to it.
+    /// * `active` — the selector arms under which this leaf is used. Copy it to every
+    ///   returned wire and resource, and guard validation and acquisition with it.
     fn input_leaf(
         &self,
         ty: &Type,
@@ -245,10 +283,21 @@ pub trait Codec {
     ) -> Result<InputConversion<Self::Wire>>;
     /// Prepare delivery of the Rust expression `value` as one or more wires.
     ///
-    /// When `borrowed` is true, the expression is a shared reference to `ty`; do not
-    /// move out of it. Keep unpublished allocations under Rust ownership and transfer
-    /// them only in [`OutputConversion::commit`]. Return a generation error for
-    /// unsupported conversions. The source value is owned when `borrowed` is false.
+    /// Keep unpublished allocations under Rust ownership and transfer them only in
+    /// [`OutputConversion::commit`]. Return a generation error for unsupported
+    /// conversions.
+    ///
+    /// # Arguments
+    ///
+    /// * `ty` — the owned source type of the value.
+    /// * `extra` — occurrence data of the conversion, as passed to [`bind_output`]
+    ///   or [`Declarations::fill`].
+    /// * `wire` — fresh identifier for the delivered value. A leaf that needs more
+    ///   wires or locals derives their names from it.
+    /// * `value` — Rust expression producing the value to deliver.
+    /// * `borrowed` — `true` when `value` is a shared reference to `ty`, such as a
+    ///   record field observed in place; do not move out of it. `false` when
+    ///   `value` is owned.
     fn output_leaf(
         &self,
         ty: &Type,
@@ -329,11 +378,20 @@ pub type Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<
 /// collide within the wrapper. Keep the function signature fixed after binding.
 /// Check completeness with [`validate_bindings`].
 ///
+/// # Arguments
+///
+/// * `flat` — the model holding the function; the parameter's slot is replaced.
+/// * `codec` — the adapter's leaf conversions.
+/// * `function` — unqualified name of the source function.
+/// * `parameter` — name of the parameter, as written in the source.
+/// * `recipe` — how to build the argument from boundary inputs.
+/// * `extra` — occurrence data passed to every codec call for this conversion.
+///
 /// Input binding rejects output recipes:
 /// ```compile_fail
 /// use prebindgen_tools::{bind_input, Bindings, Codec, Output};
 /// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
-///     bind_input(flat, codec, "foo", "x", &Output::Scalar, extra).unwrap();
+///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_input<C: Codec>(
@@ -366,6 +424,14 @@ pub fn bind_input<C: Codec>(
 /// refers to the wrapper-local `__result` containing the source call's result.
 /// The recipe is checked for compatible types and signatures, and for repeated
 /// consumption of the same value. Unit results use `Output::fields([])`.
+///
+/// # Arguments
+///
+/// * `flat` — the model holding the function; the result's slot is replaced.
+/// * `codec` — the adapter's leaf conversions.
+/// * `function` — unqualified name of the source function.
+/// * `recipe` — how to deliver the result as boundary outputs.
+/// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Output binding rejects input recipes:
 /// ```compile_fail
@@ -654,7 +720,7 @@ fn append<W>(to: &mut OutputConversion<W>, from: OutputConversion<W>) {
 
 /// Format generated tokens as a Rust source file.
 ///
-/// Returns a syntax error if the tokens do not form a file. This does not
+/// `tokens` must be a sequence of items, such as a whole generated module. Returns a syntax error if the tokens do not form a file. This does not
 /// resolve names or type-check generated code; the binding crate must compile it.
 pub fn rust_source(tokens: TokenStream) -> Result<String> {
     let file = syn::parse2(tokens).map_err(|e| format!("generated Rust: {e}"))?;
@@ -688,13 +754,18 @@ impl Condition {
     /// Return a new condition additionally requiring one selector arm.
     ///
     /// Does not modify the original condition; no additional runtime flag is generated.
+    ///
+    /// # Arguments
+    ///
+    /// * `tag` — identifier of the selector's index wire.
+    /// * `index` — zero-based index of the required arm.
     pub fn arm(&self, tag: syn::Ident, index: i32) -> Self {
         let mut result = self.clone();
         result.0.push((tag, index));
         result
     }
     /// Emit this condition AND a Rust predicate, short-circuiting the predicate
-    /// when the selector path is inactive.
+    /// when the selector path is inactive. `predicate` is a Rust `bool` expression.
     pub fn and(&self, predicate: TokenStream) -> TokenStream {
         if self.0.is_empty() {
             predicate
@@ -734,6 +805,9 @@ pub struct Resource {
     pub active: Condition,
 }
 /// Emit pairwise alias checks across all active input resources.
+///
+/// `resources` holds the [`InputConversion::resources`] of all of one exported
+/// function's parameters together, so that aliases across parameters are found.
 ///
 /// Run this code after leaf validation and before **any** ownership acquisition.
 /// Shared/shared pairs and mutually exclusive selector arms do not conflict.

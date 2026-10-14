@@ -195,7 +195,7 @@ impl Cbindgen {
             pointers: Vec::new(),
         }
     }
-    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`.
+    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
     ///
     /// Only declared functions, referenced constructors/getters and required types
     /// are selected. Automatic type discovery follows unqualified source names
@@ -206,7 +206,8 @@ impl Cbindgen {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register a type-wide input or output expansion.
+    /// Register a type-wide input or output expansion, built with `expand_param!`
+    /// or `expand_return!`.
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
@@ -216,6 +217,8 @@ impl Cbindgen {
     }
     /// Export a function and build its occurrence converters from declarations.
     ///
+    /// `decl` names the function, normally with `fun!`, and carries its overrides.
+    ///
     /// Function renaming is currently unsupported; exports use the symbol prefix
     /// and original source name.
     pub fn function(mut self, decl: prebindgen_tools::FunctionDecl) -> Self {
@@ -224,6 +227,8 @@ impl Cbindgen {
     }
 
     /// Start from a flat model with input and output conversion slots and prefix `pb`.
+    ///
+    /// `flat` is the parsed source, with any converters already attached.
     ///
     /// Attach converters with [`prebindgen_tools::bind_input`] and
     /// [`prebindgen_tools::bind_output`] with [`CCodec`], or fill defaults with
@@ -248,10 +253,15 @@ impl Cbindgen {
     }
     /// Declare an opaque C pointee and its typed destructor for a source type.
     ///
-    /// Produces `{prefix}_{name}` and `{prefix}_drop_{name}`. Every leaf type other
-    /// than a primitive, text or bytes needs a matching declaration. Owned values
-    /// use `Box<T>` directly; they have no `Send` requirement. This declaration
-    /// alone does not export constructors.
+    /// Every leaf type other than a primitive, text or bytes needs a matching
+    /// declaration. Owned values use `Box<T>` directly; they have no `Send`
+    /// requirement. This declaration alone does not export constructors.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — the C name, without the prefix: the header declares the type
+    ///   `{prefix}_{name}` and the destructor `{prefix}_drop_{name}`.
+    /// * `ty` — the source type behind the pointer, as written in the source crate.
     pub fn opaque_ptr(mut self, name: &str, ty: syn::Type) -> Self {
         self.pointers.push((name.into(), ty));
         self

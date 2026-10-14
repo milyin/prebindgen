@@ -66,6 +66,8 @@ pub struct FieldsDecl {
 }
 impl FieldsDecl {
     /// Select the source getter whose returned record will be projected.
+    ///
+    /// `function` is the getter's unqualified name.
     pub fn new(function: syn::Ident) -> Self {
         Self {
             function: function.to_string(),
@@ -73,6 +75,11 @@ impl FieldsDecl {
         }
     }
     /// Replace the output expansion for one named field of the returned record.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — the field's name in the source record.
+    /// * `decl` — how to deliver that field instead of its type's default.
     ///
     /// # Panics
     /// Panics if the same field is overridden twice. Unknown fields and mismatched
@@ -146,8 +153,8 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 /// Resolved type defaults used to build boundary converters.
 ///
 /// Per-function overrides replace type defaults. Existing converters are preserved
-/// unless explicitly overridden. Defaults cover primitives, text, bytes and unit;
-/// other types are delegated to the adapter as foreign values. Recursive expansion
+/// unless explicitly overridden. By default unit has no wires and every other
+/// type is a leaf, converted by the adapter's [`Codec`]. Recursive expansion
 /// cycles are rejected. Recipes are local to [`Self::fill`]; only compiled conversion
 /// data is attached to Flat. See [`Codec`] for a buildable example of constructor
 /// alternatives, combined outputs and manual overrides.
@@ -160,6 +167,11 @@ impl Declarations {
     ///
     /// Returns an error for an unresolved type or duplicate declarations for the
     /// same type and direction. Recipes are resolved later by [`Self::fill`].
+    ///
+    /// # Arguments
+    ///
+    /// * `flat` — the model in which each declaration's type is resolved.
+    /// * `decls` — type-wide defaults, at most one per type and direction.
     pub fn new<I, O>(flat: &Flat<I, O>, decls: Vec<ExpandDecl>) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
@@ -194,6 +206,13 @@ impl Declarations {
     /// Resolves and compiles all required conversions before modifying any slot.
     /// An unknown parameter, recursive expansion, incompatible type or invalid
     /// constructor/getter leaves the entire function unchanged.
+    ///
+    /// # Arguments
+    ///
+    /// * `flat` — the model holding the function; its slots receive the converters.
+    /// * `codec` — the adapter's leaf conversions.
+    /// * `decl` — the function to export, with its per-parameter and result overrides.
+    /// * `extra` — occurrence data passed to every codec call made by this fill.
     pub fn fill<C: Codec>(
         &self,
         flat: &mut Bindings<C::Wire>,
@@ -406,6 +425,8 @@ pub struct FunctionDecl {
 }
 impl FunctionDecl {
     /// Reference a source function without overriding names or conversions.
+    ///
+    /// `name` is the function's unqualified source name.
     pub fn new(name: syn::Ident) -> Self {
         Self {
             name: name.to_string(),
@@ -422,6 +443,11 @@ impl FunctionDecl {
         self
     }
     /// Replace the expansion for one source parameter.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` — the parameter's name, as written in the source.
+    /// * `decl` — how to build that argument instead of its type's default.
     ///
     /// # Panics
     /// Panics if that parameter already has an override. Resolution checks that the
@@ -445,6 +471,12 @@ impl FunctionDecl {
 /// Used when selecting captured items before constructing a flat model. The
 /// returned list can contain duplicates; collecting names does not resolve or
 /// validate the recipes or export their helper functions.
+///
+/// # Arguments
+///
+/// * `expansions` — type-wide defaults; their constructors and getters are collected.
+/// * `functions` — exported functions; their names and those referenced by their
+///   overrides are collected.
 pub fn source_functions<'a>(
     expansions: &[ExpandDecl],
     functions: impl IntoIterator<Item = &'a FunctionDecl>,
