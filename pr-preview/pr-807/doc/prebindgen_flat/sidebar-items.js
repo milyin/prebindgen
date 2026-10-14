@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Primitive"],"fn":["same_type","type_key"],"struct":["Field","Flat","Function","Param","Record","TypeUse"],"type":["Result"]};
