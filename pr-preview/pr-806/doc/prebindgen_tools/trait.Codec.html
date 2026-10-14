@@ -1,0 +1,129 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Language-specific leaf conversions. Recursive composition stays in tools."><title>Codec in prebindgen_tools - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.0 (b940084d7 2026-09-28)" data-channel="1.99.0" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Codec</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Codec</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#implementing-a-codec" title="Implementing a codec">Implementing a codec</a></li></ul><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Extra" title="Extra">Extra</a></li><li><a href="#associatedtype.Wire" title="Wire">Wire</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.consumes" title="consumes">consumes</a></li><li><a href="#tymethod.input_leaf" title="input_leaf">input_leaf</a></li><li><a href="#tymethod.output_leaf" title="output_leaf">output_leaf</a></li><li><a href="#tymethod.selector" title="selector">selector</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate prebindgen_<wbr>tools</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">prebindgen_tools</a></div><h1>Trait <span class="trait">Codec</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_tools/lib.rs.html#216-260">Source</a> </span></div><pre class="rust item-decl"><code>pub trait Codec {
+    type <a href="#associatedtype.Extra" class="associatedtype">Extra</a>;
+    type <a href="#associatedtype.Wire" class="associatedtype">Wire</a>: <a class="trait" href="https://doc.rust-lang.org/1.99.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.99.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>;
+
+    // Required methods
+    fn <a href="#tymethod.selector" class="fn">selector</a>(&amp;self, extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>) -&gt; Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Wire" title="type prebindgen_tools::Codec::Wire">Wire</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.consumes" class="fn">consumes</a>(&amp;self, ty: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>, extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.99.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.input_leaf" class="fn">input_leaf</a>(
+        &amp;self,
+        ty: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+        extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>,
+        wire: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+        var: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+        active: &amp;<a class="struct" href="struct.Condition.html" title="struct prebindgen_tools::Condition">Condition</a>,
+    ) -&gt; <a class="type" href="../prebindgen_flat/type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="struct.InputConversion.html" title="struct prebindgen_tools::InputConversion">InputConversion</a>&lt;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Wire" title="type prebindgen_tools::Codec::Wire">Wire</a>&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.output_leaf" class="fn">output_leaf</a>(
+        &amp;self,
+        ty: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+        extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>,
+        wire: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+        value: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+        borrowed: <a class="primitive" href="https://doc.rust-lang.org/1.99.0/std/primitive.bool.html">bool</a>,
+    ) -&gt; <a class="type" href="../prebindgen_flat/type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="struct.OutputConversion.html" title="struct prebindgen_tools::OutputConversion">OutputConversion</a>&lt;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Wire" title="type prebindgen_tools::Codec::Wire">Wire</a>&gt;&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Language-specific leaf conversions. Recursive composition stays in tools.</p>
+<p>A leaf is a source type the adapter converts itself: a value copied across
+the boundary (see <a href="value/index.html" title="mod prebindgen_tools::value"><code>value</code></a>) or an object kept in Rust (see <a href="boxed/index.html" title="mod prebindgen_tools::boxed"><code>boxed</code></a>). The
+adapter chooses by type; a recipe only says where the leaves are.</p>
+<p>Input leaves must validate without consuming in <code>validation</code>, then
+acquire ownership without failure or source calls in <code>acquire</code>. Each acquired
+value needs an ordinary Rust owner so later failures drop it. <code>statements</code>
+can construct arguments from those owners. Every input wire must retain
+the supplied activation condition. Output leaves keep ownership in Rust
+locals until their infallible <code>commit</code> runs after successful delivery.</p>
+<h2 id="implementing-a-codec"><a class="doc-anchor" href="#implementing-a-codec">§</a>Implementing a codec</h2>
+<p>This minimal codec uses Rust values as its carriers. It illustrates converter
+construction without a foreign ABI or object storage. A language adapter
+additionally writes wrappers and chooses native and destination-language
+carrier types for its wire kinds.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_flat::Result;
+<span class="kw">use </span>prebindgen_tools::{
+    value, Codec, Condition, Declarations, InputConversion, OutputConversion,
+    Bindings, fun, expand_param, expand_return, bind_input, Input, validate_bindings,
+};
+<span class="kw">use </span>proc_macro2::TokenStream;
+<span class="kw">use </span>quote::quote;
+<span class="kw">use </span>syn::{Ident, Type};
+
+<span class="kw">struct </span>RustCarriers;
+<span class="kw">impl </span>Codec <span class="kw">for </span>RustCarriers {
+    <span class="kw">type </span>Extra = ();
+    <span class="kw">type </span>Wire = <span class="prelude-ty">Option</span>&lt;value::Value&gt;; <span class="comment">// `None` marks a selector.
+
+    </span><span class="kw">fn </span>selector(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>()) -&gt; <span class="self">Self</span>::Wire { <span class="prelude-val">None </span>}
+    <span class="kw">fn </span>consumes(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Type, <span class="kw">_</span>: <span class="kw-2">&amp;</span>()) -&gt; bool { <span class="bool-val">false </span>}
+    <span class="kw">fn </span>input_leaf(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>Type, <span class="kw">_</span>: <span class="kw-2">&amp;</span>(), wire: Ident, var: Ident, active: <span class="kw-2">&amp;</span>Condition,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputConversion&lt;<span class="self">Self</span>::Wire&gt;&gt; {
+        <span class="kw">let </span>kind = value::Value::of(ty).ok_or(<span class="string">"only values cross this codec"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>decode = <span class="macro">quote!</span>(#wire.clone());
+        value::input(ty, wire, var, active, decode, <span class="prelude-val">Some</span>(kind))
+    }
+    <span class="kw">fn </span>output_leaf(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>Type, <span class="kw">_</span>: <span class="kw-2">&amp;</span>(), wire: Ident, v: TokenStream, borrowed: bool,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputConversion&lt;<span class="self">Self</span>::Wire&gt;&gt; {
+        <span class="kw">let </span>kind = value::Value::of(ty).ok_or(<span class="string">"only values cross this codec"</span>)<span class="question-mark">?</span>;
+        value::output(ty, wire, v, borrowed, |v| v, <span class="prelude-val">Some</span>(kind))
+    }
+}
+
+<span class="kw">let </span>source = syn::parse_file(<span class="string">r#"
+    pub fn from_i32(value: i32) -&gt; i64 { value as i64 }
+    pub fn to_i32(value: &amp;i64) -&gt; i32 { *value as i32 }
+    pub fn echo(value: i64) -&gt; i64 { value }
+"#</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>flat = Bindings::&lt;<span class="prelude-ty">Option</span>&lt;value::Value&gt;&gt;::parse(
+    source.items.into_iter().map(|item| (item, Default::default())),
+)<span class="question-mark">?</span>;
+<span class="kw">let </span>defaults = Declarations::new(<span class="kw-2">&amp;</span>flat, <span class="macro">vec!</span>[
+    <span class="macro">expand_param!</span>(i64).variant(<span class="macro">fun!</span>(from_i32)).variant_self().into(),
+    <span class="macro">expand_return!</span>(i64).field(<span class="macro">fun!</span>(to_i32)).field_self().into(),
+])<span class="question-mark">?</span>;
+defaults.fill(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>RustCarriers, <span class="kw-2">&amp;</span><span class="macro">fun!</span>(echo), <span class="kw-2">&amp;</span>())<span class="question-mark">?</span>;
+<span class="kw">let </span>function = flat.function(<span class="string">"echo"</span>)<span class="question-mark">?</span>;
+<span class="comment">// Input: selector, constructor argument, direct value. Output: two values.
+</span><span class="macro">assert_eq!</span>(function.params[<span class="number">0</span>].ty.slot.as_ref().unwrap().wires.len(), <span class="number">3</span>);
+<span class="macro">assert_eq!</span>(function.ret.slot.as_ref().unwrap().wires.len(), <span class="number">2</span>);
+<span class="comment">// Replace just this parameter's converter; later default filling preserves it.
+</span>bind_input(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>RustCarriers, <span class="string">"echo"</span>, <span class="string">"value"</span>, <span class="kw-2">&amp;</span>Input::Leaf, <span class="kw-2">&amp;</span>())<span class="question-mark">?</span>;
+defaults.fill(<span class="kw-2">&amp;mut </span>flat, <span class="kw-2">&amp;</span>RustCarriers, <span class="kw-2">&amp;</span><span class="macro">fun!</span>(echo), <span class="kw-2">&amp;</span>())<span class="question-mark">?</span>;
+validate_bindings(<span class="kw-2">&amp;</span>flat)<span class="question-mark">?</span>;
+<span class="kw">let </span>input = flat.function(<span class="string">"echo"</span>)<span class="question-mark">?</span>.params[<span class="number">0</span>].ty.slot.as_ref().unwrap();
+<span class="macro">assert_eq!</span>(input.wires.len(), <span class="number">1</span>);
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(input.wires[<span class="number">0</span>].kind, <span class="prelude-val">Some</span>(value::Value::Scalar(<span class="kw">_</span>))));
+<span class="macro">assert!</span>(input.resources.is_empty()); <span class="comment">// No foreign ownership in this codec.</span></code></pre></div></div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Extra" class="method"><a class="src rightside" href="../src/prebindgen_tools/lib.rs.html#220">Source</a><h4 class="code-header">type <a href="#associatedtype.Extra" class="associatedtype">Extra</a></h4></section></summary><div class="docblock"><p>Input data borrowed while building one occurrence’s conversion; use <code>()</code> if unused.
+The same value is passed through nested conversions. It is not stored in Flat;
+hooks retain only the data needed for emission in their code and wires.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.Wire" class="method"><a class="src rightside" href="../src/prebindgen_tools/lib.rs.html#223">Source</a><h4 class="code-header">type <a href="#associatedtype.Wire" class="associatedtype">Wire</a>: <a class="trait" href="https://doc.rust-lang.org/1.99.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://doc.rust-lang.org/1.99.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a></h4></section></summary><div class="docblock"><p>The adapter’s description of one wire, stored in <a href="struct.Wire.html#structfield.kind" title="field prebindgen_tools::Wire::kind"><code>Wire::kind</code></a>, such as
+its carrier type or a destination type name.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.selector" class="method"><a class="src rightside" href="../src/prebindgen_tools/lib.rs.html#225">Source</a><h4 class="code-header">fn <a href="#tymethod.selector" class="fn">selector</a>(&amp;self, extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>) -&gt; Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Wire" title="type prebindgen_tools::Codec::Wire">Wire</a></h4></section></summary><div class="docblock"><p>Describe the <code>i32</code> arm index wire that tools create for <a href="enum.Input.html#variant.Selector" title="variant prebindgen_tools::Input::Selector"><code>Input::Selector</code></a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.consumes" class="method"><a class="src rightside" href="../src/prebindgen_tools/lib.rs.html#231">Source</a><h4 class="code-header">fn <a href="#tymethod.consumes" class="fn">consumes</a>(&amp;self, ty: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>, extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.99.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Whether a leaf output consumes the current source value.</p>
+<p>This must agree with <a href="trait.Codec.html#tymethod.output_leaf" title="method prebindgen_tools::Codec::output_leaf"><code>Self::output_leaf</code></a>. It governs move ordering and
+double-consumption rejection in <a href="enum.Output.html#variant.Combine" title="variant prebindgen_tools::Output::Combine"><code>Output::Combine</code></a>, not input ownership.
+A non-consuming leaf receives a shared reference with <code>borrowed</code> set.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.input_leaf" class="method"><a class="src rightside" href="../src/prebindgen_tools/lib.rs.html#238-245">Source</a><h4 class="code-header">fn <a href="#tymethod.input_leaf" class="fn">input_leaf</a>(
+    &amp;self,
+    ty: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+    extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>,
+    wire: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+    var: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+    active: &amp;<a class="struct" href="struct.Condition.html" title="struct prebindgen_tools::Condition">Condition</a>,
+) -&gt; <a class="type" href="../prebindgen_flat/type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="struct.InputConversion.html" title="struct prebindgen_tools::InputConversion">InputConversion</a>&lt;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Wire" title="type prebindgen_tools::Codec::Wire">Wire</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Prepare a leaf input of source type <code>ty</code> using occurrence data <code>extra</code>.</p>
+<p><code>wire</code> and <code>var</code> are fresh identifiers for a boundary input and source local.
+Preserve <code>active</code> on every returned wire and resource. All fallible checks
+belong in <a href="struct.InputConversion.html#structfield.validation" title="field prebindgen_tools::InputConversion::validation"><code>InputConversion::validation</code></a>; do not consume values there. Return
+a generation error when this type or access mode is unsupported.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.output_leaf" class="method"><a class="src rightside" href="../src/prebindgen_tools/lib.rs.html#252-259">Source</a><h4 class="code-header">fn <a href="#tymethod.output_leaf" class="fn">output_leaf</a>(
+    &amp;self,
+    ty: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+    extra: &amp;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_tools::Codec::Extra">Extra</a>,
+    wire: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+    value: <a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>,
+    borrowed: <a class="primitive" href="https://doc.rust-lang.org/1.99.0/std/primitive.bool.html">bool</a>,
+) -&gt; <a class="type" href="../prebindgen_flat/type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="struct.OutputConversion.html" title="struct prebindgen_tools::OutputConversion">OutputConversion</a>&lt;Self::<a class="associatedtype" href="trait.Codec.html#associatedtype.Wire" title="type prebindgen_tools::Codec::Wire">Wire</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Prepare delivery of the Rust expression <code>value</code> as one or more wires.</p>
+<p>When <code>borrowed</code> is true, the expression is a shared reference to <code>ty</code>; do not
+move out of it. Keep unpublished allocations under Rust ownership and transfer
+them only in <a href="struct.OutputConversion.html#structfield.commit" title="field prebindgen_tools::OutputConversion::commit"><code>OutputConversion::commit</code></a>. Return a generation error for
+unsupported conversions. The source value is owned when <code>borrowed</code> is false.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait <b>is</b> <a href="https://doc.rust-lang.org/1.99.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/prebindgen_tools/trait.Codec.js" async></script></section></div></main></body></html>
