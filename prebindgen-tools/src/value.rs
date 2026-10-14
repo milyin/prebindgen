@@ -109,7 +109,8 @@ pub fn input<W>(
     })
 }
 
-/// Deliver an owned value type. A borrowed `value` is cloned first.
+/// Deliver an owned value type. A borrowed `value` is copied first: scalars by
+/// dereference, text and bytes by `Clone`.
 ///
 /// `encode` maps the owned Rust value to the delivered expression. The adapter
 /// may adjust the result, for example to defer an allocation's transfer to `commit`.
@@ -121,22 +122,28 @@ pub fn output<W>(
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
 ) -> Result<OutputConversion<W>> {
-    if matches!(ty, Type::Reference(_)) || Value::of(ty).is_none() {
+    let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
-    }
-    let value = if borrowed {
-        quote!(::core::clone::Clone::clone(#value))
-    } else {
-        value
+    };
+    let mut statements = TokenStream::new();
+    let value = match (borrowed, class) {
+        (false, _) => value,
+        // Bound first: dereferencing `&place` in place is `clippy::deref_addrof`.
+        (true, Value::Scalar(_)) => {
+            statements.extend(quote!(let #w: &#ty = #value;));
+            quote!(*#w)
+        }
+        (true, _) => quote!(::core::clone::Clone::clone(#value)),
     };
     let expr = encode(value);
+    statements.extend(quote!(let #w = #expr;));
     Ok(OutputConversion {
         wires: vec![Wire {
             name: w.clone(),
             kind,
             active: Condition::default(),
         }],
-        statements: quote!(let #w = #expr;),
+        statements,
         values: vec![quote!(#w)],
         commit: quote!(),
     })
