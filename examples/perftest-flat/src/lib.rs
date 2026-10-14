@@ -312,13 +312,11 @@ pub fn string_new(s: &str) -> String {
     s.to_string()
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Byte length of an opaque string — lets the C benchmark read it through the
-// /// `string_t *` handle.
-// #[prebindgen]
-// pub fn string_len(s: &String) -> usize {
-//     s.len()
-// }
+/// Byte length of a string.
+#[prebindgen]
+pub fn string_len(s: &String) -> usize {
+    s.len()
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Minimal opaque handle for LIFECYCLE benchmarking: the plain variant of a

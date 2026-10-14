@@ -129,9 +129,7 @@ fn main() {
     cbindgen = cbindgen.function(pq!(storage_callback)).panic();
     */
     cbindgen = cbindgen.function(fun!(string_new))/* C errors now return a status. */;
-    /* Unsupported: this declaration requires unsupported conversions or builder options.
-    cbindgen = cbindgen.function(pq!(string_len)).panic();
-    */
+    cbindgen = cbindgen.function(fun!(string_len))/* C errors now return a status. */;
 
     // Array (slice / Vec) API. `storage_put_slice` takes `&[Payload]` — a
     // `repr_c_struct` slice — which lowers to `(const payload_t *, size_t)`

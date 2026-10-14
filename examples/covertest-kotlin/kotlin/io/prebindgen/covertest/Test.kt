@@ -15,6 +15,7 @@ private fun expectInvalid(action: () -> Unit) {
 fun main() {
     for (text in listOf("", "ordinary", "héllo 世界", "embedded\u0000nul")) {
         check(stringNew(text) == text)
+        check(stringLen(text) == text.encodeToByteArray().size.toULong())
     }
     try { stringNew(null); error("expected null input failure") }
     catch (_: IllegalArgumentException) { }

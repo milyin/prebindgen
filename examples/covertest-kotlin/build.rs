@@ -1126,7 +1126,7 @@ fn main() {
         )
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
-        .package(package!().fun(fun!(string_new)))
+        .package(package!().fun(fun!(string_new)).fun(fun!(string_len)))
         // Report projects its supported Summary, Stamp and label fields.
         // Project those fields before handing ownership of the Report to Kotlin.
         .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
