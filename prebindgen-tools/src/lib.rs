@@ -3,13 +3,13 @@
 //! [`Declarations::fill`], [`bind_input`] and [`bind_output`] build conversions
 //! directly in a [`Bindings`] model. Recipes and codec input data are used only
 //! during construction; slots retain wires and code needed by wrapper writers.
-//! Before emission, call [`validate_bindings`] and follow the execution ordering
-//! documented on [`InputConversion`] and [`OutputConversion`].
+//! Generation uses [`Flat::prepare_call`] and the call emitter in `prebindgen-flat`;
+//! tools owns only declaration resolution and slot preparation.
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! [`value`] provides conversions for values copied across the boundary and
 //! [`boxed`] for values kept in Rust-owned allocations.
 #![warn(missing_docs)]
-use prebindgen_flat::{same_type, type_key, Flat, Result};
+use prebindgen_flat::{same_type, type_key, Condition, Flat, InputPlan, OutputPlan, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -111,29 +111,6 @@ impl Output {
     }
 }
 
-/// One boundary parameter or result component used by wrapper emission.
-///
-/// ```
-/// use prebindgen_tools::{Condition, Wire};
-/// let wire = Wire {
-///     name: syn::parse_quote!(value),
-///     kind: "i64",
-///     active: Condition::default(),
-/// };
-/// assert_eq!(wire.kind, "i64");
-/// ```
-#[derive(Clone, Debug)]
-pub struct Wire<W> {
-    /// Generated identifier used by conversion code and wrapper signatures.
-    pub name: syn::Ident,
-    /// Adapter description of the carrier, supplied by [`Codec::input_leaf`],
-    /// [`Codec::output_leaf`] or [`Codec::selector`].
-    /// The framework carries it into the conversion without interpreting it.
-    pub kind: W,
-    /// Input selector path; outputs normally use the always-active default.
-    pub active: Condition,
-}
-
 /// Language-specific leaf conversions. Recursive composition stays in tools.
 ///
 /// A leaf is a source type the adapter converts itself: a value copied across
@@ -155,10 +132,10 @@ pub struct Wire<W> {
 /// carrier types for its wire kinds.
 ///
 /// ```
-/// use prebindgen_flat::Result;
+/// use prebindgen_flat::{Result, Condition, InputPlan, OutputPlan, validate_bindings};
 /// use prebindgen_tools::{
-///     value, Codec, Condition, Declarations, InputConversion, OutputConversion,
-///     Bindings, fun, expand_param, expand_return, bind_input, Input, validate_bindings,
+///     value, Codec, Declarations,
+///     Bindings, fun, expand_param, expand_return, bind_input, Input,
 /// };
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
@@ -173,14 +150,14 @@ pub struct Wire<W> {
 ///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
 ///     fn input_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
-///     ) -> Result<InputConversion<Self::Wire>> {
+///     ) -> Result<InputPlan<Self::Wire>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         let decode = quote!(#wire.clone());
 ///         value::input(ty, wire, var, active, decode, Some(kind))
 ///     }
 ///     fn output_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
-///     ) -> Result<OutputConversion<Self::Wire>> {
+///     ) -> Result<OutputPlan<Self::Wire>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         value::output(ty, wire, v, borrowed, |v| v, Some(kind))
 ///     }
@@ -233,7 +210,7 @@ pub trait Codec {
     ///
     /// `wire` and `var` are fresh identifiers for a boundary input and source local.
     /// Preserve `active` on every returned wire and resource. All fallible checks
-    /// belong in [`InputConversion::validation`]; do not consume values there. Return
+    /// belong in [`InputPlan::validation`]; do not consume values there. Return
     /// a generation error when this type or access mode is unsupported.
     fn input_leaf(
         &self,
@@ -242,12 +219,12 @@ pub trait Codec {
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
-    ) -> Result<InputConversion<Self::Wire>>;
+    ) -> Result<InputPlan<Self::Wire>>;
     /// Prepare delivery of the Rust expression `value` as one or more wires.
     ///
     /// When `borrowed` is true, the expression is a shared reference to `ty`; do not
     /// move out of it. Keep unpublished allocations under Rust ownership and transfer
-    /// them only in [`OutputConversion::commit`]. Return a generation error for
+    /// them only in [`OutputPlan::commit`]. Return a generation error for
     /// unsupported conversions. The source value is owned when `borrowed` is false.
     fn output_leaf(
         &self,
@@ -256,48 +233,12 @@ pub trait Codec {
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputConversion<Self::Wire>>;
-}
-/// An input conversion split into call-wide validation, acquisition and construction.
-///
-/// Wrappers must validate **all** active inputs and [`Resource`] conflicts before
-/// executing any acquisition, then acquire all consuming inputs before evaluating
-/// argument construction. This preserves caller ownership on validation failure.
-#[derive(Clone, Debug)]
-pub struct InputConversion<W> {
-    /// Flattened boundary parameters in signature order.
-    pub wires: Vec<Wire<W>>,
-    /// Validate and prepare every active leaf before any ownership transfer.
-    pub validation: TokenStream,
-    /// Infallible acquisition of all owned inputs, before constructors can run.
-    pub acquire: TokenStream,
-    /// Active foreign resources whose identities must be checked across all arguments.
-    pub resources: Vec<Resource>,
-    /// Argument construction after all acquisitions, including source constructor calls.
-    pub statements: TokenStream,
-    /// Rust expression passed to the source function after `statements`.
-    pub argument: TokenStream,
-}
-/// Output conversion whose owned temporaries survive until successful delivery.
-///
-/// Wrappers evaluate `statements`, deliver `values` in `wires` order, then execute
-/// `commit` only after every fallible delivery operation succeeds. Values use
-/// the representation produced by the codec's output leaves.
-#[derive(Clone, Debug)]
-pub struct OutputConversion<W> {
-    /// Boundary results in delivery order; one entry per expression in `values`.
-    pub wires: Vec<Wire<W>>,
-    /// Transfer ownership only after all foreign delivery operations succeed.
-    pub commit: TokenStream,
-    /// Code producing owned output temporaries and evaluating observations before moves.
-    pub statements: TokenStream,
-    /// Delivery expressions in wire order; they must remain valid until commit.
-    pub values: Vec<TokenStream>,
+    ) -> Result<OutputPlan<Self::Wire>>;
 }
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
 /// Unbound source helpers have `None` slots. Bound functions need `Some` for their
-/// result and every parameter; [`validate_bindings`] checks this before emission.
+/// result and every parameter; [`prebindgen_flat::validate_bindings`] checks this before emission.
 /// Record fields retain only names and source types. Recipes and [`Codec::Extra`]
 /// are construction inputs, not stored in this model.
 ///
@@ -316,7 +257,7 @@ pub struct OutputConversion<W> {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<W>>>;
+pub type Bindings<W, R = ()> = Flat<InputPlan<W>, OutputPlan<W>, R>;
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -327,17 +268,17 @@ pub type Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<
 /// Rebinding an occurrence replaces its converter without changing other slots.
 /// Generated names are scoped by parameter position, so separate calls cannot
 /// collide within the wrapper. Keep the function signature fixed after binding.
-/// Check completeness with [`validate_bindings`].
+/// Check completeness with [`prebindgen_flat::validate_bindings`].
 ///
 /// Input binding rejects output recipes:
 /// ```compile_fail
 /// use prebindgen_tools::{bind_input, Bindings, Codec, Output};
 /// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
-///     bind_input(flat, codec, "foo", "x", &Output::Scalar, extra).unwrap();
+///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
-pub fn bind_input<C: Codec>(
-    flat: &mut Bindings<C::Wire>,
+pub fn bind_input<C: Codec, R: Default>(
+    flat: &mut Bindings<C::Wire, R>,
     codec: &C,
     function: &str,
     parameter: &str,
@@ -350,12 +291,19 @@ pub fn bind_input<C: Codec>(
         .iter()
         .position(|p| p.name == parameter)
         .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
-    let conversion = Compiler::new(flat, codec, format!("p{index}")).input(
+    let mut conversion = Compiler::new(flat, codec, format!("p{index}")).input(
         &f.params[index].ty.ty,
         recipe,
         extra,
         &Condition::default(),
     )?;
+    let ty = flat.function(function)?.params[index].ty.ty.clone();
+    conversion.representation = Some(register_shape(
+        flat,
+        format!("{function}/input/{parameter}"),
+        ty,
+        &conversion.wires,
+    )?);
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
     Ok(())
 }
@@ -374,58 +322,39 @@ pub fn bind_input<C: Codec>(
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
-pub fn bind_output<C: Codec>(
-    flat: &mut Bindings<C::Wire>,
+pub fn bind_output<C: Codec, R: Default>(
+    flat: &mut Bindings<C::Wire, R>,
     codec: &C,
     function: &str,
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<()> {
-    let conversion = Compiler::new(flat, codec, "ret".into()).output(
+    let mut conversion = Compiler::new(flat, codec, "ret".into()).output(
         &flat.function(function)?.ret.ty,
         recipe,
         extra,
         quote!(__result),
         false,
     )?;
+    let ty = flat.function(function)?.ret.ty.clone();
+    conversion.representation = Some(register_shape(
+        flat,
+        format!("{function}/output"),
+        ty,
+        &conversion.wires,
+    )?);
     flat.function_mut(function)?.ret.slot = Some(conversion);
     Ok(())
 }
 
-/// Check that every bound function has an input converter for each parameter
-/// and an output converter, including unit results.
-///
-/// Functions with entirely empty slots remain source-only helpers. This check
-/// neither builds conversions nor changes the model. Adapters call it before
-/// writing wrappers. It does not validate code fragments supplied directly by callers.
-pub fn validate_bindings<W>(flat: &Bindings<W>) -> Result<()> {
-    for f in flat.functions.values() {
-        if f.ret.slot.is_some() {
-            for p in &f.params {
-                if p.ty.slot.is_none() {
-                    return Err(format!(
-                        "`{}`: parameter `{}` has no input converter",
-                        f.name, p.name
-                    ));
-                }
-            }
-        } else if f.params.iter().any(|p| p.ty.slot.is_some()) {
-            return Err(format!(
-                "`{}`: bound inputs have no output converter",
-                f.name
-            ));
-        }
-    }
-    Ok(())
-}
-struct Compiler<'a, C: Codec> {
-    flat: &'a Bindings<C::Wire>,
+struct Compiler<'a, C: Codec, R> {
+    flat: &'a Bindings<C::Wire, R>,
     codec: &'a C,
     prefix: String,
     next: std::cell::Cell<usize>,
 }
-impl<'a, C: Codec> Compiler<'a, C> {
-    fn new(flat: &'a Bindings<C::Wire>, codec: &'a C, prefix: String) -> Self {
+impl<'a, C: Codec, R> Compiler<'a, C, R> {
+    fn new(flat: &'a Bindings<C::Wire, R>, codec: &'a C, prefix: String) -> Self {
         Self {
             flat,
             codec,
@@ -445,7 +374,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         recipe: &Input,
         extra: &C::Extra,
         active: &Condition,
-    ) -> Result<InputConversion<C::Wire>> {
+    ) -> Result<InputPlan<C::Wire>> {
         let var = self.name();
         let mut wires = Vec::new();
         let mut validation = TokenStream::new();
@@ -460,7 +389,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
-                    return Ok(InputConversion {
+                    return Ok(InputPlan {
+                        representation: None,
                         wires,
                         validation,
                         acquire,
@@ -480,7 +410,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let mut fields = Vec::new();
                 for (field, child) in r.fields.iter().zip(children) {
-                    let p = self.input(&field.ty, child, extra, active)?;
+                    let mut p = self.input(&field.ty, child, extra, active)?;
+                    prefix(&mut p.wires, format!("field:{}", field.name));
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -506,7 +437,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let mut call_args = Vec::new();
                 for (param, child) in f.params.iter().zip(args) {
-                    let p = self.input(&param.ty.ty, child, extra, active)?;
+                    let mut p = self.input(&param.ty.ty, child, extra, active)?;
+                    prefix(&mut p.wires, format!("argument:{}", param.name));
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -526,6 +458,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let tag = self.name();
                 wires.push(Wire {
+                    component: prebindgen_flat::ComponentPath(vec!["selector".into()]),
                     name: tag.clone(),
                     kind: self.codec.selector(extra),
                     active: active.clone(),
@@ -535,7 +468,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
-                    let p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
+                    let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
+                    prefix(&mut p.wires, format!("alternative:{i}"));
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -548,7 +482,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
-        Ok(InputConversion {
+        Ok(InputPlan {
+            representation: None,
             wires,
             validation,
             acquire,
@@ -564,8 +499,10 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputConversion<C::Wire>> {
-        let mut out = OutputConversion {
+    ) -> Result<OutputPlan<C::Wire>> {
+        let mut out = OutputPlan {
+            representation: None,
+            source: syn::parse_quote!(__result),
             commit: TokenStream::new(),
             wires: Vec::new(),
             statements: TokenStream::new(),
@@ -586,7 +523,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 for (field, child) in r.fields.iter().zip(children) {
                     let name = &field.name;
-                    let p = self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
+                    let mut p =
+                        self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
+                    prefix(&mut p.wires, format!("field:{name}"));
                     append(&mut out, p);
                 }
             }
@@ -606,10 +545,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let path = &f.path;
                 let arg = if borrowed { value } else { quote!(&#value) };
                 out.statements = quote!(let #v=#path(#arg););
-                append(
-                    &mut out,
-                    self.output(&f.ret.ty, output, extra, quote!(#v), false)?,
-                );
+                let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
+                prefix(&mut child.wires, format!("getter:{function}"));
+                append(&mut out, child);
             }
             Output::Combine(parts) => {
                 if parts.is_empty() {
@@ -624,7 +562,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("a combination cannot consume the same value twice".into());
                 }
                 let mut bodies = Vec::new();
-                for child in parts {
+                for (index, child) in parts.iter().enumerate() {
                     let consuming = child.consumes(ty, extra, self.codec);
                     let arg = if borrowed || consuming {
                         value.clone()
@@ -632,6 +570,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         quote!(&#value)
                     };
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
+                    prefix(&mut p.wires, format!("view:{index}"));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p);
                 }
@@ -645,27 +584,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
         Ok(out)
     }
 }
-fn append<W>(to: &mut OutputConversion<W>, from: OutputConversion<W>) {
+fn append<W>(to: &mut OutputPlan<W>, from: OutputPlan<W>) {
     to.commit.extend(from.commit);
     to.wires.extend(from.wires);
     to.statements.extend(from.statements);
     to.values.extend(from.values);
-}
-
-/// Format generated tokens as a Rust source file.
-///
-/// Returns a syntax error if the tokens do not form a file. This does not
-/// resolve names or type-check generated code; the binding crate must compile it.
-pub fn rust_source(tokens: TokenStream) -> Result<String> {
-    let file = syn::parse2(tokens).map_err(|e| format!("generated Rust: {e}"))?;
-    Ok(prettyplease::unparse(&file))
-}
-
-/// Parse one Rust identifier used by a declaration.
-///
-/// Returns an error for invalid syntax, including paths or multiple identifiers.
-pub fn ident(name: &str) -> Result<syn::Ident> {
-    syn::parse_str(name).map_err(|_| format!("invalid identifier `{name}`"))
 }
 
 #[cfg(test)]
@@ -676,101 +599,57 @@ pub use declarations::{
     Declarations, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl,
 };
 
-/// A leaf is active only on its selected path. Adapters use the same condition
-/// for foreign-side resource locking and native conversion code.
-#[derive(Clone, Debug, Default)]
-pub struct Condition(
-    /// Conjunction of `(selector identifier, required arm index)` terms.
-    /// An empty vector is always active.
-    pub Vec<(syn::Ident, i32)>,
-);
-impl Condition {
-    /// Return a new condition additionally requiring one selector arm.
-    ///
-    /// Does not modify the original condition; no additional runtime flag is generated.
-    pub fn arm(&self, tag: syn::Ident, index: i32) -> Self {
-        let mut result = self.clone();
-        result.0.push((tag, index));
-        result
-    }
-    /// Emit this condition AND a Rust predicate, short-circuiting the predicate
-    /// when the selector path is inactive.
-    pub fn and(&self, predicate: TokenStream) -> TokenStream {
-        if self.0.is_empty() {
-            predicate
-        } else {
-            let condition = self.rust();
-            quote!((#condition) && (#predicate))
-        }
-    }
-    /// Emit the conjunction as a Rust boolean expression; an empty condition emits `true`.
-    pub fn rust(&self) -> TokenStream {
-        self.0
-            .iter()
-            .map(|(tag, i)| quote!(#tag == #i))
-            .reduce(|a, b| quote!((#a) && (#b)))
-            .unwrap_or_else(|| quote!(true))
-    }
-}
-/// Access to one foreign resource during an exported call.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Access {
-    /// Read-only borrow; multiple active shared accesses may alias.
-    Shared,
-    /// Mutable borrow; conflicts with every other active use of the resource.
-    Exclusive,
-    /// Ownership transfer; conflicts with every other active use of the resource.
-    Move,
-}
-/// The adapter supplies identity; tools only enforce call-wide access conflicts.
-#[derive(Clone, Debug)]
-pub struct Resource {
-    /// Side-effect-free Rust expression identifying a live resource, such as an address.
-    /// All identities compared within a call must share an equality-compatible domain.
-    pub identity: TokenStream,
-    /// Borrow or ownership requirement imposed by this input conversion.
-    pub access: Access,
-    /// Path on which this resource is accessed; inactive resources do not conflict.
-    pub active: Condition,
-}
-/// Emit pairwise alias checks across all active input resources.
-///
-/// Run this code after leaf validation and before **any** ownership acquisition.
-/// Shared/shared pairs and mutually exclusive selector arms do not conflict.
-/// Conflicts return `Err("conflicting input aliases".into())` from the enclosing
-/// wrapper. This does not validate pointer liveness, synchronize threads, or
-/// acquire resources; those remain adapter/caller responsibilities.
-pub fn validate_resources(resources: &[Resource]) -> TokenStream {
-    let mut result = TokenStream::new();
-    for (i, a) in resources.iter().enumerate() {
-        for b in &resources[i + 1..] {
-            if a.access == Access::Shared && b.access == Access::Shared {
-                continue;
-            }
-            let x = &a.identity;
-            let y = &b.identity;
-            // Different alternatives of the same selector cannot conflict.
-            if a.active
-                .0
-                .iter()
-                .any(|(tag, arm)| b.active.0.iter().any(|(t, i)| t == tag && i != arm))
-            {
-                continue;
-            }
-            let mut active = a.active.clone();
-            for term in &b.active.0 {
-                if !active.0.contains(term) {
-                    active.0.push(term.clone());
-                }
-            }
-            let conflict = active.and(quote!((#x) == (#y)));
-            result.extend(quote!(if #conflict {return Err("conflicting input aliases".into());}));
-        }
-    }
-    result
-}
-
 /// Shared conversion helpers for adapters that store foreign values in boxes.
 pub mod boxed;
 /// Shared conversion helpers for values copied across the boundary.
 pub mod value;
+
+fn prefix<W>(wires: &mut [Wire<W>], segment: String) {
+    for wire in wires {
+        wire.component.prepend(segment.clone());
+    }
+}
+
+fn register_shape<W: Clone, R: Default>(
+    flat: &mut Bindings<W, R>,
+    name: String,
+    ty: syn::Type,
+    wires: &[Wire<W>],
+) -> Result<prebindgen_flat::RepresentationId> {
+    use prebindgen_flat::{Component, Representation, RepresentationId};
+    let mut seen = std::collections::BTreeSet::new();
+    let components = wires
+        .iter()
+        .filter(|wire| seen.insert(wire.component.clone()))
+        .map(|wire| {
+            let fields: Option<Vec<_>> = wire
+                .component
+                .0
+                .iter()
+                .map(|s| s.strip_prefix("field:").map(str::to_owned))
+                .collect();
+            Component {
+                path: wire.component.clone(),
+                name: wire
+                    .component
+                    .0
+                    .last()
+                    .map(|s| s.split_once(':').map_or(s.as_str(), |(_, n)| n))
+                    .unwrap_or("value")
+                    .into(),
+                source_fields: fields.filter(|f| !f.is_empty()),
+                representation: None,
+            }
+        })
+        .collect();
+    let id = RepresentationId(name);
+    flat.representations.insert(
+        id.clone(),
+        Representation {
+            source_type: ty,
+            components,
+            data: R::default(),
+        },
+    )?;
+    Ok(id)
+}

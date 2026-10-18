@@ -1,7 +1,8 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
+use prebindgen_flat::BoxedWire;
 use prebindgen_flat::{Flat, Primitive, Result};
-use prebindgen_tools::{boxed::BoxedWire, value::Value};
+use prebindgen_tools::value::Value;
 /// The carrier of one C wire.
 ///
 /// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -17,7 +18,9 @@ pub enum CWire {
     /// An `int32_t` selector arm index.
     Selector,
 }
-use prebindgen_tools::{Bindings as GenericBindings, Codec, Wire as GenericWire};
+use prebindgen_flat::{InputPlan, OutputPlan, Wire as GenericWire};
+use prebindgen_tools::Codec;
+type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
 type Wire = GenericWire<CWire>;
@@ -58,8 +61,8 @@ impl Codec for CCodec {
         _: &(),
         w: syn::Ident,
         v: syn::Ident,
-        active: &prebindgen_tools::Condition,
-    ) -> Result<prebindgen_tools::InputConversion<CWire>> {
+        active: &prebindgen_flat::Condition,
+    ) -> Result<prebindgen_flat::InputPlan<CWire>> {
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::Scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
@@ -88,7 +91,7 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_tools::OutputConversion<CWire>> {
+    ) -> Result<prebindgen_flat::OutputPlan<CWire>> {
         match Value::of(ty) {
             Some(Value::Scalar(p)) => prebindgen_tools::value::output(
                 ty,
@@ -262,7 +265,7 @@ impl Cbindgen {
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn build(self) -> Result<Generation> {
-        prebindgen_tools::ident(&self.prefix)?;
+        prebindgen_flat::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
             (None, Some(path)) => Flat::parse_selected(
@@ -295,7 +298,7 @@ impl Cbindgen {
             .into_iter()
             .map(|(n, t)| Ok((n, flat.resolve_type(&t)?)))
             .collect::<Result<Vec<_>>>()?;
-        prebindgen_tools::validate_bindings(&flat)?;
+        prebindgen_flat::validate_bindings(&flat)?;
         generate(flat, &self.prefix, pointers)
     }
 }
@@ -335,7 +338,7 @@ fn rust_ty(wire: &Wire) -> TokenStream {
         },
         CWire::Pointer(p) => {
             let ty = &p.ty;
-            if p.access == prebindgen_tools::Access::Shared {
+            if p.access == prebindgen_flat::Access::Shared {
                 quote!(*const #ty)
             } else {
                 quote!(*mut #ty)
@@ -367,7 +370,7 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
                 .iter()
                 .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
                 .expect("validated pointer declaration");
-            let qualifier = if p.access == prebindgen_tools::Access::Shared {
+            let qualifier = if p.access == prebindgen_flat::Access::Shared {
                 "const "
             } else {
                 ""
@@ -378,8 +381,12 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
         CWire::Buffer => format!("{prefix}_buffer"),
     }
 }
-fn generate(
-    flat: Bindings,
+fn generate<
+    I: prebindgen_flat::InputConversion<Wire = CWire>,
+    O: prebindgen_flat::OutputConversion<Wire = CWire>,
+    R,
+>(
+    flat: Flat<I, O, R>,
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
 ) -> Result<Generation> {
@@ -392,17 +399,17 @@ fn generate(
         }
     }
     for f in flat.functions.values() {
-        let Some(out) = &f.ret.slot else {
+        if f.ret.slot.is_none() {
             continue;
-        };
+        }
+        let call = flat.prepare_call(&f.name.to_string())?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
-        let inputs = f.params.iter().flat_map(|p| match &p.ty.slot {
-            Some(i) => i.wires.iter(),
-            _ => unreachable!(),
-        });
-        for wire in inputs.chain(out.wires.iter()) {
+        for wire in call
+            .inputs()
+            .chain(call.outputs().map(|output| output.wire))
+        {
             if let CWire::Pointer(pointer) = &wire.kind {
                 if !pointers
                     .iter()
@@ -434,7 +441,7 @@ fn generate(
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
     for (name, ty) in &pointers {
-        prebindgen_tools::ident(name)?;
+        prebindgen_flat::ident(name)?;
         let drop = format_ident!("{prefix}_drop_{name}");
         tokens.extend(quote!{
             #[doc = "# Safety
@@ -446,38 +453,25 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
     for f in flat.functions.values() {
-        let Some(output) = &f.ret.slot else {
+        let Some(_) = &f.ret.slot else {
             continue;
         };
+        let call = flat.prepare_call(&f.name.to_string())?;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let mut params = Vec::new();
         let mut cparams = Vec::new();
-        let mut body = TokenStream::new();
-        let mut validation = TokenStream::new();
-        let mut acquire = TokenStream::new();
-        let mut resources = Vec::new();
-        let mut args = Vec::new();
-        for p in &f.params {
-            let Some(input) = &p.ty.slot else {
-                unreachable!()
-            };
-            for w in &input.wires {
-                let n = &w.name;
-                let ty = rust_ty(w);
-                params.push(quote!(#n:#ty));
-                cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
-            }
-            validation.extend(input.validation.clone());
-            acquire.extend(input.acquire.clone());
-            resources.extend(input.resources.clone());
-            body.extend(input.statements.clone());
-            args.push(input.argument.clone());
+        for w in call.inputs() {
+            let n = &w.name;
+            let ty = rust_ty(w);
+            params.push(quote!(#n:#ty));
+            cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
         }
         let mut fields = Vec::new();
         let mut values = Vec::new();
         header.push_str("typedef struct {\n");
-        for (i, (w, v)) in output.wires.iter().zip(&output.values).enumerate() {
+        for (i, output) in call.outputs().enumerate() {
+            let (w, v) = (output.wire, output.value);
             let field = format_ident!("v{i}");
             let ty = rust_ty(w);
             fields.push(quote!(pub #field:#ty));
@@ -492,10 +486,11 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!("}} {result};\n"));
         cparams.push(format!("{result} *out"));
         header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
-        let call = &f.path;
-        let output_body = &output.statements;
-        let commit = &output.commit;
-        let aliases = prebindgen_tools::validate_resources(&resources);
+        let body = call.emit(prebindgen_flat::CallHooks {
+            deliver: quote!(let result=#result{#(#values),*}; std::ptr::write(out,result);),
+            result: quote!(()),
+            ..Default::default()
+        });
         tokens.extend(quote! {
          #[repr(C)] pub struct #result {#(#fields),*}
          #[doc = "# Safety
@@ -504,12 +499,7 @@ The output pointer must be writable. Active input buffers must be readable for t
    #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)*out:*mut #result)->i32{
           if out.is_null(){__pb_error("null result pointer");return -1;}
           match ::prebindgen_runtime::boundary(||{
-           #validation #aliases #acquire #body
-           let __result=#call(#(#args),*);
-           #output_body
-           let result=#result{#(#values),*};
-           std::ptr::write(out,result);
-           #commit Ok(())
+           #body
           }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
          }
         });
@@ -518,7 +508,7 @@ The output pointer must be writable. Active input buffers must be readable for t
     tokens.extend(quote!(#(#guards)*));
     header.push_str("#ifdef __cplusplus\n}\n#endif\n#endif\n");
     Ok(Generation {
-        rust: prebindgen_tools::rust_source(tokens)?,
+        rust: prebindgen_flat::rust_source(tokens)?,
         header,
     })
 }

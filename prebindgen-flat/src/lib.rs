@@ -1,5 +1,6 @@
-//! Source types in Rust syntax, with separate data slots for inputs and outputs.
-//! Slot data is chosen by the consumer; record declarations contain only source structure.
+//! Source types, resolved representations, and the complete wrapper-generation API.
+//! Parameters and results hold optional conversions constrained by direction-specific
+//! traits. Preparation fills slots; generation uses [`Flat::prepare_call`].
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
 //! slot data types. Unit remains available for absence of a value.
@@ -8,6 +9,11 @@ use prebindgen::SourceLocation;
 use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
+
+mod conversion;
+pub use conversion::*;
+mod representation;
+pub use representation::*;
 
 mod primitive;
 pub use primitive::Primitive;
@@ -35,15 +41,15 @@ pub struct Param<S> {
 }
 /// A validated free function and its independently configurable type occurrences.
 #[derive(Clone, Debug)]
-pub struct Function<I, O> {
+pub struct Function<I: InputConversion, O: OutputConversion> {
     /// Unqualified name used by binding declarations.
     pub name: syn::Ident,
     /// Qualified path used to call the source function from generated Rust.
     pub path: syn::Path,
     /// Parameters in call order.
-    pub params: Vec<Param<I>>,
+    pub params: Vec<Param<Option<I>>>,
     /// Result occurrence; an omitted Rust return type becomes `()`.
-    pub ret: TypeUse<O>,
+    pub ret: TypeUse<Option<O>>,
     /// Origin recorded by source capture, for diagnostics and qualification.
     pub location: SourceLocation,
 }
@@ -63,26 +69,27 @@ pub struct Field {
     /// Qualified source type.
     pub ty: Type,
 }
-/// Source structure with independent consumer-defined input and output slot types.
+/// Source structure with independently configured input and output conversions.
 ///
-/// Every parameter carries `I`; every result carries `O`. Record fields have no
-/// slots. Flat does not interpret either data type.
+/// Every parameter carries `Option<I>`; every result carries `Option<O>`.
+/// Record fields describe source structure; [`Self::representations`] describes
+/// destination shapes and explicit component mappings. Conversion implementations
+/// remain opaque to wrapper writers.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
 /// Rust size; generated code must emit [`Self::guards`] to enforce that rule.
 ///
 /// ```
-/// use prebindgen_flat::{Flat, type_key};
+/// use prebindgen_flat::{Flat, InputPlan, OutputPlan};
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
-/// let flat = Flat::<(), ()>::parse(items.into_iter().map(|item| (item, Default::default())))?;
-/// let mut flat = flat.map_slots(|ty, ()| Ok(type_key(ty)), |_, ()| Ok(0usize))?;
-/// flat.function_mut("add")?.params[0].ty.slot = "first input".into();
-/// assert_eq!(flat.function("add")?.params[1].ty.slot, "i64");
+/// let flat = Flat::<InputPlan<()>, OutputPlan<()>>::parse(
+///     items.into_iter().map(|item| (item, Default::default())))?;
+/// assert!(flat.function("add")?.params[0].ty.slot.is_none());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct Flat<I, O> {
+pub struct Flat<I: InputConversion = InputPlan<()>, O: OutputConversion = OutputPlan<()>, R = ()> {
     /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by [`type_key`] of their qualified type.
@@ -92,9 +99,11 @@ pub struct Flat<I, O> {
     /// Constants every adapter must emit: captured feature guards and generated
     /// nonzero-size assertions. Layout assertions run when the bindings compile.
     pub guards: Vec<syn::ItemConst>,
+    /// Resolved representations available to wrapper writers.
+    pub representations: Representations<R>,
 }
 
-impl<I: Default, O: Default> Flat<I, O> {
+impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
     /// Select the source declarations needed by this binding before validating
     /// the supported flat subset. Items outside the selection are skipped without validation.
     ///
@@ -161,7 +170,7 @@ impl<I: Default, O: Default> Flat<I, O> {
     /// belong to this subset. Rejects duplicate names, non-public declarations,
     /// unsupported signatures and types, and inaccessible record fields.
     ///
-    /// Input slots start at `I::default()` and output slots at `O::default()`.
+    /// Input and output slots start at `None`; no default conversion is required.
     /// Unqualified declared types and callable paths are qualified with the captured
     /// crate name (or `crate` if absent).
     /// Opaque alias implementations are not inspected. Rust layout and trait
@@ -206,6 +215,7 @@ impl<I: Default, O: Default> Flat<I, O> {
             records: BTreeMap::new(),
             types,
             guards: Vec::new(),
+            representations: Representations::default(),
         };
         for (item, location) in items {
             match item {
@@ -246,7 +256,7 @@ impl<I: Default, O: Default> Flat<I, O> {
                             name: id.ident,
                             ty: TypeUse {
                                 ty: flat.resolve_type(&p.ty)?,
-                                slot: I::default(),
+                                slot: None,
                             },
                         });
                     }
@@ -256,7 +266,7 @@ impl<I: Default, O: Default> Flat<I, O> {
                     };
                     let ret = TypeUse {
                         ty: flat.resolve_type(&ret)?,
-                        slot: O::default(),
+                        slot: None,
                     };
                     flat.functions.insert(
                         name.to_string(),
@@ -315,7 +325,7 @@ impl<I: Default, O: Default> Flat<I, O> {
     }
 }
 
-impl<I, O> Flat<I, O> {
+impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
     /// Look up a free function by its unqualified source name.
     ///
     /// Returns an error if it was not included in this model.
@@ -395,11 +405,11 @@ impl<I, O> Flat<I, O> {
     /// Functions are visited by name; within each function, parameters are visited
     /// in declaration order, followed by its result. Record declarations pass
     /// through unchanged. Stops on the first error.
-    pub fn map_slots<I2, O2>(
+    pub fn map_slots<I2: InputConversion, O2: OutputConversion>(
         self,
-        mut input: impl FnMut(&Type, I) -> Result<I2>,
-        mut output: impl FnMut(&Type, O) -> Result<O2>,
-    ) -> Result<Flat<I2, O2>> {
+        mut input: impl FnMut(&Type, Option<I>) -> Result<Option<I2>>,
+        mut output: impl FnMut(&Type, Option<O>) -> Result<Option<O2>>,
+    ) -> Result<Flat<I2, O2, R>> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {
             let params = fun
@@ -433,6 +443,7 @@ impl<I, O> Flat<I, O> {
             records: self.records,
             types: self.types,
             guards: self.guards,
+            representations: self.representations,
         })
     }
 }
@@ -450,3 +461,6 @@ pub fn same_type(a: &Type, b: &Type) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod generation_tests;

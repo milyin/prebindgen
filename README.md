@@ -10,17 +10,19 @@ conversions, and language adapters emit wrappers and foreign declarations.
         ↓ select declared functions, constructors, getters and referenced types
 Flat with empty conversion slots
         ↓ prebindgen-tools builds and attaches converters
-Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<W>>>
+Flat<I: InputConversion, O: OutputConversion, R>
+        (parameter slots: Option<I>; result slots: Option<O>)
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<I, O>` attaches consumer-defined `I` data
-to parameters and `O` data to results. Record declarations contain only names and
-source types; their fields have no conversion slots. Flat also preserves source
-names, locations and guards. Wrapper writers use conversion slots; recursive
-conversion decisions belong to tools.
+can have different input recipes. `Flat<I, O, R>` requires conversion traits on
+`I` and `O` and stores them in optional slots. Record declarations preserve Rust
+source structure. Named representation schemas describe logical components,
+source-field associations and adapter-specific type data `R`; wires refer to
+components by stable paths. Flat also preserves source names, locations and guards.
+Wrapper writers use flat's generation API; recursive recipe resolution belongs to tools.
 
 ## Examples migrated from main
 
@@ -87,35 +89,72 @@ C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`
 C pointer types and typed destructors. Its old naming and cbindgen postprocessing
 settings remain commented out in the example manifests.
 
-Manual conversion binding remains available for generator development, but none
-of the migrated binding examples requires it. `Bindings<W>` has separate optional
-`InputConversion<W>` and `OutputConversion<W>` slots. Each stores only wires,
-conversion code and resource/ownership steps needed for wrapper emission.
-`bind_input` and `bind_output` compile a recipe directly into one named occurrence.
-`Declarations::fill` resolves defaults and overrides and compiles every needed
-conversion before updating a function. A failed construction leaves its slots
-unchanged. Existing converters survive default filling; explicit overrides replace
-them using the codec input data supplied to that call.
+## Preparation and generation APIs
 
-`Input` and `Output` recipes and `Codec::Extra` are construction inputs. Neither is
-stored in Flat, and there is no whole-model recipe-to-prepared transition or source
-model clone. Nested fields, constructors, selectors, getters and combined outputs
-use the enclosing call's extra data. Referenced helpers supply source signatures,
-and record declarations supply field names and types. This subset does not provide
-separate adapter data per nested recipe node. C and JNI use `()` for `Extra`.
+`prebindgen-flat` owns the generation contract:
 
-Direction is enforced by the slot types. `validate_bindings` checks completeness
-before emission: entirely unbound functions remain source-only helpers; partially
-bound functions are rejected. Recipe/type compatibility is checked when attaching
-a converter. Flat itself knows nothing about recipes, conversions or processing
-stages. Names are scoped to parameter positions and the result, so independent
-binding calls and overrides cannot collide with other occurrences in a wrapper.
+- `InputConversion` and `OutputConversion` are traits on slot contents. Their
+  `emit` methods produce `InputPlan<W>` and `OutputPlan<W>`. Plans also implement
+  the traits, allowing preparation to store precompiled conversions directly.
+- `Flat<I, O, R>` stores `Option<I>` on parameters and `Option<O>` on results.
+  Parsing leaves slots empty; conversion types need no `Default` implementation.
+- `flat.prepare_call(name)` resolves the selected function's slots and validates
+  its explicit representation mappings. `PreparedCall::inputs`, `parameters`
+  and `outputs` expose boundary signatures and paired output expressions without
+  exposing execution phases to the writer.
+- `call.emit(CallHooks { acknowledge, deliver, result })` assembles the entire
+  Rust call protocol: all validation and alias checks, acknowledgement, all
+  acquisition, argument construction, source invocation, output preparation,
+  delivery, and ownership commit. The hooks contain generated Rust code, not
+  runtime callbacks. Delivery may use `?`; the final result expression must be
+  infallible. The returned statements run inside the adapter's error boundary.
+- `rust_source` formats generated Rust. `Wire`, `Condition`, `Access`, `Resource`
+  and `BoxedWire` are generation contracts defined in flat.
 
-The manual tools API now uses `Bindings`, `bind_input`/`bind_output` and
-`Declarations::fill(flat, codec, declaration, extra)` instead of `Configured`,
-`Slot` and `prepare`. C exposes `Bindings` and `CCodec`, and JNI exposes `Bindings`
-and `JniCodec`; their manual model/callback APIs accept final conversion slots.
-The supported declarative `build.rs` APIs retain their syntax.
+Both C and JNI writers use this API. Their generation functions are generic over
+conversion implementations with the corresponding adapter wire type. They supply
+boundary signatures, delivery and error handling; they do not combine conversion
+phases or depend on tools during generation.
+
+`prebindgen-tools` prepares slots. Its `Bindings<W, R = ()>` alias is
+`Flat<InputPlan<W>, OutputPlan<W>, R>`. `bind_input` and `bind_output` compile one
+occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
+function. Failed compilation preserves existing slots. Existing converters survive
+default filling; explicit overrides replace them. Recipes and `Codec::Extra` are
+construction inputs, never stored in Flat. Nested recipes use the enclosing
+occurrence's extra data. Preparation helpers `value` and `boxed` build leaf plans.
+
+### Representations and field mapping
+
+`flat.representations` holds named `Representation<R>` schemas. Each schema names
+its source Rust type, logical components and adapter-specific declaration data.
+A component has a stable `ComponentPath`, a presentation name, an optional source
+field path and an optional nested representation reference. Derived views do not
+need a source field. Several physical wires can implement the same component.
+
+Plans identify their chosen representation explicitly. Each wire identifies a
+component within that shape. Writers match these identities when generating
+structure fields or assembling destination values; they never infer field mappings
+from generated local names or wire order. `PreparedCall::parameters()` preserves
+the grouping of wires belonging to each source parameter. Output expressions are
+paired with wires by `outputs()`.
+
+Tools registers occurrence schemas and preserves component paths through record
+fields, constructors, selectors, getters and combined outputs. The optional `R`
+parameter allows preparation to attach richer adapter metadata (`R: Default` for
+the standard preparation helpers). Direct custom conversion implementations can
+reference any explicitly registered representation.
+
+`set_canonical` designates a type's preferred representation for preparation clients.
+It does not install a converter or imply support in both directions. Generation
+always uses explicit slot references. `validate_representations` checks schemas,
+nested references and source-field paths, including types with no bound functions.
+The registry provides type-generation metadata; this refactor preserves the existing
+C/JNI public surfaces and does not automatically introduce new data classes.
+
+Unconfigured helpers may retain empty slots. Selected exported functions must have
+all slots filled, including unit results. The current adapters additionally use
+`validate_bindings` to reject partially configured functions.
 
 A leaf is a source type the adapter converts itself rather than composing it
 from parts. Recipes mark where the leaves are (`Input::Leaf`, `Output::Leaf`);
@@ -258,7 +297,7 @@ overloads and shared selector argument storage remain outside this subset.
 Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
 `prebindgen_flat::Flat` for occurrence slots, `prebindgen_tools::Declarations`
 for build-script expansions, and `prebindgen_tools::Codec` for adapter authors.
-The codec and conversion-slot contracts explain validation, ownership acquisition
+The codec and flat conversion contracts explain validation, ownership acquisition
 and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
 
 Runnable rustdoc examples cover occurrence configuration, selector/combined-output

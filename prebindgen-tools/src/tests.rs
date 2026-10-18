@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_flat::validate_bindings;
 use value::Value;
 struct TestCodec;
 const TEST_CODEC: TestCodec = TestCodec;
@@ -47,7 +48,7 @@ impl Codec for TestCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &Condition,
-    ) -> Result<InputConversion<TestWire>> {
+    ) -> Result<InputPlan<TestWire>> {
         let name = extra.name;
         if let Some(value) = Value::of(ty) {
             let decode = quote!(decode(#name, #w)?);
@@ -60,8 +61,10 @@ impl Codec for TestCodec {
                 wire(Kind::Value(value), ty, extra),
             );
         }
-        Ok(InputConversion {
+        Ok(InputPlan {
+            representation: None,
             wires: vec![Wire {
+                component: Default::default(),
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
                 active: active.clone(),
@@ -80,7 +83,7 @@ impl Codec for TestCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputConversion<TestWire>> {
+    ) -> Result<OutputPlan<TestWire>> {
         let name = extra.name;
         if let Some(value) = Value::of(ty) {
             let kind = wire(Kind::Value(value), ty, extra);
@@ -89,8 +92,11 @@ impl Codec for TestCodec {
         if borrowed && !extra.copy {
             return Err("test token cannot be copied".into());
         }
-        Ok(OutputConversion {
+        Ok(OutputPlan {
+            representation: None,
+            source: syn::parse_quote!(__result),
             wires: vec![Wire {
+                component: Default::default(),
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
                 active: Condition::default(),
@@ -549,4 +555,40 @@ fn extra_controls_consumption_without_changing_the_recipe() {
             assert!(result.unwrap_err().contains("consume the same value twice"));
         }
     }
+}
+
+#[test]
+fn record_projection_retains_field_mappings_in_prepared_flat() {
+    let mut flat = parse("pub struct Point { pub x:i64, pub y:i64 } pub fn point()->Point {}");
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "point",
+        &Output::fields([Output::Leaf, Output::Leaf]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let call = flat.prepare_call("point").unwrap();
+    let shape = flat
+        .representations
+        .get(call.output_representation().unwrap())
+        .unwrap();
+    assert_eq!(
+        shape.components[0].source_fields.as_deref(),
+        Some(["x".into()].as_slice())
+    );
+    assert_eq!(
+        shape.components[1].source_fields.as_deref(),
+        Some(["y".into()].as_slice())
+    );
+    assert_eq!(
+        call.outputs()
+            .map(|out| out.wire.component.clone())
+            .collect::<Vec<_>>(),
+        shape
+            .components
+            .iter()
+            .map(|c| c.path.clone())
+            .collect::<Vec<_>>()
+    );
 }

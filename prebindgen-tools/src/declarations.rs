@@ -160,7 +160,10 @@ impl Declarations {
     ///
     /// Returns an error for an unresolved type or duplicate declarations for the
     /// same type and direction. Recipes are resolved later by [`Self::fill`].
-    pub fn new<I, O>(flat: &Flat<I, O>, decls: Vec<ExpandDecl>) -> Result<Self> {
+    pub fn new<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion, R>(
+        flat: &Flat<I, O, R>,
+        decls: Vec<ExpandDecl>,
+    ) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -194,9 +197,9 @@ impl Declarations {
     /// Resolves and compiles all required conversions before modifying any slot.
     /// An unknown parameter, recursive expansion, incompatible type or invalid
     /// constructor/getter leaves the entire function unchanged.
-    pub fn fill<C: Codec>(
+    pub fn fill<C: Codec, R: Default>(
         &self,
-        flat: &mut Bindings<C::Wire>,
+        flat: &mut Bindings<C::Wire, R>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,
@@ -222,7 +225,7 @@ impl Declarations {
                 None
             });
         }
-        let output = if decl.ret.is_some() || source.ret.slot.is_none() {
+        let mut output = if decl.ret.is_some() || source.ret.slot.is_none() {
             let recipe = self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?;
             Some(Compiler::new(flat, codec, "ret".into()).output(
                 &source.ret.ty,
@@ -234,6 +237,32 @@ impl Declarations {
         } else {
             None
         };
+        // Compilation has succeeded for the complete function. Register the
+        // resolved shapes only now, preserving atomicity on conversion errors.
+        let parameter_types: Vec<_> = source
+            .params
+            .iter()
+            .map(|p| (p.name.to_string(), p.ty.ty.clone()))
+            .collect();
+        let result_type = source.ret.ty.clone();
+        for (input, (name, ty)) in inputs.iter_mut().zip(parameter_types) {
+            if let Some(input) = input {
+                input.representation = Some(crate::register_shape(
+                    flat,
+                    format!("{}/input/{name}", decl.name),
+                    ty,
+                    &input.wires,
+                )?);
+            }
+        }
+        if let Some(output) = &mut output {
+            output.representation = Some(crate::register_shape(
+                flat,
+                format!("{}/output", decl.name),
+                result_type,
+                &output.wires,
+            )?);
+        }
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
@@ -245,9 +274,9 @@ impl Declarations {
         }
         Ok(())
     }
-    fn input<I, O>(
+    fn input<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion, R>(
         &self,
-        flat: &Flat<I, O>,
+        flat: &Flat<I, O, R>,
         ty: &syn::Type,
         explicit: Option<&ExpandParamDecl>,
         stack: &mut Vec<String>,
@@ -295,9 +324,9 @@ impl Declarations {
             Input::Leaf
         })
     }
-    fn output<I, O>(
+    fn output<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion, R>(
         &self,
-        flat: &Flat<I, O>,
+        flat: &Flat<I, O, R>,
         ty: &syn::Type,
         explicit: Option<&ExpandReturnDecl>,
         stack: &mut Vec<String>,

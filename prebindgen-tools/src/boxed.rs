@@ -1,18 +1,11 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`](crate::boxed::Storage) policy and map
-//! [`BoxedWire`](crate::boxed::BoxedWire) data into their own wire kind.
-use crate::{Access, Condition, InputConversion, OutputConversion, Resource, Wire};
-use prebindgen_flat::Result;
+//! [`BoxedWire`](prebindgen_flat::BoxedWire) data into their own wire kind.
+use prebindgen_flat::{
+    Access, BoxedWire, Condition, InputPlan, OutputPlan, Resource, Result, Wire,
+};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-/// Source type and access mode for a wire carrying a boxed allocation address.
-#[derive(Clone, Debug)]
-pub struct BoxedWire {
-    /// Source value type inside the allocation, without the input reference or storage wrapper.
-    pub ty: syn::Type,
-    /// Whether the call moves, shares or exclusively borrows the stored value.
-    pub access: Access,
-}
 /// Storage chosen by the adapter. A wrapper must expose a `value` field and
 /// allow construction as `Wrapper { value }`.
 pub enum Storage {
@@ -46,14 +39,15 @@ impl Storage {
 /// `T` transfers ownership; references borrow the allocation for the call.
 /// Validation checks only nonnull/aligned encoding. The caller must guarantee
 /// allocation provenance, type, liveness and synchronization. The wrapper must
-/// run call-wide resource validation before acquisition (see [`InputConversion`]).
+/// run call-wide resource validation before acquisition (see [`InputPlan`]).
 /// The returned resource records the allocation address and required access.
 ///
 /// `wire_kind` receives the pointee type and access mode as [`BoxedWire`]. Its
 /// return value becomes [`Wire::kind`]. Generated code uses `prebindgen_runtime`.
 ///
 /// ```
-/// use prebindgen_tools::{boxed, Access, Condition};
+/// use prebindgen_tools::boxed;
+/// use prebindgen_flat::{Access, Condition};
 /// let input = boxed::input(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
@@ -71,7 +65,7 @@ pub fn input<W>(
     v: syn::Ident,
     active: &Condition,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputConversion<W>> {
+) -> Result<InputPlan<W>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -109,8 +103,10 @@ pub fn input<W>(
             quote!(let #v: #ty = unsafe { &mut (*#pointer)#field };),
         ),
     };
-    Ok(InputConversion {
+    Ok(InputPlan {
+        representation: None,
         wires: vec![Wire {
+            component: Default::default(),
             name: w.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
@@ -145,7 +141,7 @@ pub fn output<W>(
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputConversion<W>> {
+) -> Result<OutputPlan<W>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -156,8 +152,11 @@ pub fn output<W>(
     };
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
-    Ok(OutputConversion {
+    Ok(OutputPlan {
+        representation: None,
+        source: syn::parse_quote!(__result),
         wires: vec![Wire {
+            component: Default::default(),
             name: w.clone(),
             kind: wire_kind(BoxedWire {
                 ty: ty.clone(),

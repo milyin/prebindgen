@@ -2,8 +2,8 @@
 //! [`Value::of`](crate::value::Value::of) classifies a source type;
 //! [`input`](crate::value::input) and [`output`](crate::value::output) build
 //! the conversion around the adapter's own decode and encode expressions.
-use crate::{Condition, InputConversion, OutputConversion, Wire};
 use prebindgen_flat::{type_key, Primitive, Result};
+use prebindgen_flat::{Condition, InputPlan, OutputPlan, Wire};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
@@ -53,7 +53,8 @@ impl Value {
 /// target borrows without copying. `ty` must satisfy [`Value::of`].
 ///
 /// ```
-/// use prebindgen_tools::{value, Condition};
+/// use prebindgen_tools::value;
+/// use prebindgen_flat::Condition;
 /// let input = value::input(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &Condition::default(), quote::quote!(read(raw)?), "buffer",
@@ -69,7 +70,7 @@ pub fn input<W>(
     active: &Condition,
     decode: TokenStream,
     kind: W,
-) -> Result<InputConversion<W>> {
+) -> Result<InputPlan<W>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
@@ -95,8 +96,10 @@ pub fn input<W>(
             quote!(#v),
         ),
     };
-    Ok(InputConversion {
+    Ok(InputPlan {
+        representation: None,
         wires: vec![Wire {
+            component: Default::default(),
             name: w,
             kind,
             active: active.clone(),
@@ -121,7 +124,7 @@ pub fn output<W>(
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputConversion<W>> {
+) -> Result<OutputPlan<W>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };
@@ -137,8 +140,11 @@ pub fn output<W>(
     };
     let expr = encode(value);
     statements.extend(quote!(let #w = #expr;));
-    Ok(OutputConversion {
+    Ok(OutputPlan {
+        representation: None,
+        source: syn::parse_quote!(__result),
         wires: vec![Wire {
+            component: Default::default(),
             name: w.clone(),
             kind,
             active: Condition::default(),
