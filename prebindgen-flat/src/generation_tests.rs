@@ -29,7 +29,6 @@ impl OutputConversion for Output {
     fn emit(&self) -> Result<OutputPlan<Self::Wire>> {
         Ok(OutputPlan {
             representation: None,
-
             wires: vec![Wire {
                 component: ComponentPath::default(),
                 name: syn::parse_quote!(out),
@@ -37,10 +36,7 @@ impl OutputConversion for Output {
                 active: Condition::default(),
             }],
             statements: quote!(log("prepare");),
-            values: vec![{
-                let result = source_result();
-                quote!(#result)
-            }],
+            values: vec![source_result_expr()],
             commit: quote!(log("commit");),
         })
     }
@@ -136,9 +132,9 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
         )
         .unwrap();
     flat.representations.set_canonical(&id).unwrap();
+    let result = source_result();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         representation: Some(id),
-
         // Deliberately reverse wire order: mapping must use component identities.
         wires: ["y", "x"]
             .into_iter()
@@ -150,16 +146,7 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
             })
             .collect(),
         statements: TokenStream::new(),
-        values: vec![
-            {
-                let result = source_result();
-                quote!(#result.y)
-            },
-            {
-                let result = source_result();
-                quote!(#result.x)
-            },
-        ],
+        values: vec![quote!(#result.y), quote!(#result.x)],
         commit: TokenStream::new(),
     });
     flat

@@ -212,6 +212,13 @@ pub fn source_result() -> syn::Ident {
     syn::parse_quote!(__result)
 }
 
+/// Expression referring to the source result bound by [`PreparedCall::emit`].
+/// Use [`source_result`] instead when an identifier is needed for interpolation.
+pub fn source_result_expr() -> TokenStream {
+    let result = source_result();
+    quote!(#result)
+}
+
 /// Source type and access mode for a wire carrying a boxed allocation address.
 /// This is generation metadata used by adapters to declare pointer/handle types;
 /// allocation and conversion construction remain preparation responsibilities.

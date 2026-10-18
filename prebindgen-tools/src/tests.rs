@@ -94,7 +94,6 @@ impl Codec for TestCodec {
         }
         Ok(OutputPlan {
             representation: None,
-
             wires: vec![Wire {
                 component: Default::default(),
                 name: w.clone(),

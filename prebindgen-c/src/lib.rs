@@ -306,7 +306,10 @@ impl Cbindgen {
         let pointers = self
             .pointers
             .into_iter()
-            .map(|(n, t)| Ok((n, flat.resolve_type(&t)?)))
+            .map(|(name, ty)| {
+                prebindgen_tools::ident(&name)?;
+                Ok((name, flat.resolve_type(&ty)?))
+            })
             .collect::<Result<Vec<_>>>()?;
         prebindgen_flat::validate_bindings(&flat)?;
         generate(flat, &self.prefix, pointers)
@@ -454,7 +457,6 @@ fn generate<
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
     for (name, ty) in &pointers {
-        syn::parse_str::<syn::Ident>(name).map_err(|_| format!("invalid identifier `{name}`"))?;
         let drop = format_ident!("{prefix}_drop_{name}");
         tokens.extend(quote!{
             #[doc = "# Safety
@@ -525,6 +527,22 @@ The output pointer must be writable. Active input buffers must be readable for t
 #[cfg(test)]
 mod generation_tests {
     use super::*;
+
+    #[test]
+    fn rejects_invalid_pointer_names_during_preparation() {
+        let source = syn::parse_file("pub type Handle = String;").unwrap();
+        let flat = Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let result = Cbindgen::new(flat)
+            .opaque_ptr("invalid-name", syn::parse_quote!(Handle))
+            .build();
+        assert_eq!(result.err().unwrap(), "invalid identifier `invalid-name`");
+    }
 
     #[test]
     fn prepares_each_conversion_once_for_validation_and_emission() {

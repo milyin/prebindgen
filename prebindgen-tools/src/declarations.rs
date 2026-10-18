@@ -3,7 +3,6 @@
 
 use crate::{Bindings, Codec, Compiler, Condition, Input, Output};
 use prebindgen_flat::{type_key, Flat, Result};
-use quote::quote;
 use std::collections::BTreeMap;
 
 /// An ordered list of input representations for one source type.
@@ -250,10 +249,7 @@ impl Declarations {
                 &source.ret.ty,
                 &recipe,
                 extra,
-                {
-                    let result = prebindgen_flat::source_result();
-                    quote!(#result)
-                },
+                prebindgen_flat::source_result_expr(),
                 false,
             )?)
         } else {

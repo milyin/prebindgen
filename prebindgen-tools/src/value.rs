@@ -164,7 +164,6 @@ pub fn output<W>(
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
         representation: None,
-
         wires: vec![Wire {
             component: Default::default(),
             name: wire.clone(),

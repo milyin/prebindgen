@@ -401,10 +401,7 @@ pub fn bind_output<C: Codec, R: Default>(
         &flat.function(function)?.ret.ty,
         recipe,
         extra,
-        {
-            let result = prebindgen_flat::source_result();
-            quote!(#result)
-        },
+        prebindgen_flat::source_result_expr(),
         false,
     )?;
     let ty = flat.function(function)?.ret.ty.clone();
@@ -579,7 +576,6 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
     ) -> Result<OutputPlan<C::Wire>> {
         let mut out = OutputPlan {
             representation: None,
-
             commit: TokenStream::new(),
             wires: Vec::new(),
             statements: TokenStream::new(),
