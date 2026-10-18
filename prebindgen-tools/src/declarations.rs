@@ -250,7 +250,10 @@ impl Declarations {
                 &source.ret.ty,
                 &recipe,
                 extra,
-                quote!(__result),
+                {
+                    let result = prebindgen_flat::source_result();
+                    quote!(#result)
+                },
                 false,
             )?)
         } else {

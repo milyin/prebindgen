@@ -164,7 +164,7 @@ pub fn output<W>(
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
         representation: None,
-        source: syn::parse_quote!(__result),
+
         wires: vec![Wire {
             component: Default::default(),
             name: wire.clone(),

@@ -74,7 +74,9 @@ pub struct Field {
 /// Every parameter carries `Option<I>`; every result carries `Option<O>`.
 /// Record fields describe source structure; [`Self::representations`] describes
 /// destination shapes and explicit component mappings. Conversion implementations
-/// remain opaque to wrapper writers.
+/// remain opaque to wrapper writers. Type-level bounds intentionally prevent
+/// non-conversion slot payloads. For source-only inspection, `let flat: Flat =
+/// Flat::parse(items)?` uses default plan types with all slots empty.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero

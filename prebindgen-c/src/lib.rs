@@ -275,7 +275,7 @@ impl Cbindgen {
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn build(self) -> Result<Generation> {
-        prebindgen_flat::ident(&self.prefix)?;
+        prebindgen_tools::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
             (None, Some(path)) => Flat::parse_selected(
@@ -400,6 +400,8 @@ fn generate<
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
 ) -> Result<Generation> {
+    flat.validate_representations()?;
+    let mut calls = Vec::new();
     let error = format_ident!("{prefix}_last_error");
     let free = format_ident!("{prefix}_free_buffer");
     let mut symbols = std::collections::BTreeSet::from([error.to_string(), free.to_string()]);
@@ -432,6 +434,7 @@ fn generate<
                 }
             }
         }
+        calls.push((f, call));
     }
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
@@ -451,7 +454,7 @@ fn generate<
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
     for (name, ty) in &pointers {
-        prebindgen_flat::ident(name)?;
+        syn::parse_str::<syn::Ident>(name).map_err(|_| format!("invalid identifier `{name}`"))?;
         let drop = format_ident!("{prefix}_drop_{name}");
         tokens.extend(quote!{
             #[doc = "# Safety
@@ -462,11 +465,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         });
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
-    for f in flat.functions.values() {
-        let Some(_) = &f.ret.slot else {
-            continue;
-        };
-        let call = flat.prepare_call(&f.name.to_string())?;
+    for (f, call) in calls {
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let mut params = Vec::new();
@@ -521,4 +520,40 @@ The output pointer must be writable. Active input buffers must be readable for t
         rust: prebindgen_flat::rust_source(tokens)?,
         header,
     })
+}
+
+#[cfg(test)]
+mod generation_tests {
+    use super::*;
+
+    #[test]
+    fn prepares_each_conversion_once_for_validation_and_emission() {
+        struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
+        impl prebindgen_flat::OutputConversion for CountedOutput {
+            type Wire = CWire;
+            fn emit(&self) -> Result<OutputPlan<CWire>> {
+                self.0.set(self.0.get() + 1);
+                Ok(OutputPlan {
+                    representation: None,
+                    wires: vec![],
+                    values: vec![],
+                    statements: quote!(),
+                    commit: quote!(),
+                })
+            }
+        }
+        let count = std::rc::Rc::new(std::cell::Cell::new(0));
+        let source = syn::parse_file("pub fn noop() {}").unwrap();
+        let mut flat = Flat::<InputPlan<CWire>, CountedOutput>::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        flat.function_mut("noop").unwrap().ret.slot = Some(CountedOutput(count.clone()));
+        let output = generate(flat, "test", vec![]).unwrap();
+        assert!(output.header.contains("test_noop("));
+        assert_eq!(count.get(), 1);
+    }
 }

@@ -174,7 +174,7 @@ pub fn output<W>(
     let allocation = storage.ty(ty);
     Ok(OutputPlan {
         representation: None,
-        source: syn::parse_quote!(__result),
+
         wires: vec![Wire {
             component: Default::default(),
             name: wire.clone(),

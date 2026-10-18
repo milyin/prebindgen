@@ -98,7 +98,8 @@ settings remain commented out in the example manifests.
   the traits, allowing preparation to store precompiled conversions directly.
 - `Flat<I, O, R>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
-- `flat.prepare_call(name)` resolves the selected function's slots and validates
+- Call `flat.validate_representations()` once at the start of generation.
+  `flat.prepare_call(name)` resolves only the selected function's slots and validates
   its explicit representation mappings. `PreparedCall::inputs`, `parameters`
   and `outputs` expose boundary signatures and paired output expressions without
   exposing execution phases to the writer.
@@ -106,8 +107,9 @@ settings remain commented out in the example manifests.
   Rust call protocol: all validation and alias checks, acknowledgement, all
   acquisition, argument construction, source invocation, output preparation,
   delivery, and ownership commit. The hooks contain generated Rust code, not
-  runtime callbacks. Delivery may use `?`; the final result expression must be
-  infallible. The returned statements run inside the adapter's error boundary.
+  runtime callbacks. Output builders use `source_result()` for the source-result
+  identifier; plans cannot independently rename that local. Delivery may use `?`;
+  the final result expression must be infallible. The returned statements run inside the adapter's error boundary.
 - `rust_source` formats generated Rust. `Wire`, `Condition`, `Access`, `Resource`
   and `BoxedWire` are generation contracts defined in flat.
 
@@ -128,9 +130,13 @@ occurrence's extra data. Preparation helpers `value` and `boxed` build leaf plan
 
 `flat.representations` holds named `Representation<R>` schemas. Each schema names
 its source Rust type, logical components and adapter-specific declaration data.
-A component has a stable `ComponentPath`, a presentation name, an optional source
+A component has a stable `ComponentPath` of typed `ComponentSegment` values
+(fields, arguments, alternatives, views, getters, selectors or adapter names), a
+presentation name, an optional source
 field path and an optional nested representation reference. Derived views do not
-need a source field. Several physical wires can implement the same component.
+need a source field. Several physical wires can implement the same component. Every component of a
+selected representation must have at least one wire; partial projections need
+their own schema. Unit representations have no components.
 
 Plans identify their chosen representation explicitly. Each wire identifies a
 component within that shape. Writers match these identities when generating

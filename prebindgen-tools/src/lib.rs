@@ -9,7 +9,9 @@
 //! [`value`] provides conversions for values copied across the boundary and
 //! [`boxed`] for values kept in Rust-owned allocations.
 #![warn(missing_docs)]
-use prebindgen_flat::{same_type, type_key, Condition, Flat, InputPlan, OutputPlan, Result, Wire};
+use prebindgen_flat::{
+    same_type, type_key, ComponentSegment, Condition, Flat, InputPlan, OutputPlan, Result, Wire,
+};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -369,7 +371,7 @@ pub fn bind_input<C: Codec, R: Default>(
 /// Build and attach a converter to a function result, replacing any existing one.
 ///
 /// Uses the same construction and failure rules as [`bind_input`]. Output code
-/// refers to the wrapper-local `__result` containing the source call's result.
+/// uses [`prebindgen_flat::source_result`] for the source call's result local.
 /// The recipe is checked for compatible types and signatures, and for repeated
 /// consumption of the same value. Unit results use `Output::fields([])`.
 ///
@@ -399,7 +401,10 @@ pub fn bind_output<C: Codec, R: Default>(
         &flat.function(function)?.ret.ty,
         recipe,
         extra,
-        quote!(__result),
+        {
+            let result = prebindgen_flat::source_result();
+            quote!(#result)
+        },
         false,
     )?;
     let ty = flat.function(function)?.ret.ty.clone();
@@ -477,7 +482,10 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 let mut fields = Vec::new();
                 for (field, child) in r.fields.iter().zip(children) {
                     let mut p = self.input(&field.ty, child, extra, active)?;
-                    prefix(&mut p.wires, format!("field:{}", field.name));
+                    prefix(
+                        &mut p.wires,
+                        ComponentSegment::Field(field.name.to_string()),
+                    );
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -504,7 +512,10 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 let mut call_args = Vec::new();
                 for (param, child) in f.params.iter().zip(args) {
                     let mut p = self.input(&param.ty.ty, child, extra, active)?;
-                    prefix(&mut p.wires, format!("argument:{}", param.name));
+                    prefix(
+                        &mut p.wires,
+                        ComponentSegment::Argument(param.name.to_string()),
+                    );
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -524,7 +535,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 }
                 let tag = self.name();
                 wires.push(Wire {
-                    component: prebindgen_flat::ComponentPath(vec!["selector".into()]),
+                    component: prebindgen_flat::ComponentPath(vec![ComponentSegment::Selector]),
                     name: tag.clone(),
                     kind: self.codec.selector(extra),
                     active: active.clone(),
@@ -535,7 +546,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
-                    prefix(&mut p.wires, format!("alternative:{i}"));
+                    prefix(&mut p.wires, ComponentSegment::Alternative(i));
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -568,7 +579,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
     ) -> Result<OutputPlan<C::Wire>> {
         let mut out = OutputPlan {
             representation: None,
-            source: syn::parse_quote!(__result),
+
             commit: TokenStream::new(),
             wires: Vec::new(),
             statements: TokenStream::new(),
@@ -591,7 +602,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                     let name = &field.name;
                     let mut p =
                         self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
-                    prefix(&mut p.wires, format!("field:{name}"));
+                    prefix(&mut p.wires, ComponentSegment::Field(name.to_string()));
                     append(&mut out, p);
                 }
             }
@@ -612,7 +623,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 let arg = if borrowed { value } else { quote!(&#value) };
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
-                prefix(&mut child.wires, format!("getter:{function}"));
+                prefix(&mut child.wires, ComponentSegment::Getter(function.clone()));
                 append(&mut out, child);
             }
             Output::Combine(parts) => {
@@ -636,7 +647,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                         quote!(&#value)
                     };
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
-                    prefix(&mut p.wires, format!("view:{index}"));
+                    prefix(&mut p.wires, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p);
                 }
@@ -670,7 +681,7 @@ pub mod boxed;
 /// Shared conversion helpers for values copied across the boundary.
 pub mod value;
 
-fn prefix<W>(wires: &mut [Wire<W>], segment: String) {
+fn prefix<W>(wires: &mut [Wire<W>], segment: ComponentSegment) {
     for wire in wires {
         wire.component.prepend(segment.clone());
     }
@@ -692,7 +703,10 @@ fn register_shape<W: Clone, R: Default>(
                 .component
                 .0
                 .iter()
-                .map(|s| s.strip_prefix("field:").map(str::to_owned))
+                .map(|segment| match segment {
+                    ComponentSegment::Field(name) => Some(name.clone()),
+                    _ => None,
+                })
                 .collect();
             Component {
                 path: wire.component.clone(),
@@ -700,9 +714,8 @@ fn register_shape<W: Clone, R: Default>(
                     .component
                     .0
                     .last()
-                    .map(|s| s.split_once(':').map_or(s.as_str(), |(_, n)| n))
-                    .unwrap_or("value")
-                    .into(),
+                    .map(ComponentSegment::name)
+                    .unwrap_or_else(|| "value".into()),
                 source_fields: fields.filter(|f| !f.is_empty()),
                 representation: None,
             }
@@ -718,4 +731,11 @@ fn register_shape<W: Clone, R: Default>(
         },
     )?;
     Ok(id)
+}
+
+/// Parse one Rust identifier used by a declaration.
+///
+/// Returns an error for invalid syntax, including paths or multiple identifiers.
+pub fn ident(name: &str) -> Result<syn::Ident> {
+    syn::parse_str(name).map_err(|_| format!("invalid identifier `{name}`"))
 }

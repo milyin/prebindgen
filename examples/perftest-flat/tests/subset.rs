@@ -3,7 +3,7 @@ use perftest_flat::*;
 #[test]
 fn entire_captured_surface_is_in_the_flat_subset() {
     let source = prebindgen::Source::new(PREBINDGEN_OUT_DIR);
-    prebindgen_flat::Flat::<prebindgen_flat::InputPlan<()>, prebindgen_flat::OutputPlan<()>>::parse(source.items_all()).unwrap();
+    let _: prebindgen_flat::Flat = prebindgen_flat::Flat::parse(source.items_all()).unwrap();
 }
 
 #[test]

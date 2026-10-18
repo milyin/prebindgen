@@ -638,6 +638,7 @@ fn generate<
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
 ) -> Result<JniGen> {
+    flat.validate_representations()?;
     let mut rust = TokenStream::new();
     let mut files = BTreeMap::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();

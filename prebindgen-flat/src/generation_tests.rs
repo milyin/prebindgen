@@ -29,7 +29,7 @@ impl OutputConversion for Output {
     fn emit(&self) -> Result<OutputPlan<Self::Wire>> {
         Ok(OutputPlan {
             representation: None,
-            source: syn::parse_quote!(custom_result),
+
             wires: vec![Wire {
                 component: ComponentPath::default(),
                 name: syn::parse_quote!(out),
@@ -37,7 +37,10 @@ impl OutputConversion for Output {
                 active: Condition::default(),
             }],
             statements: quote!(log("prepare");),
-            values: vec![quote!(custom_result)],
+            values: vec![{
+                let result = source_result();
+                quote!(#result)
+            }],
             commit: quote!(log("commit");),
         })
     }
@@ -122,7 +125,7 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
                 components: ["x", "y"]
                     .into_iter()
                     .map(|name| Component {
-                        path: ComponentPath(vec![name.into()]),
+                        path: ComponentPath(vec![ComponentSegment::Field(name.into())]),
                         name: name.into(),
                         source_fields: Some(vec![name.into()]),
                         representation: None,
@@ -135,19 +138,28 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
     flat.representations.set_canonical(&id).unwrap();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         representation: Some(id),
-        source: syn::parse_quote!(point),
+
         // Deliberately reverse wire order: mapping must use component identities.
         wires: ["y", "x"]
             .into_iter()
             .map(|name| Wire {
-                component: ComponentPath(vec![name.into()]),
+                component: ComponentPath(vec![ComponentSegment::Field(name.into())]),
                 name: format_ident!("wire_{name}"),
                 kind: "Double",
                 active: Condition::default(),
             })
             .collect(),
         statements: TokenStream::new(),
-        values: vec![quote!(point.y), quote!(point.x)],
+        values: vec![
+            {
+                let result = source_result();
+                quote!(#result.y)
+            },
+            {
+                let result = source_result();
+                quote!(#result.x)
+            },
+        ],
         commit: TokenStream::new(),
     });
     flat
@@ -174,7 +186,7 @@ fn type_declarations_and_values_share_explicit_component_identities() {
         .collect();
     assert_eq!(
         format!("{}({})", schema.data, assignments.join(", ")),
-        "Point(y = point . y, x = point . x)"
+        "Point(y = __result . y, x = __result . x)"
     );
     assert_eq!(
         flat.representations
@@ -193,7 +205,7 @@ fn generation_rejects_invalid_mappings_and_output_arity() {
         .as_mut()
         .unwrap()
         .wires[0]
-        .component = ComponentPath(vec!["absent".into()]);
+        .component = ComponentPath(vec![ComponentSegment::Named("absent".into())]);
     assert!(flat
         .prepare_call("point")
         .err()
@@ -219,9 +231,8 @@ fn generation_rejects_invalid_mappings_and_output_arity() {
     shape.components[0].source_fields = Some(vec!["absent".into()]);
     flat.representations.insert(id, shape).unwrap();
     assert!(flat
-        .prepare_call("point")
-        .err()
-        .unwrap()
+        .validate_representations()
+        .unwrap_err()
         .contains("unknown source field"));
 }
 
@@ -261,4 +272,41 @@ fn standalone_type_schemas_validate_without_executable_slots() {
         .validate_representations()
         .unwrap_err()
         .contains("unknown representation"));
+}
+
+#[test]
+fn a_selected_shape_requires_values_for_all_components() {
+    let mut flat = record_model();
+    let output = flat
+        .function_mut("point")
+        .unwrap()
+        .ret
+        .slot
+        .as_mut()
+        .unwrap();
+    output.wires.pop();
+    output.values.pop();
+    assert!(flat
+        .prepare_call("point")
+        .err()
+        .unwrap()
+        .contains("has no wire"));
+}
+
+#[test]
+fn several_physical_wires_may_supply_one_component() {
+    let mut flat = record_model();
+    let output = flat
+        .function_mut("point")
+        .unwrap()
+        .ret
+        .slot
+        .as_mut()
+        .unwrap();
+    let mut extra = output.wires[0].clone();
+    extra.name = syn::parse_quote!(additional_wire);
+    output.wires.push(extra);
+    output.values.push(quote!(0));
+    flat.validate_representations().unwrap();
+    assert_eq!(flat.prepare_call("point").unwrap().outputs().len(), 3);
 }

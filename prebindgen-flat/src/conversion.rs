@@ -57,8 +57,6 @@ pub struct InputPlan<W> {
 pub struct OutputPlan<W> {
     /// Explicit resolved representation, if this conversion exposes a named shape.
     pub representation: Option<crate::RepresentationId>,
-    /// Source result local used by this conversion.
-    pub source: syn::Ident,
     /// Boundary results in delivery order; one entry per expression in `values`.
     pub wires: Vec<Wire<W>>,
     /// Transfer ownership only after all foreign delivery operations succeed.
@@ -207,14 +205,16 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
     Ok(prettyplease::unparse(&file))
 }
 
-/// Parse one Rust identifier used by a declaration.
-///
-/// Returns an error for invalid syntax, including paths or multiple identifiers.
-pub fn ident(name: &str) -> Result<syn::Ident> {
-    syn::parse_str(name).map_err(|_| format!("invalid identifier `{name}`"))
+/// Identifier bound to the source function result by [`PreparedCall::emit`].
+/// Output conversion builders must use this identifier when constructing result
+/// expressions. The name is reserved within the generated call body.
+pub fn source_result() -> syn::Ident {
+    syn::parse_quote!(__result)
 }
 
 /// Source type and access mode for a wire carrying a boxed allocation address.
+/// This is generation metadata used by adapters to declare pointer/handle types;
+/// allocation and conversion construction remain preparation responsibilities.
 #[derive(Clone, Debug)]
 pub struct BoxedWire {
     /// Source value type inside the allocation, without the input reference or storage wrapper.
@@ -233,6 +233,8 @@ pub trait InputConversion {
 }
 
 /// Opaque output conversion stored in a result slot.
+/// Build source-value expressions with [`source_result`], the same identifier
+/// bound by the call emitter.
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire;
@@ -332,7 +334,7 @@ impl<I, O> PreparedCall<I, O> {
         let path = &self.path;
         let prepare = &self.output.statements;
         let commit = &self.output.commit;
-        let source = &self.output.source;
+        let source = source_result();
         let CallHooks {
             acknowledge,
             deliver,
@@ -380,9 +382,10 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
 
 impl<I: InputConversion, O: OutputConversion, R> crate::Flat<I, O, R> {
     /// Prepare a selected function and validate its explicit representation mappings.
-    /// Canonical defaults are never substituted during generation.
+    /// Call [`Self::validate_representations`] once before a generation pass.
+    /// This method checks only the selected call's mappings. Canonical defaults
+    /// are never substituted during generation.
     pub fn prepare_call(&self, name: &str) -> Result<PreparedCall<I::Wire, O::Wire>> {
-        self.validate_representations()?;
         let function = self.function(name)?;
         let call = function.resolve_call()?;
         for (parameter, input) in function.params.iter().zip(&call.inputs) {
@@ -455,6 +458,14 @@ impl<I: InputConversion, O: OutputConversion, R> crate::Flat<I, O, R> {
                 return Err(format!(
                     "wire `{}` has no component in representation `{}`",
                     wire.name, id.0
+                ));
+            }
+        }
+        for component in &shape.components {
+            if !wires.iter().any(|wire| wire.component == component.path) {
+                return Err(format!(
+                    "component `{}` has no wire in representation `{}`",
+                    component.name, id.0
                 ));
             }
         }
