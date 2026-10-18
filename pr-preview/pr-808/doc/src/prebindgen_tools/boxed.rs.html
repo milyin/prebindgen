@@ -174,19 +174,18 @@
 <a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">let </span>allocation = storage.ty(ty);
 <a href=#175 id=175 data-nosnippet>175</a>    <span class="prelude-val">Ok</span>(OutputPlan {
 <a href=#176 id=176 data-nosnippet>176</a>        representation: <span class="prelude-val">None</span>,
-<a href=#177 id=177 data-nosnippet>177</a>
-<a href=#178 id=178 data-nosnippet>178</a>        wires: <span class="macro">vec!</span>[Wire {
-<a href=#179 id=179 data-nosnippet>179</a>            component: Default::default(),
-<a href=#180 id=180 data-nosnippet>180</a>            name: wire.clone(),
-<a href=#181 id=181 data-nosnippet>181</a>            kind: wire_kind(BoxedWire {
-<a href=#182 id=182 data-nosnippet>182</a>                ty: ty.clone(),
-<a href=#183 id=183 data-nosnippet>183</a>                access: Access::Move,
-<a href=#184 id=184 data-nosnippet>184</a>            }),
-<a href=#185 id=185 data-nosnippet>185</a>            active: Condition::default(),
-<a href=#186 id=186 data-nosnippet>186</a>        }],
-<a href=#187 id=187 data-nosnippet>187</a>        statements: <span class="macro">quote!</span>(<span class="kw">let </span><span class="kw-2">mut </span>#wire = Box::new(#value);),
-<a href=#188 id=188 data-nosnippet>188</a>        values: <span class="macro">vec!</span>[<span class="macro">quote!</span>((<span class="kw-2">&amp;mut *</span>#wire) <span class="kw">as </span><span class="kw-2">*mut </span>#allocation)],
-<a href=#189 id=189 data-nosnippet>189</a>        commit: <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#wire);),
-<a href=#190 id=190 data-nosnippet>190</a>    })
-<a href=#191 id=191 data-nosnippet>191</a>}
+<a href=#177 id=177 data-nosnippet>177</a>        wires: <span class="macro">vec!</span>[Wire {
+<a href=#178 id=178 data-nosnippet>178</a>            component: Default::default(),
+<a href=#179 id=179 data-nosnippet>179</a>            name: wire.clone(),
+<a href=#180 id=180 data-nosnippet>180</a>            kind: wire_kind(BoxedWire {
+<a href=#181 id=181 data-nosnippet>181</a>                ty: ty.clone(),
+<a href=#182 id=182 data-nosnippet>182</a>                access: Access::Move,
+<a href=#183 id=183 data-nosnippet>183</a>            }),
+<a href=#184 id=184 data-nosnippet>184</a>            active: Condition::default(),
+<a href=#185 id=185 data-nosnippet>185</a>        }],
+<a href=#186 id=186 data-nosnippet>186</a>        statements: <span class="macro">quote!</span>(<span class="kw">let </span><span class="kw-2">mut </span>#wire = Box::new(#value);),
+<a href=#187 id=187 data-nosnippet>187</a>        values: <span class="macro">vec!</span>[<span class="macro">quote!</span>((<span class="kw-2">&amp;mut *</span>#wire) <span class="kw">as </span><span class="kw-2">*mut </span>#allocation)],
+<a href=#188 id=188 data-nosnippet>188</a>        commit: <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#wire);),
+<a href=#189 id=189 data-nosnippet>189</a>    })
+<a href=#190 id=190 data-nosnippet>190</a>}
 </code></pre></div></section></main></body></html>
