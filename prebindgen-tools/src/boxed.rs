@@ -41,9 +41,21 @@ impl Storage {
 /// allocation provenance, type, liveness and synchronization. The wrapper must
 /// run call-wide resource validation before acquisition (see [`InputPlan`]).
 /// The returned resource records the allocation address and required access.
+/// Generated code uses `prebindgen_runtime`.
 ///
-/// `wire_kind` receives the pointee type and access mode as [`BoxedWire`]. Its
-/// return value becomes [`Wire::kind`]. Generated code uses `prebindgen_runtime`.
+/// # Arguments
+///
+/// * `storage` — the allocation layout. It must match the layout the adapter's
+///   outputs and destructors use for the same type.
+/// * `ty` — the source parameter type: `T` moves the value out of the allocation,
+///   `&T` and `&mut T` borrow it for the call.
+/// * `wire` — identifier of the boundary parameter carrying the address. Its type
+///   is the adapter's choice, an integer or a pointer, as long as `wire as *mut _`
+///   converts it to the allocation pointer.
+/// * `var` — identifier of the Rust local that holds the argument.
+/// * `active` — the selector arms under which this input is used, as given to
+///   [`Codec::input_leaf`](crate::Codec::input_leaf).
+/// * `wire_kind` — builds [`Wire::kind`] from the pointee type and access mode.
 ///
 /// ```
 /// use prebindgen_tools::boxed;
@@ -61,8 +73,8 @@ impl Storage {
 pub fn input<W>(
     storage: &Storage,
     ty: &syn::Type,
-    w: syn::Ident,
-    v: syn::Ident,
+    wire: syn::Ident,
+    var: syn::Ident,
     active: &Condition,
     wire_kind: impl FnOnce(BoxedWire) -> W,
 ) -> Result<InputPlan<W>> {
@@ -80,34 +92,34 @@ pub fn input<W>(
     let condition = active.rust();
     let allocation = storage.ty(target);
     let field = storage.field();
-    let pointer = format_ident!("{w}_pointer");
+    let pointer = format_ident!("{wire}_pointer");
     let taken = match storage {
-        Storage::Direct => quote!(*#v.expect("active allocation")),
-        Storage::Wrapped(_) => quote!(#v.expect("active allocation").value),
+        Storage::Direct => quote!(*#var.expect("active allocation")),
+        Storage::Wrapped(_) => quote!(#var.expect("active allocation").value),
     };
     let validation = quote!(
-        let #pointer = #w as *mut #allocation;
+        let #pointer = #wire as *mut #allocation;
         if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;}
     );
     let (acquire, statements) = match access {
         Access::Move => (
-            quote!(let #v = if #condition {Some(unsafe {Box::from_raw(#pointer)})} else {None};),
-            quote!(let #v: #ty = #taken;),
+            quote!(let #var = if #condition {Some(unsafe {Box::from_raw(#pointer)})} else {None};),
+            quote!(let #var: #ty = #taken;),
         ),
         Access::Shared => (
             quote!(),
-            quote!(let #v: #ty = unsafe { &(*#pointer)#field };),
+            quote!(let #var: #ty = unsafe { &(*#pointer)#field };),
         ),
         Access::Exclusive => (
             quote!(),
-            quote!(let #v: #ty = unsafe { &mut (*#pointer)#field };),
+            quote!(let #var: #ty = unsafe { &mut (*#pointer)#field };),
         ),
     };
     Ok(InputPlan {
         representation: None,
         wires: vec![Wire {
             component: Default::default(),
-            name: w.clone(),
+            name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
                 access,
@@ -117,7 +129,7 @@ pub fn input<W>(
         validation,
         acquire,
         statements,
-        argument: quote!(#v),
+        argument: quote!(#var),
         resources: vec![Resource {
             identity: quote!(#pointer.addr()),
             access,
@@ -127,17 +139,25 @@ pub fn input<W>(
 }
 /// Prepare an owned boxed-address output with deferred ownership transfer.
 ///
-/// When `borrowed` is true, `value` is `&T` and generated code clones `T`; otherwise
-/// it moves the value. A reference source type is rejected. `statements` retains
-/// the box, `values` exposes its address, and `commit` relinquishes ownership only
-/// after successful delivery. The adapter must provide a matching destructor.
+/// A reference source type is rejected. `statements` retains the box, `values`
+/// exposes its address as a `*mut` pointer to the allocation, and `commit`
+/// relinquishes ownership only after successful delivery. The adapter must provide
+/// a matching destructor. Named source types must satisfy the nonzero-size guards
+/// from the flat model.
 ///
-/// `wire_kind` receives [`BoxedWire`] and returns the value stored in [`Wire::kind`].
-/// Named source types must satisfy the nonzero-size guards from the flat model.
+/// # Arguments
+///
+/// * `storage` — the allocation layout, matching the adapter's inputs and destructor.
+/// * `ty` — the owned source type of the value.
+/// * `wire` — identifier of the delivered wire, also used for the local box.
+/// * `value` — Rust expression producing the value.
+/// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
+///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
+/// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
 pub fn output<W>(
     storage: &Storage,
     ty: &syn::Type,
-    w: syn::Ident,
+    wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
@@ -157,15 +177,15 @@ pub fn output<W>(
         source: syn::parse_quote!(__result),
         wires: vec![Wire {
             component: Default::default(),
-            name: w.clone(),
+            name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: ty.clone(),
                 access: Access::Move,
             }),
             active: Condition::default(),
         }],
-        statements: quote!(let mut #w = Box::new(#value);),
-        values: vec![quote!((&mut *#w) as *mut #allocation)],
-        commit: quote!(let _ = Box::into_raw(#w);),
+        statements: quote!(let mut #wire = Box::new(#value);),
+        values: vec![quote!((&mut *#wire) as *mut #allocation)],
+        commit: quote!(let _ = Box::into_raw(#wire);),
     })
 }

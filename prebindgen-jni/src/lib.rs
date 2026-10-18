@@ -68,10 +68,12 @@ pub struct PtrClassDecl {
 }
 impl PtrClassDecl {
     /// Declare a handle class with a name derived from the source type.
+    ///
+    /// `ty` is the source type the class owns, as written in the source crate.
     pub fn new(ty: syn::Type) -> Self {
         Self { ty, name: None }
     }
-    /// Override the Kotlin short class name, validated during build.
+    /// Override the Kotlin short class name with `name`, validated during build.
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
         self
@@ -91,6 +93,9 @@ pub struct PackageDecl {
 }
 impl PackageDecl {
     /// Create an empty package relative to the configured root prefix.
+    ///
+    /// `name` is a dotted package name relative to that prefix, or empty for the
+    /// prefix itself.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -199,6 +204,8 @@ impl JniGenBuilder {
     }
     /// Adjust the selected flat model before declaration defaults are applied.
     ///
+    /// `f` receives the model and may attach converters to it.
+    ///
     /// Use this to attach converters with [`prebindgen_tools::bind_input`] and
     /// [`prebindgen_tools::bind_output`], using [`JniCodec`]. Callbacks run in
     /// registration order; errors stop generation. Source selection has already happened, so references
@@ -229,6 +236,8 @@ impl JniGenBuilder {
     }
     /// Append captured items, each paired with its source location.
     ///
+    /// `items` usually comes from `prebindgen::Source::items_all`.
+    ///
     /// Calls accumulate items. Only declared functions, expansion helpers and required
     /// types are selected for validation. Automatic type discovery follows
     /// unqualified source names (see [`Flat::parse_selected`]); types referenced
@@ -242,7 +251,7 @@ impl JniGenBuilder {
         self.items.get_or_insert_with(Vec::new).extend(items);
         self
     }
-    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`.
+    /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
     ///
     /// Uses the same selection as [`Self::items`]. A repeated call replaces the path;
     /// combining it with items or a flat model is rejected during build.
@@ -250,7 +259,8 @@ impl JniGenBuilder {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register a type-wide input or output default.
+    /// Register a type-wide input or output default, built with `expand_param!`
+    /// or `expand_return!`.
     ///
     /// Per-function overrides replace defaults. Duplicate declarations for the same
     /// type and direction are rejected during build.

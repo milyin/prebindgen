@@ -80,13 +80,18 @@ impl Condition {
     /// Return a new condition additionally requiring one selector arm.
     ///
     /// Does not modify the original condition; no additional runtime flag is generated.
+    ///
+    /// # Arguments
+    ///
+    /// * `tag` — identifier of the selector's index wire.
+    /// * `index` — zero-based index of the required arm.
     pub fn arm(&self, tag: syn::Ident, index: i32) -> Self {
         let mut result = self.clone();
         result.0.push((tag, index));
         result
     }
     /// Emit this condition AND a Rust predicate, short-circuiting the predicate
-    /// when the selector path is inactive.
+    /// when the selector path is inactive. `predicate` is a Rust `bool` expression.
     pub fn and(&self, predicate: TokenStream) -> TokenStream {
         if self.0.is_empty() {
             predicate
@@ -114,7 +119,7 @@ pub enum Access {
     /// Ownership transfer; conflicts with every other active use of the resource.
     Move,
 }
-/// The adapter supplies identity; tools only enforce call-wide access conflicts.
+/// The adapter supplies identity; flat enforces call-wide access conflicts.
 #[derive(Clone, Debug)]
 pub struct Resource {
     /// Side-effect-free Rust expression identifying a live resource, such as an address.
@@ -126,6 +131,9 @@ pub struct Resource {
     pub active: Condition,
 }
 /// Emit pairwise alias checks across all active input resources.
+///
+/// `resources` holds the [`InputPlan::resources`] of all of one exported
+/// function's parameters together, so that aliases across parameters are found.
 ///
 /// Run this code after leaf validation and before **any** ownership acquisition.
 /// Shared/shared pairs and mutually exclusive selector arms do not conflict.
@@ -192,7 +200,7 @@ pub fn validate_bindings<I: InputConversion, O: OutputConversion, R>(
 }
 /// Format generated tokens as a Rust source file.
 ///
-/// Returns a syntax error if the tokens do not form a file. This does not
+/// `tokens` must be a sequence of Rust items. Returns a syntax error if they do not form a file. This does not
 /// resolve names or type-check generated code; the binding crate must compile it.
 pub fn rust_source(tokens: TokenStream) -> Result<String> {
     let file = syn::parse2(tokens).map_err(|e| format!("generated Rust: {e}"))?;

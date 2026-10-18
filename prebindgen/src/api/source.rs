@@ -86,6 +86,9 @@ impl Source {
     }
 
     /// Create a builder to configure how `Source` is constructed
+    ///
+    /// `input_dir` is the source crate's prebindgen output directory, normally its
+    /// exported `PREBINDGEN_OUT_DIR` constant.
     pub fn builder<P: AsRef<Path>>(input_dir: P) -> Builder {
         Builder::new(input_dir)
     }
@@ -212,9 +215,9 @@ impl Source {
 
     /// Returns an iterator over items from specific groups
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// * `groups` - Array of group names to include
+    /// * `groups` — names of the groups to include, as given in `#[prebindgen("group")]`.
     ///
     /// # Example
     ///
@@ -240,9 +243,9 @@ impl Source {
 
     /// Returns an iterator over items excluding specific groups
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// * `groups` - Array of group names to exclude
+    /// * `groups` — names of the groups to exclude, as given in `#[prebindgen("group")]`.
     ///
     /// # Example
     ///
