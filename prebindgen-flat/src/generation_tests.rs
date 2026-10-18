@@ -13,6 +13,11 @@ impl InputConversion for Input {
         let acquire = format!("acquire{index}");
         let construct = format!("construct{index}");
         Ok(InputPlan {
+            requirements: vec![CallRequirement {
+                key: "test.ack".into(),
+                parameters: quote!(),
+                acknowledge: quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
+            }],
             representation: None,
             wires: vec![],
             validation: quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); }),
@@ -28,6 +33,11 @@ impl OutputConversion for Output {
     type Wire = &'static str;
     fn emit(&self) -> Result<OutputPlan<Self::Wire>> {
         Ok(OutputPlan {
+            requirements: Vec::new(),
+            delivery: Delivery {
+                statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
+                result: source_result_expr(),
+            },
             representation: None,
             wires: vec![Wire {
                 component: ComponentPath::default(),
@@ -57,29 +67,28 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     f.params[0].ty.slot = Some(Input(0));
     f.params[1].ty.slot = Some(Input(1));
     f.ret.slot = Some(Output);
-    let call = flat.prepare_call("add").unwrap();
-    let value = call.outputs().next().unwrap().value;
-    let body = call.emit(CallHooks {
-        acknowledge: quote!(log("acknowledge");),
-        deliver: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
-        result: quote!(#value),
-    });
+    let call = prepare_call(&flat, "add").unwrap();
+    assert_eq!(call.requirements().len(), 1);
+    let body = call.emit();
     let code = quote! {
         use std::sync::Mutex;
         static LOG: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
         fn log(event: &'static str) { LOG.lock().unwrap().push(event); }
         #items
-        fn run(fail_validation:bool, fail_delivery:bool) -> Result<i32,String> {
+        fn run(fail_validation:bool, fail_acknowledge:bool, fail_delivery:bool) -> Result<i32,String> {
             (|| { #body })()
         }
         fn main() {
-            assert_eq!(run(true, false), Err("validation".into()));
+            assert_eq!(run(true, false, false), Err("validation".into()));
             assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1"]);
             LOG.lock().unwrap().clear();
-            assert_eq!(run(false, true), Err("delivery".into()));
+            assert_eq!(run(false, true, false), Err("acknowledgement".into()));
+            assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1", "acknowledge"]);
+            LOG.lock().unwrap().clear();
+            assert_eq!(run(false, false, true), Err("delivery".into()));
             assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1", "acknowledge", "acquire0", "acquire1", "construct0", "construct1", "source", "prepare", "deliver"]);
             LOG.lock().unwrap().clear();
-            assert_eq!(run(false, false), Ok(2));
+            assert_eq!(run(false, false, false), Ok(2));
             assert_eq!(*LOG.lock().unwrap(), ["validate0", "validate1", "acknowledge", "acquire0", "acquire1", "construct0", "construct1", "source", "prepare", "deliver", "commit"]);
         }
     };
@@ -134,6 +143,8 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
     flat.representations.set_canonical(&id).unwrap();
     let result = source_result();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
+        requirements: Vec::new(),
+        delivery: Default::default(),
         representation: Some(id),
         // Deliberately reverse wire order: mapping must use component identities.
         wires: ["y", "x"]
@@ -155,7 +166,7 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
 #[test]
 fn type_declarations_and_values_share_explicit_component_identities() {
     let flat = record_model();
-    let call = flat.prepare_call("point").unwrap();
+    let call = prepare_call(&flat, "point").unwrap();
     let schema = flat
         .representations
         .get(call.output_representation().unwrap())
@@ -193,8 +204,7 @@ fn generation_rejects_invalid_mappings_and_output_arity() {
         .unwrap()
         .wires[0]
         .component = ComponentPath(vec![ComponentSegment::Named("absent".into())]);
-    assert!(flat
-        .prepare_call("point")
+    assert!(prepare_call(&flat, "point")
         .err()
         .unwrap()
         .contains("no component"));
@@ -207,8 +217,7 @@ fn generation_rejects_invalid_mappings_and_output_arity() {
         .unwrap()
         .values
         .pop();
-    assert!(flat
-        .prepare_call("point")
+    assert!(prepare_call(&flat, "point")
         .err()
         .unwrap()
         .contains("count differs"));
@@ -238,7 +247,7 @@ fn changing_canonical_default_does_not_reinterpret_bound_occurrences() {
         )
         .unwrap();
     flat.representations.set_canonical(&handle).unwrap();
-    let call = flat.prepare_call("point").unwrap();
+    let call = prepare_call(&flat, "point").unwrap();
     assert_eq!(
         call.output_representation(),
         Some(&RepresentationId("PointFields".into()))
@@ -273,8 +282,7 @@ fn a_selected_shape_requires_values_for_all_components() {
         .unwrap();
     output.wires.pop();
     output.values.pop();
-    assert!(flat
-        .prepare_call("point")
+    assert!(prepare_call(&flat, "point")
         .err()
         .unwrap()
         .contains("has no wire"));
@@ -295,5 +303,55 @@ fn several_physical_wires_may_supply_one_component() {
     output.wires.push(extra);
     output.values.push(quote!(0));
     flat.validate_representations().unwrap();
-    assert_eq!(flat.prepare_call("point").unwrap().outputs().len(), 3);
+    assert_eq!(prepare_call(&flat, "point").unwrap().outputs().len(), 3);
+}
+
+#[test]
+fn shared_requirements_merge_across_slots_and_reject_conflicts() {
+    let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { a+b }").unwrap();
+    let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
+        items.items.into_iter().map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    let first = Input(0).emit().unwrap();
+    let mut second = Input(1).emit().unwrap();
+    let mut output = Output.emit().unwrap();
+    output.requirements = first.requirements.clone();
+    output.requirements.push(CallRequirement {
+        key: "test.result".into(),
+        parameters: quote!(out: *mut i32),
+        acknowledge: quote!(),
+    });
+    let f = flat.function_mut("add").unwrap();
+    f.params[0].ty.slot = Some(first);
+    f.params[1].ty.slot = Some(second.clone());
+    f.ret.slot = Some(output);
+    let call = prepare_call(&flat, "add").unwrap();
+    assert_eq!(
+        call.requirements()
+            .iter()
+            .map(|r| r.key.as_str())
+            .collect::<Vec<_>>(),
+        ["test.ack", "test.result"]
+    );
+    assert_eq!(
+        call.requirements()[1].parameters.to_string(),
+        quote!(out: *mut i32).to_string()
+    );
+    for conflict in [true, false] {
+        let mut bad = second.clone();
+        if conflict {
+            bad.requirements[0].parameters = quote!(other: i32);
+        } else {
+            bad.requirements[0].acknowledge = quote!(different_ack());
+        }
+        flat.function_mut("add").unwrap().params[1].ty.slot = Some(bad);
+        assert!(prepare_call(&flat, "add")
+            .err()
+            .unwrap()
+            .contains("conflicting call requirement `test.ack`"));
+    }
+    second.requirements[0].key = "test.another".into();
+    flat.function_mut("add").unwrap().params[1].ty.slot = Some(second);
+    assert_eq!(prepare_call(&flat, "add").unwrap().requirements().len(), 3);
 }

@@ -38,6 +38,8 @@ pub struct InputPlan<W> {
     pub representation: Option<crate::RepresentationId>,
     /// Flattened boundary parameters in signature order.
     pub wires: Vec<Wire<W>>,
+    /// Shared wrapper requirements contributed by this slot.
+    pub requirements: Vec<CallRequirement>,
     /// Validate and prepare every active leaf before any ownership transfer.
     pub validation: TokenStream,
     /// Infallible acquisition of all owned inputs, before constructors can run.
@@ -55,10 +57,14 @@ pub struct InputPlan<W> {
 /// [`PreparedCall::emit`] commits only after adapter delivery succeeds.
 #[derive(Clone, Debug)]
 pub struct OutputPlan<W> {
+    /// Delivery and return code prepared with this result slot.
+    pub delivery: Delivery,
     /// Explicit resolved representation, if this conversion exposes a named shape.
     pub representation: Option<crate::RepresentationId>,
     /// Boundary results in delivery order; one entry per expression in `values`.
     pub wires: Vec<Wire<W>>,
+    /// Shared wrapper requirements contributed by this slot.
+    pub requirements: Vec<CallRequirement>,
     /// Transfer ownership only after all foreign delivery operations succeed.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
@@ -220,7 +226,7 @@ pub fn source_result_expr() -> TokenStream {
 }
 
 /// Opaque input conversion stored in a parameter slot.
-/// Implementations describe phases; wrapper writers use [`Flat::prepare_call`](crate::Flat::prepare_call).
+/// Implementations describe phases; wrapper writers use [`prepare_call`].
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire;
@@ -234,7 +240,8 @@ pub trait InputConversion {
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire;
-    /// Resolve code and boundary outputs for this occurrence.
+    /// Resolve code, boundary outputs and delivery glue for this occurrence.
+    /// The glue must match the environment supplied by the wrapper writer.
     fn emit(&self) -> Result<OutputPlan<Self::Wire>>;
 }
 impl<W: Clone> InputConversion for InputPlan<W> {
@@ -266,34 +273,53 @@ pub struct OutputValue<'a, W> {
     pub value: &'a TokenStream,
 }
 
-/// Adapter code inserted at fixed execution points by [`PreparedCall::emit`].
-pub struct CallHooks {
-    /// Fallible acknowledgement after validation, before infallible acquisition.
+/// A shared wrapper requirement supplied by a slot during preparation.
+/// Requirements with the same key must have identical token spellings. Assembly preserves
+/// first occurrence order and emits each requirement once, even when several
+/// parameters need it. Keys are adapter-owned, preferably namespaced.
+#[derive(Clone, Debug)]
+pub struct CallRequirement {
+    /// Stable identity within one call, such as `jni.ownership`.
+    pub key: String,
+    /// Additional Rust parameter declarations, without a trailing comma.
+    /// The wrapper writer places these after all wire parameters.
+    pub parameters: TokenStream,
+    /// Fallible code after all validation and alias checks, before acquisition.
+    /// It must not consume inputs. Shared acknowledgement belongs here.
     pub acknowledge: TokenStream,
-    /// Deliver all outputs. May fail with `?`; ownership has not been committed.
-    pub deliver: TokenStream,
-    /// Wrapper result expression, evaluated after commit; must be infallible.
-    pub result: TokenStream,
 }
 
-impl Default for CallHooks {
+/// Result-slot glue executed after output preparation and before ownership commit.
+#[derive(Clone, Debug)]
+pub struct Delivery {
+    /// Deliver every output; failure must leave owned temporaries uncommitted.
+    pub statements: TokenStream,
+    /// Infallible wrapper result expression evaluated after commit.
+    pub result: TokenStream,
+}
+impl Default for Delivery {
     fn default() -> Self {
         Self {
-            acknowledge: TokenStream::new(),
-            deliver: TokenStream::new(),
+            statements: TokenStream::new(),
             result: quote!(()),
         }
     }
 }
 
 /// Resolved call with opaque conversion phases and inspectable boundary mappings.
-/// Created by [`Flat::prepare_call`](crate::Flat::prepare_call).
+/// Created by [`prepare_call`].
 pub struct PreparedCall<I, O> {
     path: syn::Path,
     inputs: Vec<InputPlan<I>>,
     output: OutputPlan<O>,
+    requirements: Vec<CallRequirement>,
 }
 impl<I, O> PreparedCall<I, O> {
+    /// Combined wrapper requirements, in first occurrence order, without duplicates.
+    pub fn requirements(&self) -> &[CallRequirement] {
+        &self.requirements
+    }
+
     /// Preserve parameter grouping when mapping components to representation fields.
     pub fn parameters(&self) -> impl ExactSizeIterator<Item = InputBoundary<'_, I>> {
         self.inputs.iter().map(|input| InputBoundary {
@@ -316,7 +342,7 @@ impl<I, O> PreparedCall<I, O> {
     /// Assemble validation, alias checks, acquisition, construction, source call,
     /// output preparation, delivery and commit in their required order.
     /// The returned statements belong inside the adapter's fallible boundary closure.
-    pub fn emit(&self, hooks: CallHooks) -> TokenStream {
+    pub fn emit(&self) -> TokenStream {
         let validation = self.inputs.iter().map(|i| &i.validation);
         let resources: Vec<_> = self
             .inputs
@@ -331,13 +357,13 @@ impl<I, O> PreparedCall<I, O> {
         let prepare = &self.output.statements;
         let commit = &self.output.commit;
         let source = source_result();
-        let CallHooks {
-            acknowledge,
-            deliver,
+        let acknowledge = self.requirements.iter().map(|r| &r.acknowledge);
+        let Delivery {
+            statements: deliver,
             result,
-        } = hooks;
+        } = &self.output.delivery;
         quote! {
-            #(#validation)* #aliases #acknowledge #(#acquire)* #(#construct)*
+            #(#validation)* #aliases #(#acknowledge)* #(#acquire)* #(#construct)*
             let #source = #path(#(#args),*);
             #prepare #deliver #commit Ok(#result)
         }
@@ -368,7 +394,27 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
         if output.wires.len() != output.values.len() {
             return Err(format!("`{}`: output wire/value count differs", self.name));
         }
+        let mut requirements: Vec<CallRequirement> = Vec::new();
+        for requirement in inputs
+            .iter()
+            .flat_map(|i| &i.requirements)
+            .chain(&output.requirements)
+        {
+            if let Some(previous) = requirements.iter().find(|r| r.key == requirement.key) {
+                if previous.parameters.to_string() != requirement.parameters.to_string()
+                    || previous.acknowledge.to_string() != requirement.acknowledge.to_string()
+                {
+                    return Err(format!(
+                        "`{}`: conflicting call requirement `{}`",
+                        self.name, requirement.key
+                    ));
+                }
+            } else {
+                requirements.push(requirement.clone());
+            }
+        }
         Ok(PreparedCall {
+            requirements,
             path: self.path.clone(),
             inputs,
             output,
@@ -376,28 +422,32 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
     }
 }
 
-impl<I: InputConversion, O: OutputConversion, R> crate::Flat<I, O, R> {
-    /// Prepare a selected function and validate its explicit representation mappings.
-    /// Call [`Self::validate_representations`] once before a generation pass.
-    /// This method checks only the selected call's mappings. Canonical defaults
-    /// are never substituted during generation.
-    pub fn prepare_call(&self, name: &str) -> Result<PreparedCall<I::Wire, O::Wire>> {
-        let function = self.function(name)?;
-        let call = function.resolve_call()?;
-        for (parameter, input) in function.params.iter().zip(&call.inputs) {
-            self.check_mapping(
-                &parameter.ty.ty,
-                input.representation.as_ref(),
-                &input.wires,
-            )?;
-        }
-        self.check_mapping(
-            &function.ret.ty,
-            call.output.representation.as_ref(),
-            &call.output.wires,
+/// Prepare a selected function and validate its explicit representation mappings.
+/// Call [`crate::Flat::validate_representations`] once before a generation pass.
+/// This method checks only the selected call's mappings. Canonical defaults
+/// are never substituted during generation.
+pub fn prepare_call<I: InputConversion, O: OutputConversion, R>(
+    flat: &crate::Flat<I, O, R>,
+    name: &str,
+) -> Result<PreparedCall<I::Wire, O::Wire>> {
+    let function = flat.function(name)?;
+    let call = function.resolve_call()?;
+    for (parameter, input) in function.params.iter().zip(&call.inputs) {
+        flat.check_mapping(
+            &parameter.ty.ty,
+            input.representation.as_ref(),
+            &input.wires,
         )?;
-        Ok(call)
     }
+    flat.check_mapping(
+        &function.ret.ty,
+        call.output.representation.as_ref(),
+        &call.output.wires,
+    )?;
+    Ok(call)
+}
+
+impl<I: InputConversion, O: OutputConversion, R> crate::Flat<I, O, R> {
     /// Validate all registered type shapes, including schemas not used by a function.
     pub fn validate_representations(&self) -> Result<()> {
         self.representations.validate()?;

@@ -1,6 +1,6 @@
 //! Source types, resolved representations, and the complete wrapper-generation API.
 //! Parameters and results hold optional conversions constrained by direction-specific
-//! traits. Preparation fills slots; generation uses [`Flat::prepare_call`].
+//! traits. Preparation fills slots; generation uses [`prepare_call`].
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
 //! slot data types. Unit remains available for absence of a value.

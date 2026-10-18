@@ -3,7 +3,7 @@
 //! [`Declarations::fill`], [`bind_input`] and [`bind_output`] build conversions
 //! directly in a [`Bindings`] model. Recipes and codec input data are used only
 //! during construction; slots retain wires and code needed by wrapper writers.
-//! Generation uses [`Flat::prepare_call`] and the call emitter in `prebindgen-flat`;
+//! Generation uses [`prebindgen_flat::prepare_call`] and the call emitter in `prebindgen-flat`;
 //! this crate owns only declaration resolution and slot preparation.
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
@@ -261,11 +261,26 @@ pub trait Codec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<Self::Wire>>;
+    /// Complete a composed parameter plan before it is stored in a slot.
+    /// Called once per bound parameter, including records and selectors.
+    fn finish_input(&self, _plan: &mut InputPlan<Self::Wire>, _extra: &Self::Extra) -> Result<()> {
+        Ok(())
+    }
+    /// Complete a composed result plan, including unit and multi-wire results.
+    /// Install call-level delivery here, after all output expressions are known.
+    fn finish_output(
+        &self,
+        _plan: &mut OutputPlan<Self::Wire>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// Prepare delivery of the Rust expression `value` as one or more wires.
     ///
     /// Keep unpublished allocations under Rust ownership and transfer them only in
     /// [`OutputPlan::commit`]. Return a generation error for unsupported
-    /// conversions.
+    /// conversions. Install final delivery in [`Codec::finish_output`], rather
+    /// than on nested leaf plans; recursive composition rejects leaf delivery.
     ///
     /// # Arguments
     ///
@@ -358,6 +373,7 @@ pub fn bind_input<C: Codec, R: Default>(
         extra,
         &Condition::default(),
     )?;
+    codec.finish_input(&mut conversion, extra)?;
     let ty = flat.function(function)?.params[index].ty.ty.clone();
     conversion.representation = Some(register_shape(
         flat,
@@ -405,6 +421,7 @@ pub fn bind_output<C: Codec, R: Default>(
         prebindgen_flat::source_result_expr(),
         false,
     )?;
+    codec.finish_output(&mut conversion, extra)?;
     let ty = flat.function(function)?.ret.ty.clone();
     conversion.representation = Some(register_shape(
         flat,
@@ -449,6 +466,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
         let mut resources = Vec::new();
+        let mut requirements = Vec::new();
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
@@ -459,6 +477,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(InputPlan {
+                        requirements,
                         representation: None,
                         wires,
                         validation,
@@ -487,6 +506,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
+                    requirements.extend(p.requirements);
                     statements.extend(p.statements);
                     wires.extend(p.wires);
                     let name = &field.name;
@@ -517,6 +537,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
+                    requirements.extend(p.requirements);
                     statements.extend(p.statements);
                     wires.extend(p.wires);
                     call_args.push(p.argument);
@@ -548,6 +569,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
+                    requirements.extend(p.requirements);
                     let body = p.statements;
                     let value = p.argument;
                     wires.extend(p.wires);
@@ -558,6 +580,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
             }
         }
         Ok(InputPlan {
+            requirements,
             representation: None,
             wires,
             validation,
@@ -576,6 +599,8 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
         borrowed: bool,
     ) -> Result<OutputPlan<C::Wire>> {
         let mut out = OutputPlan {
+            requirements: Vec::new(),
+            delivery: Default::default(),
             representation: None,
             commit: TokenStream::new(),
             wires: Vec::new(),
@@ -600,7 +625,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                     let mut p =
                         self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
                     prefix(&mut p.wires, ComponentSegment::Field(name.to_string()));
-                    append(&mut out, p);
+                    append(&mut out, p)?;
                 }
             }
             Output::Getter { function, output } => {
@@ -621,7 +646,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
                 prefix(&mut child.wires, ComponentSegment::Getter(function.clone()));
-                append(&mut out, child);
+                append(&mut out, child)?;
             }
             Output::Combine(parts) => {
                 if parts.is_empty() {
@@ -646,7 +671,7 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
                     prefix(&mut p.wires, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
-                    append(&mut out, p);
+                    append(&mut out, p)?;
                 }
                 // Wire order follows the declaration. Observations execute before the move.
                 bodies.sort_by_key(|(consumes, _)| *consumes);
@@ -658,11 +683,18 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
         Ok(out)
     }
 }
-fn append<W>(to: &mut OutputPlan<W>, from: OutputPlan<W>) {
+fn append<W>(to: &mut OutputPlan<W>, from: OutputPlan<W>) -> Result<()> {
+    if !from.delivery.statements.is_empty()
+        || from.delivery.result.to_string() != quote!(()).to_string()
+    {
+        return Err("composed output delivery must be installed by Codec::finish_output".into());
+    }
+    to.requirements.extend(from.requirements);
     to.commit.extend(from.commit);
     to.wires.extend(from.wires);
     to.statements.extend(from.statements);
     to.values.extend(from.values);
+    Ok(())
 }
 
 #[cfg(test)]

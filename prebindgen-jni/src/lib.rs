@@ -405,13 +405,58 @@ impl Class {
         format!("{}.{}", self.pkg, self.name)
     }
 }
-/// Leaf conversions used by [`JniGen`].
+/// Conversions and slot glue used by [`JniGen`].
+/// Prepared code expects a mutable `env` JNI environment in the wrapper.
+/// Shared ownership acknowledgement declares `__ownership` through the call's
+/// requirements; output delivery creates the `result` object array.
+/// The writer supplies the error boundary and matching Kotlin protocol.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Extra = ();
     type Wire = JniWire;
+    fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
+        if plan.resources.iter().any(|r| r.access == Access::Move) {
+            plan.requirements.push(prebindgen_flat::CallRequirement {
+                key: "jni.ownership".into(),
+                parameters: quote!(__ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
+                acknowledge: quote!(
+                    if env.get_array_length(&__ownership).map_err(|e|e.to_string())? != 1 {
+                        return Err("invalid ownership acknowledgement".into());
+                    }
+                    env.set_boolean_array_region(&__ownership, 0, &[1]).map_err(|e|e.to_string())?;
+                ),
+            });
+        }
+        Ok(())
+    }
+    fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+        let count = plan.wires.len();
+        let mut encode = TokenStream::new();
+        for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
+            let expr = match &wire.kind {
+                JniWire::Scalar(p) => scalar::output_java(*p, value),
+                JniWire::Handle(_) => {
+                    quote!(::prebindgen_jni_runtime::handle_object(&mut env,(#value) as u64)?)
+                }
+                JniWire::Text => quote!(::prebindgen_jni_runtime::text_object(&mut env,&#value)?),
+                JniWire::Bytes => quote!(::prebindgen_jni_runtime::bytes_object(&mut env,&#value)?),
+                JniWire::Selector => return Err("selector output is unsupported".into()),
+            };
+            let i = i as i32;
+            encode.extend(quote! {
+                let object = #expr;
+                env.set_object_array_element(&result, #i, &object).map_err(|e|e.to_string())?;
+                env.delete_local_ref(object).map_err(|e|e.to_string())?;
+            });
+        }
+        plan.delivery = prebindgen_flat::Delivery {
+            statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut env, #count)?; #encode),
+            result: quote!(result.into_raw()),
+        };
+        Ok(())
+    }
     fn selector(&self, _: &()) -> JniWire {
         JniWire::Selector
     }
@@ -662,7 +707,7 @@ fn generate<
     }
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let call = flat.prepare_call(&f.name.to_string())?;
+        let call = prebindgen_flat::prepare_call(&flat, &f.name.to_string())?;
         let method = format!("call{index}");
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
@@ -696,18 +741,27 @@ fn generate<
             kt_params.push(format!("{n}: {kt}"));
             kt_args.push(arg);
         }
-        let has_consumes = !consumed.is_empty();
-        let ownership_param = if has_consumes {
-            params.push(
-                quote!(__ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
-            );
+        if call
+            .requirements()
+            .iter()
+            .any(|r| r.key != "jni.ownership" && !r.parameters.is_empty())
+        {
+            return Err("JNI wrapper requirement has no Kotlin parameter mapping".into());
+        }
+        let has_consumes = call.requirements().iter().any(|r| r.key == "jni.ownership");
+        if has_consumes != !consumed.is_empty() {
+            return Err("JNI ownership requirement does not match consuming input wires".into());
+        }
+        params.extend(
+            call.requirements()
+                .iter()
+                .filter(|r| !r.parameters.is_empty())
+                .map(|r| r.parameters.clone()),
+        );
+        if has_consumes {
             raw_params.push("ownership: BooleanArray".into());
             kt_args.push("ownership".into());
-            quote!(if env.get_array_length(&__ownership).map_err(|e|e.to_string())? != 1 {return Err("invalid ownership acknowledgement".into());}
-                env.set_boolean_array_region(&__ownership, 0, &[1]).map_err(|e|e.to_string())?;)
-        } else {
-            quote!()
-        };
+        }
         let slots: usize = usize::from(has_consumes)
             + call
                 .inputs()
@@ -722,44 +776,24 @@ fn generate<
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"
             ));
         }
-        let count = call.outputs().len();
-        let mut encode = TokenStream::new();
         let mut delivered = Vec::new();
         let mut result_types = Vec::new();
         for (i, output) in call.outputs().enumerate() {
-            let (w, v) = (output.wire, output.value);
-            let (expr, kt, decode) = match &w.kind {
-                JniWire::Scalar(p) => scalar::output(*p, v, i),
+            let w = output.wire;
+            let (kt, decode) = match &w.kind {
+                JniWire::Scalar(p) => scalar::output_kotlin(*p, i),
                 JniWire::Handle(handle) => {
                     let c = class(&classes, &handle.ty)?.fqn();
-                    (
-                        quote!(::prebindgen_jni_runtime::handle_object(&mut env,(#v) as u64)?),
-                        c.clone(),
-                        format!("{c}(result[{i}] as Long)"),
-                    )
+                    (c.clone(), format!("{c}(result[{i}] as Long)"))
                 }
-                JniWire::Text => (
-                    quote!(::prebindgen_jni_runtime::text_object(&mut env,&#v)?),
-                    "String".into(),
-                    format!("result[{i}] as String"),
-                ),
-                JniWire::Bytes => (
-                    quote!(::prebindgen_jni_runtime::bytes_object(&mut env,&#v)?),
-                    "ByteArray".into(),
-                    format!("result[{i}] as ByteArray"),
-                ),
+                JniWire::Text => ("String".into(), format!("result[{i}] as String")),
+                JniWire::Bytes => ("ByteArray".into(), format!("result[{i}] as ByteArray")),
                 JniWire::Selector => return Err("selector output is unsupported".into()),
             };
-            let i = i as i32;
-            encode.extend(quote!{let object=#expr;env.set_object_array_element(&result,#i,&object).map_err(|e|e.to_string())?;env.delete_local_ref(object).map_err(|e|e.to_string())?;});
             delivered.push(decode);
             result_types.push(kt);
         }
-        let body = call.emit(prebindgen_flat::CallHooks {
-            acknowledge: ownership_param,
-            deliver: quote!(let result=::prebindgen_jni_runtime::array(&mut env,#count)?; #encode),
-            result: quote!(result.into_raw()),
-        });
+        let body = call.emit();
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]

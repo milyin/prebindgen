@@ -107,6 +107,7 @@ pub fn input<W>(
         ),
     };
     Ok(InputPlan {
+        requirements: Vec::new(),
         representation: None,
         wires: vec![Wire {
             component: Default::default(),
@@ -162,6 +163,8 @@ pub fn output<W>(
     let expr = encode(value);
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
+        requirements: Vec::new(),
+        delivery: Default::default(),
         representation: None,
         wires: vec![Wire {
             component: Default::default(),

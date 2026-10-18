@@ -62,6 +62,7 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
+            requirements: Vec::new(),
             representation: None,
             wires: vec![Wire {
                 component: Default::default(),
@@ -93,6 +94,8 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
+            requirements: Vec::new(),
+            delivery: Default::default(),
             representation: None,
             wires: vec![Wire {
                 component: Default::default(),
@@ -567,7 +570,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
         &Extra::default(),
     )
     .unwrap();
-    let call = flat.prepare_call("point").unwrap();
+    let call = prebindgen_flat::prepare_call(&flat, "point").unwrap();
     let shape = flat
         .representations
         .get(call.output_representation().unwrap())
@@ -589,5 +592,113 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
             .iter()
             .map(|c| c.path.clone())
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
+    struct FinalizingCodec;
+    impl Codec for FinalizingCodec {
+        type Extra = Extra;
+        type Wire = TestWire;
+        fn selector(&self, extra: &Extra) -> TestWire {
+            TEST_CODEC.selector(extra)
+        }
+        fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
+            TEST_CODEC.consumes(ty, extra)
+        }
+        fn input_leaf(
+            &self,
+            ty: &Type,
+            extra: &Extra,
+            w: syn::Ident,
+            v: syn::Ident,
+            active: &Condition,
+        ) -> Result<InputPlan<TestWire>> {
+            TEST_CODEC.input_leaf(ty, extra, w, v, active)
+        }
+        fn output_leaf(
+            &self,
+            ty: &Type,
+            extra: &Extra,
+            w: syn::Ident,
+            v: TokenStream,
+            borrowed: bool,
+        ) -> Result<OutputPlan<TestWire>> {
+            TEST_CODEC.output_leaf(ty, extra, w, v, borrowed)
+        }
+        fn finish_input(&self, plan: &mut InputPlan<TestWire>, _: &Extra) -> Result<()> {
+            assert!(plan.requirements.is_empty());
+            assert_eq!(plan.wires.len(), 2);
+            plan.requirements.push(prebindgen_flat::CallRequirement {
+                key: "test.complete".into(),
+                parameters: quote!(),
+                acknowledge: quote!(ack();),
+            });
+            Ok(())
+        }
+        fn finish_output(&self, plan: &mut OutputPlan<TestWire>, extra: &Extra) -> Result<()> {
+            if extra.name == "fail" {
+                return Err("finalization failed".into());
+            }
+            assert!(plan.delivery.statements.is_empty());
+            assert!(plan.wires.is_empty());
+            plan.delivery.statements = quote!(deliver_unit(););
+            Ok(())
+        }
+    }
+    let source = "pub struct Pair { pub a:i32, pub b:i32 } pub fn pair(a:i32,b:i32)->Pair {} pub fn take(p:Pair) {}";
+    let mut direct = parse(source);
+    bind_input(
+        &mut direct,
+        &FinalizingCodec,
+        "take",
+        "p",
+        &Input::constructor("pair", [Input::Leaf, Input::Leaf]),
+        &Extra::default(),
+    )
+    .unwrap();
+    bind_output(
+        &mut direct,
+        &FinalizingCodec,
+        "take",
+        &Output::fields([]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let declarations = Declarations::new(&direct, vec![]).unwrap();
+    let decl = FunctionDecl::new(syn::parse_quote!(take)).expand_param(
+        "p",
+        ExpandParamDecl::new(syn::parse_quote!(Pair)).variant(fun!(pair)),
+    );
+    let mut flat = parse(source);
+    assert_eq!(
+        declarations
+            .fill(
+                &mut flat,
+                &FinalizingCodec,
+                &decl,
+                &Extra {
+                    name: "fail",
+                    ..Extra::default()
+                }
+            )
+            .unwrap_err(),
+        "finalization failed"
+    );
+    assert!(flat.function("take").unwrap().params[0].ty.slot.is_none());
+    assert!(flat.function("take").unwrap().ret.slot.is_none());
+    declarations
+        .fill(&mut flat, &FinalizingCodec, &decl, &Extra::default())
+        .unwrap();
+    assert_eq!(
+        prebindgen_flat::prepare_call(&flat, "take")
+            .unwrap()
+            .emit()
+            .to_string(),
+        prebindgen_flat::prepare_call(&direct, "take")
+            .unwrap()
+            .emit()
+            .to_string()
     );
 }

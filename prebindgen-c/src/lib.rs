@@ -27,7 +27,10 @@ type Wire = GenericWire<CWire>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-/// Leaf conversions used by [`Cbindgen`].
+/// Conversions and slot glue used by [`Cbindgen`].
+/// Prepared output delivery expects `out` and a local `__PbResult` type alias
+/// supplied by the writer. The writer checks `out` and provides the error boundary
+/// and buffer helpers before executing the assembled call.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
 ///
@@ -49,6 +52,27 @@ pub struct CCodec;
 impl Codec for CCodec {
     type Extra = ();
     type Wire = CWire;
+    fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
+        let mut values: Vec<_> = plan
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let field = format_ident!("v{i}");
+                quote!(#field: #value)
+            })
+            .collect();
+        if values.is_empty() {
+            values.push(quote!(unused: 0));
+        }
+        // The writer supplies the concrete result type through this local alias,
+        // and an `out` pointer to that type.
+        plan.delivery = prebindgen_flat::Delivery {
+            statements: quote!(let result = __PbResult { #(#values),* }; std::ptr::write(out, result);),
+            result: quote!(()),
+        };
+        Ok(())
+    }
     fn selector(&self, _: &()) -> CWire {
         CWire::Selector
     }
@@ -417,7 +441,7 @@ fn generate<
         if f.ret.slot.is_none() {
             continue;
         }
-        let call = flat.prepare_call(&f.name.to_string())?;
+        let call = prebindgen_flat::prepare_call(&flat, &f.name.to_string())?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
@@ -479,35 +503,34 @@ The pointer must be null or a live allocation of the declared type returned by t
             cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
         }
         let mut fields = Vec::new();
-        let mut values = Vec::new();
         header.push_str("typedef struct {\n");
         for (i, output) in call.outputs().enumerate() {
-            let (w, v) = (output.wire, output.value);
+            let w = output.wire;
             let field = format_ident!("v{i}");
             let ty = rust_ty(w);
             fields.push(quote!(pub #field:#ty));
-            values.push(quote!(#field:#v));
             header.push_str(&format!("    {} v{i};\n", c_ty(w, prefix, &pointers)));
         }
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));
-            values.push(quote!(unused:0));
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {result};\n"));
         cparams.push(format!("{result} *out"));
         header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
-        let body = call.emit(prebindgen_flat::CallHooks {
-            deliver: quote!(let result=#result{#(#values),*}; std::ptr::write(out,result);),
-            result: quote!(()),
-            ..Default::default()
-        });
+        let body = call.emit();
+        if call.requirements().iter().any(|r| !r.parameters.is_empty()) {
+            return Err(
+                "C wrapper requirements cannot add parameters without a C header mapping".into(),
+            );
+        }
         tokens.extend(quote! {
          #[repr(C)] pub struct #result {#(#fields),*}
          #[doc = "# Safety
 The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."]
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)*out:*mut #result)->i32{
+          type __PbResult = #result;
           if out.is_null(){__pb_error("null result pointer");return -1;}
           match ::prebindgen_runtime::boundary(||{
            #body
@@ -552,6 +575,8 @@ mod generation_tests {
             fn emit(&self) -> Result<OutputPlan<CWire>> {
                 self.0.set(self.0.get() + 1);
                 Ok(OutputPlan {
+                    requirements: Vec::new(),
+                    delivery: Default::default(),
                     representation: None,
                     wires: vec![],
                     values: vec![],

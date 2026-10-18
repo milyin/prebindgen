@@ -99,29 +99,35 @@ settings remain commented out in the example manifests.
 - `Flat<I, O, R>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
 - Call `flat.validate_representations()` once at the start of generation.
-  `flat.prepare_call(name)` resolves only the selected function's slots and validates
+  `prepare_call(&flat, name)` resolves only the selected function's slots and validates
   its explicit representation mappings. `PreparedCall::inputs`, `parameters`
   and `outputs` expose boundary signatures and paired output expressions without
   exposing execution phases to the writer.
-- `call.emit(CallHooks { acknowledge, deliver, result })` assembles the entire
-  Rust call protocol: all validation and alias checks, acknowledgement, all
-  acquisition, argument construction, source invocation, output preparation,
-  delivery, and ownership commit. The hooks contain generated Rust code, not
-  runtime callbacks. Output builders use `source_result()` for the source-result
-  identifier; plans cannot independently rename that local. Delivery may use `?`;
-  the final result expression must be infallible. The returned statements run inside the adapter's error boundary.
+- Input and output plans carry named `CallRequirement`s, including additional
+  Rust parameters and acknowledgement code. `prepare_call` merges identical
+  requirements by key in first occurrence order and rejects conflicting definitions.
+  `call.requirements()` exposes the resulting wrapper requirements.
+- The result slot carries `Delivery`: fallible delivery statements and an
+  infallible return expression. `call.emit()` assembles all validation and alias
+  checks, shared acknowledgement, all acquisition, argument construction, source
+  invocation, output preparation, delivery, and ownership commit. No generator or
+  external hooks are passed to assembly. Output builders use `source_result()`
+  for the source-result identifier. The returned statements run inside the
+  adapter's error boundary and the environment expected by the prepared slots.
 - `rust_source` formats generated Rust. `Wire`, `Condition`, `Access` and
   `Resource` are general generation contracts defined in flat.
 
 Both C and JNI writers use this API. Their generation functions are generic over
 conversion implementations with the corresponding adapter wire type. They supply
-boundary signatures, delivery and error handling; they do not combine conversion
+boundary signatures, the required environment and error handling; they do not combine conversion
 phases or depend on declarations during generation.
 
 `prebindgen-declarations` prepares slots. Its `Bindings<W, R = ()>` alias is
 `Flat<InputPlan<W>, OutputPlan<W>, R>`. `bind_input` and `bind_output` compile one
 occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
-function. Failed compilation preserves existing slots. Existing converters survive
+function. `Codec::finish_input` and `finish_output` attach glue after recursive
+composition, during preparation only; the latter also runs for unit results.
+Failed compilation preserves existing slots. Existing converters survive
 default filling; explicit overrides replace them. Recipes and `Codec::Extra` are
 construction inputs, never stored in Flat. Nested recipes use the enclosing
 occurrence's extra data.

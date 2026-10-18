@@ -255,6 +255,12 @@ impl Declarations {
         } else {
             None
         };
+        for input in inputs.iter_mut().flatten() {
+            codec.finish_input(input, extra)?;
+        }
+        if let Some(output) = &mut output {
+            codec.finish_output(output, extra)?;
+        }
         // Compilation has succeeded for the complete function. Register the
         // resolved shapes only now, preserving atomicity on conversion errors.
         let parameter_types: Vec<_> = source
