@@ -1,13 +1,12 @@
-//! Conversion composition. Adapters supply leaf codecs; wrappers consume conversion slots.
+//! Declaration language and composition for preparing conversion slots.
 //!
 //! [`Declarations::fill`], [`bind_input`] and [`bind_output`] build conversions
 //! directly in a [`Bindings`] model. Recipes and codec input data are used only
 //! during construction; slots retain wires and code needed by wrapper writers.
 //! Generation uses [`Flat::prepare_call`] and the call emitter in `prebindgen-flat`;
-//! tools owns only declaration resolution and slot preparation.
+//! this crate owns only declaration resolution and slot preparation.
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
-//! [`value`] provides conversions for values copied across the boundary and
-//! [`boxed`] for values kept in Rust-owned allocations.
+//! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_flat::{
     same_type, type_key, ComponentSegment, Condition, Flat, InputPlan, OutputPlan, Result, Wire,
@@ -132,10 +131,11 @@ impl Output {
     }
 }
 
-/// Language-specific leaf conversions. Recursive composition stays in tools.
+/// Language-specific leaf conversions. Recursive composition stays in this declaration compiler.
 ///
 /// A leaf is a source type the adapter converts itself: a value copied across
-/// the boundary (see [`value`]) or an object kept in Rust (see [`boxed`]). The
+/// the boundary or an object kept in Rust. `prebindgen-conversions` provides helpers
+/// for both representations. The
 /// adapter chooses by type; a recipe only says where the leaves are.
 ///
 /// Input leaves must validate without consuming in `validation`, then
@@ -154,8 +154,9 @@ impl Output {
 ///
 /// ```
 /// use prebindgen_flat::{Result, Condition, InputPlan, OutputPlan, validate_bindings};
-/// use prebindgen_tools::{
-///     value, Codec, Declarations,
+/// use prebindgen_conversions::value;
+/// use prebindgen_declarations::{
+///     Codec, Declarations,
 ///     Bindings, fun, expand_param, expand_return, bind_input, Input,
 /// };
 /// use proc_macro2::TokenStream;
@@ -219,7 +220,7 @@ pub trait Codec {
     /// The adapter's description of one wire, stored in [`Wire::kind`], such as
     /// its carrier type or a destination type name.
     type Wire: Clone + std::fmt::Debug;
-    /// Describe the `i32` arm index wire that tools create for [`Input::Selector`].
+    /// Describe the `i32` arm index wire that the declaration compiler creates for [`Input::Selector`].
     ///
     /// `extra` is the occurrence data of the conversion that contains the selector.
     fn selector(&self, extra: &Self::Extra) -> Self::Wire;
@@ -295,7 +296,7 @@ pub trait Codec {
 ///
 /// Output conversion data cannot be attached to an input position:
 /// ```compile_fail
-/// use prebindgen_tools::Bindings;
+/// use prebindgen_declarations::Bindings;
 /// fn swap(flat: &mut Bindings<()>) {
 ///     let function = flat.function_mut("foo").unwrap();
 ///     function.params[0].ty.slot = function.ret.slot.clone();
@@ -303,7 +304,7 @@ pub trait Codec {
 /// ```
 /// Nor can a recipe be stored in a slot:
 /// ```compile_fail
-/// use prebindgen_tools::{Bindings, Input};
+/// use prebindgen_declarations::{Bindings, Input};
 /// fn configure(flat: &mut Bindings<()>) {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
@@ -332,7 +333,7 @@ pub type Bindings<W, R = ()> = Flat<InputPlan<W>, OutputPlan<W>, R>;
 ///
 /// Input binding rejects output recipes:
 /// ```compile_fail
-/// use prebindgen_tools::{bind_input, Bindings, Codec, Output};
+/// use prebindgen_declarations::{bind_input, Bindings, Codec, Output};
 /// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
 ///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
@@ -385,7 +386,7 @@ pub fn bind_input<C: Codec, R: Default>(
 ///
 /// Output binding rejects input recipes:
 /// ```compile_fail
-/// use prebindgen_tools::{bind_output, Bindings, Codec, Input};
+/// use prebindgen_declarations::{bind_output, Bindings, Codec, Input};
 /// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
@@ -671,11 +672,6 @@ pub mod declarations;
 pub use declarations::{
     Declarations, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl,
 };
-
-/// Shared conversion helpers for adapters that store foreign values in boxes.
-pub mod boxed;
-/// Shared conversion helpers for values copied across the boundary.
-pub mod value;
 
 fn prefix<W>(wires: &mut [Wire<W>], segment: ComponentSegment) {
     for wire in wires {

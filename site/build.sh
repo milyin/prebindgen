@@ -19,7 +19,8 @@ crates=(
   prebindgen-jni-runtime
   prebindgen-proc-macro
   prebindgen-flat
-  prebindgen-tools
+  prebindgen-conversions
+  prebindgen-declarations
   prebindgen-registry
   prebindgen-c
   prebindgen-jni

@@ -1,6 +1,6 @@
 use super::*;
+use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
-use value::Value;
 struct TestCodec;
 const TEST_CODEC: TestCodec = TestCodec;
 #[derive(Clone, Debug, PartialEq)]

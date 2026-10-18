@@ -2,14 +2,14 @@
 
 prebindgen generates C and JNI/Kotlin bindings from annotated Rust source.
 The flat model describes source signatures and types. Build-script declarations
-configure conversions for each parameter and result; shared tools build the
+configure conversions for each parameter and result; the declaration compiler builds the
 conversions, and language adapters emit wrappers and foreign declarations.
 
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
 Flat with empty conversion slots
-        ↓ prebindgen-tools builds and attaches converters
+        ↓ prebindgen-declarations builds and attaches converters
 Flat<I: InputConversion, O: OutputConversion, R>
         (parameter slots: Option<I>; result slots: Option<O>)
         ↓ C or JNI wrapper writer
@@ -22,14 +22,14 @@ can have different input recipes. `Flat<I, O, R>` requires conversion traits on
 source structure. Named representation schemas describe logical components,
 source-field associations and adapter-specific type data `R`; wires refer to
 components by stable paths. Flat also preserves source names, locations and guards.
-Wrapper writers use flat's generation API; recursive recipe resolution belongs to tools.
+Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
 
 ## Examples migrated from main
 
 This branch replaces the generator engine while preserving source capture and
 source-reading support. The supported JniGen `build.rs` declarations keep their
 existing syntax and import paths. `prebindgen-registry` re-exports declaration
-types and macros from `prebindgen-tools`.
+types and macros from `prebindgen-declarations`.
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
 been removed. All eight Rust example crates from `main` are in the workspace.
@@ -77,7 +77,7 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `fun!`,
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
-The tools layer also supports `expand_param!` constructor/identity variants,
+The declaration layer also supports `expand_param!` constructor/identity variants,
 `expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
 output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
@@ -110,21 +110,30 @@ settings remain commented out in the example manifests.
   runtime callbacks. Output builders use `source_result()` for the source-result
   identifier; plans cannot independently rename that local. Delivery may use `?`;
   the final result expression must be infallible. The returned statements run inside the adapter's error boundary.
-- `rust_source` formats generated Rust. `Wire`, `Condition`, `Access`, `Resource`
-  and `BoxedWire` are generation contracts defined in flat.
+- `rust_source` formats generated Rust. `Wire`, `Condition`, `Access` and
+  `Resource` are general generation contracts defined in flat.
 
 Both C and JNI writers use this API. Their generation functions are generic over
 conversion implementations with the corresponding adapter wire type. They supply
 boundary signatures, delivery and error handling; they do not combine conversion
-phases or depend on tools during generation.
+phases or depend on declarations during generation.
 
-`prebindgen-tools` prepares slots. Its `Bindings<W, R = ()>` alias is
+`prebindgen-declarations` prepares slots. Its `Bindings<W, R = ()>` alias is
 `Flat<InputPlan<W>, OutputPlan<W>, R>`. `bind_input` and `bind_output` compile one
 occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
 function. Failed compilation preserves existing slots. Existing converters survive
 default filling; explicit overrides replace them. Recipes and `Codec::Extra` are
 construction inputs, never stored in Flat. Nested recipes use the enclosing
-occurrence's extra data. Preparation helpers `value` and `boxed` build leaf plans.
+occurrence's extra data.
+
+`prebindgen-conversions` owns reusable leaf implementations: `value`, `boxed`,
+`boxed::Storage` and `boxed::BoxedWire`. It depends on flat and does not depend
+on declarations. Adapters use its builders during preparation and its metadata
+during generation. Declarations uses conversions only in tests and examples;
+its production compiler accepts adapter-supplied codecs.
+
+`prebindgen-runtime` remains the execution-time support library. It acquires no
+`syn` or code-generation dependencies from this separation.
 
 ### Representations and field mapping
 
@@ -145,7 +154,7 @@ from generated local names or wire order. `PreparedCall::parameters()` preserves
 the grouping of wires belonging to each source parameter. Output expressions are
 paired with wires by `outputs()`.
 
-Tools registers occurrence schemas and preserves component paths through record
+The declaration compiler registers occurrence schemas and preserves component paths through record
 fields, constructors, selectors, getters and combined outputs. The optional `R`
 parameter allows preparation to attach richer adapter metadata (`R: Default` for
 the standard preparation helpers). Direct custom conversion implementations can
@@ -165,15 +174,15 @@ all slots filled, including unit results. The current adapters additionally use
 A leaf is a source type the adapter converts itself rather than composing it
 from parts. Recipes mark where the leaves are (`Input::Leaf`, `Output::Leaf`);
 the codec chooses each leaf's conversion from its type. `Codec` has four
-methods: `input_leaf`, `output_leaf`, `consumes` and `selector`. Tools offer two
+methods: `input_leaf`, `output_leaf`, `consumes` and `selector`. `prebindgen-conversions` provides two
 helpers for leaves:
 
-- `prebindgen_tools::value` copies values across the boundary. `Value::of`
+- `prebindgen_conversions::value` copies values across the boundary. `Value::of`
   classifies primitives, text (`String`, `&String`, `&str`) and bytes
   (`Vec<u8>`, `&Vec<u8>`, `&[u8]`). The adapter supplies only the decode and
   encode expressions; the helper adapts them to owned and borrowed targets, so a
   `&str` target can borrow the caller's buffer without copying.
-- `prebindgen_tools::boxed` keeps objects in Rust-owned allocations.
+- `prebindgen_conversions::boxed` keeps objects in Rust-owned allocations.
 
 Both adapters treat values as copies and every other leaf type as a boxed object,
 so a type alias such as `type Key = String` crosses as an object.
@@ -184,13 +193,13 @@ stores the adapter's description of its carrier in `kind`. C uses `CWire`
 byte array, handle or selector); C passes text and bytes in the same buffer type.
 These are distinct types: Rust rejects attaching a C converter to JNI bindings
 or passing a JNI model to the C generator.
-`Bindings<W>` retains these wires. Tools compose leaves, fields, constructors,
+`Bindings<W>` retains these wires. Declarations compose leaves, fields, constructors,
 input selectors and combined outputs. The composition model requires neither
 handles nor boxed storage. It has no object registry or universal `Send`
 requirement.
 
 The adapter declares whether a leaf output consumes its value; values do not.
-Tools run observations before that move and reject double consumption. For
+Declarations run observations before that move and reject double consumption. For
 pointer/handle output from borrowed record fields, these adapters make
 independent owned copies using Rust `Clone`. A standalone owned text/byte result
 moves its buffer; an observed field is copied.
@@ -258,7 +267,7 @@ Consumed pointers become invalid. Destruction accepts null, but destroying a
 non-null pointer twice or using a consumed pointer is undefined behavior, as
 with ordinary owned C pointers. There is no runtime type/liveness registry.
 C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
-Both current adapters opt into `prebindgen_tools::boxed`, which shares pointer
+Both current adapters opt into `prebindgen_conversions::boxed`, which shares pointer
 validation, borrow/move acquisition, cloned observations and output commit.
 C stores objects directly in `Box<T>`; its header exposes typed opaque pointers.
 Other adapters can choose different storage in their leaf conversions; there is
@@ -301,8 +310,8 @@ overloads and shared selector argument storage remain outside this subset.
 ## API documentation
 
 Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
-`prebindgen_flat::Flat` for occurrence slots, `prebindgen_tools::Declarations`
-for build-script expansions, and `prebindgen_tools::Codec` for adapter authors.
+`prebindgen_flat::Flat` for occurrence slots, `prebindgen_declarations::Declarations`
+for build-script expansions, and `prebindgen_declarations::Codec` for adapter authors.
 The codec and flat conversion contracts explain validation, ownership acquisition
 and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
 

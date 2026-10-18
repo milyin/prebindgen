@@ -5,9 +5,9 @@
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Flat, Result};
 mod scalar;
-use prebindgen_flat::BoxedWire;
+use prebindgen_conversions::boxed::BoxedWire;
+use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
-use prebindgen_tools::value::Value;
 /// The carrier of one JNI wire.
 ///
 /// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -25,8 +25,8 @@ pub enum JniWire {
     /// An `int` selector arm index.
     Selector,
 }
+use prebindgen_declarations::Codec;
 use prebindgen_flat::{Access, InputPlan, OutputPlan};
-use prebindgen_tools::Codec;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with JNI handle conversion data for wrapper emission.
 ///
@@ -34,7 +34,7 @@ type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// wire type belongs to a different adapter:
 /// ```compile_fail
 /// use prebindgen_jni::Bindings;
-/// use prebindgen_tools::{bind_input, Input};
+/// use prebindgen_declarations::{bind_input, Input};
 /// fn wrong(flat: &mut Bindings) {
 ///     bind_input(flat, &prebindgen_c::CCodec, "echo", "x", &Input::Leaf, &()).unwrap();
 /// }
@@ -50,7 +50,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use prebindgen_tools::{
+pub use prebindgen_declarations::{
     expand_param, expand_return, fields, fun, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
     FieldsDecl, FunctionDecl,
 };
@@ -206,15 +206,15 @@ impl JniGenBuilder {
     ///
     /// `f` receives the model and may attach converters to it.
     ///
-    /// Use this to attach converters with [`prebindgen_tools::bind_input`] and
-    /// [`prebindgen_tools::bind_output`], using [`JniCodec`]. Callbacks run in
+    /// Use this to attach converters with [`prebindgen_declarations::bind_input`] and
+    /// [`prebindgen_declarations::bind_output`], using [`JniCodec`]. Callbacks run in
     /// registration order; errors stop generation. Source selection has already happened, so references
     /// introduced here must already exist in the model. Per-function declarations
     /// can explicitly override the converters assigned by these callbacks.
     ///
     /// ```
     /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
-    /// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+    /// use prebindgen_declarations::{bind_input, bind_output, Input, Output};
     /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
     /// let flat = Bindings::parse(
     ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -305,7 +305,7 @@ impl JniGenBuilder {
     /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
     /// respective compilers when consuming the generated output.
     pub fn build(self) -> Result<JniGen> {
-        let references = prebindgen_tools::declarations::source_functions(
+        let references = prebindgen_declarations::declarations::source_functions(
             &self.expansions,
             self.packages.iter().flat_map(|p| &p.functions),
         );
@@ -327,7 +327,7 @@ impl JniGenBuilder {
         for configure in self.configure {
             configure(&mut flat)?;
         }
-        let defaults = prebindgen_tools::Declarations::new(&flat, self.expansions)?;
+        let defaults = prebindgen_declarations::Declarations::new(&flat, self.expansions)?;
         validate_package(&self.prefix)?;
         let mut classes = BTreeMap::new();
         let mut functions = Vec::new();
@@ -406,7 +406,7 @@ impl Class {
     }
 }
 /// Leaf conversions used by [`JniGen`].
-/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+/// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
 pub struct JniCodec;
 impl Codec for JniCodec {
@@ -437,12 +437,12 @@ impl Codec for JniCodec {
                 JniWire::Bytes,
             ),
             None => {
-                return prebindgen_tools::boxed::input(&storage(), ty, w, v, active, |b| {
+                return prebindgen_conversions::boxed::input(&storage(), ty, w, v, active, |b| {
                     JniWire::Handle(Box::new(b))
                 })
             }
         };
-        prebindgen_tools::value::input(ty, w, v, active, decode, kind)
+        prebindgen_conversions::value::input(ty, w, v, active, decode, kind)
     }
     fn output_leaf(
         &self,
@@ -455,7 +455,7 @@ impl Codec for JniCodec {
         // Text and bytes stay Rust values until the wrapper delivers them.
         let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
             Some(Value::Scalar(p)) => {
-                return prebindgen_tools::value::output(
+                return prebindgen_conversions::value::output(
                     ty,
                     w,
                     v,
@@ -467,16 +467,16 @@ impl Codec for JniCodec {
             Some(Value::Text) => (|v| v, JniWire::Text),
             Some(Value::Bytes) => (|v| v, JniWire::Bytes),
             None => {
-                return prebindgen_tools::boxed::output(&storage(), ty, w, v, borrowed, |b| {
+                return prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
                     JniWire::Handle(Box::new(b))
                 })
             }
         };
-        prebindgen_tools::value::output(ty, w, v, borrowed, encode, kind)
+        prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
     }
 }
-fn storage() -> prebindgen_tools::boxed::Storage {
-    prebindgen_tools::boxed::Storage::Wrapped(syn::parse_quote!(
+fn storage() -> prebindgen_conversions::boxed::Storage {
+    prebindgen_conversions::boxed::Storage::Wrapped(syn::parse_quote!(
         ::prebindgen_jni_runtime::Allocation
     ))
 }

@@ -1,6 +1,6 @@
 //! Leaf conversions for values the adapter copies across the boundary.
-//! [`Value::of`](crate::value::Value::of) classifies a source type;
-//! [`input`](crate::value::input) and [`output`](crate::value::output) build
+//! [`Value::of`] classifies a source type;
+//! [`input`] and [`output`] build
 //! the conversion around the adapter's own decode and encode expressions.
 use prebindgen_flat::{type_key, Primitive, Result};
 use prebindgen_flat::{Condition, InputPlan, OutputPlan, Wire};
@@ -22,7 +22,7 @@ impl Value {
     /// Classify `ty`; `None` means it is not a value type, including `&mut` views.
     ///
     /// ```
-    /// use prebindgen_tools::value::Value;
+    /// use prebindgen_conversions::value::Value;
     /// assert_eq!(Value::of(&syn::parse_quote!(&str)), Some(Value::Text));
     /// assert_eq!(Value::of(&syn::parse_quote!(&mut String)), None);
     /// ```
@@ -55,16 +55,15 @@ impl Value {
 /// * `ty` — the source parameter type; it must satisfy [`Value::of`].
 /// * `wire` — identifier of the boundary parameter `decode` reads.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — the selector arms under which this input is used, as given to
-///   [`Codec::input_leaf`](crate::Codec::input_leaf). `decode` runs only when
-///   they are selected.
+/// * `active` — the selector arms under which this input is used. `decode` runs
+///   only when they are selected.
 /// * `decode` — Rust expression that reads `wire` and yields the owned value or,
 ///   for text and bytes, a view (`&str`, `&[u8]`). It runs during validation and
 ///   may return a `String` error with `?`.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
 ///
 /// ```
-/// use prebindgen_tools::value;
+/// use prebindgen_conversions::value;
 /// use prebindgen_flat::Condition;
 /// let input = value::input(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),

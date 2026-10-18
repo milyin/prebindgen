@@ -6,4 +6,4 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-prebindgen-tools.workspace = true
+prebindgen-declarations.workspace = true

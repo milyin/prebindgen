@@ -1,11 +1,20 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
-//! Adapters select a [`Storage`](crate::boxed::Storage) policy and map
-//! [`BoxedWire`](prebindgen_flat::BoxedWire) data into their own wire kind.
-use prebindgen_flat::{
-    Access, BoxedWire, Condition, InputPlan, OutputPlan, Resource, Result, Wire,
-};
+//! Adapters select a [`Storage`] policy and map
+//! [`BoxedWire`] data into their own wire kind.
+use prebindgen_flat::{Access, Condition, InputPlan, OutputPlan, Resource, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+/// Source type and access mode for a wire carrying a boxed allocation address.
+/// This is generation metadata used by adapters to declare pointer/handle types;
+/// allocation and conversion construction remain preparation responsibilities.
+#[derive(Clone, Debug)]
+pub struct BoxedWire {
+    /// Source value type inside the allocation, without the input reference or storage wrapper.
+    pub ty: syn::Type,
+    /// Whether the call moves, shares or exclusively borrows the stored value.
+    pub access: Access,
+}
+
 /// Storage chosen by the adapter. A wrapper must expose a `value` field and
 /// allow construction as `Wrapper { value }`.
 pub enum Storage {
@@ -53,12 +62,12 @@ impl Storage {
 ///   is the adapter's choice, an integer or a pointer, as long as `wire as *mut _`
 ///   converts it to the allocation pointer.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — the selector arms under which this input is used, as given to
-///   [`Codec::input_leaf`](crate::Codec::input_leaf).
+/// * `active` — the selector arms under which this input is used. Validation
+///   and ownership acquisition run only when those arms are selected.
 /// * `wire_kind` — builds [`Wire::kind`] from the pointee type and access mode.
 ///
 /// ```
-/// use prebindgen_tools::boxed;
+/// use prebindgen_conversions::boxed;
 /// use prebindgen_flat::{Access, Condition};
 /// let input = boxed::input(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),

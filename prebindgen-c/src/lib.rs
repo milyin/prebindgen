@@ -1,8 +1,8 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
-use prebindgen_flat::BoxedWire;
+use prebindgen_conversions::boxed::BoxedWire;
+use prebindgen_conversions::value::Value;
 use prebindgen_flat::{Flat, Primitive, Result};
-use prebindgen_tools::value::Value;
 /// The carrier of one C wire.
 ///
 /// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -18,8 +18,8 @@ pub enum CWire {
     /// An `int32_t` selector arm index.
     Selector,
 }
+use prebindgen_declarations::Codec;
 use prebindgen_flat::{InputPlan, OutputPlan, Wire as GenericWire};
-use prebindgen_tools::Codec;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -28,12 +28,12 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 /// Leaf conversions used by [`Cbindgen`].
-/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+/// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
 ///
 /// ```
 /// use prebindgen_c::{Bindings, Cbindgen, CCodec};
-/// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+/// use prebindgen_declarations::{bind_input, bind_output, Input, Output};
 /// let source = syn::parse_file("pub fn echo(x: i64) -> i64 { x }")?;
 /// let mut flat = Bindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -72,8 +72,8 @@ impl Codec for CCodec {
             ),
             Some(Value::Bytes) => (quote!(unsafe {__pb_read(#w)?}), CWire::Buffer),
             None => {
-                return prebindgen_tools::boxed::input(
-                    &prebindgen_tools::boxed::Storage::Direct,
+                return prebindgen_conversions::boxed::input(
+                    &prebindgen_conversions::boxed::Storage::Direct,
                     ty,
                     w,
                     v,
@@ -82,7 +82,7 @@ impl Codec for CCodec {
                 )
             }
         };
-        prebindgen_tools::value::input(ty, w, v, active, decode, kind)
+        prebindgen_conversions::value::input(ty, w, v, active, decode, kind)
     }
     fn output_leaf(
         &self,
@@ -93,7 +93,7 @@ impl Codec for CCodec {
         borrowed: bool,
     ) -> Result<prebindgen_flat::OutputPlan<CWire>> {
         match Value::of(ty) {
-            Some(Value::Scalar(p)) => prebindgen_tools::value::output(
+            Some(Value::Scalar(p)) => prebindgen_conversions::value::output(
                 ty,
                 w,
                 v,
@@ -103,7 +103,7 @@ impl Codec for CCodec {
             ),
             Some(_) => {
                 // The buffer stays owned by Rust until every output is delivered.
-                let mut out = prebindgen_tools::value::output(
+                let mut out = prebindgen_conversions::value::output(
                     ty,
                     w.clone(),
                     v,
@@ -115,8 +115,8 @@ impl Codec for CCodec {
                 out.commit = quote!(let _ = Box::into_raw(#w););
                 Ok(out)
             }
-            None => prebindgen_tools::boxed::output(
-                &prebindgen_tools::boxed::Storage::Direct,
+            None => prebindgen_conversions::boxed::output(
+                &prebindgen_conversions::boxed::Storage::Direct,
                 ty,
                 w,
                 v,
@@ -152,13 +152,13 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// Start with captured source via [`Self::builder`] and [`Self::source`], or a
 /// flat model via [`Self::new`]. With captured source, declare each
 /// exported function. In either case, declare each opaque pointee type.
-/// Conversion declarations use [`prebindgen_tools::Declarations`]. When reading
+/// Conversion declarations use [`prebindgen_declarations::Declarations`]. When reading
 /// captured source, add the source crate as both a build dependency and a normal
 /// dependency: generation reads its captures, and generated code calls its functions.
 ///
 /// ```
 /// use prebindgen_c::{Bindings, Cbindgen};
-/// use prebindgen_tools::fun;
+/// use prebindgen_declarations::fun;
 /// let source = syn::parse_file("pub fn add(a: i64, b: i64) -> i64 { a + b }")?;
 /// let flat = Bindings::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -181,8 +181,8 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
-    expansions: Vec<prebindgen_tools::ExpandDecl>,
-    functions: Vec<prebindgen_tools::FunctionDecl>,
+    expansions: Vec<prebindgen_declarations::ExpandDecl>,
+    functions: Vec<prebindgen_declarations::FunctionDecl>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
 }
@@ -214,7 +214,7 @@ impl Cbindgen {
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn expand(mut self, decl: impl Into<prebindgen_tools::ExpandDecl>) -> Self {
+    pub fn expand(mut self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
         self.expansions.push(decl.into());
         self
     }
@@ -224,7 +224,7 @@ impl Cbindgen {
     ///
     /// Function renaming is currently unsupported; exports use the symbol prefix
     /// and original source name.
-    pub fn function(mut self, decl: prebindgen_tools::FunctionDecl) -> Self {
+    pub fn function(mut self, decl: prebindgen_declarations::FunctionDecl) -> Self {
         self.functions.push(decl);
         self
     }
@@ -233,8 +233,8 @@ impl Cbindgen {
     ///
     /// `flat` is the parsed source, with any converters already attached.
     ///
-    /// Attach converters with [`prebindgen_tools::bind_input`] and
-    /// [`prebindgen_tools::bind_output`] with [`CCodec`], or fill defaults with
+    /// Attach converters with [`prebindgen_declarations::bind_input`] and
+    /// [`prebindgen_declarations::bind_output`] with [`CCodec`], or fill defaults with
     /// [`Self::function`].
     /// Every fully bound function in the supplied model is exported.
     pub fn new(flat: Bindings) -> Self {
@@ -275,12 +275,12 @@ impl Cbindgen {
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn build(self) -> Result<Generation> {
-        prebindgen_tools::ident(&self.prefix)?;
+        prebindgen_declarations::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
             (None, Some(path)) => Flat::parse_selected(
                 prebindgen::Source::new(path).items_all(),
-                &prebindgen_tools::declarations::source_functions(
+                &prebindgen_declarations::declarations::source_functions(
                     &self.expansions,
                     &self.functions,
                 ),
@@ -292,7 +292,7 @@ impl Cbindgen {
             )?,
             _ => return Err("supply exactly one source or flat model".into()),
         };
-        let declarations = prebindgen_tools::Declarations::new(&flat, self.expansions)?;
+        let declarations = prebindgen_declarations::Declarations::new(&flat, self.expansions)?;
         let mut names = std::collections::BTreeSet::new();
         for decl in self.functions {
             if !names.insert(decl.name.clone()) {
@@ -307,7 +307,7 @@ impl Cbindgen {
             .pointers
             .into_iter()
             .map(|(name, ty)| {
-                prebindgen_tools::ident(&name)?;
+                prebindgen_declarations::ident(&name)?;
                 Ok((name, flat.resolve_type(&ty)?))
             })
             .collect::<Result<Vec<_>>>()?;

@@ -219,17 +219,6 @@ pub fn source_result_expr() -> TokenStream {
     quote!(#result)
 }
 
-/// Source type and access mode for a wire carrying a boxed allocation address.
-/// This is generation metadata used by adapters to declare pointer/handle types;
-/// allocation and conversion construction remain preparation responsibilities.
-#[derive(Clone, Debug)]
-pub struct BoxedWire {
-    /// Source value type inside the allocation, without the input reference or storage wrapper.
-    pub ty: syn::Type,
-    /// Whether the call moves, shares or exclusively borrows the stored value.
-    pub access: Access,
-}
-
 /// Opaque input conversion stored in a parameter slot.
 /// Implementations describe phases; wrapper writers use [`Flat::prepare_call`](crate::Flat::prepare_call).
 pub trait InputConversion {
