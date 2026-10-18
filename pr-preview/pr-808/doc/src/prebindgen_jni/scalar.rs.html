@@ -68,37 +68,39 @@
 <a href=#68 id=68 data-nosnippet>68</a>        <span class="kw">_ </span>=&gt; v,
 <a href=#69 id=69 data-nosnippet>69</a>    }
 <a href=#70 id=70 data-nosnippet>70</a>}
-<a href=#71 id=71 data-nosnippet>71</a><span class="kw">pub fn </span>output(p: Primitive, v: <span class="kw-2">&amp;</span>TokenStream, index: usize) -&gt; (TokenStream, String, String) {
+<a href=#71 id=71 data-nosnippet>71</a><span class="kw">pub fn </span>output_kotlin(p: Primitive, index: usize) -&gt; (String, String) {
 <a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">let </span>decode = <span class="kw">match </span>p {
 <a href=#73 id=73 data-nosnippet>73</a>        U64 | Usize =&gt; <span class="macro">format!</span>(<span class="string">"(result[{index}] as Long).toULong()"</span>),
 <a href=#74 id=74 data-nosnippet>74</a>        I128 =&gt; <span class="macro">format!</span>(<span class="string">"java.math.BigInteger(result[{index}] as ByteArray)"</span>),
 <a href=#75 id=75 data-nosnippet>75</a>        U128 =&gt; <span class="macro">format!</span>(<span class="string">"java.math.BigInteger(1, result[{index}] as ByteArray)"</span>),
 <a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"result[{index}] as {}"</span>, kotlin(p)),
 <a href=#77 id=77 data-nosnippet>77</a>    };
-<a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">let </span>encode = <span class="kw">if </span><span class="macro">matches!</span>(p, I128 | U128) {
-<a href=#79 id=79 data-nosnippet>79</a>        <span class="macro">quote!</span>(::prebindgen_jni_runtime::bytes_object(<span class="kw-2">&amp;mut </span>env, <span class="kw-2">&amp;</span>#v)<span class="question-mark">?</span>)
-<a href=#80 id=80 data-nosnippet>80</a>    } <span class="kw">else </span>{
-<a href=#81 id=81 data-nosnippet>81</a>        <span class="kw">let </span>(class, signature, value) = <span class="kw">match </span>p {
-<a href=#82 id=82 data-nosnippet>82</a>            Bool =&gt; (<span class="string">"Boolean"</span>, <span class="string">"Z"</span>, <span class="macro">quote!</span>(Bool(#v))),
-<a href=#83 id=83 data-nosnippet>83</a>            I8 =&gt; (<span class="string">"Byte"</span>, <span class="string">"B"</span>, <span class="macro">quote!</span>(Byte(#v))),
-<a href=#84 id=84 data-nosnippet>84</a>            I16 =&gt; (<span class="string">"Short"</span>, <span class="string">"S"</span>, <span class="macro">quote!</span>(Short(#v))),
-<a href=#85 id=85 data-nosnippet>85</a>            I32 | U8 | U16 | Char =&gt; (<span class="string">"Integer"</span>, <span class="string">"I"</span>, <span class="macro">quote!</span>(Int(#v))),
-<a href=#86 id=86 data-nosnippet>86</a>            I64 | U32 | U64 | Isize | Usize =&gt; (<span class="string">"Long"</span>, <span class="string">"J"</span>, <span class="macro">quote!</span>(Long(#v))),
-<a href=#87 id=87 data-nosnippet>87</a>            F32 =&gt; (<span class="string">"Float"</span>, <span class="string">"F"</span>, <span class="macro">quote!</span>(Float(#v))),
-<a href=#88 id=88 data-nosnippet>88</a>            F64 =&gt; (<span class="string">"Double"</span>, <span class="string">"D"</span>, <span class="macro">quote!</span>(Double(#v))),
-<a href=#89 id=89 data-nosnippet>89</a>            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
-<a href=#90 id=90 data-nosnippet>90</a>        };
-<a href=#91 id=91 data-nosnippet>91</a>        <span class="kw">let </span>signature = <span class="macro">format!</span>(<span class="string">"({signature})Ljava/lang/{class};"</span>);
-<a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">let </span>class = <span class="macro">format!</span>(<span class="string">"java/lang/{class}"</span>);
-<a href=#93 id=93 data-nosnippet>93</a>        <span class="macro">quote!</span>(env.call_static_method(#class, <span class="string">"valueOf"</span>, #signature, <span class="kw-2">&amp;</span>[::prebindgen_jni_runtime::jni::objects::JValue::#value]).and_then(|v| v.l()).map_err(|e| e.to_string())<span class="question-mark">?</span>)
-<a href=#94 id=94 data-nosnippet>94</a>    };
-<a href=#95 id=95 data-nosnippet>95</a>    (encode, kotlin(p).into(), decode)
-<a href=#96 id=96 data-nosnippet>96</a>}
-<a href=#97 id=97 data-nosnippet>97</a><span class="kw">pub fn </span>parameter_slots(p: Primitive) -&gt; usize {
-<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">if </span><span class="macro">matches!</span>(p, I64 | U32 | U64 | Isize | Usize | F64) {
-<a href=#99 id=99 data-nosnippet>99</a>        <span class="number">2
-<a href=#100 id=100 data-nosnippet>100</a>    </span>} <span class="kw">else </span>{
-<a href=#101 id=101 data-nosnippet>101</a>        <span class="number">1
-<a href=#102 id=102 data-nosnippet>102</a>    </span>}
-<a href=#103 id=103 data-nosnippet>103</a>}
+<a href=#78 id=78 data-nosnippet>78</a>    (kotlin(p).into(), decode)
+<a href=#79 id=79 data-nosnippet>79</a>}
+<a href=#80 id=80 data-nosnippet>80</a><span class="kw">pub fn </span>output_java(p: Primitive, v: <span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream {
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">if </span><span class="macro">matches!</span>(p, I128 | U128) {
+<a href=#82 id=82 data-nosnippet>82</a>        <span class="macro">quote!</span>(::prebindgen_jni_runtime::bytes_object(<span class="kw-2">&amp;mut </span>env, <span class="kw-2">&amp;</span>#v)<span class="question-mark">?</span>)
+<a href=#83 id=83 data-nosnippet>83</a>    } <span class="kw">else </span>{
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span>(class, signature, value) = <span class="kw">match </span>p {
+<a href=#85 id=85 data-nosnippet>85</a>            Bool =&gt; (<span class="string">"Boolean"</span>, <span class="string">"Z"</span>, <span class="macro">quote!</span>(Bool(#v))),
+<a href=#86 id=86 data-nosnippet>86</a>            I8 =&gt; (<span class="string">"Byte"</span>, <span class="string">"B"</span>, <span class="macro">quote!</span>(Byte(#v))),
+<a href=#87 id=87 data-nosnippet>87</a>            I16 =&gt; (<span class="string">"Short"</span>, <span class="string">"S"</span>, <span class="macro">quote!</span>(Short(#v))),
+<a href=#88 id=88 data-nosnippet>88</a>            I32 | U8 | U16 | Char =&gt; (<span class="string">"Integer"</span>, <span class="string">"I"</span>, <span class="macro">quote!</span>(Int(#v))),
+<a href=#89 id=89 data-nosnippet>89</a>            I64 | U32 | U64 | Isize | Usize =&gt; (<span class="string">"Long"</span>, <span class="string">"J"</span>, <span class="macro">quote!</span>(Long(#v))),
+<a href=#90 id=90 data-nosnippet>90</a>            F32 =&gt; (<span class="string">"Float"</span>, <span class="string">"F"</span>, <span class="macro">quote!</span>(Float(#v))),
+<a href=#91 id=91 data-nosnippet>91</a>            F64 =&gt; (<span class="string">"Double"</span>, <span class="string">"D"</span>, <span class="macro">quote!</span>(Double(#v))),
+<a href=#92 id=92 data-nosnippet>92</a>            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+<a href=#93 id=93 data-nosnippet>93</a>        };
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="kw">let </span>signature = <span class="macro">format!</span>(<span class="string">"({signature})Ljava/lang/{class};"</span>);
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">let </span>class = <span class="macro">format!</span>(<span class="string">"java/lang/{class}"</span>);
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="macro">quote!</span>(env.call_static_method(#class, <span class="string">"valueOf"</span>, #signature, <span class="kw-2">&amp;</span>[::prebindgen_jni_runtime::jni::objects::JValue::#value]).and_then(|v| v.l()).map_err(|e| e.to_string())<span class="question-mark">?</span>)
+<a href=#97 id=97 data-nosnippet>97</a>    }
+<a href=#98 id=98 data-nosnippet>98</a>}
+<a href=#99 id=99 data-nosnippet>99</a><span class="kw">pub fn </span>parameter_slots(p: Primitive) -&gt; usize {
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">if </span><span class="macro">matches!</span>(p, I64 | U32 | U64 | Isize | Usize | F64) {
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="number">2
+<a href=#102 id=102 data-nosnippet>102</a>    </span>} <span class="kw">else </span>{
+<a href=#103 id=103 data-nosnippet>103</a>        <span class="number">1
+<a href=#104 id=104 data-nosnippet>104</a>    </span>}
+<a href=#105 id=105 data-nosnippet>105</a>}
 </code></pre></div></section></main></body></html>
