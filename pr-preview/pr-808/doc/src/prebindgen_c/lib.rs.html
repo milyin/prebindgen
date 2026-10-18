@@ -1,8 +1,8 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-c/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_c" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.1 (58cf8f9c3 2026-10-13)" data-channel="1.99.1" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_c/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Generate Rust wrappers and C declarations from conversion slots.
 <a href=#2 id=2 data-nosnippet>2</a></span><span class="attr">#![warn(missing_docs)]
-<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span>prebindgen_flat::BoxedWire;
-<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>prebindgen_flat::{Flat, Primitive, <span class="prelude-ty">Result</span>};
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_tools::value::Value;
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span>prebindgen_conversions::boxed::BoxedWire;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>prebindgen_conversions::value::Value;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::{Flat, Primitive, <span class="prelude-ty">Result</span>};
 <a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// The carrier of one C wire.
 <a href=#7 id=7 data-nosnippet>7</a>///
 <a href=#8 id=8 data-nosnippet>8</a>/// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -18,8 +18,8 @@
 <a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// An `int32_t` selector arm index.
 <a href=#19 id=19 data-nosnippet>19</a>    </span>Selector,
 <a href=#20 id=20 data-nosnippet>20</a>}
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>prebindgen_flat::{InputPlan, OutputPlan, Wire <span class="kw">as </span>GenericWire};
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>prebindgen_tools::Codec;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>prebindgen_declarations::Codec;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>prebindgen_flat::{InputPlan, OutputPlan, Wire <span class="kw">as </span>GenericWire};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">type </span>GenericBindings&lt;W&gt; = Flat&lt;InputPlan&lt;W&gt;, OutputPlan&lt;W&gt;&gt;;
 <a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// Flat source model with C conversion data for wrapper emission.
 <a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub type </span>Bindings = GenericBindings&lt;CWire&gt;;
@@ -28,12 +28,12 @@
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>quote::{format_ident, quote};
 <a href=#29 id=29 data-nosnippet>29</a>
 <a href=#30 id=30 data-nosnippet>30</a><span class="doccomment">/// Leaf conversions used by [`Cbindgen`].
-<a href=#31 id=31 data-nosnippet>31</a>/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+<a href=#31 id=31 data-nosnippet>31</a>/// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 <a href=#32 id=32 data-nosnippet>32</a>/// to fill [`Bindings`] manually.
 <a href=#33 id=33 data-nosnippet>33</a>///
 <a href=#34 id=34 data-nosnippet>34</a>/// ```
 <a href=#35 id=35 data-nosnippet>35</a>/// use prebindgen_c::{Bindings, Cbindgen, CCodec};
-<a href=#36 id=36 data-nosnippet>36</a>/// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+<a href=#36 id=36 data-nosnippet>36</a>/// use prebindgen_declarations::{bind_input, bind_output, Input, Output};
 <a href=#37 id=37 data-nosnippet>37</a>/// let source = syn::parse_file("pub fn echo(x: i64) -&gt; i64 { x }")?;
 <a href=#38 id=38 data-nosnippet>38</a>/// let mut flat = Bindings::parse(
 <a href=#39 id=39 data-nosnippet>39</a>///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -72,8 +72,8 @@
 <a href=#72 id=72 data-nosnippet>72</a>            ),
 <a href=#73 id=73 data-nosnippet>73</a>            <span class="prelude-val">Some</span>(Value::Bytes) =&gt; (<span class="macro">quote!</span>(<span class="kw">unsafe </span>{__pb_read(#w)<span class="question-mark">?</span>}), CWire::Buffer),
 <a href=#74 id=74 data-nosnippet>74</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#75 id=75 data-nosnippet>75</a>                <span class="kw">return </span>prebindgen_tools::boxed::input(
-<a href=#76 id=76 data-nosnippet>76</a>                    <span class="kw-2">&amp;</span>prebindgen_tools::boxed::Storage::Direct,
+<a href=#75 id=75 data-nosnippet>75</a>                <span class="kw">return </span>prebindgen_conversions::boxed::input(
+<a href=#76 id=76 data-nosnippet>76</a>                    <span class="kw-2">&amp;</span>prebindgen_conversions::boxed::Storage::Direct,
 <a href=#77 id=77 data-nosnippet>77</a>                    ty,
 <a href=#78 id=78 data-nosnippet>78</a>                    w,
 <a href=#79 id=79 data-nosnippet>79</a>                    v,
@@ -82,7 +82,7 @@
 <a href=#82 id=82 data-nosnippet>82</a>                )
 <a href=#83 id=83 data-nosnippet>83</a>            }
 <a href=#84 id=84 data-nosnippet>84</a>        };
-<a href=#85 id=85 data-nosnippet>85</a>        prebindgen_tools::value::input(ty, w, v, active, decode, kind)
+<a href=#85 id=85 data-nosnippet>85</a>        prebindgen_conversions::value::input(ty, w, v, active, decode, kind)
 <a href=#86 id=86 data-nosnippet>86</a>    }
 <a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">fn </span>output_leaf(
 <a href=#88 id=88 data-nosnippet>88</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -93,7 +93,7 @@
 <a href=#93 id=93 data-nosnippet>93</a>        borrowed: bool,
 <a href=#94 id=94 data-nosnippet>94</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_flat::OutputPlan&lt;CWire&gt;&gt; {
 <a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">match </span>Value::of(ty) {
-<a href=#96 id=96 data-nosnippet>96</a>            <span class="prelude-val">Some</span>(Value::Scalar(p)) =&gt; prebindgen_tools::value::output(
+<a href=#96 id=96 data-nosnippet>96</a>            <span class="prelude-val">Some</span>(Value::Scalar(p)) =&gt; prebindgen_conversions::value::output(
 <a href=#97 id=97 data-nosnippet>97</a>                ty,
 <a href=#98 id=98 data-nosnippet>98</a>                w,
 <a href=#99 id=99 data-nosnippet>99</a>                v,
@@ -103,7 +103,7 @@
 <a href=#103 id=103 data-nosnippet>103</a>            ),
 <a href=#104 id=104 data-nosnippet>104</a>            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {
 <a href=#105 id=105 data-nosnippet>105</a>                <span class="comment">// The buffer stays owned by Rust until every output is delivered.
-<a href=#106 id=106 data-nosnippet>106</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>out = prebindgen_tools::value::output(
+<a href=#106 id=106 data-nosnippet>106</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>out = prebindgen_conversions::value::output(
 <a href=#107 id=107 data-nosnippet>107</a>                    ty,
 <a href=#108 id=108 data-nosnippet>108</a>                    w.clone(),
 <a href=#109 id=109 data-nosnippet>109</a>                    v,
@@ -115,8 +115,8 @@
 <a href=#115 id=115 data-nosnippet>115</a>                out.commit = <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#w););
 <a href=#116 id=116 data-nosnippet>116</a>                <span class="prelude-val">Ok</span>(out)
 <a href=#117 id=117 data-nosnippet>117</a>            }
-<a href=#118 id=118 data-nosnippet>118</a>            <span class="prelude-val">None </span>=&gt; prebindgen_tools::boxed::output(
-<a href=#119 id=119 data-nosnippet>119</a>                <span class="kw-2">&amp;</span>prebindgen_tools::boxed::Storage::Direct,
+<a href=#118 id=118 data-nosnippet>118</a>            <span class="prelude-val">None </span>=&gt; prebindgen_conversions::boxed::output(
+<a href=#119 id=119 data-nosnippet>119</a>                <span class="kw-2">&amp;</span>prebindgen_conversions::boxed::Storage::Direct,
 <a href=#120 id=120 data-nosnippet>120</a>                ty,
 <a href=#121 id=121 data-nosnippet>121</a>                w,
 <a href=#122 id=122 data-nosnippet>122</a>                v,
@@ -152,13 +152,13 @@
 <a href=#152 id=152 data-nosnippet>152</a>/// Start with captured source via [`Self::builder`] and [`Self::source`], or a
 <a href=#153 id=153 data-nosnippet>153</a>/// flat model via [`Self::new`]. With captured source, declare each
 <a href=#154 id=154 data-nosnippet>154</a>/// exported function. In either case, declare each opaque pointee type.
-<a href=#155 id=155 data-nosnippet>155</a>/// Conversion declarations use [`prebindgen_tools::Declarations`]. When reading
+<a href=#155 id=155 data-nosnippet>155</a>/// Conversion declarations use [`prebindgen_declarations::Declarations`]. When reading
 <a href=#156 id=156 data-nosnippet>156</a>/// captured source, add the source crate as both a build dependency and a normal
 <a href=#157 id=157 data-nosnippet>157</a>/// dependency: generation reads its captures, and generated code calls its functions.
 <a href=#158 id=158 data-nosnippet>158</a>///
 <a href=#159 id=159 data-nosnippet>159</a>/// ```
 <a href=#160 id=160 data-nosnippet>160</a>/// use prebindgen_c::{Bindings, Cbindgen};
-<a href=#161 id=161 data-nosnippet>161</a>/// use prebindgen_tools::fun;
+<a href=#161 id=161 data-nosnippet>161</a>/// use prebindgen_declarations::fun;
 <a href=#162 id=162 data-nosnippet>162</a>/// let source = syn::parse_file("pub fn add(a: i64, b: i64) -&gt; i64 { a + b }")?;
 <a href=#163 id=163 data-nosnippet>163</a>/// let flat = Bindings::parse(
 <a href=#164 id=164 data-nosnippet>164</a>///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -181,8 +181,8 @@
 <a href=#181 id=181 data-nosnippet>181</a></span><span class="kw">pub struct </span>Cbindgen {
 <a href=#182 id=182 data-nosnippet>182</a>    flat: <span class="prelude-ty">Option</span>&lt;Bindings&gt;,
 <a href=#183 id=183 data-nosnippet>183</a>    source: <span class="prelude-ty">Option</span>&lt;std::path::PathBuf&gt;,
-<a href=#184 id=184 data-nosnippet>184</a>    expansions: Vec&lt;prebindgen_tools::ExpandDecl&gt;,
-<a href=#185 id=185 data-nosnippet>185</a>    functions: Vec&lt;prebindgen_tools::FunctionDecl&gt;,
+<a href=#184 id=184 data-nosnippet>184</a>    expansions: Vec&lt;prebindgen_declarations::ExpandDecl&gt;,
+<a href=#185 id=185 data-nosnippet>185</a>    functions: Vec&lt;prebindgen_declarations::FunctionDecl&gt;,
 <a href=#186 id=186 data-nosnippet>186</a>    prefix: String,
 <a href=#187 id=187 data-nosnippet>187</a>    pointers: Vec&lt;(String, syn::Type)&gt;,
 <a href=#188 id=188 data-nosnippet>188</a>}
@@ -214,7 +214,7 @@
 <a href=#214 id=214 data-nosnippet>214</a>    ///
 <a href=#215 id=215 data-nosnippet>215</a>    /// Per-function overrides replace this default; duplicate defaults are rejected
 <a href=#216 id=216 data-nosnippet>216</a>    /// by [`Self::build`]. Registration order does not affect type lookup.
-<a href=#217 id=217 data-nosnippet>217</a>    </span><span class="kw">pub fn </span>expand(<span class="kw-2">mut </span><span class="self">self</span>, decl: <span class="kw">impl </span>Into&lt;prebindgen_tools::ExpandDecl&gt;) -&gt; <span class="self">Self </span>{
+<a href=#217 id=217 data-nosnippet>217</a>    </span><span class="kw">pub fn </span>expand(<span class="kw-2">mut </span><span class="self">self</span>, decl: <span class="kw">impl </span>Into&lt;prebindgen_declarations::ExpandDecl&gt;) -&gt; <span class="self">Self </span>{
 <a href=#218 id=218 data-nosnippet>218</a>        <span class="self">self</span>.expansions.push(decl.into());
 <a href=#219 id=219 data-nosnippet>219</a>        <span class="self">self
 <a href=#220 id=220 data-nosnippet>220</a>    </span>}
@@ -224,7 +224,7 @@
 <a href=#224 id=224 data-nosnippet>224</a>    ///
 <a href=#225 id=225 data-nosnippet>225</a>    /// Function renaming is currently unsupported; exports use the symbol prefix
 <a href=#226 id=226 data-nosnippet>226</a>    /// and original source name.
-<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="kw">pub fn </span>function(<span class="kw-2">mut </span><span class="self">self</span>, decl: prebindgen_tools::FunctionDecl) -&gt; <span class="self">Self </span>{
+<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="kw">pub fn </span>function(<span class="kw-2">mut </span><span class="self">self</span>, decl: prebindgen_declarations::FunctionDecl) -&gt; <span class="self">Self </span>{
 <a href=#228 id=228 data-nosnippet>228</a>        <span class="self">self</span>.functions.push(decl);
 <a href=#229 id=229 data-nosnippet>229</a>        <span class="self">self
 <a href=#230 id=230 data-nosnippet>230</a>    </span>}
@@ -233,8 +233,8 @@
 <a href=#233 id=233 data-nosnippet>233</a>    ///
 <a href=#234 id=234 data-nosnippet>234</a>    /// `flat` is the parsed source, with any converters already attached.
 <a href=#235 id=235 data-nosnippet>235</a>    ///
-<a href=#236 id=236 data-nosnippet>236</a>    /// Attach converters with [`prebindgen_tools::bind_input`] and
-<a href=#237 id=237 data-nosnippet>237</a>    /// [`prebindgen_tools::bind_output`] with [`CCodec`], or fill defaults with
+<a href=#236 id=236 data-nosnippet>236</a>    /// Attach converters with [`prebindgen_declarations::bind_input`] and
+<a href=#237 id=237 data-nosnippet>237</a>    /// [`prebindgen_declarations::bind_output`] with [`CCodec`], or fill defaults with
 <a href=#238 id=238 data-nosnippet>238</a>    /// [`Self::function`].
 <a href=#239 id=239 data-nosnippet>239</a>    /// Every fully bound function in the supplied model is exported.
 <a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">pub fn </span>new(flat: Bindings) -&gt; <span class="self">Self </span>{
@@ -275,12 +275,12 @@
 <a href=#275 id=275 data-nosnippet>275</a>    /// duplicate declarations, unsupported conversions, or missing opaque pointees.
 <a href=#276 id=276 data-nosnippet>276</a>    /// Rust layout/trait requirements are checked when the generated Rust compiles.
 <a href=#277 id=277 data-nosnippet>277</a>    </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Generation&gt; {
-<a href=#278 id=278 data-nosnippet>278</a>        prebindgen_tools::ident(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix)<span class="question-mark">?</span>;
+<a href=#278 id=278 data-nosnippet>278</a>        prebindgen_declarations::ident(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix)<span class="question-mark">?</span>;
 <a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = <span class="kw">match </span>(<span class="self">self</span>.flat, <span class="self">self</span>.source) {
 <a href=#280 id=280 data-nosnippet>280</a>            (<span class="prelude-val">Some</span>(flat), <span class="prelude-val">None</span>) =&gt; flat,
 <a href=#281 id=281 data-nosnippet>281</a>            (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(path)) =&gt; Flat::parse_selected(
 <a href=#282 id=282 data-nosnippet>282</a>                prebindgen::Source::new(path).items_all(),
-<a href=#283 id=283 data-nosnippet>283</a>                <span class="kw-2">&amp;</span>prebindgen_tools::declarations::source_functions(
+<a href=#283 id=283 data-nosnippet>283</a>                <span class="kw-2">&amp;</span>prebindgen_declarations::declarations::source_functions(
 <a href=#284 id=284 data-nosnippet>284</a>                    <span class="kw-2">&amp;</span><span class="self">self</span>.expansions,
 <a href=#285 id=285 data-nosnippet>285</a>                    <span class="kw-2">&amp;</span><span class="self">self</span>.functions,
 <a href=#286 id=286 data-nosnippet>286</a>                ),
@@ -292,7 +292,7 @@
 <a href=#292 id=292 data-nosnippet>292</a>            )<span class="question-mark">?</span>,
 <a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"supply exactly one source or flat model"</span>.into()),
 <a href=#294 id=294 data-nosnippet>294</a>        };
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>declarations = prebindgen_tools::Declarations::new(<span class="kw-2">&amp;</span>flat, <span class="self">self</span>.expansions)<span class="question-mark">?</span>;
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>declarations = prebindgen_declarations::Declarations::new(<span class="kw-2">&amp;</span>flat, <span class="self">self</span>.expansions)<span class="question-mark">?</span>;
 <a href=#296 id=296 data-nosnippet>296</a>        <span class="kw">let </span><span class="kw-2">mut </span>names = std::collections::BTreeSet::new();
 <a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">for </span>decl <span class="kw">in </span><span class="self">self</span>.functions {
 <a href=#298 id=298 data-nosnippet>298</a>            <span class="kw">if </span>!names.insert(decl.name.clone()) {
@@ -307,7 +307,7 @@
 <a href=#307 id=307 data-nosnippet>307</a>            </span>.pointers
 <a href=#308 id=308 data-nosnippet>308</a>            .into_iter()
 <a href=#309 id=309 data-nosnippet>309</a>            .map(|(name, ty)| {
-<a href=#310 id=310 data-nosnippet>310</a>                prebindgen_tools::ident(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>;
+<a href=#310 id=310 data-nosnippet>310</a>                prebindgen_declarations::ident(<span class="kw-2">&amp;</span>name)<span class="question-mark">?</span>;
 <a href=#311 id=311 data-nosnippet>311</a>                <span class="prelude-val">Ok</span>((name, flat.resolve_type(<span class="kw-2">&amp;</span>ty)<span class="question-mark">?</span>))
 <a href=#312 id=312 data-nosnippet>312</a>            })
 <a href=#313 id=313 data-nosnippet>313</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;

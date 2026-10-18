@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Input","Output"],"fn":["bind_input","bind_output","ident"],"macro":[["expand_param",1],["expand_return",1],["fields",1],["fun",1]],"mod":["declarations"],"trait":["Codec"],"type":["Bindings"]};

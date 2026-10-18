@@ -8,14 +8,14 @@ configuration callbacks run in registration order before declarations fill slots
     f: impl <a class="trait" href="https://doc.rust-lang.org/1.99.1/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(&amp;mut <a class="type" href="type.Bindings.html" title="type prebindgen_jni::Bindings">Bindings</a>) -&gt; <a class="type" href="../prebindgen_flat/type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.99.1/std/primitive.unit.html">()</a>&gt; + 'static,
 ) -&gt; Self</h4></section></summary><div class="docblock"><p>Adjust the selected flat model before declaration defaults are applied.</p>
 <p><code>f</code> receives the model and may attach converters to it.</p>
-<p>Use this to attach converters with <a href="../prebindgen_tools/fn.bind_input.html" title="fn prebindgen_tools::bind_input"><code>prebindgen_tools::bind_input</code></a> and
-<a href="../prebindgen_tools/fn.bind_output.html" title="fn prebindgen_tools::bind_output"><code>prebindgen_tools::bind_output</code></a>, using <a href="struct.JniCodec.html" title="struct prebindgen_jni::JniCodec"><code>JniCodec</code></a>. Callbacks run in
+<p>Use this to attach converters with <a href="../prebindgen_declarations/fn.bind_input.html" title="fn prebindgen_declarations::bind_input"><code>prebindgen_declarations::bind_input</code></a> and
+<a href="../prebindgen_declarations/fn.bind_output.html" title="fn prebindgen_declarations::bind_output"><code>prebindgen_declarations::bind_output</code></a>, using <a href="struct.JniCodec.html" title="struct prebindgen_jni::JniCodec"><code>JniCodec</code></a>. Callbacks run in
 registration order; errors stop generation. Source selection has already happened, so references
 introduced here must already exist in the model. Per-function declarations
 can explicitly override the converters assigned by these callbacks.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
-<span class="kw">use </span>prebindgen_tools::{bind_input, bind_output, Input, Output};
+<span class="kw">use </span>prebindgen_declarations::{bind_input, bind_output, Input, Output};
 <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn echo(x: i64) -&gt; i64 { x }"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>flat = Bindings::parse(
     source.items.into_iter().map(|item| (item, Default::default())),

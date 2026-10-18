@@ -1,2 +1,2 @@
-window.ALL_CRATES = ["prebindgen","prebindgen_c","prebindgen_flat","prebindgen_jni","prebindgen_jni_runtime","prebindgen_proc_macro","prebindgen_registry","prebindgen_runtime","prebindgen_tools"];
-//{"start":21,"fragment_lengths":[12,15,18,17,25,24,22,21,19]}
+window.ALL_CRATES = ["prebindgen","prebindgen_c","prebindgen_conversions","prebindgen_declarations","prebindgen_flat","prebindgen_jni","prebindgen_jni_runtime","prebindgen_proc_macro","prebindgen_registry","prebindgen_runtime"];
+//{"start":21,"fragment_lengths":[12,15,25,26,18,17,25,24,22,21]}

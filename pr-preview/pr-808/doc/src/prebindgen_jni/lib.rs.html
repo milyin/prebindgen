@@ -5,9 +5,9 @@
 <a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#![warn(missing_docs)]
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span>prebindgen_flat::{type_key, Flat, <span class="prelude-ty">Result</span>};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">mod </span>scalar;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>prebindgen_flat::BoxedWire;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>prebindgen_flat::Primitive;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>prebindgen_tools::value::Value;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>prebindgen_conversions::boxed::BoxedWire;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>prebindgen_conversions::value::Value;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>prebindgen_flat::Primitive;
 <a href=#11 id=11 data-nosnippet>11</a><span class="doccomment">/// The carrier of one JNI wire.
 <a href=#12 id=12 data-nosnippet>12</a>///
 <a href=#13 id=13 data-nosnippet>13</a>/// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -25,8 +25,8 @@
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="doccomment">/// An `int` selector arm index.
 <a href=#26 id=26 data-nosnippet>26</a>    </span>Selector,
 <a href=#27 id=27 data-nosnippet>27</a>}
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>prebindgen_flat::{Access, InputPlan, OutputPlan};
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>prebindgen_tools::Codec;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>prebindgen_declarations::Codec;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>prebindgen_flat::{Access, InputPlan, OutputPlan};
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">type </span>GenericBindings&lt;W&gt; = Flat&lt;InputPlan&lt;W&gt;, OutputPlan&lt;W&gt;&gt;;
 <a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// Flat source model with JNI handle conversion data for wrapper emission.
 <a href=#32 id=32 data-nosnippet>32</a>///
@@ -34,7 +34,7 @@
 <a href=#34 id=34 data-nosnippet>34</a>/// wire type belongs to a different adapter:
 <a href=#35 id=35 data-nosnippet>35</a>/// ```compile_fail
 <a href=#36 id=36 data-nosnippet>36</a>/// use prebindgen_jni::Bindings;
-<a href=#37 id=37 data-nosnippet>37</a>/// use prebindgen_tools::{bind_input, Input};
+<a href=#37 id=37 data-nosnippet>37</a>/// use prebindgen_declarations::{bind_input, Input};
 <a href=#38 id=38 data-nosnippet>38</a>/// fn wrong(flat: &amp;mut Bindings) {
 <a href=#39 id=39 data-nosnippet>39</a>///     bind_input(flat, &amp;prebindgen_c::CCodec, "echo", "x", &amp;Input::Leaf, &amp;()).unwrap();
 <a href=#40 id=40 data-nosnippet>40</a>/// }
@@ -50,7 +50,7 @@
 <a href=#50 id=50 data-nosnippet>50</a><span class="kw">use </span>quote::{format_ident, quote};
 <a href=#51 id=51 data-nosnippet>51</a><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <a href=#52 id=52 data-nosnippet>52</a>
-<a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub use </span>prebindgen_tools::{
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub use </span>prebindgen_declarations::{
 <a href=#54 id=54 data-nosnippet>54</a>    expand_param, expand_return, fields, fun, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
 <a href=#55 id=55 data-nosnippet>55</a>    FieldsDecl, FunctionDecl,
 <a href=#56 id=56 data-nosnippet>56</a>};
@@ -206,15 +206,15 @@
 <a href=#206 id=206 data-nosnippet>206</a>    ///
 <a href=#207 id=207 data-nosnippet>207</a>    /// `f` receives the model and may attach converters to it.
 <a href=#208 id=208 data-nosnippet>208</a>    ///
-<a href=#209 id=209 data-nosnippet>209</a>    /// Use this to attach converters with [`prebindgen_tools::bind_input`] and
-<a href=#210 id=210 data-nosnippet>210</a>    /// [`prebindgen_tools::bind_output`], using [`JniCodec`]. Callbacks run in
+<a href=#209 id=209 data-nosnippet>209</a>    /// Use this to attach converters with [`prebindgen_declarations::bind_input`] and
+<a href=#210 id=210 data-nosnippet>210</a>    /// [`prebindgen_declarations::bind_output`], using [`JniCodec`]. Callbacks run in
 <a href=#211 id=211 data-nosnippet>211</a>    /// registration order; errors stop generation. Source selection has already happened, so references
 <a href=#212 id=212 data-nosnippet>212</a>    /// introduced here must already exist in the model. Per-function declarations
 <a href=#213 id=213 data-nosnippet>213</a>    /// can explicitly override the converters assigned by these callbacks.
 <a href=#214 id=214 data-nosnippet>214</a>    ///
 <a href=#215 id=215 data-nosnippet>215</a>    /// ```
 <a href=#216 id=216 data-nosnippet>216</a>    /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
-<a href=#217 id=217 data-nosnippet>217</a>    /// use prebindgen_tools::{bind_input, bind_output, Input, Output};
+<a href=#217 id=217 data-nosnippet>217</a>    /// use prebindgen_declarations::{bind_input, bind_output, Input, Output};
 <a href=#218 id=218 data-nosnippet>218</a>    /// let source = syn::parse_file("pub fn echo(x: i64) -&gt; i64 { x }")?;
 <a href=#219 id=219 data-nosnippet>219</a>    /// let flat = Bindings::parse(
 <a href=#220 id=220 data-nosnippet>220</a>    ///     source.items.into_iter().map(|item| (item, Default::default())),
@@ -305,7 +305,7 @@
 <a href=#305 id=305 data-nosnippet>305</a>    /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
 <a href=#306 id=306 data-nosnippet>306</a>    /// respective compilers when consuming the generated output.
 <a href=#307 id=307 data-nosnippet>307</a>    </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;JniGen&gt; {
-<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw">let </span>references = prebindgen_tools::declarations::source_functions(
+<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw">let </span>references = prebindgen_declarations::declarations::source_functions(
 <a href=#309 id=309 data-nosnippet>309</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.expansions,
 <a href=#310 id=310 data-nosnippet>310</a>            <span class="self">self</span>.packages.iter().flat_map(|p| <span class="kw-2">&amp;</span>p.functions),
 <a href=#311 id=311 data-nosnippet>311</a>        );
@@ -327,7 +327,7 @@
 <a href=#327 id=327 data-nosnippet>327</a>        <span class="kw">for </span>configure <span class="kw">in </span><span class="self">self</span>.configure {
 <a href=#328 id=328 data-nosnippet>328</a>            configure(<span class="kw-2">&amp;mut </span>flat)<span class="question-mark">?</span>;
 <a href=#329 id=329 data-nosnippet>329</a>        }
-<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw">let </span>defaults = prebindgen_tools::Declarations::new(<span class="kw-2">&amp;</span>flat, <span class="self">self</span>.expansions)<span class="question-mark">?</span>;
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw">let </span>defaults = prebindgen_declarations::Declarations::new(<span class="kw-2">&amp;</span>flat, <span class="self">self</span>.expansions)<span class="question-mark">?</span>;
 <a href=#331 id=331 data-nosnippet>331</a>        validate_package(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix)<span class="question-mark">?</span>;
 <a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span><span class="kw-2">mut </span>classes = BTreeMap::new();
 <a href=#333 id=333 data-nosnippet>333</a>        <span class="kw">let </span><span class="kw-2">mut </span>functions = Vec::new();
@@ -406,7 +406,7 @@
 <a href=#406 id=406 data-nosnippet>406</a>    }
 <a href=#407 id=407 data-nosnippet>407</a>}
 <a href=#408 id=408 data-nosnippet>408</a><span class="doccomment">/// Leaf conversions used by [`JniGen`].
-<a href=#409 id=409 data-nosnippet>409</a>/// Use with [`prebindgen_tools::bind_input`] and [`prebindgen_tools::bind_output`]
+<a href=#409 id=409 data-nosnippet>409</a>/// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 <a href=#410 id=410 data-nosnippet>410</a>/// to fill [`Bindings`] manually.
 <a href=#411 id=411 data-nosnippet>411</a></span><span class="kw">pub struct </span>JniCodec;
 <a href=#412 id=412 data-nosnippet>412</a><span class="kw">impl </span>Codec <span class="kw">for </span>JniCodec {
@@ -437,12 +437,12 @@
 <a href=#437 id=437 data-nosnippet>437</a>                JniWire::Bytes,
 <a href=#438 id=438 data-nosnippet>438</a>            ),
 <a href=#439 id=439 data-nosnippet>439</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#440 id=440 data-nosnippet>440</a>                <span class="kw">return </span>prebindgen_tools::boxed::input(<span class="kw-2">&amp;</span>storage(), ty, w, v, active, |b| {
+<a href=#440 id=440 data-nosnippet>440</a>                <span class="kw">return </span>prebindgen_conversions::boxed::input(<span class="kw-2">&amp;</span>storage(), ty, w, v, active, |b| {
 <a href=#441 id=441 data-nosnippet>441</a>                    JniWire::Handle(Box::new(b))
 <a href=#442 id=442 data-nosnippet>442</a>                })
 <a href=#443 id=443 data-nosnippet>443</a>            }
 <a href=#444 id=444 data-nosnippet>444</a>        };
-<a href=#445 id=445 data-nosnippet>445</a>        prebindgen_tools::value::input(ty, w, v, active, decode, kind)
+<a href=#445 id=445 data-nosnippet>445</a>        prebindgen_conversions::value::input(ty, w, v, active, decode, kind)
 <a href=#446 id=446 data-nosnippet>446</a>    }
 <a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">fn </span>output_leaf(
 <a href=#448 id=448 data-nosnippet>448</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -455,7 +455,7 @@
 <a href=#455 id=455 data-nosnippet>455</a>        <span class="comment">// Text and bytes stay Rust values until the wrapper delivers them.
 <a href=#456 id=456 data-nosnippet>456</a>        </span><span class="kw">let </span>(encode, kind): (<span class="kw">fn</span>(TokenStream) -&gt; TokenStream, <span class="kw">_</span>) = <span class="kw">match </span>Value::of(ty) {
 <a href=#457 id=457 data-nosnippet>457</a>            <span class="prelude-val">Some</span>(Value::Scalar(p)) =&gt; {
-<a href=#458 id=458 data-nosnippet>458</a>                <span class="kw">return </span>prebindgen_tools::value::output(
+<a href=#458 id=458 data-nosnippet>458</a>                <span class="kw">return </span>prebindgen_conversions::value::output(
 <a href=#459 id=459 data-nosnippet>459</a>                    ty,
 <a href=#460 id=460 data-nosnippet>460</a>                    w,
 <a href=#461 id=461 data-nosnippet>461</a>                    v,
@@ -467,16 +467,16 @@
 <a href=#467 id=467 data-nosnippet>467</a>            <span class="prelude-val">Some</span>(Value::Text) =&gt; (|v| v, JniWire::Text),
 <a href=#468 id=468 data-nosnippet>468</a>            <span class="prelude-val">Some</span>(Value::Bytes) =&gt; (|v| v, JniWire::Bytes),
 <a href=#469 id=469 data-nosnippet>469</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#470 id=470 data-nosnippet>470</a>                <span class="kw">return </span>prebindgen_tools::boxed::output(<span class="kw-2">&amp;</span>storage(), ty, w, v, borrowed, |b| {
+<a href=#470 id=470 data-nosnippet>470</a>                <span class="kw">return </span>prebindgen_conversions::boxed::output(<span class="kw-2">&amp;</span>storage(), ty, w, v, borrowed, |b| {
 <a href=#471 id=471 data-nosnippet>471</a>                    JniWire::Handle(Box::new(b))
 <a href=#472 id=472 data-nosnippet>472</a>                })
 <a href=#473 id=473 data-nosnippet>473</a>            }
 <a href=#474 id=474 data-nosnippet>474</a>        };
-<a href=#475 id=475 data-nosnippet>475</a>        prebindgen_tools::value::output(ty, w, v, borrowed, encode, kind)
+<a href=#475 id=475 data-nosnippet>475</a>        prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
 <a href=#476 id=476 data-nosnippet>476</a>    }
 <a href=#477 id=477 data-nosnippet>477</a>}
-<a href=#478 id=478 data-nosnippet>478</a><span class="kw">fn </span>storage() -&gt; prebindgen_tools::boxed::Storage {
-<a href=#479 id=479 data-nosnippet>479</a>    prebindgen_tools::boxed::Storage::Wrapped(<span class="macro">syn::parse_quote!</span>(
+<a href=#478 id=478 data-nosnippet>478</a><span class="kw">fn </span>storage() -&gt; prebindgen_conversions::boxed::Storage {
+<a href=#479 id=479 data-nosnippet>479</a>    prebindgen_conversions::boxed::Storage::Wrapped(<span class="macro">syn::parse_quote!</span>(
 <a href=#480 id=480 data-nosnippet>480</a>        ::prebindgen_jni_runtime::Allocation
 <a href=#481 id=481 data-nosnippet>481</a>    ))
 <a href=#482 id=482 data-nosnippet>482</a>}

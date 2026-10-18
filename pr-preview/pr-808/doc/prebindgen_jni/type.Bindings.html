@@ -3,7 +3,7 @@
 wire type belongs to a different adapter:</p>
 
 <div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_jni::Bindings;
-<span class="kw">use </span>prebindgen_tools::{bind_input, Input};
+<span class="kw">use </span>prebindgen_declarations::{bind_input, Input};
 <span class="kw">fn </span>wrong(flat: <span class="kw-2">&amp;mut </span>Bindings) {
     bind_input(flat, <span class="kw-2">&amp;</span>prebindgen_c::CCodec, <span class="string">"echo"</span>, <span class="string">"x"</span>, <span class="kw-2">&amp;</span>Input::Leaf, <span class="kw-2">&amp;</span>()).unwrap();
 }</code></pre></div>
