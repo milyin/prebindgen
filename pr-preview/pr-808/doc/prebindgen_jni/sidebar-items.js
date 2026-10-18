@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExpandDecl","JniWire"],"macro":[["expand_param",1],["expand_return",1],["fields",1],["fun",1],["package",1],["ptr_class",1]],"struct":["ExpandParamDecl","ExpandReturnDecl","FieldsDecl","FunctionDecl","JniCodec","JniGen","JniGenBuilder","PackageDecl","PtrClassDecl"],"type":["Bindings","Generation"]};
