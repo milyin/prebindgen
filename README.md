@@ -97,10 +97,11 @@ settings remain commented out in the example manifests.
   through individual methods. `emit_call` reads these methods directly; slots
   do not return intermediate plans. `InputPlan<W>` and `OutputPlan<W>` remain
   optional concrete storage implementations, without a `W: Clone` requirement.
-  Metadata is borrowed; code methods return tokens with stable generated names.
+  Wire metadata is borrowed; code methods accept an `EmissionContext` and return
+  `Result<TokenStream>`. Output expressions are rendered with the same context.
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
-- `emit_call(function)` checks slot completeness, output arity and shared
+- `emit_call(function, &context)` checks slot completeness, output arity and shared
   acknowledgement agreement, then returns the assembled Rust call body. There is
   no intermediate call object or external glue argument. `Function::inputs` and
   `outputs` expose borrowed wire metadata and paired output expressions;
@@ -113,9 +114,15 @@ settings remain commented out in the example manifests.
 - The result slot supplies delivery and the final result expression. `emit_call`
   orders validation, alias checks, acknowledgement, all acquisition, argument
   construction, source invocation, output preparation, delivery and ownership
-  commit. Output builders use `source_result()` for the source-result identifier.
-  The returned statements run inside the adapter's error boundary and the
-  environment expected by the prepared slots.
+  commit. The caller explicitly chooses the source-result local and any environment,
+  output-pointer, result-type, acknowledgement and carrier/helper bindings used by
+  the slots. Missing bindings are generation errors. The returned statements run
+  inside the adapter's error boundary.
+- Stored plans use `EmissionParameter::tokens()` to mark external references;
+  `source_result_expr()` creates the source-result marker. `EmissionContext::render`
+  resolves only these explicit markers, never ordinary identifiers or literals.
+  Custom trait implementations can use the context directly. Slot-private locals
+  and wire names remain owned by preparation; wrapper names must avoid those locals.
 - `rust_source` formats generated Rust. `Wire`, `Condition`, `Access` and
   `Resource` are general generation contracts defined in flat.
 

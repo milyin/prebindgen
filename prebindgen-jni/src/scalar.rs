@@ -43,6 +43,7 @@ pub fn input(p: Primitive, name: &syn::Ident) -> (String, String) {
     }
 }
 pub fn decode(p: Primitive, w: &syn::Ident) -> TokenStream {
+    let env = prebindgen_flat::EmissionParameter::Environment.tokens();
     let ty = p.rust_type();
     match p {
         Bool => quote!(#w != 0),
@@ -54,8 +55,8 @@ pub fn decode(p: Primitive, w: &syn::Ident) -> TokenStream {
         }
         U64 => quote!(#w as u64),
         Usize => quote!(usize::try_from(#w as u64).map_err(|_| "usize input out of range")?),
-        I128 => quote!(::prebindgen_jni_runtime::signed128(&mut env, &#w)?),
-        U128 => quote!(::prebindgen_jni_runtime::unsigned128(&mut env, &#w)?),
+        I128 => quote!(::prebindgen_jni_runtime::signed128(&mut #env, &#w)?),
+        U128 => quote!(::prebindgen_jni_runtime::unsigned128(&mut #env, &#w)?),
         _ => quote!(#w),
     }
 }
@@ -78,8 +79,9 @@ pub fn output_kotlin(p: Primitive, index: usize) -> (String, String) {
     (kotlin(p).into(), decode)
 }
 pub fn output_java(p: Primitive, v: &TokenStream) -> TokenStream {
+    let env = prebindgen_flat::EmissionParameter::Environment.tokens();
     if matches!(p, I128 | U128) {
-        quote!(::prebindgen_jni_runtime::bytes_object(&mut env, &#v)?)
+        quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &#v)?)
     } else {
         let (class, signature, value) = match p {
             Bool => ("Boolean", "Z", quote!(Bool(#v))),
@@ -93,7 +95,7 @@ pub fn output_java(p: Primitive, v: &TokenStream) -> TokenStream {
         };
         let signature = format!("({signature})Ljava/lang/{class};");
         let class = format!("java/lang/{class}");
-        quote!(env.call_static_method(#class, "valueOf", #signature, &[::prebindgen_jni_runtime::jni::objects::JValue::#value]).and_then(|v| v.l()).map_err(|e| e.to_string())?)
+        quote!(#env.call_static_method(#class, "valueOf", #signature, &[::prebindgen_jni_runtime::jni::objects::JValue::#value]).and_then(|v| v.l()).map_err(|e| e.to_string())?)
     }
 }
 pub fn parameter_slots(p: Primitive) -> usize {

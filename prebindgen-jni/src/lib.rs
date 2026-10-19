@@ -406,9 +406,8 @@ impl Class {
     }
 }
 /// Conversions and slot glue used by [`JniGen`].
-/// Prepared code expects a mutable `env` JNI environment in the wrapper.
-/// Consuming input slots supply shared acknowledgement code; the writer declares
-/// `__ownership`. Output delivery creates the `result` object array.
+/// Prepared code explicitly references the emission context's JNI environment
+/// and ownership acknowledgement parameter. Output delivery owns its result local.
 /// The writer supplies the error boundary and matching Kotlin protocol.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
@@ -417,38 +416,43 @@ impl Codec for JniCodec {
     type Extra = ();
     type Wire = JniWire;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
+        let env = prebindgen_flat::EmissionParameter::Environment.tokens();
+        let ownership = prebindgen_flat::EmissionParameter::Acknowledgement.tokens();
         if plan.resources.iter().any(|r| r.access == Access::Move) {
             plan.acknowledgement = Some(quote!(
-                if env.get_array_length(&__ownership).map_err(|e|e.to_string())? != 1 {
+                if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {
                     return Err("invalid ownership acknowledgement".into());
                 }
-                env.set_boolean_array_region(&__ownership, 0, &[1]).map_err(|e|e.to_string())?;
+                #env.set_boolean_array_region(&#ownership, 0, &[1]).map_err(|e|e.to_string())?;
             ));
         }
         Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+        let env = prebindgen_flat::EmissionParameter::Environment.tokens();
         let count = plan.wires.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
             let expr = match &wire.kind {
                 JniWire::Scalar(p) => scalar::output_java(*p, value),
                 JniWire::Handle(_) => {
-                    quote!(::prebindgen_jni_runtime::handle_object(&mut env,(#value) as u64)?)
+                    quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
                 }
-                JniWire::Text => quote!(::prebindgen_jni_runtime::text_object(&mut env,&#value)?),
-                JniWire::Bytes => quote!(::prebindgen_jni_runtime::bytes_object(&mut env,&#value)?),
+                JniWire::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
+                JniWire::Bytes => {
+                    quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
+                }
                 JniWire::Selector => return Err("selector output is unsupported".into()),
             };
             let i = i as i32;
             encode.extend(quote! {
                 let object = #expr;
-                env.set_object_array_element(&result, #i, &object).map_err(|e|e.to_string())?;
-                env.delete_local_ref(object).map_err(|e|e.to_string())?;
+                #env.set_object_array_element(&result, #i, &object).map_err(|e|e.to_string())?;
+                #env.delete_local_ref(object).map_err(|e|e.to_string())?;
             });
         }
         plan.delivery = prebindgen_flat::Delivery {
-            statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut env, #count)?; #encode),
+            statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode),
             result: quote!(result.into_raw()),
         };
         Ok(())
@@ -467,14 +471,15 @@ impl Codec for JniCodec {
         v: syn::Ident,
         active: &prebindgen_flat::Condition,
     ) -> Result<prebindgen_flat::InputPlan<JniWire>> {
+        let env = prebindgen_flat::EmissionParameter::Environment.tokens();
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::Scalar(p)),
             Some(Value::Text) => (
-                quote!(::prebindgen_jni_runtime::text(&mut env,&#w)?),
+                quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
                 JniWire::Text,
             ),
             Some(Value::Bytes) => (
-                quote!(::prebindgen_jni_runtime::bytes(&mut env,&#w)?),
+                quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
                 JniWire::Bytes,
             ),
             None => {
@@ -701,7 +706,12 @@ fn generate<
     }
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let body = prebindgen_flat::emit_call(f)?;
+        let env = format_ident!("jni_environment");
+        let ownership = format_ident!("ownership_accepted");
+        let mut context = prebindgen_flat::EmissionContext::new(format_ident!("source_value"));
+        context.environment = Some(env.clone());
+        context.acknowledgement = Some(ownership.clone());
+        let body = prebindgen_flat::emit_call(f, &context)?;
         let method = format!("call{index}");
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
@@ -739,13 +749,16 @@ fn generate<
         let has_acknowledgement = f
             .input_conversions()?
             .iter()
-            .any(|i| i.acknowledgement().is_some());
+            .map(|i| i.acknowledgement(&context).map(|code| code.is_some()))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .any(|present| present);
         if has_acknowledgement != has_consumes {
             return Err("JNI acknowledgement does not match consuming input wires".into());
         }
         if has_consumes {
             params.push(
-                quote!(__ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
+                quote!(#ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
             );
             raw_params.push("ownership: BooleanArray".into());
             kt_args.push("ownership".into());
@@ -765,7 +778,7 @@ fn generate<
         }
         let mut delivered = Vec::new();
         let mut result_types = Vec::new();
-        for (i, output) in f.outputs()?.enumerate() {
+        for (i, output) in f.outputs(&context)?.enumerate() {
             let w = output.wire;
             let (kt, decode) = match &w.kind {
                 JniWire::Scalar(p) => scalar::output_kotlin(*p, i),
@@ -783,10 +796,10 @@ fn generate<
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]
-#[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
+#[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
     match ::prebindgen_runtime::boundary(||{
      #body
-    }){Ok(result)=>result,Err(e)=>{::prebindgen_jni_runtime::fail(&mut env,&e);std::ptr::null_mut()}}
+    }){Ok(result)=>result,Err(e)=>{::prebindgen_jni_runtime::fail(&mut #env,&e);std::ptr::null_mut()}}
    }
   });
         native.push_str(&format!(
@@ -796,7 +809,7 @@ fn generate<
         let mut output_locals = String::new();
         let mut materialize = String::new();
         let mut cleanup = String::new();
-        for (i, output) in f.outputs()?.enumerate() {
+        for (i, output) in f.outputs(&context)?.enumerate() {
             let w = output.wire;
             if let JniWire::Handle(handle) = &w.kind {
                 let c = class(&classes, &handle.ty)?.fqn();

@@ -569,7 +569,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
     .unwrap();
     let call = flat.function("point").unwrap();
     assert_eq!(
-        call.outputs()
+        call.outputs(&emission_context())
             .unwrap()
             .map(|out| out.wire.component.clone())
             .collect::<Vec<_>>(),
@@ -697,10 +697,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         .fill(&mut flat, &FinalizingCodec, &decl, &Extra::default())
         .unwrap();
     assert_eq!(
-        prebindgen_flat::emit_call(flat.function("take").unwrap())
+        prebindgen_flat::emit_call(flat.function("take").unwrap(), &emission_context())
             .unwrap()
             .to_string(),
-        prebindgen_flat::emit_call(direct.function("take").unwrap())
+        prebindgen_flat::emit_call(direct.function("take").unwrap(), &emission_context())
             .unwrap()
             .to_string()
     );
@@ -813,7 +813,7 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &Extra::default(),
     )
     .unwrap();
-    let before = prebindgen_flat::emit_call(flat.function("point").unwrap())
+    let before = prebindgen_flat::emit_call(flat.function("point").unwrap(), &emission_context())
         .unwrap()
         .to_string();
     let handle = RepresentationId("PointHandle".into());
@@ -835,13 +835,25 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     drop(shapes);
     flat.records.clear();
     let call = flat.function("point").unwrap();
-    assert_eq!(call.outputs().unwrap().len(), 2);
+    assert_eq!(call.outputs(&emission_context()).unwrap().len(), 2);
     assert_eq!(
-        prebindgen_flat::emit_call(call).unwrap().to_string(),
+        prebindgen_flat::emit_call(call, &emission_context())
+            .unwrap()
+            .to_string(),
         before
     );
     assert_eq!(
-        call.outputs().unwrap().next().unwrap().wire.component.0,
+        call.outputs(&emission_context())
+            .unwrap()
+            .next()
+            .unwrap()
+            .wire
+            .component
+            .0,
         [ComponentSegment::Field("x".into())]
     );
+}
+
+fn emission_context() -> prebindgen_flat::EmissionContext {
+    prebindgen_flat::EmissionContext::new(syn::parse_quote!(__result))
 }

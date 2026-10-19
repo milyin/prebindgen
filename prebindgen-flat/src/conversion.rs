@@ -1,5 +1,5 @@
 //! Conversion contracts and call assembly.
-use crate::Result;
+use crate::{EmissionContext, EmissionParameter, Result};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -205,18 +205,10 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
     Ok(prettyplease::unparse(&file))
 }
 
-/// Identifier bound to the source function result by [`emit_call`].
-/// Output conversion builders must use this identifier when constructing result
-/// expressions. The name is reserved within the generated call body.
-pub fn source_result() -> syn::Ident {
-    syn::parse_quote!(__result)
-}
-
-/// Expression referring to the source result bound by [`emit_call`].
-/// Use [`source_result`] instead when an identifier is needed for interpolation.
+/// Explicit template reference to the caller-selected source-result local.
+/// [`EmissionContext::render`] resolves it during emission.
 pub fn source_result_expr() -> TokenStream {
-    let result = source_result();
-    quote!(#result)
+    EmissionParameter::SourceResult.tokens()
 }
 
 /// A fully prepared input conversion stored in a slot.
@@ -233,42 +225,45 @@ pub trait InputConversion {
     /// All contributing inputs must return the same token spelling; assembly emits
     /// it once. Return `None` when this input needs no acknowledgement. Slot-local
     /// fallible checks belong in `validation`, not in this shared operation.
-    fn acknowledgement(&self) -> Option<&TokenStream> {
-        None
+    fn acknowledgement(&self, _context: &EmissionContext) -> Result<Option<TokenStream>> {
+        Ok(None)
     }
     /// Resources used for call-wide alias checking.
     fn resources(&self) -> &[Resource];
     /// Fallible validation before any ownership transfer.
-    fn validation(&self) -> TokenStream;
+    fn validation(&self, context: &EmissionContext) -> Result<TokenStream>;
     /// Infallible ownership acquisition after acknowledgement.
-    fn acquisition(&self) -> TokenStream;
+    fn acquisition(&self, context: &EmissionContext) -> Result<TokenStream>;
     /// Construct the argument after all inputs have been acquired.
-    fn construction(&self) -> TokenStream;
+    fn construction(&self, context: &EmissionContext) -> Result<TokenStream>;
     /// Expression passed to the source function.
-    fn argument(&self) -> TokenStream;
+    fn argument(&self, context: &EmissionContext) -> Result<TokenStream>;
 }
 impl<W> InputConversion for InputPlan<W> {
     type Wire = W;
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
-    fn acknowledgement(&self) -> Option<&TokenStream> {
-        self.acknowledgement.as_ref()
+    fn acknowledgement(&self, context: &EmissionContext) -> Result<Option<TokenStream>> {
+        self.acknowledgement
+            .as_ref()
+            .map(|code| context.render(code))
+            .transpose()
     }
     fn resources(&self) -> &[Resource] {
         &self.resources
     }
-    fn validation(&self) -> TokenStream {
-        self.validation.clone()
+    fn validation(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.validation)
     }
-    fn acquisition(&self) -> TokenStream {
-        self.acquire.clone()
+    fn acquisition(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.acquire)
     }
-    fn construction(&self) -> TokenStream {
-        self.statements.clone()
+    fn construction(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.statements)
     }
-    fn argument(&self) -> TokenStream {
-        self.argument.clone()
+    fn argument(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.argument)
     }
 }
 /// A fully prepared output conversion stored in a slot.
@@ -276,42 +271,46 @@ impl<W> InputConversion for InputPlan<W> {
 /// Code runs in the environment supplied by the language wrapper writer.
 /// Preparation resolves errors before installing the slot; [`emit_call`]
 /// reads this interface directly, without an intermediate plan.
-/// Source-value expressions use [`source_result`].
+/// Source-value templates use [`source_result_expr`]; custom implementations can
+/// use the supplied context directly.
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire;
     /// Boundary results in delivery order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Output expressions in wire order, valid until commit.
-    fn values(&self) -> &[TokenStream];
+    fn values(&self, context: &EmissionContext) -> Result<Vec<TokenStream>>;
     /// Prepare owned output temporaries before delivery.
-    fn preparation(&self) -> TokenStream;
+    fn preparation(&self, context: &EmissionContext) -> Result<TokenStream>;
     /// Fallible delivery code; ownership remains uncommitted on failure.
-    fn delivery(&self) -> TokenStream;
+    fn delivery(&self, context: &EmissionContext) -> Result<TokenStream>;
     /// Infallibly transfer ownership after successful delivery.
-    fn commit(&self) -> TokenStream;
+    fn commit(&self, context: &EmissionContext) -> Result<TokenStream>;
     /// Infallible wrapper result expression evaluated after commit.
-    fn result(&self) -> TokenStream;
+    fn result(&self, context: &EmissionContext) -> Result<TokenStream>;
 }
 impl<W> OutputConversion for OutputPlan<W> {
     type Wire = W;
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
-    fn values(&self) -> &[TokenStream] {
-        &self.values
+    fn values(&self, context: &EmissionContext) -> Result<Vec<TokenStream>> {
+        self.values
+            .iter()
+            .map(|code| context.render(code))
+            .collect()
     }
-    fn preparation(&self) -> TokenStream {
-        self.statements.clone()
+    fn preparation(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.statements)
     }
-    fn delivery(&self) -> TokenStream {
-        self.delivery.statements.clone()
+    fn delivery(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.delivery.statements)
     }
-    fn commit(&self) -> TokenStream {
-        self.commit.clone()
+    fn commit(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.commit)
     }
-    fn result(&self) -> TokenStream {
-        self.delivery.result.clone()
+    fn result(&self, context: &EmissionContext) -> Result<TokenStream> {
+        context.render(&self.delivery.result)
     }
 }
 
@@ -320,7 +319,7 @@ pub struct OutputValue<'a, W> {
     /// Resolved boundary component and logical mapping.
     pub wire: &'a Wire<W>,
     /// Expression ready for adapter-specific delivery.
-    pub value: &'a TokenStream,
+    pub value: TokenStream,
 }
 
 /// Result-slot glue executed after output preparation and before ownership commit.
@@ -352,16 +351,13 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
             })
             .collect()
     }
-    /// Filled result slot, checked for matching wire and value counts.
+    /// Filled result slot. Emission checks the rendered wire and value counts.
     pub fn output_conversion(&self) -> Result<&O> {
         let output = self
             .ret
             .slot
             .as_ref()
             .ok_or_else(|| format!("`{}`: result has no conversion", self.name))?;
-        if output.wires().len() != output.values().len() {
-            return Err(format!("`{}`: output wire/value count differs", self.name));
-        }
         Ok(output)
     }
     /// Boundary input wires read directly from the slots in parameter order.
@@ -372,12 +368,19 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
             .flat_map(|i| i.wires()))
     }
     /// Output expressions paired with their wire descriptions, directly from the slot.
-    pub fn outputs(&self) -> Result<impl ExactSizeIterator<Item = OutputValue<'_, O::Wire>>> {
+    pub fn outputs(
+        &self,
+        context: &EmissionContext,
+    ) -> Result<impl ExactSizeIterator<Item = OutputValue<'_, O::Wire>>> {
         let output = self.output_conversion()?;
+        let values = output.values(context)?;
+        if output.wires().len() != values.len() {
+            return Err(format!("`{}`: output wire/value count differs", self.name));
+        }
         Ok(output
             .wires()
             .iter()
-            .zip(output.values())
+            .zip(values)
             .map(|(wire, value)| OutputValue { wire, value }))
     }
 }
@@ -389,12 +392,17 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
 /// construction, source invocation, output preparation, delivery and commit.
 pub fn emit_call<I: InputConversion, O: OutputConversion>(
     function: &crate::Function<I, O>,
+    context: &EmissionContext,
 ) -> Result<TokenStream> {
     let inputs = function.input_conversions()?;
     let output = function.output_conversion()?;
-    let mut acknowledgement: Option<&TokenStream> = None;
-    for fragment in inputs.iter().filter_map(|i| i.acknowledgement()) {
-        if let Some(previous) = acknowledgement {
+    let _ = function.outputs(context)?;
+    let mut acknowledgement: Option<TokenStream> = None;
+    for input in &inputs {
+        let Some(fragment) = input.acknowledgement(context)? else {
+            continue;
+        };
+        if let Some(previous) = &acknowledgement {
             if previous.to_string() != fragment.to_string() {
                 return Err(format!(
                     "`{}`: conflicting input acknowledgements",
@@ -405,21 +413,33 @@ pub fn emit_call<I: InputConversion, O: OutputConversion>(
             acknowledgement = Some(fragment);
         }
     }
-    let validation = inputs.iter().map(|i| i.validation());
+    let validation = inputs
+        .iter()
+        .map(|i| i.validation(context))
+        .collect::<Result<Vec<_>>>()?;
     let resources: Vec<_> = inputs
         .iter()
         .flat_map(|i| i.resources().iter().cloned())
         .collect();
-    let aliases = validate_resources(&resources);
-    let acquire = inputs.iter().map(|i| i.acquisition());
-    let construct = inputs.iter().map(|i| i.construction());
-    let args = inputs.iter().map(|i| i.argument());
+    let aliases = context.render(&validate_resources(&resources))?;
+    let acquire = inputs
+        .iter()
+        .map(|i| i.acquisition(context))
+        .collect::<Result<Vec<_>>>()?;
+    let construct = inputs
+        .iter()
+        .map(|i| i.construction(context))
+        .collect::<Result<Vec<_>>>()?;
+    let args = inputs
+        .iter()
+        .map(|i| i.argument(context))
+        .collect::<Result<Vec<_>>>()?;
     let path = &function.path;
-    let prepare = output.preparation();
-    let deliver = output.delivery();
-    let commit = output.commit();
-    let result = output.result();
-    let source = source_result();
+    let prepare = output.preparation(context)?;
+    let deliver = output.delivery(context)?;
+    let commit = output.commit(context)?;
+    let result = output.result(context)?;
+    let source = &context.source_result;
     Ok(quote! {
         #(#validation)* #aliases #acknowledgement #(#acquire)* #(#construct)*
         let #source = #path(#(#args),*);

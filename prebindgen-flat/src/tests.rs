@@ -9,16 +9,16 @@ impl InputConversion for TestInput {
     fn resources(&self) -> &[Resource] {
         panic!("test has no executable conversion")
     }
-    fn validation(&self) -> proc_macro2::TokenStream {
+    fn validation(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn acquisition(&self) -> proc_macro2::TokenStream {
+    fn acquisition(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn construction(&self) -> proc_macro2::TokenStream {
+    fn construction(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn argument(&self) -> proc_macro2::TokenStream {
+    fn argument(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
 }
@@ -29,19 +29,19 @@ impl OutputConversion for TestOutput {
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
     }
-    fn values(&self) -> &[proc_macro2::TokenStream] {
+    fn values(&self, _: &EmissionContext) -> Result<Vec<proc_macro2::TokenStream>> {
         panic!("test has no executable conversion")
     }
-    fn preparation(&self) -> proc_macro2::TokenStream {
+    fn preparation(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn delivery(&self) -> proc_macro2::TokenStream {
+    fn delivery(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn commit(&self) -> proc_macro2::TokenStream {
+    fn commit(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn result(&self) -> proc_macro2::TokenStream {
+    fn result(&self, _: &EmissionContext) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
 }

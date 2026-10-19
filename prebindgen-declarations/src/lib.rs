@@ -381,7 +381,7 @@ pub fn bind_input<C: Codec>(
 /// Build and attach a converter to a function result, replacing any existing one.
 ///
 /// Uses the same construction and failure rules as [`bind_input`]. Output code
-/// uses [`prebindgen_flat::source_result`] for the source call's result local.
+/// uses [`prebindgen_flat::source_result_expr`] for the source call's result local.
 /// The recipe is checked for compatible types and signatures, and for repeated
 /// consumption of the same value. Unit results use `Output::fields([])`.
 ///

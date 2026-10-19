@@ -61,7 +61,7 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
     let call = flat.function("add").unwrap();
-    let body = emit_call(call).unwrap();
+    let body = emit_call(call, &emission_context()).unwrap();
     let code = quote! {
         use std::sync::Mutex;
         static LOG: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
@@ -113,7 +113,7 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
         syn::parse_file("pub struct Point { pub x:f64, pub y:f64 } pub fn point()->Point {}")
             .unwrap();
     let mut flat = Flat::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-    let result = source_result();
+    let result = source_result_expr();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         delivery: Default::default(),
         // Deliberately reverse wire order: mapping must use component identities.
@@ -138,7 +138,7 @@ fn field_mapping_is_available_without_a_registry() {
     let flat = record_model();
     let call = flat.function("point").unwrap();
     let assignments: Vec<_> = call
-        .outputs()
+        .outputs(&emission_context())
         .unwrap()
         .map(|out| {
             let [ComponentSegment::Field(name)] = out.wire.component.0.as_slice() else {
@@ -161,10 +161,12 @@ fn generation_rejects_inconsistent_output_arity() {
         .unwrap()
         .values
         .pop();
-    assert!(emit_call(flat.function("point").unwrap())
-        .err()
-        .unwrap()
-        .contains("count differs"));
+    assert!(
+        emit_call(flat.function("point").unwrap(), &emission_context())
+            .err()
+            .unwrap()
+            .contains("count differs")
+    );
 }
 
 #[test]
@@ -179,7 +181,14 @@ fn partial_projection_is_self_contained() {
         .unwrap();
     output.wires.pop();
     output.values.pop();
-    assert_eq!(flat.function("point").unwrap().outputs().unwrap().len(), 1);
+    assert_eq!(
+        flat.function("point")
+            .unwrap()
+            .outputs(&emission_context())
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -196,7 +205,14 @@ fn several_physical_wires_may_supply_one_component() {
     extra.name = syn::parse_quote!(additional_wire);
     output.wires.push(extra);
     output.values.push(quote!(0));
-    assert_eq!(flat.function("point").unwrap().outputs().unwrap().len(), 3);
+    assert_eq!(
+        flat.function("point")
+            .unwrap()
+            .outputs(&emission_context())
+            .unwrap()
+            .len(),
+        3
+    );
 }
 
 #[test]
@@ -210,17 +226,20 @@ fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     f.params[0].ty.slot = Some(Input(0).plan());
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
-    let both = emit_call(f).unwrap().to_string();
+    let both = emit_call(f, &emission_context()).unwrap().to_string();
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = None;
-    assert_eq!(emit_call(f).unwrap().to_string(), both);
+    assert_eq!(emit_call(f, &emission_context()).unwrap().to_string(), both);
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = Some(quote!(different_ack()));
-    assert!(emit_call(f)
+    assert!(emit_call(f, &emission_context())
         .unwrap_err()
         .contains("conflicting input acknowledgements"));
     for param in &mut f.params {
         param.ty.slot.as_mut().unwrap().acknowledgement = None;
     }
-    assert!(!emit_call(f).unwrap().to_string().contains("acknowledge"));
+    assert!(!emit_call(f, &emission_context())
+        .unwrap()
+        .to_string()
+        .contains("acknowledge"));
 }
 
 #[test]
@@ -267,11 +286,15 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         &f.params[0].ty.slot.as_ref().unwrap().wires[0]
     ));
     assert!(std::ptr::eq(
-        call.outputs().unwrap().next().unwrap().value,
-        &f.ret.slot.as_ref().unwrap().values[0]
+        call.outputs(&emission_context())
+            .unwrap()
+            .next()
+            .unwrap()
+            .wire,
+        &f.ret.slot.as_ref().unwrap().wires[0]
     ));
     assert_eq!(
-        emit_call(call).unwrap().to_string(),
+        emit_call(call, &emission_context()).unwrap().to_string(),
         quote!(let __result = crate::echo(x); Ok(__result)).to_string()
     );
 }
@@ -284,11 +307,147 @@ fn emit_call_rejects_missing_input_and_result_slots() {
     )
     .unwrap();
     let function = flat.function_mut("echo").unwrap();
-    assert!(emit_call(function)
+    assert!(emit_call(function, &emission_context())
         .unwrap_err()
         .contains("parameter `x` has no conversion"));
     function.params[0].ty.slot = Some(Input(0).plan());
-    assert!(emit_call(function)
+    assert!(emit_call(function, &emission_context())
         .unwrap_err()
         .contains("result has no conversion"));
+}
+
+fn emission_context() -> EmissionContext {
+    EmissionContext::new(syn::parse_quote!(__result))
+}
+
+#[test]
+fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
+    let items = syn::parse_file("pub fn echo(x:i32)->i32 { x + 1 }").unwrap();
+    let mut flat = Flat::<InputPlan<()>, OutputPlan<()>>::parse(
+        items
+            .items
+            .into_iter()
+            .map(|item| (item, Default::default())),
+    )
+    .unwrap();
+    let env = EmissionParameter::Environment.tokens();
+    let ack = EmissionParameter::Acknowledgement.tokens();
+    let out = EmissionParameter::OutputPointer.tokens();
+    let ty = EmissionParameter::OutputType.tokens();
+    let value = source_result_expr();
+    let function = flat.function_mut("echo").unwrap();
+    let wire = || Wire {
+        component: Default::default(),
+        name: syn::parse_quote!(incoming),
+        kind: (),
+        active: Condition::default(),
+    };
+    function.params[0].ty.slot = Some(InputPlan {
+        wires: vec![wire()],
+        acknowledgement: Some(quote!(*#ack = true;)),
+        validation: quote!(if #env < 0 { return Err("environment".into()); }),
+        acquire: quote!(),
+        resources: vec![],
+        statements: quote!(let converted = incoming + #env;),
+        argument: quote!(converted),
+    });
+    function.ret.slot = Some(OutputPlan {
+        wires: vec![wire()],
+        statements: quote!(),
+        values: vec![value.clone()],
+        commit: quote!(),
+        delivery: Delivery {
+            statements: quote!(unsafe { #out.write(#ty { value: #value }); }),
+            result: value,
+        },
+    });
+    let mut wrappers = TokenStream::new();
+    for (suffix, type_name) in [("a", "First"), ("b", "Second")] {
+        let name = format_ident!("run_{suffix}");
+        let environment = format_ident!("runtime_{suffix}");
+        let output_pointer = format_ident!("sink_{suffix}");
+        let acknowledgement = format_ident!("accepted_{suffix}");
+        let output_type = format_ident!("{type_name}");
+        let mut context = EmissionContext::new(format_ident!("computed_{suffix}"));
+        context.environment = Some(environment.clone());
+        context.output_pointer = Some(output_pointer.clone());
+        context.output_type = Some(syn::parse_quote!(crate::#output_type));
+        context.acknowledgement = Some(acknowledgement.clone());
+        let body = emit_call(function, &context).unwrap();
+        assert!(!body.to_string().contains("__prebindgen_emit"));
+        wrappers.extend(quote! {
+            struct #output_type { value: i32 }
+            fn #name(incoming:i32, #environment:i32, #output_pointer:*mut #output_type, #acknowledgement:&mut bool) -> Result<i32,String> { #body }
+        });
+    }
+    let code = quote! {
+        fn echo(x:i32)->i32 { x + 1 }
+        #wrappers
+        fn main() {
+            let mut first = First { value: 0 }; let mut second = Second { value: 0 };
+            let mut accepted = false;
+            assert_eq!(run_a(40, 1, &mut first, &mut accepted), Ok(42));
+            assert!(accepted); assert_eq!(first.value, 42);
+            accepted = false;
+            assert_eq!(run_b(8, 2, &mut second, &mut accepted), Ok(11));
+            assert!(accepted); assert_eq!(second.value, 11);
+            accepted = false;
+            assert_eq!(run_a(40, -1, &mut first, &mut accepted), Err("environment".into()));
+            assert!(!accepted); assert_eq!(first.value, 42);
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("contexts.rs");
+    let executable = dir.path().join("contexts");
+    std::fs::write(&source, code.to_string()).unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .arg("--edition=2021")
+        .arg(&source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    let run = std::process::Command::new(executable).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings() {
+    let mut context = EmissionContext::new(syn::parse_quote!(computed));
+    for parameter in [
+        EmissionParameter::Environment,
+        EmissionParameter::OutputPointer,
+        EmissionParameter::OutputType,
+        EmissionParameter::Acknowledgement,
+        EmissionParameter::BufferType,
+        EmissionParameter::WideIntegerType,
+        EmissionParameter::ReadBuffer,
+    ] {
+        assert!(context
+            .render(&parameter.tokens())
+            .unwrap_err()
+            .contains("missing emission binding"));
+    }
+    context.environment = Some(syn::parse_quote!(runtime));
+    let environment = EmissionParameter::Environment.tokens();
+    let rendered = context
+        .render(&quote!({let env = "__prebindgen_emit!(environment)"; (#environment, env)}))
+        .unwrap();
+    assert_eq!(
+        rendered.to_string(),
+        quote!({
+            let env = "__prebindgen_emit!(environment)";
+            (runtime, env)
+        })
+        .to_string()
+    );
 }

@@ -28,9 +28,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 /// Conversions and slot glue used by [`Cbindgen`].
-/// Prepared output delivery expects `out` and a local `__PbResult` type alias
-/// supplied by the writer. The writer checks `out` and provides the error boundary
-/// and buffer helpers before executing the assembled call.
+/// Prepared code uses explicit emission parameters for the output pointer and
+/// result type. The writer supplies these bindings and the error boundary.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
 ///
@@ -65,10 +64,10 @@ impl Codec for CCodec {
         if values.is_empty() {
             values.push(quote!(unused: 0));
         }
-        // The writer supplies the concrete result type through this local alias,
-        // and an `out` pointer to that type.
+        let result_type = prebindgen_flat::EmissionParameter::OutputType.tokens();
+        let out = prebindgen_flat::EmissionParameter::OutputPointer.tokens();
         plan.delivery = prebindgen_flat::Delivery {
-            statements: quote!(let result = __PbResult { #(#values),* }; std::ptr::write(out, result);),
+            statements: quote!(let result = #result_type { #(#values),* }; std::ptr::write(#out, result);),
             result: quote!(()),
         };
         Ok(())
@@ -87,14 +86,15 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_flat::Condition,
     ) -> Result<prebindgen_flat::InputPlan<CWire>> {
+        let read_buffer = prebindgen_flat::EmissionParameter::ReadBuffer.tokens();
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::Scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
             Some(Value::Text) => (
-                quote!(std::str::from_utf8(unsafe {__pb_read(#w)?}).map_err(|_|"invalid UTF-8")?),
+                quote!(std::str::from_utf8(unsafe {#read_buffer(#w)?}).map_err(|_|"invalid UTF-8")?),
                 CWire::Buffer,
             ),
-            Some(Value::Bytes) => (quote!(unsafe {__pb_read(#w)?}), CWire::Buffer),
+            Some(Value::Bytes) => (quote!(unsafe {#read_buffer(#w)?}), CWire::Buffer),
             None => {
                 return prebindgen_conversions::boxed::input(
                     &prebindgen_conversions::boxed::Storage::Direct,
@@ -135,7 +135,8 @@ impl Codec for CCodec {
                     |v| quote!(::core::convert::Into::<Vec<u8>>::into(#v).into_boxed_slice()),
                     CWire::Buffer,
                 )?;
-                out.values = vec![quote!(__PbBuffer {data: #w.as_ptr(), len: #w.len()})];
+                let buffer_type = prebindgen_flat::EmissionParameter::BufferType.tokens();
+                out.values = vec![quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()})];
                 out.commit = quote!(let _ = Box::into_raw(#w););
                 Ok(out)
             }
@@ -162,11 +163,12 @@ fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
     }
 }
 fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
+    let wide_integer_type = prebindgen_flat::EmissionParameter::WideIntegerType.tokens();
     match p {
         Primitive::Bool => quote!(u8::from(#v)),
         Primitive::Char => quote!((#v) as u32),
         Primitive::I128 | Primitive::U128 => {
-            quote!({ let bits = (#v) as u128; __Pb128 { hi: (bits >> 64) as u64, lo: bits as u64 } })
+            quote!({ let bits = (#v) as u128; #wide_integer_type { hi: (bits >> 64) as u64, lo: bits as u64 } })
         }
         _ => v,
     }
@@ -439,11 +441,21 @@ fn generate<
         if f.ret.slot.is_none() {
             continue;
         }
-        let body = prebindgen_flat::emit_call(f)?;
+        let result_type = format_ident!("{prefix}_{}_result", f.name);
+        let mut context = prebindgen_flat::EmissionContext::new(format_ident!("source_value"));
+        context.output_pointer = Some(format_ident!("output"));
+        context.output_type = Some(syn::parse_quote!(#result_type));
+        context.buffer_type = Some(syn::parse_quote!(__PbBuffer));
+        context.wide_integer_type = Some(syn::parse_quote!(__Pb128));
+        context.read_buffer = Some(syn::parse_quote!(__pb_read));
+        let body = prebindgen_flat::emit_call(f, &context)?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
-        for wire in f.inputs()?.chain(f.outputs()?.map(|output| output.wire)) {
+        for wire in f
+            .inputs()?
+            .chain(f.outputs(&context)?.map(|output| output.wire))
+        {
             if let CWire::Pointer(pointer) = &wire.kind {
                 if !pointers
                     .iter()
@@ -456,7 +468,7 @@ fn generate<
                 }
             }
         }
-        calls.push((f, body));
+        calls.push((f, body, context));
     }
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
@@ -486,7 +498,8 @@ The pointer must be null or a live allocation of the declared type returned by t
         });
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
-    for (f, body) in calls {
+    for (f, body, context) in calls {
+        let out = context.output_pointer.as_ref().unwrap();
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let mut params = Vec::new();
@@ -499,7 +512,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         }
         let mut fields = Vec::new();
         header.push_str("typedef struct {\n");
-        for (i, output) in f.outputs()?.enumerate() {
+        for (i, output) in f.outputs(&context)?.enumerate() {
             let w = output.wire;
             let field = format_ident!("v{i}");
             let ty = rust_ty(w);
@@ -511,16 +524,15 @@ The pointer must be null or a live allocation of the declared type returned by t
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {result};\n"));
-        cparams.push(format!("{result} *out"));
+        cparams.push(format!("{result} *{out}"));
         header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
         tokens.extend(quote! {
          #[repr(C)] pub struct #result {#(#fields),*}
          #[doc = "# Safety
 The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."]
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-   #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)*out:*mut #result)->i32{
-          type __PbResult = #result;
-          if out.is_null(){__pb_error("null result pointer");return -1;}
+   #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)* #out:*mut #result)->i32{
+          if #out.is_null(){__pb_error("null result pointer");return -1;}
           match ::prebindgen_runtime::boundary(||{
            #body
           }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
@@ -564,21 +576,21 @@ mod generation_tests {
             fn wires(&self) -> &[GenericWire<Self::Wire>] {
                 &[]
             }
-            fn values(&self) -> &[TokenStream] {
-                &[]
+            fn values(&self, _: &prebindgen_flat::EmissionContext) -> Result<Vec<TokenStream>> {
+                Ok(vec![])
             }
-            fn preparation(&self) -> TokenStream {
+            fn preparation(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
                 self.0.set(self.0.get() + 1);
-                quote!()
+                Ok(quote!())
             }
-            fn delivery(&self) -> TokenStream {
-                quote!()
+            fn delivery(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+                Ok(quote!())
             }
-            fn commit(&self) -> TokenStream {
-                quote!()
+            fn commit(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+                Ok(quote!())
             }
-            fn result(&self) -> TokenStream {
-                quote!(())
+            fn result(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+                Ok(quote!(()))
             }
         }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));

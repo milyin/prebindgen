@@ -10,6 +10,8 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
+mod emission;
+pub use emission::{EmissionContext, EmissionParameter};
 mod conversion;
 pub use conversion::*;
 mod component;
