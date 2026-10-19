@@ -69,7 +69,7 @@ impl Storage {
 /// ```
 /// use prebindgen_conversions::boxed;
 /// use prebindgen_flat::{Access, Condition};
-/// let input = boxed::input(
+/// let input = boxed::input::<_, syn::Ident>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     &Condition::default(), |boxed| boxed.access,
@@ -79,14 +79,14 @@ impl Storage {
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W>(
+pub fn input<W, C>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &Condition,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputPlan<W>> {
+) -> Result<InputPlan<W, C>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -125,6 +125,7 @@ pub fn input<W>(
         ),
     };
     Ok(InputPlan {
+        context: Default::default(),
         acknowledgement: None,
         wires: vec![Wire {
             component: Default::default(),
@@ -163,14 +164,14 @@ pub fn input<W>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W>(
+pub fn output<W, C>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputPlan<W>> {
+) -> Result<OutputPlan<W, C>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -182,6 +183,7 @@ pub fn output<W>(
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
     Ok(OutputPlan {
+        context: Default::default(),
         delivery: Default::default(),
         wires: vec![Wire {
             component: Default::default(),

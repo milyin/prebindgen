@@ -65,7 +65,7 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::value;
 /// use prebindgen_flat::Condition;
-/// let input = value::input(
+/// let input = value::input::<_, syn::Ident>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &Condition::default(), quote::quote!(read(raw)?), "buffer",
 /// )?;
@@ -73,14 +73,14 @@ impl Value {
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W>(
+pub fn input<W, C>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &Condition,
     decode: TokenStream,
     kind: W,
-) -> Result<InputPlan<W>> {
+) -> Result<InputPlan<W, C>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
@@ -107,6 +107,7 @@ pub fn input<W>(
         ),
     };
     Ok(InputPlan {
+        context: Default::default(),
         acknowledgement: None,
         wires: vec![Wire {
             component: Default::default(),
@@ -138,14 +139,14 @@ pub fn input<W>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W>(
+pub fn output<W, C>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputPlan<W>> {
+) -> Result<OutputPlan<W, C>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };
@@ -162,6 +163,7 @@ pub fn output<W>(
     let expr = encode(value);
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
+        context: Default::default(),
         delivery: Default::default(),
         wires: vec![Wire {
             component: Default::default(),

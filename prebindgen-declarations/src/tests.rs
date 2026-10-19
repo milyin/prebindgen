@@ -31,6 +31,7 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 impl Codec for TestCodec {
     type Extra = Extra;
     type Wire = TestWire;
+    type Context = syn::Ident;
     fn selector(&self, extra: &Extra) -> TestWire {
         TestWire {
             kind: Kind::Selector,
@@ -62,6 +63,7 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
+            context: Default::default(),
             acknowledgement: None,
             wires: vec![Wire {
                 component: Default::default(),
@@ -93,6 +95,7 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
+            context: Default::default(),
             delivery: Default::default(),
             wires: vec![Wire {
                 component: Default::default(),
@@ -584,6 +587,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     impl Codec for FinalizingCodec {
         type Extra = Extra;
         type Wire = TestWire;
+        type Context = syn::Ident;
         fn selector(&self, extra: &Extra) -> TestWire {
             TEST_CODEC.selector(extra)
         }
@@ -854,6 +858,6 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     );
 }
 
-fn emission_context() -> prebindgen_flat::EmissionContext {
-    prebindgen_flat::EmissionContext::new(syn::parse_quote!(__result))
+fn emission_context() -> syn::Ident {
+    syn::parse_quote!(__result)
 }

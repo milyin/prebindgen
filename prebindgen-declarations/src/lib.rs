@@ -166,20 +166,21 @@ impl Output {
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Extra = ();
+///     type Context = syn::Ident;
 ///     type Wire = Option<value::Value>; // `None` marks a selector.
 ///
 ///     fn selector(&self, _: &()) -> Self::Wire { None }
 ///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
 ///     fn input_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
-///     ) -> Result<InputPlan<Self::Wire>> {
+///     ) -> Result<InputPlan<Self::Wire, Self::Context>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         let decode = quote!(#wire.clone());
 ///         value::input(ty, wire, var, active, decode, Some(kind))
 ///     }
 ///     fn output_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
-///     ) -> Result<OutputPlan<Self::Wire>> {
+///     ) -> Result<OutputPlan<Self::Wire, Self::Context>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         value::output(ty, wire, v, borrowed, |v| v, Some(kind))
 ///     }
@@ -217,6 +218,8 @@ pub trait Codec {
     /// The same value is passed through nested conversions. It is not stored in Flat;
     /// hooks retain only the data needed for emission in their code and wires.
     type Extra;
+    /// Context supplied by the language generator when emitting stored templates.
+    type Context: prebindgen_flat::TemplateContext;
     /// The adapter's description of one wire, stored in [`Wire::kind`], such as
     /// its carrier type or a destination type name.
     type Wire: Clone + std::fmt::Debug;
@@ -260,17 +263,21 @@ pub trait Codec {
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<Self::Wire>>;
+    ) -> Result<InputPlan<Self::Wire, Self::Context>>;
     /// Complete a composed parameter plan before it is stored in a slot.
     /// Called once per bound parameter, including records and selectors.
-    fn finish_input(&self, _plan: &mut InputPlan<Self::Wire>, _extra: &Self::Extra) -> Result<()> {
+    fn finish_input(
+        &self,
+        _plan: &mut InputPlan<Self::Wire, Self::Context>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
         Ok(())
     }
     /// Complete a composed result plan, including unit and multi-wire results.
     /// Install call-level delivery here, after all output expressions are known.
     fn finish_output(
         &self,
-        _plan: &mut OutputPlan<Self::Wire>,
+        _plan: &mut OutputPlan<Self::Wire, Self::Context>,
         _extra: &Self::Extra,
     ) -> Result<()> {
         Ok(())
@@ -300,7 +307,7 @@ pub trait Codec {
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputPlan<Self::Wire>>;
+    ) -> Result<OutputPlan<Self::Wire, Self::Context>>;
 }
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
@@ -324,7 +331,7 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
+pub type Bindings<W, C = syn::Ident> = Flat<InputPlan<W, C>, OutputPlan<W, C>>;
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -349,12 +356,12 @@ pub type Bindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Input binding rejects output recipes:
 /// ```compile_fail
 /// use prebindgen_declarations::{bind_input, Bindings, Codec, Output};
-/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
+/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire, C::Context>, codec: &C, extra: &C::Extra) {
 ///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_input<C: Codec>(
-    flat: &mut Bindings<C::Wire>,
+    flat: &mut Bindings<C::Wire, C::Context>,
     codec: &C,
     function: &str,
     parameter: &str,
@@ -396,12 +403,12 @@ pub fn bind_input<C: Codec>(
 /// Output binding rejects input recipes:
 /// ```compile_fail
 /// use prebindgen_declarations::{bind_output, Bindings, Codec, Input};
-/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire>, codec: &C, extra: &C::Extra) {
+/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire, C::Context>, codec: &C, extra: &C::Extra) {
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_output<C: Codec>(
-    flat: &mut Bindings<C::Wire>,
+    flat: &mut Bindings<C::Wire, C::Context>,
     codec: &C,
     function: &str,
     recipe: &Output,
@@ -420,13 +427,13 @@ pub fn bind_output<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
-    flat: &'a Bindings<C::Wire>,
+    flat: &'a Bindings<C::Wire, C::Context>,
     codec: &'a C,
     prefix: String,
     next: std::cell::Cell<usize>,
 }
 impl<'a, C: Codec> Compiler<'a, C> {
-    fn new(flat: &'a Bindings<C::Wire>, codec: &'a C, prefix: String) -> Self {
+    fn new(flat: &'a Bindings<C::Wire, C::Context>, codec: &'a C, prefix: String) -> Self {
         Self {
             flat,
             codec,
@@ -446,7 +453,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         recipe: &Input,
         extra: &C::Extra,
         active: &Condition,
-    ) -> Result<InputPlan<C::Wire>> {
+    ) -> Result<InputPlan<C::Wire, C::Context>> {
         let var = self.name();
         let mut wires = Vec::new();
         let mut validation = TokenStream::new();
@@ -463,6 +470,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(InputPlan {
+                        context: Default::default(),
                         acknowledgement,
                         wires,
                         validation,
@@ -565,6 +573,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
         }
         Ok(InputPlan {
+            context: Default::default(),
             acknowledgement,
             wires,
             validation,
@@ -581,8 +590,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputPlan<C::Wire>> {
+    ) -> Result<OutputPlan<C::Wire, C::Context>> {
         let mut out = OutputPlan {
+            context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
             wires: Vec::new(),
@@ -665,7 +675,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         Ok(out)
     }
 }
-fn append<W>(to: &mut OutputPlan<W>, from: OutputPlan<W>) -> Result<()> {
+fn append<W, C>(to: &mut OutputPlan<W, C>, from: OutputPlan<W, C>) -> Result<()> {
     if !from.delivery.statements.is_empty()
         || from.delivery.result.to_string() != quote!(()).to_string()
     {

@@ -217,7 +217,7 @@ impl Declarations {
     /// * `extra` — occurrence data passed to every codec call made by this fill.
     pub fn fill<C: Codec>(
         &self,
-        flat: &mut Bindings<C::Wire>,
+        flat: &mut Bindings<C::Wire, C::Context>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,

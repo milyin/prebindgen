@@ -12,6 +12,7 @@ impl Input {
         let acquire = format!("acquire{index}");
         let construct = format!("construct{index}");
         InputPlan {
+            context: Default::default(),
             acknowledgement: Some(
                 quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
             ),
@@ -28,6 +29,7 @@ struct Output;
 impl Output {
     fn plan(&self) -> OutputPlan<&'static str> {
         OutputPlan {
+            context: Default::default(),
             delivery: Delivery {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
@@ -115,6 +117,7 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
     let mut flat = Flat::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
     let result = source_result_expr();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
+        context: Default::default(),
         delivery: Default::default(),
         // Deliberately reverse wire order: mapping must use component identities.
         wires: ["y", "x"]
@@ -261,6 +264,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     };
     let f = flat.function_mut("echo").unwrap();
     f.params[0].ty.slot = Some(InputPlan {
+        context: Default::default(),
         wires: vec![wire()],
         acknowledgement: None,
         validation: quote!(),
@@ -270,6 +274,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         argument: quote!(x),
     });
     f.ret.slot = Some(OutputPlan {
+        context: Default::default(),
         wires: vec![wire()],
         statements: quote!(),
         values: vec![source_result_expr()],
@@ -316,24 +321,51 @@ fn emit_call_rejects_missing_input_and_result_slots() {
         .contains("result has no conversion"));
 }
 
-fn emission_context() -> EmissionContext {
-    EmissionContext::new(syn::parse_quote!(__result))
+fn emission_context() -> syn::Ident {
+    syn::parse_quote!(__result)
+}
+
+// Defined by the consumer, with no Clone/Debug/Default requirement.
+struct TestContext {
+    result: syn::Ident,
+    runtime: syn::Ident,
+    sink: syn::Ident,
+    accepted: syn::Ident,
+    carrier: syn::Path,
+}
+impl EmissionContext for TestContext {
+    fn source_result(&self) -> &syn::Ident {
+        &self.result
+    }
+}
+impl TemplateContext for TestContext {
+    fn render(&self, code: &TokenStream) -> Result<TokenStream> {
+        use quote::ToTokens;
+        render_template(code, &|name| match name {
+            "source_result" => Ok(self.result.to_token_stream()),
+            "runtime" => Ok(self.runtime.to_token_stream()),
+            "sink" => Ok(self.sink.to_token_stream()),
+            "accepted" => Ok(self.accepted.to_token_stream()),
+            "carrier" => Ok(self.carrier.to_token_stream()),
+            _ => Err(format!("unknown emission parameter `{name}`")),
+        })
+    }
 }
 
 #[test]
 fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x + 1 }").unwrap();
-    let mut flat = Flat::<InputPlan<()>, OutputPlan<()>>::parse(
+    let mut flat = Flat::<InputPlan<(), TestContext>, OutputPlan<(), TestContext>>::parse(
         items
             .items
             .into_iter()
             .map(|item| (item, Default::default())),
     )
     .unwrap();
-    let env = EmissionParameter::Environment.tokens();
-    let ack = EmissionParameter::Acknowledgement.tokens();
-    let out = EmissionParameter::OutputPointer.tokens();
-    let ty = EmissionParameter::OutputType.tokens();
+    let env = template_parameter("runtime");
+    let ack = template_parameter("accepted");
+    let out = template_parameter("sink");
+    let ty = template_parameter("carrier");
     let value = source_result_expr();
     let function = flat.function_mut("echo").unwrap();
     let wire = || Wire {
@@ -343,6 +375,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         active: Condition::default(),
     };
     function.params[0].ty.slot = Some(InputPlan {
+        context: Default::default(),
         wires: vec![wire()],
         acknowledgement: Some(quote!(*#ack = true;)),
         validation: quote!(if #env < 0 { return Err("environment".into()); }),
@@ -352,6 +385,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         argument: quote!(converted),
     });
     function.ret.slot = Some(OutputPlan {
+        context: Default::default(),
         wires: vec![wire()],
         statements: quote!(),
         values: vec![value.clone()],
@@ -368,11 +402,13 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         let output_pointer = format_ident!("sink_{suffix}");
         let acknowledgement = format_ident!("accepted_{suffix}");
         let output_type = format_ident!("{type_name}");
-        let mut context = EmissionContext::new(format_ident!("computed_{suffix}"));
-        context.environment = Some(environment.clone());
-        context.output_pointer = Some(output_pointer.clone());
-        context.output_type = Some(syn::parse_quote!(crate::#output_type));
-        context.acknowledgement = Some(acknowledgement.clone());
+        let context = TestContext {
+            result: format_ident!("computed_{suffix}"),
+            runtime: environment.clone(),
+            sink: output_pointer.clone(),
+            carrier: syn::parse_quote!(crate::#output_type),
+            accepted: acknowledgement.clone(),
+        };
         let body = emit_call(function, &context).unwrap();
         assert!(!body.to_string().contains("__prebindgen_emit"));
         wrappers.extend(quote! {
@@ -422,23 +458,19 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
 
 #[test]
 fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings() {
-    let mut context = EmissionContext::new(syn::parse_quote!(computed));
-    for parameter in [
-        EmissionParameter::Environment,
-        EmissionParameter::OutputPointer,
-        EmissionParameter::OutputType,
-        EmissionParameter::Acknowledgement,
-        EmissionParameter::BufferType,
-        EmissionParameter::WideIntegerType,
-        EmissionParameter::ReadBuffer,
-    ] {
-        assert!(context
-            .render(&parameter.tokens())
-            .unwrap_err()
-            .contains("missing emission binding"));
-    }
-    context.environment = Some(syn::parse_quote!(runtime));
-    let environment = EmissionParameter::Environment.tokens();
+    let minimal: syn::Ident = syn::parse_quote!(computed);
+    assert!(minimal
+        .render(&template_parameter("runtime"))
+        .unwrap_err()
+        .contains("unknown emission parameter `runtime`"));
+    let context = TestContext {
+        result: minimal,
+        runtime: syn::parse_quote!(runtime),
+        sink: syn::parse_quote!(sink),
+        accepted: syn::parse_quote!(accepted),
+        carrier: syn::parse_quote!(Carrier),
+    };
+    let environment = template_parameter("runtime");
     let rendered = context
         .render(&quote!({let env = "__prebindgen_emit!(environment)"; (#environment, env)}))
         .unwrap();
@@ -449,5 +481,83 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
             (runtime, env)
         })
         .to_string()
+    );
+}
+
+#[test]
+fn custom_conversions_use_context_without_template_rendering() {
+    struct Context {
+        local: syn::Ident,
+        increment: i32,
+    }
+    impl EmissionContext for Context {
+        fn source_result(&self) -> &syn::Ident {
+            &self.local
+        }
+    }
+    struct Input;
+    impl InputConversion for Input {
+        type Wire = ();
+        type Context = Context;
+        fn wires(&self) -> &[Wire<()>] {
+            &[]
+        }
+        fn resources(&self, _: &Context) -> Result<Vec<Resource>> {
+            Ok(vec![])
+        }
+        fn validation(&self, _: &Context) -> Result<TokenStream> {
+            Ok(quote!())
+        }
+        fn acquisition(&self, _: &Context) -> Result<TokenStream> {
+            Ok(quote!())
+        }
+        fn construction(&self, _: &Context) -> Result<TokenStream> {
+            Ok(quote!())
+        }
+        fn argument(&self, context: &Context) -> Result<TokenStream> {
+            let increment = context.increment;
+            Ok(quote!(#increment))
+        }
+    }
+    struct Output;
+    impl OutputConversion for Output {
+        type Wire = ();
+        type Context = Context;
+        fn wires(&self) -> &[Wire<()>] {
+            &[]
+        }
+        fn values(&self, _: &Context) -> Result<Vec<TokenStream>> {
+            Ok(vec![])
+        }
+        fn preparation(&self, _: &Context) -> Result<TokenStream> {
+            Ok(quote!())
+        }
+        fn delivery(&self, _: &Context) -> Result<TokenStream> {
+            Ok(quote!())
+        }
+        fn commit(&self, _: &Context) -> Result<TokenStream> {
+            Ok(quote!())
+        }
+        fn result(&self, context: &Context) -> Result<TokenStream> {
+            let local = &context.local;
+            Ok(quote!(#local))
+        }
+    }
+    let item = syn::parse_quote!(
+        pub fn echo(x: i32) -> i32 {
+            x
+        }
+    );
+    let mut flat = Flat::<Input, Output>::parse([(item, Default::default())]).unwrap();
+    let function = flat.function_mut("echo").unwrap();
+    function.params[0].ty.slot = Some(Input);
+    function.ret.slot = Some(Output);
+    let context = Context {
+        local: syn::parse_quote!(returned),
+        increment: 42,
+    };
+    assert_eq!(
+        emit_call(function, &context).unwrap().to_string(),
+        quote!(let returned = crate::echo(42i32); Ok(returned)).to_string()
     );
 }

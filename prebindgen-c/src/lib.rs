@@ -19,7 +19,11 @@ pub enum CWire {
     Selector,
 }
 use prebindgen_declarations::Codec;
-use prebindgen_flat::{InputPlan, OutputPlan, Wire as GenericWire};
+use prebindgen_flat::Wire as GenericWire;
+mod emission;
+pub use emission::CContext;
+type InputPlan<W> = prebindgen_flat::InputPlan<W, CContext>;
+type OutputPlan<W> = prebindgen_flat::OutputPlan<W, CContext>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -51,6 +55,7 @@ pub struct CCodec;
 impl Codec for CCodec {
     type Extra = ();
     type Wire = CWire;
+    type Context = CContext;
     fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
         let mut values: Vec<_> = plan
             .values
@@ -64,8 +69,8 @@ impl Codec for CCodec {
         if values.is_empty() {
             values.push(quote!(unused: 0));
         }
-        let result_type = prebindgen_flat::EmissionParameter::OutputType.tokens();
-        let out = prebindgen_flat::EmissionParameter::OutputPointer.tokens();
+        let result_type = prebindgen_flat::template_parameter("output_type");
+        let out = prebindgen_flat::template_parameter("output_pointer");
         plan.delivery = prebindgen_flat::Delivery {
             statements: quote!(let result = #result_type { #(#values),* }; std::ptr::write(#out, result);),
             result: quote!(()),
@@ -85,8 +90,8 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_flat::Condition,
-    ) -> Result<prebindgen_flat::InputPlan<CWire>> {
-        let read_buffer = prebindgen_flat::EmissionParameter::ReadBuffer.tokens();
+    ) -> Result<InputPlan<CWire>> {
+        let read_buffer = prebindgen_flat::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::Scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
@@ -115,7 +120,7 @@ impl Codec for CCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_flat::OutputPlan<CWire>> {
+    ) -> Result<OutputPlan<CWire>> {
         match Value::of(ty) {
             Some(Value::Scalar(p)) => prebindgen_conversions::value::output(
                 ty,
@@ -135,7 +140,7 @@ impl Codec for CCodec {
                     |v| quote!(::core::convert::Into::<Vec<u8>>::into(#v).into_boxed_slice()),
                     CWire::Buffer,
                 )?;
-                let buffer_type = prebindgen_flat::EmissionParameter::BufferType.tokens();
+                let buffer_type = prebindgen_flat::template_parameter("buffer_type");
                 out.values = vec![quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()})];
                 out.commit = quote!(let _ = Box::into_raw(#w););
                 Ok(out)
@@ -163,7 +168,7 @@ fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
     }
 }
 fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
-    let wide_integer_type = prebindgen_flat::EmissionParameter::WideIntegerType.tokens();
+    let wide_integer_type = prebindgen_flat::template_parameter("wide_integer_type");
     match p {
         Primitive::Bool => quote!(u8::from(#v)),
         Primitive::Char => quote!((#v) as u32),
@@ -421,8 +426,8 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     }
 }
 fn generate<
-    I: prebindgen_flat::InputConversion<Wire = CWire>,
-    O: prebindgen_flat::OutputConversion<Wire = CWire>,
+    I: prebindgen_flat::InputConversion<Wire = CWire, Context = CContext>,
+    O: prebindgen_flat::OutputConversion<Wire = CWire, Context = CContext>,
 >(
     flat: Flat<I, O>,
     prefix: &str,
@@ -442,12 +447,14 @@ fn generate<
             continue;
         }
         let result_type = format_ident!("{prefix}_{}_result", f.name);
-        let mut context = prebindgen_flat::EmissionContext::new(format_ident!("source_value"));
-        context.output_pointer = Some(format_ident!("output"));
-        context.output_type = Some(syn::parse_quote!(#result_type));
-        context.buffer_type = Some(syn::parse_quote!(__PbBuffer));
-        context.wide_integer_type = Some(syn::parse_quote!(__Pb128));
-        context.read_buffer = Some(syn::parse_quote!(__pb_read));
+        let context = CContext {
+            source_result: format_ident!("source_value"),
+            output_pointer: format_ident!("output"),
+            output_type: syn::parse_quote!(#result_type),
+            buffer_type: syn::parse_quote!(__PbBuffer),
+            wide_integer_type: syn::parse_quote!(__Pb128),
+            read_buffer: syn::parse_quote!(__pb_read),
+        };
         let body = prebindgen_flat::emit_call(f, &context)?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
@@ -499,7 +506,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
     for (f, body, context) in calls {
-        let out = context.output_pointer.as_ref().unwrap();
+        let out = &context.output_pointer;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let mut params = Vec::new();
@@ -573,23 +580,24 @@ mod generation_tests {
         struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
         impl prebindgen_flat::OutputConversion for CountedOutput {
             type Wire = CWire;
+            type Context = CContext;
             fn wires(&self) -> &[GenericWire<Self::Wire>] {
                 &[]
             }
-            fn values(&self, _: &prebindgen_flat::EmissionContext) -> Result<Vec<TokenStream>> {
+            fn values(&self, _: &CContext) -> Result<Vec<TokenStream>> {
                 Ok(vec![])
             }
-            fn preparation(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+            fn preparation(&self, _: &CContext) -> Result<TokenStream> {
                 self.0.set(self.0.get() + 1);
                 Ok(quote!())
             }
-            fn delivery(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+            fn delivery(&self, _: &CContext) -> Result<TokenStream> {
                 Ok(quote!())
             }
-            fn commit(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+            fn commit(&self, _: &CContext) -> Result<TokenStream> {
                 Ok(quote!())
             }
-            fn result(&self, _: &prebindgen_flat::EmissionContext) -> Result<TokenStream> {
+            fn result(&self, _: &CContext) -> Result<TokenStream> {
                 Ok(quote!(()))
             }
         }

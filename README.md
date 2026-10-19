@@ -95,9 +95,9 @@ settings remain commented out in the example manifests.
 
 - `InputConversion` and `OutputConversion` expose prepared slot metadata and code
   through individual methods. `emit_call` reads these methods directly; slots
-  do not return intermediate plans. `InputPlan<W>` and `OutputPlan<W>` remain
+  do not return intermediate plans. `InputPlan<W, C>` and `OutputPlan<W, C>` remain
   optional concrete storage implementations, without a `W: Clone` requirement.
-  Wire metadata is borrowed; code methods accept an `EmissionContext` and return
+  Wire metadata is borrowed; code methods accept `&Self::Context` and return
   `Result<TokenStream>`. Output expressions are rendered with the same context.
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
@@ -114,25 +114,31 @@ settings remain commented out in the example manifests.
 - The result slot supplies delivery and the final result expression. `emit_call`
   orders validation, alias checks, acknowledgement, all acquisition, argument
   construction, source invocation, output preparation, delivery and ownership
-  commit. The caller explicitly chooses the source-result local and any environment,
-  output-pointer, result-type, acknowledgement and carrier/helper bindings used by
-  the slots. Missing bindings are generation errors. The returned statements run
-  inside the adapter's error boundary.
-- Stored plans use `EmissionParameter::tokens()` to mark external references;
-  `source_result_expr()` creates the source-result marker. `EmissionContext::render`
-  resolves only these explicit markers, never ordinary identifiers or literals.
-  Custom trait implementations can use the context directly. Slot-private locals
+  commit. The returned statements run inside the adapter's error boundary.
+- Each language generator defines its context type, selected by both conversion
+  traits' associated `Context` type. `emit_call` requires matching context types.
+  Flat's `EmissionContext` trait requires only `source_result()`, the identifier
+  used to bind the wrapped function's return value. C and JNI define their own
+  required fields in `CContext` and `JniContext`; Flat has no list of ABI bindings.
+- Stored plans use the optional `TemplateContext::render` interface.
+  `template_parameter(name)` creates an explicit marker whose meaning is defined
+  by the language generator; `source_result_expr()` marks the source-result local.
+  The `render_template` helper substitutes markers recursively, leaving ordinary
+  identifiers and literals untouched. Custom conversions can use context fields
+  directly without templates or rendering support. Slot-private locals
   and wire names remain owned by preparation; wrapper names must avoid those locals.
 - `rust_source` formats generated Rust. `Wire`, `Condition`, `Access` and
   `Resource` are general generation contracts defined in flat.
 
 Both C and JNI writers use this API. Their generation functions are generic over
-conversion implementations with the corresponding adapter wire type. They supply
+conversion implementations with the corresponding adapter wire and context types. They supply
 boundary signatures, the required environment and error handling; they do not combine conversion
 phases or depend on declarations during generation.
 
-`prebindgen-declarations` prepares slots. Its `Bindings<W>` alias is
-`Flat<InputPlan<W>, OutputPlan<W>>`. `bind_input` and `bind_output` compile one
+`prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
+`Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
+type for the prepared slots; it defaults to `syn::Ident` in the alias for
+conversions that only need a source-result local. `bind_input` and `bind_output` compile one
 occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
 function. `Codec::finish_input` and `finish_output` attach glue after recursive
 composition, during preparation only; the latter also runs for unit results.

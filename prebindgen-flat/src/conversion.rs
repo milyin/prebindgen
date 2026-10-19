@@ -1,5 +1,5 @@
 //! Conversion contracts and call assembly.
-use crate::{EmissionContext, EmissionParameter, Result};
+use crate::{template_parameter, EmissionContext, Result, TemplateContext};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -33,7 +33,9 @@ pub struct Wire<W> {
 /// Optional concrete storage implementing [`InputConversion`]. [`emit_call`] orders
 /// them across all parameters; wrapper writers do not assemble them themselves.
 #[derive(Clone, Debug)]
-pub struct InputPlan<W> {
+pub struct InputPlan<W, C = syn::Ident> {
+    /// Context type supplied by the language generator at emission.
+    pub context: std::marker::PhantomData<fn(&C)>,
     /// Flattened boundary parameters in signature order.
     pub wires: Vec<Wire<W>>,
     /// Shared call acknowledgement, if this input needs one.
@@ -54,7 +56,9 @@ pub struct InputPlan<W> {
 /// Optional concrete storage implementing [`OutputConversion`].
 /// [`emit_call`] commits only after adapter delivery succeeds.
 #[derive(Clone, Debug)]
-pub struct OutputPlan<W> {
+pub struct OutputPlan<W, C = syn::Ident> {
+    /// Context type supplied by the language generator at emission.
+    pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
     /// Boundary results in delivery order; one entry per expression in `values`.
@@ -206,9 +210,9 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 }
 
 /// Explicit template reference to the caller-selected source-result local.
-/// [`EmissionContext::render`] resolves it during emission.
+/// [`TemplateContext::render`] resolves it during emission.
 pub fn source_result_expr() -> TokenStream {
-    EmissionParameter::SourceResult.tokens()
+    template_parameter("source_result")
 }
 
 /// A fully prepared input conversion stored in a slot.
@@ -219,50 +223,62 @@ pub fn source_result_expr() -> TokenStream {
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire;
+    /// Emission data defined and supplied by the language generator.
+    type Context: EmissionContext;
     /// Boundary parameters in signature order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Shared call acknowledgement, after validation and before acquisition.
     /// All contributing inputs must return the same token spelling; assembly emits
     /// it once. Return `None` when this input needs no acknowledgement. Slot-local
     /// fallible checks belong in `validation`, not in this shared operation.
-    fn acknowledgement(&self, _context: &EmissionContext) -> Result<Option<TokenStream>> {
+    fn acknowledgement(&self, _context: &Self::Context) -> Result<Option<TokenStream>> {
         Ok(None)
     }
-    /// Resources used for call-wide alias checking.
-    fn resources(&self) -> &[Resource];
+    /// Resources used for call-wide alias checking, with identities emitted for this context.
+    fn resources(&self, context: &Self::Context) -> Result<Vec<Resource>>;
     /// Fallible validation before any ownership transfer.
-    fn validation(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn validation(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Infallible ownership acquisition after acknowledgement.
-    fn acquisition(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn acquisition(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Construct the argument after all inputs have been acquired.
-    fn construction(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn construction(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Expression passed to the source function.
-    fn argument(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn argument(&self, context: &Self::Context) -> Result<TokenStream>;
 }
-impl<W> InputConversion for InputPlan<W> {
+impl<W, C: TemplateContext> InputConversion for InputPlan<W, C> {
     type Wire = W;
+    type Context = C;
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
-    fn acknowledgement(&self, context: &EmissionContext) -> Result<Option<TokenStream>> {
+    fn acknowledgement(&self, context: &Self::Context) -> Result<Option<TokenStream>> {
         self.acknowledgement
             .as_ref()
             .map(|code| context.render(code))
             .transpose()
     }
-    fn resources(&self) -> &[Resource] {
-        &self.resources
+    fn resources(&self, context: &Self::Context) -> Result<Vec<Resource>> {
+        self.resources
+            .iter()
+            .map(|resource| {
+                Ok(Resource {
+                    identity: context.render(&resource.identity)?,
+                    access: resource.access,
+                    active: resource.active.clone(),
+                })
+            })
+            .collect()
     }
-    fn validation(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn validation(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.validation)
     }
-    fn acquisition(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn acquisition(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.acquire)
     }
-    fn construction(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn construction(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.statements)
     }
-    fn argument(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn argument(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.argument)
     }
 }
@@ -276,40 +292,43 @@ impl<W> InputConversion for InputPlan<W> {
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire;
+    /// Emission data defined and supplied by the language generator.
+    type Context: EmissionContext;
     /// Boundary results in delivery order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Output expressions in wire order, valid until commit.
-    fn values(&self, context: &EmissionContext) -> Result<Vec<TokenStream>>;
+    fn values(&self, context: &Self::Context) -> Result<Vec<TokenStream>>;
     /// Prepare owned output temporaries before delivery.
-    fn preparation(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn preparation(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Fallible delivery code; ownership remains uncommitted on failure.
-    fn delivery(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn delivery(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Infallibly transfer ownership after successful delivery.
-    fn commit(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn commit(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Infallible wrapper result expression evaluated after commit.
-    fn result(&self, context: &EmissionContext) -> Result<TokenStream>;
+    fn result(&self, context: &Self::Context) -> Result<TokenStream>;
 }
-impl<W> OutputConversion for OutputPlan<W> {
+impl<W, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
     type Wire = W;
+    type Context = C;
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
-    fn values(&self, context: &EmissionContext) -> Result<Vec<TokenStream>> {
+    fn values(&self, context: &Self::Context) -> Result<Vec<TokenStream>> {
         self.values
             .iter()
             .map(|code| context.render(code))
             .collect()
     }
-    fn preparation(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn preparation(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.statements)
     }
-    fn delivery(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn delivery(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.delivery.statements)
     }
-    fn commit(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn commit(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.commit)
     }
-    fn result(&self, context: &EmissionContext) -> Result<TokenStream> {
+    fn result(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.delivery.result)
     }
 }
@@ -370,7 +389,7 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
     /// Output expressions paired with their wire descriptions, directly from the slot.
     pub fn outputs(
         &self,
-        context: &EmissionContext,
+        context: &O::Context,
     ) -> Result<impl ExactSizeIterator<Item = OutputValue<'_, O::Wire>>> {
         let output = self.output_conversion()?;
         let values = output.values(context)?;
@@ -390,9 +409,24 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
 /// The returned code runs inside the wrapper's fallible boundary, in this order:
 /// all validation, alias checks, one acknowledgement, all acquisition, argument
 /// construction, source invocation, output preparation, delivery and commit.
-pub fn emit_call<I: InputConversion, O: OutputConversion>(
+/// Input and output contexts must match, even when the function has no parameters.
+///
+/// ```compile_fail
+/// use prebindgen_flat::{emit_call, Function, InputConversion, OutputConversion, EmissionContext};
+/// struct OtherContext(syn::Ident);
+/// impl EmissionContext for OtherContext {
+///     fn source_result(&self) -> &syn::Ident { &self.0 }
+/// }
+/// fn incompatible<I, O>(function: &Function<I, O>, context: &syn::Ident)
+/// where I: InputConversion<Context = syn::Ident>,
+///       O: OutputConversion<Context = OtherContext>,
+/// {
+///     emit_call(function, context).unwrap();
+/// }
+/// ```
+pub fn emit_call<I: InputConversion, O: OutputConversion<Context = I::Context>>(
     function: &crate::Function<I, O>,
-    context: &EmissionContext,
+    context: &I::Context,
 ) -> Result<TokenStream> {
     let inputs = function.input_conversions()?;
     let output = function.output_conversion()?;
@@ -419,9 +453,12 @@ pub fn emit_call<I: InputConversion, O: OutputConversion>(
         .collect::<Result<Vec<_>>>()?;
     let resources: Vec<_> = inputs
         .iter()
-        .flat_map(|i| i.resources().iter().cloned())
+        .map(|i| i.resources(context))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
         .collect();
-    let aliases = context.render(&validate_resources(&resources))?;
+    let aliases = validate_resources(&resources);
     let acquire = inputs
         .iter()
         .map(|i| i.acquisition(context))
@@ -439,7 +476,7 @@ pub fn emit_call<I: InputConversion, O: OutputConversion>(
     let deliver = output.delivery(context)?;
     let commit = output.commit(context)?;
     let result = output.result(context)?;
-    let source = &context.source_result;
+    let source = context.source_result();
     Ok(quote! {
         #(#validation)* #aliases #acknowledgement #(#acquire)* #(#construct)*
         let #source = #path(#(#args),*);

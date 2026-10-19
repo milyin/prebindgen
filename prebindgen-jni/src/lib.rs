@@ -26,7 +26,11 @@ pub enum JniWire {
     Selector,
 }
 use prebindgen_declarations::Codec;
-use prebindgen_flat::{Access, InputPlan, OutputPlan};
+use prebindgen_flat::Access;
+mod emission;
+pub use emission::JniContext;
+type InputPlan<W> = prebindgen_flat::InputPlan<W, JniContext>;
+type OutputPlan<W> = prebindgen_flat::OutputPlan<W, JniContext>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with JNI handle conversion data for wrapper emission.
 ///
@@ -415,9 +419,10 @@ pub struct JniCodec;
 impl Codec for JniCodec {
     type Extra = ();
     type Wire = JniWire;
+    type Context = JniContext;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
-        let env = prebindgen_flat::EmissionParameter::Environment.tokens();
-        let ownership = prebindgen_flat::EmissionParameter::Acknowledgement.tokens();
+        let env = prebindgen_flat::template_parameter("environment");
+        let ownership = prebindgen_flat::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
             plan.acknowledgement = Some(quote!(
                 if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {
@@ -429,7 +434,7 @@ impl Codec for JniCodec {
         Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
-        let env = prebindgen_flat::EmissionParameter::Environment.tokens();
+        let env = prebindgen_flat::template_parameter("environment");
         let count = plan.wires.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
@@ -470,8 +475,8 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_flat::Condition,
-    ) -> Result<prebindgen_flat::InputPlan<JniWire>> {
-        let env = prebindgen_flat::EmissionParameter::Environment.tokens();
+    ) -> Result<InputPlan<JniWire>> {
+        let env = prebindgen_flat::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::Scalar(p)),
             Some(Value::Text) => (
@@ -497,7 +502,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<prebindgen_flat::OutputPlan<JniWire>> {
+    ) -> Result<OutputPlan<JniWire>> {
         // Text and bytes stay Rust values until the wrapper delivers them.
         let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
             Some(Value::Scalar(p)) => {
@@ -674,8 +679,8 @@ fn class<'a>(classes: &'a BTreeMap<String, Class>, ty: &syn::Type) -> Result<&'a
         .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))
 }
 fn generate<
-    I: prebindgen_flat::InputConversion<Wire = JniWire>,
-    O: prebindgen_flat::OutputConversion<Wire = JniWire>,
+    I: prebindgen_flat::InputConversion<Wire = JniWire, Context = JniContext>,
+    O: prebindgen_flat::OutputConversion<Wire = JniWire, Context = JniContext>,
 >(
     flat: Flat<I, O>,
     prefix: &str,
@@ -708,9 +713,11 @@ fn generate<
         let f = flat.function(&source)?;
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
-        let mut context = prebindgen_flat::EmissionContext::new(format_ident!("source_value"));
-        context.environment = Some(env.clone());
-        context.acknowledgement = Some(ownership.clone());
+        let context = JniContext {
+            source_result: format_ident!("source_value"),
+            environment: env.clone(),
+            acknowledgement: ownership.clone(),
+        };
         let body = prebindgen_flat::emit_call(f, &context)?;
         let method = format!("call{index}");
         let sym = symbol(prefix, &method);
