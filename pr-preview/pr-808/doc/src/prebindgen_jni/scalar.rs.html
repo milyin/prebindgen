@@ -69,12 +69,12 @@
 <a href=#69 id=69 data-nosnippet>69</a>        <span class="kw">_ </span>=&gt; v,
 <a href=#70 id=70 data-nosnippet>70</a>    }
 <a href=#71 id=71 data-nosnippet>71</a>}
-<a href=#72 id=72 data-nosnippet>72</a><span class="kw">pub fn </span>output_kotlin(p: Primitive, index: usize) -&gt; (String, String) {
+<a href=#72 id=72 data-nosnippet>72</a><span class="kw">pub fn </span>output_kotlin(p: Primitive, index: usize, result: <span class="kw-2">&amp;</span>str) -&gt; (String, String) {
 <a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">let </span>decode = <span class="kw">match </span>p {
-<a href=#74 id=74 data-nosnippet>74</a>        U64 | Usize =&gt; <span class="macro">format!</span>(<span class="string">"(result[{index}] as Long).toULong()"</span>),
-<a href=#75 id=75 data-nosnippet>75</a>        I128 =&gt; <span class="macro">format!</span>(<span class="string">"java.math.BigInteger(result[{index}] as ByteArray)"</span>),
-<a href=#76 id=76 data-nosnippet>76</a>        U128 =&gt; <span class="macro">format!</span>(<span class="string">"java.math.BigInteger(1, result[{index}] as ByteArray)"</span>),
-<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"result[{index}] as {}"</span>, kotlin(p)),
+<a href=#74 id=74 data-nosnippet>74</a>        U64 | Usize =&gt; <span class="macro">format!</span>(<span class="string">"({result}[{index}] as Long).toULong()"</span>),
+<a href=#75 id=75 data-nosnippet>75</a>        I128 =&gt; <span class="macro">format!</span>(<span class="string">"java.math.BigInteger({result}[{index}] as ByteArray)"</span>),
+<a href=#76 id=76 data-nosnippet>76</a>        U128 =&gt; <span class="macro">format!</span>(<span class="string">"java.math.BigInteger(1, {result}[{index}] as ByteArray)"</span>),
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"{result}[{index}] as {}"</span>, kotlin(p)),
 <a href=#78 id=78 data-nosnippet>78</a>    };
 <a href=#79 id=79 data-nosnippet>79</a>    (kotlin(p).into(), decode)
 <a href=#80 id=80 data-nosnippet>80</a>}

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CWire"],"struct":["CCodec","CContext","Cbindgen","Generation"],"type":["Bindings"]};
+window.SIDEBAR_ITEMS = {"enum":["CWire"],"struct":["CCodec","CContext","CPointer","Cbindgen","Generation"],"type":["Bindings"]};
