@@ -217,7 +217,7 @@
 <a href=#217 id=217 data-nosnippet>217</a>    /// * `extra` — occurrence data passed to every codec call made by this fill.
 <a href=#218 id=218 data-nosnippet>218</a>    </span><span class="kw">pub fn </span>fill&lt;C: Codec&gt;(
 <a href=#219 id=219 data-nosnippet>219</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#220 id=220 data-nosnippet>220</a>        flat: <span class="kw-2">&amp;mut </span>Bindings&lt;C::Wire&gt;,
+<a href=#220 id=220 data-nosnippet>220</a>        flat: <span class="kw-2">&amp;mut </span>Bindings&lt;C::Wire, C::Context&gt;,
 <a href=#221 id=221 data-nosnippet>221</a>        codec: <span class="kw-2">&amp;</span>C,
 <a href=#222 id=222 data-nosnippet>222</a>        decl: <span class="kw-2">&amp;</span>FunctionDecl,
 <a href=#223 id=223 data-nosnippet>223</a>        extra: <span class="kw-2">&amp;</span>C::Extra,
