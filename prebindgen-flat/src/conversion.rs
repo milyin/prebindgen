@@ -220,6 +220,89 @@ pub fn source_result_expr() -> TokenStream {
 /// Code runs in the environment supplied by the language wrapper writer.
 /// Preparation resolves errors before installing the slot; [`emit_call`]
 /// reads this interface directly, without an intermediate plan.
+///
+/// This conversion accepts a `u8` wire parameter and builds a Rust `bool` argument.
+/// It validates the wire value before constructing the argument. Since a scalar
+/// has no foreign resource to acquire, it needs no resources or acknowledgement.
+///
+/// ```
+/// use prebindgen_flat::{EmissionContext, InputConversion, Resource, Result, Wire};
+/// use proc_macro2::TokenStream;
+/// use quote::quote;
+/// use syn::{parse_quote, Ident, Type};
+///
+/// // The language generator defines the context and supplies it during emission.
+/// struct Context {
+///     source_result: Ident,
+/// }
+/// impl EmissionContext for Context {
+///     fn source_result(&self) -> &Ident { &self.source_result }
+/// }
+///
+/// // Preparation stores the wire description and argument variable name in the slot.
+/// struct BoolInput {
+///     wires: [Wire<Type>; 1],
+///     argument_name: Ident,
+/// }
+/// impl InputConversion for BoolInput {
+///     type Wire = Type;
+///     type Context = Context;
+///
+///     fn wires(&self) -> &[Wire<Type>] {
+///         &self.wires
+///     }
+///
+///     fn resources(&self, _: &Context) -> Result<Vec<Resource>> {
+///         Ok(vec![]) // A scalar has no foreign resource identity.
+///     }
+///
+///     fn validation(&self, _: &Context) -> Result<TokenStream> {
+///         let wire = &self.wires[0].name;
+///         Ok(quote! {
+///             if #wire > 1 {
+///                 return Err("expected 0 or 1 for bool".into());
+///             }
+///         })
+///     }
+///
+///     // The default acknowledgement() returns None: no ownership is transferred.
+///     fn acquisition(&self, _: &Context) -> Result<TokenStream> {
+///         Ok(quote!())
+///     }
+///
+///     fn construction(&self, _: &Context) -> Result<TokenStream> {
+///         let wire = &self.wires[0].name;
+///         let argument = &self.argument_name;
+///         Ok(quote!(let #argument = #wire != 0;))
+///     }
+///
+///     fn argument(&self, _: &Context) -> Result<TokenStream> {
+///         let argument = &self.argument_name;
+///         Ok(quote!(#argument))
+///     }
+/// }
+///
+/// let slot = BoolInput {
+///     wires: [Wire {
+///         component: Default::default(),
+///         name: parse_quote!(raw_enabled),
+///         kind: parse_quote!(u8),
+///         active: Default::default(),
+///     }],
+///     argument_name: parse_quote!(enabled),
+/// };
+/// let context = Context { source_result: parse_quote!(returned) };
+///
+/// // Individual phases can be emitted directly. emit_call orders these phases
+/// // across all input slots and passes enabled to the wrapped function.
+/// assert_eq!(slot.construction(&context)?.to_string(),
+///            quote!(let enabled = raw_enabled != 0;).to_string());
+/// assert_eq!(slot.argument(&context)?.to_string(), "enabled");
+/// # Ok::<(), String>(())
+/// ```
+///
+/// This example uses an always-active wire. Conversions supporting selector arms
+/// must guard validation and acquisition with the wire's [`Condition`].
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire;
