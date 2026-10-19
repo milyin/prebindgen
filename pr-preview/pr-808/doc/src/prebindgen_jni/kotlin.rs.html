@@ -217,20 +217,20 @@
 <a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;JniWire&gt;] {
 <a href=#218 id=218 data-nosnippet>218</a>        <span class="self">self</span>.rust.wires()
 <a href=#219 id=219 data-nosnippet>219</a>    }
-<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="self">self</span>.rust.values(context)
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
+<a href=#221 id=221 data-nosnippet>221</a>        <span class="self">self</span>.rust.values(context, source)
 <a href=#222 id=222 data-nosnippet>222</a>    }
-<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#224 id=224 data-nosnippet>224</a>        <span class="self">self</span>.rust.preparation(context)
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="self">self</span>.rust.preparation(context, source)
 <a href=#225 id=225 data-nosnippet>225</a>    }
-<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#227 id=227 data-nosnippet>227</a>        <span class="self">self</span>.rust.delivery(context)
+<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="self">self</span>.rust.delivery(context, source)
 <a href=#228 id=228 data-nosnippet>228</a>    }
-<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#230 id=230 data-nosnippet>230</a>        <span class="self">self</span>.rust.commit(context)
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="self">self</span>.rust.commit(context, source)
 <a href=#231 id=231 data-nosnippet>231</a>    }
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#233 id=233 data-nosnippet>233</a>        <span class="self">self</span>.rust.result(context)
+<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>JniContext, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#233 id=233 data-nosnippet>233</a>        <span class="self">self</span>.rust.result(context, source)
 <a href=#234 id=234 data-nosnippet>234</a>    }
 <a href=#235 id=235 data-nosnippet>235</a>}
 <a href=#236 id=236 data-nosnippet>236</a><span class="kw">impl </span>KotlinInputConversion <span class="kw">for </span>JniInput {

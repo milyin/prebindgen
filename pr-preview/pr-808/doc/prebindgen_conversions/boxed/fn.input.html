@@ -29,7 +29,7 @@ ownership acquisition. Its meaning is private to the converter.</li>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_conversions::boxed;
 <span class="kw">use </span>prebindgen_flat::Access;
-<span class="kw">let </span>input = boxed::input::&lt;syn::Type, syn::Ident&gt;(
+<span class="kw">let </span>input = boxed::input::&lt;syn::Type, ()&gt;(
     <span class="kw-2">&amp;</span>boxed::Storage::Direct, <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw-2">&amp;</span>Counter),
     <span class="macro">syn::parse_quote!</span>(raw), <span class="macro">syn::parse_quote!</span>(counter),
     <span class="kw-2">&amp;</span><span class="macro">quote::quote!</span>(<span class="bool-val">true</span>), |boxed| {

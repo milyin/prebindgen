@@ -23,7 +23,7 @@ may return a <code>String</code> error with <code>?</code>.</li>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_conversions::value;
 <span class="kw">use </span>quote::quote;
-<span class="kw">let </span>input = value::input::&lt;syn::Type, syn::Ident&gt;(
+<span class="kw">let </span>input = value::input::&lt;syn::Type, ()&gt;(
     <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(<span class="kw-2">&amp;</span>str), <span class="macro">syn::parse_quote!</span>(raw), <span class="macro">syn::parse_quote!</span>(text),
     <span class="kw-2">&amp;</span><span class="macro">quote::quote!</span>(<span class="bool-val">true</span>), <span class="macro">quote::quote!</span>(read(raw)<span class="question-mark">?</span>), <span class="macro">syn::parse_quote!</span>(<span class="kw-2">&amp;</span>str),
 )<span class="question-mark">?</span>;

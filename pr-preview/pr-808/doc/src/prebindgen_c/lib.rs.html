@@ -457,20 +457,20 @@
 <a href=#457 id=457 data-nosnippet>457</a>        }
 <a href=#458 id=458 data-nosnippet>458</a>        <span class="kw">let </span>result_type = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{}_result"</span>, f.name);
 <a href=#459 id=459 data-nosnippet>459</a>        <span class="kw">let </span>context = CContext {
-<a href=#460 id=460 data-nosnippet>460</a>            source_result: <span class="macro">format_ident!</span>(<span class="string">"source_value"</span>),
-<a href=#461 id=461 data-nosnippet>461</a>            output_pointer: <span class="macro">format_ident!</span>(<span class="string">"output"</span>),
-<a href=#462 id=462 data-nosnippet>462</a>            output_type: <span class="macro">syn::parse_quote!</span>(#result_type),
-<a href=#463 id=463 data-nosnippet>463</a>            buffer_type: <span class="macro">syn::parse_quote!</span>(__PbBuffer),
-<a href=#464 id=464 data-nosnippet>464</a>            wide_integer_type: <span class="macro">syn::parse_quote!</span>(__Pb128),
-<a href=#465 id=465 data-nosnippet>465</a>            read_buffer: <span class="macro">syn::parse_quote!</span>(__pb_read),
-<a href=#466 id=466 data-nosnippet>466</a>        };
-<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>body = prebindgen_flat::emit_call(f, <span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
+<a href=#460 id=460 data-nosnippet>460</a>            output_pointer: <span class="macro">format_ident!</span>(<span class="string">"output"</span>),
+<a href=#461 id=461 data-nosnippet>461</a>            output_type: <span class="macro">syn::parse_quote!</span>(#result_type),
+<a href=#462 id=462 data-nosnippet>462</a>            buffer_type: <span class="macro">syn::parse_quote!</span>(__PbBuffer),
+<a href=#463 id=463 data-nosnippet>463</a>            wide_integer_type: <span class="macro">syn::parse_quote!</span>(__Pb128),
+<a href=#464 id=464 data-nosnippet>464</a>            read_buffer: <span class="macro">syn::parse_quote!</span>(__pb_read),
+<a href=#465 id=465 data-nosnippet>465</a>        };
+<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">let </span>source = <span class="macro">format_ident!</span>(<span class="string">"source_value"</span>);
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>body = prebindgen_flat::emit_call(f, <span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>source)<span class="question-mark">?</span>;
 <a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">if </span>!symbols.insert(<span class="macro">format!</span>(<span class="string">"{prefix}_{}"</span>, f.name)) {
 <a href=#469 id=469 data-nosnippet>469</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C export"</span>.into());
 <a href=#470 id=470 data-nosnippet>470</a>        }
 <a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">for </span>wire <span class="kw">in </span>f
 <a href=#472 id=472 data-nosnippet>472</a>            .inputs()<span class="question-mark">?
-<a href=#473 id=473 data-nosnippet>473</a>            </span>.chain(f.outputs(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.map(|output| output.wire))
+<a href=#473 id=473 data-nosnippet>473</a>            </span>.chain(f.outputs(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>source)<span class="question-mark">?</span>.map(|output| output.wire))
 <a href=#474 id=474 data-nosnippet>474</a>        {
 <a href=#475 id=475 data-nosnippet>475</a>            <span class="kw">if let </span>CWire::Pointer(pointer) = <span class="kw-2">&amp;</span>wire.kind {
 <a href=#476 id=476 data-nosnippet>476</a>                <span class="kw">if </span>!pointers
@@ -484,7 +484,7 @@
 <a href=#484 id=484 data-nosnippet>484</a>                }
 <a href=#485 id=485 data-nosnippet>485</a>            }
 <a href=#486 id=486 data-nosnippet>486</a>        }
-<a href=#487 id=487 data-nosnippet>487</a>        calls.push((f, body, context));
+<a href=#487 id=487 data-nosnippet>487</a>        calls.push((f, body, context, source));
 <a href=#488 id=488 data-nosnippet>488</a>    }
 <a href=#489 id=489 data-nosnippet>489</a>    <span class="kw">let </span><span class="kw-2">mut </span>tokens = <span class="macro">quote!</span> {
 <a href=#490 id=490 data-nosnippet>490</a>       <span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>__Pb128 {<span class="kw">pub </span>hi:u64,<span class="kw">pub </span>lo:u64}
@@ -514,7 +514,7 @@
 <a href=#514 id=514 data-nosnippet>514</a>        });
 <a href=#515 id=515 data-nosnippet>515</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"</span>));
 <a href=#516 id=516 data-nosnippet>516</a>    }
-<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">for </span>(f, body, context) <span class="kw">in </span>calls {
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">for </span>(f, body, context, source) <span class="kw">in </span>calls {
 <a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span>out = <span class="kw-2">&amp;</span>context.output_pointer;
 <a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{}"</span>, f.name);
 <a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>result = <span class="macro">format_ident!</span>(<span class="string">"{name}_result"</span>);
@@ -528,7 +528,7 @@
 <a href=#528 id=528 data-nosnippet>528</a>        }
 <a href=#529 id=529 data-nosnippet>529</a>        <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
 <a href=#530 id=530 data-nosnippet>530</a>        header.push_str(<span class="string">"typedef struct {\n"</span>);
-<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">for </span>(i, output) <span class="kw">in </span>f.outputs(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.enumerate() {
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">for </span>(i, output) <span class="kw">in </span>f.outputs(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>source)<span class="question-mark">?</span>.enumerate() {
 <a href=#532 id=532 data-nosnippet>532</a>            <span class="kw">let </span>w = output.wire;
 <a href=#533 id=533 data-nosnippet>533</a>            <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
 <a href=#534 id=534 data-nosnippet>534</a>            <span class="kw">let </span>ty = w.kind.rust_type();
@@ -593,20 +593,20 @@
 <a href=#593 id=593 data-nosnippet>593</a>            <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[GenericWire&lt;<span class="self">Self</span>::Wire&gt;] {
 <a href=#594 id=594 data-nosnippet>594</a>                <span class="kw-2">&amp;</span>[]
 <a href=#595 id=595 data-nosnippet>595</a>            }
-<a href=#596 id=596 data-nosnippet>596</a>            <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
+<a href=#596 id=596 data-nosnippet>596</a>            <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext, _source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
 <a href=#597 id=597 data-nosnippet>597</a>                <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[])
 <a href=#598 id=598 data-nosnippet>598</a>            }
-<a href=#599 id=599 data-nosnippet>599</a>            <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#599 id=599 data-nosnippet>599</a>            <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext, _source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
 <a href=#600 id=600 data-nosnippet>600</a>                <span class="self">self</span>.<span class="number">0</span>.set(<span class="self">self</span>.<span class="number">0</span>.get() + <span class="number">1</span>);
 <a href=#601 id=601 data-nosnippet>601</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
 <a href=#602 id=602 data-nosnippet>602</a>            }
-<a href=#603 id=603 data-nosnippet>603</a>            <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#603 id=603 data-nosnippet>603</a>            <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext, _source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
 <a href=#604 id=604 data-nosnippet>604</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
 <a href=#605 id=605 data-nosnippet>605</a>            }
-<a href=#606 id=606 data-nosnippet>606</a>            <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#606 id=606 data-nosnippet>606</a>            <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext, _source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
 <a href=#607 id=607 data-nosnippet>607</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
 <a href=#608 id=608 data-nosnippet>608</a>            }
-<a href=#609 id=609 data-nosnippet>609</a>            <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#609 id=609 data-nosnippet>609</a>            <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext, _source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
 <a href=#610 id=610 data-nosnippet>610</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(()))
 <a href=#611 id=611 data-nosnippet>611</a>            }
 <a href=#612 id=612 data-nosnippet>612</a>        }

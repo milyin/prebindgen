@@ -176,7 +176,7 @@
 <a href=#176 id=176 data-nosnippet>176</a>/// struct RustCarriers;
 <a href=#177 id=177 data-nosnippet>177</a>/// impl Codec for RustCarriers {
 <a href=#178 id=178 data-nosnippet>178</a>///     type Extra = ();
-<a href=#179 id=179 data-nosnippet>179</a>///     type Context = syn::Ident;
+<a href=#179 id=179 data-nosnippet>179</a>///     type Context = ();
 <a href=#180 id=180 data-nosnippet>180</a>///     type Input = InputPlan&lt;Self::Wire&gt;;
 <a href=#181 id=181 data-nosnippet>181</a>///     type Output = OutputPlan&lt;Self::Wire&gt;;
 <a href=#182 id=182 data-nosnippet>182</a>///     type Wire = Type; // The Rust carrier type is the complete wire description.
@@ -354,7 +354,7 @@
 <a href=#354 id=354 data-nosnippet>354</a>///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 <a href=#355 id=355 data-nosnippet>355</a>/// }
 <a href=#356 id=356 data-nosnippet>356</a>/// ```
-<a href=#357 id=357 data-nosnippet>357</a></span><span class="kw">pub type </span>Bindings&lt;W, C = syn::Ident&gt; = Flat&lt;InputPlan&lt;W, C&gt;, OutputPlan&lt;W, C&gt;&gt;;
+<a href=#357 id=357 data-nosnippet>357</a></span><span class="kw">pub type </span>Bindings&lt;W, C = ()&gt; = Flat&lt;InputPlan&lt;W, C&gt;, OutputPlan&lt;W, C&gt;&gt;;
 <a href=#358 id=358 data-nosnippet>358</a>
 <a href=#359 id=359 data-nosnippet>359</a><span class="doccomment">/// Build and attach a converter to a named function parameter.
 <a href=#360 id=360 data-nosnippet>360</a>///
