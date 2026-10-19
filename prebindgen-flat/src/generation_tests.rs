@@ -294,7 +294,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     ));
     assert_eq!(
         emit_call(call, &emission_context()).unwrap().to_string(),
-        quote!(let __result = crate::echo(x); Ok(__result)).to_string()
+        quote!(let __prebindgen_argument_0 = x; let __result = crate::echo(__prebindgen_argument_0); Ok(__result)).to_string()
     );
 }
 
@@ -504,12 +504,9 @@ fn custom_conversions_use_context_without_template_rendering() {
         fn acquisition(&self, _: &Context) -> Result<TokenStream> {
             Ok(quote!())
         }
-        fn construction(&self, _: &Context) -> Result<TokenStream> {
-            Ok(quote!())
-        }
-        fn argument(&self, context: &Context) -> Result<TokenStream> {
+        fn construction(&self, context: &Context, target: &syn::Ident) -> Result<TokenStream> {
             let increment = context.increment;
-            Ok(quote!(#increment))
+            Ok(quote!(let #target = #increment;))
         }
     }
     struct Output;
@@ -551,7 +548,7 @@ fn custom_conversions_use_context_without_template_rendering() {
     };
     assert_eq!(
         emit_call(function, &context).unwrap().to_string(),
-        quote!(let returned = crate::echo(42i32); Ok(returned)).to_string()
+        quote!(let __prebindgen_argument_0 = 42i32; let returned = crate::echo(__prebindgen_argument_0); Ok(returned)).to_string()
     );
 }
 
@@ -585,6 +582,82 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
     let file = dir.path().join("predicates.rs");
     let executable = dir.path().join("predicates");
     std::fs::write(&file, source.to_string()).unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .arg(&file)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    assert!(std::process::Command::new(executable)
+        .status()
+        .unwrap()
+        .success());
+}
+
+#[test]
+fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
+    let item = syn::parse_quote!(
+        pub fn length(value: &str) -> usize {
+            value.len()
+        }
+    );
+    let mut flat =
+        Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse([(item, Default::default())])
+            .unwrap();
+    let function = flat.function_mut("length").unwrap();
+    function.params[0].ty.slot = Some(InputPlan {
+        context: Default::default(),
+        wires: vec![Wire {
+            name: syn::parse_quote!(__prebindgen_argument_0),
+            kind: syn::parse_quote!(usize),
+        }],
+        acknowledgement: None,
+        validation: quote!(let __prebindgen_argument_0_ = __prebindgen_argument_0 + 1;),
+        acquire: quote!(),
+        resources: vec![],
+        statements: quote!(let storage = String::from("abc");),
+        argument: quote!(storage.as_str()),
+    });
+    let source = source_result_expr();
+    function.ret.slot = Some(OutputPlan {
+        context: Default::default(),
+        wires: vec![],
+        values: vec![],
+        statements: quote!(),
+        commit: quote!(),
+        delivery: Delivery {
+            statements: quote!(),
+            result: quote!(#source + __prebindgen_argument_0_),
+        },
+    });
+    let context = syn::parse_quote!(__prebindgen_argument_0__);
+    let body = emit_call(function, &context).unwrap();
+    let target: syn::Ident = syn::parse_quote!(chosen_by_caller);
+    let standalone = function.params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap()
+        .construction(&context, &target)
+        .unwrap();
+    let code = quote! {
+        fn length(value: &str) -> usize { value.len() }
+        fn wrapper(__prebindgen_argument_0: usize) -> Result<usize, String> { #body }
+        fn main() {
+            assert_eq!(wrapper(10), Ok(14));
+            #standalone
+            assert_eq!(chosen_by_caller, "abc");
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("targets.rs");
+    let executable = dir.path().join("targets");
+    std::fs::write(&file, code.to_string()).unwrap();
     let compiled = std::process::Command::new("rustc")
         .arg(&file)
         .arg("-o")

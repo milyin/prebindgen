@@ -16,10 +16,7 @@ impl InputConversion for TestInput {
     fn acquisition(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn construction(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-    fn argument(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn construction(&self, _: &syn::Ident, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
 }

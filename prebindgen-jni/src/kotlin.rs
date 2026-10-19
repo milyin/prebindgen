@@ -207,11 +207,8 @@ impl InputConversion for JniInput {
     fn acquisition(&self, context: &JniContext) -> Result<TokenStream> {
         self.rust.acquisition(context)
     }
-    fn construction(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.construction(context)
-    }
-    fn argument(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.argument(context)
+    fn construction(&self, context: &JniContext, target: &syn::Ident) -> Result<TokenStream> {
+        self.rust.construction(context, target)
     }
 }
 impl OutputConversion for JniOutput {

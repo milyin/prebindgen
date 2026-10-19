@@ -84,7 +84,7 @@ pub struct InputPlan<W: WireKind, C = syn::Ident> {
     pub resources: Vec<Resource>,
     /// Argument construction after all acquisitions, including source constructor calls.
     pub statements: TokenStream,
-    /// Rust expression passed to the source function after `statements`.
+    /// Prepared value expression assigned to the caller-supplied target after `statements`.
     pub argument: TokenStream,
 }
 /// Output conversion whose owned temporaries survive until successful delivery.
@@ -234,10 +234,9 @@ pub fn source_result_expr() -> TokenStream {
 ///     fn source_result(&self) -> &Ident { &self.source_result }
 /// }
 ///
-/// // Preparation stores the wire description and argument variable name in the slot.
+/// // Preparation stores the wire description. The caller supplies the target name.
 /// struct BoolInput {
 ///     wires: [Wire<WireType>; 1],
-///     argument_name: Ident,
 /// }
 /// impl InputConversion for BoolInput {
 ///     type Wire = WireType;
@@ -265,15 +264,9 @@ pub fn source_result_expr() -> TokenStream {
 ///         Ok(quote!())
 ///     }
 ///
-///     fn construction(&self, _: &Context) -> Result<TokenStream> {
+///     fn construction(&self, _: &Context, target: &Ident) -> Result<TokenStream> {
 ///         let wire = &self.wires[0].name;
-///         let argument = &self.argument_name;
-///         Ok(quote!(let #argument = #wire != 0;))
-///     }
-///
-///     fn argument(&self, _: &Context) -> Result<TokenStream> {
-///         let argument = &self.argument_name;
-///         Ok(quote!(#argument))
+///         Ok(quote!(let #target = #wire != 0;))
 ///     }
 /// }
 ///
@@ -282,15 +275,14 @@ pub fn source_result_expr() -> TokenStream {
 ///         name: parse_quote!(raw_enabled),
 ///         kind: WireType::U8,
 ///     }],
-///     argument_name: parse_quote!(enabled),
 /// };
 /// let context = Context { source_result: parse_quote!(returned) };
 ///
 /// // Individual phases can be emitted directly. emit_call orders these phases
 /// // across all input slots and passes enabled to the wrapped function.
-/// assert_eq!(slot.construction(&context)?.to_string(),
+/// let target = parse_quote!(enabled);
+/// assert_eq!(slot.construction(&context, &target)?.to_string(),
 ///            quote!(let enabled = raw_enabled != 0;).to_string());
-/// assert_eq!(slot.argument(&context)?.to_string(), "enabled");
 /// # Ok::<(), String>(())
 /// ```
 ///
@@ -315,10 +307,11 @@ pub trait InputConversion {
     fn validation(&self, context: &Self::Context) -> Result<TokenStream>;
     /// Infallible ownership acquisition after acknowledgement.
     fn acquisition(&self, context: &Self::Context) -> Result<TokenStream>;
-    /// Construct the argument after all inputs have been acquired.
-    fn construction(&self, context: &Self::Context) -> Result<TokenStream>;
-    /// Expression passed to the source function.
-    fn argument(&self, context: &Self::Context) -> Result<TokenStream>;
+    /// Construct the argument after all inputs have been acquired, binding it to `target`.
+    /// The caller owns this identifier and passes it to the source function. Emit a
+    /// `let` binding in the surrounding scope, so borrowed argument storage remains alive.
+    /// Converter-private temporaries must not shadow other caller-supplied bindings.
+    fn construction(&self, context: &Self::Context, target: &syn::Ident) -> Result<TokenStream>;
 }
 impl<W: WireKind, C: TemplateContext> InputConversion for InputPlan<W, C> {
     type Wire = W;
@@ -350,11 +343,10 @@ impl<W: WireKind, C: TemplateContext> InputConversion for InputPlan<W, C> {
     fn acquisition(&self, context: &Self::Context) -> Result<TokenStream> {
         context.render(&self.acquire)
     }
-    fn construction(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.statements)
-    }
-    fn argument(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.argument)
+    fn construction(&self, context: &Self::Context, target: &syn::Ident) -> Result<TokenStream> {
+        let statements = context.render(&self.statements)?;
+        let value = context.render(&self.argument)?;
+        Ok(quote!(#statements let #target = #value;))
     }
 }
 /// A fully prepared output conversion stored in a slot.
@@ -538,23 +530,53 @@ pub fn emit_call<I: InputConversion, O: OutputConversion<Context = I::Context>>(
         .iter()
         .map(|i| i.acquisition(context))
         .collect::<Result<Vec<_>>>()?;
-    let construct = inputs
-        .iter()
-        .map(|i| i.construction(context))
-        .collect::<Result<Vec<_>>>()?;
-    let args = inputs
-        .iter()
-        .map(|i| i.argument(context))
-        .collect::<Result<Vec<_>>>()?;
     let path = &function.path;
     let prepare = output.preparation(context)?;
     let deliver = output.delivery(context)?;
     let commit = output.commit(context)?;
     let result = output.result(context)?;
     let source = context.source_result();
+    let mut used: std::collections::BTreeSet<String> = inputs
+        .iter()
+        .flat_map(|input| input.wires().iter().map(|wire| wire.name.to_string()))
+        .chain(std::iter::once(context.source_result().to_string()))
+        .collect();
+    // Reserve names already used by surrounding phases and the source path.
+    // These tokens are emitted once; their code and evaluation order stay unchanged.
+    reserve_identifiers(
+        &quote!(#path #(#validation)* #aliases #acknowledgement #(#acquire)*
+        #prepare #deliver #commit #result),
+        &mut used,
+    );
+    let args: Vec<_> = (0..inputs.len())
+        .map(|index| {
+            let mut name = format!("__prebindgen_argument_{index}");
+            while !used.insert(name.clone()) {
+                name.push('_');
+            }
+            syn::Ident::new(&name, proc_macro2::Span::call_site())
+        })
+        .collect();
+    let construct = inputs
+        .iter()
+        .zip(&args)
+        .map(|(input, target)| input.construction(context, target))
+        .collect::<Result<Vec<_>>>()?;
     Ok(quote! {
         #(#validation)* #aliases #acknowledgement #(#acquire)* #(#construct)*
         let #source = #path(#(#args),*);
         #prepare #deliver #commit Ok(#result)
     })
+}
+
+fn reserve_identifiers(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
+    for token in code.clone() {
+        match token {
+            proc_macro2::TokenTree::Ident(name) => {
+                used.insert(name.to_string());
+            }
+            proc_macro2::TokenTree::Group(group) => reserve_identifiers(&group.stream(), used),
+            _ => {}
+        }
+    }
 }

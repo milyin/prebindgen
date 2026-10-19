@@ -111,6 +111,10 @@ settings remain commented out in the example manifests.
   after all validation and alias checks and before any ownership acquisition.
   Conflicting acknowledgements are rejected. There are no keys or parameter
   declarations in this contract; the wrapper declares its ABI from the slot data.
+- `InputConversion::construction(context, target)` binds the converted argument
+  to the identifier supplied by `emit_call`. The call emitter uses that binding
+  directly; there is no separate `argument()` method. Prepared plans retain an
+  internal value expression and bind it to the requested target during emission.
 - The result slot supplies delivery and the final result expression. `emit_call`
   orders validation, alias checks, acknowledgement, all acquisition, argument
   construction, source invocation, output preparation, delivery and ownership
