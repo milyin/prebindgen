@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a></span><span class="attr">#![warn(missing_docs)]
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>prebindgen_conversions::value::Value;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::{Flat, Primitive, <span class="prelude-ty">Result</span>};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::{Flat, Primitive, <span class="prelude-ty">Result</span>, WireKind};
 <a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// The carrier of one C wire.
 <a href=#7 id=7 data-nosnippet>7</a>///
 <a href=#8 id=8 data-nosnippet>8</a>/// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -385,245 +385,244 @@
 <a href=#385 id=385 data-nosnippet>385</a>        std::fs::write(path, <span class="kw-2">&amp;</span><span class="self">self</span>.header).map_err(|e| e.to_string())
 <a href=#386 id=386 data-nosnippet>386</a>    }
 <a href=#387 id=387 data-nosnippet>387</a>}
-<a href=#388 id=388 data-nosnippet>388</a><span class="kw">fn </span>rust_ty(wire: <span class="kw-2">&amp;</span>Wire) -&gt; TokenStream {
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>wire.kind {
-<a href=#390 id=390 data-nosnippet>390</a>        CWire::Scalar(p) =&gt; <span class="kw">match </span>p {
-<a href=#391 id=391 data-nosnippet>391</a>            Primitive::Bool =&gt; <span class="macro">quote!</span>(u8),
-<a href=#392 id=392 data-nosnippet>392</a>            Primitive::Char =&gt; <span class="macro">quote!</span>(u32),
-<a href=#393 id=393 data-nosnippet>393</a>            Primitive::I128 | Primitive::U128 =&gt; <span class="macro">quote!</span>(__Pb128),
-<a href=#394 id=394 data-nosnippet>394</a>            p =&gt; {
-<a href=#395 id=395 data-nosnippet>395</a>                <span class="kw">let </span>ty = p.rust_type();
-<a href=#396 id=396 data-nosnippet>396</a>                <span class="macro">quote!</span>(#ty)
-<a href=#397 id=397 data-nosnippet>397</a>            }
-<a href=#398 id=398 data-nosnippet>398</a>        },
-<a href=#399 id=399 data-nosnippet>399</a>        CWire::Pointer(p) =&gt; {
-<a href=#400 id=400 data-nosnippet>400</a>            <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>p.ty;
-<a href=#401 id=401 data-nosnippet>401</a>            <span class="kw">if </span>!p.mutable {
-<a href=#402 id=402 data-nosnippet>402</a>                <span class="macro">quote!</span>(<span class="kw-2">*const </span>#ty)
-<a href=#403 id=403 data-nosnippet>403</a>            } <span class="kw">else </span>{
-<a href=#404 id=404 data-nosnippet>404</a>                <span class="macro">quote!</span>(<span class="kw-2">*mut </span>#ty)
-<a href=#405 id=405 data-nosnippet>405</a>            }
+<a href=#388 id=388 data-nosnippet>388</a><span class="kw">impl </span>WireKind <span class="kw">for </span>CWire {
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#391 id=391 data-nosnippet>391</a>            CWire::Scalar(p) =&gt; <span class="kw">match </span>p {
+<a href=#392 id=392 data-nosnippet>392</a>                Primitive::Bool =&gt; <span class="macro">syn::parse_quote!</span>(u8),
+<a href=#393 id=393 data-nosnippet>393</a>                Primitive::Char =&gt; <span class="macro">syn::parse_quote!</span>(u32),
+<a href=#394 id=394 data-nosnippet>394</a>                Primitive::I128 | Primitive::U128 =&gt; <span class="macro">syn::parse_quote!</span>(__Pb128),
+<a href=#395 id=395 data-nosnippet>395</a>                p =&gt; p.rust_type(),
+<a href=#396 id=396 data-nosnippet>396</a>            },
+<a href=#397 id=397 data-nosnippet>397</a>            CWire::Pointer(p) =&gt; {
+<a href=#398 id=398 data-nosnippet>398</a>                <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>p.ty;
+<a href=#399 id=399 data-nosnippet>399</a>                <span class="kw">if </span>!p.mutable {
+<a href=#400 id=400 data-nosnippet>400</a>                    <span class="macro">syn::parse_quote!</span>(<span class="kw-2">*const </span>#ty)
+<a href=#401 id=401 data-nosnippet>401</a>                } <span class="kw">else </span>{
+<a href=#402 id=402 data-nosnippet>402</a>                    <span class="macro">syn::parse_quote!</span>(<span class="kw-2">*mut </span>#ty)
+<a href=#403 id=403 data-nosnippet>403</a>                }
+<a href=#404 id=404 data-nosnippet>404</a>            }
+<a href=#405 id=405 data-nosnippet>405</a>            CWire::Buffer =&gt; <span class="macro">syn::parse_quote!</span>(__PbBuffer),
 <a href=#406 id=406 data-nosnippet>406</a>        }
-<a href=#407 id=407 data-nosnippet>407</a>        CWire::Buffer =&gt; <span class="macro">quote!</span>(__PbBuffer),
-<a href=#408 id=408 data-nosnippet>408</a>    }
-<a href=#409 id=409 data-nosnippet>409</a>}
-<a href=#410 id=410 data-nosnippet>410</a><span class="kw">fn </span>c_ty(wire: <span class="kw-2">&amp;</span>Wire, prefix: <span class="kw-2">&amp;</span>str, pointers: <span class="kw-2">&amp;</span>[(String, syn::Type)]) -&gt; String {
-<a href=#411 id=411 data-nosnippet>411</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>wire.kind {
-<a href=#412 id=412 data-nosnippet>412</a>        CWire::Scalar(p) =&gt; <span class="kw">match </span>p {
-<a href=#413 id=413 data-nosnippet>413</a>            Primitive::Bool | Primitive::U8 =&gt; <span class="string">"uint8_t"</span>.into(),
-<a href=#414 id=414 data-nosnippet>414</a>            Primitive::Char | Primitive::U32 =&gt; <span class="string">"uint32_t"</span>.into(),
-<a href=#415 id=415 data-nosnippet>415</a>            Primitive::I8 =&gt; <span class="string">"int8_t"</span>.into(),
-<a href=#416 id=416 data-nosnippet>416</a>            Primitive::I16 =&gt; <span class="string">"int16_t"</span>.into(),
-<a href=#417 id=417 data-nosnippet>417</a>            Primitive::I32 =&gt; <span class="string">"int32_t"</span>.into(),
-<a href=#418 id=418 data-nosnippet>418</a>            Primitive::I64 =&gt; <span class="string">"int64_t"</span>.into(),
-<a href=#419 id=419 data-nosnippet>419</a>            Primitive::U16 =&gt; <span class="string">"uint16_t"</span>.into(),
-<a href=#420 id=420 data-nosnippet>420</a>            Primitive::U64 =&gt; <span class="string">"uint64_t"</span>.into(),
-<a href=#421 id=421 data-nosnippet>421</a>            Primitive::Isize =&gt; <span class="string">"intptr_t"</span>.into(),
-<a href=#422 id=422 data-nosnippet>422</a>            Primitive::Usize =&gt; <span class="string">"uintptr_t"</span>.into(),
-<a href=#423 id=423 data-nosnippet>423</a>            Primitive::F32 =&gt; <span class="string">"float"</span>.into(),
-<a href=#424 id=424 data-nosnippet>424</a>            Primitive::F64 =&gt; <span class="string">"double"</span>.into(),
-<a href=#425 id=425 data-nosnippet>425</a>            Primitive::I128 | Primitive::U128 =&gt; <span class="macro">format!</span>(<span class="string">"{prefix}_int128"</span>),
-<a href=#426 id=426 data-nosnippet>426</a>        },
-<a href=#427 id=427 data-nosnippet>427</a>        CWire::Pointer(p) =&gt; {
-<a href=#428 id=428 data-nosnippet>428</a>            <span class="kw">let </span>(name, <span class="kw">_</span>) = pointers
-<a href=#429 id=429 data-nosnippet>429</a>                .iter()
-<a href=#430 id=430 data-nosnippet>430</a>                .find(|(<span class="kw">_</span>, ty)| prebindgen_flat::same_type(ty, <span class="kw-2">&amp;</span>p.ty))
-<a href=#431 id=431 data-nosnippet>431</a>                .expect(<span class="string">"validated pointer declaration"</span>);
-<a href=#432 id=432 data-nosnippet>432</a>            <span class="kw">let </span>qualifier = <span class="kw">if </span>!p.mutable { <span class="string">"const " </span>} <span class="kw">else </span>{ <span class="string">"" </span>};
-<a href=#433 id=433 data-nosnippet>433</a>            <span class="macro">format!</span>(<span class="string">"{qualifier}{prefix}_{name} *"</span>)
-<a href=#434 id=434 data-nosnippet>434</a>        }
-<a href=#435 id=435 data-nosnippet>435</a>        CWire::Buffer =&gt; <span class="macro">format!</span>(<span class="string">"{prefix}_buffer"</span>),
-<a href=#436 id=436 data-nosnippet>436</a>    }
-<a href=#437 id=437 data-nosnippet>437</a>}
-<a href=#438 id=438 data-nosnippet>438</a><span class="kw">fn </span>generate&lt;
-<a href=#439 id=439 data-nosnippet>439</a>    I: prebindgen_flat::InputConversion&lt;Wire = CWire, Context = CContext&gt;,
-<a href=#440 id=440 data-nosnippet>440</a>    O: prebindgen_flat::OutputConversion&lt;Wire = CWire, Context = CContext&gt;,
-<a href=#441 id=441 data-nosnippet>441</a>&gt;(
-<a href=#442 id=442 data-nosnippet>442</a>    flat: Flat&lt;I, O&gt;,
-<a href=#443 id=443 data-nosnippet>443</a>    prefix: <span class="kw-2">&amp;</span>str,
-<a href=#444 id=444 data-nosnippet>444</a>    pointers: Vec&lt;(String, syn::Type)&gt;,
-<a href=#445 id=445 data-nosnippet>445</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Generation&gt; {
-<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">let </span><span class="kw-2">mut </span>calls = Vec::new();
-<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">let </span>error = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_last_error"</span>);
-<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">let </span>free = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_free_buffer"</span>);
-<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">let </span><span class="kw-2">mut </span>symbols = std::collections::BTreeSet::from([error.to_string(), free.to_string()]);
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">for </span>(name, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>pointers {
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">if </span>!symbols.insert(<span class="macro">format!</span>(<span class="string">"{prefix}_drop_{name}"</span>)) {
-<a href=#452 id=452 data-nosnippet>452</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C destructor"</span>.into());
-<a href=#453 id=453 data-nosnippet>453</a>        }
-<a href=#454 id=454 data-nosnippet>454</a>    }
-<a href=#455 id=455 data-nosnippet>455</a>    <span class="kw">for </span>f <span class="kw">in </span>flat.functions.values() {
-<a href=#456 id=456 data-nosnippet>456</a>        <span class="kw">if </span>f.ret.slot.is_none() {
-<a href=#457 id=457 data-nosnippet>457</a>            <span class="kw">continue</span>;
-<a href=#458 id=458 data-nosnippet>458</a>        }
-<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw">let </span>result_type = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{}_result"</span>, f.name);
-<a href=#460 id=460 data-nosnippet>460</a>        <span class="kw">let </span>context = CContext {
-<a href=#461 id=461 data-nosnippet>461</a>            source_result: <span class="macro">format_ident!</span>(<span class="string">"source_value"</span>),
-<a href=#462 id=462 data-nosnippet>462</a>            output_pointer: <span class="macro">format_ident!</span>(<span class="string">"output"</span>),
-<a href=#463 id=463 data-nosnippet>463</a>            output_type: <span class="macro">syn::parse_quote!</span>(#result_type),
-<a href=#464 id=464 data-nosnippet>464</a>            buffer_type: <span class="macro">syn::parse_quote!</span>(__PbBuffer),
-<a href=#465 id=465 data-nosnippet>465</a>            wide_integer_type: <span class="macro">syn::parse_quote!</span>(__Pb128),
-<a href=#466 id=466 data-nosnippet>466</a>            read_buffer: <span class="macro">syn::parse_quote!</span>(__pb_read),
-<a href=#467 id=467 data-nosnippet>467</a>        };
-<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">let </span>body = prebindgen_flat::emit_call(f, <span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
-<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">if </span>!symbols.insert(<span class="macro">format!</span>(<span class="string">"{prefix}_{}"</span>, f.name)) {
-<a href=#470 id=470 data-nosnippet>470</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C export"</span>.into());
-<a href=#471 id=471 data-nosnippet>471</a>        }
-<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">for </span>wire <span class="kw">in </span>f
-<a href=#473 id=473 data-nosnippet>473</a>            .inputs()<span class="question-mark">?
-<a href=#474 id=474 data-nosnippet>474</a>            </span>.chain(f.outputs(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.map(|output| output.wire))
-<a href=#475 id=475 data-nosnippet>475</a>        {
-<a href=#476 id=476 data-nosnippet>476</a>            <span class="kw">if let </span>CWire::Pointer(pointer) = <span class="kw-2">&amp;</span>wire.kind {
-<a href=#477 id=477 data-nosnippet>477</a>                <span class="kw">if </span>!pointers
-<a href=#478 id=478 data-nosnippet>478</a>                    .iter()
-<a href=#479 id=479 data-nosnippet>479</a>                    .any(|(<span class="kw">_</span>, declared)| prebindgen_flat::same_type(declared, <span class="kw-2">&amp;</span>pointer.ty))
-<a href=#480 id=480 data-nosnippet>480</a>                {
-<a href=#481 id=481 data-nosnippet>481</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
-<a href=#482 id=482 data-nosnippet>482</a>                        <span class="string">"declare a C opaque pointer for `{}`"</span>,
-<a href=#483 id=483 data-nosnippet>483</a>                        prebindgen_flat::type_key(<span class="kw-2">&amp;</span>pointer.ty)
-<a href=#484 id=484 data-nosnippet>484</a>                    ));
-<a href=#485 id=485 data-nosnippet>485</a>                }
-<a href=#486 id=486 data-nosnippet>486</a>            }
-<a href=#487 id=487 data-nosnippet>487</a>        }
-<a href=#488 id=488 data-nosnippet>488</a>        calls.push((f, body, context));
-<a href=#489 id=489 data-nosnippet>489</a>    }
-<a href=#490 id=490 data-nosnippet>490</a>    <span class="kw">let </span><span class="kw-2">mut </span>tokens = <span class="macro">quote!</span> {
-<a href=#491 id=491 data-nosnippet>491</a>       <span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>__Pb128 {<span class="kw">pub </span>hi:u64,<span class="kw">pub </span>lo:u64}
-<a href=#492 id=492 data-nosnippet>492</a>       <span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>__PbBuffer {<span class="kw">pub </span>data:<span class="kw-2">*const </span>u8,<span class="kw">pub </span>len:usize}
-<a href=#493 id=493 data-nosnippet>493</a>       <span class="macro">std::thread_local!</span> {<span class="kw">static </span>__PB_ERROR:std::cell::RefCell&lt;<span class="prelude-ty">Option</span>&lt;std::ffi::CString&gt;&gt;=<span class="kw">const </span>{std::cell::RefCell::new(<span class="prelude-val">None</span>)};}
-<a href=#494 id=494 data-nosnippet>494</a>       <span class="kw">fn </span>__pb_error(e:<span class="kw-2">&amp;</span>str){__PB_ERROR.with(|s|<span class="kw-2">*</span>s.borrow_mut()=<span class="kw">if </span>e.is_empty(){<span class="prelude-val">None</span>}<span class="kw">else</span>{<span class="prelude-val">Some</span>(std::ffi::CString::new(e.replace(<span class="string">'\0'</span>,<span class="string">"?"</span>)).unwrap())});}
-<a href=#495 id=495 data-nosnippet>495</a>       <span class="attr">#[no_mangle] </span><span class="kw">pub extern </span><span class="string">"C" </span><span class="kw">fn </span>#error()-&gt;<span class="kw-2">*const </span>std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ref().map_or(<span class="string">c""</span>.as_ptr(),|e| e.as_ptr()))}
-<a href=#496 id=496 data-nosnippet>496</a>       <span class="comment">// Input pointers are borrowed only during the call; output buffers are owned.
-<a href=#497 id=497 data-nosnippet>497</a>       </span><span class="kw">unsafe fn </span>__pb_read&lt;<span class="lifetime">'a</span>&gt;(b:__PbBuffer)-&gt;<span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8],String&gt;{
-<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">if </span>b.len==<span class="number">0</span>{<span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span>[]);}
-<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">if </span>b.data.is_null()||b.len&gt;isize::MAX <span class="kw">as </span>usize{<span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"invalid buffer"</span>.into());}
-<a href=#500 id=500 data-nosnippet>500</a>        <span class="prelude-val">Ok</span>(std::slice::from_raw_parts(b.data,b.len))
-<a href=#501 id=501 data-nosnippet>501</a>       }
-<a href=#502 id=502 data-nosnippet>502</a>       <span class="attr">#[doc = <span class="string">"# Safety
-<a href=#503 id=503 data-nosnippet>503</a>    The buffer must have been returned by this library and not already freed."</span>]
-<a href=#504 id=504 data-nosnippet>504</a>    #[no_mangle] </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#free(b:__PbBuffer){<span class="kw">if </span>!b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data <span class="kw">as </span><span class="kw-2">*mut </span>u8,b.len)));}}
-<a href=#505 id=505 data-nosnippet>505</a>      };
-<a href=#506 id=506 data-nosnippet>506</a>    <span class="kw">let </span><span class="kw-2">mut </span>header=<span class="macro">format!</span>(<span class="string">"#ifndef {prefix}_H\n#define {prefix}_H\n#include &lt;stdint.h&gt;\n#include &lt;stddef.h&gt;\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n"</span>);
-<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">for </span>(name, ty) <span class="kw">in </span><span class="kw-2">&amp;</span>pointers {
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span>drop = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_drop_{name}"</span>);
-<a href=#509 id=509 data-nosnippet>509</a>        tokens.extend(<span class="macro">quote!</span>{
-<a href=#510 id=510 data-nosnippet>510</a>            <span class="attr">#[doc = <span class="string">"# Safety
-<a href=#511 id=511 data-nosnippet>511</a>The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call."</span>]
-<a href=#512 id=512 data-nosnippet>512</a>            #[no_mangle] </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#drop(ptr:<span class="kw-2">*mut </span>#ty)-&gt;i32{
-<a href=#513 id=513 data-nosnippet>513</a>                <span class="kw">match </span>::prebindgen_runtime::boundary(||{<span class="kw">if </span>!ptr.is_null(){drop(Box::from_raw(ptr));}<span class="prelude-val">Ok</span>(())}){<span class="prelude-val">Ok</span>(())=&gt;{__pb_error(<span class="string">""</span>);<span class="number">0</span>},<span class="prelude-val">Err</span>(e)=&gt;{__pb_error(<span class="kw-2">&amp;</span>e);-<span class="number">1</span>}}
-<a href=#514 id=514 data-nosnippet>514</a>            }
-<a href=#515 id=515 data-nosnippet>515</a>        });
-<a href=#516 id=516 data-nosnippet>516</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"</span>));
-<a href=#517 id=517 data-nosnippet>517</a>    }
-<a href=#518 id=518 data-nosnippet>518</a>    <span class="kw">for </span>(f, body, context) <span class="kw">in </span>calls {
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>out = <span class="kw-2">&amp;</span>context.output_pointer;
-<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{}"</span>, f.name);
-<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>result = <span class="macro">format_ident!</span>(<span class="string">"{name}_result"</span>);
-<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
-<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">let </span><span class="kw-2">mut </span>cparams = Vec::new();
-<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">for </span>w <span class="kw">in </span>f.inputs()<span class="question-mark">? </span>{
-<a href=#525 id=525 data-nosnippet>525</a>            <span class="kw">let </span>n = <span class="kw-2">&amp;</span>w.name;
-<a href=#526 id=526 data-nosnippet>526</a>            <span class="kw">let </span>ty = rust_ty(w);
-<a href=#527 id=527 data-nosnippet>527</a>            params.push(<span class="macro">quote!</span>(#n:#ty));
-<a href=#528 id=528 data-nosnippet>528</a>            cparams.push(<span class="macro">format!</span>(<span class="string">"{} {n}"</span>, c_ty(w, prefix, <span class="kw-2">&amp;</span>pointers)));
-<a href=#529 id=529 data-nosnippet>529</a>        }
-<a href=#530 id=530 data-nosnippet>530</a>        <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
-<a href=#531 id=531 data-nosnippet>531</a>        header.push_str(<span class="string">"typedef struct {\n"</span>);
-<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">for </span>(i, output) <span class="kw">in </span>f.outputs(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.enumerate() {
-<a href=#533 id=533 data-nosnippet>533</a>            <span class="kw">let </span>w = output.wire;
-<a href=#534 id=534 data-nosnippet>534</a>            <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#535 id=535 data-nosnippet>535</a>            <span class="kw">let </span>ty = rust_ty(w);
-<a href=#536 id=536 data-nosnippet>536</a>            fields.push(<span class="macro">quote!</span>(<span class="kw">pub </span>#field:#ty));
-<a href=#537 id=537 data-nosnippet>537</a>            header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"    {} v{i};\n"</span>, c_ty(w, prefix, <span class="kw-2">&amp;</span>pointers)));
-<a href=#538 id=538 data-nosnippet>538</a>        }
-<a href=#539 id=539 data-nosnippet>539</a>        <span class="kw">if </span>fields.is_empty() {
-<a href=#540 id=540 data-nosnippet>540</a>            fields.push(<span class="macro">quote!</span>(<span class="kw">pub </span>unused:u8));
-<a href=#541 id=541 data-nosnippet>541</a>            header.push_str(<span class="string">"    uint8_t unused;\n"</span>);
-<a href=#542 id=542 data-nosnippet>542</a>        }
-<a href=#543 id=543 data-nosnippet>543</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"}} {result};\n"</span>));
-<a href=#544 id=544 data-nosnippet>544</a>        cparams.push(<span class="macro">format!</span>(<span class="string">"{result} *{out}"</span>));
-<a href=#545 id=545 data-nosnippet>545</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"int32_t {name}({});\n"</span>, cparams.join(<span class="string">", "</span>)));
-<a href=#546 id=546 data-nosnippet>546</a>        tokens.extend(<span class="macro">quote!</span> {
-<a href=#547 id=547 data-nosnippet>547</a>         <span class="attr">#[repr(C)] </span><span class="kw">pub struct </span>#result {#(#fields),<span class="kw-2">*</span>}
-<a href=#548 id=548 data-nosnippet>548</a>         <span class="attr">#[doc = <span class="string">"# Safety
-<a href=#549 id=549 data-nosnippet>549</a>The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."</span>]
-<a href=#550 id=550 data-nosnippet>550</a>   #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-<a href=#551 id=551 data-nosnippet>551</a>   #[no_mangle] </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#name(#(#params,)* #out:<span class="kw-2">*mut </span>#result)-&gt;i32{
-<a href=#552 id=552 data-nosnippet>552</a>          <span class="kw">if </span>#out.is_null(){__pb_error(<span class="string">"null result pointer"</span>);<span class="kw">return </span>-<span class="number">1</span>;}
-<a href=#553 id=553 data-nosnippet>553</a>          <span class="kw">match </span>::prebindgen_runtime::boundary(||{
-<a href=#554 id=554 data-nosnippet>554</a>           #body
-<a href=#555 id=555 data-nosnippet>555</a>          }){<span class="prelude-val">Ok</span>(())=&gt;{__pb_error(<span class="string">""</span>);<span class="number">0</span>},<span class="prelude-val">Err</span>(e)=&gt;{__pb_error(<span class="kw-2">&amp;</span>e);-<span class="number">1</span>}}
-<a href=#556 id=556 data-nosnippet>556</a>         }
-<a href=#557 id=557 data-nosnippet>557</a>        });
-<a href=#558 id=558 data-nosnippet>558</a>    }
-<a href=#559 id=559 data-nosnippet>559</a>    <span class="kw">let </span>guards = <span class="kw-2">&amp;</span>flat.guards;
-<a href=#560 id=560 data-nosnippet>560</a>    tokens.extend(<span class="macro">quote!</span>(#(#guards)<span class="kw-2">*</span>));
-<a href=#561 id=561 data-nosnippet>561</a>    header.push_str(<span class="string">"#ifdef __cplusplus\n}\n#endif\n#endif\n"</span>);
-<a href=#562 id=562 data-nosnippet>562</a>    <span class="prelude-val">Ok</span>(Generation {
-<a href=#563 id=563 data-nosnippet>563</a>        rust: prebindgen_flat::rust_source(tokens)<span class="question-mark">?</span>,
-<a href=#564 id=564 data-nosnippet>564</a>        header,
-<a href=#565 id=565 data-nosnippet>565</a>    })
-<a href=#566 id=566 data-nosnippet>566</a>}
-<a href=#567 id=567 data-nosnippet>567</a>
-<a href=#568 id=568 data-nosnippet>568</a><span class="attr">#[cfg(test)]
-<a href=#569 id=569 data-nosnippet>569</a></span><span class="kw">mod </span>generation_tests {
-<a href=#570 id=570 data-nosnippet>570</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#571 id=571 data-nosnippet>571</a>
-<a href=#572 id=572 data-nosnippet>572</a>    <span class="attr">#[test]
-<a href=#573 id=573 data-nosnippet>573</a>    </span><span class="kw">fn </span>rejects_invalid_pointer_names_during_preparation() {
-<a href=#574 id=574 data-nosnippet>574</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Handle = String;"</span>).unwrap();
-<a href=#575 id=575 data-nosnippet>575</a>        <span class="kw">let </span>flat = Bindings::parse(
-<a href=#576 id=576 data-nosnippet>576</a>            source
-<a href=#577 id=577 data-nosnippet>577</a>                .items
-<a href=#578 id=578 data-nosnippet>578</a>                .into_iter()
-<a href=#579 id=579 data-nosnippet>579</a>                .map(|item| (item, Default::default())),
-<a href=#580 id=580 data-nosnippet>580</a>        )
-<a href=#581 id=581 data-nosnippet>581</a>        .unwrap();
-<a href=#582 id=582 data-nosnippet>582</a>        <span class="kw">let </span>result = Cbindgen::new(flat)
-<a href=#583 id=583 data-nosnippet>583</a>            .opaque_ptr(<span class="string">"invalid-name"</span>, <span class="macro">syn::parse_quote!</span>(Handle))
-<a href=#584 id=584 data-nosnippet>584</a>            .build();
-<a href=#585 id=585 data-nosnippet>585</a>        <span class="macro">assert_eq!</span>(result.err().unwrap(), <span class="string">"invalid identifier `invalid-name`"</span>);
-<a href=#586 id=586 data-nosnippet>586</a>    }
-<a href=#587 id=587 data-nosnippet>587</a>
-<a href=#588 id=588 data-nosnippet>588</a>    <span class="attr">#[test]
-<a href=#589 id=589 data-nosnippet>589</a>    </span><span class="kw">fn </span>emits_custom_slot_code_without_building_a_plan() {
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw">struct </span>CountedOutput(std::rc::Rc&lt;std::cell::Cell&lt;usize&gt;&gt;);
-<a href=#591 id=591 data-nosnippet>591</a>        <span class="kw">impl </span>prebindgen_flat::OutputConversion <span class="kw">for </span>CountedOutput {
-<a href=#592 id=592 data-nosnippet>592</a>            <span class="kw">type </span>Wire = CWire;
-<a href=#593 id=593 data-nosnippet>593</a>            <span class="kw">type </span>Context = CContext;
-<a href=#594 id=594 data-nosnippet>594</a>            <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[GenericWire&lt;<span class="self">Self</span>::Wire&gt;] {
-<a href=#595 id=595 data-nosnippet>595</a>                <span class="kw-2">&amp;</span>[]
-<a href=#596 id=596 data-nosnippet>596</a>            }
-<a href=#597 id=597 data-nosnippet>597</a>            <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
-<a href=#598 id=598 data-nosnippet>598</a>                <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[])
-<a href=#599 id=599 data-nosnippet>599</a>            }
-<a href=#600 id=600 data-nosnippet>600</a>            <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#601 id=601 data-nosnippet>601</a>                <span class="self">self</span>.<span class="number">0</span>.set(<span class="self">self</span>.<span class="number">0</span>.get() + <span class="number">1</span>);
-<a href=#602 id=602 data-nosnippet>602</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
-<a href=#603 id=603 data-nosnippet>603</a>            }
-<a href=#604 id=604 data-nosnippet>604</a>            <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#605 id=605 data-nosnippet>605</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
-<a href=#606 id=606 data-nosnippet>606</a>            }
-<a href=#607 id=607 data-nosnippet>607</a>            <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#608 id=608 data-nosnippet>608</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
-<a href=#609 id=609 data-nosnippet>609</a>            }
-<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#611 id=611 data-nosnippet>611</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(()))
-<a href=#612 id=612 data-nosnippet>612</a>            }
-<a href=#613 id=613 data-nosnippet>613</a>        }
-<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">let </span>count = std::rc::Rc::new(std::cell::Cell::new(<span class="number">0</span>));
-<a href=#615 id=615 data-nosnippet>615</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn noop() {}"</span>).unwrap();
-<a href=#616 id=616 data-nosnippet>616</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = Flat::&lt;InputPlan&lt;CWire&gt;, CountedOutput&gt;::parse(
-<a href=#617 id=617 data-nosnippet>617</a>            source
-<a href=#618 id=618 data-nosnippet>618</a>                .items
-<a href=#619 id=619 data-nosnippet>619</a>                .into_iter()
-<a href=#620 id=620 data-nosnippet>620</a>                .map(|item| (item, Default::default())),
-<a href=#621 id=621 data-nosnippet>621</a>        )
-<a href=#622 id=622 data-nosnippet>622</a>        .unwrap();
-<a href=#623 id=623 data-nosnippet>623</a>        flat.function_mut(<span class="string">"noop"</span>).unwrap().ret.slot = <span class="prelude-val">Some</span>(CountedOutput(count.clone()));
-<a href=#624 id=624 data-nosnippet>624</a>        <span class="kw">let </span>output = generate(flat, <span class="string">"test"</span>, <span class="macro">vec!</span>[]).unwrap();
-<a href=#625 id=625 data-nosnippet>625</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"test_noop("</span>));
-<a href=#626 id=626 data-nosnippet>626</a>        <span class="macro">assert_eq!</span>(count.get(), <span class="number">1</span>);
-<a href=#627 id=627 data-nosnippet>627</a>    }
-<a href=#628 id=628 data-nosnippet>628</a>}
+<a href=#407 id=407 data-nosnippet>407</a>    }
+<a href=#408 id=408 data-nosnippet>408</a>}
+<a href=#409 id=409 data-nosnippet>409</a><span class="kw">fn </span>c_ty(wire: <span class="kw-2">&amp;</span>Wire, prefix: <span class="kw-2">&amp;</span>str, pointers: <span class="kw-2">&amp;</span>[(String, syn::Type)]) -&gt; String {
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>wire.kind {
+<a href=#411 id=411 data-nosnippet>411</a>        CWire::Scalar(p) =&gt; <span class="kw">match </span>p {
+<a href=#412 id=412 data-nosnippet>412</a>            Primitive::Bool | Primitive::U8 =&gt; <span class="string">"uint8_t"</span>.into(),
+<a href=#413 id=413 data-nosnippet>413</a>            Primitive::Char | Primitive::U32 =&gt; <span class="string">"uint32_t"</span>.into(),
+<a href=#414 id=414 data-nosnippet>414</a>            Primitive::I8 =&gt; <span class="string">"int8_t"</span>.into(),
+<a href=#415 id=415 data-nosnippet>415</a>            Primitive::I16 =&gt; <span class="string">"int16_t"</span>.into(),
+<a href=#416 id=416 data-nosnippet>416</a>            Primitive::I32 =&gt; <span class="string">"int32_t"</span>.into(),
+<a href=#417 id=417 data-nosnippet>417</a>            Primitive::I64 =&gt; <span class="string">"int64_t"</span>.into(),
+<a href=#418 id=418 data-nosnippet>418</a>            Primitive::U16 =&gt; <span class="string">"uint16_t"</span>.into(),
+<a href=#419 id=419 data-nosnippet>419</a>            Primitive::U64 =&gt; <span class="string">"uint64_t"</span>.into(),
+<a href=#420 id=420 data-nosnippet>420</a>            Primitive::Isize =&gt; <span class="string">"intptr_t"</span>.into(),
+<a href=#421 id=421 data-nosnippet>421</a>            Primitive::Usize =&gt; <span class="string">"uintptr_t"</span>.into(),
+<a href=#422 id=422 data-nosnippet>422</a>            Primitive::F32 =&gt; <span class="string">"float"</span>.into(),
+<a href=#423 id=423 data-nosnippet>423</a>            Primitive::F64 =&gt; <span class="string">"double"</span>.into(),
+<a href=#424 id=424 data-nosnippet>424</a>            Primitive::I128 | Primitive::U128 =&gt; <span class="macro">format!</span>(<span class="string">"{prefix}_int128"</span>),
+<a href=#425 id=425 data-nosnippet>425</a>        },
+<a href=#426 id=426 data-nosnippet>426</a>        CWire::Pointer(p) =&gt; {
+<a href=#427 id=427 data-nosnippet>427</a>            <span class="kw">let </span>(name, <span class="kw">_</span>) = pointers
+<a href=#428 id=428 data-nosnippet>428</a>                .iter()
+<a href=#429 id=429 data-nosnippet>429</a>                .find(|(<span class="kw">_</span>, ty)| prebindgen_flat::same_type(ty, <span class="kw-2">&amp;</span>p.ty))
+<a href=#430 id=430 data-nosnippet>430</a>                .expect(<span class="string">"validated pointer declaration"</span>);
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="kw">let </span>qualifier = <span class="kw">if </span>!p.mutable { <span class="string">"const " </span>} <span class="kw">else </span>{ <span class="string">"" </span>};
+<a href=#432 id=432 data-nosnippet>432</a>            <span class="macro">format!</span>(<span class="string">"{qualifier}{prefix}_{name} *"</span>)
+<a href=#433 id=433 data-nosnippet>433</a>        }
+<a href=#434 id=434 data-nosnippet>434</a>        CWire::Buffer =&gt; <span class="macro">format!</span>(<span class="string">"{prefix}_buffer"</span>),
+<a href=#435 id=435 data-nosnippet>435</a>    }
+<a href=#436 id=436 data-nosnippet>436</a>}
+<a href=#437 id=437 data-nosnippet>437</a><span class="kw">fn </span>generate&lt;
+<a href=#438 id=438 data-nosnippet>438</a>    I: prebindgen_flat::InputConversion&lt;Wire = CWire, Context = CContext&gt;,
+<a href=#439 id=439 data-nosnippet>439</a>    O: prebindgen_flat::OutputConversion&lt;Wire = CWire, Context = CContext&gt;,
+<a href=#440 id=440 data-nosnippet>440</a>&gt;(
+<a href=#441 id=441 data-nosnippet>441</a>    flat: Flat&lt;I, O&gt;,
+<a href=#442 id=442 data-nosnippet>442</a>    prefix: <span class="kw-2">&amp;</span>str,
+<a href=#443 id=443 data-nosnippet>443</a>    pointers: Vec&lt;(String, syn::Type)&gt;,
+<a href=#444 id=444 data-nosnippet>444</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Generation&gt; {
+<a href=#445 id=445 data-nosnippet>445</a>    <span class="kw">let </span><span class="kw-2">mut </span>calls = Vec::new();
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">let </span>error = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_last_error"</span>);
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">let </span>free = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_free_buffer"</span>);
+<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">let </span><span class="kw-2">mut </span>symbols = std::collections::BTreeSet::from([error.to_string(), free.to_string()]);
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">for </span>(name, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>pointers {
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="kw">if </span>!symbols.insert(<span class="macro">format!</span>(<span class="string">"{prefix}_drop_{name}"</span>)) {
+<a href=#451 id=451 data-nosnippet>451</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C destructor"</span>.into());
+<a href=#452 id=452 data-nosnippet>452</a>        }
+<a href=#453 id=453 data-nosnippet>453</a>    }
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="kw">for </span>f <span class="kw">in </span>flat.functions.values() {
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">if </span>f.ret.slot.is_none() {
+<a href=#456 id=456 data-nosnippet>456</a>            <span class="kw">continue</span>;
+<a href=#457 id=457 data-nosnippet>457</a>        }
+<a href=#458 id=458 data-nosnippet>458</a>        <span class="kw">let </span>result_type = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{}_result"</span>, f.name);
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw">let </span>context = CContext {
+<a href=#460 id=460 data-nosnippet>460</a>            source_result: <span class="macro">format_ident!</span>(<span class="string">"source_value"</span>),
+<a href=#461 id=461 data-nosnippet>461</a>            output_pointer: <span class="macro">format_ident!</span>(<span class="string">"output"</span>),
+<a href=#462 id=462 data-nosnippet>462</a>            output_type: <span class="macro">syn::parse_quote!</span>(#result_type),
+<a href=#463 id=463 data-nosnippet>463</a>            buffer_type: <span class="macro">syn::parse_quote!</span>(__PbBuffer),
+<a href=#464 id=464 data-nosnippet>464</a>            wide_integer_type: <span class="macro">syn::parse_quote!</span>(__Pb128),
+<a href=#465 id=465 data-nosnippet>465</a>            read_buffer: <span class="macro">syn::parse_quote!</span>(__pb_read),
+<a href=#466 id=466 data-nosnippet>466</a>        };
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>body = prebindgen_flat::emit_call(f, <span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">if </span>!symbols.insert(<span class="macro">format!</span>(<span class="string">"{prefix}_{}"</span>, f.name)) {
+<a href=#469 id=469 data-nosnippet>469</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C export"</span>.into());
+<a href=#470 id=470 data-nosnippet>470</a>        }
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">for </span>wire <span class="kw">in </span>f
+<a href=#472 id=472 data-nosnippet>472</a>            .inputs()<span class="question-mark">?
+<a href=#473 id=473 data-nosnippet>473</a>            </span>.chain(f.outputs(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.map(|output| output.wire))
+<a href=#474 id=474 data-nosnippet>474</a>        {
+<a href=#475 id=475 data-nosnippet>475</a>            <span class="kw">if let </span>CWire::Pointer(pointer) = <span class="kw-2">&amp;</span>wire.kind {
+<a href=#476 id=476 data-nosnippet>476</a>                <span class="kw">if </span>!pointers
+<a href=#477 id=477 data-nosnippet>477</a>                    .iter()
+<a href=#478 id=478 data-nosnippet>478</a>                    .any(|(<span class="kw">_</span>, declared)| prebindgen_flat::same_type(declared, <span class="kw-2">&amp;</span>pointer.ty))
+<a href=#479 id=479 data-nosnippet>479</a>                {
+<a href=#480 id=480 data-nosnippet>480</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
+<a href=#481 id=481 data-nosnippet>481</a>                        <span class="string">"declare a C opaque pointer for `{}`"</span>,
+<a href=#482 id=482 data-nosnippet>482</a>                        prebindgen_flat::type_key(<span class="kw-2">&amp;</span>pointer.ty)
+<a href=#483 id=483 data-nosnippet>483</a>                    ));
+<a href=#484 id=484 data-nosnippet>484</a>                }
+<a href=#485 id=485 data-nosnippet>485</a>            }
+<a href=#486 id=486 data-nosnippet>486</a>        }
+<a href=#487 id=487 data-nosnippet>487</a>        calls.push((f, body, context));
+<a href=#488 id=488 data-nosnippet>488</a>    }
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="kw">let </span><span class="kw-2">mut </span>tokens = <span class="macro">quote!</span> {
+<a href=#490 id=490 data-nosnippet>490</a>       <span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>__Pb128 {<span class="kw">pub </span>hi:u64,<span class="kw">pub </span>lo:u64}
+<a href=#491 id=491 data-nosnippet>491</a>       <span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>__PbBuffer {<span class="kw">pub </span>data:<span class="kw-2">*const </span>u8,<span class="kw">pub </span>len:usize}
+<a href=#492 id=492 data-nosnippet>492</a>       <span class="macro">std::thread_local!</span> {<span class="kw">static </span>__PB_ERROR:std::cell::RefCell&lt;<span class="prelude-ty">Option</span>&lt;std::ffi::CString&gt;&gt;=<span class="kw">const </span>{std::cell::RefCell::new(<span class="prelude-val">None</span>)};}
+<a href=#493 id=493 data-nosnippet>493</a>       <span class="kw">fn </span>__pb_error(e:<span class="kw-2">&amp;</span>str){__PB_ERROR.with(|s|<span class="kw-2">*</span>s.borrow_mut()=<span class="kw">if </span>e.is_empty(){<span class="prelude-val">None</span>}<span class="kw">else</span>{<span class="prelude-val">Some</span>(std::ffi::CString::new(e.replace(<span class="string">'\0'</span>,<span class="string">"?"</span>)).unwrap())});}
+<a href=#494 id=494 data-nosnippet>494</a>       <span class="attr">#[no_mangle] </span><span class="kw">pub extern </span><span class="string">"C" </span><span class="kw">fn </span>#error()-&gt;<span class="kw-2">*const </span>std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ref().map_or(<span class="string">c""</span>.as_ptr(),|e| e.as_ptr()))}
+<a href=#495 id=495 data-nosnippet>495</a>       <span class="comment">// Input pointers are borrowed only during the call; output buffers are owned.
+<a href=#496 id=496 data-nosnippet>496</a>       </span><span class="kw">unsafe fn </span>__pb_read&lt;<span class="lifetime">'a</span>&gt;(b:__PbBuffer)-&gt;<span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8],String&gt;{
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="kw">if </span>b.len==<span class="number">0</span>{<span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span>[]);}
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">if </span>b.data.is_null()||b.len&gt;isize::MAX <span class="kw">as </span>usize{<span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"invalid buffer"</span>.into());}
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="prelude-val">Ok</span>(std::slice::from_raw_parts(b.data,b.len))
+<a href=#500 id=500 data-nosnippet>500</a>       }
+<a href=#501 id=501 data-nosnippet>501</a>       <span class="attr">#[doc = <span class="string">"# Safety
+<a href=#502 id=502 data-nosnippet>502</a>    The buffer must have been returned by this library and not already freed."</span>]
+<a href=#503 id=503 data-nosnippet>503</a>    #[no_mangle] </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#free(b:__PbBuffer){<span class="kw">if </span>!b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data <span class="kw">as </span><span class="kw-2">*mut </span>u8,b.len)));}}
+<a href=#504 id=504 data-nosnippet>504</a>      };
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">let </span><span class="kw-2">mut </span>header=<span class="macro">format!</span>(<span class="string">"#ifndef {prefix}_H\n#define {prefix}_H\n#include &lt;stdint.h&gt;\n#include &lt;stddef.h&gt;\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n"</span>);
+<a href=#506 id=506 data-nosnippet>506</a>    <span class="kw">for </span>(name, ty) <span class="kw">in </span><span class="kw-2">&amp;</span>pointers {
+<a href=#507 id=507 data-nosnippet>507</a>        <span class="kw">let </span>drop = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_drop_{name}"</span>);
+<a href=#508 id=508 data-nosnippet>508</a>        tokens.extend(<span class="macro">quote!</span>{
+<a href=#509 id=509 data-nosnippet>509</a>            <span class="attr">#[doc = <span class="string">"# Safety
+<a href=#510 id=510 data-nosnippet>510</a>The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call."</span>]
+<a href=#511 id=511 data-nosnippet>511</a>            #[no_mangle] </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#drop(ptr:<span class="kw-2">*mut </span>#ty)-&gt;i32{
+<a href=#512 id=512 data-nosnippet>512</a>                <span class="kw">match </span>::prebindgen_runtime::boundary(||{<span class="kw">if </span>!ptr.is_null(){drop(Box::from_raw(ptr));}<span class="prelude-val">Ok</span>(())}){<span class="prelude-val">Ok</span>(())=&gt;{__pb_error(<span class="string">""</span>);<span class="number">0</span>},<span class="prelude-val">Err</span>(e)=&gt;{__pb_error(<span class="kw-2">&amp;</span>e);-<span class="number">1</span>}}
+<a href=#513 id=513 data-nosnippet>513</a>            }
+<a href=#514 id=514 data-nosnippet>514</a>        });
+<a href=#515 id=515 data-nosnippet>515</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"</span>));
+<a href=#516 id=516 data-nosnippet>516</a>    }
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">for </span>(f, body, context) <span class="kw">in </span>calls {
+<a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span>out = <span class="kw-2">&amp;</span>context.output_pointer;
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{prefix}_{}"</span>, f.name);
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>result = <span class="macro">format_ident!</span>(<span class="string">"{name}_result"</span>);
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">let </span><span class="kw-2">mut </span>cparams = Vec::new();
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">for </span>w <span class="kw">in </span>f.inputs()<span class="question-mark">? </span>{
+<a href=#524 id=524 data-nosnippet>524</a>            <span class="kw">let </span>n = <span class="kw-2">&amp;</span>w.name;
+<a href=#525 id=525 data-nosnippet>525</a>            <span class="kw">let </span>ty = w.kind.rust_type();
+<a href=#526 id=526 data-nosnippet>526</a>            params.push(<span class="macro">quote!</span>(#n:#ty));
+<a href=#527 id=527 data-nosnippet>527</a>            cparams.push(<span class="macro">format!</span>(<span class="string">"{} {n}"</span>, c_ty(w, prefix, <span class="kw-2">&amp;</span>pointers)));
+<a href=#528 id=528 data-nosnippet>528</a>        }
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
+<a href=#530 id=530 data-nosnippet>530</a>        header.push_str(<span class="string">"typedef struct {\n"</span>);
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">for </span>(i, output) <span class="kw">in </span>f.outputs(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>.enumerate() {
+<a href=#532 id=532 data-nosnippet>532</a>            <span class="kw">let </span>w = output.wire;
+<a href=#533 id=533 data-nosnippet>533</a>            <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#534 id=534 data-nosnippet>534</a>            <span class="kw">let </span>ty = w.kind.rust_type();
+<a href=#535 id=535 data-nosnippet>535</a>            fields.push(<span class="macro">quote!</span>(<span class="kw">pub </span>#field:#ty));
+<a href=#536 id=536 data-nosnippet>536</a>            header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"    {} v{i};\n"</span>, c_ty(w, prefix, <span class="kw-2">&amp;</span>pointers)));
+<a href=#537 id=537 data-nosnippet>537</a>        }
+<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">if </span>fields.is_empty() {
+<a href=#539 id=539 data-nosnippet>539</a>            fields.push(<span class="macro">quote!</span>(<span class="kw">pub </span>unused:u8));
+<a href=#540 id=540 data-nosnippet>540</a>            header.push_str(<span class="string">"    uint8_t unused;\n"</span>);
+<a href=#541 id=541 data-nosnippet>541</a>        }
+<a href=#542 id=542 data-nosnippet>542</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"}} {result};\n"</span>));
+<a href=#543 id=543 data-nosnippet>543</a>        cparams.push(<span class="macro">format!</span>(<span class="string">"{result} *{out}"</span>));
+<a href=#544 id=544 data-nosnippet>544</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"int32_t {name}({});\n"</span>, cparams.join(<span class="string">", "</span>)));
+<a href=#545 id=545 data-nosnippet>545</a>        tokens.extend(<span class="macro">quote!</span> {
+<a href=#546 id=546 data-nosnippet>546</a>         <span class="attr">#[repr(C)] </span><span class="kw">pub struct </span>#result {#(#fields),<span class="kw-2">*</span>}
+<a href=#547 id=547 data-nosnippet>547</a>         <span class="attr">#[doc = <span class="string">"# Safety
+<a href=#548 id=548 data-nosnippet>548</a>The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."</span>]
+<a href=#549 id=549 data-nosnippet>549</a>   #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+<a href=#550 id=550 data-nosnippet>550</a>   #[no_mangle] </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#name(#(#params,)* #out:<span class="kw-2">*mut </span>#result)-&gt;i32{
+<a href=#551 id=551 data-nosnippet>551</a>          <span class="kw">if </span>#out.is_null(){__pb_error(<span class="string">"null result pointer"</span>);<span class="kw">return </span>-<span class="number">1</span>;}
+<a href=#552 id=552 data-nosnippet>552</a>          <span class="kw">match </span>::prebindgen_runtime::boundary(||{
+<a href=#553 id=553 data-nosnippet>553</a>           #body
+<a href=#554 id=554 data-nosnippet>554</a>          }){<span class="prelude-val">Ok</span>(())=&gt;{__pb_error(<span class="string">""</span>);<span class="number">0</span>},<span class="prelude-val">Err</span>(e)=&gt;{__pb_error(<span class="kw-2">&amp;</span>e);-<span class="number">1</span>}}
+<a href=#555 id=555 data-nosnippet>555</a>         }
+<a href=#556 id=556 data-nosnippet>556</a>        });
+<a href=#557 id=557 data-nosnippet>557</a>    }
+<a href=#558 id=558 data-nosnippet>558</a>    <span class="kw">let </span>guards = <span class="kw-2">&amp;</span>flat.guards;
+<a href=#559 id=559 data-nosnippet>559</a>    tokens.extend(<span class="macro">quote!</span>(#(#guards)<span class="kw-2">*</span>));
+<a href=#560 id=560 data-nosnippet>560</a>    header.push_str(<span class="string">"#ifdef __cplusplus\n}\n#endif\n#endif\n"</span>);
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="prelude-val">Ok</span>(Generation {
+<a href=#562 id=562 data-nosnippet>562</a>        rust: prebindgen_flat::rust_source(tokens)<span class="question-mark">?</span>,
+<a href=#563 id=563 data-nosnippet>563</a>        header,
+<a href=#564 id=564 data-nosnippet>564</a>    })
+<a href=#565 id=565 data-nosnippet>565</a>}
+<a href=#566 id=566 data-nosnippet>566</a>
+<a href=#567 id=567 data-nosnippet>567</a><span class="attr">#[cfg(test)]
+<a href=#568 id=568 data-nosnippet>568</a></span><span class="kw">mod </span>generation_tests {
+<a href=#569 id=569 data-nosnippet>569</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#570 id=570 data-nosnippet>570</a>
+<a href=#571 id=571 data-nosnippet>571</a>    <span class="attr">#[test]
+<a href=#572 id=572 data-nosnippet>572</a>    </span><span class="kw">fn </span>rejects_invalid_pointer_names_during_preparation() {
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub type Handle = String;"</span>).unwrap();
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="kw">let </span>flat = Bindings::parse(
+<a href=#575 id=575 data-nosnippet>575</a>            source
+<a href=#576 id=576 data-nosnippet>576</a>                .items
+<a href=#577 id=577 data-nosnippet>577</a>                .into_iter()
+<a href=#578 id=578 data-nosnippet>578</a>                .map(|item| (item, Default::default())),
+<a href=#579 id=579 data-nosnippet>579</a>        )
+<a href=#580 id=580 data-nosnippet>580</a>        .unwrap();
+<a href=#581 id=581 data-nosnippet>581</a>        <span class="kw">let </span>result = Cbindgen::new(flat)
+<a href=#582 id=582 data-nosnippet>582</a>            .opaque_ptr(<span class="string">"invalid-name"</span>, <span class="macro">syn::parse_quote!</span>(Handle))
+<a href=#583 id=583 data-nosnippet>583</a>            .build();
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="macro">assert_eq!</span>(result.err().unwrap(), <span class="string">"invalid identifier `invalid-name`"</span>);
+<a href=#585 id=585 data-nosnippet>585</a>    }
+<a href=#586 id=586 data-nosnippet>586</a>
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="attr">#[test]
+<a href=#588 id=588 data-nosnippet>588</a>    </span><span class="kw">fn </span>emits_custom_slot_code_without_building_a_plan() {
+<a href=#589 id=589 data-nosnippet>589</a>        <span class="kw">struct </span>CountedOutput(std::rc::Rc&lt;std::cell::Cell&lt;usize&gt;&gt;);
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw">impl </span>prebindgen_flat::OutputConversion <span class="kw">for </span>CountedOutput {
+<a href=#591 id=591 data-nosnippet>591</a>            <span class="kw">type </span>Wire = CWire;
+<a href=#592 id=592 data-nosnippet>592</a>            <span class="kw">type </span>Context = CContext;
+<a href=#593 id=593 data-nosnippet>593</a>            <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[GenericWire&lt;<span class="self">Self</span>::Wire&gt;] {
+<a href=#594 id=594 data-nosnippet>594</a>                <span class="kw-2">&amp;</span>[]
+<a href=#595 id=595 data-nosnippet>595</a>            }
+<a href=#596 id=596 data-nosnippet>596</a>            <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
+<a href=#597 id=597 data-nosnippet>597</a>                <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[])
+<a href=#598 id=598 data-nosnippet>598</a>            }
+<a href=#599 id=599 data-nosnippet>599</a>            <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#600 id=600 data-nosnippet>600</a>                <span class="self">self</span>.<span class="number">0</span>.set(<span class="self">self</span>.<span class="number">0</span>.get() + <span class="number">1</span>);
+<a href=#601 id=601 data-nosnippet>601</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
+<a href=#602 id=602 data-nosnippet>602</a>            }
+<a href=#603 id=603 data-nosnippet>603</a>            <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#604 id=604 data-nosnippet>604</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
+<a href=#605 id=605 data-nosnippet>605</a>            }
+<a href=#606 id=606 data-nosnippet>606</a>            <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#607 id=607 data-nosnippet>607</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>())
+<a href=#608 id=608 data-nosnippet>608</a>            }
+<a href=#609 id=609 data-nosnippet>609</a>            <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>CContext) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#610 id=610 data-nosnippet>610</a>                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(()))
+<a href=#611 id=611 data-nosnippet>611</a>            }
+<a href=#612 id=612 data-nosnippet>612</a>        }
+<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw">let </span>count = std::rc::Rc::new(std::cell::Cell::new(<span class="number">0</span>));
+<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">let </span>source = syn::parse_file(<span class="string">"pub fn noop() {}"</span>).unwrap();
+<a href=#615 id=615 data-nosnippet>615</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = Flat::&lt;InputPlan&lt;CWire&gt;, CountedOutput&gt;::parse(
+<a href=#616 id=616 data-nosnippet>616</a>            source
+<a href=#617 id=617 data-nosnippet>617</a>                .items
+<a href=#618 id=618 data-nosnippet>618</a>                .into_iter()
+<a href=#619 id=619 data-nosnippet>619</a>                .map(|item| (item, Default::default())),
+<a href=#620 id=620 data-nosnippet>620</a>        )
+<a href=#621 id=621 data-nosnippet>621</a>        .unwrap();
+<a href=#622 id=622 data-nosnippet>622</a>        flat.function_mut(<span class="string">"noop"</span>).unwrap().ret.slot = <span class="prelude-val">Some</span>(CountedOutput(count.clone()));
+<a href=#623 id=623 data-nosnippet>623</a>        <span class="kw">let </span>output = generate(flat, <span class="string">"test"</span>, <span class="macro">vec!</span>[]).unwrap();
+<a href=#624 id=624 data-nosnippet>624</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"test_noop("</span>));
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="macro">assert_eq!</span>(count.get(), <span class="number">1</span>);
+<a href=#626 id=626 data-nosnippet>626</a>    }
+<a href=#627 id=627 data-nosnippet>627</a>}
 </code></pre></div></section></main></body></html>

@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a>//! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 <a href=#4 id=4 data-nosnippet>4</a>//! Declaration processing fills occurrence slots before wrappers are generated.
 <a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#![warn(missing_docs)]
-<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span>prebindgen_flat::{type_key, Flat, <span class="prelude-ty">Result</span>};
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span>prebindgen_flat::{type_key, Flat, <span class="prelude-ty">Result</span>, WireKind};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">mod </span>scalar;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>prebindgen_conversions::boxed::BoxedWire;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>prebindgen_conversions::value::Value;
@@ -734,7 +734,7 @@
 <a href=#734 id=734 data-nosnippet>734</a>        <span class="kw">let </span><span class="kw-2">mut </span>consumed = Vec::new();
 <a href=#735 id=735 data-nosnippet>735</a>        <span class="kw">for </span>w <span class="kw">in </span>f.inputs()<span class="question-mark">? </span>{
 <a href=#736 id=736 data-nosnippet>736</a>            <span class="kw">let </span>n = <span class="kw-2">&amp;</span>w.name;
-<a href=#737 id=737 data-nosnippet>737</a>            <span class="kw">let </span>rt = <span class="kw-2">&amp;</span>w.kind.rust_type;
+<a href=#737 id=737 data-nosnippet>737</a>            <span class="kw">let </span>rt = w.kind.rust_type();
 <a href=#738 id=738 data-nosnippet>738</a>            params.push(<span class="macro">quote!</span>(#n:#rt));
 <a href=#739 id=739 data-nosnippet>739</a>            raw_params.push(<span class="macro">format!</span>(<span class="string">"{n}: {}"</span>, w.kind.kotlin_type));
 <a href=#740 id=740 data-nosnippet>740</a>        }
