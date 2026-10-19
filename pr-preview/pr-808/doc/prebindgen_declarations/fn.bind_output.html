@@ -6,7 +6,7 @@
     extra: &amp;C::<a class="associatedtype" href="trait.Codec.html#associatedtype.Extra" title="type prebindgen_declarations::Codec::Extra">Extra</a>,
 ) -&gt; <a class="type" href="../prebindgen_flat/type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.99.1/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Build and attach a converter to a function result, replacing any existing one.</p>
 <p>Uses the same construction and failure rules as <a href="fn.bind_input.html" title="fn prebindgen_declarations::bind_input"><code>bind_input</code></a>. Output code
-uses <a href="../prebindgen_flat/conversion/fn.source_result.html" title="fn prebindgen_flat::conversion::source_result"><code>prebindgen_flat::source_result</code></a> for the source call’s result local.
+uses <a href="../prebindgen_flat/conversion/fn.source_result_expr.html" title="fn prebindgen_flat::conversion::source_result_expr"><code>prebindgen_flat::source_result_expr</code></a> for the source call’s result local.
 The recipe is checked for compatible types and signatures, and for repeated
 consumption of the same value. Unit results use <code>Output::fields([])</code>.</p>
 <h2 id="arguments"><a class="doc-anchor" href="#arguments">§</a>Arguments</h2>
