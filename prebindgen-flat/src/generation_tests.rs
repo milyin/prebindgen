@@ -35,10 +35,8 @@ impl Output {
                 result: source_result_expr(),
             },
             wires: vec![Wire {
-                component: ComponentPath::default(),
                 name: syn::parse_quote!(out),
                 kind: "int",
-                active: Condition::default(),
             }],
             statements: quote!(log("prepare");),
             values: vec![source_result_expr()],
@@ -119,14 +117,12 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         context: Default::default(),
         delivery: Default::default(),
-        // Deliberately reverse wire order: mapping must use component identities.
+        // Slot code owns field projection; callers only see ordered carriers and values.
         wires: ["y", "x"]
             .into_iter()
             .map(|name| Wire {
-                component: ComponentPath(vec![ComponentSegment::Field(name.into())]),
                 name: format_ident!("wire_{name}"),
                 kind: "Double",
-                active: Condition::default(),
             })
             .collect(),
         statements: TokenStream::new(),
@@ -137,20 +133,15 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
 }
 
 #[test]
-fn field_mapping_is_available_without_a_registry() {
+fn output_expressions_need_no_field_mapping() {
     let flat = record_model();
     let call = flat.function("point").unwrap();
-    let assignments: Vec<_> = call
+    let values: Vec<_> = call
         .outputs(&emission_context())
         .unwrap()
-        .map(|out| {
-            let [ComponentSegment::Field(name)] = out.wire.component.0.as_slice() else {
-                panic!("expected field mapping")
-            };
-            format!("{name} = {}", out.value)
-        })
+        .map(|out| out.value.to_string())
         .collect();
-    assert_eq!(assignments, ["y = __result . y", "x = __result . x"]);
+    assert_eq!(values, ["__result . y", "__result . x"]);
 }
 
 #[test]
@@ -257,10 +248,8 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     )
     .unwrap();
     let wire = || Wire {
-        component: Default::default(),
         name: syn::parse_quote!(x),
         kind: NonClone,
-        active: Condition::default(),
     };
     let f = flat.function_mut("echo").unwrap();
     f.params[0].ty.slot = Some(InputPlan {
@@ -369,10 +358,8 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     let value = source_result_expr();
     let function = flat.function_mut("echo").unwrap();
     let wire = || Wire {
-        component: Default::default(),
         name: syn::parse_quote!(incoming),
         kind: (),
-        active: Condition::default(),
     };
     function.params[0].ty.slot = Some(InputPlan {
         context: Default::default(),
@@ -560,4 +547,51 @@ fn custom_conversions_use_context_without_template_rendering() {
         emit_call(function, &context).unwrap().to_string(),
         quote!(let returned = crate::echo(42i32); Ok(returned)).to_string()
     );
+}
+
+#[test]
+fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
+    let code = validate_resources(&[
+        Resource {
+            identity: quote!(left),
+            access: Access::Move,
+            active: quote!(enabled && count > 0),
+        },
+        Resource {
+            identity: quote!(right.expect("inactive identity must not be evaluated")),
+            access: Access::Shared,
+            active: quote!(count % 2 == 0),
+        },
+    ]);
+    let source = quote! {
+        fn check(enabled: bool, count: usize, left: usize, right: Option<usize>) -> Result<(), String> {
+            #code
+            Ok(())
+        }
+        fn main() {
+            assert!(check(true, 2, 7, Some(7)).is_err());
+            assert!(check(true, 2, 7, Some(8)).is_ok());
+            assert!(check(false, 2, 7, None).is_ok());
+            assert!(check(true, 1, 7, None).is_ok());
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("predicates.rs");
+    let executable = dir.path().join("predicates");
+    std::fs::write(&file, source.to_string()).unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .arg(&file)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    assert!(std::process::Command::new(executable)
+        .status()
+        .unwrap()
+        .success());
 }

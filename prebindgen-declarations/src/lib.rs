@@ -8,12 +8,14 @@
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
-use prebindgen_flat::{
-    same_type, type_key, ComponentSegment, Condition, Flat, InputPlan, OutputPlan, Result, Wire,
-};
+use prebindgen_flat::{same_type, type_key, Flat, InputPlan, OutputPlan, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod condition;
+pub use condition::Condition;
+mod component;
+pub use component::{ComponentPath, ComponentSegment};
 
 /// A recipe for converting boundary inputs into one source argument.
 ///
@@ -153,7 +155,7 @@ impl Output {
 /// carrier types for its wire kinds.
 ///
 /// ```
-/// use prebindgen_flat::{Result, Condition, InputPlan, OutputPlan, validate_bindings};
+/// use prebindgen_flat::{Result, InputPlan, OutputPlan, validate_bindings};
 /// use prebindgen_conversions::value;
 /// use prebindgen_declarations::{
 ///     Codec, Declarations,
@@ -163,10 +165,13 @@ impl Output {
 /// use quote::quote;
 /// use syn::{Ident, Type};
 ///
+/// use prebindgen_declarations::Condition;
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Extra = ();
 ///     type Context = syn::Ident;
+///     type Input = InputPlan<Self::Wire>;
+///     type Output = OutputPlan<Self::Wire>;
 ///     type Wire = Option<value::Value>; // `None` marks a selector.
 ///
 ///     fn selector(&self, _: &()) -> Self::Wire { None }
@@ -176,7 +181,7 @@ impl Output {
 ///     ) -> Result<InputPlan<Self::Wire, Self::Context>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         let decode = quote!(#wire.clone());
-///         value::input(ty, wire, var, active, decode, Some(kind))
+///         value::input(ty, wire, var, &active.rust(), decode, Some(kind))
 ///     }
 ///     fn output_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
@@ -220,8 +225,19 @@ pub trait Codec {
     type Extra;
     /// Context supplied by the language generator when emitting stored templates.
     type Context: prebindgen_flat::TemplateContext;
-    /// The adapter's description of one wire, stored in [`Wire::kind`], such as
-    /// its carrier type or a destination type name.
+    /// Final self-contained input converter installed after preparation.
+    type Input: prebindgen_flat::InputConversion<Context = Self::Context>
+        + From<InputPlan<Self::Wire, Self::Context>>;
+    /// Final self-contained output converter installed after preparation.
+    type Output: prebindgen_flat::OutputConversion<Context = Self::Context>
+        + From<OutputPlan<Self::Wire, Self::Context>>;
+    /// Preserve a logical path in private preparation metadata when the codec needs it.
+    /// The final converter decides how to use this mapping; Flat never interprets it.
+    /// Called from the innermost component outward; prepend each segment to its path.
+    fn prefix_component(&self, _wire: &mut Self::Wire, _segment: ComponentSegment) {}
+
+    /// Private preparation metadata for a leaf wire. Final slot conversion may
+    /// replace it with a transport-only description before exposing wires to a writer.
     type Wire: Clone + std::fmt::Debug;
     /// Describe the `i32` arm index wire that the declaration compiler creates for [`Input::Selector`].
     ///
@@ -355,13 +371,14 @@ pub type Bindings<W, C = syn::Ident> = Flat<InputPlan<W, C>, OutputPlan<W, C>>;
 ///
 /// Input binding rejects output recipes:
 /// ```compile_fail
-/// use prebindgen_declarations::{bind_input, Bindings, Codec, Output};
-/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire, C::Context>, codec: &C, extra: &C::Extra) {
+/// use prebindgen_declarations::{bind_input, Codec, Output};
+/// use prebindgen_flat::Flat;
+/// fn wrong<C: Codec>(flat: &mut Flat<C::Input, C::Output>, codec: &C, extra: &C::Extra) {
 ///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_input<C: Codec>(
-    flat: &mut Bindings<C::Wire, C::Context>,
+    flat: &mut Flat<C::Input, C::Output>,
     codec: &C,
     function: &str,
     parameter: &str,
@@ -381,7 +398,7 @@ pub fn bind_input<C: Codec>(
         &Condition::default(),
     )?;
     codec.finish_input(&mut conversion, extra)?;
-    flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
+    flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
     Ok(())
 }
 
@@ -402,13 +419,14 @@ pub fn bind_input<C: Codec>(
 ///
 /// Output binding rejects input recipes:
 /// ```compile_fail
-/// use prebindgen_declarations::{bind_output, Bindings, Codec, Input};
-/// fn wrong<C: Codec>(flat: &mut Bindings<C::Wire, C::Context>, codec: &C, extra: &C::Extra) {
+/// use prebindgen_declarations::{bind_output, Codec, Input};
+/// use prebindgen_flat::Flat;
+/// fn wrong<C: Codec>(flat: &mut Flat<C::Input, C::Output>, codec: &C, extra: &C::Extra) {
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_output<C: Codec>(
-    flat: &mut Bindings<C::Wire, C::Context>,
+    flat: &mut Flat<C::Input, C::Output>,
     codec: &C,
     function: &str,
     recipe: &Output,
@@ -422,18 +440,18 @@ pub fn bind_output<C: Codec>(
         false,
     )?;
     codec.finish_output(&mut conversion, extra)?;
-    flat.function_mut(function)?.ret.slot = Some(conversion);
+    flat.function_mut(function)?.ret.slot = Some(conversion.into());
     Ok(())
 }
 
 struct Compiler<'a, C: Codec> {
-    flat: &'a Bindings<C::Wire, C::Context>,
+    flat: &'a Flat<C::Input, C::Output>,
     codec: &'a C,
     prefix: String,
     next: std::cell::Cell<usize>,
 }
 impl<'a, C: Codec> Compiler<'a, C> {
-    fn new(flat: &'a Bindings<C::Wire, C::Context>, codec: &'a C, prefix: String) -> Self {
+    fn new(flat: &'a Flat<C::Input, C::Output>, codec: &'a C, prefix: String) -> Self {
         Self {
             flat,
             codec,
@@ -446,6 +464,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let n = format_ident!("{}_w{next}", self.prefix);
         self.next.set(next + 1);
         n
+    }
+    fn prefix(&self, wires: &mut [Wire<C::Wire>], segment: ComponentSegment) {
+        for wire in wires {
+            self.codec.prefix_component(&mut wire.kind, segment.clone());
+        }
     }
     fn input(
         &self,
@@ -492,7 +515,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let mut fields = Vec::new();
                 for (field, child) in r.fields.iter().zip(children) {
                     let mut p = self.input(&field.ty, child, extra, active)?;
-                    prefix(
+                    self.prefix(
                         &mut p.wires,
                         ComponentSegment::Field(field.name.to_string()),
                     );
@@ -523,7 +546,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let mut call_args = Vec::new();
                 for (param, child) in f.params.iter().zip(args) {
                     let mut p = self.input(&param.ty.ty, child, extra, active)?;
-                    prefix(
+                    self.prefix(
                         &mut p.wires,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
@@ -547,10 +570,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let tag = self.name();
                 wires.push(Wire {
-                    component: prebindgen_flat::ComponentPath(vec![ComponentSegment::Selector]),
                     name: tag.clone(),
-                    kind: self.codec.selector(extra),
-                    active: active.clone(),
+                    kind: {
+                        let mut kind = self.codec.selector(extra);
+                        self.codec
+                            .prefix_component(&mut kind, ComponentSegment::Selector);
+                        kind
+                    },
                 });
                 let count = arms.len() as i32;
                 let invalid = active.and(quote!(!(0..#count).contains(&#tag)));
@@ -558,7 +584,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
-                    prefix(&mut p.wires, ComponentSegment::Alternative(i));
+                    self.prefix(&mut p.wires, ComponentSegment::Alternative(i));
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -616,7 +642,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     let name = &field.name;
                     let mut p =
                         self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
-                    prefix(&mut p.wires, ComponentSegment::Field(name.to_string()));
+                    self.prefix(&mut p.wires, ComponentSegment::Field(name.to_string()));
                     append(&mut out, p)?;
                 }
             }
@@ -637,7 +663,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let arg = if borrowed { value } else { quote!(&#value) };
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
-                prefix(&mut child.wires, ComponentSegment::Getter(function.clone()));
+                self.prefix(&mut child.wires, ComponentSegment::Getter(function.clone()));
                 append(&mut out, child)?;
             }
             Output::Combine(parts) => {
@@ -661,7 +687,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         quote!(&#value)
                     };
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
-                    prefix(&mut p.wires, ComponentSegment::View(index));
+                    self.prefix(&mut p.wires, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
                 }
@@ -695,12 +721,6 @@ pub mod declarations;
 pub use declarations::{
     Declarations, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl,
 };
-
-fn prefix<W>(wires: &mut [Wire<W>], segment: ComponentSegment) {
-    for wire in wires {
-        wire.component.prepend(segment.clone());
-    }
-}
 
 /// Parse one Rust identifier used by a declaration.
 ///

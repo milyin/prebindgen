@@ -1,7 +1,7 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`] policy and map
 //! [`BoxedWire`] data into their own wire kind.
-use prebindgen_flat::{Access, Condition, InputPlan, OutputPlan, Resource, Result, Wire};
+use prebindgen_flat::{Access, InputPlan, OutputPlan, Resource, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 /// Source type and access mode for a wire carrying a boxed allocation address.
@@ -62,17 +62,17 @@ impl Storage {
 ///   is the adapter's choice, an integer or a pointer, as long as `wire as *mut _`
 ///   converts it to the allocation pointer.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — the selector arms under which this input is used. Validation
-///   and ownership acquisition run only when those arms are selected.
+/// * `active` — an emitted Rust boolean expression guarding validation and
+///   ownership acquisition. Its meaning is private to the converter.
 /// * `wire_kind` — builds [`Wire::kind`] from the pointee type and access mode.
 ///
 /// ```
 /// use prebindgen_conversions::boxed;
-/// use prebindgen_flat::{Access, Condition};
+/// use prebindgen_flat::Access;
 /// let input = boxed::input::<_, syn::Ident>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
-///     &Condition::default(), |boxed| boxed.access,
+///     &quote::quote!(true), |boxed| boxed.access,
 /// )?;
 /// assert_eq!(input.wires[0].kind, Access::Shared);
 /// assert!(input.acquire.is_empty());
@@ -84,7 +84,7 @@ pub fn input<W, C>(
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
-    active: &Condition,
+    active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
 ) -> Result<InputPlan<W, C>> {
     let (target, access) = match ty {
@@ -98,7 +98,7 @@ pub fn input<W, C>(
         ),
         _ => (ty, Access::Move),
     };
-    let condition = active.rust();
+    let condition = active.clone();
     let allocation = storage.ty(target);
     let field = storage.field();
     let pointer = format_ident!("{wire}_pointer");
@@ -128,13 +128,11 @@ pub fn input<W, C>(
         context: Default::default(),
         acknowledgement: None,
         wires: vec![Wire {
-            component: Default::default(),
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
                 access,
             }),
-            active: active.clone(),
         }],
         validation,
         acquire,
@@ -142,8 +140,8 @@ pub fn input<W, C>(
         argument: quote!(#var),
         resources: vec![Resource {
             identity: quote!(#pointer.addr()),
-            access,
             active: active.clone(),
+            access,
         }],
     })
 }
@@ -186,13 +184,11 @@ pub fn output<W, C>(
         context: Default::default(),
         delivery: Default::default(),
         wires: vec![Wire {
-            component: Default::default(),
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: ty.clone(),
                 access: Access::Move,
             }),
-            active: Condition::default(),
         }],
         statements: quote!(let mut #wire = Box::new(#value);),
         values: vec![quote!((&mut *#wire) as *mut #allocation)],

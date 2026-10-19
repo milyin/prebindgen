@@ -8,12 +8,12 @@ mod scalar;
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
-/// The carrier of one JNI wire.
+/// Preparation metadata consumed when building a JNI slot converter.
 ///
 /// This adapter-specific type keeps C and JNI converters from being mixed in
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
-pub enum JniWire {
+pub enum JniKind {
     /// A primitive in its JVM carrier.
     Scalar(Primitive),
     /// A `java.lang.String`.
@@ -21,7 +21,7 @@ pub enum JniWire {
     /// A `byte[]`.
     Bytes,
     /// A boxed allocation address in a `long`, owned by a Kotlin handle class.
-    Handle(Box<BoxedWire>),
+    Handle(Box<BoxedWire>, String),
     /// An `int` selector arm index.
     Selector,
 }
@@ -31,7 +31,11 @@ mod emission;
 pub use emission::JniContext;
 type InputPlan<W> = prebindgen_flat::InputPlan<W, JniContext>;
 type OutputPlan<W> = prebindgen_flat::OutputPlan<W, JniContext>;
-type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
+mod kotlin;
+pub use kotlin::{
+    JniInput, JniOutput, JniWire, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
+    KotlinOutput, KotlinOutputConversion,
+};
 /// Flat source model with JNI handle conversion data for wrapper emission.
 ///
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
@@ -49,7 +53,7 @@ type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 ///     prebindgen_c::Cbindgen::new(flat);
 /// }
 /// ```
-pub type Bindings = GenericBindings<JniWire>;
+pub type Bindings = Flat<JniInput, JniOutput>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
@@ -418,9 +422,11 @@ impl Class {
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Extra = ();
-    type Wire = JniWire;
+    type Wire = JniKind;
     type Context = JniContext;
-    fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
+    type Input = JniInput;
+    type Output = JniOutput;
+    fn finish_input(&self, plan: &mut InputPlan<JniKind>, _: &()) -> Result<()> {
         let env = prebindgen_flat::template_parameter("environment");
         let ownership = prebindgen_flat::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
@@ -433,21 +439,21 @@ impl Codec for JniCodec {
         }
         Ok(())
     }
-    fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut OutputPlan<JniKind>, _: &()) -> Result<()> {
         let env = prebindgen_flat::template_parameter("environment");
         let count = plan.wires.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
             let expr = match &wire.kind {
-                JniWire::Scalar(p) => scalar::output_java(*p, value),
-                JniWire::Handle(_) => {
+                JniKind::Scalar(p) => scalar::output_java(*p, value),
+                JniKind::Handle(_, _) => {
                     quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
                 }
-                JniWire::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
-                JniWire::Bytes => {
+                JniKind::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
+                JniKind::Bytes => {
                     quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
                 }
-                JniWire::Selector => return Err("selector output is unsupported".into()),
+                JniKind::Selector => return Err("selector output is unsupported".into()),
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -462,8 +468,8 @@ impl Codec for JniCodec {
         };
         Ok(())
     }
-    fn selector(&self, _: &()) -> JniWire {
-        JniWire::Selector
+    fn selector(&self, _: &()) -> JniKind {
+        JniKind::Selector
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
         Value::of(ty).is_none()
@@ -474,26 +480,31 @@ impl Codec for JniCodec {
         _: &(),
         w: syn::Ident,
         v: syn::Ident,
-        active: &prebindgen_flat::Condition,
-    ) -> Result<InputPlan<JniWire>> {
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniKind>> {
         let env = prebindgen_flat::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
-            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::Scalar(p)),
+            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniKind::Scalar(p)),
             Some(Value::Text) => (
                 quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
-                JniWire::Text,
+                JniKind::Text,
             ),
             Some(Value::Bytes) => (
                 quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
-                JniWire::Bytes,
+                JniKind::Bytes,
             ),
             None => {
-                return prebindgen_conversions::boxed::input(&storage(), ty, w, v, active, |b| {
-                    JniWire::Handle(Box::new(b))
-                })
+                return prebindgen_conversions::boxed::input(
+                    &storage(),
+                    ty,
+                    w,
+                    v,
+                    &active.rust(),
+                    |b| JniKind::Handle(Box::new(b), kotlin_condition(active)),
+                )
             }
         };
-        prebindgen_conversions::value::input(ty, w, v, active, decode, kind)
+        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
     }
     fn output_leaf(
         &self,
@@ -502,7 +513,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputPlan<JniWire>> {
+    ) -> Result<OutputPlan<JniKind>> {
         // Text and bytes stay Rust values until the wrapper delivers them.
         let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
             Some(Value::Scalar(p)) => {
@@ -512,14 +523,14 @@ impl Codec for JniCodec {
                     v,
                     borrowed,
                     |v| scalar::encode(p, v),
-                    JniWire::Scalar(p),
+                    JniKind::Scalar(p),
                 )
             }
-            Some(Value::Text) => (|v| v, JniWire::Text),
-            Some(Value::Bytes) => (|v| v, JniWire::Bytes),
+            Some(Value::Text) => (|v| v, JniKind::Text),
+            Some(Value::Bytes) => (|v| v, JniKind::Bytes),
             None => {
                 return prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
-                    JniWire::Handle(Box::new(b))
+                    JniKind::Handle(Box::new(b), "true".into())
                 })
             }
         };
@@ -655,33 +666,8 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
         escape(method)
     )
 }
-fn raw_rust(kind: &JniWire) -> TokenStream {
-    match kind {
-        JniWire::Scalar(p) => scalar::rust_type(*p),
-        JniWire::Handle(_) => quote!(i64),
-        JniWire::Selector => quote!(i32),
-        JniWire::Text => quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
-        JniWire::Bytes => quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>),
-    }
-}
-fn raw_kt(kind: &JniWire) -> &'static str {
-    match kind {
-        JniWire::Scalar(p) => scalar::raw_kotlin(*p),
-        JniWire::Handle(_) => "Long",
-        JniWire::Selector => "Int",
-        JniWire::Text => "String?",
-        JniWire::Bytes => "ByteArray?",
-    }
-}
-fn class<'a>(classes: &'a BTreeMap<String, Class>, ty: &syn::Type) -> Result<&'a Class> {
-    classes
-        .get(&type_key(ty))
-        .ok_or_else(|| format!("no handle class for `{}`", type_key(ty)))
-}
-fn generate<
-    I: prebindgen_flat::InputConversion<Wire = JniWire, Context = JniContext>,
-    O: prebindgen_flat::OutputConversion<Wire = JniWire, Context = JniContext>,
->(
+
+fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: Flat<I, O>,
     prefix: &str,
     init: &str,
@@ -709,6 +695,19 @@ fn generate<
         let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
+    let kotlin_classes = classes
+        .iter()
+        .enumerate()
+        .map(|(index, (ty, class))| {
+            (
+                ty.clone(),
+                KotlinClass {
+                    name: class.fqn(),
+                    drop_function: format!("{prefix}.JNINative.drop{index}"),
+                },
+            )
+        })
+        .collect();
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
         let env = format_ident!("jni_environment");
@@ -723,34 +722,31 @@ fn generate<
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
+        let kotlin_context = KotlinContext {
+            classes: &kotlin_classes,
+            result: "result",
+            failure: "failure",
+            output_prefix: "output",
+        };
         let mut kt_params = Vec::new();
         let mut kt_args = Vec::new();
         let mut locks = Vec::new();
         let mut consumed = Vec::new();
         for w in f.inputs()? {
             let n = &w.name;
-            let rt = raw_rust(&w.kind);
+            let rt = &w.kind.rust_type;
             params.push(quote!(#n:#rt));
-            raw_params.push(format!("{n}: {}", raw_kt(&w.kind)));
-            let (kt, arg) = match &w.kind {
-                JniWire::Scalar(p) => scalar::input(*p, n),
-                JniWire::Handle(handle) => {
-                    let condition = kotlin_condition(&w.active);
-                    locks.push(format!(
-                        "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
-                    ));
-                    if handle.access == Access::Move {
-                        consumed.push(format!("if ({condition}) {n}!!.markConsumed()"));
-                    }
-                    (
-                        format!("{}?", class(&classes, &handle.ty)?.fqn()),
-                        format!("{n}?.raw ?: 0L"),
-                    )
-                }
-                _ => (raw_kt(&w.kind).into(), n.to_string()),
-            };
-            kt_params.push(format!("{n}: {kt}"));
-            kt_args.push(arg);
+            raw_params.push(format!("{n}: {}", w.kind.kotlin_type));
+        }
+        for input in f.input_conversions()? {
+            let code = input.kotlin(&kotlin_context)?;
+            if code.arguments.len() != input.wires().len() {
+                return Err("Kotlin input argument/wire count differs".into());
+            }
+            kt_params.extend(code.parameters);
+            kt_args.extend(code.arguments);
+            locks.extend(code.locks);
+            consumed.extend(code.consumed);
         }
         let has_consumes = !consumed.is_empty();
         let has_acknowledgement = f
@@ -761,7 +757,7 @@ fn generate<
             .into_iter()
             .any(|present| present);
         if has_acknowledgement != has_consumes {
-            return Err("JNI acknowledgement does not match consuming input wires".into());
+            return Err("JNI acknowledgement does not match slot ownership updates".into());
         }
         if has_consumes {
             params.push(
@@ -770,35 +766,22 @@ fn generate<
             raw_params.push("ownership: BooleanArray".into());
             kt_args.push("ownership".into());
         }
-        let slots: usize = usize::from(has_consumes)
-            + f.inputs()?
-                .map(|w| match w.kind {
-                    JniWire::Handle(_) => 2,
-                    JniWire::Scalar(p) => scalar::parameter_slots(p),
-                    _ => 1,
-                })
-                .sum::<usize>();
+        let slots: usize =
+            usize::from(has_consumes) + f.inputs()?.map(|w| w.kind.parameter_slots).sum::<usize>();
         if slots > 255 {
             return Err(format!(
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"
             ));
         }
-        let mut delivered = Vec::new();
-        let mut result_types = Vec::new();
-        for (i, output) in f.outputs(&context)?.enumerate() {
-            let w = output.wire;
-            let (kt, decode) = match &w.kind {
-                JniWire::Scalar(p) => scalar::output_kotlin(*p, i),
-                JniWire::Handle(handle) => {
-                    let c = class(&classes, &handle.ty)?.fqn();
-                    (c.clone(), format!("{c}(result[{i}] as Long)"))
-                }
-                JniWire::Text => ("String".into(), format!("result[{i}] as String")),
-                JniWire::Bytes => ("ByteArray".into(), format!("result[{i}] as ByteArray")),
-                JniWire::Selector => return Err("selector output is unsupported".into()),
-            };
-            delivered.push(decode);
-            result_types.push(kt);
+        let KotlinOutput {
+            delivered,
+            result_types,
+            output_locals,
+            materialize,
+            cleanup,
+        } = f.output_conversion()?.kotlin(&kotlin_context)?;
+        if delivered.len() != result_types.len() {
+            return Err("Kotlin output expression/type count differs".into());
         }
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
@@ -813,23 +796,6 @@ fn generate<
             "    @JvmStatic external fun {method}({}): Array<Any?>\n",
             raw_params.join(", ")
         ));
-        let mut output_locals = String::new();
-        let mut materialize = String::new();
-        let mut cleanup = String::new();
-        for (i, output) in f.outputs(&context)?.enumerate() {
-            let w = output.wire;
-            if let JniWire::Handle(handle) = &w.kind {
-                let c = class(&classes, &handle.ty)?.fqn();
-                output_locals.push_str(&format!("        var output{i}: {c}? = null\n"));
-                materialize.push_str(&format!("            output{i} = {}\n", delivered[i]));
-                delivered[i] = format!("output{i}");
-                let index = classes
-                    .keys()
-                    .position(|key| *key == type_key(&handle.ty))
-                    .unwrap();
-                cleanup.push_str(&format!("            try {{ if (output{i} != null) output{i}.close() else {prefix}.JNINative.drop{index}(result[{i}] as Long) }} catch (cleanup: Throwable) {{ failure.addSuppressed(cleanup) }}\n"));
-            }
-        }
         let (generic, ret, end) = match delivered.len() {
             0 => ("", "Unit".into(), "Unit".into()),
             1 => ("", result_types[0].clone(), delivered[0].clone()),
@@ -842,10 +808,12 @@ fn generate<
                 )
             }
         };
+        let failure = kotlin_context.failure;
+        let result = kotlin_context.result;
         let end = if cleanup.is_empty() {
             end
         } else {
-            format!("{output_locals}        try {{\n{materialize}            {end}\n        }} catch (failure: Throwable) {{\n{cleanup}            throw failure\n        }}")
+            format!("{output_locals}        try {{\n{materialize}            {end}\n        }} catch ({failure}: Throwable) {{\n{cleanup}            throw {failure}\n        }}")
         };
         let call = format!("{prefix}.JNINative.{method}({})", kt_args.join(", "));
         let call = if has_consumes {
@@ -854,9 +822,9 @@ fn generate<
             call
         };
         let native_call = if locks.is_empty() {
-            format!("val result = {call}\n        {end}")
+            format!("val {result} = {call}\n        {end}")
         } else {
-            format!("val result = {prefix}.withHandleLocks(listOfNotNull({})) {{\n        {call}\n    }}\n{end}", locks.join(", "))
+            format!("val {result} = {prefix}.withHandleLocks(listOfNotNull({})) {{\n        {call}\n    }}\n{end}", locks.join(", "))
         };
         let text = packages.entry(pkg).or_default();
         text.push_str(&format!(
@@ -889,7 +857,7 @@ fn generate<
 #[cfg(test)]
 mod tests;
 
-fn kotlin_condition(condition: &prebindgen_flat::Condition) -> String {
+fn kotlin_condition(condition: &prebindgen_declarations::Condition) -> String {
     if condition.0.is_empty() {
         return "true".into();
     }

@@ -14,6 +14,7 @@ struct TestWire {
     kind: Kind,
     name: &'static str,
     ty: String,
+    component: ComponentPath,
 }
 // Construction-only data needs no Clone or Debug implementation.
 #[derive(Default)]
@@ -26,17 +27,24 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
         kind,
         name: extra.name,
         ty: type_key(ty),
+        component: Default::default(),
     }
 }
 impl Codec for TestCodec {
     type Extra = Extra;
     type Wire = TestWire;
     type Context = syn::Ident;
+    type Input = InputPlan<TestWire>;
+    type Output = OutputPlan<TestWire>;
+    fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
+        wire.component.prepend(segment);
+    }
     fn selector(&self, extra: &Extra) -> TestWire {
         TestWire {
             kind: Kind::Selector,
             name: extra.name,
             ty: "i32".into(),
+            component: Default::default(),
         }
     }
     fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
@@ -57,7 +65,7 @@ impl Codec for TestCodec {
                 ty,
                 w,
                 v,
-                active,
+                &active.rust(),
                 decode,
                 wire(Kind::Value(value), ty, extra),
             );
@@ -66,10 +74,8 @@ impl Codec for TestCodec {
             context: Default::default(),
             acknowledgement: None,
             wires: vec![Wire {
-                component: Default::default(),
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
-                active: active.clone(),
             }],
             validation: quote!(),
             acquire: quote!(),
@@ -98,10 +104,8 @@ impl Codec for TestCodec {
             context: Default::default(),
             delivery: Default::default(),
             wires: vec![Wire {
-                component: Default::default(),
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
-                active: Condition::default(),
             }],
             statements: quote!(let #w=send_token(#v);),
             values: vec![quote!(#w)],
@@ -574,10 +578,9 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
     assert_eq!(
         call.outputs(&emission_context())
             .unwrap()
-            .map(|out| out.wire.component.clone())
+            .map(|out| out.wire.kind.component.clone())
             .collect::<Vec<_>>(),
-        ["x", "y"]
-            .map(|name| prebindgen_flat::ComponentPath(vec![ComponentSegment::Field(name.into())]))
+        ["x", "y"].map(|name| ComponentPath(vec![ComponentSegment::Field(name.into())]))
     );
 }
 
@@ -588,6 +591,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         type Extra = Extra;
         type Wire = TestWire;
         type Context = syn::Ident;
+        type Input = InputPlan<TestWire>;
+        type Output = OutputPlan<TestWire>;
+        fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
+            wire.component.prepend(segment);
+        }
         fn selector(&self, extra: &Extra) -> TestWire {
             TEST_CODEC.selector(extra)
         }
@@ -722,9 +730,7 @@ fn point_shapes() -> (Bindings<TestWire>, Representations<()>, RepresentationId)
                 components: ["x", "y"]
                     .into_iter()
                     .map(|name| Component {
-                        path: prebindgen_flat::ComponentPath(vec![ComponentSegment::Field(
-                            name.into(),
-                        )]),
+                        path: ComponentPath(vec![ComponentSegment::Field(name.into())]),
                         name: name.into(),
                         source_fields: Some(vec![name.into()]),
                         representation: None,
@@ -759,20 +765,33 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .unwrap()
         .wires;
     let ty = syn::parse_quote!(crate::Point);
-    shapes.validate_mapping(&ty, &id, wires).unwrap();
+    shapes
+        .validate_mapping(&ty, &id, wires.iter().map(|w| (&w.name, &w.kind.component)))
+        .unwrap();
     assert!(shapes
-        .validate_mapping(&ty, &id, &wires[..1])
+        .validate_mapping(
+            &ty,
+            &id,
+            wires[..1].iter().map(|w| (&w.name, &w.kind.component))
+        )
         .unwrap_err()
         .contains("has no wire"));
     let mut bad_wires = wires.clone();
-    bad_wires[0].component =
-        prebindgen_flat::ComponentPath(vec![ComponentSegment::Named("missing".into())]);
+    bad_wires[0].kind.component = ComponentPath(vec![ComponentSegment::Named("missing".into())]);
     assert!(shapes
-        .validate_mapping(&ty, &id, &bad_wires)
+        .validate_mapping(
+            &ty,
+            &id,
+            bad_wires.iter().map(|w| (&w.name, &w.kind.component))
+        )
         .unwrap_err()
         .contains("no component"));
     assert!(shapes
-        .validate_mapping(&syn::parse_quote!(i64), &id, wires)
+        .validate_mapping(
+            &syn::parse_quote!(i64),
+            &id,
+            wires.iter().map(|w| (&w.name, &w.kind.component))
+        )
         .unwrap_err()
         .contains("does not match"));
     let original = shapes.get(&id).unwrap().clone();
@@ -852,6 +871,7 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
             .next()
             .unwrap()
             .wire
+            .kind
             .component
             .0,
         [ComponentSegment::Field("x".into())]

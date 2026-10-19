@@ -1,6 +1,6 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
-use prebindgen_conversions::boxed::BoxedWire;
+
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::{Flat, Primitive, Result};
 /// The carrier of one C wire.
@@ -14,9 +14,23 @@ pub enum CWire {
     /// Text or bytes as a pointer/length buffer.
     Buffer,
     /// A typed opaque pointer to a boxed source value.
-    Pointer(Box<BoxedWire>),
-    /// An `int32_t` selector arm index.
-    Selector,
+    Pointer(Box<CPointer>),
+}
+/// Pointee type and mutability of a C boundary pointer.
+#[derive(Clone, Debug)]
+pub struct CPointer {
+    /// Rust pointee type used in the ABI and the opaque C type declaration.
+    pub ty: syn::Type,
+    /// Whether this carrier is a mutable pointer.
+    pub mutable: bool,
+}
+impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
+    fn from(value: prebindgen_conversions::boxed::BoxedWire) -> Self {
+        Self {
+            ty: value.ty,
+            mutable: value.access != prebindgen_flat::Access::Shared,
+        }
+    }
 }
 use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
@@ -56,6 +70,8 @@ impl Codec for CCodec {
     type Extra = ();
     type Wire = CWire;
     type Context = CContext;
+    type Input = InputPlan<CWire>;
+    type Output = OutputPlan<CWire>;
     fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
         let mut values: Vec<_> = plan
             .values
@@ -78,7 +94,7 @@ impl Codec for CCodec {
         Ok(())
     }
     fn selector(&self, _: &()) -> CWire {
-        CWire::Selector
+        CWire::Scalar(Primitive::I32)
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
         Value::of(ty).is_none()
@@ -89,7 +105,7 @@ impl Codec for CCodec {
         _: &(),
         w: syn::Ident,
         v: syn::Ident,
-        active: &prebindgen_flat::Condition,
+        active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
         let read_buffer = prebindgen_flat::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
@@ -106,12 +122,12 @@ impl Codec for CCodec {
                     ty,
                     w,
                     v,
-                    active,
-                    |b| CWire::Pointer(Box::new(b)),
+                    &active.rust(),
+                    |b| CWire::Pointer(Box::new(b.into())),
                 )
             }
         };
-        prebindgen_conversions::value::input(ty, w, v, active, decode, kind)
+        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
     }
     fn output_leaf(
         &self,
@@ -151,7 +167,7 @@ impl Codec for CCodec {
                 w,
                 v,
                 borrowed,
-                |b| CWire::Pointer(Box::new(b)),
+                |b| CWire::Pointer(Box::new(b.into())),
             ),
         }
     }
@@ -382,13 +398,12 @@ fn rust_ty(wire: &Wire) -> TokenStream {
         },
         CWire::Pointer(p) => {
             let ty = &p.ty;
-            if p.access == prebindgen_flat::Access::Shared {
+            if !p.mutable {
                 quote!(*const #ty)
             } else {
                 quote!(*mut #ty)
             }
         }
-        CWire::Selector => quote!(i32),
         CWire::Buffer => quote!(__PbBuffer),
     }
 }
@@ -414,14 +429,9 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
                 .iter()
                 .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
                 .expect("validated pointer declaration");
-            let qualifier = if p.access == prebindgen_flat::Access::Shared {
-                "const "
-            } else {
-                ""
-            };
+            let qualifier = if !p.mutable { "const " } else { "" };
             format!("{qualifier}{prefix}_{name} *")
         }
-        CWire::Selector => "int32_t".into(),
         CWire::Buffer => format!("{prefix}_buffer"),
     }
 }

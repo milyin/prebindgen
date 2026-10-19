@@ -14,8 +14,6 @@ mod emission;
 pub use emission::{render_template, template_parameter, EmissionContext, TemplateContext};
 mod conversion;
 pub use conversion::*;
-mod component;
-pub use component::*;
 
 mod primitive;
 pub use primitive::Primitive;

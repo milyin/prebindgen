@@ -69,12 +69,12 @@ pub fn encode(p: Primitive, v: TokenStream) -> TokenStream {
         _ => v,
     }
 }
-pub fn output_kotlin(p: Primitive, index: usize) -> (String, String) {
+pub fn output_kotlin(p: Primitive, index: usize, result: &str) -> (String, String) {
     let decode = match p {
-        U64 | Usize => format!("(result[{index}] as Long).toULong()"),
-        I128 => format!("java.math.BigInteger(result[{index}] as ByteArray)"),
-        U128 => format!("java.math.BigInteger(1, result[{index}] as ByteArray)"),
-        _ => format!("result[{index}] as {}", kotlin(p)),
+        U64 | Usize => format!("({result}[{index}] as Long).toULong()"),
+        I128 => format!("java.math.BigInteger({result}[{index}] as ByteArray)"),
+        U128 => format!("java.math.BigInteger(1, {result}[{index}] as ByteArray)"),
+        _ => format!("{result}[{index}] as {}", kotlin(p)),
     };
     (kotlin(p).into(), decode)
 }

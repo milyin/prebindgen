@@ -127,7 +127,7 @@ settings remain commented out in the example manifests.
   identifiers and literals untouched. Custom conversions can use context fields
   directly without templates or rendering support. Slot-private locals
   and wire names remain owned by preparation; wrapper names must avoid those locals.
-- `rust_source` formats generated Rust. `Wire`, `Condition`, `Access` and
+- `rust_source` formats generated Rust. `Wire`, `Access` and
   `Resource` are general generation contracts defined in flat.
 
 Both C and JNI writers use this API. Their generation functions are generic over
@@ -168,13 +168,20 @@ outputs directly, without creating a registry.
 
 `Flat<I, O>` contains no representation registry, and conversion traits contain
 no representation IDs. Generation never looks up declarations or defaults.
-Each `Wire` carries its resolved `ComponentPath` directly: typed steps identify
-fields, constructor arguments, alternatives, views, getters or adapter-defined
-components. Several physical wires can implement one logical component. Writers
-use these paths rather than inferring field mappings from generated variable names.
-`Function::input_conversions()` preserves the grouping of wires for each source
-parameter; `outputs()` pairs output wires with their expressions. Partial
-projections are self-contained and need no separate registered schema.
+A `Wire` exposes only a binding name and carrier description. It does not expose
+fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`
+and `Condition` belong to declarations. A codec can retain logical mappings in
+its private preparation metadata through `prefix_component`; `validate_mapping`
+accepts explicit name/path pairs. The final converter emits the corresponding
+projections or constructions itself. Wrapper writers never interpret these paths.
+`Function::input_conversions()` preserves slot grouping; `outputs()` pairs carriers
+with ready-to-use expressions.
+
+Resource participation is an emitted Rust boolean expression, not a selector
+structure. Flat combines these predicates for call-wide alias checks. JNI slots
+also emit Kotlin conversion, conditional locking, ownership updates and output
+rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
+writer routes carriers and orders these operations without inspecting their meaning.
 
 The preparation registry can be changed or dropped after slots are filled without
 affecting generation. C/JNI public wrapper surfaces remain the same.
@@ -185,8 +192,7 @@ all slots filled, including unit results. The current adapters additionally use
 
 A leaf is a source type the adapter converts itself rather than composing it
 from parts. Recipes mark where the leaves are (`Input::Leaf`, `Output::Leaf`);
-the codec chooses each leaf's conversion from its type. `Codec` has four
-methods: `input_leaf`, `output_leaf`, `consumes` and `selector`. `prebindgen-conversions` provides two
+the codec chooses each leaf's conversion from its type. Its leaf methods are `input_leaf`, `output_leaf`, `consumes` and `selector`. `prebindgen-conversions` provides two
 helpers for leaves:
 
 - `prebindgen_conversions::value` copies values across the boundary. `Value::of`
@@ -200,12 +206,15 @@ Both adapters treat values as copies and every other leaf type as a boxed object
 so a type alias such as `type Key = String` crosses as an object.
 
 A wire is one generated boundary parameter or result component. `Wire<W>`
-stores the adapter's description of its carrier in `kind`. C uses `CWire`
-(scalar, buffer, pointer or selector) and JNI uses `JniWire` (scalar, string,
-byte array, handle or selector); C passes text and bytes in the same buffer type.
-These are distinct types: Rust rejects attaching a C converter to JNI bindings
-or passing a JNI model to the C generator.
-`Bindings<W>` retains these wires. Declarations compose leaves, fields, constructors,
+stores the adapter's transport description in `kind`. C uses `CWire` for scalars,
+buffers and typed pointers. JNI's `JniWire` describes Rust/Kotlin carrier types and
+JVM parameter width. Ownership and selector semantics remain private to the slots.
+C and JNI retain distinct carrier types.
+
+`Codec::Input` and `Codec::Output` select the final slot implementations. After
+composition and finalization, preparation converts its plans into these types;
+JNI uses this step to hide its preparation metadata inside `JniInput`/`JniOutput`.
+Simple codecs may use `InputPlan`/`OutputPlan` directly. Declarations compose leaves, fields, constructors,
 input selectors and combined outputs. The composition model requires neither
 handles nor boxed storage. It has no object registry or universal `Send`
 requirement.

@@ -1,8 +1,7 @@
 //! Preparation-only representation declarations and defaults.
 //! Resolve choices and copy required metadata into slots before generation.
-use prebindgen_flat::{
-    type_key, ComponentPath, Flat, InputConversion, OutputConversion, Result, Wire,
-};
+use crate::ComponentPath;
+use prebindgen_flat::{type_key, Flat, InputConversion, OutputConversion, Result};
 use std::collections::BTreeMap;
 
 /// Identity used only while resolving preparation declarations.
@@ -144,12 +143,13 @@ impl<R> Representations<R> {
     }
     /// Validate an occurrence mapping during preparation, before installing its slot.
     /// Partial projections require a matching declaration; several wires may share a component.
-    pub fn validate_mapping<W>(
+    pub fn validate_mapping<'a>(
         &self,
         ty: &syn::Type,
         id: &RepresentationId,
-        wires: &[Wire<W>],
+        mapping: impl IntoIterator<Item = (&'a syn::Ident, &'a ComponentPath)>,
     ) -> Result<()> {
+        let wires: Vec<_> = mapping.into_iter().collect();
         let shape = self.get(id)?;
         if !prebindgen_flat::same_type(ty, &shape.source_type) {
             return Err(format!(
@@ -157,16 +157,16 @@ impl<R> Representations<R> {
                 id.0
             ));
         }
-        for wire in wires {
-            if !shape.components.iter().any(|c| c.path == wire.component) {
+        for (name, path) in &wires {
+            if !shape.components.iter().any(|c| c.path == **path) {
                 return Err(format!(
                     "wire `{}` has no component in representation `{}`",
-                    wire.name, id.0
+                    name, id.0
                 ));
             }
         }
         for component in &shape.components {
-            if !wires.iter().any(|wire| wire.component == component.path) {
+            if !wires.iter().any(|(_, path)| **path == component.path) {
                 return Err(format!(
                     "component `{}` has no wire in representation `{}`",
                     component.name, id.0

@@ -3,7 +3,7 @@
 //! [`input`] and [`output`] build
 //! the conversion around the adapter's own decode and encode expressions.
 use prebindgen_flat::{type_key, Primitive, Result};
-use prebindgen_flat::{Condition, InputPlan, OutputPlan, Wire};
+use prebindgen_flat::{InputPlan, OutputPlan, Wire};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
@@ -55,7 +55,7 @@ impl Value {
 /// * `ty` — the source parameter type; it must satisfy [`Value::of`].
 /// * `wire` — identifier of the boundary parameter `decode` reads.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — the selector arms under which this input is used. `decode` runs
+/// * `active` — an emitted Rust boolean expression. `decode` runs
 ///   only when they are selected.
 /// * `decode` — Rust expression that reads `wire` and yields the owned value or,
 ///   for text and bytes, a view (`&str`, `&[u8]`). It runs during validation and
@@ -64,10 +64,10 @@ impl Value {
 ///
 /// ```
 /// use prebindgen_conversions::value;
-/// use prebindgen_flat::Condition;
+/// use quote::quote;
 /// let input = value::input::<_, syn::Ident>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
-///     &Condition::default(), quote::quote!(read(raw)?), "buffer",
+///     &quote::quote!(true), quote::quote!(read(raw)?), "buffer",
 /// )?;
 /// assert_eq!(input.wires[0].kind, "buffer");
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
@@ -77,14 +77,14 @@ pub fn input<W, C>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
-    active: &Condition,
+    active: &TokenStream,
     decode: TokenStream,
     kind: W,
 ) -> Result<InputPlan<W, C>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
-    let condition = active.rust();
+    let condition = active.clone();
     let taken = quote!(#var.expect("active value"));
     let (statements, argument) = match ty {
         Type::Reference(r) if matches!(type_key(&r.elem).as_str(), "str" | "[u8]") => {
@@ -109,12 +109,7 @@ pub fn input<W, C>(
     Ok(InputPlan {
         context: Default::default(),
         acknowledgement: None,
-        wires: vec![Wire {
-            component: Default::default(),
-            name: wire,
-            kind,
-            active: active.clone(),
-        }],
+        wires: vec![Wire { name: wire, kind }],
         validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
         acquire: quote!(),
         resources: vec![],
@@ -166,10 +161,8 @@ pub fn output<W, C>(
         context: Default::default(),
         delivery: Default::default(),
         wires: vec![Wire {
-            component: Default::default(),
             name: wire.clone(),
             kind,
-            active: Condition::default(),
         }],
         statements,
         values: vec![quote!(#wire)],

@@ -1,4 +1,4 @@
-//! Resolved logical paths carried directly by boundary wires.
+//! Logical paths used during declaration compilation.
 /// Typed step identifying a logical component independently of generated names.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ComponentSegment {

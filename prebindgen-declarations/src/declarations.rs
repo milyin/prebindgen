@@ -1,7 +1,7 @@
 //! Build-script declarations for input alternatives and output views.
 //! [`Declarations`] builds converters directly in boundary occurrence slots.
 
-use crate::{Bindings, Codec, Compiler, Condition, Input, Output};
+use crate::{Codec, Compiler, Condition, Input, Output};
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
 
@@ -217,7 +217,7 @@ impl Declarations {
     /// * `extra` — occurrence data passed to every codec call made by this fill.
     pub fn fill<C: Codec>(
         &self,
-        flat: &mut Bindings<C::Wire, C::Context>,
+        flat: &mut prebindgen_flat::Flat<C::Input, C::Output>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,
@@ -265,11 +265,11 @@ impl Declarations {
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
-                p.ty.slot = Some(input);
+                p.ty.slot = Some(input.into());
             }
         }
         if let Some(output) = output {
-            dest.ret.slot = Some(output);
+            dest.ret.slot = Some(output.into());
         }
         Ok(())
     }

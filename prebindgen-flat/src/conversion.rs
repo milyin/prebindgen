@@ -6,26 +6,20 @@ use quote::quote;
 /// One boundary parameter or result component used by wrapper emission.
 ///
 /// ```
-/// use prebindgen_flat::{Condition, Wire};
+/// use prebindgen_flat::Wire;
 /// let wire = Wire {
-///     component: Default::default(),
 ///     name: syn::parse_quote!(value),
 ///     kind: "i64",
-///     active: Condition::default(),
 /// };
 /// assert_eq!(wire.kind, "i64");
 /// ```
 #[derive(Clone, Debug)]
 pub struct Wire<W> {
-    /// Logical component supplied by this wire; several wires may share a path.
-    pub component: crate::ComponentPath,
     /// Generated identifier used by conversion code and wrapper signatures.
     pub name: syn::Ident,
-    /// Adapter description of the carrier, supplied by a conversion.
-    /// The framework carries it into the conversion without interpreting it.
+    /// Transport description used to declare the boundary type.
+    /// Logical fields, selection rules and ownership behavior belong inside the converter.
     pub kind: W,
-    /// Input selector path; outputs normally use the always-active default.
-    pub active: Condition,
 }
 
 /// An input conversion split into call-wide validation, acquisition and construction.
@@ -70,47 +64,6 @@ pub struct OutputPlan<W, C = syn::Ident> {
     /// Delivery expressions in wire order; they must remain valid until commit.
     pub values: Vec<TokenStream>,
 }
-/// A leaf is active only on its selected path. Adapters use the same condition
-/// for foreign-side resource locking and native conversion code.
-#[derive(Clone, Debug, Default)]
-pub struct Condition(
-    /// Conjunction of `(selector identifier, required arm index)` terms.
-    /// An empty vector is always active.
-    pub Vec<(syn::Ident, i32)>,
-);
-impl Condition {
-    /// Return a new condition additionally requiring one selector arm.
-    ///
-    /// Does not modify the original condition; no additional runtime flag is generated.
-    ///
-    /// # Arguments
-    ///
-    /// * `tag` — identifier of the selector's index wire.
-    /// * `index` — zero-based index of the required arm.
-    pub fn arm(&self, tag: syn::Ident, index: i32) -> Self {
-        let mut result = self.clone();
-        result.0.push((tag, index));
-        result
-    }
-    /// Emit this condition AND a Rust predicate, short-circuiting the predicate
-    /// when the selector path is inactive. `predicate` is a Rust `bool` expression.
-    pub fn and(&self, predicate: TokenStream) -> TokenStream {
-        if self.0.is_empty() {
-            predicate
-        } else {
-            let condition = self.rust();
-            quote!((#condition) && (#predicate))
-        }
-    }
-    /// Emit the conjunction as a Rust boolean expression; an empty condition emits `true`.
-    pub fn rust(&self) -> TokenStream {
-        self.0
-            .iter()
-            .map(|(tag, i)| quote!(#tag == #i))
-            .reduce(|a, b| quote!((#a) && (#b)))
-            .unwrap_or_else(|| quote!(true))
-    }
-}
 /// Access to one foreign resource during an exported call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
@@ -129,8 +82,8 @@ pub struct Resource {
     pub identity: TokenStream,
     /// Borrow or ownership requirement imposed by this input conversion.
     pub access: Access,
-    /// Path on which this resource is accessed; inactive resources do not conflict.
-    pub active: Condition,
+    /// Side-effect-free Rust boolean expression; false resources do not conflict.
+    pub active: TokenStream,
 }
 /// Emit pairwise alias checks across all active input resources.
 ///
@@ -138,7 +91,7 @@ pub struct Resource {
 /// function's parameters together, so that aliases across parameters are found.
 ///
 /// Run this code after leaf validation and before **any** ownership acquisition.
-/// Shared/shared pairs and mutually exclusive selector arms do not conflict.
+/// Shared/shared pairs and resources whose predicates are not both true do not conflict.
 /// Conflicts return `Err("conflicting input aliases".into())` from the enclosing
 /// wrapper. This does not validate pointer liveness, synchronize threads, or
 /// acquire resources; those remain adapter/caller responsibilities.
@@ -151,21 +104,9 @@ pub fn validate_resources(resources: &[Resource]) -> TokenStream {
             }
             let x = &a.identity;
             let y = &b.identity;
-            // Different alternatives of the same selector cannot conflict.
-            if a.active
-                .0
-                .iter()
-                .any(|(tag, arm)| b.active.0.iter().any(|(t, i)| t == tag && i != arm))
-            {
-                continue;
-            }
-            let mut active = a.active.clone();
-            for term in &b.active.0 {
-                if !active.0.contains(term) {
-                    active.0.push(term.clone());
-                }
-            }
-            let conflict = active.and(quote!((#x) == (#y)));
+            let active_a = &a.active;
+            let active_b = &b.active;
+            let conflict = quote!((#active_a) && (#active_b) && ((#x) == (#y)));
             result.extend(quote!(if #conflict {return Err("conflicting input aliases".into());}));
         }
     }
@@ -284,10 +225,8 @@ pub fn source_result_expr() -> TokenStream {
 ///
 /// let slot = BoolInput {
 ///     wires: [Wire {
-///         component: Default::default(),
 ///         name: parse_quote!(raw_enabled),
 ///         kind: parse_quote!(u8),
-///         active: Default::default(),
 ///     }],
 ///     argument_name: parse_quote!(enabled),
 /// };
@@ -301,8 +240,7 @@ pub fn source_result_expr() -> TokenStream {
 /// # Ok::<(), String>(())
 /// ```
 ///
-/// This example uses an always-active wire. Conversions supporting selector arms
-/// must guard validation and acquisition with the wire's [`Condition`].
+/// The converter owns any conditional behavior. Wires describe transport only.
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire;
@@ -347,7 +285,7 @@ impl<W, C: TemplateContext> InputConversion for InputPlan<W, C> {
                 Ok(Resource {
                     identity: context.render(&resource.identity)?,
                     access: resource.access,
-                    active: resource.active.clone(),
+                    active: context.render(&resource.active)?,
                 })
             })
             .collect()
@@ -418,7 +356,7 @@ impl<W, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
 
 /// An output expression paired with its boundary description.
 pub struct OutputValue<'a, W> {
-    /// Resolved boundary component and logical mapping.
+    /// Boundary carrier and binding name; its meaning is private to the converter.
     pub wire: &'a Wire<W>,
     /// Expression ready for adapter-specific delivery.
     pub value: TokenStream,
