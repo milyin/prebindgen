@@ -65,15 +65,15 @@
 <a href=#65 id=65 data-nosnippet>65</a>/// ```
 <a href=#66 id=66 data-nosnippet>66</a>/// use prebindgen_conversions::value;
 <a href=#67 id=67 data-nosnippet>67</a>/// use quote::quote;
-<a href=#68 id=68 data-nosnippet>68</a>/// let input = value::input::&lt;_, syn::Ident&gt;(
+<a href=#68 id=68 data-nosnippet>68</a>/// let input = value::input::&lt;syn::Type, syn::Ident&gt;(
 <a href=#69 id=69 data-nosnippet>69</a>///     &amp;syn::parse_quote!(&amp;str), syn::parse_quote!(raw), syn::parse_quote!(text),
-<a href=#70 id=70 data-nosnippet>70</a>///     &amp;quote::quote!(true), quote::quote!(read(raw)?), "buffer",
+<a href=#70 id=70 data-nosnippet>70</a>///     &amp;quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&amp;str),
 <a href=#71 id=71 data-nosnippet>71</a>/// )?;
-<a href=#72 id=72 data-nosnippet>72</a>/// assert_eq!(input.wires[0].kind, "buffer");
+<a href=#72 id=72 data-nosnippet>72</a>/// assert_eq!(prebindgen_flat::type_key(&amp;input.wires[0].rust_type()), "&amp; str");
 <a href=#73 id=73 data-nosnippet>73</a>/// assert!(input.acquire.is_empty() &amp;&amp; input.resources.is_empty());
 <a href=#74 id=74 data-nosnippet>74</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#75 id=75 data-nosnippet>75</a>/// ```
-<a href=#76 id=76 data-nosnippet>76</a></span><span class="kw">pub fn </span>input&lt;W, C&gt;(
+<a href=#76 id=76 data-nosnippet>76</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C&gt;(
 <a href=#77 id=77 data-nosnippet>77</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#78 id=78 data-nosnippet>78</a>    wire: syn::Ident,
 <a href=#79 id=79 data-nosnippet>79</a>    var: syn::Ident,
@@ -134,7 +134,7 @@
 <a href=#134 id=134 data-nosnippet>134</a>/// * `encode` — maps a Rust expression of the owned value to the expression
 <a href=#135 id=135 data-nosnippet>135</a>///   delivered on the wire.
 <a href=#136 id=136 data-nosnippet>136</a>/// * `kind` — the adapter's [`Wire::kind`] for the wire.
-<a href=#137 id=137 data-nosnippet>137</a></span><span class="kw">pub fn </span>output&lt;W, C&gt;(
+<a href=#137 id=137 data-nosnippet>137</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C&gt;(
 <a href=#138 id=138 data-nosnippet>138</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#139 id=139 data-nosnippet>139</a>    wire: syn::Ident,
 <a href=#140 id=140 data-nosnippet>140</a>    value: TokenStream,
