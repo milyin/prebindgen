@@ -16,6 +16,11 @@ struct TestWire {
     ty: String,
     component: ComponentPath,
 }
+impl prebindgen_flat::WireKind for TestWire {
+    fn rust_type(&self) -> syn::Type {
+        syn::parse_str(&self.ty).unwrap()
+    }
+}
 // Construction-only data needs no Clone or Debug implementation.
 #[derive(Default)]
 struct Extra {

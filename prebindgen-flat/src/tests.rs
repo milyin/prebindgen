@@ -2,7 +2,7 @@ use super::*;
 #[derive(Clone, Debug, PartialEq)]
 struct TestInput(u8);
 impl InputConversion for TestInput {
-    type Wire = ();
+    type Wire = syn::Type;
     type Context = syn::Ident;
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
@@ -26,7 +26,7 @@ impl InputConversion for TestInput {
 #[derive(Clone, Debug, PartialEq)]
 struct TestOutput(u32);
 impl OutputConversion for TestOutput {
-    type Wire = ();
+    type Wire = syn::Type;
     type Context = syn::Ident;
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")

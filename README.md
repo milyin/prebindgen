@@ -206,7 +206,11 @@ Both adapters treat values as copies and every other leaf type as a boxed object
 so a type alias such as `type Key = String` crosses as an object.
 
 A wire is one generated boundary parameter or result component. `Wire<W>`
-stores the adapter's transport description in `kind`. C uses `CWire` for scalars,
+stores the adapter's transport description in `kind`. Conversion traits require
+`WireKind`, whose `rust_type()` returns a `syn::Type` for the boundary carrier.
+Both writers use this API to declare Rust parameters and result fields. A plain
+`syn::Type` implements `WireKind` when no additional metadata is needed.
+C uses `CWire` for scalars,
 buffers and typed pointers. JNI's `JniWire` describes Rust/Kotlin carrier types and
 JVM parameter width. Ownership and selector semantics remain private to the slots.
 C and JNI retain distinct carrier types.

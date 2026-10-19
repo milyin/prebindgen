@@ -166,28 +166,35 @@ impl Output {
 /// use syn::{Ident, Type};
 ///
 /// use prebindgen_declarations::Condition;
+/// fn carrier(kind: value::Value) -> Type {
+///     match kind {
+///         value::Value::Scalar(p) => p.rust_type(),
+///         value::Value::Text => syn::parse_quote!(String),
+///         value::Value::Bytes => syn::parse_quote!(Vec<u8>),
+///     }
+/// }
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Extra = ();
 ///     type Context = syn::Ident;
 ///     type Input = InputPlan<Self::Wire>;
 ///     type Output = OutputPlan<Self::Wire>;
-///     type Wire = Option<value::Value>; // `None` marks a selector.
+///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
-///     fn selector(&self, _: &()) -> Self::Wire { None }
+///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
 ///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
 ///     fn input_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
 ///     ) -> Result<InputPlan<Self::Wire, Self::Context>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         let decode = quote!(#wire.clone());
-///         value::input(ty, wire, var, &active.rust(), decode, Some(kind))
+///         value::input(ty, wire, var, &active.rust(), decode, carrier(kind))
 ///     }
 ///     fn output_leaf(
 ///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
 ///     ) -> Result<OutputPlan<Self::Wire, Self::Context>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
-///         value::output(ty, wire, v, borrowed, |v| v, Some(kind))
+///         value::output(ty, wire, v, borrowed, |v| v, carrier(kind))
 ///     }
 /// }
 ///
@@ -196,7 +203,7 @@ impl Output {
 ///     pub fn to_i32(value: &i64) -> i32 { *value as i32 }
 ///     pub fn echo(value: i64) -> i64 { value }
 /// "#)?;
-/// let mut flat = Bindings::<Option<value::Value>>::parse(
+/// let mut flat = Bindings::<Type>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let defaults = Declarations::new(&flat, vec![
@@ -214,7 +221,7 @@ impl Output {
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
 /// assert_eq!(input.wires.len(), 1);
-/// assert!(matches!(input.wires[0].kind, Some(value::Value::Scalar(_))));
+/// assert_eq!(prebindgen_flat::type_key(&input.wires[0].kind), "i64");
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -335,7 +342,7 @@ pub trait Codec {
 /// Output conversion data cannot be attached to an input position:
 /// ```compile_fail
 /// use prebindgen_declarations::Bindings;
-/// fn swap(flat: &mut Bindings<()>) {
+/// fn swap(flat: &mut Bindings<syn::Type>) {
 ///     let function = flat.function_mut("foo").unwrap();
 ///     function.params[0].ty.slot = function.ret.slot.clone();
 /// }
@@ -343,7 +350,7 @@ pub trait Codec {
 /// Nor can a recipe be stored in a slot:
 /// ```compile_fail
 /// use prebindgen_declarations::{Bindings, Input};
-/// fn configure(flat: &mut Bindings<()>) {
+/// fn configure(flat: &mut Bindings<syn::Type>) {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```

@@ -3,15 +3,40 @@ use crate::{template_parameter, EmissionContext, Result, TemplateContext};
 use proc_macro2::TokenStream;
 use quote::quote;
 
+/// Transport metadata that supplies the Rust carrier type of a wire.
+/// The returned type describes the boundary value, not the source value being converted.
+/// For example, a boolean conversion may use `u8` as its Rust carrier type.
+///
+/// ```
+/// use prebindgen_flat::WireKind;
+/// struct BoolCarrier;
+/// impl WireKind for BoolCarrier {
+///     fn rust_type(&self) -> syn::Type { syn::parse_quote!(u8) }
+/// }
+/// let ty = BoolCarrier.rust_type();
+/// assert_eq!(quote::quote!(#ty).to_string(), "u8");
+/// ```
+pub trait WireKind {
+    /// Rust type used to declare this wire in a wrapper signature or result structure.
+    fn rust_type(&self) -> syn::Type;
+}
+impl WireKind for syn::Type {
+    fn rust_type(&self) -> syn::Type {
+        self.clone()
+    }
+}
+
 /// One boundary parameter or result component used by wrapper emission.
 ///
 /// ```
 /// use prebindgen_flat::Wire;
-/// let wire = Wire {
+/// let wire: Wire<syn::Type> = Wire {
 ///     name: syn::parse_quote!(value),
-///     kind: "i64",
+///     kind: syn::parse_quote!(i64),
 /// };
-/// assert_eq!(wire.kind, "i64");
+/// use prebindgen_flat::WireKind;
+/// let ty = wire.kind.rust_type();
+/// assert_eq!(quote::quote!(#ty).to_string(), "i64");
 /// ```
 #[derive(Clone, Debug)]
 pub struct Wire<W> {
@@ -243,7 +268,7 @@ pub fn source_result_expr() -> TokenStream {
 /// The converter owns any conditional behavior. Wires describe transport only.
 pub trait InputConversion {
     /// Adapter-specific boundary description.
-    type Wire;
+    type Wire: WireKind;
     /// Emission data defined and supplied by the language generator.
     type Context: EmissionContext;
     /// Boundary parameters in signature order.
@@ -266,7 +291,7 @@ pub trait InputConversion {
     /// Expression passed to the source function.
     fn argument(&self, context: &Self::Context) -> Result<TokenStream>;
 }
-impl<W, C: TemplateContext> InputConversion for InputPlan<W, C> {
+impl<W: WireKind, C: TemplateContext> InputConversion for InputPlan<W, C> {
     type Wire = W;
     type Context = C;
     fn wires(&self) -> &[Wire<Self::Wire>] {
@@ -312,7 +337,7 @@ impl<W, C: TemplateContext> InputConversion for InputPlan<W, C> {
 /// use the supplied context directly.
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
-    type Wire;
+    type Wire: WireKind;
     /// Emission data defined and supplied by the language generator.
     type Context: EmissionContext;
     /// Boundary results in delivery order.
@@ -328,7 +353,7 @@ pub trait OutputConversion {
     /// Infallible wrapper result expression evaluated after commit.
     fn result(&self, context: &Self::Context) -> Result<TokenStream>;
 }
-impl<W, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
+impl<W: WireKind, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
     type Wire = W;
     type Context = C;
     fn wires(&self) -> &[Wire<Self::Wire>] {

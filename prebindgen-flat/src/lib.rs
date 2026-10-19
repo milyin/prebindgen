@@ -85,13 +85,16 @@ pub struct Field {
 /// ```
 /// use prebindgen_flat::{Flat, InputPlan, OutputPlan};
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
-/// let flat = Flat::<InputPlan<()>, OutputPlan<()>>::parse(
+/// let flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
 ///     items.into_iter().map(|item| (item, Default::default())))?;
 /// assert!(flat.function("add")?.params[0].ty.slot.is_none());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct Flat<I: InputConversion = InputPlan<()>, O: OutputConversion = OutputPlan<()>> {
+pub struct Flat<
+    I: InputConversion = InputPlan<syn::Type>,
+    O: OutputConversion = OutputPlan<syn::Type>,
+> {
     /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by `type_key` of their qualified type.

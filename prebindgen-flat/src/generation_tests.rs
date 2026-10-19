@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 
 struct Input(usize);
 impl Input {
-    fn plan(&self) -> InputPlan<&'static str> {
+    fn plan(&self) -> InputPlan<syn::Type> {
         let index = self.0;
         let name = format_ident!("arg{index}");
         let validate = format!("validate{index}");
@@ -27,7 +27,7 @@ impl Input {
 }
 struct Output;
 impl Output {
-    fn plan(&self) -> OutputPlan<&'static str> {
+    fn plan(&self) -> OutputPlan<syn::Type> {
         OutputPlan {
             context: Default::default(),
             delivery: Delivery {
@@ -36,7 +36,7 @@ impl Output {
             },
             wires: vec![Wire {
                 name: syn::parse_quote!(out),
-                kind: "int",
+                kind: syn::parse_quote!(i32),
             }],
             statements: quote!(log("prepare");),
             values: vec![source_result_expr()],
@@ -48,7 +48,7 @@ impl Output {
 #[test]
 fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { log(\"source\"); a+b }").unwrap();
-    let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
+    let mut flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
         items
             .items
             .clone()
@@ -108,7 +108,7 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     );
 }
 
-fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
+fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
     let items =
         syn::parse_file("pub struct Point { pub x:f64, pub y:f64 } pub fn point()->Point {}")
             .unwrap();
@@ -122,7 +122,7 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
             .into_iter()
             .map(|name| Wire {
                 name: format_ident!("wire_{name}"),
-                kind: "Double",
+                kind: syn::parse_quote!(f64),
             })
             .collect(),
         statements: TokenStream::new(),
@@ -212,7 +212,7 @@ fn several_physical_wires_may_supply_one_component() {
 #[test]
 fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { a+b }").unwrap();
-    let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
+    let mut flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
         items.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
@@ -239,6 +239,11 @@ fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
 #[test]
 fn function_accessors_borrow_non_clone_wire_metadata() {
     struct NonClone;
+    impl WireKind for NonClone {
+        fn rust_type(&self) -> syn::Type {
+            syn::parse_quote!(i32)
+        }
+    }
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
     let mut flat = Flat::<InputPlan<NonClone>, OutputPlan<NonClone>>::parse(
         items
@@ -296,7 +301,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
 #[test]
 fn emit_call_rejects_missing_input_and_result_slots() {
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
-    let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
+    let mut flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
         items.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
@@ -344,13 +349,14 @@ impl TemplateContext for TestContext {
 #[test]
 fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x + 1 }").unwrap();
-    let mut flat = Flat::<InputPlan<(), TestContext>, OutputPlan<(), TestContext>>::parse(
-        items
-            .items
-            .into_iter()
-            .map(|item| (item, Default::default())),
-    )
-    .unwrap();
+    let mut flat =
+        Flat::<InputPlan<syn::Type, TestContext>, OutputPlan<syn::Type, TestContext>>::parse(
+            items
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
     let env = template_parameter("runtime");
     let ack = template_parameter("accepted");
     let out = template_parameter("sink");
@@ -359,7 +365,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     let function = flat.function_mut("echo").unwrap();
     let wire = || Wire {
         name: syn::parse_quote!(incoming),
-        kind: (),
+        kind: syn::parse_quote!(i32),
     };
     function.params[0].ty.slot = Some(InputPlan {
         context: Default::default(),
@@ -484,9 +490,9 @@ fn custom_conversions_use_context_without_template_rendering() {
     }
     struct Input;
     impl InputConversion for Input {
-        type Wire = ();
+        type Wire = syn::Type;
         type Context = Context;
-        fn wires(&self) -> &[Wire<()>] {
+        fn wires(&self) -> &[Wire<syn::Type>] {
             &[]
         }
         fn resources(&self, _: &Context) -> Result<Vec<Resource>> {
@@ -508,9 +514,9 @@ fn custom_conversions_use_context_without_template_rendering() {
     }
     struct Output;
     impl OutputConversion for Output {
-        type Wire = ();
+        type Wire = syn::Type;
         type Context = Context;
-        fn wires(&self) -> &[Wire<()>] {
+        fn wires(&self) -> &[Wire<syn::Type>] {
             &[]
         }
         fn values(&self, _: &Context) -> Result<Vec<TokenStream>> {

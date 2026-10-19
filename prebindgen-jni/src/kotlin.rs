@@ -1,14 +1,16 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
-use prebindgen_flat::{InputConversion, OutputConversion, Resource, Wire};
+use prebindgen_flat::{InputConversion, OutputConversion, Resource, Wire, WireKind};
 
-fn raw_rust(kind: &JniKind) -> TokenStream {
+fn raw_rust(kind: &JniKind) -> syn::Type {
     match kind {
         JniKind::Scalar(p) => scalar::rust_type(*p),
-        JniKind::Handle(_, _) => quote!(i64),
-        JniKind::Selector => quote!(i32),
-        JniKind::Text => quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
-        JniKind::Bytes => quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>),
+        JniKind::Handle(_, _) => syn::parse_quote!(i64),
+        JniKind::Selector => syn::parse_quote!(i32),
+        JniKind::Text => syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
+        JniKind::Bytes => {
+            syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
+        }
     }
 }
 fn raw_kt(kind: &JniKind) -> &'static str {
@@ -25,11 +27,16 @@ fn raw_kt(kind: &JniKind) -> &'static str {
 #[derive(Clone, Debug)]
 pub struct JniWire {
     /// Rust parameter type at the JNI boundary.
-    pub rust_type: TokenStream,
+    pub rust_type: syn::Type,
     /// Kotlin type at the native boundary.
     pub kotlin_type: &'static str,
     /// JVM signature slots occupied by this carrier.
     pub parameter_slots: usize,
+}
+impl WireKind for JniWire {
+    fn rust_type(&self) -> syn::Type {
+        self.rust_type.clone()
+    }
 }
 impl From<&JniKind> for JniWire {
     fn from(kind: &JniKind) -> Self {
@@ -342,8 +349,8 @@ mod tests {
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::from(&JniKind::Scalar(Primitive::I64));
         assert_eq!(
-            input.wires()[0].kind.rust_type.to_string(),
-            scalar.rust_type.to_string()
+            prebindgen_flat::type_key(&input.wires()[0].kind.rust_type()),
+            prebindgen_flat::type_key(&scalar.rust_type())
         );
         assert_eq!(input.wires()[0].kind.kotlin_type, scalar.kotlin_type);
         let emitted = input.kotlin(&context).unwrap();

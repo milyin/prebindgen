@@ -3,7 +3,7 @@
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_flat::{type_key, Flat, Result};
+use prebindgen_flat::{type_key, Flat, Result, WireKind};
 mod scalar;
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
@@ -734,7 +734,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let mut consumed = Vec::new();
         for w in f.inputs()? {
             let n = &w.name;
-            let rt = &w.kind.rust_type;
+            let rt = w.kind.rust_type();
             params.push(quote!(#n:#rt));
             raw_params.push(format!("{n}: {}", w.kind.kotlin_type));
         }

@@ -4,16 +4,18 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use Primitive::*;
 
-pub fn rust_type(p: Primitive) -> TokenStream {
+pub fn rust_type(p: Primitive) -> syn::Type {
     match p {
-        Bool => quote!(u8),
-        I8 => quote!(i8),
-        I16 => quote!(i16),
-        U8 | U16 | I32 | Char => quote!(i32),
-        U32 | U64 | I64 | Isize | Usize => quote!(i64),
-        F32 => quote!(f32),
-        F64 => quote!(f64),
-        I128 | U128 => quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>),
+        Bool => syn::parse_quote!(u8),
+        I8 => syn::parse_quote!(i8),
+        I16 => syn::parse_quote!(i16),
+        U8 | U16 | I32 | Char => syn::parse_quote!(i32),
+        U32 | U64 | I64 | Isize | Usize => syn::parse_quote!(i64),
+        F32 => syn::parse_quote!(f32),
+        F64 => syn::parse_quote!(f64),
+        I128 | U128 => {
+            syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
+        }
     }
 }
 pub fn raw_kotlin(p: Primitive) -> &'static str {

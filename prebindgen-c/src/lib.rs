@@ -2,7 +2,7 @@
 #![warn(missing_docs)]
 
 use prebindgen_conversions::value::Value;
-use prebindgen_flat::{Flat, Primitive, Result};
+use prebindgen_flat::{Flat, Primitive, Result, WireKind};
 /// The carrier of one C wire.
 ///
 /// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -385,26 +385,25 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-fn rust_ty(wire: &Wire) -> TokenStream {
-    match &wire.kind {
-        CWire::Scalar(p) => match p {
-            Primitive::Bool => quote!(u8),
-            Primitive::Char => quote!(u32),
-            Primitive::I128 | Primitive::U128 => quote!(__Pb128),
-            p => {
-                let ty = p.rust_type();
-                quote!(#ty)
+impl WireKind for CWire {
+    fn rust_type(&self) -> syn::Type {
+        match self {
+            CWire::Scalar(p) => match p {
+                Primitive::Bool => syn::parse_quote!(u8),
+                Primitive::Char => syn::parse_quote!(u32),
+                Primitive::I128 | Primitive::U128 => syn::parse_quote!(__Pb128),
+                p => p.rust_type(),
+            },
+            CWire::Pointer(p) => {
+                let ty = &p.ty;
+                if !p.mutable {
+                    syn::parse_quote!(*const #ty)
+                } else {
+                    syn::parse_quote!(*mut #ty)
+                }
             }
-        },
-        CWire::Pointer(p) => {
-            let ty = &p.ty;
-            if !p.mutable {
-                quote!(*const #ty)
-            } else {
-                quote!(*mut #ty)
-            }
+            CWire::Buffer => syn::parse_quote!(__PbBuffer),
         }
-        CWire::Buffer => quote!(__PbBuffer),
     }
 }
 fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
@@ -523,7 +522,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         let mut cparams = Vec::new();
         for w in f.inputs()? {
             let n = &w.name;
-            let ty = rust_ty(w);
+            let ty = w.kind.rust_type();
             params.push(quote!(#n:#ty));
             cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
         }
@@ -532,7 +531,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         for (i, output) in f.outputs(&context)?.enumerate() {
             let w = output.wire;
             let field = format_ident!("v{i}");
-            let ty = rust_ty(w);
+            let ty = w.kind.rust_type();
             fields.push(quote!(pub #field:#ty));
             header.push_str(&format!("    {} v{i};\n", c_ty(w, prefix, &pointers)));
         }
