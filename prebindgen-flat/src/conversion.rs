@@ -34,8 +34,6 @@ pub struct Wire<W> {
 /// them across all parameters; wrapper writers do not assemble them themselves.
 #[derive(Clone, Debug)]
 pub struct InputPlan<W> {
-    /// Explicit resolved representation, if this conversion exposes a named shape.
-    pub representation: Option<crate::RepresentationId>,
     /// Flattened boundary parameters in signature order.
     pub wires: Vec<Wire<W>>,
     /// Shared wrapper requirements contributed by this slot.
@@ -59,8 +57,6 @@ pub struct InputPlan<W> {
 pub struct OutputPlan<W> {
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
-    /// Explicit resolved representation, if this conversion exposes a named shape.
-    pub representation: Option<crate::RepresentationId>,
     /// Boundary results in delivery order; one entry per expression in `values`.
     pub wires: Vec<Wire<W>>,
     /// Shared wrapper requirements contributed by this slot.
@@ -180,8 +176,8 @@ pub fn validate_resources(resources: &[Resource]) -> TokenStream {
 /// Functions with entirely empty slots remain source-only helpers. This check
 /// neither builds conversions nor changes the model. Adapters call it before
 /// writing wrappers. It does not validate code fragments supplied directly by callers.
-pub fn validate_bindings<I: InputConversion, O: OutputConversion, R>(
-    flat: &crate::Flat<I, O, R>,
+pub fn validate_bindings<I: InputConversion, O: OutputConversion>(
+    flat: &crate::Flat<I, O>,
 ) -> Result<()> {
     for f in flat.functions.values() {
         if f.ret.slot.is_some() {
@@ -233,8 +229,6 @@ pub fn source_result_expr() -> TokenStream {
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire;
-    /// Explicit representation selected during preparation.
-    fn representation(&self) -> Option<&crate::RepresentationId>;
     /// Boundary parameters in signature order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Shared wrapper requirements prepared with this slot.
@@ -252,9 +246,6 @@ pub trait InputConversion {
 }
 impl<W> InputConversion for InputPlan<W> {
     type Wire = W;
-    fn representation(&self) -> Option<&crate::RepresentationId> {
-        self.representation.as_ref()
-    }
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
@@ -286,8 +277,6 @@ impl<W> InputConversion for InputPlan<W> {
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire;
-    /// Explicit representation selected during preparation.
-    fn representation(&self) -> Option<&crate::RepresentationId>;
     /// Boundary results in delivery order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Shared wrapper requirements prepared with this slot.
@@ -305,9 +294,6 @@ pub trait OutputConversion {
 }
 impl<W> OutputConversion for OutputPlan<W> {
     type Wire = W;
-    fn representation(&self) -> Option<&crate::RepresentationId> {
-        self.representation.as_ref()
-    }
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
@@ -331,10 +317,8 @@ impl<W> OutputConversion for OutputPlan<W> {
     }
 }
 
-/// Boundary signature and representation for one source parameter.
+/// Boundary wires for one source parameter, including their resolved component paths.
 pub struct InputBoundary<'a, W> {
-    /// Explicit shape selected during preparation.
-    pub representation: Option<&'a crate::RepresentationId>,
     /// Boundary components belonging to this parameter, in signature order.
     pub wires: &'a [Wire<W>],
 }
@@ -397,7 +381,6 @@ impl<I: InputConversion, O: OutputConversion> PreparedCall<'_, I, O> {
     /// Preserve parameter grouping when mapping components to representation fields.
     pub fn parameters(&self) -> impl ExactSizeIterator<Item = InputBoundary<'_, I::Wire>> {
         self.inputs.iter().map(|input| InputBoundary {
-            representation: input.representation(),
             wires: input.wires(),
         })
     }
@@ -490,107 +473,12 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
     }
 }
 
-/// Prepare a selected function and validate its explicit representation mappings.
-/// Call [`crate::Flat::validate_representations`] once before a generation pass.
-/// This method checks only the selected call's mappings. Canonical defaults
-/// are never substituted during generation.
-pub fn prepare_call<'a, I: InputConversion, O: OutputConversion, R>(
-    flat: &'a crate::Flat<I, O, R>,
+/// Prepare a selected function using only its filled slots.
+/// Checks missing conversions, output arity and shared glue compatibility.
+/// Representation choices and field mappings are resolved during preparation.
+pub fn prepare_call<'a, I: InputConversion, O: OutputConversion>(
+    flat: &'a crate::Flat<I, O>,
     name: &str,
 ) -> Result<PreparedCall<'a, I, O>> {
-    let function = flat.function(name)?;
-    let call = function.resolve_call()?;
-    for (parameter, input) in function.params.iter().zip(&call.inputs) {
-        flat.check_mapping(&parameter.ty.ty, input.representation(), input.wires())?;
-    }
-    flat.check_mapping(
-        &function.ret.ty,
-        call.output.representation(),
-        call.output.wires(),
-    )?;
-    Ok(call)
-}
-
-impl<I: InputConversion, O: OutputConversion, R> crate::Flat<I, O, R> {
-    /// Validate all registered type shapes, including schemas not used by a function.
-    pub fn validate_representations(&self) -> Result<()> {
-        self.representations.validate()?;
-        for (id, shape) in self.representations.iter() {
-            self.resolve_type(&shape.source_type)?;
-            for component in &shape.components {
-                if let Some(fields) = &component.source_fields {
-                    let mut ty = &shape.source_type;
-                    for field in fields {
-                        ty = &self
-                            .record(ty)?
-                            .fields
-                            .iter()
-                            .find(|f| f.name == field.as_str())
-                            .ok_or_else(|| {
-                                format!(
-                                    "unknown source field `{field}` in representation `{}`",
-                                    id.0
-                                )
-                            })?
-                            .ty;
-                    }
-                    if let Some(child) = &component.representation {
-                        if !crate::same_type(ty, &self.representations.get(child)?.source_type) {
-                            return Err(format!(
-                                "component `{}` has an incompatible source type",
-                                component.name
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    fn check_mapping<W>(
-        &self,
-        ty: &syn::Type,
-        id: Option<&crate::RepresentationId>,
-        wires: &[Wire<W>],
-    ) -> Result<()> {
-        let Some(id) = id else {
-            return Ok(());
-        };
-        let shape = self.representations.get(id)?;
-        if !crate::same_type(ty, &shape.source_type) {
-            return Err(format!(
-                "representation `{}` does not match occurrence type",
-                id.0
-            ));
-        }
-        for wire in wires {
-            if !shape.components.iter().any(|c| c.path == wire.component) {
-                return Err(format!(
-                    "wire `{}` has no component in representation `{}`",
-                    wire.name, id.0
-                ));
-            }
-        }
-        for component in &shape.components {
-            if !wires.iter().any(|wire| wire.component == component.path) {
-                return Err(format!(
-                    "component `{}` has no wire in representation `{}`",
-                    component.name, id.0
-                ));
-            }
-        }
-        Ok(())
-    }
-}
-impl<I: InputConversion, O: OutputConversion> PreparedCall<'_, I, O> {
-    /// Resolved representation of a source parameter, by its declaration index.
-    pub fn input_representation(&self, index: usize) -> Option<&crate::RepresentationId> {
-        self.inputs
-            .get(index)
-            .and_then(|input| input.representation())
-    }
-    /// Resolved result representation.
-    pub fn output_representation(&self) -> Option<&crate::RepresentationId> {
-        self.output.representation()
-    }
+    flat.function(name)?.resolve_call()
 }

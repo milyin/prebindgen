@@ -675,15 +675,13 @@ fn class<'a>(classes: &'a BTreeMap<String, Class>, ty: &syn::Type) -> Result<&'a
 fn generate<
     I: prebindgen_flat::InputConversion<Wire = JniWire>,
     O: prebindgen_flat::OutputConversion<Wire = JniWire>,
-    R,
 >(
-    flat: Flat<I, O, R>,
+    flat: Flat<I, O>,
     prefix: &str,
     init: &str,
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
 ) -> Result<JniGen> {
-    flat.validate_representations()?;
     let mut rust = TokenStream::new();
     let mut files = BTreeMap::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();

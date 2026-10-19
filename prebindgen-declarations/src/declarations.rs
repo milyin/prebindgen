@@ -171,8 +171,8 @@ impl Declarations {
     ///
     /// * `flat` — the model in which each declaration's type is resolved.
     /// * `decls` — type-wide defaults, at most one per type and direction.
-    pub fn new<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion, R>(
-        flat: &Flat<I, O, R>,
+    pub fn new<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion>(
+        flat: &Flat<I, O>,
         decls: Vec<ExpandDecl>,
     ) -> Result<Self> {
         let mut out = Self {
@@ -215,9 +215,9 @@ impl Declarations {
     /// * `codec` — the adapter's leaf conversions.
     /// * `decl` — the function to export, with its per-parameter and result overrides.
     /// * `extra` — occurrence data passed to every codec call made by this fill.
-    pub fn fill<C: Codec, R: Default>(
+    pub fn fill<C: Codec>(
         &self,
-        flat: &mut Bindings<C::Wire, R>,
+        flat: &mut Bindings<C::Wire>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,
@@ -261,32 +261,7 @@ impl Declarations {
         if let Some(output) = &mut output {
             codec.finish_output(output, extra)?;
         }
-        // Compilation has succeeded for the complete function. Register the
-        // resolved shapes only now, preserving atomicity on conversion errors.
-        let parameter_types: Vec<_> = source
-            .params
-            .iter()
-            .map(|p| (p.name.to_string(), p.ty.ty.clone()))
-            .collect();
-        let result_type = source.ret.ty.clone();
-        for (input, (name, ty)) in inputs.iter_mut().zip(parameter_types) {
-            if let Some(input) = input {
-                input.representation = Some(crate::register_shape(
-                    flat,
-                    format!("{}/input/{name}", decl.name),
-                    ty,
-                    &input.wires,
-                )?);
-            }
-        }
-        if let Some(output) = &mut output {
-            output.representation = Some(crate::register_shape(
-                flat,
-                format!("{}/output", decl.name),
-                result_type,
-                &output.wires,
-            )?);
-        }
+        // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
@@ -298,9 +273,9 @@ impl Declarations {
         }
         Ok(())
     }
-    fn input<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion, R>(
+    fn input<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion>(
         &self,
-        flat: &Flat<I, O, R>,
+        flat: &Flat<I, O>,
         ty: &syn::Type,
         explicit: Option<&ExpandParamDecl>,
         stack: &mut Vec<String>,
@@ -348,9 +323,9 @@ impl Declarations {
             Input::Leaf
         })
     }
-    fn output<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion, R>(
+    fn output<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion>(
         &self,
-        flat: &Flat<I, O, R>,
+        flat: &Flat<I, O>,
         ty: &syn::Type,
         explicit: Option<&ExpandReturnDecl>,
         stack: &mut Vec<String>,

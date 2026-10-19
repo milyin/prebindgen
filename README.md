@@ -10,14 +10,14 @@ conversions, and language adapters emit wrappers and foreign declarations.
         ↓ select declared functions, constructors, getters and referenced types
 Flat with empty conversion slots
         ↓ prebindgen-declarations builds and attaches converters
-Flat<I: InputConversion, O: OutputConversion, R>
+Flat<I: InputConversion, O: OutputConversion>
         (parameter slots: Option<I>; result slots: Option<O>)
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<I, O, R>` requires conversion traits on
+can have different input recipes. `Flat<I, O>` requires conversion traits on
 `I` and `O` and stores them in optional slots. Record declarations preserve Rust
 source structure. Named representation schemas describe logical components,
 source-field associations and adapter-specific type data `R`; wires refer to
@@ -98,11 +98,10 @@ settings remain commented out in the example manifests.
   do not return intermediate plans. `InputPlan<W>` and `OutputPlan<W>` remain
   optional concrete storage implementations, without a `W: Clone` requirement.
   Metadata is borrowed; code methods return tokens with stable generated names.
-- `Flat<I, O, R>` stores `Option<I>` on parameters and `Option<O>` on results.
+- `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
-- Call `flat.validate_representations()` once at the start of generation.
-  `prepare_call(&flat, name)` resolves only the selected function's slots and validates
-  its explicit representation mappings. `PreparedCall::inputs`, `parameters`
+- `prepare_call(&flat, name)` reads only the selected function's filled slots.
+  It checks missing conversions, output arity and shared glue compatibility. `PreparedCall::inputs`, `parameters`
   and `outputs` expose boundary signatures and paired output expressions without
   exposing execution phases to the writer. `PreparedCall` borrows the selected
   slots, so their metadata need not be cloned.
@@ -125,8 +124,8 @@ conversion implementations with the corresponding adapter wire type. They supply
 boundary signatures, the required environment and error handling; they do not combine conversion
 phases or depend on declarations during generation.
 
-`prebindgen-declarations` prepares slots. Its `Bindings<W, R = ()>` alias is
-`Flat<InputPlan<W>, OutputPlan<W>, R>`. `bind_input` and `bind_output` compile one
+`prebindgen-declarations` prepares slots. Its `Bindings<W>` alias is
+`Flat<InputPlan<W>, OutputPlan<W>>`. `bind_input` and `bind_output` compile one
 occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
 function. `Codec::finish_input` and `finish_output` attach glue after recursive
 composition, during preparation only; the latter also runs for unit results.
@@ -144,37 +143,28 @@ its production compiler accepts adapter-supplied codecs.
 `prebindgen-runtime` remains the execution-time support library. It acquires no
 `syn` or code-generation dependencies from this separation.
 
-### Representations and field mapping
+### Preparation declarations and resolved field mapping
 
-`flat.representations` holds named `Representation<R>` schemas. Each schema names
-its source Rust type, logical components and adapter-specific declaration data.
-A component has a stable `ComponentPath` of typed `ComponentSegment` values
-(fields, arguments, alternatives, views, getters, selectors or adapter names), a
-presentation name, an optional source
-field path and an optional nested representation reference. Derived views do not
-need a source field. Several physical wires can implement the same component. Every component of a
-selected representation must have at least one wire; partial projections need
-their own schema. Unit representations have no components.
+Representation choices belong to `prebindgen-declarations`. Its optional
+`Representations<R>` registry holds shape declarations, nested references and
+canonical defaults. Preparation clients validate these with `validate(&flat)`
+and can check an occurrence's wires with `validate_mapping`. They copy any
+selected adapter metadata into their own slot implementations. The standard
+recipe compiler resolves fields, constructors, selectors, getters and combined
+outputs directly, without creating a registry.
 
-Plans identify their chosen representation explicitly. Each wire identifies a
-component within that shape. Writers match these identities when generating
-structure fields or assembling destination values; they never infer field mappings
-from generated local names or wire order. `PreparedCall::parameters()` preserves
-the grouping of wires belonging to each source parameter. Output expressions are
-paired with wires by `outputs()`.
+`Flat<I, O>` contains no representation registry, and conversion traits contain
+no representation IDs. Generation never looks up declarations or defaults.
+Each `Wire` carries its resolved `ComponentPath` directly: typed steps identify
+fields, constructor arguments, alternatives, views, getters or adapter-defined
+components. Several physical wires can implement one logical component. Writers
+use these paths rather than inferring field mappings from generated variable names.
+`PreparedCall::parameters()` preserves the grouping of wires for each source
+parameter; `outputs()` pairs output wires with their expressions. Partial
+projections are self-contained and need no separate registered schema.
 
-The declaration compiler registers occurrence schemas and preserves component paths through record
-fields, constructors, selectors, getters and combined outputs. The optional `R`
-parameter allows preparation to attach richer adapter metadata (`R: Default` for
-the standard preparation helpers). Direct custom conversion implementations can
-reference any explicitly registered representation.
-
-`set_canonical` designates a type's preferred representation for preparation clients.
-It does not install a converter or imply support in both directions. Generation
-always uses explicit slot references. `validate_representations` checks schemas,
-nested references and source-field paths, including types with no bound functions.
-The registry provides type-generation metadata; this refactor preserves the existing
-C/JNI public surfaces and does not automatically introduce new data classes.
+The preparation registry can be changed or dropped after slots are filled without
+affecting generation. C/JNI public wrapper surfaces remain the same.
 
 Unconfigured helpers may retain empty slots. Selected exported functions must have
 all slots filled, including unit results. The current adapters additionally use

@@ -126,7 +126,6 @@ pub fn input<W>(
     };
     Ok(InputPlan {
         requirements: Vec::new(),
-        representation: None,
         wires: vec![Wire {
             component: Default::default(),
             name: wire.clone(),
@@ -185,7 +184,6 @@ pub fn output<W>(
     Ok(OutputPlan {
         requirements: Vec::new(),
         delivery: Default::default(),
-        representation: None,
         wires: vec![Wire {
             component: Default::default(),
             name: wire.clone(),

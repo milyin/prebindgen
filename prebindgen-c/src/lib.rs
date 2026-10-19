@@ -421,13 +421,11 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
 fn generate<
     I: prebindgen_flat::InputConversion<Wire = CWire>,
     O: prebindgen_flat::OutputConversion<Wire = CWire>,
-    R,
 >(
-    flat: Flat<I, O, R>,
+    flat: Flat<I, O>,
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
 ) -> Result<Generation> {
-    flat.validate_representations()?;
     let mut calls = Vec::new();
     let error = format_ident!("{prefix}_last_error");
     let free = format_ident!("{prefix}_free_buffer");
@@ -572,9 +570,6 @@ mod generation_tests {
         struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
         impl prebindgen_flat::OutputConversion for CountedOutput {
             type Wire = CWire;
-            fn representation(&self) -> Option<&prebindgen_flat::RepresentationId> {
-                None
-            }
             fn wires(&self) -> &[GenericWire<Self::Wire>] {
                 &[]
             }

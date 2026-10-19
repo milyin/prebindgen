@@ -3,9 +3,6 @@ use super::*;
 struct TestInput(u8);
 impl InputConversion for TestInput {
     type Wire = ();
-    fn representation(&self) -> Option<&crate::RepresentationId> {
-        panic!("test has no executable conversion")
-    }
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
     }
@@ -32,9 +29,6 @@ impl InputConversion for TestInput {
 struct TestOutput(u32);
 impl OutputConversion for TestOutput {
     type Wire = ();
-    fn representation(&self) -> Option<&crate::RepresentationId> {
-        panic!("test has no executable conversion")
-    }
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
     }

@@ -63,7 +63,6 @@ impl Codec for TestCodec {
         }
         Ok(InputPlan {
             requirements: Vec::new(),
-            representation: None,
             wires: vec![Wire {
                 component: Default::default(),
                 name: w.clone(),
@@ -96,7 +95,6 @@ impl Codec for TestCodec {
         Ok(OutputPlan {
             requirements: Vec::new(),
             delivery: Default::default(),
-            representation: None,
             wires: vec![Wire {
                 component: Default::default(),
                 name: w.clone(),
@@ -571,27 +569,12 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
     )
     .unwrap();
     let call = prebindgen_flat::prepare_call(&flat, "point").unwrap();
-    let shape = flat
-        .representations
-        .get(call.output_representation().unwrap())
-        .unwrap();
-    assert_eq!(
-        shape.components[0].source_fields.as_deref(),
-        Some(["x".into()].as_slice())
-    );
-    assert_eq!(
-        shape.components[1].source_fields.as_deref(),
-        Some(["y".into()].as_slice())
-    );
     assert_eq!(
         call.outputs()
             .map(|out| out.wire.component.clone())
             .collect::<Vec<_>>(),
-        shape
-            .components
-            .iter()
-            .map(|c| c.path.clone())
-            .collect::<Vec<_>>()
+        ["x", "y"]
+            .map(|name| prebindgen_flat::ComponentPath(vec![ComponentSegment::Field(name.into())]))
     );
 }
 
@@ -700,5 +683,143 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             .unwrap()
             .emit()
             .to_string()
+    );
+}
+
+fn point_shapes() -> (Bindings<TestWire>, Representations<()>, RepresentationId) {
+    let flat = parse("pub struct Point { pub x:i64, pub y:i64 } pub fn point()->Point {}");
+    let id = RepresentationId("PointFields".into());
+    let mut shapes = Representations::default();
+    shapes
+        .insert(
+            id.clone(),
+            Representation {
+                source_type: syn::parse_quote!(crate::Point),
+                components: ["x", "y"]
+                    .into_iter()
+                    .map(|name| Component {
+                        path: prebindgen_flat::ComponentPath(vec![ComponentSegment::Field(
+                            name.into(),
+                        )]),
+                        name: name.into(),
+                        source_fields: Some(vec![name.into()]),
+                        representation: None,
+                    })
+                    .collect(),
+                data: (),
+            },
+        )
+        .unwrap();
+    shapes.set_canonical(&id).unwrap();
+    (flat, shapes, id)
+}
+
+#[test]
+fn preparation_checks_representation_fields_references_and_mappings() {
+    let (mut flat, mut shapes, id) = point_shapes();
+    shapes.validate(&flat).unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "point",
+        &Output::fields([Output::Leaf, Output::Leaf]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let wires = &flat
+        .function("point")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .wires;
+    let ty = syn::parse_quote!(crate::Point);
+    shapes.validate_mapping(&ty, &id, wires).unwrap();
+    assert!(shapes
+        .validate_mapping(&ty, &id, &wires[..1])
+        .unwrap_err()
+        .contains("has no wire"));
+    let mut bad_wires = wires.clone();
+    bad_wires[0].component =
+        prebindgen_flat::ComponentPath(vec![ComponentSegment::Named("missing".into())]);
+    assert!(shapes
+        .validate_mapping(&ty, &id, &bad_wires)
+        .unwrap_err()
+        .contains("no component"));
+    assert!(shapes
+        .validate_mapping(&syn::parse_quote!(i64), &id, wires)
+        .unwrap_err()
+        .contains("does not match"));
+    let original = shapes.get(&id).unwrap().clone();
+    let mut bad = original.clone();
+    bad.components[0].source_fields = Some(vec!["missing".into()]);
+    shapes.insert(id.clone(), bad).unwrap();
+    assert!(shapes
+        .validate(&flat)
+        .unwrap_err()
+        .contains("unknown source field"));
+    let mut bad = original.clone();
+    bad.components[0].representation = Some(RepresentationId("MissingType".into()));
+    shapes.insert(id.clone(), bad).unwrap();
+    assert!(shapes
+        .validate(&flat)
+        .unwrap_err()
+        .contains("unknown representation"));
+    let mut bad = original.clone();
+    bad.components.push(bad.components[0].clone());
+    assert!(shapes
+        .insert(id.clone(), bad)
+        .unwrap_err()
+        .contains("duplicate component"));
+    let mut bad = original;
+    bad.components[0].representation = Some(id.clone());
+    shapes.insert(id, bad).unwrap();
+    assert!(shapes
+        .validate(&flat)
+        .unwrap_err()
+        .contains("incompatible source type"));
+}
+
+#[test]
+fn generation_needs_no_preparation_registry_or_record_lookup() {
+    let (mut flat, mut shapes, id) = point_shapes();
+    shapes.validate(&flat).unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "point",
+        &Output::fields([Output::Leaf, Output::Leaf]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let before = prebindgen_flat::prepare_call(&flat, "point")
+        .unwrap()
+        .emit()
+        .to_string();
+    let handle = RepresentationId("PointHandle".into());
+    shapes
+        .insert(
+            handle.clone(),
+            Representation {
+                source_type: syn::parse_quote!(crate::Point),
+                components: vec![],
+                data: (),
+            },
+        )
+        .unwrap();
+    shapes.set_canonical(&handle).unwrap();
+    assert_ne!(
+        shapes.canonical(&syn::parse_quote!(crate::Point)),
+        Some(&id)
+    );
+    drop(shapes);
+    flat.records.clear();
+    let call = prebindgen_flat::prepare_call(&flat, "point").unwrap();
+    assert_eq!(call.outputs().len(), 2);
+    assert_eq!(call.emit().to_string(), before);
+    assert_eq!(
+        call.outputs().next().unwrap().wire.component.0,
+        [ComponentSegment::Field("x".into())]
     );
 }

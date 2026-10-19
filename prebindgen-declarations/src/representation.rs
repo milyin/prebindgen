@@ -1,51 +1,13 @@
-//! Named representation schemas shared by type declarations and conversions.
-use crate::{type_key, Result};
+//! Preparation-only representation declarations and defaults.
+//! Resolve choices and copy required metadata into slots before generation.
+use prebindgen_flat::{
+    type_key, ComponentPath, Flat, InputConversion, OutputConversion, Result, Wire,
+};
 use std::collections::BTreeMap;
 
-/// Stable identity of a resolved representation; independent of generated names.
+/// Identity used only while resolving preparation declarations.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RepresentationId(pub String);
-
-/// Typed step identifying a logical component independently of generated names.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ComponentSegment {
-    /// A source record field.
-    Field(String),
-    /// A constructor argument.
-    Argument(String),
-    /// An input selector arm.
-    Alternative(usize),
-    /// One simultaneous output view.
-    View(usize),
-    /// A source getter's result.
-    Getter(String),
-    /// An input selector's discriminator.
-    Selector,
-    /// An adapter-defined logical component with no implied source projection.
-    Named(String),
-}
-impl ComponentSegment {
-    /// Default presentation name; applications may assign a different name in the schema.
-    pub fn name(&self) -> String {
-        match self {
-            Self::Field(name) | Self::Argument(name) | Self::Getter(name) | Self::Named(name) => {
-                name.clone()
-            }
-            Self::Alternative(index) | Self::View(index) => index.to_string(),
-            Self::Selector => "selector".into(),
-        }
-    }
-}
-
-/// Logical component identity, including nesting. Several wires may implement it.
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ComponentPath(pub Vec<ComponentSegment>);
-impl ComponentPath {
-    /// Prefix a component with a containing field, view, or alternative.
-    pub fn prepend(&mut self, segment: ComponentSegment) {
-        self.0.insert(0, segment);
-    }
-}
 
 /// A logical component in a representation, not an executable conversion.
 /// Every component must have at least one wire when a conversion selects this
@@ -62,7 +24,7 @@ pub struct Component {
     pub representation: Option<RepresentationId>,
 }
 
-/// Resolved shape used to generate a destination type or describe an occurrence.
+/// Shape declaration used during preparation, never referenced by a conversion slot.
 #[derive(Clone, Debug)]
 pub struct Representation<R> {
     /// Qualified Rust type represented by this shape.
@@ -105,7 +67,7 @@ impl<R> Representations<R> {
             .get(id)
             .ok_or_else(|| format!("unknown representation `{}`", id.0))
     }
-    /// Iterate in identity order, for generation of selected type declarations.
+    /// Iterate declarations in identity order during preparation.
     pub fn iter(&self) -> impl Iterator<Item = (&RepresentationId, &Representation<R>)> {
         self.entries.iter()
     }
@@ -116,12 +78,12 @@ impl<R> Representations<R> {
         self.canonical.insert(key, id.clone());
         Ok(())
     }
-    /// Look up a preparation default; generation uses explicit occurrence references.
+    /// Look up a preparation default. Copy the selected data into prepared slots.
     pub fn canonical(&self, ty: &syn::Type) -> Option<&RepresentationId> {
         self.canonical.get(&type_key(ty))
     }
     /// Validate nested references after all declarations have been registered.
-    pub fn validate(&self) -> Result<()> {
+    fn validate_references(&self) -> Result<()> {
         for shape in self.entries.values() {
             for component in &shape.components {
                 if let Some(id) = &component.representation {
@@ -134,6 +96,80 @@ impl<R> Representations<R> {
                 return Err(format!(
                     "canonical representation `{}` changed source type",
                     id.0
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<R> Representations<R> {
+    /// Validate all registered type shapes, including schemas not used by a function.
+    pub fn validate<I: InputConversion, O: OutputConversion>(
+        &self,
+        flat: &Flat<I, O>,
+    ) -> Result<()> {
+        self.validate_references()?;
+        for (id, shape) in self.iter() {
+            flat.resolve_type(&shape.source_type)?;
+            for component in &shape.components {
+                if let Some(fields) = &component.source_fields {
+                    let mut ty = &shape.source_type;
+                    for field in fields {
+                        ty = &flat
+                            .record(ty)?
+                            .fields
+                            .iter()
+                            .find(|f| f.name == field.as_str())
+                            .ok_or_else(|| {
+                                format!(
+                                    "unknown source field `{field}` in representation `{}`",
+                                    id.0
+                                )
+                            })?
+                            .ty;
+                    }
+                    if let Some(child) = &component.representation {
+                        if !prebindgen_flat::same_type(ty, &self.get(child)?.source_type) {
+                            return Err(format!(
+                                "component `{}` has an incompatible source type",
+                                component.name
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Validate an occurrence mapping during preparation, before installing its slot.
+    /// Partial projections require a matching declaration; several wires may share a component.
+    pub fn validate_mapping<W>(
+        &self,
+        ty: &syn::Type,
+        id: &RepresentationId,
+        wires: &[Wire<W>],
+    ) -> Result<()> {
+        let shape = self.get(id)?;
+        if !prebindgen_flat::same_type(ty, &shape.source_type) {
+            return Err(format!(
+                "representation `{}` does not match occurrence type",
+                id.0
+            ));
+        }
+        for wire in wires {
+            if !shape.components.iter().any(|c| c.path == wire.component) {
+                return Err(format!(
+                    "wire `{}` has no component in representation `{}`",
+                    wire.name, id.0
+                ));
+            }
+        }
+        for component in &shape.components {
+            if !wires.iter().any(|wire| wire.component == component.path) {
+                return Err(format!(
+                    "component `{}` has no wire in representation `{}`",
+                    component.name, id.0
                 ));
             }
         }

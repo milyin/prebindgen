@@ -17,7 +17,6 @@ impl Input {
                 parameters: quote!(),
                 acknowledge: quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
             }],
-            representation: None,
             wires: vec![],
             validation: quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); }),
             resources: vec![],
@@ -36,7 +35,6 @@ impl Output {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
             },
-            representation: None,
             wires: vec![Wire {
                 component: ComponentPath::default(),
                 name: syn::parse_quote!(out),
@@ -114,36 +112,15 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     );
 }
 
-fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
+fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
     let items =
         syn::parse_file("pub struct Point { pub x:f64, pub y:f64 } pub fn point()->Point {}")
             .unwrap();
     let mut flat = Flat::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
-    let id = RepresentationId("PointFields".into());
-    flat.representations
-        .insert(
-            id.clone(),
-            Representation {
-                source_type: syn::parse_quote!(crate::Point),
-                components: ["x", "y"]
-                    .into_iter()
-                    .map(|name| Component {
-                        path: ComponentPath(vec![ComponentSegment::Field(name.into())]),
-                        name: name.into(),
-                        source_fields: Some(vec![name.into()]),
-                        representation: None,
-                    })
-                    .collect(),
-                data: "Point".into(),
-            },
-        )
-        .unwrap();
-    flat.representations.set_canonical(&id).unwrap();
     let result = source_result();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         requirements: Vec::new(),
         delivery: Default::default(),
-        representation: Some(id),
         // Deliberately reverse wire order: mapping must use component identities.
         wires: ["y", "x"]
             .into_iter()
@@ -162,50 +139,23 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>, String> {
 }
 
 #[test]
-fn type_declarations_and_values_share_explicit_component_identities() {
+fn field_mapping_is_available_without_a_registry() {
     let flat = record_model();
     let call = prepare_call(&flat, "point").unwrap();
-    let schema = flat
-        .representations
-        .get(call.output_representation().unwrap())
-        .unwrap();
     let assignments: Vec<_> = call
         .outputs()
         .map(|out| {
-            let field = schema
-                .components
-                .iter()
-                .find(|c| c.path == out.wire.component)
-                .unwrap();
-            format!("{} = {}", field.name, out.value)
+            let [ComponentSegment::Field(name)] = out.wire.component.0.as_slice() else {
+                panic!("expected field mapping")
+            };
+            format!("{name} = {}", out.value)
         })
         .collect();
-    assert_eq!(
-        format!("{}({})", schema.data, assignments.join(", ")),
-        "Point(y = __result . y, x = __result . x)"
-    );
-    assert_eq!(
-        flat.representations
-            .canonical(&syn::parse_quote!(crate::Point)),
-        call.output_representation()
-    );
+    assert_eq!(assignments, ["y = __result . y", "x = __result . x"]);
 }
 
 #[test]
-fn generation_rejects_invalid_mappings_and_output_arity() {
-    let mut flat = record_model();
-    flat.function_mut("point")
-        .unwrap()
-        .ret
-        .slot
-        .as_mut()
-        .unwrap()
-        .wires[0]
-        .component = ComponentPath(vec![ComponentSegment::Named("absent".into())]);
-    assert!(prepare_call(&flat, "point")
-        .err()
-        .unwrap()
-        .contains("no component"));
+fn generation_rejects_inconsistent_output_arity() {
     let mut flat = record_model();
     flat.function_mut("point")
         .unwrap()
@@ -219,57 +169,10 @@ fn generation_rejects_invalid_mappings_and_output_arity() {
         .err()
         .unwrap()
         .contains("count differs"));
-    let mut flat = record_model();
-    let id = RepresentationId("PointFields".into());
-    let mut shape = flat.representations.get(&id).unwrap().clone();
-    shape.components[0].source_fields = Some(vec!["absent".into()]);
-    flat.representations.insert(id, shape).unwrap();
-    assert!(flat
-        .validate_representations()
-        .unwrap_err()
-        .contains("unknown source field"));
 }
 
 #[test]
-fn changing_canonical_default_does_not_reinterpret_bound_occurrences() {
-    let mut flat = record_model();
-    let handle = RepresentationId("PointHandle".into());
-    flat.representations
-        .insert(
-            handle.clone(),
-            Representation {
-                source_type: syn::parse_quote!(crate::Point),
-                components: vec![],
-                data: "Handle".into(),
-            },
-        )
-        .unwrap();
-    flat.representations.set_canonical(&handle).unwrap();
-    let call = prepare_call(&flat, "point").unwrap();
-    assert_eq!(
-        call.output_representation(),
-        Some(&RepresentationId("PointFields".into()))
-    );
-    assert_eq!(call.outputs().len(), 2);
-}
-
-#[test]
-fn standalone_type_schemas_validate_without_executable_slots() {
-    let mut flat = record_model();
-    flat.functions.clear();
-    flat.validate_representations().unwrap();
-    let id = RepresentationId("PointFields".into());
-    let mut shape = flat.representations.get(&id).unwrap().clone();
-    shape.components[0].representation = Some(RepresentationId("MissingScalar".into()));
-    flat.representations.insert(id, shape).unwrap();
-    assert!(flat
-        .validate_representations()
-        .unwrap_err()
-        .contains("unknown representation"));
-}
-
-#[test]
-fn a_selected_shape_requires_values_for_all_components() {
+fn partial_projection_is_self_contained() {
     let mut flat = record_model();
     let output = flat
         .function_mut("point")
@@ -280,10 +183,7 @@ fn a_selected_shape_requires_values_for_all_components() {
         .unwrap();
     output.wires.pop();
     output.values.pop();
-    assert!(prepare_call(&flat, "point")
-        .err()
-        .unwrap()
-        .contains("has no wire"));
+    assert_eq!(prepare_call(&flat, "point").unwrap().outputs().len(), 1);
 }
 
 #[test]
@@ -300,7 +200,6 @@ fn several_physical_wires_may_supply_one_component() {
     extra.name = syn::parse_quote!(additional_wire);
     output.wires.push(extra);
     output.values.push(quote!(0));
-    flat.validate_representations().unwrap();
     assert_eq!(prepare_call(&flat, "point").unwrap().outputs().len(), 3);
 }
 
@@ -373,7 +272,6 @@ fn prepared_calls_borrow_non_clone_wire_metadata() {
     };
     let f = flat.function_mut("echo").unwrap();
     f.params[0].ty.slot = Some(InputPlan {
-        representation: None,
         wires: vec![wire()],
         requirements: vec![],
         validation: quote!(),
@@ -383,7 +281,6 @@ fn prepared_calls_borrow_non_clone_wire_metadata() {
         argument: quote!(x),
     });
     f.ret.slot = Some(OutputPlan {
-        representation: None,
         wires: vec![wire()],
         requirements: vec![],
         statements: quote!(),

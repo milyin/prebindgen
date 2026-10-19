@@ -1,4 +1,4 @@
-//! Source types, resolved representations, and the complete wrapper-generation API.
+//! Source types, self-contained conversion slots, and wrapper code assembly.
 //! Parameters and results hold optional conversions constrained by direction-specific
 //! traits. Preparation fills slots; generation uses [`prepare_call`].
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
@@ -12,8 +12,8 @@ use syn::{visit_mut::VisitMut, Type};
 
 mod conversion;
 pub use conversion::*;
-mod representation;
-pub use representation::*;
+mod component;
+pub use component::*;
 
 mod primitive;
 pub use primitive::Primitive;
@@ -72,8 +72,8 @@ pub struct Field {
 /// Source structure with independently configured input and output conversions.
 ///
 /// Every parameter carries `Option<I>`; every result carries `Option<O>`.
-/// Record fields describe source structure; [`Self::representations`] describes
-/// destination shapes and explicit component mappings. Conversion implementations
+/// Record fields describe source structure; conversion wires carry resolved
+/// component mappings directly. Conversion implementations
 /// remain opaque to wrapper writers. Type-level bounds intentionally prevent
 /// non-conversion slot payloads. For source-only inspection, `let flat: Flat =
 /// Flat::parse(items)?` uses default plan types with all slots empty.
@@ -91,7 +91,7 @@ pub struct Field {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct Flat<I: InputConversion = InputPlan<()>, O: OutputConversion = OutputPlan<()>, R = ()> {
+pub struct Flat<I: InputConversion = InputPlan<()>, O: OutputConversion = OutputPlan<()>> {
     /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by `type_key` of their qualified type.
@@ -101,11 +101,9 @@ pub struct Flat<I: InputConversion = InputPlan<()>, O: OutputConversion = Output
     /// Constants every adapter must emit: captured feature guards and generated
     /// nonzero-size assertions. Layout assertions run when the bindings compile.
     pub guards: Vec<syn::ItemConst>,
-    /// Resolved representations available to wrapper writers.
-    pub representations: Representations<R>,
 }
 
-impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
+impl<I: InputConversion, O: OutputConversion> Flat<I, O> {
     /// Select the source declarations needed by this binding before validating
     /// the supported flat subset. Items outside the selection are skipped without validation.
     ///
@@ -228,7 +226,6 @@ impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
             records: BTreeMap::new(),
             types,
             guards: Vec::new(),
-            representations: Representations::default(),
         };
         for (item, location) in items {
             match item {
@@ -338,7 +335,7 @@ impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
     }
 }
 
-impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
+impl<I: InputConversion, O: OutputConversion> Flat<I, O> {
     /// Look up a free function by its unqualified source name.
     ///
     /// Returns an error if it was not included in this model.
@@ -428,7 +425,7 @@ impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
         self,
         mut input: impl FnMut(&Type, Option<I>) -> Result<Option<I2>>,
         mut output: impl FnMut(&Type, Option<O>) -> Result<Option<O2>>,
-    ) -> Result<Flat<I2, O2, R>> {
+    ) -> Result<Flat<I2, O2>> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {
             let params = fun
@@ -462,7 +459,6 @@ impl<I: InputConversion, O: OutputConversion, R> Flat<I, O, R> {
             records: self.records,
             types: self.types,
             guards: self.guards,
-            representations: self.representations,
         })
     }
 }

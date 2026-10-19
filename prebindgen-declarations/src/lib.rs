@@ -324,7 +324,7 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W, R = ()> = Flat<InputPlan<W>, OutputPlan<W>, R>;
+pub type Bindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -353,8 +353,8 @@ pub type Bindings<W, R = ()> = Flat<InputPlan<W>, OutputPlan<W>, R>;
 ///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
-pub fn bind_input<C: Codec, R: Default>(
-    flat: &mut Bindings<C::Wire, R>,
+pub fn bind_input<C: Codec>(
+    flat: &mut Bindings<C::Wire>,
     codec: &C,
     function: &str,
     parameter: &str,
@@ -374,13 +374,6 @@ pub fn bind_input<C: Codec, R: Default>(
         &Condition::default(),
     )?;
     codec.finish_input(&mut conversion, extra)?;
-    let ty = flat.function(function)?.params[index].ty.ty.clone();
-    conversion.representation = Some(register_shape(
-        flat,
-        format!("{function}/input/{parameter}"),
-        ty,
-        &conversion.wires,
-    )?);
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
     Ok(())
 }
@@ -407,8 +400,8 @@ pub fn bind_input<C: Codec, R: Default>(
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
-pub fn bind_output<C: Codec, R: Default>(
-    flat: &mut Bindings<C::Wire, R>,
+pub fn bind_output<C: Codec>(
+    flat: &mut Bindings<C::Wire>,
     codec: &C,
     function: &str,
     recipe: &Output,
@@ -422,25 +415,18 @@ pub fn bind_output<C: Codec, R: Default>(
         false,
     )?;
     codec.finish_output(&mut conversion, extra)?;
-    let ty = flat.function(function)?.ret.ty.clone();
-    conversion.representation = Some(register_shape(
-        flat,
-        format!("{function}/output"),
-        ty,
-        &conversion.wires,
-    )?);
     flat.function_mut(function)?.ret.slot = Some(conversion);
     Ok(())
 }
 
-struct Compiler<'a, C: Codec, R> {
-    flat: &'a Bindings<C::Wire, R>,
+struct Compiler<'a, C: Codec> {
+    flat: &'a Bindings<C::Wire>,
     codec: &'a C,
     prefix: String,
     next: std::cell::Cell<usize>,
 }
-impl<'a, C: Codec, R> Compiler<'a, C, R> {
-    fn new(flat: &'a Bindings<C::Wire, R>, codec: &'a C, prefix: String) -> Self {
+impl<'a, C: Codec> Compiler<'a, C> {
+    fn new(flat: &'a Bindings<C::Wire>, codec: &'a C, prefix: String) -> Self {
         Self {
             flat,
             codec,
@@ -478,7 +464,6 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(InputPlan {
                         requirements,
-                        representation: None,
                         wires,
                         validation,
                         acquire,
@@ -581,7 +566,6 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
         }
         Ok(InputPlan {
             requirements,
-            representation: None,
             wires,
             validation,
             acquire,
@@ -601,7 +585,6 @@ impl<'a, C: Codec, R> Compiler<'a, C, R> {
         let mut out = OutputPlan {
             requirements: Vec::new(),
             delivery: Default::default(),
-            representation: None,
             commit: TokenStream::new(),
             wires: Vec::new(),
             statements: TokenStream::new(),
@@ -711,55 +694,12 @@ fn prefix<W>(wires: &mut [Wire<W>], segment: ComponentSegment) {
     }
 }
 
-fn register_shape<W: Clone, R: Default>(
-    flat: &mut Bindings<W, R>,
-    name: String,
-    ty: syn::Type,
-    wires: &[Wire<W>],
-) -> Result<prebindgen_flat::RepresentationId> {
-    use prebindgen_flat::{Component, Representation, RepresentationId};
-    let mut seen = std::collections::BTreeSet::new();
-    let components = wires
-        .iter()
-        .filter(|wire| seen.insert(wire.component.clone()))
-        .map(|wire| {
-            let fields: Option<Vec<_>> = wire
-                .component
-                .0
-                .iter()
-                .map(|segment| match segment {
-                    ComponentSegment::Field(name) => Some(name.clone()),
-                    _ => None,
-                })
-                .collect();
-            Component {
-                path: wire.component.clone(),
-                name: wire
-                    .component
-                    .0
-                    .last()
-                    .map(ComponentSegment::name)
-                    .unwrap_or_else(|| "value".into()),
-                source_fields: fields.filter(|f| !f.is_empty()),
-                representation: None,
-            }
-        })
-        .collect();
-    let id = RepresentationId(name);
-    flat.representations.insert(
-        id.clone(),
-        Representation {
-            source_type: ty,
-            components,
-            data: R::default(),
-        },
-    )?;
-    Ok(id)
-}
-
 /// Parse one Rust identifier used by a declaration.
 ///
 /// Returns an error for invalid syntax, including paths or multiple identifiers.
 pub fn ident(name: &str) -> Result<syn::Ident> {
     syn::parse_str(name).map_err(|_| format!("invalid identifier `{name}`"))
 }
+
+mod representation;
+pub use representation::{Component, Representation, RepresentationId, Representations};
