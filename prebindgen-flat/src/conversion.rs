@@ -28,23 +28,33 @@ impl WireKind for syn::Type {
 
 /// One boundary parameter or result component used by wrapper emission.
 ///
+/// In conversion slots, `W` implements [`WireKind`]. Call [`Wire::rust_type`]
+/// to obtain the Rust carrier type supplied by the kind.
+///
 /// ```
 /// use prebindgen_flat::Wire;
 /// let wire: Wire<syn::Type> = Wire {
 ///     name: syn::parse_quote!(value),
 ///     kind: syn::parse_quote!(i64),
 /// };
-/// use prebindgen_flat::WireKind;
-/// let ty = wire.kind.rust_type();
+/// let ty = wire.rust_type();
 /// assert_eq!(quote::quote!(#ty).to_string(), "i64");
 /// ```
 #[derive(Clone, Debug)]
 pub struct Wire<W> {
     /// Generated identifier used by conversion code and wrapper signatures.
     pub name: syn::Ident,
-    /// Transport description used to declare the boundary type.
+    /// Transport description implementing [`WireKind`] in conversion slots.
     /// Logical fields, selection rules and ownership behavior belong inside the converter.
     pub kind: W,
+}
+
+impl<W: WireKind> Wire<W> {
+    /// Rust carrier type supplied by this wire's [`WireKind`].
+    /// Used to declare a wrapper parameter or result field.
+    pub fn rust_type(&self) -> syn::Type {
+        self.kind.rust_type()
+    }
 }
 
 /// An input conversion split into call-wide validation, acquisition and construction.
