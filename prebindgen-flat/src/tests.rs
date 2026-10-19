@@ -6,9 +6,6 @@ impl InputConversion for TestInput {
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
     }
-    fn requirements(&self) -> &[CallRequirement] {
-        panic!("test has no executable conversion")
-    }
     fn resources(&self) -> &[Resource] {
         panic!("test has no executable conversion")
     }
@@ -30,9 +27,6 @@ struct TestOutput(u32);
 impl OutputConversion for TestOutput {
     type Wire = ();
     fn wires(&self) -> &[Wire<Self::Wire>] {
-        panic!("test has no executable conversion")
-    }
-    fn requirements(&self) -> &[CallRequirement] {
         panic!("test has no executable conversion")
     }
     fn values(&self) -> &[proc_macro2::TokenStream] {

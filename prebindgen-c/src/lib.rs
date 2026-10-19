@@ -439,14 +439,11 @@ fn generate<
         if f.ret.slot.is_none() {
             continue;
         }
-        let call = prebindgen_flat::prepare_call(&flat, &f.name.to_string())?;
+        let body = prebindgen_flat::emit_call(f)?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
-        for wire in call
-            .inputs()
-            .chain(call.outputs().map(|output| output.wire))
-        {
+        for wire in f.inputs()?.chain(f.outputs()?.map(|output| output.wire)) {
             if let CWire::Pointer(pointer) = &wire.kind {
                 if !pointers
                     .iter()
@@ -459,7 +456,7 @@ fn generate<
                 }
             }
         }
-        calls.push((f, call));
+        calls.push((f, body));
     }
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
@@ -489,12 +486,12 @@ The pointer must be null or a live allocation of the declared type returned by t
         });
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
-    for (f, call) in calls {
+    for (f, body) in calls {
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let mut params = Vec::new();
         let mut cparams = Vec::new();
-        for w in call.inputs() {
+        for w in f.inputs()? {
             let n = &w.name;
             let ty = rust_ty(w);
             params.push(quote!(#n:#ty));
@@ -502,7 +499,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         }
         let mut fields = Vec::new();
         header.push_str("typedef struct {\n");
-        for (i, output) in call.outputs().enumerate() {
+        for (i, output) in f.outputs()?.enumerate() {
             let w = output.wire;
             let field = format_ident!("v{i}");
             let ty = rust_ty(w);
@@ -516,12 +513,6 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!("}} {result};\n"));
         cparams.push(format!("{result} *out"));
         header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
-        let body = call.emit();
-        if call.requirements().iter().any(|r| !r.parameters.is_empty()) {
-            return Err(
-                "C wrapper requirements cannot add parameters without a C header mapping".into(),
-            );
-        }
         tokens.extend(quote! {
          #[repr(C)] pub struct #result {#(#fields),*}
          #[doc = "# Safety
@@ -571,9 +562,6 @@ mod generation_tests {
         impl prebindgen_flat::OutputConversion for CountedOutput {
             type Wire = CWire;
             fn wires(&self) -> &[GenericWire<Self::Wire>] {
-                &[]
-            }
-            fn requirements(&self) -> &[prebindgen_flat::CallRequirement] {
                 &[]
             }
             fn values(&self) -> &[TokenStream] {

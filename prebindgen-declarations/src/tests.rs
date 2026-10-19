@@ -62,7 +62,7 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
-            requirements: Vec::new(),
+            acknowledgement: None,
             wires: vec![Wire {
                 component: Default::default(),
                 name: w.clone(),
@@ -93,7 +93,6 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
-            requirements: Vec::new(),
             delivery: Default::default(),
             wires: vec![Wire {
                 component: Default::default(),
@@ -568,9 +567,10 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
         &Extra::default(),
     )
     .unwrap();
-    let call = prebindgen_flat::prepare_call(&flat, "point").unwrap();
+    let call = flat.function("point").unwrap();
     assert_eq!(
         call.outputs()
+            .unwrap()
             .map(|out| out.wire.component.clone())
             .collect::<Vec<_>>(),
         ["x", "y"]
@@ -598,7 +598,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             v: syn::Ident,
             active: &Condition,
         ) -> Result<InputPlan<TestWire>> {
-            TEST_CODEC.input_leaf(ty, extra, w, v, active)
+            let mut plan = TEST_CODEC.input_leaf(ty, extra, w.clone(), v, active)?;
+            plan.acknowledgement = Some(if extra.name == "conflict" {
+                quote!(ack(#w);)
+            } else {
+                quote!(ack();)
+            });
+            Ok(plan)
         }
         fn output_leaf(
             &self,
@@ -611,13 +617,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             TEST_CODEC.output_leaf(ty, extra, w, v, borrowed)
         }
         fn finish_input(&self, plan: &mut InputPlan<TestWire>, _: &Extra) -> Result<()> {
-            assert!(plan.requirements.is_empty());
+            assert_eq!(
+                plan.acknowledgement.as_ref().unwrap().to_string(),
+                quote!(ack();).to_string()
+            );
             assert_eq!(plan.wires.len(), 2);
-            plan.requirements.push(prebindgen_flat::CallRequirement {
-                key: "test.complete".into(),
-                parameters: quote!(),
-                acknowledge: quote!(ack();),
-            });
             Ok(())
         }
         fn finish_output(&self, plan: &mut OutputPlan<TestWire>, extra: &Extra) -> Result<()> {
@@ -631,6 +635,24 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
     }
     let source = "pub struct Pair { pub a:i32, pub b:i32 } pub fn pair(a:i32,b:i32)->Pair {} pub fn take(p:Pair) {}";
+    let mut conflicting = parse(source);
+    assert!(bind_input(
+        &mut conflicting,
+        &FinalizingCodec,
+        "take",
+        "p",
+        &Input::constructor("pair", [Input::Leaf, Input::Leaf]),
+        &Extra {
+            name: "conflict",
+            ..Extra::default()
+        }
+    )
+    .unwrap_err()
+    .contains("conflicting input acknowledgements"));
+    assert!(conflicting.function("take").unwrap().params[0]
+        .ty
+        .slot
+        .is_none());
     let mut direct = parse(source);
     bind_input(
         &mut direct,
@@ -675,13 +697,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         .fill(&mut flat, &FinalizingCodec, &decl, &Extra::default())
         .unwrap();
     assert_eq!(
-        prebindgen_flat::prepare_call(&flat, "take")
+        prebindgen_flat::emit_call(flat.function("take").unwrap())
             .unwrap()
-            .emit()
             .to_string(),
-        prebindgen_flat::prepare_call(&direct, "take")
+        prebindgen_flat::emit_call(direct.function("take").unwrap())
             .unwrap()
-            .emit()
             .to_string()
     );
 }
@@ -793,9 +813,8 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &Extra::default(),
     )
     .unwrap();
-    let before = prebindgen_flat::prepare_call(&flat, "point")
+    let before = prebindgen_flat::emit_call(flat.function("point").unwrap())
         .unwrap()
-        .emit()
         .to_string();
     let handle = RepresentationId("PointHandle".into());
     shapes
@@ -815,11 +834,14 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     );
     drop(shapes);
     flat.records.clear();
-    let call = prebindgen_flat::prepare_call(&flat, "point").unwrap();
-    assert_eq!(call.outputs().len(), 2);
-    assert_eq!(call.emit().to_string(), before);
+    let call = flat.function("point").unwrap();
+    assert_eq!(call.outputs().unwrap().len(), 2);
     assert_eq!(
-        call.outputs().next().unwrap().wire.component.0,
+        prebindgen_flat::emit_call(call).unwrap().to_string(),
+        before
+    );
+    assert_eq!(
+        call.outputs().unwrap().next().unwrap().wire.component.0,
         [ComponentSegment::Field("x".into())]
     );
 }

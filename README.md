@@ -94,28 +94,28 @@ settings remain commented out in the example manifests.
 `prebindgen-flat` owns the generation contract:
 
 - `InputConversion` and `OutputConversion` expose prepared slot metadata and code
-  through individual methods. `prepare_call` reads these methods directly; slots
+  through individual methods. `emit_call` reads these methods directly; slots
   do not return intermediate plans. `InputPlan<W>` and `OutputPlan<W>` remain
   optional concrete storage implementations, without a `W: Clone` requirement.
   Metadata is borrowed; code methods return tokens with stable generated names.
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
-- `prepare_call(&flat, name)` reads only the selected function's filled slots.
-  It checks missing conversions, output arity and shared glue compatibility. `PreparedCall::inputs`, `parameters`
-  and `outputs` expose boundary signatures and paired output expressions without
-  exposing execution phases to the writer. `PreparedCall` borrows the selected
-  slots, so their metadata need not be cloned.
-- Input and output plans carry named `CallRequirement`s, including additional
-  Rust parameters and acknowledgement code. `prepare_call` merges identical
-  requirements by key in first occurrence order and rejects conflicting definitions.
-  `call.requirements()` exposes the resulting wrapper requirements.
-- The result slot carries `Delivery`: fallible delivery statements and an
-  infallible return expression. `call.emit()` assembles all validation and alias
-  checks, shared acknowledgement, all acquisition, argument construction, source
-  invocation, output preparation, delivery, and ownership commit. No generator or
-  external hooks are passed to assembly. Output builders use `source_result()`
-  for the source-result identifier. The returned statements run inside the
-  adapter's error boundary and the environment expected by the prepared slots.
+- `emit_call(function)` checks slot completeness, output arity and shared
+  acknowledgement agreement, then returns the assembled Rust call body. There is
+  no intermediate call object or external glue argument. `Function::inputs` and
+  `outputs` expose borrowed wire metadata and paired output expressions;
+  `input_conversions` preserves parameter grouping.
+- An input may supply acknowledgement code. Every input that supplies it must
+  provide the same token spelling. Assembly emits this shared operation once,
+  after all validation and alias checks and before any ownership acquisition.
+  Conflicting acknowledgements are rejected. There are no keys or parameter
+  declarations in this contract; the wrapper declares its ABI from the slot data.
+- The result slot supplies delivery and the final result expression. `emit_call`
+  orders validation, alias checks, acknowledgement, all acquisition, argument
+  construction, source invocation, output preparation, delivery and ownership
+  commit. Output builders use `source_result()` for the source-result identifier.
+  The returned statements run inside the adapter's error boundary and the
+  environment expected by the prepared slots.
 - `rust_source` formats generated Rust. `Wire`, `Condition`, `Access` and
   `Resource` are general generation contracts defined in flat.
 
@@ -159,7 +159,7 @@ Each `Wire` carries its resolved `ComponentPath` directly: typed steps identify
 fields, constructor arguments, alternatives, views, getters or adapter-defined
 components. Several physical wires can implement one logical component. Writers
 use these paths rather than inferring field mappings from generated variable names.
-`PreparedCall::parameters()` preserves the grouping of wires for each source
+`Function::input_conversions()` preserves the grouping of wires for each source
 parameter; `outputs()` pairs output wires with their expressions. Partial
 projections are self-contained and need no separate registered schema.
 

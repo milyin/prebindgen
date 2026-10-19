@@ -12,11 +12,9 @@ impl Input {
         let acquire = format!("acquire{index}");
         let construct = format!("construct{index}");
         InputPlan {
-            requirements: vec![CallRequirement {
-                key: "test.ack".into(),
-                parameters: quote!(),
-                acknowledge: quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
-            }],
+            acknowledgement: Some(
+                quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
+            ),
             wires: vec![],
             validation: quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); }),
             resources: vec![],
@@ -30,7 +28,6 @@ struct Output;
 impl Output {
     fn plan(&self) -> OutputPlan<&'static str> {
         OutputPlan {
-            requirements: Vec::new(),
             delivery: Delivery {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
@@ -63,9 +60,8 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     f.params[0].ty.slot = Some(Input(0).plan());
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
-    let call = prepare_call(&flat, "add").unwrap();
-    assert_eq!(call.requirements().len(), 1);
-    let body = call.emit();
+    let call = flat.function("add").unwrap();
+    let body = emit_call(call).unwrap();
     let code = quote! {
         use std::sync::Mutex;
         static LOG: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
@@ -119,7 +115,6 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
     let mut flat = Flat::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
     let result = source_result();
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
-        requirements: Vec::new(),
         delivery: Default::default(),
         // Deliberately reverse wire order: mapping must use component identities.
         wires: ["y", "x"]
@@ -141,9 +136,10 @@ fn record_model() -> Flat<InputPlan<()>, OutputPlan<&'static str>> {
 #[test]
 fn field_mapping_is_available_without_a_registry() {
     let flat = record_model();
-    let call = prepare_call(&flat, "point").unwrap();
+    let call = flat.function("point").unwrap();
     let assignments: Vec<_> = call
         .outputs()
+        .unwrap()
         .map(|out| {
             let [ComponentSegment::Field(name)] = out.wire.component.0.as_slice() else {
                 panic!("expected field mapping")
@@ -165,7 +161,7 @@ fn generation_rejects_inconsistent_output_arity() {
         .unwrap()
         .values
         .pop();
-    assert!(prepare_call(&flat, "point")
+    assert!(emit_call(flat.function("point").unwrap())
         .err()
         .unwrap()
         .contains("count differs"));
@@ -183,7 +179,7 @@ fn partial_projection_is_self_contained() {
         .unwrap();
     output.wires.pop();
     output.values.pop();
-    assert_eq!(prepare_call(&flat, "point").unwrap().outputs().len(), 1);
+    assert_eq!(flat.function("point").unwrap().outputs().unwrap().len(), 1);
 }
 
 #[test]
@@ -200,61 +196,35 @@ fn several_physical_wires_may_supply_one_component() {
     extra.name = syn::parse_quote!(additional_wire);
     output.wires.push(extra);
     output.values.push(quote!(0));
-    assert_eq!(prepare_call(&flat, "point").unwrap().outputs().len(), 3);
+    assert_eq!(flat.function("point").unwrap().outputs().unwrap().len(), 3);
 }
 
 #[test]
-fn shared_requirements_merge_across_slots_and_reject_conflicts() {
+fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { a+b }").unwrap();
     let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
         items.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let first = Input(0).plan();
-    let mut second = Input(1).plan();
-    let mut output = Output.plan();
-    output.requirements = first.requirements.clone();
-    output.requirements.push(CallRequirement {
-        key: "test.result".into(),
-        parameters: quote!(out: *mut i32),
-        acknowledge: quote!(),
-    });
     let f = flat.function_mut("add").unwrap();
-    f.params[0].ty.slot = Some(first);
-    f.params[1].ty.slot = Some(second.clone());
-    f.ret.slot = Some(output);
-    let call = prepare_call(&flat, "add").unwrap();
-    assert_eq!(
-        call.requirements()
-            .iter()
-            .map(|r| r.key.as_str())
-            .collect::<Vec<_>>(),
-        ["test.ack", "test.result"]
-    );
-    assert_eq!(
-        call.requirements()[1].parameters.to_string(),
-        quote!(out: *mut i32).to_string()
-    );
-    for conflict in [true, false] {
-        let mut bad = second.clone();
-        if conflict {
-            bad.requirements[0].parameters = quote!(other: i32);
-        } else {
-            bad.requirements[0].acknowledge = quote!(different_ack());
-        }
-        flat.function_mut("add").unwrap().params[1].ty.slot = Some(bad);
-        assert!(prepare_call(&flat, "add")
-            .err()
-            .unwrap()
-            .contains("conflicting call requirement `test.ack`"));
+    f.params[0].ty.slot = Some(Input(0).plan());
+    f.params[1].ty.slot = Some(Input(1).plan());
+    f.ret.slot = Some(Output.plan());
+    let both = emit_call(f).unwrap().to_string();
+    f.params[0].ty.slot.as_mut().unwrap().acknowledgement = None;
+    assert_eq!(emit_call(f).unwrap().to_string(), both);
+    f.params[0].ty.slot.as_mut().unwrap().acknowledgement = Some(quote!(different_ack()));
+    assert!(emit_call(f)
+        .unwrap_err()
+        .contains("conflicting input acknowledgements"));
+    for param in &mut f.params {
+        param.ty.slot.as_mut().unwrap().acknowledgement = None;
     }
-    second.requirements[0].key = "test.another".into();
-    flat.function_mut("add").unwrap().params[1].ty.slot = Some(second);
-    assert_eq!(prepare_call(&flat, "add").unwrap().requirements().len(), 3);
+    assert!(!emit_call(f).unwrap().to_string().contains("acknowledge"));
 }
 
 #[test]
-fn prepared_calls_borrow_non_clone_wire_metadata() {
+fn function_accessors_borrow_non_clone_wire_metadata() {
     struct NonClone;
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
     let mut flat = Flat::<InputPlan<NonClone>, OutputPlan<NonClone>>::parse(
@@ -273,7 +243,7 @@ fn prepared_calls_borrow_non_clone_wire_metadata() {
     let f = flat.function_mut("echo").unwrap();
     f.params[0].ty.slot = Some(InputPlan {
         wires: vec![wire()],
-        requirements: vec![],
+        acknowledgement: None,
         validation: quote!(),
         acquire: quote!(),
         resources: vec![],
@@ -282,7 +252,6 @@ fn prepared_calls_borrow_non_clone_wire_metadata() {
     });
     f.ret.slot = Some(OutputPlan {
         wires: vec![wire()],
-        requirements: vec![],
         statements: quote!(),
         values: vec![source_result_expr()],
         commit: quote!(),
@@ -291,18 +260,35 @@ fn prepared_calls_borrow_non_clone_wire_metadata() {
             result: source_result_expr(),
         },
     });
-    let call = prepare_call(&flat, "echo").unwrap();
+    let call = flat.function("echo").unwrap();
     let f = flat.function("echo").unwrap();
     assert!(std::ptr::eq(
-        call.inputs().next().unwrap(),
+        call.inputs().unwrap().next().unwrap(),
         &f.params[0].ty.slot.as_ref().unwrap().wires[0]
     ));
     assert!(std::ptr::eq(
-        call.outputs().next().unwrap().value,
+        call.outputs().unwrap().next().unwrap().value,
         &f.ret.slot.as_ref().unwrap().values[0]
     ));
     assert_eq!(
-        call.emit().to_string(),
+        emit_call(call).unwrap().to_string(),
         quote!(let __result = crate::echo(x); Ok(__result)).to_string()
     );
+}
+
+#[test]
+fn emit_call_rejects_missing_input_and_result_slots() {
+    let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
+    let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
+        items.items.into_iter().map(|i| (i, Default::default())),
+    )
+    .unwrap();
+    let function = flat.function_mut("echo").unwrap();
+    assert!(emit_call(function)
+        .unwrap_err()
+        .contains("parameter `x` has no conversion"));
+    function.params[0].ty.slot = Some(Input(0).plan());
+    assert!(emit_call(function)
+        .unwrap_err()
+        .contains("result has no conversion"));
 }

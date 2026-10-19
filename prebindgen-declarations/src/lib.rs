@@ -3,7 +3,7 @@
 //! [`Declarations::fill`], [`bind_input`] and [`bind_output`] build conversions
 //! directly in a [`Bindings`] model. Recipes and codec input data are used only
 //! during construction; slots retain wires and code needed by wrapper writers.
-//! Generation uses [`prebindgen_flat::prepare_call`] and the call emitter in `prebindgen-flat`;
+//! Generation uses [`prebindgen_flat::emit_call`] and the call emitter in `prebindgen-flat`;
 //! this crate owns only declaration resolution and slot preparation.
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
@@ -452,7 +452,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
         let mut resources = Vec::new();
-        let mut requirements = Vec::new();
+        let mut acknowledgement = None;
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
@@ -463,7 +463,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(InputPlan {
-                        requirements,
+                        acknowledgement,
                         wires,
                         validation,
                         acquire,
@@ -491,7 +491,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
-                    requirements.extend(p.requirements);
+                    merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     statements.extend(p.statements);
                     wires.extend(p.wires);
                     let name = &field.name;
@@ -522,7 +522,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
-                    requirements.extend(p.requirements);
+                    merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     statements.extend(p.statements);
                     wires.extend(p.wires);
                     call_args.push(p.argument);
@@ -554,7 +554,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
-                    requirements.extend(p.requirements);
+                    merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     let body = p.statements;
                     let value = p.argument;
                     wires.extend(p.wires);
@@ -565,7 +565,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
         }
         Ok(InputPlan {
-            requirements,
+            acknowledgement,
             wires,
             validation,
             acquire,
@@ -583,7 +583,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
         borrowed: bool,
     ) -> Result<OutputPlan<C::Wire>> {
         let mut out = OutputPlan {
-            requirements: Vec::new(),
             delivery: Default::default(),
             commit: TokenStream::new(),
             wires: Vec::new(),
@@ -672,7 +671,6 @@ fn append<W>(to: &mut OutputPlan<W>, from: OutputPlan<W>) -> Result<()> {
     {
         return Err("composed output delivery must be installed by Codec::finish_output".into());
     }
-    to.requirements.extend(from.requirements);
     to.commit.extend(from.commit);
     to.wires.extend(from.wires);
     to.statements.extend(from.statements);
@@ -703,3 +701,19 @@ pub fn ident(name: &str) -> Result<syn::Ident> {
 
 mod representation;
 pub use representation::{Component, Representation, RepresentationId, Representations};
+
+fn merge_acknowledgement(
+    target: &mut Option<TokenStream>,
+    incoming: Option<TokenStream>,
+) -> Result<()> {
+    if let Some(code) = incoming {
+        if let Some(previous) = target {
+            if previous.to_string() != code.to_string() {
+                return Err("conflicting input acknowledgements".into());
+            }
+        } else {
+            *target = Some(code);
+        }
+    }
+    Ok(())
+}

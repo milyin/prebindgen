@@ -125,7 +125,7 @@ pub fn input<W>(
         ),
     };
     Ok(InputPlan {
-        requirements: Vec::new(),
+        acknowledgement: None,
         wires: vec![Wire {
             component: Default::default(),
             name: wire.clone(),
@@ -182,7 +182,6 @@ pub fn output<W>(
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
     Ok(OutputPlan {
-        requirements: Vec::new(),
         delivery: Default::default(),
         wires: vec![Wire {
             component: Default::default(),

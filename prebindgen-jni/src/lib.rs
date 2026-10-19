@@ -407,8 +407,8 @@ impl Class {
 }
 /// Conversions and slot glue used by [`JniGen`].
 /// Prepared code expects a mutable `env` JNI environment in the wrapper.
-/// Shared ownership acknowledgement declares `__ownership` through the call's
-/// requirements; output delivery creates the `result` object array.
+/// Consuming input slots supply shared acknowledgement code; the writer declares
+/// `__ownership`. Output delivery creates the `result` object array.
 /// The writer supplies the error boundary and matching Kotlin protocol.
 /// Use with [`prebindgen_declarations::bind_input`] and [`prebindgen_declarations::bind_output`]
 /// to fill [`Bindings`] manually.
@@ -418,16 +418,12 @@ impl Codec for JniCodec {
     type Wire = JniWire;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
         if plan.resources.iter().any(|r| r.access == Access::Move) {
-            plan.requirements.push(prebindgen_flat::CallRequirement {
-                key: "jni.ownership".into(),
-                parameters: quote!(__ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
-                acknowledge: quote!(
-                    if env.get_array_length(&__ownership).map_err(|e|e.to_string())? != 1 {
-                        return Err("invalid ownership acknowledgement".into());
-                    }
-                    env.set_boolean_array_region(&__ownership, 0, &[1]).map_err(|e|e.to_string())?;
-                ),
-            });
+            plan.acknowledgement = Some(quote!(
+                if env.get_array_length(&__ownership).map_err(|e|e.to_string())? != 1 {
+                    return Err("invalid ownership acknowledgement".into());
+                }
+                env.set_boolean_array_region(&__ownership, 0, &[1]).map_err(|e|e.to_string())?;
+            ));
         }
         Ok(())
     }
@@ -705,7 +701,7 @@ fn generate<
     }
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let call = prebindgen_flat::prepare_call(&flat, &f.name.to_string())?;
+        let body = prebindgen_flat::emit_call(f)?;
         let method = format!("call{index}");
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
@@ -714,7 +710,7 @@ fn generate<
         let mut kt_args = Vec::new();
         let mut locks = Vec::new();
         let mut consumed = Vec::new();
-        for w in call.inputs() {
+        for w in f.inputs()? {
             let n = &w.name;
             let rt = raw_rust(&w.kind);
             params.push(quote!(#n:#rt));
@@ -739,30 +735,23 @@ fn generate<
             kt_params.push(format!("{n}: {kt}"));
             kt_args.push(arg);
         }
-        if call
-            .requirements()
+        let has_consumes = !consumed.is_empty();
+        let has_acknowledgement = f
+            .input_conversions()?
             .iter()
-            .any(|r| r.key != "jni.ownership" && !r.parameters.is_empty())
-        {
-            return Err("JNI wrapper requirement has no Kotlin parameter mapping".into());
+            .any(|i| i.acknowledgement().is_some());
+        if has_acknowledgement != has_consumes {
+            return Err("JNI acknowledgement does not match consuming input wires".into());
         }
-        let has_consumes = call.requirements().iter().any(|r| r.key == "jni.ownership");
-        if has_consumes != !consumed.is_empty() {
-            return Err("JNI ownership requirement does not match consuming input wires".into());
-        }
-        params.extend(
-            call.requirements()
-                .iter()
-                .filter(|r| !r.parameters.is_empty())
-                .map(|r| r.parameters.clone()),
-        );
         if has_consumes {
+            params.push(
+                quote!(__ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
+            );
             raw_params.push("ownership: BooleanArray".into());
             kt_args.push("ownership".into());
         }
         let slots: usize = usize::from(has_consumes)
-            + call
-                .inputs()
+            + f.inputs()?
                 .map(|w| match w.kind {
                     JniWire::Handle(_) => 2,
                     JniWire::Scalar(p) => scalar::parameter_slots(p),
@@ -776,7 +765,7 @@ fn generate<
         }
         let mut delivered = Vec::new();
         let mut result_types = Vec::new();
-        for (i, output) in call.outputs().enumerate() {
+        for (i, output) in f.outputs()?.enumerate() {
             let w = output.wire;
             let (kt, decode) = match &w.kind {
                 JniWire::Scalar(p) => scalar::output_kotlin(*p, i),
@@ -791,7 +780,6 @@ fn generate<
             delivered.push(decode);
             result_types.push(kt);
         }
-        let body = call.emit();
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]
@@ -808,7 +796,7 @@ fn generate<
         let mut output_locals = String::new();
         let mut materialize = String::new();
         let mut cleanup = String::new();
-        for (i, output) in call.outputs().enumerate() {
+        for (i, output) in f.outputs()?.enumerate() {
             let w = output.wire;
             if let JniWire::Handle(handle) = &w.kind {
                 let c = class(&classes, &handle.ty)?.fqn();
