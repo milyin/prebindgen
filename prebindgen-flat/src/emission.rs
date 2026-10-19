@@ -6,7 +6,7 @@ use quote::{quote, ToTokens};
 /// Language-generator-owned context used when assembling a source call.
 /// All other fields and their meaning are chosen by the language generator.
 pub trait EmissionContext {
-    /// Local in which call assembly binds the source function's return value.
+    /// Name of the generated variable that holds the source function's return value.
     fn source_result(&self) -> &syn::Ident;
 }
 

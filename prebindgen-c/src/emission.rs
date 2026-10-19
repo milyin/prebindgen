@@ -6,7 +6,7 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct CContext {
-    /// Local holding the source function result.
+    /// Name of the generated variable that holds the source function's return value.
     pub source_result: syn::Ident,
     /// Wrapper parameter receiving the result structure.
     pub output_pointer: syn::Ident,
