@@ -3,16 +3,58 @@ use super::*;
 struct TestInput(u8);
 impl InputConversion for TestInput {
     type Wire = ();
-    fn emit(&self) -> Result<InputPlan<()>> {
-        Err("test has no executable conversion".into())
+    fn representation(&self) -> Option<&crate::RepresentationId> {
+        panic!("test has no executable conversion")
+    }
+    fn wires(&self) -> &[Wire<Self::Wire>] {
+        panic!("test has no executable conversion")
+    }
+    fn requirements(&self) -> &[CallRequirement] {
+        panic!("test has no executable conversion")
+    }
+    fn resources(&self) -> &[Resource] {
+        panic!("test has no executable conversion")
+    }
+    fn validation(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
+    }
+    fn acquisition(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
+    }
+    fn construction(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
+    }
+    fn argument(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
     }
 }
 #[derive(Clone, Debug, PartialEq)]
 struct TestOutput(u32);
 impl OutputConversion for TestOutput {
     type Wire = ();
-    fn emit(&self) -> Result<OutputPlan<()>> {
-        Err("test has no executable conversion".into())
+    fn representation(&self) -> Option<&crate::RepresentationId> {
+        panic!("test has no executable conversion")
+    }
+    fn wires(&self) -> &[Wire<Self::Wire>] {
+        panic!("test has no executable conversion")
+    }
+    fn requirements(&self) -> &[CallRequirement] {
+        panic!("test has no executable conversion")
+    }
+    fn values(&self) -> &[proc_macro2::TokenStream] {
+        panic!("test has no executable conversion")
+    }
+    fn preparation(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
+    }
+    fn delivery(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
+    }
+    fn commit(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
+    }
+    fn result(&self) -> proc_macro2::TokenStream {
+        panic!("test has no executable conversion")
     }
 }
 fn parse(text: &str) -> Result<Flat<TestInput, TestOutput>> {

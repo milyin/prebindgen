@@ -30,7 +30,7 @@ pub struct Wire<W> {
 
 /// An input conversion split into call-wide validation, acquisition and construction.
 ///
-/// Conversion implementers provide these phases. [`PreparedCall::emit`] orders
+/// Optional concrete storage implementing [`InputConversion`]. [`PreparedCall::emit`] orders
 /// them across all parameters; wrapper writers do not assemble them themselves.
 #[derive(Clone, Debug)]
 pub struct InputPlan<W> {
@@ -53,7 +53,7 @@ pub struct InputPlan<W> {
 }
 /// Output conversion whose owned temporaries survive until successful delivery.
 ///
-/// Conversion implementers provide preparation and deferred commit code.
+/// Optional concrete storage implementing [`OutputConversion`].
 /// [`PreparedCall::emit`] commits only after adapter delivery succeeds.
 #[derive(Clone, Debug)]
 pub struct OutputPlan<W> {
@@ -225,35 +225,109 @@ pub fn source_result_expr() -> TokenStream {
     quote!(#result)
 }
 
-/// Opaque input conversion stored in a parameter slot.
-/// Implementations describe phases; wrapper writers use [`prepare_call`].
+/// A fully prepared input conversion stored in a slot.
+/// Metadata and generated names must stay consistent across method calls.
+/// Code runs in the environment supplied by the language wrapper writer.
+/// Preparation resolves errors before installing the slot; [`prepare_call`]
+/// reads this interface directly, without an intermediate plan.
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire;
-    /// Resolve code and boundary inputs for this occurrence.
-    fn emit(&self) -> Result<InputPlan<Self::Wire>>;
+    /// Explicit representation selected during preparation.
+    fn representation(&self) -> Option<&crate::RepresentationId>;
+    /// Boundary parameters in signature order.
+    fn wires(&self) -> &[Wire<Self::Wire>];
+    /// Shared wrapper requirements prepared with this slot.
+    fn requirements(&self) -> &[CallRequirement];
+    /// Resources used for call-wide alias checking.
+    fn resources(&self) -> &[Resource];
+    /// Fallible validation before any ownership transfer.
+    fn validation(&self) -> TokenStream;
+    /// Infallible ownership acquisition after acknowledgement.
+    fn acquisition(&self) -> TokenStream;
+    /// Construct the argument after all inputs have been acquired.
+    fn construction(&self) -> TokenStream;
+    /// Expression passed to the source function.
+    fn argument(&self) -> TokenStream;
 }
-
-/// Opaque output conversion stored in a result slot.
-/// Build source-value expressions with [`source_result`], the same identifier
-/// bound by the call emitter.
+impl<W> InputConversion for InputPlan<W> {
+    type Wire = W;
+    fn representation(&self) -> Option<&crate::RepresentationId> {
+        self.representation.as_ref()
+    }
+    fn wires(&self) -> &[Wire<Self::Wire>] {
+        &self.wires
+    }
+    fn requirements(&self) -> &[CallRequirement] {
+        &self.requirements
+    }
+    fn resources(&self) -> &[Resource] {
+        &self.resources
+    }
+    fn validation(&self) -> TokenStream {
+        self.validation.clone()
+    }
+    fn acquisition(&self) -> TokenStream {
+        self.acquire.clone()
+    }
+    fn construction(&self) -> TokenStream {
+        self.statements.clone()
+    }
+    fn argument(&self) -> TokenStream {
+        self.argument.clone()
+    }
+}
+/// A fully prepared output conversion stored in a slot.
+/// Metadata and generated names must stay consistent across method calls.
+/// Code runs in the environment supplied by the language wrapper writer.
+/// Preparation resolves errors before installing the slot; [`prepare_call`]
+/// reads this interface directly, without an intermediate plan.
+/// Source-value expressions use [`source_result`].
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire;
-    /// Resolve code, boundary outputs and delivery glue for this occurrence.
-    /// The glue must match the environment supplied by the wrapper writer.
-    fn emit(&self) -> Result<OutputPlan<Self::Wire>>;
+    /// Explicit representation selected during preparation.
+    fn representation(&self) -> Option<&crate::RepresentationId>;
+    /// Boundary results in delivery order.
+    fn wires(&self) -> &[Wire<Self::Wire>];
+    /// Shared wrapper requirements prepared with this slot.
+    fn requirements(&self) -> &[CallRequirement];
+    /// Output expressions in wire order, valid until commit.
+    fn values(&self) -> &[TokenStream];
+    /// Prepare owned output temporaries before delivery.
+    fn preparation(&self) -> TokenStream;
+    /// Fallible delivery code; ownership remains uncommitted on failure.
+    fn delivery(&self) -> TokenStream;
+    /// Infallibly transfer ownership after successful delivery.
+    fn commit(&self) -> TokenStream;
+    /// Infallible wrapper result expression evaluated after commit.
+    fn result(&self) -> TokenStream;
 }
-impl<W: Clone> InputConversion for InputPlan<W> {
+impl<W> OutputConversion for OutputPlan<W> {
     type Wire = W;
-    fn emit(&self) -> Result<InputPlan<W>> {
-        Ok(self.clone())
+    fn representation(&self) -> Option<&crate::RepresentationId> {
+        self.representation.as_ref()
     }
-}
-impl<W: Clone> OutputConversion for OutputPlan<W> {
-    type Wire = W;
-    fn emit(&self) -> Result<OutputPlan<W>> {
-        Ok(self.clone())
+    fn wires(&self) -> &[Wire<Self::Wire>] {
+        &self.wires
+    }
+    fn requirements(&self) -> &[CallRequirement] {
+        &self.requirements
+    }
+    fn values(&self) -> &[TokenStream] {
+        &self.values
+    }
+    fn preparation(&self) -> TokenStream {
+        self.statements.clone()
+    }
+    fn delivery(&self) -> TokenStream {
+        self.delivery.statements.clone()
+    }
+    fn commit(&self) -> TokenStream {
+        self.commit.clone()
+    }
+    fn result(&self) -> TokenStream {
+        self.delivery.result.clone()
     }
 }
 
@@ -308,60 +382,58 @@ impl Default for Delivery {
 
 /// Resolved call with opaque conversion phases and inspectable boundary mappings.
 /// Created by [`prepare_call`].
-pub struct PreparedCall<I, O> {
-    path: syn::Path,
-    inputs: Vec<InputPlan<I>>,
-    output: OutputPlan<O>,
+pub struct PreparedCall<'a, I: InputConversion, O: OutputConversion> {
+    path: &'a syn::Path,
+    inputs: Vec<&'a I>,
+    output: &'a O,
     requirements: Vec<CallRequirement>,
 }
-impl<I, O> PreparedCall<I, O> {
+impl<I: InputConversion, O: OutputConversion> PreparedCall<'_, I, O> {
     /// Combined wrapper requirements, in first occurrence order, without duplicates.
     pub fn requirements(&self) -> &[CallRequirement] {
         &self.requirements
     }
 
     /// Preserve parameter grouping when mapping components to representation fields.
-    pub fn parameters(&self) -> impl ExactSizeIterator<Item = InputBoundary<'_, I>> {
+    pub fn parameters(&self) -> impl ExactSizeIterator<Item = InputBoundary<'_, I::Wire>> {
         self.inputs.iter().map(|input| InputBoundary {
-            representation: input.representation.as_ref(),
-            wires: &input.wires,
+            representation: input.representation(),
+            wires: input.wires(),
         })
     }
     /// Boundary inputs in function and component order.
-    pub fn inputs(&self) -> impl Iterator<Item = &Wire<I>> {
-        self.inputs.iter().flat_map(|input| &input.wires)
+    pub fn inputs(&self) -> impl Iterator<Item = &Wire<I::Wire>> {
+        self.inputs.iter().flat_map(|input| input.wires())
     }
     /// Boundary outputs paired with their delivery expressions.
-    pub fn outputs(&self) -> impl ExactSizeIterator<Item = OutputValue<'_, O>> {
+    pub fn outputs(&self) -> impl ExactSizeIterator<Item = OutputValue<'_, O::Wire>> {
         self.output
-            .wires
+            .wires()
             .iter()
-            .zip(&self.output.values)
+            .zip(self.output.values())
             .map(|(wire, value)| OutputValue { wire, value })
     }
     /// Assemble validation, alias checks, acquisition, construction, source call,
     /// output preparation, delivery and commit in their required order.
     /// The returned statements belong inside the adapter's fallible boundary closure.
     pub fn emit(&self) -> TokenStream {
-        let validation = self.inputs.iter().map(|i| &i.validation);
+        let validation = self.inputs.iter().map(|i| i.validation());
         let resources: Vec<_> = self
             .inputs
             .iter()
-            .flat_map(|i| i.resources.iter().cloned())
+            .flat_map(|i| i.resources().iter().cloned())
             .collect();
         let aliases = validate_resources(&resources);
-        let acquire = self.inputs.iter().map(|i| &i.acquire);
-        let construct = self.inputs.iter().map(|i| &i.statements);
-        let args = self.inputs.iter().map(|i| &i.argument);
+        let acquire = self.inputs.iter().map(|i| i.acquisition());
+        let construct = self.inputs.iter().map(|i| i.construction());
+        let args = self.inputs.iter().map(|i| i.argument());
         let path = &self.path;
-        let prepare = &self.output.statements;
-        let commit = &self.output.commit;
+        let prepare = self.output.preparation();
+        let commit = self.output.commit();
         let source = source_result();
         let acknowledge = self.requirements.iter().map(|r| &r.acknowledge);
-        let Delivery {
-            statements: deliver,
-            result,
-        } = &self.output.delivery;
+        let deliver = self.output.delivery();
+        let result = self.output.result();
         quote! {
             #(#validation)* #aliases #(#acknowledge)* #(#acquire)* #(#construct)*
             let #source = #path(#(#args),*);
@@ -372,33 +444,29 @@ impl<I, O> PreparedCall<I, O> {
 impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
     /// Resolve all slots once. Missing slots and inconsistent output arity fail
     /// before a writer can emit a partial signature or call body.
-    fn resolve_call(&self) -> Result<PreparedCall<I::Wire, O::Wire>> {
+    fn resolve_call(&self) -> Result<PreparedCall<'_, I, O>> {
         let inputs = self
             .params
             .iter()
             .map(|p| {
-                p.ty.slot
-                    .as_ref()
-                    .ok_or_else(|| {
-                        format!("`{}`: parameter `{}` has no conversion", self.name, p.name)
-                    })?
-                    .emit()
+                p.ty.slot.as_ref().ok_or_else(|| {
+                    format!("`{}`: parameter `{}` has no conversion", self.name, p.name)
+                })
             })
             .collect::<Result<Vec<_>>>()?;
         let output = self
             .ret
             .slot
             .as_ref()
-            .ok_or_else(|| format!("`{}`: result has no conversion", self.name))?
-            .emit()?;
-        if output.wires.len() != output.values.len() {
+            .ok_or_else(|| format!("`{}`: result has no conversion", self.name))?;
+        if output.wires().len() != output.values().len() {
             return Err(format!("`{}`: output wire/value count differs", self.name));
         }
         let mut requirements: Vec<CallRequirement> = Vec::new();
         for requirement in inputs
             .iter()
-            .flat_map(|i| &i.requirements)
-            .chain(&output.requirements)
+            .flat_map(|i| i.requirements())
+            .chain(output.requirements())
         {
             if let Some(previous) = requirements.iter().find(|r| r.key == requirement.key) {
                 if previous.parameters.to_string() != requirement.parameters.to_string()
@@ -415,7 +483,7 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
         }
         Ok(PreparedCall {
             requirements,
-            path: self.path.clone(),
+            path: &self.path,
             inputs,
             output,
         })
@@ -426,23 +494,19 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
 /// Call [`crate::Flat::validate_representations`] once before a generation pass.
 /// This method checks only the selected call's mappings. Canonical defaults
 /// are never substituted during generation.
-pub fn prepare_call<I: InputConversion, O: OutputConversion, R>(
-    flat: &crate::Flat<I, O, R>,
+pub fn prepare_call<'a, I: InputConversion, O: OutputConversion, R>(
+    flat: &'a crate::Flat<I, O, R>,
     name: &str,
-) -> Result<PreparedCall<I::Wire, O::Wire>> {
+) -> Result<PreparedCall<'a, I, O>> {
     let function = flat.function(name)?;
     let call = function.resolve_call()?;
     for (parameter, input) in function.params.iter().zip(&call.inputs) {
-        flat.check_mapping(
-            &parameter.ty.ty,
-            input.representation.as_ref(),
-            &input.wires,
-        )?;
+        flat.check_mapping(&parameter.ty.ty, input.representation(), input.wires())?;
     }
     flat.check_mapping(
         &function.ret.ty,
-        call.output.representation.as_ref(),
-        &call.output.wires,
+        call.output.representation(),
+        call.output.wires(),
     )?;
     Ok(call)
 }
@@ -518,15 +582,15 @@ impl<I: InputConversion, O: OutputConversion, R> crate::Flat<I, O, R> {
         Ok(())
     }
 }
-impl<I, O> PreparedCall<I, O> {
+impl<I: InputConversion, O: OutputConversion> PreparedCall<'_, I, O> {
     /// Resolved representation of a source parameter, by its declaration index.
     pub fn input_representation(&self, index: usize) -> Option<&crate::RepresentationId> {
         self.inputs
             .get(index)
-            .and_then(|input| input.representation.as_ref())
+            .and_then(|input| input.representation())
     }
     /// Resolved result representation.
     pub fn output_representation(&self) -> Option<&crate::RepresentationId> {
-        self.output.representation.as_ref()
+        self.output.representation()
     }
 }

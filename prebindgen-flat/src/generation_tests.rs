@@ -4,15 +4,14 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 struct Input(usize);
-impl InputConversion for Input {
-    type Wire = &'static str;
-    fn emit(&self) -> Result<InputPlan<Self::Wire>> {
+impl Input {
+    fn plan(&self) -> InputPlan<&'static str> {
         let index = self.0;
         let name = format_ident!("arg{index}");
         let validate = format!("validate{index}");
         let acquire = format!("acquire{index}");
         let construct = format!("construct{index}");
-        Ok(InputPlan {
+        InputPlan {
             requirements: vec![CallRequirement {
                 key: "test.ack".into(),
                 parameters: quote!(),
@@ -25,14 +24,13 @@ impl InputConversion for Input {
             acquire: quote!(log(#acquire);),
             statements: quote!(log(#construct); let #name = 1;),
             argument: quote!(#name),
-        })
+        }
     }
 }
 struct Output;
-impl OutputConversion for Output {
-    type Wire = &'static str;
-    fn emit(&self) -> Result<OutputPlan<Self::Wire>> {
-        Ok(OutputPlan {
+impl Output {
+    fn plan(&self) -> OutputPlan<&'static str> {
+        OutputPlan {
             requirements: Vec::new(),
             delivery: Delivery {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
@@ -48,14 +46,14 @@ impl OutputConversion for Output {
             statements: quote!(log("prepare");),
             values: vec![source_result_expr()],
             commit: quote!(log("commit");),
-        })
+        }
     }
 }
 
 #[test]
 fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { log(\"source\"); a+b }").unwrap();
-    let mut flat = Flat::<Input, Output>::parse(
+    let mut flat = Flat::<InputPlan<&str>, OutputPlan<&str>>::parse(
         items
             .items
             .clone()
@@ -64,9 +62,9 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     )
     .unwrap();
     let f = flat.function_mut("add").unwrap();
-    f.params[0].ty.slot = Some(Input(0));
-    f.params[1].ty.slot = Some(Input(1));
-    f.ret.slot = Some(Output);
+    f.params[0].ty.slot = Some(Input(0).plan());
+    f.params[1].ty.slot = Some(Input(1).plan());
+    f.ret.slot = Some(Output.plan());
     let call = prepare_call(&flat, "add").unwrap();
     assert_eq!(call.requirements().len(), 1);
     let body = call.emit();
@@ -313,9 +311,9 @@ fn shared_requirements_merge_across_slots_and_reject_conflicts() {
         items.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let first = Input(0).emit().unwrap();
-    let mut second = Input(1).emit().unwrap();
-    let mut output = Output.emit().unwrap();
+    let first = Input(0).plan();
+    let mut second = Input(1).plan();
+    let mut output = Output.plan();
     output.requirements = first.requirements.clone();
     output.requirements.push(CallRequirement {
         key: "test.result".into(),
@@ -354,4 +352,60 @@ fn shared_requirements_merge_across_slots_and_reject_conflicts() {
     second.requirements[0].key = "test.another".into();
     flat.function_mut("add").unwrap().params[1].ty.slot = Some(second);
     assert_eq!(prepare_call(&flat, "add").unwrap().requirements().len(), 3);
+}
+
+#[test]
+fn prepared_calls_borrow_non_clone_wire_metadata() {
+    struct NonClone;
+    let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
+    let mut flat = Flat::<InputPlan<NonClone>, OutputPlan<NonClone>>::parse(
+        items
+            .items
+            .into_iter()
+            .map(|item| (item, Default::default())),
+    )
+    .unwrap();
+    let wire = || Wire {
+        component: Default::default(),
+        name: syn::parse_quote!(x),
+        kind: NonClone,
+        active: Condition::default(),
+    };
+    let f = flat.function_mut("echo").unwrap();
+    f.params[0].ty.slot = Some(InputPlan {
+        representation: None,
+        wires: vec![wire()],
+        requirements: vec![],
+        validation: quote!(),
+        acquire: quote!(),
+        resources: vec![],
+        statements: quote!(),
+        argument: quote!(x),
+    });
+    f.ret.slot = Some(OutputPlan {
+        representation: None,
+        wires: vec![wire()],
+        requirements: vec![],
+        statements: quote!(),
+        values: vec![source_result_expr()],
+        commit: quote!(),
+        delivery: Delivery {
+            statements: quote!(),
+            result: source_result_expr(),
+        },
+    });
+    let call = prepare_call(&flat, "echo").unwrap();
+    let f = flat.function("echo").unwrap();
+    assert!(std::ptr::eq(
+        call.inputs().next().unwrap(),
+        &f.params[0].ty.slot.as_ref().unwrap().wires[0]
+    ));
+    assert!(std::ptr::eq(
+        call.outputs().next().unwrap().value,
+        &f.ret.slot.as_ref().unwrap().values[0]
+    ));
+    assert_eq!(
+        call.emit().to_string(),
+        quote!(let __result = crate::echo(x); Ok(__result)).to_string()
+    );
 }

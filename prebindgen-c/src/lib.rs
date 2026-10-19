@@ -568,21 +568,34 @@ mod generation_tests {
     }
 
     #[test]
-    fn prepares_each_conversion_once_for_validation_and_emission() {
+    fn emits_custom_slot_code_without_building_a_plan() {
         struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
         impl prebindgen_flat::OutputConversion for CountedOutput {
             type Wire = CWire;
-            fn emit(&self) -> Result<OutputPlan<CWire>> {
+            fn representation(&self) -> Option<&prebindgen_flat::RepresentationId> {
+                None
+            }
+            fn wires(&self) -> &[GenericWire<Self::Wire>] {
+                &[]
+            }
+            fn requirements(&self) -> &[prebindgen_flat::CallRequirement] {
+                &[]
+            }
+            fn values(&self) -> &[TokenStream] {
+                &[]
+            }
+            fn preparation(&self) -> TokenStream {
                 self.0.set(self.0.get() + 1);
-                Ok(OutputPlan {
-                    requirements: Vec::new(),
-                    delivery: Default::default(),
-                    representation: None,
-                    wires: vec![],
-                    values: vec![],
-                    statements: quote!(),
-                    commit: quote!(),
-                })
+                quote!()
+            }
+            fn delivery(&self) -> TokenStream {
+                quote!()
+            }
+            fn commit(&self) -> TokenStream {
+                quote!()
+            }
+            fn result(&self) -> TokenStream {
+                quote!(())
             }
         }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));

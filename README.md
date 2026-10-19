@@ -93,16 +93,19 @@ settings remain commented out in the example manifests.
 
 `prebindgen-flat` owns the generation contract:
 
-- `InputConversion` and `OutputConversion` are traits on slot contents. Their
-  `emit` methods produce `InputPlan<W>` and `OutputPlan<W>`. Plans also implement
-  the traits, allowing preparation to store precompiled conversions directly.
+- `InputConversion` and `OutputConversion` expose prepared slot metadata and code
+  through individual methods. `prepare_call` reads these methods directly; slots
+  do not return intermediate plans. `InputPlan<W>` and `OutputPlan<W>` remain
+  optional concrete storage implementations, without a `W: Clone` requirement.
+  Metadata is borrowed; code methods return tokens with stable generated names.
 - `Flat<I, O, R>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
 - Call `flat.validate_representations()` once at the start of generation.
   `prepare_call(&flat, name)` resolves only the selected function's slots and validates
   its explicit representation mappings. `PreparedCall::inputs`, `parameters`
   and `outputs` expose boundary signatures and paired output expressions without
-  exposing execution phases to the writer.
+  exposing execution phases to the writer. `PreparedCall` borrows the selected
+  slots, so their metadata need not be cloned.
 - Input and output plans carry named `CallRequirement`s, including additional
   Rust parameters and acknowledgement code. `prepare_call` merges identical
   requirements by key in first occurrence order and rejects conflicting definitions.
