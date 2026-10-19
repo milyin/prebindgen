@@ -209,10 +209,22 @@ pub fn source_result_expr() -> TokenStream {
 /// has no foreign resource to acquire, it needs no resources or acknowledgement.
 ///
 /// ```
-/// use prebindgen_flat::{EmissionContext, InputConversion, Resource, Result, Wire};
+/// use prebindgen_flat::{EmissionContext, InputConversion, Resource, Result, Wire, WireKind};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Ident, Type};
+///
+/// // The language generator defines its supported boundary carriers.
+/// enum WireType {
+///     U8,
+/// }
+/// impl WireKind for WireType {
+///     fn rust_type(&self) -> Type {
+///         match self {
+///             Self::U8 => parse_quote!(u8),
+///         }
+///     }
+/// }
 ///
 /// // The language generator defines the context and supplies it during emission.
 /// struct Context {
@@ -224,14 +236,14 @@ pub fn source_result_expr() -> TokenStream {
 ///
 /// // Preparation stores the wire description and argument variable name in the slot.
 /// struct BoolInput {
-///     wires: [Wire<Type>; 1],
+///     wires: [Wire<WireType>; 1],
 ///     argument_name: Ident,
 /// }
 /// impl InputConversion for BoolInput {
-///     type Wire = Type;
+///     type Wire = WireType;
 ///     type Context = Context;
 ///
-///     fn wires(&self) -> &[Wire<Type>] {
+///     fn wires(&self) -> &[Wire<WireType>] {
 ///         &self.wires
 ///     }
 ///
@@ -268,7 +280,7 @@ pub fn source_result_expr() -> TokenStream {
 /// let slot = BoolInput {
 ///     wires: [Wire {
 ///         name: parse_quote!(raw_enabled),
-///         kind: parse_quote!(u8),
+///         kind: WireType::U8,
 ///     }],
 ///     argument_name: parse_quote!(enabled),
 /// };
