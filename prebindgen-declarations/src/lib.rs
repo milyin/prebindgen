@@ -245,7 +245,7 @@ pub trait Codec {
 
     /// Private preparation metadata for a leaf wire. Final slot conversion may
     /// replace it with a transport-only description before exposing wires to a writer.
-    type Wire: Clone + std::fmt::Debug;
+    type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
     /// Describe the `i32` arm index wire that the declaration compiler creates for [`Input::Selector`].
     ///
     /// `extra` is the occurrence data of the conversion that contains the selector.
@@ -708,7 +708,10 @@ impl<'a, C: Codec> Compiler<'a, C> {
         Ok(out)
     }
 }
-fn append<W, C>(to: &mut OutputPlan<W, C>, from: OutputPlan<W, C>) -> Result<()> {
+fn append<W: prebindgen_flat::WireKind, C>(
+    to: &mut OutputPlan<W, C>,
+    from: OutputPlan<W, C>,
+) -> Result<()> {
     if !from.delivery.statements.is_empty()
         || from.delivery.result.to_string() != quote!(()).to_string()
     {

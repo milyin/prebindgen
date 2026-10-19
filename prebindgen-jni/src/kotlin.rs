@@ -2,14 +2,18 @@
 use super::*;
 use prebindgen_flat::{InputConversion, OutputConversion, Resource, Wire, WireKind};
 
-fn raw_rust(kind: &JniKind) -> syn::Type {
-    match kind {
-        JniKind::Scalar(p) => scalar::rust_type(*p),
-        JniKind::Handle(_, _) => syn::parse_quote!(i64),
-        JniKind::Selector => syn::parse_quote!(i32),
-        JniKind::Text => syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>),
-        JniKind::Bytes => {
-            syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
+impl WireKind for JniKind {
+    fn rust_type(&self) -> syn::Type {
+        match self {
+            JniKind::Scalar(p) => scalar::rust_type(*p),
+            JniKind::Handle(_, _) => syn::parse_quote!(i64),
+            JniKind::Selector => syn::parse_quote!(i32),
+            JniKind::Text => {
+                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
+            }
+            JniKind::Bytes => {
+                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
+            }
         }
     }
 }
@@ -41,7 +45,7 @@ impl WireKind for JniWire {
 impl From<&JniKind> for JniWire {
     fn from(kind: &JniKind) -> Self {
         Self {
-            rust_type: raw_rust(kind),
+            rust_type: kind.rust_type(),
             kotlin_type: raw_kt(kind),
             parameter_slots: match kind {
                 JniKind::Handle(_, _) => 2,

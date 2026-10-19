@@ -28,7 +28,7 @@ impl WireKind for syn::Type {
 
 /// One boundary parameter or result component used by wrapper emission.
 ///
-/// In conversion slots, `W` implements [`WireKind`]. Call [`Wire::rust_type`]
+/// `W` must implement [`WireKind`]. Call [`Wire::rust_type`]
 /// to obtain the Rust carrier type supplied by the kind.
 ///
 /// ```
@@ -40,11 +40,18 @@ impl WireKind for syn::Type {
 /// let ty = wire.rust_type();
 /// assert_eq!(quote::quote!(#ty).to_string(), "i64");
 /// ```
+/// A wire kind without a Rust carrier type is rejected:
+///
+/// ```compile_fail
+/// use prebindgen_flat::Wire;
+/// struct Untyped;
+/// let wire = Wire { name: syn::parse_quote!(value), kind: Untyped };
+/// ```
 #[derive(Clone, Debug)]
-pub struct Wire<W> {
+pub struct Wire<W: WireKind> {
     /// Generated identifier used by conversion code and wrapper signatures.
     pub name: syn::Ident,
-    /// Transport description implementing [`WireKind`] in conversion slots.
+    /// Transport description implementing [`WireKind`].
     /// Logical fields, selection rules and ownership behavior belong inside the converter.
     pub kind: W,
 }
@@ -62,7 +69,7 @@ impl<W: WireKind> Wire<W> {
 /// Optional concrete storage implementing [`InputConversion`]. [`emit_call`] orders
 /// them across all parameters; wrapper writers do not assemble them themselves.
 #[derive(Clone, Debug)]
-pub struct InputPlan<W, C = syn::Ident> {
+pub struct InputPlan<W: WireKind, C = syn::Ident> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Flattened boundary parameters in signature order.
@@ -85,7 +92,7 @@ pub struct InputPlan<W, C = syn::Ident> {
 /// Optional concrete storage implementing [`OutputConversion`].
 /// [`emit_call`] commits only after adapter delivery succeeds.
 #[derive(Clone, Debug)]
-pub struct OutputPlan<W, C = syn::Ident> {
+pub struct OutputPlan<W: WireKind, C = syn::Ident> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
@@ -390,7 +397,7 @@ impl<W: WireKind, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
 }
 
 /// An output expression paired with its boundary description.
-pub struct OutputValue<'a, W> {
+pub struct OutputValue<'a, W: WireKind> {
     /// Boundary carrier and binding name; its meaning is private to the converter.
     pub wire: &'a Wire<W>,
     /// Expression ready for adapter-specific delivery.

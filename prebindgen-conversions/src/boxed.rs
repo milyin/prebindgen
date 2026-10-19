@@ -69,17 +69,21 @@ impl Storage {
 /// ```
 /// use prebindgen_conversions::boxed;
 /// use prebindgen_flat::Access;
-/// let input = boxed::input::<_, syn::Ident>(
+/// let input = boxed::input::<syn::Type, syn::Ident>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
-///     &quote::quote!(true), |boxed| boxed.access,
+///     &quote::quote!(true), |boxed| {
+///         let ty = boxed.ty;
+///         syn::parse_quote!(*const #ty)
+///     },
 /// )?;
-/// assert_eq!(input.wires[0].kind, Access::Shared);
+/// assert_eq!(input.resources[0].access, Access::Shared);
+/// assert_eq!(prebindgen_flat::type_key(&input.wires[0].rust_type()), "* const Counter");
 /// assert!(input.acquire.is_empty());
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W, C>(
+pub fn input<W: prebindgen_flat::WireKind, C>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
@@ -162,7 +166,7 @@ pub fn input<W, C>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W, C>(
+pub fn output<W: prebindgen_flat::WireKind, C>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,

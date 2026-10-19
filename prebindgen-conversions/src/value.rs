@@ -65,15 +65,15 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::value;
 /// use quote::quote;
-/// let input = value::input::<_, syn::Ident>(
+/// let input = value::input::<syn::Type, syn::Ident>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
-///     &quote::quote!(true), quote::quote!(read(raw)?), "buffer",
+///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
-/// assert_eq!(input.wires[0].kind, "buffer");
+/// assert_eq!(prebindgen_flat::type_key(&input.wires[0].rust_type()), "& str");
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W, C>(
+pub fn input<W: prebindgen_flat::WireKind, C>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
@@ -134,7 +134,7 @@ pub fn input<W, C>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W, C>(
+pub fn output<W: prebindgen_flat::WireKind, C>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
