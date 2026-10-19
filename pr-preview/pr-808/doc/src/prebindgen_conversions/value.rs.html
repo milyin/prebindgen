@@ -107,7 +107,7 @@
 <a href=#107 id=107 data-nosnippet>107</a>        ),
 <a href=#108 id=108 data-nosnippet>108</a>    };
 <a href=#109 id=109 data-nosnippet>109</a>    <span class="prelude-val">Ok</span>(InputPlan {
-<a href=#110 id=110 data-nosnippet>110</a>        requirements: Vec::new(),
+<a href=#110 id=110 data-nosnippet>110</a>        acknowledgement: <span class="prelude-val">None</span>,
 <a href=#111 id=111 data-nosnippet>111</a>        wires: <span class="macro">vec!</span>[Wire {
 <a href=#112 id=112 data-nosnippet>112</a>            component: Default::default(),
 <a href=#113 id=113 data-nosnippet>113</a>            name: wire,
@@ -162,17 +162,16 @@
 <a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">let </span>expr = encode(value);
 <a href=#163 id=163 data-nosnippet>163</a>    statements.extend(<span class="macro">quote!</span>(<span class="kw">let </span>#wire = #expr;));
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="prelude-val">Ok</span>(OutputPlan {
-<a href=#165 id=165 data-nosnippet>165</a>        requirements: Vec::new(),
-<a href=#166 id=166 data-nosnippet>166</a>        delivery: Default::default(),
-<a href=#167 id=167 data-nosnippet>167</a>        wires: <span class="macro">vec!</span>[Wire {
-<a href=#168 id=168 data-nosnippet>168</a>            component: Default::default(),
-<a href=#169 id=169 data-nosnippet>169</a>            name: wire.clone(),
-<a href=#170 id=170 data-nosnippet>170</a>            kind,
-<a href=#171 id=171 data-nosnippet>171</a>            active: Condition::default(),
-<a href=#172 id=172 data-nosnippet>172</a>        }],
-<a href=#173 id=173 data-nosnippet>173</a>        statements,
-<a href=#174 id=174 data-nosnippet>174</a>        values: <span class="macro">vec!</span>[<span class="macro">quote!</span>(#wire)],
-<a href=#175 id=175 data-nosnippet>175</a>        commit: <span class="macro">quote!</span>(),
-<a href=#176 id=176 data-nosnippet>176</a>    })
-<a href=#177 id=177 data-nosnippet>177</a>}
+<a href=#165 id=165 data-nosnippet>165</a>        delivery: Default::default(),
+<a href=#166 id=166 data-nosnippet>166</a>        wires: <span class="macro">vec!</span>[Wire {
+<a href=#167 id=167 data-nosnippet>167</a>            component: Default::default(),
+<a href=#168 id=168 data-nosnippet>168</a>            name: wire.clone(),
+<a href=#169 id=169 data-nosnippet>169</a>            kind,
+<a href=#170 id=170 data-nosnippet>170</a>            active: Condition::default(),
+<a href=#171 id=171 data-nosnippet>171</a>        }],
+<a href=#172 id=172 data-nosnippet>172</a>        statements,
+<a href=#173 id=173 data-nosnippet>173</a>        values: <span class="macro">vec!</span>[<span class="macro">quote!</span>(#wire)],
+<a href=#174 id=174 data-nosnippet>174</a>        commit: <span class="macro">quote!</span>(),
+<a href=#175 id=175 data-nosnippet>175</a>    })
+<a href=#176 id=176 data-nosnippet>176</a>}
 </code></pre></div></section></main></body></html>
