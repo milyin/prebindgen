@@ -1,5 +1,5 @@
 //! Conversion contracts and call assembly.
-use crate::{template_parameter, EmissionContext, Result, TemplateContext};
+use crate::{template_parameter, Result, TemplateContext};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -69,7 +69,7 @@ impl<W: WireKind> Wire<W> {
 /// Optional concrete storage implementing [`InputConversion`]. [`emit_call`] orders
 /// them across all parameters; wrapper writers do not assemble them themselves.
 #[derive(Clone, Debug)]
-pub struct InputPlan<W: WireKind, C = syn::Ident> {
+pub struct InputPlan<W: WireKind, C = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Flattened boundary parameters in signature order.
@@ -92,7 +92,7 @@ pub struct InputPlan<W: WireKind, C = syn::Ident> {
 /// Optional concrete storage implementing [`OutputConversion`].
 /// [`emit_call`] commits only after adapter delivery succeeds.
 #[derive(Clone, Debug)]
-pub struct OutputPlan<W: WireKind, C = syn::Ident> {
+pub struct OutputPlan<W: WireKind, C = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
@@ -193,7 +193,8 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 }
 
 /// Explicit template reference to the caller-selected source-result local.
-/// [`TemplateContext::render`] resolves it during emission.
+/// [`OutputPlan`] resolves it from the explicit `source` argument before
+/// calling [`TemplateContext::render`] for generator-specific parameters.
 pub fn source_result_expr() -> TokenStream {
     template_parameter("source_result")
 }
@@ -209,7 +210,7 @@ pub fn source_result_expr() -> TokenStream {
 /// has no foreign resource to acquire, it needs no resources or acknowledgement.
 ///
 /// ```
-/// use prebindgen_flat::{EmissionContext, InputConversion, Resource, Result, Wire, WireKind};
+/// use prebindgen_flat::{InputConversion, Resource, Result, Wire, WireKind};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Ident, Type};
@@ -227,12 +228,7 @@ pub fn source_result_expr() -> TokenStream {
 /// }
 ///
 /// // The language generator defines the context and supplies it during emission.
-/// struct Context {
-///     source_result: Ident,
-/// }
-/// impl EmissionContext for Context {
-///     fn source_result(&self) -> &Ident { &self.source_result }
-/// }
+/// struct Context;
 ///
 /// // Preparation stores the wire description. The caller supplies the target name.
 /// struct BoolInput {
@@ -276,7 +272,7 @@ pub fn source_result_expr() -> TokenStream {
 ///         kind: WireType::U8,
 ///     }],
 /// };
-/// let context = Context { source_result: parse_quote!(returned) };
+/// let context = Context;
 ///
 /// // Individual phases can be emitted directly. emit_call orders these phases
 /// // across all input slots and passes enabled to the wrapped function.
@@ -291,7 +287,7 @@ pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire: WireKind;
     /// Emission data defined and supplied by the language generator.
-    type Context: EmissionContext;
+    type Context;
     /// Boundary parameters in signature order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Shared call acknowledgement, after validation and before acquisition.
@@ -355,24 +351,25 @@ impl<W: WireKind, C: TemplateContext> InputConversion for InputPlan<W, C> {
 /// Preparation resolves errors before installing the slot; [`emit_call`]
 /// reads this interface directly, without an intermediate plan.
 /// Source-value templates use [`source_result_expr`]; custom implementations can
-/// use the supplied context directly.
+/// use the explicitly supplied source binding directly. All output phases receive
+/// the same binding, chosen by the caller, for the source function's return value.
 pub trait OutputConversion {
     /// Adapter-specific boundary description.
     type Wire: WireKind;
     /// Emission data defined and supplied by the language generator.
-    type Context: EmissionContext;
+    type Context;
     /// Boundary results in delivery order.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Output expressions in wire order, valid until commit.
-    fn values(&self, context: &Self::Context) -> Result<Vec<TokenStream>>;
+    fn values(&self, context: &Self::Context, source: &syn::Ident) -> Result<Vec<TokenStream>>;
     /// Prepare owned output temporaries before delivery.
-    fn preparation(&self, context: &Self::Context) -> Result<TokenStream>;
+    fn preparation(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
     /// Fallible delivery code; ownership remains uncommitted on failure.
-    fn delivery(&self, context: &Self::Context) -> Result<TokenStream>;
+    fn delivery(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
     /// Infallibly transfer ownership after successful delivery.
-    fn commit(&self, context: &Self::Context) -> Result<TokenStream>;
+    fn commit(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
     /// Infallible wrapper result expression evaluated after commit.
-    fn result(&self, context: &Self::Context) -> Result<TokenStream>;
+    fn result(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
 }
 impl<W: WireKind, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
     type Wire = W;
@@ -380,23 +377,23 @@ impl<W: WireKind, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
     fn wires(&self) -> &[Wire<Self::Wire>] {
         &self.wires
     }
-    fn values(&self, context: &Self::Context) -> Result<Vec<TokenStream>> {
+    fn values(&self, context: &Self::Context, source: &syn::Ident) -> Result<Vec<TokenStream>> {
         self.values
             .iter()
-            .map(|code| context.render(code))
+            .map(|code| crate::emission::render_output(context, code, source))
             .collect()
     }
-    fn preparation(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.statements)
+    fn preparation(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
+        crate::emission::render_output(context, &self.statements, source)
     }
-    fn delivery(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.delivery.statements)
+    fn delivery(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
+        crate::emission::render_output(context, &self.delivery.statements, source)
     }
-    fn commit(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.commit)
+    fn commit(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
+        crate::emission::render_output(context, &self.commit, source)
     }
-    fn result(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.delivery.result)
+    fn result(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
+        crate::emission::render_output(context, &self.delivery.result, source)
     }
 }
 
@@ -457,9 +454,10 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
     pub fn outputs(
         &self,
         context: &O::Context,
+        source: &syn::Ident,
     ) -> Result<impl ExactSizeIterator<Item = OutputValue<'_, O::Wire>>> {
         let output = self.output_conversion()?;
-        let values = output.values(context)?;
+        let values = output.values(context, source)?;
         if output.wires().len() != values.len() {
             return Err(format!("`{}`: output wire/value count differs", self.name));
         }
@@ -476,28 +474,27 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
 /// The returned code runs inside the wrapper's fallible boundary, in this order:
 /// all validation, alias checks, one acknowledgement, all acquisition, argument
 /// construction, source invocation, output preparation, delivery and commit.
+/// `source` names the variable that receives the source function's return value.
 /// Input and output contexts must match, even when the function has no parameters.
 ///
 /// ```compile_fail
-/// use prebindgen_flat::{emit_call, Function, InputConversion, OutputConversion, EmissionContext};
+/// use prebindgen_flat::{emit_call, Function, InputConversion, OutputConversion};
 /// struct OtherContext(syn::Ident);
-/// impl EmissionContext for OtherContext {
-///     fn source_result(&self) -> &syn::Ident { &self.0 }
-/// }
 /// fn incompatible<I, O>(function: &Function<I, O>, context: &syn::Ident)
 /// where I: InputConversion<Context = syn::Ident>,
 ///       O: OutputConversion<Context = OtherContext>,
 /// {
-///     emit_call(function, context).unwrap();
+///     emit_call(function, context, &syn::parse_quote!(returned)).unwrap();
 /// }
 /// ```
 pub fn emit_call<I: InputConversion, O: OutputConversion<Context = I::Context>>(
     function: &crate::Function<I, O>,
     context: &I::Context,
+    source: &syn::Ident,
 ) -> Result<TokenStream> {
     let inputs = function.input_conversions()?;
     let output = function.output_conversion()?;
-    let _ = function.outputs(context)?;
+    let _ = function.outputs(context, source)?;
     let mut acknowledgement: Option<TokenStream> = None;
     for input in &inputs {
         let Some(fragment) = input.acknowledgement(context)? else {
@@ -531,15 +528,14 @@ pub fn emit_call<I: InputConversion, O: OutputConversion<Context = I::Context>>(
         .map(|i| i.acquisition(context))
         .collect::<Result<Vec<_>>>()?;
     let path = &function.path;
-    let prepare = output.preparation(context)?;
-    let deliver = output.delivery(context)?;
-    let commit = output.commit(context)?;
-    let result = output.result(context)?;
-    let source = context.source_result();
+    let prepare = output.preparation(context, source)?;
+    let deliver = output.delivery(context, source)?;
+    let commit = output.commit(context, source)?;
+    let result = output.result(context, source)?;
     let mut used: std::collections::BTreeSet<String> = inputs
         .iter()
         .flat_map(|input| input.wires().iter().map(|wire| wire.name.to_string()))
-        .chain(std::iter::once(context.source_result().to_string()))
+        .chain(std::iter::once(source.to_string()))
         .collect();
     // Reserve names already used by surrounding phases and the source path.
     // These tokens are emitted once; their code and evaluation order stay unchanged.

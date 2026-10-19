@@ -457,20 +457,20 @@ fn generate<
         }
         let result_type = format_ident!("{prefix}_{}_result", f.name);
         let context = CContext {
-            source_result: format_ident!("source_value"),
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
             buffer_type: syn::parse_quote!(__PbBuffer),
             wide_integer_type: syn::parse_quote!(__Pb128),
             read_buffer: syn::parse_quote!(__pb_read),
         };
-        let body = prebindgen_flat::emit_call(f, &context)?;
+        let source = format_ident!("source_value");
+        let body = prebindgen_flat::emit_call(f, &context, &source)?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
         for wire in f
             .inputs()?
-            .chain(f.outputs(&context)?.map(|output| output.wire))
+            .chain(f.outputs(&context, &source)?.map(|output| output.wire))
         {
             if let CWire::Pointer(pointer) = &wire.kind {
                 if !pointers
@@ -484,7 +484,7 @@ fn generate<
                 }
             }
         }
-        calls.push((f, body, context));
+        calls.push((f, body, context, source));
     }
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
@@ -514,7 +514,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         });
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
-    for (f, body, context) in calls {
+    for (f, body, context, source) in calls {
         let out = &context.output_pointer;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
@@ -528,7 +528,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         }
         let mut fields = Vec::new();
         header.push_str("typedef struct {\n");
-        for (i, output) in f.outputs(&context)?.enumerate() {
+        for (i, output) in f.outputs(&context, &source)?.enumerate() {
             let w = output.wire;
             let field = format_ident!("v{i}");
             let ty = w.kind.rust_type();
@@ -593,20 +593,20 @@ mod generation_tests {
             fn wires(&self) -> &[GenericWire<Self::Wire>] {
                 &[]
             }
-            fn values(&self, _: &CContext) -> Result<Vec<TokenStream>> {
+            fn values(&self, _: &CContext, _source: &syn::Ident) -> Result<Vec<TokenStream>> {
                 Ok(vec![])
             }
-            fn preparation(&self, _: &CContext) -> Result<TokenStream> {
+            fn preparation(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
                 self.0.set(self.0.get() + 1);
                 Ok(quote!())
             }
-            fn delivery(&self, _: &CContext) -> Result<TokenStream> {
+            fn delivery(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
                 Ok(quote!())
             }
-            fn commit(&self, _: &CContext) -> Result<TokenStream> {
+            fn commit(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
                 Ok(quote!())
             }
-            fn result(&self, _: &CContext) -> Result<TokenStream> {
+            fn result(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
                 Ok(quote!(()))
             }
         }

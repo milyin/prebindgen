@@ -65,7 +65,7 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::value;
 /// use quote::quote;
-/// let input = value::input::<syn::Type, syn::Ident>(
+/// let input = value::input::<syn::Type, ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;

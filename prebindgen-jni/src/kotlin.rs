@@ -217,20 +217,20 @@ impl OutputConversion for JniOutput {
     fn wires(&self) -> &[Wire<JniWire>] {
         self.rust.wires()
     }
-    fn values(&self, context: &JniContext) -> Result<Vec<TokenStream>> {
-        self.rust.values(context)
+    fn values(&self, context: &JniContext, source: &syn::Ident) -> Result<Vec<TokenStream>> {
+        self.rust.values(context, source)
     }
-    fn preparation(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.preparation(context)
+    fn preparation(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
+        self.rust.preparation(context, source)
     }
-    fn delivery(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.delivery(context)
+    fn delivery(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
+        self.rust.delivery(context, source)
     }
-    fn commit(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.commit(context)
+    fn commit(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
+        self.rust.commit(context, source)
     }
-    fn result(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.result(context)
+    fn result(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
+        self.rust.result(context, source)
     }
 }
 impl KotlinInputConversion for JniInput {

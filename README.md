@@ -101,7 +101,7 @@ settings remain commented out in the example manifests.
   `Result<TokenStream>`. Output expressions are rendered with the same context.
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Parsing leaves slots empty; conversion types need no `Default` implementation.
-- `emit_call(function, &context)` checks slot completeness, output arity and shared
+- `emit_call(function, &context, &source)` checks slot completeness, output arity and shared
   acknowledgement agreement, then returns the assembled Rust call body. There is
   no intermediate call object or external glue argument. `Function::inputs` and
   `outputs` expose borrowed wire metadata and paired output expressions;
@@ -121,12 +121,13 @@ settings remain commented out in the example manifests.
   commit. The returned statements run inside the adapter's error boundary.
 - Each language generator defines its context type, selected by both conversion
   traits' associated `Context` type. `emit_call` requires matching context types.
-  Flat's `EmissionContext` trait requires only `source_result()`, the identifier
-  used to bind the wrapped function's return value. C and JNI define their own
-  required fields in `CContext` and `JniContext`; Flat has no list of ABI bindings.
+  Contexts have no required trait or fields. The caller passes the source-result
+  identifier explicitly to `emit_call`, output conversion methods and `Function::outputs`.
+  C and JNI define their generator-specific fields in `CContext` and `JniContext`.
 - Stored plans use the optional `TemplateContext::render` interface.
   `template_parameter(name)` creates an explicit marker whose meaning is defined
-  by the language generator; `source_result_expr()` marks the source-result local.
+  by the language generator; `source_result_expr()` marks the source-result local,
+  which output plans resolve using the explicit source argument.
   The `render_template` helper substitutes markers recursively, leaving ordinary
   identifiers and literals untouched. Custom conversions can use context fields
   directly without templates or rendering support. Slot-private locals
@@ -141,8 +142,8 @@ phases or depend on declarations during generation.
 
 `prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
 `Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
-type for the prepared slots; it defaults to `syn::Ident` in the alias for
-conversions that only need a source-result local. `bind_input` and `bind_output` compile one
+type for the prepared slots; it defaults to `()` in the alias for
+conversions that need no generator-specific settings. `bind_input` and `bind_output` compile one
 occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
 function. `Codec::finish_input` and `finish_output` attach glue after recursive
 composition, during preparation only; the latter also runs for unit results.

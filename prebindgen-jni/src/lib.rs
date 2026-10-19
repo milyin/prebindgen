@@ -713,11 +713,11 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
         let context = JniContext {
-            source_result: format_ident!("source_value"),
             environment: env.clone(),
             acknowledgement: ownership.clone(),
         };
-        let body = prebindgen_flat::emit_call(f, &context)?;
+        let source = format_ident!("source_value");
+        let body = prebindgen_flat::emit_call(f, &context, &source)?;
         let method = format!("call{index}");
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();

@@ -3,32 +3,33 @@ use crate::Result;
 use proc_macro2::{Group, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 
-/// Language-generator-owned context used when assembling a source call.
-/// All other fields and their meaning are chosen by the language generator.
-pub trait EmissionContext {
-    /// Name of the generated variable that holds the source function's return value.
-    fn source_result(&self) -> &syn::Ident;
-}
-
 /// Optional rendering support for stored [`crate::InputPlan`] and
 /// [`crate::OutputPlan`] templates. Custom conversions need not implement this.
-pub trait TemplateContext: EmissionContext {
+pub trait TemplateContext {
     /// Resolve the template's explicit parameter markers.
     fn render(&self, code: &TokenStream) -> Result<TokenStream>;
 }
 
-impl EmissionContext for syn::Ident {
-    fn source_result(&self) -> &syn::Ident {
-        self
+impl TemplateContext for () {
+    fn render(&self, code: &TokenStream) -> Result<TokenStream> {
+        render_template(code, &|name| Err(format!("unknown emission parameter `{name}`")))
     }
 }
-impl TemplateContext for syn::Ident {
-    fn render(&self, code: &TokenStream) -> Result<TokenStream> {
-        render_template(code, &|name| match name {
-            "source_result" => Ok(self.to_token_stream()),
-            _ => Err(format!("unknown emission parameter `{name}`")),
+
+/// Resolve the call's source binding before generator-specific template parameters.
+pub(crate) fn render_output(
+    context: &impl TemplateContext,
+    code: &TokenStream,
+    source: &syn::Ident,
+) -> Result<TokenStream> {
+    let code = render_template(code, &|name| {
+        Ok(if name == "source_result" {
+            source.to_token_stream()
+        } else {
+            template_parameter(name)
         })
-    }
+    })?;
+    context.render(&code)
 }
 
 /// Insert an explicit template marker. The context renderer defines its meaning.

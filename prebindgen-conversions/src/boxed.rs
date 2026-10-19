@@ -69,7 +69,7 @@ impl Storage {
 /// ```
 /// use prebindgen_conversions::boxed;
 /// use prebindgen_flat::Access;
-/// let input = boxed::input::<syn::Type, syn::Ident>(
+/// let input = boxed::input::<syn::Type, ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     &quote::quote!(true), |boxed| {

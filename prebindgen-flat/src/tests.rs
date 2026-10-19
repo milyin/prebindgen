@@ -3,20 +3,20 @@ use super::*;
 struct TestInput(u8);
 impl InputConversion for TestInput {
     type Wire = syn::Type;
-    type Context = syn::Ident;
+    type Context = ();
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
     }
-    fn resources(&self, _: &syn::Ident) -> Result<Vec<Resource>> {
+    fn resources(&self, _: &()) -> Result<Vec<Resource>> {
         panic!("test has no executable conversion")
     }
-    fn validation(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn validation(&self, _: &()) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn acquisition(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn acquisition(&self, _: &()) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn construction(&self, _: &syn::Ident, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn construction(&self, _: &(), _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
 }
@@ -24,23 +24,23 @@ impl InputConversion for TestInput {
 struct TestOutput(u32);
 impl OutputConversion for TestOutput {
     type Wire = syn::Type;
-    type Context = syn::Ident;
+    type Context = ();
     fn wires(&self) -> &[Wire<Self::Wire>] {
         panic!("test has no executable conversion")
     }
-    fn values(&self, _: &syn::Ident) -> Result<Vec<proc_macro2::TokenStream>> {
+    fn values(&self, _: &(), _source: &syn::Ident) -> Result<Vec<proc_macro2::TokenStream>> {
         panic!("test has no executable conversion")
     }
-    fn preparation(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn preparation(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn delivery(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn delivery(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn commit(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn commit(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
-    fn result(&self, _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
+    fn result(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
         panic!("test has no executable conversion")
     }
 }

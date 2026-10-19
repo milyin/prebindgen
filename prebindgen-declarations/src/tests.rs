@@ -38,7 +38,7 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 impl Codec for TestCodec {
     type Extra = Extra;
     type Wire = TestWire;
-    type Context = syn::Ident;
+    type Context = ();
     type Input = InputPlan<TestWire>;
     type Output = OutputPlan<TestWire>;
     fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
@@ -581,7 +581,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
     .unwrap();
     let call = flat.function("point").unwrap();
     assert_eq!(
-        call.outputs(&emission_context())
+        call.outputs(&(), &source_binding())
             .unwrap()
             .map(|out| out.wire.kind.component.clone())
             .collect::<Vec<_>>(),
@@ -595,7 +595,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     impl Codec for FinalizingCodec {
         type Extra = Extra;
         type Wire = TestWire;
-        type Context = syn::Ident;
+        type Context = ();
         type Input = InputPlan<TestWire>;
         type Output = OutputPlan<TestWire>;
         fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
@@ -714,10 +714,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         .fill(&mut flat, &FinalizingCodec, &decl, &Extra::default())
         .unwrap();
     assert_eq!(
-        prebindgen_flat::emit_call(flat.function("take").unwrap(), &emission_context())
+        prebindgen_flat::emit_call(flat.function("take").unwrap(), &(), &source_binding())
             .unwrap()
             .to_string(),
-        prebindgen_flat::emit_call(direct.function("take").unwrap(), &emission_context())
+        prebindgen_flat::emit_call(direct.function("take").unwrap(), &(), &source_binding())
             .unwrap()
             .to_string()
     );
@@ -841,7 +841,7 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &Extra::default(),
     )
     .unwrap();
-    let before = prebindgen_flat::emit_call(flat.function("point").unwrap(), &emission_context())
+    let before = prebindgen_flat::emit_call(flat.function("point").unwrap(), &(), &source_binding())
         .unwrap()
         .to_string();
     let handle = RepresentationId("PointHandle".into());
@@ -863,15 +863,15 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     drop(shapes);
     flat.records.clear();
     let call = flat.function("point").unwrap();
-    assert_eq!(call.outputs(&emission_context()).unwrap().len(), 2);
+    assert_eq!(call.outputs(&(), &source_binding()).unwrap().len(), 2);
     assert_eq!(
-        prebindgen_flat::emit_call(call, &emission_context())
+        prebindgen_flat::emit_call(call, &(), &source_binding())
             .unwrap()
             .to_string(),
         before
     );
     assert_eq!(
-        call.outputs(&emission_context())
+        call.outputs(&(), &source_binding())
             .unwrap()
             .next()
             .unwrap()
@@ -883,6 +883,6 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     );
 }
 
-fn emission_context() -> syn::Ident {
+fn source_binding() -> syn::Ident {
     syn::parse_quote!(__result)
 }

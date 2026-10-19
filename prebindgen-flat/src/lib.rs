@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
 mod emission;
-pub use emission::{render_template, template_parameter, EmissionContext, TemplateContext};
+pub use emission::{render_template, template_parameter, TemplateContext};
 mod conversion;
 pub use conversion::*;
 

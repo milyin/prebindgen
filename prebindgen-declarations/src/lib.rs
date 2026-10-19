@@ -176,7 +176,7 @@ impl Output {
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Extra = ();
-///     type Context = syn::Ident;
+///     type Context = ();
 ///     type Input = InputPlan<Self::Wire>;
 ///     type Output = OutputPlan<Self::Wire>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
@@ -354,7 +354,7 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W, C = syn::Ident> = Flat<InputPlan<W, C>, OutputPlan<W, C>>;
+pub type Bindings<W, C = ()> = Flat<InputPlan<W, C>, OutputPlan<W, C>>;
 
 /// Build and attach a converter to a named function parameter.
 ///

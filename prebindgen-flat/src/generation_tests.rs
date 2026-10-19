@@ -61,7 +61,7 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
     let call = flat.function("add").unwrap();
-    let body = emit_call(call, &emission_context()).unwrap();
+    let body = emit_call(call, &(), &source_binding()).unwrap();
     let code = quote! {
         use std::sync::Mutex;
         static LOG: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
@@ -137,11 +137,17 @@ fn output_expressions_need_no_field_mapping() {
     let flat = record_model();
     let call = flat.function("point").unwrap();
     let values: Vec<_> = call
-        .outputs(&emission_context())
+        .outputs(&(), &source_binding())
         .unwrap()
         .map(|out| out.value.to_string())
         .collect();
     assert_eq!(values, ["__result . y", "__result . x"]);
+    // The same prepared slot and context work with a caller-selected binding.
+    let source = syn::parse_quote!(another_result);
+    let values: Vec<_> = call.outputs(&(), &source).unwrap()
+        .map(|out| out.value.to_string()).collect();
+    assert_eq!(values, ["another_result . y", "another_result . x"]);
+
 }
 
 #[test]
@@ -156,7 +162,7 @@ fn generation_rejects_inconsistent_output_arity() {
         .values
         .pop();
     assert!(
-        emit_call(flat.function("point").unwrap(), &emission_context())
+        emit_call(flat.function("point").unwrap(), &(), &source_binding())
             .err()
             .unwrap()
             .contains("count differs")
@@ -178,7 +184,7 @@ fn partial_projection_is_self_contained() {
     assert_eq!(
         flat.function("point")
             .unwrap()
-            .outputs(&emission_context())
+            .outputs(&(), &source_binding())
             .unwrap()
             .len(),
         1
@@ -202,7 +208,7 @@ fn several_physical_wires_may_supply_one_component() {
     assert_eq!(
         flat.function("point")
             .unwrap()
-            .outputs(&emission_context())
+            .outputs(&(), &source_binding())
             .unwrap()
             .len(),
         3
@@ -220,17 +226,17 @@ fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     f.params[0].ty.slot = Some(Input(0).plan());
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
-    let both = emit_call(f, &emission_context()).unwrap().to_string();
+    let both = emit_call(f, &(), &source_binding()).unwrap().to_string();
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = None;
-    assert_eq!(emit_call(f, &emission_context()).unwrap().to_string(), both);
+    assert_eq!(emit_call(f, &(), &source_binding()).unwrap().to_string(), both);
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = Some(quote!(different_ack()));
-    assert!(emit_call(f, &emission_context())
+    assert!(emit_call(f, &(), &source_binding())
         .unwrap_err()
         .contains("conflicting input acknowledgements"));
     for param in &mut f.params {
         param.ty.slot.as_mut().unwrap().acknowledgement = None;
     }
-    assert!(!emit_call(f, &emission_context())
+    assert!(!emit_call(f, &(), &source_binding())
         .unwrap()
         .to_string()
         .contains("acknowledge"));
@@ -285,7 +291,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         &f.params[0].ty.slot.as_ref().unwrap().wires[0]
     ));
     assert!(std::ptr::eq(
-        call.outputs(&emission_context())
+        call.outputs(&(), &source_binding())
             .unwrap()
             .next()
             .unwrap()
@@ -293,7 +299,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         &f.ret.slot.as_ref().unwrap().wires[0]
     ));
     assert_eq!(
-        emit_call(call, &emission_context()).unwrap().to_string(),
+        emit_call(call, &(), &source_binding()).unwrap().to_string(),
         quote!(let __prebindgen_argument_0 = x; let __result = crate::echo(__prebindgen_argument_0); Ok(__result)).to_string()
     );
 }
@@ -306,37 +312,30 @@ fn emit_call_rejects_missing_input_and_result_slots() {
     )
     .unwrap();
     let function = flat.function_mut("echo").unwrap();
-    assert!(emit_call(function, &emission_context())
+    assert!(emit_call(function, &(), &source_binding())
         .unwrap_err()
         .contains("parameter `x` has no conversion"));
     function.params[0].ty.slot = Some(Input(0).plan());
-    assert!(emit_call(function, &emission_context())
+    assert!(emit_call(function, &(), &source_binding())
         .unwrap_err()
         .contains("result has no conversion"));
 }
 
-fn emission_context() -> syn::Ident {
+fn source_binding() -> syn::Ident {
     syn::parse_quote!(__result)
 }
 
 // Defined by the consumer, with no Clone/Debug/Default requirement.
 struct TestContext {
-    result: syn::Ident,
     runtime: syn::Ident,
     sink: syn::Ident,
     accepted: syn::Ident,
     carrier: syn::Path,
 }
-impl EmissionContext for TestContext {
-    fn source_result(&self) -> &syn::Ident {
-        &self.result
-    }
-}
 impl TemplateContext for TestContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         use quote::ToTokens;
         render_template(code, &|name| match name {
-            "source_result" => Ok(self.result.to_token_stream()),
             "runtime" => Ok(self.runtime.to_token_stream()),
             "sink" => Ok(self.sink.to_token_stream()),
             "accepted" => Ok(self.accepted.to_token_stream()),
@@ -396,13 +395,13 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         let acknowledgement = format_ident!("accepted_{suffix}");
         let output_type = format_ident!("{type_name}");
         let context = TestContext {
-            result: format_ident!("computed_{suffix}"),
             runtime: environment.clone(),
             sink: output_pointer.clone(),
             carrier: syn::parse_quote!(crate::#output_type),
             accepted: acknowledgement.clone(),
         };
-        let body = emit_call(function, &context).unwrap();
+        let source = format_ident!("computed_{suffix}");
+        let body = emit_call(function, &context, &source).unwrap();
         assert!(!body.to_string().contains("__prebindgen_emit"));
         wrappers.extend(quote! {
             struct #output_type { value: i32 }
@@ -451,13 +450,12 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
 
 #[test]
 fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings() {
-    let minimal: syn::Ident = syn::parse_quote!(computed);
+    let minimal = ();
     assert!(minimal
         .render(&template_parameter("runtime"))
         .unwrap_err()
         .contains("unknown emission parameter `runtime`"));
     let context = TestContext {
-        result: minimal,
         runtime: syn::parse_quote!(runtime),
         sink: syn::parse_quote!(sink),
         accepted: syn::parse_quote!(accepted),
@@ -480,13 +478,7 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 #[test]
 fn custom_conversions_use_context_without_template_rendering() {
     struct Context {
-        local: syn::Ident,
         increment: i32,
-    }
-    impl EmissionContext for Context {
-        fn source_result(&self) -> &syn::Ident {
-            &self.local
-        }
     }
     struct Input;
     impl InputConversion for Input {
@@ -516,21 +508,20 @@ fn custom_conversions_use_context_without_template_rendering() {
         fn wires(&self) -> &[Wire<syn::Type>] {
             &[]
         }
-        fn values(&self, _: &Context) -> Result<Vec<TokenStream>> {
+        fn values(&self, _: &Context, _source: &syn::Ident) -> Result<Vec<TokenStream>> {
             Ok(vec![])
         }
-        fn preparation(&self, _: &Context) -> Result<TokenStream> {
+        fn preparation(&self, _: &Context, _source: &syn::Ident) -> Result<TokenStream> {
             Ok(quote!())
         }
-        fn delivery(&self, _: &Context) -> Result<TokenStream> {
+        fn delivery(&self, _: &Context, _source: &syn::Ident) -> Result<TokenStream> {
             Ok(quote!())
         }
-        fn commit(&self, _: &Context) -> Result<TokenStream> {
+        fn commit(&self, _: &Context, _source: &syn::Ident) -> Result<TokenStream> {
             Ok(quote!())
         }
-        fn result(&self, context: &Context) -> Result<TokenStream> {
-            let local = &context.local;
-            Ok(quote!(#local))
+        fn result(&self, _: &Context, source: &syn::Ident) -> Result<TokenStream> {
+            Ok(quote!(#source))
         }
     }
     let item = syn::parse_quote!(
@@ -543,11 +534,10 @@ fn custom_conversions_use_context_without_template_rendering() {
     function.params[0].ty.slot = Some(Input);
     function.ret.slot = Some(Output);
     let context = Context {
-        local: syn::parse_quote!(returned),
         increment: 42,
     };
     assert_eq!(
-        emit_call(function, &context).unwrap().to_string(),
+        emit_call(function, &context, &syn::parse_quote!(returned)).unwrap().to_string(),
         quote!(let __prebindgen_argument_0 = 42i32; let returned = crate::echo(__prebindgen_argument_0); Ok(returned)).to_string()
     );
 }
@@ -635,8 +625,9 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
             result: quote!(#source + __prebindgen_argument_0_),
         },
     });
-    let context = syn::parse_quote!(__prebindgen_argument_0__);
-    let body = emit_call(function, &context).unwrap();
+    let context = ();
+    let source = syn::parse_quote!(__prebindgen_argument_0__);
+    let body = emit_call(function, &context, &source).unwrap();
     let target: syn::Ident = syn::parse_quote!(chosen_by_caller);
     let standalone = function.params[0]
         .ty
