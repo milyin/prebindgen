@@ -1,5 +1,5 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_registry::fun;
+use prebindgen_declarations::fun;
 use syn::parse_quote as pq;
 
 fn main() {
@@ -76,9 +76,9 @@ fn main() {
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.convert(
-            prebindgen_registry::convert!(Millis)
-                .input(prebindgen_registry::fun!(millis_from_raw))
-                .output(prebindgen_registry::fun!(millis_to_raw)),
+            prebindgen_declarations::convert!(Millis)
+                .input(prebindgen_declarations::fun!(millis_from_raw))
+                .output(prebindgen_declarations::fun!(millis_to_raw)),
         );
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
