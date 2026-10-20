@@ -206,15 +206,16 @@ pub fn source_result_expr() -> TokenStream {
 /// reads this interface directly, without an intermediate plan.
 ///
 /// This conversion accepts one opaque pointer wire and constructs a
-/// `Box<Document>` argument for a function such as `publish(document: Box<Document>)`.
+/// `Box<T>` argument. Preparation supplies the concrete pointee type as a
+/// `syn::Type`; the converter does not hardcode any wrapped type.
 /// It demonstrates every method, including ownership transfer and alias checking.
 ///
 /// The wrapper supplies an `&mut bool` acknowledgement parameter, initially false.
 /// Validation or alias-check failure leaves it false and ownership with the caller.
-/// After acknowledgement, the wrapper owns the document even if later code fails.
-/// The pointer must come from a compatible `Box<Document>::into_raw`, remain live,
-/// and be used exclusively for this transfer. A null check cannot establish those
-/// conditions.
+/// After acknowledgement, the wrapper owns the allocation even if later code fails.
+/// The pointer must come from a compatible `Box::into_raw` for the prepared
+/// pointee type, remain live, and be used exclusively for this transfer.
+/// A null check cannot establish those conditions.
 ///
 /// ```
 /// use prebindgen_flat::{Access, InputConversion, Resource, Result, Wire, WireKind};
@@ -240,13 +241,14 @@ pub fn source_result_expr() -> TokenStream {
 ///     acknowledged: Ident,
 /// }
 ///
-/// // Only the converter knows that this opaque pointer owns a Document.
-/// struct DocumentInput {
+/// // A reusable converter prepared for any supported sized pointee type.
+/// struct OwnedBoxInput {
+///     pointee: Type,
 ///     wires: [Wire<WireType>; 1],
 ///     // Preparation chooses a private temporary unique within the wrapper.
 ///     owned: Ident,
 /// }
-/// impl InputConversion for DocumentInput {
+/// impl InputConversion for OwnedBoxInput {
 ///     type Wire = WireType;
 ///     type Context = Context;
 ///
@@ -267,7 +269,7 @@ pub fn source_result_expr() -> TokenStream {
 ///         let wire = &self.wires[0].name;
 ///         Ok(quote! {
 ///             if #wire.is_null() {
-///                 return Err("null document handle".into());
+///                 return Err("null owned handle".into());
 ///             }
 ///         })
 ///     }
@@ -281,10 +283,10 @@ pub fn source_result_expr() -> TokenStream {
 ///     fn acquisition(&self, _: &Context) -> Result<TokenStream> {
 ///         let wire = &self.wires[0].name;
 ///         let owned = &self.owned;
-///         // Document is the source Rust type in the generated wrapper's scope.
+///         let pointee = &self.pointee;
 ///         // Safety relies on the caller's pointer and ownership contract above.
 ///         Ok(quote! {
-///             let #owned = unsafe { Box::<Document>::from_raw(#wire.cast::<Document>()) };
+///             let #owned = unsafe { ::std::boxed::Box::<#pointee>::from_raw(#wire.cast::<#pointee>()) };
 ///         })
 ///     }
 ///
@@ -294,12 +296,15 @@ pub fn source_result_expr() -> TokenStream {
 ///     }
 /// }
 ///
-/// let slot = DocumentInput {
+/// // Preparation obtains this type from the wrapped signature. Use u64 here
+/// // to demonstrate the converter without introducing an application type.
+/// let slot = OwnedBoxInput {
+///     pointee: parse_quote!(u64),
 ///     wires: [Wire {
-///         name: parse_quote!(raw_document),
+///         name: parse_quote!(raw_value),
 ///         kind: WireType::OpaquePointer,
 ///     }],
-///     owned: parse_quote!(__owned_document),
+///     owned: parse_quote!(__owned_value),
 /// };
 /// let context = Context { acknowledged: parse_quote!(ownership_taken) };
 ///
@@ -310,10 +315,10 @@ pub fn source_result_expr() -> TokenStream {
 /// let validation = slot.validation(&context)?;
 /// let acknowledgement = slot.acknowledgement(&context)?;
 /// let acquisition = slot.acquisition(&context)?;
-/// let target = parse_quote!(document);
+/// let target = parse_quote!(argument);
 /// let construction = slot.construction(&context, &target)?;
 /// assert_eq!(construction.to_string(),
-///            quote!(let document = __owned_document;).to_string());
+///            quote!(let argument = __owned_value;).to_string());
 ///
 /// // Inspect the emitted phases without compiling or executing a foreign pointer.
 /// let phases = quote! {
