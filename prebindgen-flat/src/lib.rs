@@ -1,6 +1,5 @@
-//! Source types, self-contained conversion slots, and wrapper code assembly.
-//! Parameters and results hold optional conversions constrained by direction-specific
-//! traits. Preparation fills slots; generation uses [`emit_call`].
+//! Source types, occurrence slots, and generator-defined conversion interfaces.
+//! Preparation fills slots; language generators interpret their request protocols.
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
 //! slot data types. Unit remains available for absence of a value.
@@ -10,8 +9,6 @@ use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
 
-mod emission;
-pub use emission::{render_template, template_parameter, TemplateContext};
 mod conversion;
 pub use conversion::*;
 
@@ -41,7 +38,7 @@ pub struct Param<S> {
 }
 /// A validated free function and its independently configurable type occurrences.
 #[derive(Clone, Debug)]
-pub struct Function<I: InputConversion, O: OutputConversion> {
+pub struct Function<I, O> {
     /// Unqualified name used by binding declarations.
     pub name: syn::Ident,
     /// Qualified path used to call the source function from generated Rust.
@@ -72,29 +69,24 @@ pub struct Field {
 /// Source structure with independently configured input and output conversions.
 ///
 /// Every parameter carries `Option<I>`; every result carries `Option<O>`.
-/// Record fields describe source structure; conversion wires carry resolved
-/// component mappings directly. Conversion implementations
-/// remain opaque to wrapper writers. Type-level bounds intentionally prevent
-/// non-conversion slot payloads. For source-only inspection, `let flat: Flat =
-/// Flat::parse(items)?` uses default plan types with all slots empty.
+/// Record fields describe source structure. Slot payloads belong to the consumer;
+/// generators may use [`InputConversion`] and [`OutputConversion`] for expression
+/// emission. Source-only inspection uses `Flat<(), ()>` with empty slots.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
 /// Rust size; generated code must emit [`Self::guards`] to enforce that rule.
 ///
 /// ```
-/// use prebindgen_flat::{Flat, InputPlan, OutputPlan};
+/// use prebindgen_flat::Flat;
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
-/// let flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
+/// let flat = Flat::<(), ()>::parse(
 ///     items.into_iter().map(|item| (item, Default::default())))?;
 /// assert!(flat.function("add")?.params[0].ty.slot.is_none());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct Flat<
-    I: InputConversion = InputPlan<syn::Type>,
-    O: OutputConversion = OutputPlan<syn::Type>,
-> {
+pub struct Flat<I = (), O = ()> {
     /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by `type_key` of their qualified type.
@@ -106,7 +98,7 @@ pub struct Flat<
     pub guards: Vec<syn::ItemConst>,
 }
 
-impl<I: InputConversion, O: OutputConversion> Flat<I, O> {
+impl<I, O> Flat<I, O> {
     /// Select the source declarations needed by this binding before validating
     /// the supported flat subset. Items outside the selection are skipped without validation.
     ///
@@ -338,7 +330,7 @@ impl<I: InputConversion, O: OutputConversion> Flat<I, O> {
     }
 }
 
-impl<I: InputConversion, O: OutputConversion> Flat<I, O> {
+impl<I, O> Flat<I, O> {
     /// Look up a free function by its unqualified source name.
     ///
     /// Returns an error if it was not included in this model.
@@ -424,7 +416,7 @@ impl<I: InputConversion, O: OutputConversion> Flat<I, O> {
     ///   slot; returns the new slot.
     /// * `output` — called for each result with its source type and old output
     ///   slot; returns the new slot.
-    pub fn map_slots<I2: InputConversion, O2: OutputConversion>(
+    pub fn map_slots<I2, O2>(
         self,
         mut input: impl FnMut(&Type, Option<I>) -> Result<Option<I2>>,
         mut output: impl FnMut(&Type, Option<O>) -> Result<Option<O2>>,
@@ -482,4 +474,4 @@ pub fn same_type(a: &Type, b: &Type) -> bool {
 mod tests;
 
 #[cfg(test)]
-mod generation_tests;
+mod request_tests;

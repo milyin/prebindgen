@@ -1,5 +1,9 @@
-//! Generation-contract tests use only flat, without the preparation crate.
+//! Execution tests for the optional staged protocol, without declarations.
 use super::*;
+use crate::staged::{emit_call, StagedFunction};
+use prebindgen_flat::Result;
+use prebindgen_flat::{InputConversion, Wire, WireKind};
+type Flat<I = InputPlan<syn::Type>, O = OutputPlan<syn::Type>> = prebindgen_flat::Flat<I, O>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -61,7 +65,7 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
     let call = flat.function("add").unwrap();
-    let body = emit_call(call, &(), &source_binding()).unwrap();
+    let body = emit_call(call, &(), &source_binding(), &syn::parse_quote!(_)).unwrap();
     let code = quote! {
         use std::sync::Mutex;
         static LOG: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
@@ -144,10 +148,12 @@ fn output_expressions_need_no_field_mapping() {
     assert_eq!(values, ["__result . y", "__result . x"]);
     // The same prepared slot and context work with a caller-selected binding.
     let source = syn::parse_quote!(another_result);
-    let values: Vec<_> = call.outputs(&(), &source).unwrap()
-        .map(|out| out.value.to_string()).collect();
+    let values: Vec<_> = call
+        .outputs(&(), &source)
+        .unwrap()
+        .map(|out| out.value.to_string())
+        .collect();
     assert_eq!(values, ["another_result . y", "another_result . x"]);
-
 }
 
 #[test]
@@ -161,12 +167,15 @@ fn generation_rejects_inconsistent_output_arity() {
         .unwrap()
         .values
         .pop();
-    assert!(
-        emit_call(flat.function("point").unwrap(), &(), &source_binding())
-            .err()
-            .unwrap()
-            .contains("count differs")
-    );
+    assert!(emit_call(
+        flat.function("point").unwrap(),
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_)
+    )
+    .err()
+    .unwrap()
+    .contains("count differs"));
 }
 
 #[test]
@@ -226,17 +235,24 @@ fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     f.params[0].ty.slot = Some(Input(0).plan());
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
-    let both = emit_call(f, &(), &source_binding()).unwrap().to_string();
+    let both = emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
+        .unwrap()
+        .to_string();
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = None;
-    assert_eq!(emit_call(f, &(), &source_binding()).unwrap().to_string(), both);
+    assert_eq!(
+        emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
+            .unwrap()
+            .to_string(),
+        both
+    );
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = Some(quote!(different_ack()));
-    assert!(emit_call(f, &(), &source_binding())
+    assert!(emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
         .unwrap_err()
         .contains("conflicting input acknowledgements"));
     for param in &mut f.params {
         param.ty.slot.as_mut().unwrap().acknowledgement = None;
     }
-    assert!(!emit_call(f, &(), &source_binding())
+    assert!(!emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
         .unwrap()
         .to_string()
         .contains("acknowledge"));
@@ -298,10 +314,14 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
             .wire,
         &f.ret.slot.as_ref().unwrap().wires[0]
     ));
-    assert_eq!(
-        emit_call(call, &(), &source_binding()).unwrap().to_string(),
-        quote!(let __prebindgen_argument_0 = x; let __result = crate::echo(__prebindgen_argument_0); Ok(__result)).to_string()
+    let body = emit_call(call, &(), &source_binding(), &syn::parse_quote!(_))
+        .unwrap()
+        .to_string();
+    assert!(body.contains(&quote!(let __prebindgen_argument_0 = x;).to_string()));
+    assert!(
+        body.contains(&quote!(let __result = crate::echo(__prebindgen_argument_0);).to_string())
     );
+    assert!(body.contains(&quote!(Ok(__result)).to_string()));
 }
 
 #[test]
@@ -312,13 +332,17 @@ fn emit_call_rejects_missing_input_and_result_slots() {
     )
     .unwrap();
     let function = flat.function_mut("echo").unwrap();
-    assert!(emit_call(function, &(), &source_binding())
-        .unwrap_err()
-        .contains("parameter `x` has no conversion"));
+    assert!(
+        emit_call(function, &(), &source_binding(), &syn::parse_quote!(_))
+            .unwrap_err()
+            .contains("parameter `x` has no conversion")
+    );
     function.params[0].ty.slot = Some(Input(0).plan());
-    assert!(emit_call(function, &(), &source_binding())
-        .unwrap_err()
-        .contains("result has no conversion"));
+    assert!(
+        emit_call(function, &(), &source_binding(), &syn::parse_quote!(_))
+            .unwrap_err()
+            .contains("result has no conversion")
+    );
 }
 
 fn source_binding() -> syn::Ident {
@@ -401,7 +425,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
             accepted: acknowledgement.clone(),
         };
         let source = format_ident!("computed_{suffix}");
-        let body = emit_call(function, &context, &source).unwrap();
+        let body = emit_call(function, &context, &source, &syn::parse_quote!(_)).unwrap();
         assert!(!body.to_string().contains("__prebindgen_emit"));
         wrappers.extend(quote! {
             struct #output_type { value: i32 }
@@ -476,73 +500,6 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 }
 
 #[test]
-fn custom_conversions_use_context_without_template_rendering() {
-    struct Context {
-        increment: i32,
-    }
-    struct Input;
-    impl InputConversion for Input {
-        type Wire = syn::Type;
-        type Context = Context;
-        fn wires(&self) -> &[Wire<syn::Type>] {
-            &[]
-        }
-        fn resources(&self, _: &Context) -> Result<Vec<Resource>> {
-            Ok(vec![])
-        }
-        fn validation(&self, _: &Context) -> Result<TokenStream> {
-            Ok(quote!())
-        }
-        fn acquisition(&self, _: &Context) -> Result<TokenStream> {
-            Ok(quote!())
-        }
-        fn construction(&self, context: &Context, target: &syn::Ident) -> Result<TokenStream> {
-            let increment = context.increment;
-            Ok(quote!(let #target = #increment;))
-        }
-    }
-    struct Output;
-    impl OutputConversion for Output {
-        type Wire = syn::Type;
-        type Context = Context;
-        fn wires(&self) -> &[Wire<syn::Type>] {
-            &[]
-        }
-        fn values(&self, _: &Context, _source: &syn::Ident) -> Result<Vec<TokenStream>> {
-            Ok(vec![])
-        }
-        fn preparation(&self, _: &Context, _source: &syn::Ident) -> Result<TokenStream> {
-            Ok(quote!())
-        }
-        fn delivery(&self, _: &Context, _source: &syn::Ident) -> Result<TokenStream> {
-            Ok(quote!())
-        }
-        fn commit(&self, _: &Context, _source: &syn::Ident) -> Result<TokenStream> {
-            Ok(quote!())
-        }
-        fn result(&self, _: &Context, source: &syn::Ident) -> Result<TokenStream> {
-            Ok(quote!(#source))
-        }
-    }
-    let item = syn::parse_quote!(
-        pub fn echo(x: i32) -> i32 {
-            x
-        }
-    );
-    let mut flat = Flat::<Input, Output>::parse([(item, Default::default())]).unwrap();
-    let function = flat.function_mut("echo").unwrap();
-    function.params[0].ty.slot = Some(Input);
-    function.ret.slot = Some(Output);
-    let context = Context {
-        increment: 42,
-    };
-    assert_eq!(
-        emit_call(function, &context, &syn::parse_quote!(returned)).unwrap().to_string(),
-        quote!(let __prebindgen_argument_0 = 42i32; let returned = crate::echo(__prebindgen_argument_0); Ok(returned)).to_string()
-    );
-}
-
-#[test]
 fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
     let code = validate_resources(&[
         Resource {
@@ -564,7 +521,7 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
         fn main() {
             assert!(check(true, 2, 7, Some(7)).is_err());
             assert!(check(true, 2, 7, Some(8)).is_ok());
-            assert!(check(false, 2, 7, None).is_ok());
+            assert!(check(false, 2, 7, Some(7)).is_ok());
             assert!(check(true, 1, 7, None).is_ok());
         }
     };
@@ -627,14 +584,21 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     });
     let context = ();
     let source = syn::parse_quote!(__prebindgen_argument_0__);
-    let body = emit_call(function, &context, &source).unwrap();
+    let body = emit_call(function, &context, &source, &syn::parse_quote!(_)).unwrap();
     let target: syn::Ident = syn::parse_quote!(chosen_by_caller);
     let standalone = function.params[0]
         .ty
         .slot
         .as_ref()
         .unwrap()
-        .construction(&context, &target)
+        .code_fragment_slot(
+            InputFragment::Construct {
+                context: &context,
+                target: &target,
+                next: quote!(assert_eq!(#target, "abc")),
+            },
+            &syn::parse_quote!(()),
+        )
         .unwrap();
     let code = quote! {
         fn length(value: &str) -> usize { value.len() }
@@ -642,7 +606,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         fn main() {
             assert_eq!(wrapper(10), Ok(14));
             #standalone
-            assert_eq!(chosen_by_caller, "abc");
+
         }
     };
     let dir = tempfile::tempdir().unwrap();
@@ -664,4 +628,28 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         .status()
         .unwrap()
         .success());
+}
+
+fn validate_resources(resources: &[Resource]) -> TokenStream {
+    let plan = InputPlan::<syn::Type> {
+        context: Default::default(),
+        wires: vec![],
+        acknowledgement: None,
+        validation: quote!(),
+        acquire: quote!(),
+        statements: quote!(),
+        argument: quote!(()),
+        resources: resources.to_vec(),
+    };
+    let seen = syn::parse_quote!(seen);
+    let check = plan
+        .code_fragment_slot(
+            InputFragment::CheckAliases {
+                context: &(),
+                seen: &seen,
+            },
+            &syn::parse_quote!(()),
+        )
+        .unwrap();
+    quote!(let mut #seen: Vec<(usize, bool)> = Vec::new(); #check;)
 }

@@ -1,8 +1,10 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
 
+use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::{Flat, Primitive, Result, WireKind};
+
 /// The carrier of one C wire.
 ///
 /// This adapter-specific type keeps C and JNI converters from being mixed in
@@ -28,7 +30,7 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     fn from(value: prebindgen_conversions::boxed::BoxedWire) -> Self {
         Self {
             ty: value.ty,
-            mutable: value.access != prebindgen_flat::Access::Shared,
+            mutable: value.access != prebindgen_conversions::Access::Shared,
         }
     }
 }
@@ -36,8 +38,8 @@ use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> = prebindgen_flat::InputPlan<W, CContext>;
-type OutputPlan<W> = prebindgen_flat::OutputPlan<W, CContext>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -85,9 +87,9 @@ impl Codec for CCodec {
         if values.is_empty() {
             values.push(quote!(unused: 0));
         }
-        let result_type = prebindgen_flat::template_parameter("output_type");
-        let out = prebindgen_flat::template_parameter("output_pointer");
-        plan.delivery = prebindgen_flat::Delivery {
+        let result_type = prebindgen_conversions::template_parameter("output_type");
+        let out = prebindgen_conversions::template_parameter("output_pointer");
+        plan.delivery = prebindgen_conversions::Delivery {
             statements: quote!(let result = #result_type { #(#values),* }; std::ptr::write(#out, result);),
             result: quote!(()),
         };
@@ -107,7 +109,7 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
-        let read_buffer = prebindgen_flat::template_parameter("read_buffer");
+        let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::Scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
@@ -156,7 +158,7 @@ impl Codec for CCodec {
                     |v| quote!(::core::convert::Into::<Vec<u8>>::into(#v).into_boxed_slice()),
                     CWire::Buffer,
                 )?;
-                let buffer_type = prebindgen_flat::template_parameter("buffer_type");
+                let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
                 out.values = vec![quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()})];
                 out.commit = quote!(let _ = Box::into_raw(#w););
                 Ok(out)
@@ -184,7 +186,7 @@ fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
     }
 }
 fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
-    let wide_integer_type = prebindgen_flat::template_parameter("wide_integer_type");
+    let wide_integer_type = prebindgen_conversions::template_parameter("wide_integer_type");
     match p {
         Primitive::Bool => quote!(u8::from(#v)),
         Primitive::Char => quote!((#v) as u32),
@@ -435,8 +437,15 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     }
 }
 fn generate<
-    I: prebindgen_flat::InputConversion<Wire = CWire, Context = CContext>,
-    O: prebindgen_flat::OutputConversion<Wire = CWire, Context = CContext>,
+    I: for<'a> prebindgen_flat::InputConversion<
+        Wire = CWire,
+        SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
+    >,
+    O: for<'a> prebindgen_flat::OutputConversion<
+        Wire = CWire,
+        SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
+        WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
+    >,
 >(
     flat: Flat<I, O>,
     prefix: &str,
@@ -464,7 +473,12 @@ fn generate<
             read_buffer: syn::parse_quote!(__pb_read),
         };
         let source = format_ident!("source_value");
-        let body = prebindgen_flat::emit_call(f, &context, &source)?;
+        let body = prebindgen_conversions::staged::emit_call(
+            f,
+            &context,
+            &source,
+            &syn::parse_quote!(()),
+        )?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
@@ -589,25 +603,33 @@ mod generation_tests {
         struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
         impl prebindgen_flat::OutputConversion for CountedOutput {
             type Wire = CWire;
-            type Context = CContext;
+            type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
+            type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>;
             fn wires(&self) -> &[GenericWire<Self::Wire>] {
                 &[]
             }
-            fn values(&self, _: &CContext, _source: &syn::Ident) -> Result<Vec<TokenStream>> {
-                Ok(vec![])
+            fn code_fragment_slot(
+                &self,
+                mode: Self::SlotFragment<'_>,
+                _: &syn::Type,
+            ) -> Result<TokenStream> {
+                use prebindgen_conversions::OutputFragment;
+                Ok(match mode {
+                    OutputFragment::Prepare { next, .. } => {
+                        self.0.set(self.0.get() + 1);
+                        quote!({ #next })
+                    }
+                    OutputFragment::Deliver { next, .. } => quote!({ #next }),
+                    OutputFragment::Commit { .. } | OutputFragment::Result { .. } => quote!(()),
+                })
             }
-            fn preparation(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
-                self.0.set(self.0.get() + 1);
-                Ok(quote!())
-            }
-            fn delivery(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
-                Ok(quote!())
-            }
-            fn commit(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
-                Ok(quote!())
-            }
-            fn result(&self, _: &CContext, _source: &syn::Ident) -> Result<TokenStream> {
-                Ok(quote!(()))
+            fn code_fragment_wire(
+                &self,
+                pos: usize,
+                _: Self::WireFragment<'_>,
+                _: &syn::Type,
+            ) -> Result<TokenStream> {
+                Err(format!("invalid output wire position {pos}"))
             }
         }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));

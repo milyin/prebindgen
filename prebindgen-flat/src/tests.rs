@@ -1,49 +1,8 @@
 use super::*;
 #[derive(Clone, Debug, PartialEq)]
 struct TestInput(u8);
-impl InputConversion for TestInput {
-    type Wire = syn::Type;
-    type Context = ();
-    fn wires(&self) -> &[Wire<Self::Wire>] {
-        panic!("test has no executable conversion")
-    }
-    fn resources(&self, _: &()) -> Result<Vec<Resource>> {
-        panic!("test has no executable conversion")
-    }
-    fn validation(&self, _: &()) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-    fn acquisition(&self, _: &()) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-    fn construction(&self, _: &(), _: &syn::Ident) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-}
 #[derive(Clone, Debug, PartialEq)]
 struct TestOutput(u32);
-impl OutputConversion for TestOutput {
-    type Wire = syn::Type;
-    type Context = ();
-    fn wires(&self) -> &[Wire<Self::Wire>] {
-        panic!("test has no executable conversion")
-    }
-    fn values(&self, _: &(), _source: &syn::Ident) -> Result<Vec<proc_macro2::TokenStream>> {
-        panic!("test has no executable conversion")
-    }
-    fn preparation(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-    fn delivery(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-    fn commit(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-    fn result(&self, _: &(), _source: &syn::Ident) -> Result<proc_macro2::TokenStream> {
-        panic!("test has no executable conversion")
-    }
-}
 fn parse(text: &str) -> Result<Flat<TestInput, TestOutput>> {
     let items = syn::parse_file(text).unwrap().items;
     Flat::parse(items.into_iter().map(|i| {

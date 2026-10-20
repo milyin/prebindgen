@@ -3,7 +3,9 @@
 //! [`input`] and [`output`] build
 //! the conversion around the adapter's own decode and encode expressions.
 use prebindgen_flat::{type_key, Primitive, Result};
-use prebindgen_flat::{InputPlan, OutputPlan, Wire};
+
+use prebindgen_flat::{Wire};
+use crate::{InputPlan, OutputPlan};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;

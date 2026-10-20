@@ -1,5 +1,5 @@
 //! Explicit bindings between prepared conversion code and its wrapper.
-use crate::Result;
+use prebindgen_flat::Result;
 use proc_macro2::{Group, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 

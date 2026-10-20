@@ -1,5 +1,6 @@
 //! Bindings supplied by this language generator during slot emission.
-use prebindgen_flat::{render_template, Result, TemplateContext};
+use prebindgen_flat::Result;
+use prebindgen_conversions::{render_template, TemplateContext};
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 

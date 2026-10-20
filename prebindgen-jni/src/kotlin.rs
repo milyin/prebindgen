@@ -1,6 +1,6 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
-use prebindgen_flat::{InputConversion, OutputConversion, Resource, Wire, WireKind};
+use prebindgen_flat::{InputConversion, OutputConversion, Wire, WireKind};
 
 impl WireKind for JniKind {
     fn rust_type(&self) -> syn::Type {
@@ -120,12 +120,23 @@ pub struct KotlinOutput {
     pub cleanup: String,
 }
 /// Input conversion with opaque Kotlin-side emission.
-pub trait KotlinInputConversion: InputConversion<Wire = JniWire, Context = JniContext> {
+pub trait KotlinInputConversion:
+    for<'a> InputConversion<
+    Wire = JniWire,
+    SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>,
+>
+{
     /// Emit destination-side input conversion for this slot.
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput>;
 }
 /// Output conversion with opaque Kotlin-side emission.
-pub trait KotlinOutputConversion: OutputConversion<Wire = JniWire, Context = JniContext> {
+pub trait KotlinOutputConversion:
+    for<'a> OutputConversion<
+    Wire = JniWire,
+    SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>,
+    WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>,
+>
+{
     /// Emit destination-side output conversion and rollback for this slot.
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput>;
 }
@@ -189,48 +200,51 @@ impl From<OutputPlan<JniKind>> for JniOutput {
         }
     }
 }
+
 impl InputConversion for JniInput {
     type Wire = JniWire;
-    type Context = JniContext;
+    type SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>;
+    type WireFragment<'a> = prebindgen_conversions::InputWireFragment;
     fn wires(&self) -> &[Wire<JniWire>] {
         self.rust.wires()
     }
-    fn resources(&self, context: &JniContext) -> Result<Vec<Resource>> {
-        self.rust.resources(context)
+    fn code_fragment_slot(
+        &self,
+        mode: Self::SlotFragment<'_>,
+        expected: &syn::Type,
+    ) -> Result<TokenStream> {
+        self.rust.code_fragment_slot(mode, expected)
     }
-    fn acknowledgement(&self, context: &JniContext) -> Result<Option<TokenStream>> {
-        self.rust.acknowledgement(context)
-    }
-    fn validation(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.validation(context)
-    }
-    fn acquisition(&self, context: &JniContext) -> Result<TokenStream> {
-        self.rust.acquisition(context)
-    }
-    fn construction(&self, context: &JniContext, target: &syn::Ident) -> Result<TokenStream> {
-        self.rust.construction(context, target)
+    fn code_fragment_wire(
+        &self,
+        pos: usize,
+        mode: Self::WireFragment<'_>,
+        expected: &syn::Type,
+    ) -> Result<TokenStream> {
+        self.rust.code_fragment_wire(pos, mode, expected)
     }
 }
 impl OutputConversion for JniOutput {
     type Wire = JniWire;
-    type Context = JniContext;
+    type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>;
+    type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>;
     fn wires(&self) -> &[Wire<JniWire>] {
         self.rust.wires()
     }
-    fn values(&self, context: &JniContext, source: &syn::Ident) -> Result<Vec<TokenStream>> {
-        self.rust.values(context, source)
+    fn code_fragment_slot(
+        &self,
+        mode: Self::SlotFragment<'_>,
+        expected: &syn::Type,
+    ) -> Result<TokenStream> {
+        self.rust.code_fragment_slot(mode, expected)
     }
-    fn preparation(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
-        self.rust.preparation(context, source)
-    }
-    fn delivery(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
-        self.rust.delivery(context, source)
-    }
-    fn commit(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
-        self.rust.commit(context, source)
-    }
-    fn result(&self, context: &JniContext, source: &syn::Ident) -> Result<TokenStream> {
-        self.rust.result(context, source)
+    fn code_fragment_wire(
+        &self,
+        pos: usize,
+        mode: Self::WireFragment<'_>,
+        expected: &syn::Type,
+    ) -> Result<TokenStream> {
+        self.rust.code_fragment_wire(pos, mode, expected)
     }
 }
 impl KotlinInputConversion for JniInput {

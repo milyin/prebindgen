@@ -91,54 +91,46 @@ settings remain commented out in the example manifests.
 
 ## Preparation and generation APIs
 
-`prebindgen-flat` owns the generation contract:
+`prebindgen-flat` provides the source model and minimal conversion interfaces:
 
-- `InputConversion` and `OutputConversion` expose prepared slot metadata and code
-  through individual methods. `emit_call` reads these methods directly; slots
-  do not return intermediate plans. `InputPlan<W, C>` and `OutputPlan<W, C>` remain
-  optional concrete storage implementations, without a `W: Clone` requirement.
-  Wire metadata is borrowed; code methods accept `&Self::Context` and return
-  `Result<TokenStream>`. Output expressions are rendered with the same context.
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
-  Parsing leaves slots empty; conversion types need no `Default` implementation.
-- `emit_call(function, &context, &source)` checks slot completeness, output arity and shared
-  acknowledgement agreement, then returns the assembled Rust call body. There is
-  no intermediate call object or external glue argument. `Function::inputs` and
-  `outputs` expose borrowed wire metadata and paired output expressions;
-  `input_conversions` preserves parameter grouping.
-- An input may supply acknowledgement code. Every input that supplies it must
-  provide the same token spelling. Assembly emits this shared operation once,
-  after all validation and alias checks and before any ownership acquisition.
-  Conflicting acknowledgements are rejected. There are no keys or parameter
-  declarations in this contract; the wrapper declares its ABI from the slot data.
-- `InputConversion::construction(context, target)` binds the converted argument
-  to the identifier supplied by `emit_call`. The call emitter uses that binding
-  directly; there is no separate `argument()` method. Prepared plans retain an
-  internal value expression and bind it to the requested target during emission.
-- The result slot supplies delivery and the final result expression. `emit_call`
-  orders validation, alias checks, acknowledgement, all acquisition, argument
-  construction, source invocation, output preparation, delivery and ownership
-  commit. The returned statements run inside the adapter's error boundary.
-- Each language generator defines its context type, selected by both conversion
-  traits' associated `Context` type. `emit_call` requires matching context types.
-  Contexts have no required trait or fields. The caller passes the source-result
-  identifier explicitly to `emit_call`, output conversion methods and `Function::outputs`.
-  C and JNI define their generator-specific fields in `CContext` and `JniContext`.
-- Stored plans use the optional `TemplateContext::render` interface.
-  `template_parameter(name)` creates an explicit marker whose meaning is defined
-  by the language generator; `source_result_expr()` marks the source-result local,
-  which output plans resolve using the explicit source argument.
-  The `render_template` helper substitutes markers recursively, leaving ordinary
-  identifiers and literals untouched. Custom conversions can use context fields
-  directly without templates or rendering support. Slot-private locals
-  and wire names remain owned by preparation; wrapper names must avoid those locals.
-- `rust_source` formats generated Rust. `Wire`, `Access` and
-  `Resource` are general generation contracts defined in flat.
+  Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
+- `InputConversion` and `OutputConversion` each expose `wires()`,
+  `code_fragment_slot(mode, expected_type)` and
+  `code_fragment_wire(pos, mode, expected_type)`.
+- `wires()` borrows a stable, ordered slice. Conditional wires stay in the list;
+  `pos` indexes that list and an invalid position is an error.
+- Each generator defines its slot and wire request enums. Variants carry only the
+  data that operation needs. Associated request types have a lifetime parameter
+  so they can borrow names, contexts or other configuration without cloning it.
+  There is no mandatory context type or universal set of conversion phases.
+- Successful requests return a Rust expression, including `()` for a no-op and
+  block expressions for operations with statements. `expected_type` is the
+  caller's expectation; implementations may use it to configure or validate the
+  request. Only compiling the generated Rust establishes type correctness.
+- `bind_fragment(target, expected_type, expression)` validates expression syntax
+  and emits a typed `let` binding. It rejects empty or statement-only fragments.
+- `WireKind` supplies each carrier's Rust type. The generator defines its carrier
+  enum and request semantics, including activity or access questions when needed.
+  Flat does not interpret resource identities, access modes or activity.
 
-Both C and JNI writers use this API. Their generation functions are generic over
-conversion implementations with the corresponding adapter wire and context types. They supply
-boundary signatures, the required environment and error handling; they do not combine conversion
-phases or depend on declarations during generation.
+`prebindgen-conversions` provides optional `InputPlan<W, C>` / `OutputPlan<W, C>`
+storage, template rendering, and a staged request protocol used by C and JNI.
+The staged protocol is one implementation of the minimal traits, not a requirement
+on other generators. Its requests cover validation, acquisition, construction and
+output delivery. Requests introducing locals accept a continuation expression so
+borrowed storage and acquired owners stay alive through the call.
+
+The C and JNI adapters opt into `staged::emit_call`, which orders those requests,
+checks allocation aliases and shared acknowledgement, and returns a fallible
+expression. The protocol and its assembly helper live outside Flat; generators
+with different requirements can compose their own request enums directly.
+`StagedFunction::outputs()` requests each output wire's value with its carrier type.
+
+Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
+binding supplied by the generator, and `source_result_expr()` marks the source
+return-value binding carried by output requests. Custom converters need neither
+stored plans nor template support.
 
 `prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
 `Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
@@ -179,11 +171,11 @@ and `Condition` belong to declarations. A codec can retain logical mappings in
 its private preparation metadata through `prefix_component`; `validate_mapping`
 accepts explicit name/path pairs. The final converter emits the corresponding
 projections or constructions itself. Wrapper writers never interpret these paths.
-`Function::input_conversions()` preserves slot grouping; `outputs()` pairs carriers
-with ready-to-use expressions.
+`Function::input_conversions()` preserves slot grouping; the optional staged
+protocol pairs output carriers with requested expressions.
 
-Resource participation is an emitted Rust boolean expression, not a selector
-structure. Flat combines these predicates for call-wide alias checks. JNI slots
+The optional staged plans describe allocation participation using emitted Rust
+boolean expressions. Their assembly helper checks allocation aliases. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.
@@ -342,11 +334,11 @@ overloads and shared selector argument storage remain outside this subset.
 Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
 `prebindgen_flat::Flat` for occurrence slots, `prebindgen_declarations::Declarations`
 for build-script expansions, and `prebindgen_declarations::Codec` for adapter authors.
-The codec and flat conversion contracts explain validation, ownership acquisition
-and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
+The Flat traits describe expression requests; the optional staged protocol in
+`prebindgen-conversions` explains validation, ownership acquisition and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
 
 Runnable rustdoc examples cover occurrence configuration, selector/combined-output
-declarations, a codec with `()` as its wire data, C and JNI generation, boxed borrows,
+declarations, a codec with Rust types as its wire data, C and JNI generation, boxed borrows,
 and JNI allocation release. `cargo test --workspace --doc` builds and runs them.
 The existing C and Kotlin smoke clients exercise the generated foreign boundaries.
 New pipeline crates enable `missing_docs` warnings so the warnings-as-errors

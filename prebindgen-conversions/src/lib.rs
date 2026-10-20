@@ -1,7 +1,7 @@
 //! Reusable boundary conversions and their representation metadata.
 //!
-//! These helpers build [`prebindgen_flat::InputPlan`] and
-//! [`prebindgen_flat::OutputPlan`] values. They do not interpret declarations or
+//! These helpers build [`InputPlan`] and
+//! [`OutputPlan`] values. They do not interpret declarations or
 //! select functions to export. Adapters may use the helpers during preparation
 //! and their wire metadata during generation.
 //!
@@ -11,3 +11,13 @@
 
 pub mod boxed;
 pub mod value;
+
+mod emission;
+pub use emission::{render_template, template_parameter, TemplateContext};
+mod plan;
+pub use plan::*;
+pub mod staged;
+pub use staged::{InputFragment, InputWireFragment, OutputFragment, OutputWireFragment};
+
+#[cfg(test)]
+mod generation_tests;

@@ -249,7 +249,7 @@ impl Declarations {
                 &source.ret.ty,
                 &recipe,
                 extra,
-                prebindgen_flat::source_result_expr(),
+                prebindgen_conversions::source_result_expr(),
                 false,
             )?)
         } else {

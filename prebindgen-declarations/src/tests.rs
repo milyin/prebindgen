@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
 struct TestCodec;
@@ -714,12 +715,22 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         .fill(&mut flat, &FinalizingCodec, &decl, &Extra::default())
         .unwrap();
     assert_eq!(
-        prebindgen_flat::emit_call(flat.function("take").unwrap(), &(), &source_binding())
-            .unwrap()
-            .to_string(),
-        prebindgen_flat::emit_call(direct.function("take").unwrap(), &(), &source_binding())
-            .unwrap()
-            .to_string()
+        prebindgen_conversions::staged::emit_call(
+            flat.function("take").unwrap(),
+            &(),
+            &source_binding(),
+            &syn::parse_quote!(_)
+        )
+        .unwrap()
+        .to_string(),
+        prebindgen_conversions::staged::emit_call(
+            direct.function("take").unwrap(),
+            &(),
+            &source_binding(),
+            &syn::parse_quote!(_)
+        )
+        .unwrap()
+        .to_string()
     );
 }
 
@@ -841,9 +852,14 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &Extra::default(),
     )
     .unwrap();
-    let before = prebindgen_flat::emit_call(flat.function("point").unwrap(), &(), &source_binding())
-        .unwrap()
-        .to_string();
+    let before = prebindgen_conversions::staged::emit_call(
+        flat.function("point").unwrap(),
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+    )
+    .unwrap()
+    .to_string();
     let handle = RepresentationId("PointHandle".into());
     shapes
         .insert(
@@ -865,9 +881,14 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     let call = flat.function("point").unwrap();
     assert_eq!(call.outputs(&(), &source_binding()).unwrap().len(), 2);
     assert_eq!(
-        prebindgen_flat::emit_call(call, &(), &source_binding())
-            .unwrap()
-            .to_string(),
+        prebindgen_conversions::staged::emit_call(
+            call,
+            &(),
+            &source_binding(),
+            &syn::parse_quote!(_)
+        )
+        .unwrap()
+        .to_string(),
         before
     );
     assert_eq!(

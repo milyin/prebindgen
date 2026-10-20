@@ -4,6 +4,7 @@
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Flat, Result, WireKind};
+
 mod scalar;
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
@@ -25,12 +26,12 @@ pub enum JniKind {
     /// An `int` selector arm index.
     Selector,
 }
+use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
-use prebindgen_flat::Access;
 mod emission;
 pub use emission::JniContext;
-type InputPlan<W> = prebindgen_flat::InputPlan<W, JniContext>;
-type OutputPlan<W> = prebindgen_flat::OutputPlan<W, JniContext>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext>;
 mod kotlin;
 pub use kotlin::{
     JniInput, JniOutput, JniWire, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
@@ -427,8 +428,8 @@ impl Codec for JniCodec {
     type Input = JniInput;
     type Output = JniOutput;
     fn finish_input(&self, plan: &mut InputPlan<JniKind>, _: &()) -> Result<()> {
-        let env = prebindgen_flat::template_parameter("environment");
-        let ownership = prebindgen_flat::template_parameter("acknowledgement");
+        let env = prebindgen_conversions::template_parameter("environment");
+        let ownership = prebindgen_conversions::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
             plan.acknowledgement = Some(quote!(
                 if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {
@@ -440,7 +441,7 @@ impl Codec for JniCodec {
         Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniKind>, _: &()) -> Result<()> {
-        let env = prebindgen_flat::template_parameter("environment");
+        let env = prebindgen_conversions::template_parameter("environment");
         let count = plan.wires.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
@@ -462,7 +463,7 @@ impl Codec for JniCodec {
                 #env.delete_local_ref(object).map_err(|e|e.to_string())?;
             });
         }
-        plan.delivery = prebindgen_flat::Delivery {
+        plan.delivery = prebindgen_conversions::Delivery {
             statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode),
             result: quote!(result.into_raw()),
         };
@@ -482,7 +483,7 @@ impl Codec for JniCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<JniKind>> {
-        let env = prebindgen_flat::template_parameter("environment");
+        let env = prebindgen_conversions::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniKind::Scalar(p)),
             Some(Value::Text) => (
@@ -717,7 +718,6 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             acknowledgement: ownership.clone(),
         };
         let source = format_ident!("source_value");
-        let body = prebindgen_flat::emit_call(f, &context, &source)?;
         let method = format!("call{index}");
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
@@ -752,7 +752,13 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let has_acknowledgement = f
             .input_conversions()?
             .iter()
-            .map(|i| i.acknowledgement(&context).map(|code| code.is_some()))
+            .map(|i| {
+                i.code_fragment_slot(
+                    prebindgen_conversions::InputFragment::Acknowledge { context: &context },
+                    &syn::parse_quote!(()),
+                )
+                .map(|code| code.to_string() != quote!(()).to_string())
+            })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .any(|present| present);
@@ -773,6 +779,12 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"
             ));
         }
+        let body = prebindgen_conversions::staged::emit_call(
+            f,
+            &context,
+            &source,
+            &syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
+        )?;
         let KotlinOutput {
             delivered,
             result_types,

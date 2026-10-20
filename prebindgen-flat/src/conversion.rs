@@ -1,5 +1,5 @@
-//! Conversion contracts and call assembly.
-use crate::{template_parameter, Result, TemplateContext};
+//! Wire descriptions and generator-defined expression requests.
+use crate::Result;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -64,97 +64,6 @@ impl<W: WireKind> Wire<W> {
     }
 }
 
-/// An input conversion split into call-wide validation, acquisition and construction.
-///
-/// Optional concrete storage implementing [`InputConversion`]. [`emit_call`] orders
-/// them across all parameters; wrapper writers do not assemble them themselves.
-#[derive(Clone, Debug)]
-pub struct InputPlan<W: WireKind, C = ()> {
-    /// Context type supplied by the language generator at emission.
-    pub context: std::marker::PhantomData<fn(&C)>,
-    /// Flattened boundary parameters in signature order.
-    pub wires: Vec<Wire<W>>,
-    /// Shared call acknowledgement, if this input needs one.
-    pub acknowledgement: Option<TokenStream>,
-    /// Validate and prepare every active leaf before any ownership transfer.
-    pub validation: TokenStream,
-    /// Infallible acquisition of all owned inputs, before constructors can run.
-    pub acquire: TokenStream,
-    /// Active foreign resources whose identities must be checked across all arguments.
-    pub resources: Vec<Resource>,
-    /// Argument construction after all acquisitions, including source constructor calls.
-    pub statements: TokenStream,
-    /// Prepared value expression assigned to the caller-supplied target after `statements`.
-    pub argument: TokenStream,
-}
-/// Output conversion whose owned temporaries survive until successful delivery.
-///
-/// Optional concrete storage implementing [`OutputConversion`].
-/// [`emit_call`] commits only after adapter delivery succeeds.
-#[derive(Clone, Debug)]
-pub struct OutputPlan<W: WireKind, C = ()> {
-    /// Context type supplied by the language generator at emission.
-    pub context: std::marker::PhantomData<fn(&C)>,
-    /// Delivery and return code prepared with this result slot.
-    pub delivery: Delivery,
-    /// Boundary results in delivery order; one entry per expression in `values`.
-    pub wires: Vec<Wire<W>>,
-    /// Transfer ownership only after all foreign delivery operations succeed.
-    pub commit: TokenStream,
-    /// Code producing owned output temporaries and evaluating observations before moves.
-    pub statements: TokenStream,
-    /// Delivery expressions in wire order; they must remain valid until commit.
-    pub values: Vec<TokenStream>,
-}
-/// Access to one foreign resource during an exported call.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Access {
-    /// Read-only borrow; multiple active shared accesses may alias.
-    Shared,
-    /// Mutable borrow; conflicts with every other active use of the resource.
-    Exclusive,
-    /// Ownership transfer; conflicts with every other active use of the resource.
-    Move,
-}
-/// The adapter supplies identity; flat enforces call-wide access conflicts.
-#[derive(Clone, Debug)]
-pub struct Resource {
-    /// Side-effect-free Rust expression identifying a live resource, such as an address.
-    /// All identities compared within a call must share an equality-compatible domain.
-    pub identity: TokenStream,
-    /// Borrow or ownership requirement imposed by this input conversion.
-    pub access: Access,
-    /// Side-effect-free Rust boolean expression; false resources do not conflict.
-    pub active: TokenStream,
-}
-/// Emit pairwise alias checks across all active input resources.
-///
-/// `resources` holds the [`InputPlan::resources`] of all of one exported
-/// function's parameters together, so that aliases across parameters are found.
-///
-/// Run this code after leaf validation and before **any** ownership acquisition.
-/// Shared/shared pairs and resources whose predicates are not both true do not conflict.
-/// Conflicts return `Err("conflicting input aliases".into())` from the enclosing
-/// wrapper. This does not validate pointer liveness, synchronize threads, or
-/// acquire resources; those remain adapter/caller responsibilities.
-pub fn validate_resources(resources: &[Resource]) -> TokenStream {
-    let mut result = TokenStream::new();
-    for (i, a) in resources.iter().enumerate() {
-        for b in &resources[i + 1..] {
-            if a.access == Access::Shared && b.access == Access::Shared {
-                continue;
-            }
-            let x = &a.identity;
-            let y = &b.identity;
-            let active_a = &a.active;
-            let active_b = &b.active;
-            let conflict = quote!((#active_a) && (#active_b) && ((#x) == (#y)));
-            result.extend(quote!(if #conflict {return Err("conflicting input aliases".into());}));
-        }
-    }
-    result
-}
-
 /// Check that every bound function has an input converter for each parameter
 /// and an output converter, including unit results.
 ///
@@ -192,318 +101,180 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
     Ok(prettyplease::unparse(&file))
 }
 
-/// Explicit template reference to the caller-selected source-result local.
-/// [`OutputPlan`] resolves it from the explicit `source` argument before
-/// calling [`TemplateContext::render`] for generator-specific parameters.
-pub fn source_result_expr() -> TokenStream {
-    template_parameter("source_result")
-}
-
-/// A fully prepared input conversion stored in a slot.
-/// Metadata and generated names must stay consistent across method calls.
-/// Code runs in the environment supplied by the language wrapper writer.
-/// Preparation resolves errors before installing the slot; [`emit_call`]
-/// reads this interface directly, without an intermediate plan.
+/// Prepared input conversion with a generator-defined request protocol.
 ///
-/// This conversion accepts one opaque pointer wire and constructs a
-/// `Box<T>` argument. Preparation supplies the concrete pointee type as a
-/// `syn::Type`; the converter does not hardcode any wrapped type.
-/// It demonstrates every method, including ownership transfer and alias checking.
+/// Every successful request returns one Rust expression, including `()` for
+/// a no-op. Statements may appear inside a block expression. The caller decides
+/// how expressions are combined and binds any values needed by later requests.
+/// `expected_type` is the caller's expectation, not a type-checking guarantee:
+/// the implementation may use it to configure emission or reject a request.
+/// Rust compilation performs the final type check. No implicit casts are required.
 ///
-/// `Context` describes the environment that the language generator prepares around
-/// the emitted conversion code. The generator defines this type and constructs a
-/// value during code generation, then passes it to [`emit_call`] or directly to
-/// the slot's methods. Call assembly passes the same context to the input and
-/// output conversions. Flat imposes no fields or trait requirements on it.
+/// Request enums belong to the generator. Each variant can carry only the names,
+/// settings or other data it needs; no common context or phase order is imposed.
+/// Their lifetime parameter allows requests to borrow that data.
 ///
-/// In this example, the wrapper exposes an ownership-acknowledgement parameter.
-/// `Context::acknowledged` holds that parameter's Rust identifier. The converter
-/// uses it to emit an assignment such as `*ownership_taken = true;`. The context
-/// exists while generating code; it contains the identifier, not the runtime
-/// boolean. The generator must declare that parameter in the generated wrapper
-/// with the type and meaning expected by the converter.
+/// The wire list is stable and includes conditional wires in signature order.
+/// Wire request positions index this exact list; invalid positions must return
+/// an error. Activity, access modes and other policies may be requested through
+/// generator-defined variants rather than being interpreted by Flat.
 ///
-/// Preparation stores the conversion-specific information in `OwnedBoxInput`:
-/// the pointee type, wire description and private temporary name. Context supplies
-/// wrapper-environment bindings shared by conversions. For another generator,
-/// these might include a runtime environment identifier or a helper-function path.
-/// The converter already determines how conversion works; context supplies the
-/// environment in which its emitted code will run. Changing the acknowledgement
-/// parameter's name therefore needs a different context value, not a rebuilt slot.
-///
-/// The final Rust argument binding is supplied separately as `target` to
-/// [`InputConversion::construction`]. Similarly, output methods receive the
-/// source-result binding explicitly. Neither binding needs to be stored in
-/// context. Converters that need no wrapper-specific environment can use `()`
-/// as their associated `Context` type.
-///
-/// The wrapper supplies an `&mut bool` acknowledgement parameter, initially false.
-/// Validation or alias-check failure leaves it false and ownership with the caller.
-/// After acknowledgement, the wrapper owns the allocation even if later code fails.
-/// The pointer must come from a compatible `Box::into_raw` for the prepared
-/// pointee type, remain live, and be used exclusively for this transfer.
-/// A null check cannot establish those conditions.
+/// A reusable owned-box converter can define its own small request vocabulary.
+/// The pointee is preparation data, not a hardcoded application type. The slot
+/// request borrows an error message only for validation; acquisition needs no
+/// context. The caller supplies `expected_type` to every request and binds the
+/// resulting value itself. This example chooses syntactic type matching as its
+/// policy; other implementations may use the expectation to configure emission.
 ///
 /// ```
-/// use prebindgen_flat::{Access, InputConversion, Resource, Result, Wire, WireKind};
+/// use prebindgen_flat::{bind_fragment, same_type, InputConversion, Result, Wire, WireKind};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
-/// use syn::{parse_quote, Ident, Type};
+/// use syn::{parse_quote, Type};
 ///
-/// // The generator defines boundary carriers independently of the wrapped types.
-/// // Any opaque object handle can use this same pointer carrier.
-/// enum WireType {
-///     OpaquePointer,
+/// enum Carrier { OpaquePointer }
+/// impl WireKind for Carrier {
+///     fn rust_type(&self) -> Type { parse_quote!(*mut ::std::ffi::c_void) }
 /// }
-/// impl WireKind for WireType {
-///     fn rust_type(&self) -> Type {
-///         match self {
-///             Self::OpaquePointer => parse_quote!(*mut ::std::ffi::c_void),
+/// enum SlotRequest<'a> {
+///     Validate { null_message: &'a str },
+///     TakeOwnership,
+/// }
+/// enum WireRequest { Value, Active }
+/// struct OwnedBoxInput {
+///     pointee: Type,
+///     wires: [Wire<Carrier>; 1],
+/// }
+/// fn expect(actual: &Type, expected: &Type) -> Result<()> {
+///     if same_type(actual, expected) { Ok(()) }
+///     else { Err("unsupported expected type".into()) }
+/// }
+/// impl InputConversion for OwnedBoxInput {
+///     type Wire = Carrier;
+///     type SlotFragment<'a> = SlotRequest<'a>;
+///     type WireFragment<'a> = WireRequest;
+///     fn wires(&self) -> &[Wire<Carrier>] { &self.wires }
+///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
+///         -> Result<TokenStream>
+///     {
+///         let name = &self.wires[0].name;
+///         let pointee = &self.pointee;
+///         match mode {
+///             SlotRequest::Validate { null_message } => {
+///                 expect(&parse_quote!(()), expected)?;
+///                 Ok(quote!({
+///                     if #name.is_null() { return Err(#null_message.into()); }
+///                 }))
+///             }
+///             SlotRequest::TakeOwnership => {
+///                 expect(&parse_quote!(::std::boxed::Box<#pointee>), expected)?;
+///                 // The caller guarantees a live, uniquely owned allocation
+///                 // created by compatible Box::into_raw. Validation alone cannot.
+///                 Ok(quote!(unsafe {
+///                     ::std::boxed::Box::<#pointee>::from_raw(#name.cast::<#pointee>())
+///                 }))
+///             }
+///         }
+///     }
+///     fn code_fragment_wire(&self, pos: usize, mode: WireRequest, expected: &Type)
+///         -> Result<TokenStream>
+///     {
+///         let wire = self.wires.get(pos).ok_or("invalid wire position")?;
+///         match mode {
+///             WireRequest::Value => {
+///                 expect(&wire.rust_type(), expected)?;
+///                 let name = &wire.name;
+///                 Ok(quote!(#name))
+///             }
+///             WireRequest::Active => {
+///                 expect(&parse_quote!(Option<bool>), expected)?;
+///                 Ok(quote!(None)) // An expression meaning unconditional activity.
+///             }
 ///         }
 ///     }
 /// }
-///
-/// // Generator-owned bindings available to emitted code. This is a code-generation
-/// // value, not a runtime context passed to the wrapped Rust function.
-/// struct Context {
-///     // Name of the wrapper's &mut bool parameter.
-///     acknowledged: Ident,
-/// }
-///
-/// // A reusable converter prepared for any supported sized pointee type.
-/// struct OwnedBoxInput {
-///     pointee: Type,
-///     wires: [Wire<WireType>; 1],
-///     // Preparation chooses a private temporary unique within the wrapper.
-///     owned: Ident,
-/// }
-/// impl InputConversion for OwnedBoxInput {
-///     type Wire = WireType;
-///     type Context = Context;
-///
-///     fn wires(&self) -> &[Wire<WireType>] {
-///         &self.wires
-///     }
-///
-///     fn resources(&self, _: &Context) -> Result<Vec<Resource>> {
-///         let wire = &self.wires[0].name;
-///         Ok(vec![Resource {
-///             identity: quote!(#wire as usize),
-///             access: Access::Move,
-///             active: quote!(true),
-///         }])
-///     }
-///
-///     fn validation(&self, _: &Context) -> Result<TokenStream> {
-///         let wire = &self.wires[0].name;
-///         Ok(quote! {
-///             if #wire.is_null() {
-///                 return Err("null owned handle".into());
-///             }
-///         })
-///     }
-///
-///     fn acknowledgement(&self, context: &Context) -> Result<Option<TokenStream>> {
-///         let acknowledged = &context.acknowledged;
-///         // Shared across consuming slots; emit_call emits it once, after checks.
-///         Ok(Some(quote!(*#acknowledged = true;)))
-///     }
-///
-///     fn acquisition(&self, _: &Context) -> Result<TokenStream> {
-///         let wire = &self.wires[0].name;
-///         let owned = &self.owned;
-///         let pointee = &self.pointee;
-///         // Safety relies on the caller's pointer and ownership contract above.
-///         Ok(quote! {
-///             let #owned = unsafe { ::std::boxed::Box::<#pointee>::from_raw(#wire.cast::<#pointee>()) };
-///         })
-///     }
-///
-///     fn construction(&self, _: &Context, target: &Ident) -> Result<TokenStream> {
-///         let owned = &self.owned;
-///         Ok(quote!(let #target = #owned;))
-///     }
-/// }
-///
-/// // Preparation obtains this type from the wrapped signature. Use u64 here
-/// // to demonstrate the converter without introducing an application type.
 /// let slot = OwnedBoxInput {
-///     pointee: parse_quote!(u64),
-///     wires: [Wire {
-///         name: parse_quote!(raw_value),
-///         kind: WireType::OpaquePointer,
-///     }],
-///     owned: parse_quote!(__owned_value),
+///     pointee: parse_quote!(u64), // Supplied by preparation from the source type.
+///     wires: [Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }],
 /// };
-/// let context = Context { acknowledged: parse_quote!(ownership_taken) };
-///
-/// // Individual phases are available directly. emit_call orders them across
-/// // all input slots, checks resource aliases, and invokes the source function.
-/// assert_eq!(slot.wires().len(), 1);
-/// assert_eq!(slot.resources(&context)?[0].access, Access::Move);
-/// let validation = slot.validation(&context)?;
-/// let acknowledgement = slot.acknowledgement(&context)?;
-/// let acquisition = slot.acquisition(&context)?;
-/// let target = parse_quote!(argument);
-/// let construction = slot.construction(&context, &target)?;
-/// assert_eq!(construction.to_string(),
-///            quote!(let argument = __owned_value;).to_string());
-///
-/// // Inspect the emitted phases without compiling or executing a foreign pointer.
-/// let phases = quote! {
-///     #validation
-///     #acknowledgement
-///     #acquisition
-///     #construction
-/// };
-/// let _: syn::Block = syn::parse2(quote!({ #phases }))?;
+/// let validation = slot.code_fragment_slot(
+///     SlotRequest::Validate { null_message: "null owned handle" }, &parse_quote!(()))?;
+/// let expected = parse_quote!(::std::boxed::Box<u64>);
+/// let value = slot.code_fragment_slot(SlotRequest::TakeOwnership, &expected)?;
+/// let binding = bind_fragment(&parse_quote!(argument), &expected, value)?;
+/// let _: syn::Block = syn::parse2(quote!({ #validation; #binding }))?;
+/// let active = slot.code_fragment_wire(0, WireRequest::Active, &parse_quote!(Option<bool>))?;
+/// assert_eq!(active.to_string(), "None");
+/// let wire_value = slot.code_fragment_wire(0, WireRequest::Value, &slot.wires()[0].rust_type())?;
+/// assert_eq!(wire_value.to_string(), "raw_value");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-///
-/// The converter owns any conditional behavior. Wires describe transport only.
 pub trait InputConversion {
-    /// Adapter-specific boundary description.
+    /// Generator-defined boundary carrier.
     type Wire: WireKind;
-    /// Wrapper-environment data defined and supplied by the language generator.
-    /// The value is used during code generation, for example to name runtime
-    /// parameters or helper functions referenced by emitted code. Use `()` when
-    /// no such data is needed. See the trait example for the distinction between
-    /// context, prepared slot data and the caller-supplied argument binding.
-    type Context;
-    /// Boundary parameters in signature order.
+    /// Requests concerning the whole input slot.
+    type SlotFragment<'a>;
+    /// Requests concerning one input wire.
+    type WireFragment<'a>;
+    /// Boundary inputs in signature order.
     fn wires(&self) -> &[Wire<Self::Wire>];
-    /// Shared call acknowledgement, after validation and before acquisition.
-    /// All contributing inputs must return the same token spelling; assembly emits
-    /// it once. Return `None` when this input needs no acknowledgement. Slot-local
-    /// fallible checks belong in `validation`, not in this shared operation.
-    fn acknowledgement(&self, _context: &Self::Context) -> Result<Option<TokenStream>> {
-        Ok(None)
-    }
-    /// Resources used for call-wide alias checking, with identities emitted for this context.
-    fn resources(&self, context: &Self::Context) -> Result<Vec<Resource>>;
-    /// Fallible validation before any ownership transfer.
-    fn validation(&self, context: &Self::Context) -> Result<TokenStream>;
-    /// Infallible ownership acquisition after acknowledgement.
-    fn acquisition(&self, context: &Self::Context) -> Result<TokenStream>;
-    /// Construct the argument after all inputs have been acquired, binding it to `target`.
-    /// The caller owns this identifier and passes it to the source function. Emit a
-    /// `let` binding in the surrounding scope, so borrowed argument storage remains alive.
-    /// Converter-private temporaries must not shadow other caller-supplied bindings.
-    fn construction(&self, context: &Self::Context, target: &syn::Ident) -> Result<TokenStream>;
+    /// Emit an expression for the whole slot.
+    fn code_fragment_slot(
+        &self,
+        mode: Self::SlotFragment<'_>,
+        expected_type: &syn::Type,
+    ) -> Result<TokenStream>;
+    /// Emit an expression for wire `pos`, or an error for an invalid position.
+    fn code_fragment_wire(
+        &self,
+        pos: usize,
+        mode: Self::WireFragment<'_>,
+        expected_type: &syn::Type,
+    ) -> Result<TokenStream>;
 }
-impl<W: WireKind, C: TemplateContext> InputConversion for InputPlan<W, C> {
-    type Wire = W;
-    type Context = C;
-    fn wires(&self) -> &[Wire<Self::Wire>] {
-        &self.wires
-    }
-    fn acknowledgement(&self, context: &Self::Context) -> Result<Option<TokenStream>> {
-        self.acknowledgement
-            .as_ref()
-            .map(|code| context.render(code))
-            .transpose()
-    }
-    fn resources(&self, context: &Self::Context) -> Result<Vec<Resource>> {
-        self.resources
-            .iter()
-            .map(|resource| {
-                Ok(Resource {
-                    identity: context.render(&resource.identity)?,
-                    access: resource.access,
-                    active: context.render(&resource.active)?,
-                })
-            })
-            .collect()
-    }
-    fn validation(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.validation)
-    }
-    fn acquisition(&self, context: &Self::Context) -> Result<TokenStream> {
-        context.render(&self.acquire)
-    }
-    fn construction(&self, context: &Self::Context, target: &syn::Ident) -> Result<TokenStream> {
-        let statements = context.render(&self.statements)?;
-        let value = context.render(&self.argument)?;
-        Ok(quote!(#statements let #target = #value;))
-    }
-}
-/// A fully prepared output conversion stored in a slot.
-/// Metadata and generated names must stay consistent across method calls.
-/// Code runs in the environment supplied by the language wrapper writer.
-/// Preparation resolves errors before installing the slot; [`emit_call`]
-/// reads this interface directly, without an intermediate plan.
-/// Source-value templates use [`source_result_expr`]; custom implementations can
-/// use the explicitly supplied source binding directly. All output phases receive
-/// the same binding, chosen by the caller, for the source function's return value.
+
+/// Prepared output conversion with a generator-defined request protocol.
+///
+/// Has the same expression and expected-type contract as [`InputConversion`],
+/// but its request enums may be entirely different. In particular, a request can
+/// carry the source-result identifier without imposing a shared context type.
 pub trait OutputConversion {
-    /// Adapter-specific boundary description.
+    /// Generator-defined boundary carrier.
     type Wire: WireKind;
-    /// Emission data defined and supplied by the language generator.
-    type Context;
-    /// Boundary results in delivery order.
+    /// Requests concerning the whole output slot.
+    type SlotFragment<'a>;
+    /// Requests concerning one output wire.
+    type WireFragment<'a>;
+    /// Boundary outputs in delivery order.
     fn wires(&self) -> &[Wire<Self::Wire>];
-    /// Output expressions in wire order, valid until commit.
-    fn values(&self, context: &Self::Context, source: &syn::Ident) -> Result<Vec<TokenStream>>;
-    /// Prepare owned output temporaries before delivery.
-    fn preparation(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
-    /// Fallible delivery code; ownership remains uncommitted on failure.
-    fn delivery(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
-    /// Infallibly transfer ownership after successful delivery.
-    fn commit(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
-    /// Infallible wrapper result expression evaluated after commit.
-    fn result(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream>;
-}
-impl<W: WireKind, C: TemplateContext> OutputConversion for OutputPlan<W, C> {
-    type Wire = W;
-    type Context = C;
-    fn wires(&self) -> &[Wire<Self::Wire>] {
-        &self.wires
-    }
-    fn values(&self, context: &Self::Context, source: &syn::Ident) -> Result<Vec<TokenStream>> {
-        self.values
-            .iter()
-            .map(|code| crate::emission::render_output(context, code, source))
-            .collect()
-    }
-    fn preparation(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
-        crate::emission::render_output(context, &self.statements, source)
-    }
-    fn delivery(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
-        crate::emission::render_output(context, &self.delivery.statements, source)
-    }
-    fn commit(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
-        crate::emission::render_output(context, &self.commit, source)
-    }
-    fn result(&self, context: &Self::Context, source: &syn::Ident) -> Result<TokenStream> {
-        crate::emission::render_output(context, &self.delivery.result, source)
-    }
+    /// Emit an expression for the whole slot.
+    fn code_fragment_slot(
+        &self,
+        mode: Self::SlotFragment<'_>,
+        expected_type: &syn::Type,
+    ) -> Result<TokenStream>;
+    /// Emit an expression for wire `pos`, or an error for an invalid position.
+    fn code_fragment_wire(
+        &self,
+        pos: usize,
+        mode: Self::WireFragment<'_>,
+        expected_type: &syn::Type,
+    ) -> Result<TokenStream>;
 }
 
-/// An output expression paired with its boundary description.
-pub struct OutputValue<'a, W: WireKind> {
-    /// Boundary carrier and binding name; its meaning is private to the converter.
-    pub wire: &'a Wire<W>,
-    /// Expression ready for adapter-specific delivery.
-    pub value: TokenStream,
+/// Bind an emitted expression to a caller-selected name and expected Rust type.
+///
+/// Rejects empty or statement-only fragments. The generated type annotation
+/// asks the Rust compiler to check the expectation in the wrapper's environment.
+pub fn bind_fragment(
+    target: &syn::Ident,
+    expected_type: &syn::Type,
+    fragment: TokenStream,
+) -> Result<TokenStream> {
+    let expression: syn::Expr =
+        syn::parse2(fragment).map_err(|error| format!("expected a Rust expression: {error}"))?;
+    Ok(quote!(let #target: #expected_type = #expression;))
 }
-
-/// Result-slot glue executed after output preparation and before ownership commit.
-#[derive(Clone, Debug)]
-pub struct Delivery {
-    /// Deliver every output; failure must leave owned temporaries uncommitted.
-    pub statements: TokenStream,
-    /// Infallible wrapper result expression evaluated after commit.
-    pub result: TokenStream,
-}
-impl Default for Delivery {
-    fn default() -> Self {
-        Self {
-            statements: TokenStream::new(),
-            result: quote!(()),
-        }
-    }
-}
-
 impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
     /// Filled input slots, preserving source parameter order and grouping.
     pub fn input_conversions(&self) -> Result<Vec<&I>> {
@@ -516,7 +287,7 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
             })
             .collect()
     }
-    /// Filled result slot. Emission checks the rendered wire and value counts.
+    /// Filled result slot, borrowed without requesting any generated code.
     pub fn output_conversion(&self) -> Result<&O> {
         let output = self
             .ret
@@ -531,130 +302,5 @@ impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
             .input_conversions()?
             .into_iter()
             .flat_map(|i| i.wires()))
-    }
-    /// Output expressions paired with their wire descriptions, directly from the slot.
-    pub fn outputs(
-        &self,
-        context: &O::Context,
-        source: &syn::Ident,
-    ) -> Result<impl ExactSizeIterator<Item = OutputValue<'_, O::Wire>>> {
-        let output = self.output_conversion()?;
-        let values = output.values(context, source)?;
-        if output.wires().len() != values.len() {
-            return Err(format!("`{}`: output wire/value count differs", self.name));
-        }
-        Ok(output
-            .wires()
-            .iter()
-            .zip(values)
-            .map(|(wire, value)| OutputValue { wire, value }))
-    }
-}
-
-/// Assemble a function call directly from filled slots, without a generator callback.
-/// Validates slot completeness, output arity and agreement on shared acknowledgement.
-/// The returned code runs inside the wrapper's fallible boundary, in this order:
-/// all validation, alias checks, one acknowledgement, all acquisition, argument
-/// construction, source invocation, output preparation, delivery and commit.
-/// `source` names the variable that receives the source function's return value.
-/// Input and output contexts must match, even when the function has no parameters.
-///
-/// ```compile_fail
-/// use prebindgen_flat::{emit_call, Function, InputConversion, OutputConversion};
-/// struct OtherContext(syn::Ident);
-/// fn incompatible<I, O>(function: &Function<I, O>, context: &syn::Ident)
-/// where I: InputConversion<Context = syn::Ident>,
-///       O: OutputConversion<Context = OtherContext>,
-/// {
-///     emit_call(function, context, &syn::parse_quote!(returned)).unwrap();
-/// }
-/// ```
-pub fn emit_call<I: InputConversion, O: OutputConversion<Context = I::Context>>(
-    function: &crate::Function<I, O>,
-    context: &I::Context,
-    source: &syn::Ident,
-) -> Result<TokenStream> {
-    let inputs = function.input_conversions()?;
-    let output = function.output_conversion()?;
-    let _ = function.outputs(context, source)?;
-    let mut acknowledgement: Option<TokenStream> = None;
-    for input in &inputs {
-        let Some(fragment) = input.acknowledgement(context)? else {
-            continue;
-        };
-        if let Some(previous) = &acknowledgement {
-            if previous.to_string() != fragment.to_string() {
-                return Err(format!(
-                    "`{}`: conflicting input acknowledgements",
-                    function.name
-                ));
-            }
-        } else {
-            acknowledgement = Some(fragment);
-        }
-    }
-    let validation = inputs
-        .iter()
-        .map(|i| i.validation(context))
-        .collect::<Result<Vec<_>>>()?;
-    let resources: Vec<_> = inputs
-        .iter()
-        .map(|i| i.resources(context))
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-    let aliases = validate_resources(&resources);
-    let acquire = inputs
-        .iter()
-        .map(|i| i.acquisition(context))
-        .collect::<Result<Vec<_>>>()?;
-    let path = &function.path;
-    let prepare = output.preparation(context, source)?;
-    let deliver = output.delivery(context, source)?;
-    let commit = output.commit(context, source)?;
-    let result = output.result(context, source)?;
-    let mut used: std::collections::BTreeSet<String> = inputs
-        .iter()
-        .flat_map(|input| input.wires().iter().map(|wire| wire.name.to_string()))
-        .chain(std::iter::once(source.to_string()))
-        .collect();
-    // Reserve names already used by surrounding phases and the source path.
-    // These tokens are emitted once; their code and evaluation order stay unchanged.
-    reserve_identifiers(
-        &quote!(#path #(#validation)* #aliases #acknowledgement #(#acquire)*
-        #prepare #deliver #commit #result),
-        &mut used,
-    );
-    let args: Vec<_> = (0..inputs.len())
-        .map(|index| {
-            let mut name = format!("__prebindgen_argument_{index}");
-            while !used.insert(name.clone()) {
-                name.push('_');
-            }
-            syn::Ident::new(&name, proc_macro2::Span::call_site())
-        })
-        .collect();
-    let construct = inputs
-        .iter()
-        .zip(&args)
-        .map(|(input, target)| input.construction(context, target))
-        .collect::<Result<Vec<_>>>()?;
-    Ok(quote! {
-        #(#validation)* #aliases #acknowledgement #(#acquire)* #(#construct)*
-        let #source = #path(#(#args),*);
-        #prepare #deliver #commit Ok(#result)
-    })
-}
-
-fn reserve_identifiers(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
-    for token in code.clone() {
-        match token {
-            proc_macro2::TokenTree::Ident(name) => {
-                used.insert(name.to_string());
-            }
-            proc_macro2::TokenTree::Group(group) => reserve_identifiers(&group.stream(), used),
-            _ => {}
-        }
     }
 }

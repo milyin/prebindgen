@@ -3,12 +3,13 @@
 //! [`Declarations::fill`], [`bind_input`] and [`bind_output`] build conversions
 //! directly in a [`Bindings`] model. Recipes and codec input data are used only
 //! during construction; slots retain wires and code needed by wrapper writers.
-//! Generation uses [`prebindgen_flat::emit_call`] and the call emitter in `prebindgen-flat`;
+//! Generation is owned by the language generator;
 //! this crate owns only declaration resolution and slot preparation.
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
-use prebindgen_flat::{same_type, type_key, Flat, InputPlan, OutputPlan, Result, Wire};
+use prebindgen_conversions::{InputPlan, OutputPlan};
+use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -155,7 +156,8 @@ impl Output {
 /// carrier types for its wire kinds.
 ///
 /// ```
-/// use prebindgen_flat::{Result, InputPlan, OutputPlan, validate_bindings};
+/// use prebindgen_flat::{Result, validate_bindings};
+/// use prebindgen_conversions::{InputPlan, OutputPlan};
 /// use prebindgen_conversions::value;
 /// use prebindgen_declarations::{
 ///     Codec, Declarations,
@@ -231,13 +233,11 @@ pub trait Codec {
     /// hooks retain only the data needed for emission in their code and wires.
     type Extra;
     /// Context supplied by the language generator when emitting stored templates.
-    type Context: prebindgen_flat::TemplateContext;
+    type Context: prebindgen_conversions::TemplateContext + 'static;
     /// Final self-contained input converter installed after preparation.
-    type Input: prebindgen_flat::InputConversion<Context = Self::Context>
-        + From<InputPlan<Self::Wire, Self::Context>>;
+    type Input: prebindgen_flat::InputConversion + From<InputPlan<Self::Wire, Self::Context>>;
     /// Final self-contained output converter installed after preparation.
-    type Output: prebindgen_flat::OutputConversion<Context = Self::Context>
-        + From<OutputPlan<Self::Wire, Self::Context>>;
+    type Output: prebindgen_flat::OutputConversion + From<OutputPlan<Self::Wire, Self::Context>>;
     /// Preserve a logical path in private preparation metadata when the codec needs it.
     /// The final converter decides how to use this mapping; Flat never interprets it.
     /// Called from the innermost component outward; prepend each segment to its path.
@@ -412,7 +412,7 @@ pub fn bind_input<C: Codec>(
 /// Build and attach a converter to a function result, replacing any existing one.
 ///
 /// Uses the same construction and failure rules as [`bind_input`]. Output code
-/// uses [`prebindgen_flat::source_result_expr`] for the source call's result local.
+/// uses [`prebindgen_conversions::source_result_expr`] for the source call's result local.
 /// The recipe is checked for compatible types and signatures, and for repeated
 /// consumption of the same value. Unit results use `Output::fields([])`.
 ///
@@ -443,7 +443,7 @@ pub fn bind_output<C: Codec>(
         &flat.function(function)?.ret.ty,
         recipe,
         extra,
-        prebindgen_flat::source_result_expr(),
+        prebindgen_conversions::source_result_expr(),
         false,
     )?;
     codec.finish_output(&mut conversion, extra)?;
