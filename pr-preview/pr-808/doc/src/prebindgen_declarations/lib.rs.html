@@ -235,9 +235,9 @@
 <a href=#235 id=235 data-nosnippet>235</a>    <span class="doccomment">/// Context supplied by the language generator when emitting stored templates.
 <a href=#236 id=236 data-nosnippet>236</a>    </span><span class="kw">type </span>Context: prebindgen_conversions::TemplateContext + <span class="lifetime">'static</span>;
 <a href=#237 id=237 data-nosnippet>237</a>    <span class="doccomment">/// Final self-contained input converter installed after preparation.
-<a href=#238 id=238 data-nosnippet>238</a>    </span><span class="kw">type </span>Input: prebindgen_flat::InputConversion + From&lt;InputPlan&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Context&gt;&gt;;
+<a href=#238 id=238 data-nosnippet>238</a>    </span><span class="kw">type </span>Input: prebindgen_flat::Conversion + From&lt;InputPlan&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Context&gt;&gt;;
 <a href=#239 id=239 data-nosnippet>239</a>    <span class="doccomment">/// Final self-contained output converter installed after preparation.
-<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">type </span>Output: prebindgen_flat::OutputConversion + From&lt;OutputPlan&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Context&gt;&gt;;
+<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">type </span>Output: prebindgen_flat::Conversion + From&lt;OutputPlan&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Context&gt;&gt;;
 <a href=#241 id=241 data-nosnippet>241</a>    <span class="doccomment">/// Preserve a logical path in private preparation metadata when the codec needs it.
 <a href=#242 id=242 data-nosnippet>242</a>    /// The final converter decides how to use this mapping; Flat never interprets it.
 <a href=#243 id=243 data-nosnippet>243</a>    /// Called from the innermost component outward; prepend each segment to its path.

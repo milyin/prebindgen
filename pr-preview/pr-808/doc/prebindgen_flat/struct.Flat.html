@@ -6,7 +6,7 @@
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Source structure with independently configured input and output conversions.</p>
 <p>Every parameter carries <code>Option&lt;I&gt;</code>; every result carries <code>Option&lt;O&gt;</code>.
 Record fields describe source structure. Slot payloads belong to the consumer;
-generators may use <a href="trait.InputConversion.html" title="trait prebindgen_flat::InputConversion"><code>InputConversion</code></a> and <a href="trait.OutputConversion.html" title="trait prebindgen_flat::OutputConversion"><code>OutputConversion</code></a> for expression
+generators may use <a href="trait.Conversion.html" title="trait prebindgen_flat::Conversion"><code>Conversion</code></a> for expression
 emission. Source-only inspection uses <code>Flat&lt;(), ()&gt;</code> with empty slots.</p>
 <p>Use <a href="struct.Flat.html#method.parse" title="associated function prebindgen_flat::Flat::parse"><code>Flat::parse</code></a> or <a href="struct.Flat.html#method.parse_selected" title="associated function prebindgen_flat::Flat::parse_selected"><code>Flat::parse_selected</code></a> to validate source syntax and
 qualify declared names. Aliases stay opaque. Named types must have nonzero

@@ -437,11 +437,11 @@
 <a href=#437 id=437 data-nosnippet>437</a>    }
 <a href=#438 id=438 data-nosnippet>438</a>}
 <a href=#439 id=439 data-nosnippet>439</a><span class="kw">fn </span>generate&lt;
-<a href=#440 id=440 data-nosnippet>440</a>    I: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; prebindgen_flat::InputConversion&lt;
+<a href=#440 id=440 data-nosnippet>440</a>    I: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; prebindgen_flat::Conversion&lt;
 <a href=#441 id=441 data-nosnippet>441</a>        Wire = CWire,
 <a href=#442 id=442 data-nosnippet>442</a>        SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::InputFragment&lt;<span class="lifetime">'a</span>, CContext&gt;,
 <a href=#443 id=443 data-nosnippet>443</a>    &gt;,
-<a href=#444 id=444 data-nosnippet>444</a>    O: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; prebindgen_flat::OutputConversion&lt;
+<a href=#444 id=444 data-nosnippet>444</a>    O: <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; prebindgen_flat::Conversion&lt;
 <a href=#445 id=445 data-nosnippet>445</a>        Wire = CWire,
 <a href=#446 id=446 data-nosnippet>446</a>        SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, CContext&gt;,
 <a href=#447 id=447 data-nosnippet>447</a>        WireFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputWireFragment&lt;<span class="lifetime">'a</span>, CContext&gt;,
@@ -601,7 +601,7 @@
 <a href=#601 id=601 data-nosnippet>601</a>    <span class="attr">#[test]
 <a href=#602 id=602 data-nosnippet>602</a>    </span><span class="kw">fn </span>emits_custom_slot_code_without_building_a_plan() {
 <a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">struct </span>CountedOutput(std::rc::Rc&lt;std::cell::Cell&lt;usize&gt;&gt;);
-<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">impl </span>prebindgen_flat::OutputConversion <span class="kw">for </span>CountedOutput {
+<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">impl </span>prebindgen_flat::Conversion <span class="kw">for </span>CountedOutput {
 <a href=#605 id=605 data-nosnippet>605</a>            <span class="kw">type </span>Wire = CWire;
 <a href=#606 id=606 data-nosnippet>606</a>            <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, CContext&gt;;
 <a href=#607 id=607 data-nosnippet>607</a>            <span class="kw">type </span>WireFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputWireFragment&lt;<span class="lifetime">'a</span>, CContext&gt;;

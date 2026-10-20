@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>//! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 <a href=#3 id=3 data-nosnippet>3</a>//! Other generators can define entirely different request enums.
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use crate</span>::{Access, InputPlan, OutputPlan, TemplateContext};
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::{Function, InputConversion, OutputConversion, <span class="prelude-ty">Result</span>, Wire, WireKind};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>prebindgen_flat::{Conversion, Function, <span class="prelude-ty">Result</span>, Wire, WireKind};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>quote::quote;
 <a href=#8 id=8 data-nosnippet>8</a>
@@ -102,7 +102,7 @@
 <a href=#102 id=102 data-nosnippet>102</a>    <span class="prelude-val">Ok</span>(code)
 <a href=#103 id=103 data-nosnippet>103</a>}
 <a href=#104 id=104 data-nosnippet>104</a>
-<a href=#105 id=105 data-nosnippet>105</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext + <span class="lifetime">'static</span>&gt; InputConversion <span class="kw">for </span>InputPlan&lt;W, C&gt; {
+<a href=#105 id=105 data-nosnippet>105</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext + <span class="lifetime">'static</span>&gt; Conversion <span class="kw">for </span>InputPlan&lt;W, C&gt; {
 <a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">type </span>Wire = W;
 <a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = InputFragment&lt;<span class="lifetime">'a</span>, C&gt;;
 <a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">type </span>WireFragment&lt;<span class="lifetime">'a</span>&gt; = InputWireFragment;
@@ -174,7 +174,7 @@
 <a href=#174 id=174 data-nosnippet>174</a>    }
 <a href=#175 id=175 data-nosnippet>175</a>}
 <a href=#176 id=176 data-nosnippet>176</a>
-<a href=#177 id=177 data-nosnippet>177</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext + <span class="lifetime">'static</span>&gt; OutputConversion <span class="kw">for </span>OutputPlan&lt;W, C&gt; {
+<a href=#177 id=177 data-nosnippet>177</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext + <span class="lifetime">'static</span>&gt; Conversion <span class="kw">for </span>OutputPlan&lt;W, C&gt; {
 <a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">type </span>Wire = W;
 <a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = OutputFragment&lt;<span class="lifetime">'a</span>, C&gt;;
 <a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">type </span>WireFragment&lt;<span class="lifetime">'a</span>&gt; = OutputWireFragment&lt;<span class="lifetime">'a</span>, C&gt;;
@@ -256,9 +256,9 @@
 <a href=#256 id=256 data-nosnippet>256</a>}
 <a href=#257 id=257 data-nosnippet>257</a><span class="kw">impl</span>&lt;I, O, C: <span class="lifetime">'static</span>&gt; StagedFunction&lt;C, O::Wire&gt; <span class="kw">for </span>Function&lt;I, O&gt;
 <a href=#258 id=258 data-nosnippet>258</a><span class="kw">where
-<a href=#259 id=259 data-nosnippet>259</a>    </span>I: InputConversion,
-<a href=#260 id=260 data-nosnippet>260</a>    O: OutputConversion,
-<a href=#261 id=261 data-nosnippet>261</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; O: OutputConversion&lt;WireFragment&lt;<span class="lifetime">'a</span>&gt; = OutputWireFragment&lt;<span class="lifetime">'a</span>, C&gt;&gt;,
+<a href=#259 id=259 data-nosnippet>259</a>    </span>I: Conversion,
+<a href=#260 id=260 data-nosnippet>260</a>    O: Conversion,
+<a href=#261 id=261 data-nosnippet>261</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; O: Conversion&lt;WireFragment&lt;<span class="lifetime">'a</span>&gt; = OutputWireFragment&lt;<span class="lifetime">'a</span>, C&gt;&gt;,
 <a href=#262 id=262 data-nosnippet>262</a>{
 <a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">fn </span>outputs(
 <a href=#264 id=264 data-nosnippet>264</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -296,10 +296,10 @@
 <a href=#296 id=296 data-nosnippet>296</a>    result_type: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#297 id=297 data-nosnippet>297</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;
 <a href=#298 id=298 data-nosnippet>298</a><span class="kw">where
-<a href=#299 id=299 data-nosnippet>299</a>    </span>I: InputConversion,
-<a href=#300 id=300 data-nosnippet>300</a>    O: OutputConversion,
-<a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; I: InputConversion&lt;SlotFragment&lt;<span class="lifetime">'a</span>&gt; = InputFragment&lt;<span class="lifetime">'a</span>, C&gt;&gt;,
-<a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; O: OutputConversion&lt;
+<a href=#299 id=299 data-nosnippet>299</a>    </span>I: Conversion,
+<a href=#300 id=300 data-nosnippet>300</a>    O: Conversion,
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; I: Conversion&lt;SlotFragment&lt;<span class="lifetime">'a</span>&gt; = InputFragment&lt;<span class="lifetime">'a</span>, C&gt;&gt;,
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; O: Conversion&lt;
 <a href=#303 id=303 data-nosnippet>303</a>        SlotFragment&lt;<span class="lifetime">'a</span>&gt; = OutputFragment&lt;<span class="lifetime">'a</span>, C&gt;,
 <a href=#304 id=304 data-nosnippet>304</a>        WireFragment&lt;<span class="lifetime">'a</span>&gt; = OutputWireFragment&lt;<span class="lifetime">'a</span>, C&gt;,
 <a href=#305 id=305 data-nosnippet>305</a>    &gt;,

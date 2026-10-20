@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-jni/src/kotlin.rs`."><title>kotlin.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_jni" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.1 (58cf8f9c3 2026-10-13)" data-channel="1.99.1" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_jni/</div>kotlin.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 <a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>prebindgen_flat::{InputConversion, OutputConversion, Wire, WireKind};
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>prebindgen_flat::{Conversion, Wire, WireKind};
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">impl </span>WireKind <span class="kw">for </span>JniKind {
 <a href=#6 id=6 data-nosnippet>6</a>    <span class="kw">fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
@@ -121,7 +121,7 @@
 <a href=#121 id=121 data-nosnippet>121</a>}
 <a href=#122 id=122 data-nosnippet>122</a><span class="doccomment">/// Input conversion with opaque Kotlin-side emission.
 <a href=#123 id=123 data-nosnippet>123</a></span><span class="kw">pub trait </span>KotlinInputConversion:
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; InputConversion&lt;
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Conversion&lt;
 <a href=#125 id=125 data-nosnippet>125</a>    Wire = JniWire,
 <a href=#126 id=126 data-nosnippet>126</a>    SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::InputFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;,
 <a href=#127 id=127 data-nosnippet>127</a>&gt;
@@ -131,7 +131,7 @@
 <a href=#131 id=131 data-nosnippet>131</a>}
 <a href=#132 id=132 data-nosnippet>132</a><span class="doccomment">/// Output conversion with opaque Kotlin-side emission.
 <a href=#133 id=133 data-nosnippet>133</a></span><span class="kw">pub trait </span>KotlinOutputConversion:
-<a href=#134 id=134 data-nosnippet>134</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; OutputConversion&lt;
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; Conversion&lt;
 <a href=#135 id=135 data-nosnippet>135</a>    Wire = JniWire,
 <a href=#136 id=136 data-nosnippet>136</a>    SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;,
 <a href=#137 id=137 data-nosnippet>137</a>    WireFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputWireFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;,
@@ -201,7 +201,7 @@
 <a href=#201 id=201 data-nosnippet>201</a>    }
 <a href=#202 id=202 data-nosnippet>202</a>}
 <a href=#203 id=203 data-nosnippet>203</a>
-<a href=#204 id=204 data-nosnippet>204</a><span class="kw">impl </span>InputConversion <span class="kw">for </span>JniInput {
+<a href=#204 id=204 data-nosnippet>204</a><span class="kw">impl </span>Conversion <span class="kw">for </span>JniInput {
 <a href=#205 id=205 data-nosnippet>205</a>    <span class="kw">type </span>Wire = JniWire;
 <a href=#206 id=206 data-nosnippet>206</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::InputFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;;
 <a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">type </span>WireFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::InputWireFragment;
@@ -224,7 +224,7 @@
 <a href=#224 id=224 data-nosnippet>224</a>        <span class="self">self</span>.rust.code_fragment_wire(pos, mode, expected)
 <a href=#225 id=225 data-nosnippet>225</a>    }
 <a href=#226 id=226 data-nosnippet>226</a>}
-<a href=#227 id=227 data-nosnippet>227</a><span class="kw">impl </span>OutputConversion <span class="kw">for </span>JniOutput {
+<a href=#227 id=227 data-nosnippet>227</a><span class="kw">impl </span>Conversion <span class="kw">for </span>JniOutput {
 <a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">type </span>Wire = JniWire;
 <a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;;
 <a href=#230 id=230 data-nosnippet>230</a>    <span class="kw">type </span>WireFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputWireFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;;
