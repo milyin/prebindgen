@@ -210,6 +210,33 @@ pub fn source_result_expr() -> TokenStream {
 /// `syn::Type`; the converter does not hardcode any wrapped type.
 /// It demonstrates every method, including ownership transfer and alias checking.
 ///
+/// `Context` describes the environment that the language generator prepares around
+/// the emitted conversion code. The generator defines this type and constructs a
+/// value during code generation, then passes it to [`emit_call`] or directly to
+/// the slot's methods. Call assembly passes the same context to the input and
+/// output conversions. Flat imposes no fields or trait requirements on it.
+///
+/// In this example, the wrapper exposes an ownership-acknowledgement parameter.
+/// `Context::acknowledged` holds that parameter's Rust identifier. The converter
+/// uses it to emit an assignment such as `*ownership_taken = true;`. The context
+/// exists while generating code; it contains the identifier, not the runtime
+/// boolean. The generator must declare that parameter in the generated wrapper
+/// with the type and meaning expected by the converter.
+///
+/// Preparation stores the conversion-specific information in `OwnedBoxInput`:
+/// the pointee type, wire description and private temporary name. Context supplies
+/// wrapper-environment bindings shared by conversions. For another generator,
+/// these might include a runtime environment identifier or a helper-function path.
+/// The converter already determines how conversion works; context supplies the
+/// environment in which its emitted code will run. Changing the acknowledgement
+/// parameter's name therefore needs a different context value, not a rebuilt slot.
+///
+/// The final Rust argument binding is supplied separately as `target` to
+/// [`InputConversion::construction`]. Similarly, output methods receive the
+/// source-result binding explicitly. Neither binding needs to be stored in
+/// context. Converters that need no wrapper-specific environment can use `()`
+/// as their associated `Context` type.
+///
 /// The wrapper supplies an `&mut bool` acknowledgement parameter, initially false.
 /// Validation or alias-check failure leaves it false and ownership with the caller.
 /// After acknowledgement, the wrapper owns the allocation even if later code fails.
@@ -236,8 +263,10 @@ pub fn source_result_expr() -> TokenStream {
 ///     }
 /// }
 ///
-/// // Name of the wrapper's &mut bool parameter, supplied during generation.
+/// // Generator-owned bindings available to emitted code. This is a code-generation
+/// // value, not a runtime context passed to the wrapped Rust function.
 /// struct Context {
+///     // Name of the wrapper's &mut bool parameter.
 ///     acknowledged: Ident,
 /// }
 ///
@@ -335,7 +364,11 @@ pub fn source_result_expr() -> TokenStream {
 pub trait InputConversion {
     /// Adapter-specific boundary description.
     type Wire: WireKind;
-    /// Emission data defined and supplied by the language generator.
+    /// Wrapper-environment data defined and supplied by the language generator.
+    /// The value is used during code generation, for example to name runtime
+    /// parameters or helper functions referenced by emitted code. Use `()` when
+    /// no such data is needed. See the trait example for the distinction between
+    /// context, prepared slot data and the caller-supplied argument binding.
     type Context;
     /// Boundary parameters in signature order.
     fn wires(&self) -> &[Wire<Self::Wire>];
