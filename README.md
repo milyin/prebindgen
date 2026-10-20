@@ -133,10 +133,11 @@ a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields
 Type-wide expansions of field types do not rewrite a data class's properties.
 
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
-`.fields_self_into(fields!(consuming_accessor))` requires an accessor taking `T`
+`.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
 and moves its returned record fields. Both support existing per-field expansion
 overrides through `.field("name", expand_return!(FieldType)...)` on `FieldsDecl`.
 These fields use their type-wide defaults when not overridden.
+`fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
 A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
 and duplicate consuming views are rejected. Observing getters run before consuming

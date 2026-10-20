@@ -39,7 +39,7 @@
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
-//! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
+//! | `expand_return!` `.fields_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
@@ -529,7 +529,7 @@ fn main() {
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
         /* Unsupported: this expansion needs unsupported conversions.
-.expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+.expand(expand_return!(Report).fields_into(fields!(report_into_struct)))
 */
         // #142: `Span`'s value form is two bounded leaves; `SpanHolder` reaches
         // it through an `Option`, so both become nullable. `delay` keeps its own
@@ -1195,7 +1195,7 @@ fn main() {
             .fun(fun!(resource_bundle_new).expand_return(expand_return!(ResourceBundle).project_self(
                 prebindgen_jni::Projection::owned().field("details", prebindgen_jni::Projection::borrowed()))))
             .fun(fun!(resource_bundle_default))
-            .fun(fun!(resource_bundle_fields).expand_return(expand_return!(ResourceBundle).fields_self_into(
+            .fun(fun!(resource_bundle_fields).expand_return(expand_return!(ResourceBundle).fields_into(
                 fields!(resource_bundle_into)
                     .field("pair", expand_return!(ResourcePair).field_self_into())
                     .field("details", expand_return!(DataFloats).field_self_ref()))))

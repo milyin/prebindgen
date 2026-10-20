@@ -1104,7 +1104,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
             &TEST_CODEC,
             &fun!(make).expand_return(
                 expand_return!(Pair)
-                    .fields_self_into(
+                    .fields_into(
                         fields!(into_pair).field("first", expand_return!(i64).field_self_ref()),
                     )
                     .field(fun!(count)),
@@ -1126,7 +1126,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(expand_return!(Pair).fields_self_into(fields!(copy_pair))),
+            &fun!(make).expand_return(expand_return!(Pair).fields_into(fields!(copy_pair))),
             &Extra::default(),
         )
         .unwrap_err();

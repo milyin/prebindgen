@@ -104,9 +104,14 @@ impl ExpandReturnDecl {
     /// type defaults. Nested data classes retain their borrowed default unless an
     /// explicit field expansion or type default selects owned projection.
     /// Observing sibling views run before this consuming view.
-    pub fn fields_self_into(mut self, decl: FieldsDecl) -> Self {
+    pub fn fields_into(mut self, decl: FieldsDecl) -> Self {
         self.fields.push(ReturnField::IntoFields(decl));
         self
+    }
+    /// Deprecated alias for [`Self::fields_into`].
+    #[deprecated(note = "use fields_into instead")]
+    pub fn fields_self_into(self, decl: FieldsDecl) -> Self {
+        self.fields_into(decl)
     }
     /// Append a leaf converted with explicit ownership and optional field policies.
     pub fn project_self(mut self, projection: Projection) -> Self {
