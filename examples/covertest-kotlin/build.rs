@@ -107,7 +107,7 @@
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
 };
-use prebindgen_registry::{
+use prebindgen_declarations::{
     convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
 };
 
@@ -127,8 +127,8 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 
 */
+use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
-use prebindgen_registry::{expand_param, expand_return, fields, fun};
 
 fn main() {
     let binding = JniGen::builder()

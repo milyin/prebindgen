@@ -25,7 +25,7 @@
 
 // Unsupported callback declarations: use prebindgen_jni::{matching, package, ptr_class};
 use prebindgen_jni::JniGen;
-// Unsupported: use prebindgen_registry::{expand_return, fields, fun};
+// Unsupported: use prebindgen_declarations::{expand_return, fields, fun};
 
 /// The crate name stamped on every item, and so the qualifier the generated
 /// code calls through (`myflat::z_keyexpr_as_str(..)`). `src/lib.rs` mounts

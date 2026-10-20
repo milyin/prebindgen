@@ -21,7 +21,6 @@ crates=(
   prebindgen-flat
   prebindgen-conversions
   prebindgen-declarations
-  prebindgen-registry
   prebindgen-c
   prebindgen-jni
 )

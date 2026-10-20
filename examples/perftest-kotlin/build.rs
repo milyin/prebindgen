@@ -24,12 +24,12 @@
 
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
-use prebindgen_registry::{expand_param, expand_return, fields, fun};
+use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 
 
 */
+use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{package, ptr_class, JniGen};
-use prebindgen_registry::{expand_param, expand_return, fields, fun};
 
 fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.

@@ -1,5 +1,5 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_registry::{expand_param, expand_return, fields, fun};
+use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use syn::parse_quote as pq;
 
 fn main() {

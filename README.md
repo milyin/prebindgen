@@ -29,8 +29,8 @@ Wrapper writers use flat's generation API; recursive recipe resolution belongs t
 
 This branch replaces the generator engine while preserving source capture and
 source-reading support. The supported JniGen `build.rs` declarations keep their
-existing syntax and import paths. `prebindgen-registry` re-exports declaration
-types and macros from `prebindgen-declarations`.
+existing syntax. Import shared declaration types and macros directly from
+`prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
 been removed. All eight Rust example crates from `main` are in the workspace.
@@ -126,7 +126,7 @@ The same declaration works as a type-wide default or a per-function replacement:
         Projection::owned().field("details", Projection::borrowed())))))
 ```
 
-`Projection` is re-exported by `prebindgen_registry` and `prebindgen_jni`.
+`Projection` is available from `prebindgen_declarations` and `prebindgen_jni`.
 Modes propagate recursively unless explicitly overridden; they never depend on
 record contents. Legacy `field_self()` and unexpanded data-class outputs retain
 a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
