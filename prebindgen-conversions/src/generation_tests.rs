@@ -513,12 +513,50 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
             active: quote!(count % 2 == 0),
         },
     ]);
+    let mut pair_checks = TokenStream::new();
+    let mut assertions = TokenStream::new();
+    for (i, first) in [Access::Shared, Access::Exclusive, Access::Move]
+        .into_iter()
+        .enumerate()
+    {
+        for (j, second) in [Access::Shared, Access::Exclusive, Access::Move]
+            .into_iter()
+            .enumerate()
+        {
+            let name = quote::format_ident!("pair_{i}_{j}");
+            let pair = validate_resources(&[
+                Resource {
+                    identity: quote!(left),
+                    access: first,
+                    active: quote!(true),
+                },
+                Resource {
+                    identity: quote!(right),
+                    access: second,
+                    active: quote!(true),
+                },
+            ]);
+            pair_checks.extend(quote! {
+                fn #name(left: usize, right: usize) -> Result<(), String> {
+                    #pair
+                    Ok(())
+                }
+            });
+            let shared = first == Access::Shared && second == Access::Shared;
+            assertions.extend(quote! {
+                assert_eq!(#name(7, 7).is_ok(), #shared);
+                assert!(#name(7, 8).is_ok());
+            });
+        }
+    }
     let source = quote! {
+        #pair_checks
         fn check(enabled: bool, count: usize, left: usize, right: Option<usize>) -> Result<(), String> {
             #code
             Ok(())
         }
         fn main() {
+            #assertions
             assert!(check(true, 2, 7, Some(7)).is_err());
             assert!(check(true, 2, 7, Some(8)).is_ok());
             assert!(check(false, 2, 7, Some(7)).is_ok());

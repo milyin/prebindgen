@@ -324,73 +324,46 @@ impl RecordShape {
         v: &syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<JniKind>> {
-        let mut out = InputPlan {
-            context: Default::default(),
-            acknowledgement: None,
-            wires: vec![],
-            validation: quote!(),
-            acquire: quote!(),
-            resources: vec![],
-            statements: quote!(),
-            argument: quote!(#v),
-        };
-        let mut fields = Vec::new();
-        for (i, f) in self.fields.iter().enumerate() {
-            let fw = format_ident!("{w}_f{i}");
-            let fv = format_ident!("{v}_f{i}");
-            let child = match &f.shape {
-                Shape::Value(_) => JniCodec.input_leaf(&f.ty, &(), fw, fv, active)?,
-                Shape::Record(r) => r.input(&fw, &fv, active)?,
-            };
-            debug_assert!(
-                child.acquire.is_empty()
-                    && child.resources.is_empty()
-                    && child.acknowledgement.is_none(),
-                "data fields must remain value-only"
-            );
-            out.wires.extend(child.wires);
-            out.validation.extend(child.validation);
-            out.statements.extend(child.statements);
-            let name = &f.name;
-            let arg = child.argument;
-            fields.push(quote!(#name: #arg));
-        }
-        let ty = &self.ty;
-        out.statements
-            .extend(quote!(let #v: #ty = #ty { #(#fields),* };));
-        Ok(out)
+        let plan = prebindgen_declarations::record_input(
+            &JniCodec,
+            &self.ty,
+            v.clone(),
+            self.fields.iter().enumerate().map(|(i, f)| {
+                let fw = format_ident!("{w}_f{i}");
+                let fv = format_ident!("{v}_f{i}");
+                let child = match &f.shape {
+                    Shape::Value(_) => JniCodec.input_leaf(&f.ty, &(), fw, fv, active)?,
+                    Shape::Record(r) => r.input(&fw, &fv, active)?,
+                };
+                Ok((f.name.clone(), child))
+            }),
+        )?;
+        debug_assert!(
+            plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
+            "data fields must remain value-only"
+        );
+        Ok(plan)
     }
     fn output(&self, w: &syn::Ident, value: TokenStream) -> Result<OutputPlan<JniKind>> {
-        let mut out = OutputPlan {
-            context: Default::default(),
-            delivery: Default::default(),
-            commit: quote!(),
-            wires: vec![],
-            statements: quote!(),
-            values: vec![],
-        };
-        // Bind even a non-place expression once before observing its fields.
-        let record = format_ident!("{w}_record");
-        out.statements.extend(quote!(let #record = &(#value);));
-        // Always observe fields. Owned results remain Rust-owned until delivery,
-        // and the same data leaf can safely appear in multiple output views.
-        for (i, f) in self.fields.iter().enumerate() {
-            let fw = format_ident!("{w}_f{i}");
-            let name = &f.name;
-            let field = quote!(&#record.#name);
-            let child = match &f.shape {
-                Shape::Value(_) => JniCodec.output_leaf(&f.ty, &(), fw, field, true)?,
-                Shape::Record(r) => r.output(&fw, field)?,
-            };
-            debug_assert!(
-                child.commit.is_empty(),
-                "data fields cannot transfer native ownership"
-            );
-            out.wires.extend(child.wires);
-            out.statements.extend(child.statements);
-            out.values.extend(child.values);
-        }
-        Ok(out)
+        let plan = prebindgen_declarations::record_output(
+            &JniCodec,
+            format_ident!("{w}_record"),
+            value,
+            self.fields.iter().map(|f| f.name.clone()),
+            |i, field| {
+                let f = &self.fields[i];
+                let fw = format_ident!("{w}_f{i}");
+                match &f.shape {
+                    Shape::Value(_) => JniCodec.output_leaf(&f.ty, &(), fw, field, true),
+                    Shape::Record(r) => r.output(&fw, field),
+                }
+            },
+        )?;
+        debug_assert!(
+            plan.commit.is_empty(),
+            "data fields cannot transfer native ownership"
+        );
+        Ok(plan)
     }
     fn paths(&self, path: &[String], paths: &mut Vec<Vec<String>>) {
         for f in &self.fields {
