@@ -1,198 +1,134 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A fully prepared input conversion stored in a slot. Metadata and generated names must stay consistent across method calls. Code runs in the environment supplied by the language wrapper writer. Preparation resolves errors before installing the slot; `emit_call` reads this interface directly, without an intermediate plan."><title>InputConversion in prebindgen_flat - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_flat" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.1 (58cf8f9c3 2026-10-13)" data-channel="1.99.1" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">InputConversion</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_flat/index.html">prebindgen_<wbr>flat</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Input<wbr>Conversion</a></h2><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.Context" title="Context">Context</a></li><li><a href="#associatedtype.Wire" title="Wire">Wire</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.acquisition" title="acquisition">acquisition</a></li><li><a href="#tymethod.construction" title="construction">construction</a></li><li><a href="#tymethod.resources" title="resources">resources</a></li><li><a href="#tymethod.validation" title="validation">validation</a></li><li><a href="#tymethod.wires" title="wires">wires</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.acknowledgement" title="acknowledgement">acknowledgement</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate prebindgen_<wbr>flat</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">prebindgen_flat</a></div><h1>Trait <span class="trait">Input<wbr>Conversion</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_flat/conversion.rs.html#364-393">Source</a> </span></div><pre class="rust item-decl"><code>pub trait InputConversion {
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Prepared input conversion with a generator-defined request protocol."><title>InputConversion in prebindgen_flat - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_flat" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.1 (58cf8f9c3 2026-10-13)" data-channel="1.99.1" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">InputConversion</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_flat/index.html">prebindgen_<wbr>flat</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Input<wbr>Conversion</a></h2><h3><a href="#required-associated-types">Required Associated Types</a></h3><ul class="block"><li><a href="#associatedtype.SlotFragment" title="SlotFragment">SlotFragment</a></li><li><a href="#associatedtype.Wire" title="Wire">Wire</a></li><li><a href="#associatedtype.WireFragment" title="WireFragment">WireFragment</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.code_fragment_slot" title="code_fragment_slot">code_fragment_slot</a></li><li><a href="#tymethod.code_fragment_wire" title="code_fragment_wire">code_fragment_wire</a></li><li><a href="#tymethod.wires" title="wires">wires</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate prebindgen_<wbr>flat</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">prebindgen_flat</a></div><h1>Trait <span class="trait">Input<wbr>Conversion</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_flat/conversion.rs.html#212-234">Source</a> </span></div><pre class="rust item-decl"><code>pub trait InputConversion {
     type <a href="#associatedtype.Wire" class="associatedtype">Wire</a>: <a class="trait" href="trait.WireKind.html" title="trait prebindgen_flat::WireKind">WireKind</a>;
-    type <a href="#associatedtype.Context" class="associatedtype">Context</a>;
+    type <a href="#associatedtype.SlotFragment" class="associatedtype">SlotFragment</a>&lt;'a&gt;;
+    type <a href="#associatedtype.WireFragment" class="associatedtype">WireFragment</a>&lt;'a&gt;;
 
     // Required methods
     fn <a href="#tymethod.wires" class="fn">wires</a>(&amp;self) -&gt; &amp;[<a class="struct" href="struct.Wire.html" title="struct prebindgen_flat::Wire">Wire</a>&lt;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Wire" title="type prebindgen_flat::InputConversion::Wire">Wire</a>&gt;];
-<span class="item-spacer"></span>    fn <a href="#tymethod.resources" class="fn">resources</a>(&amp;self, context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.99.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="struct.Resource.html" title="struct prebindgen_flat::Resource">Resource</a>&gt;&gt;;
-<span class="item-spacer"></span>    fn <a href="#tymethod.validation" class="fn">validation</a>(&amp;self, context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;;
-<span class="item-spacer"></span>    fn <a href="#tymethod.acquisition" class="fn">acquisition</a>(&amp;self, context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;;
-<span class="item-spacer"></span>    fn <a href="#tymethod.construction" class="fn">construction</a>(
+<span class="item-spacer"></span>    fn <a href="#tymethod.code_fragment_slot" class="fn">code_fragment_slot</a>(
         &amp;self,
-        context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>,
-        target: &amp;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
+        mode: Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.SlotFragment" title="type prebindgen_flat::InputConversion::SlotFragment">SlotFragment</a>&lt;'_&gt;,
+        expected_type: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
     ) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;;
-
-    // Provided method
-    fn <a href="#method.acknowledgement" class="fn">acknowledgement</a>(
+<span class="item-spacer"></span>    fn <a href="#tymethod.code_fragment_wire" class="fn">code_fragment_wire</a>(
         &amp;self,
-        _context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>,
-    ) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.99.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;&gt; { ... }
-}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A fully prepared input conversion stored in a slot.
-Metadata and generated names must stay consistent across method calls.
-Code runs in the environment supplied by the language wrapper writer.
-Preparation resolves errors before installing the slot; <a href="fn.emit_call.html" title="fn prebindgen_flat::emit_call"><code>emit_call</code></a>
-reads this interface directly, without an intermediate plan.</p>
-<p>This conversion accepts one opaque pointer wire and constructs a
-<code>Box&lt;T&gt;</code> argument. Preparation supplies the concrete pointee type as a
-<code>syn::Type</code>; the converter does not hardcode any wrapped type.
-It demonstrates every method, including ownership transfer and alias checking.</p>
-<p><code>Context</code> describes the environment that the language generator prepares around
-the emitted conversion code. The generator defines this type and constructs a
-value during code generation, then passes it to <a href="fn.emit_call.html" title="fn prebindgen_flat::emit_call"><code>emit_call</code></a> or directly to
-the slot’s methods. Call assembly passes the same context to the input and
-output conversions. Flat imposes no fields or trait requirements on it.</p>
-<p>In this example, the wrapper exposes an ownership-acknowledgement parameter.
-<code>Context::acknowledged</code> holds that parameter’s Rust identifier. The converter
-uses it to emit an assignment such as <code>*ownership_taken = true;</code>. The context
-exists while generating code; it contains the identifier, not the runtime
-boolean. The generator must declare that parameter in the generated wrapper
-with the type and meaning expected by the converter.</p>
-<p>Preparation stores the conversion-specific information in <code>OwnedBoxInput</code>:
-the pointee type, wire description and private temporary name. Context supplies
-wrapper-environment bindings shared by conversions. For another generator,
-these might include a runtime environment identifier or a helper-function path.
-The converter already determines how conversion works; context supplies the
-environment in which its emitted code will run. Changing the acknowledgement
-parameter’s name therefore needs a different context value, not a rebuilt slot.</p>
-<p>The final Rust argument binding is supplied separately as <code>target</code> to
-<a href="trait.InputConversion.html#tymethod.construction" title="method prebindgen_flat::InputConversion::construction"><code>InputConversion::construction</code></a>. Similarly, output methods receive the
-source-result binding explicitly. Neither binding needs to be stored in
-context. Converters that need no wrapper-specific environment can use <code>()</code>
-as their associated <code>Context</code> type.</p>
-<p>The wrapper supplies an <code>&amp;mut bool</code> acknowledgement parameter, initially false.
-Validation or alias-check failure leaves it false and ownership with the caller.
-After acknowledgement, the wrapper owns the allocation even if later code fails.
-The pointer must come from a compatible <code>Box::into_raw</code> for the prepared
-pointee type, remain live, and be used exclusively for this transfer.
-A null check cannot establish those conditions.</p>
+        pos: <a class="primitive" href="https://doc.rust-lang.org/1.99.1/std/primitive.usize.html">usize</a>,
+        mode: Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.WireFragment" title="type prebindgen_flat::InputConversion::WireFragment">WireFragment</a>&lt;'_&gt;,
+        expected_type: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+    ) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Prepared input conversion with a generator-defined request protocol.</p>
+<p>Every successful request returns one Rust expression, including <code>()</code> for
+a no-op. Statements may appear inside a block expression. The caller decides
+how expressions are combined and binds any values needed by later requests.
+<code>expected_type</code> is the caller’s expectation, not a type-checking guarantee:
+the implementation may use it to configure emission or reject a request.
+Rust compilation performs the final type check. No implicit casts are required.</p>
+<p>Request enums belong to the generator. Each variant can carry only the names,
+settings or other data it needs; no common context or phase order is imposed.
+Their lifetime parameter allows requests to borrow that data.</p>
+<p>The wire list is stable and includes conditional wires in signature order.
+Wire request positions index this exact list; invalid positions must return
+an error. Activity, access modes and other policies may be requested through
+generator-defined variants rather than being interpreted by Flat.</p>
+<p>A reusable owned-box converter can define its own small request vocabulary.
+The pointee is preparation data, not a hardcoded application type. The slot
+request borrows an error message only for validation; acquisition needs no
+context. The caller supplies <code>expected_type</code> to every request and binds the
+resulting value itself. This example chooses syntactic type matching as its
+policy; other implementations may use the expectation to configure emission.</p>
 
-<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_flat::{Access, InputConversion, Resource, <span class="prelude-ty">Result</span>, Wire, WireKind};
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen_flat::{bind_fragment, same_type, InputConversion, <span class="prelude-ty">Result</span>, Wire, WireKind};
 <span class="kw">use </span>proc_macro2::TokenStream;
 <span class="kw">use </span>quote::quote;
-<span class="kw">use </span>syn::{parse_quote, Ident, Type};
+<span class="kw">use </span>syn::{parse_quote, Type};
 
-<span class="comment">// The generator defines boundary carriers independently of the wrapped types.
-// Any opaque object handle can use this same pointer carrier.
-</span><span class="kw">enum </span>WireType {
-    OpaquePointer,
+<span class="kw">enum </span>Carrier { OpaquePointer }
+<span class="kw">impl </span>WireKind <span class="kw">for </span>Carrier {
+    <span class="kw">fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Type { <span class="macro">parse_quote!</span>(<span class="kw-2">*mut </span>::std::ffi::c_void) }
 }
-<span class="kw">impl </span>WireKind <span class="kw">for </span>WireType {
-    <span class="kw">fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Type {
-        <span class="kw">match </span><span class="self">self </span>{
-            <span class="self">Self</span>::OpaquePointer =&gt; <span class="macro">parse_quote!</span>(<span class="kw-2">*mut </span>::std::ffi::c_void),
+<span class="kw">enum </span>SlotRequest&lt;<span class="lifetime">'a</span>&gt; {
+    Validate { null_message: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str },
+    TakeOwnership,
+}
+<span class="kw">enum </span>WireRequest { Value, Active }
+<span class="kw">struct </span>OwnedBoxInput {
+    pointee: Type,
+    wires: [Wire&lt;Carrier&gt;; <span class="number">1</span>],
+}
+<span class="kw">fn </span>expect(actual: <span class="kw-2">&amp;</span>Type, expected: <span class="kw-2">&amp;</span>Type) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">if </span>same_type(actual, expected) { <span class="prelude-val">Ok</span>(()) }
+    <span class="kw">else </span>{ <span class="prelude-val">Err</span>(<span class="string">"unsupported expected type"</span>.into()) }
+}
+<span class="kw">impl </span>InputConversion <span class="kw">for </span>OwnedBoxInput {
+    <span class="kw">type </span>Wire = Carrier;
+    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = SlotRequest&lt;<span class="lifetime">'a</span>&gt;;
+    <span class="kw">type </span>WireFragment&lt;<span class="lifetime">'a</span>&gt; = WireRequest;
+    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;Carrier&gt;] { <span class="kw-2">&amp;</span><span class="self">self</span>.wires }
+    <span class="kw">fn </span>code_fragment_slot(<span class="kw-2">&amp;</span><span class="self">self</span>, mode: SlotRequest&lt;<span class="lifetime">'_</span>&gt;, expected: <span class="kw-2">&amp;</span>Type)
+        -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;
+    {
+        <span class="kw">let </span>name = <span class="kw-2">&amp;</span><span class="self">self</span>.wires[<span class="number">0</span>].name;
+        <span class="kw">let </span>pointee = <span class="kw-2">&amp;</span><span class="self">self</span>.pointee;
+        <span class="kw">match </span>mode {
+            SlotRequest::Validate { null_message } =&gt; {
+                expect(<span class="kw-2">&amp;</span><span class="macro">parse_quote!</span>(()), expected)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>({
+                    <span class="kw">if </span>#name.is_null() { <span class="kw">return </span><span class="prelude-val">Err</span>(#null_message.into()); }
+                }))
+            }
+            SlotRequest::TakeOwnership =&gt; {
+                expect(<span class="kw-2">&amp;</span><span class="macro">parse_quote!</span>(::std::boxed::Box&lt;#pointee&gt;), expected)<span class="question-mark">?</span>;
+                <span class="comment">// The caller guarantees a live, uniquely owned allocation
+                // created by compatible Box::into_raw. Validation alone cannot.
+                </span><span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">unsafe </span>{
+                    ::std::boxed::Box::&lt;#pointee&gt;::from_raw(#name.cast::&lt;#pointee&gt;())
+                }))
+            }
+        }
+    }
+    <span class="kw">fn </span>code_fragment_wire(<span class="kw-2">&amp;</span><span class="self">self</span>, pos: usize, mode: WireRequest, expected: <span class="kw-2">&amp;</span>Type)
+        -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;
+    {
+        <span class="kw">let </span>wire = <span class="self">self</span>.wires.get(pos).ok_or(<span class="string">"invalid wire position"</span>)<span class="question-mark">?</span>;
+        <span class="kw">match </span>mode {
+            WireRequest::Value =&gt; {
+                expect(<span class="kw-2">&amp;</span>wire.rust_type(), expected)<span class="question-mark">?</span>;
+                <span class="kw">let </span>name = <span class="kw-2">&amp;</span>wire.name;
+                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(#name))
+            }
+            WireRequest::Active =&gt; {
+                expect(<span class="kw-2">&amp;</span><span class="macro">parse_quote!</span>(<span class="prelude-ty">Option</span>&lt;bool&gt;), expected)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="prelude-val">None</span>)) <span class="comment">// An expression meaning unconditional activity.
+            </span>}
         }
     }
 }
-
-<span class="comment">// Generator-owned bindings available to emitted code. This is a code-generation
-// value, not a runtime context passed to the wrapped Rust function.
-</span><span class="kw">struct </span>Context {
-    <span class="comment">// Name of the wrapper's &amp;mut bool parameter.
-    </span>acknowledged: Ident,
-}
-
-<span class="comment">// A reusable converter prepared for any supported sized pointee type.
-</span><span class="kw">struct </span>OwnedBoxInput {
-    pointee: Type,
-    wires: [Wire&lt;WireType&gt;; <span class="number">1</span>],
-    <span class="comment">// Preparation chooses a private temporary unique within the wrapper.
-    </span>owned: Ident,
-}
-<span class="kw">impl </span>InputConversion <span class="kw">for </span>OwnedBoxInput {
-    <span class="kw">type </span>Wire = WireType;
-    <span class="kw">type </span>Context = Context;
-
-    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;WireType&gt;] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.wires
-    }
-
-    <span class="kw">fn </span>resources(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Resource&gt;&gt; {
-        <span class="kw">let </span>wire = <span class="kw-2">&amp;</span><span class="self">self</span>.wires[<span class="number">0</span>].name;
-        <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[Resource {
-            identity: <span class="macro">quote!</span>(#wire <span class="kw">as </span>usize),
-            access: Access::Move,
-            active: <span class="macro">quote!</span>(<span class="bool-val">true</span>),
-        }])
-    }
-
-    <span class="kw">fn </span>validation(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-        <span class="kw">let </span>wire = <span class="kw-2">&amp;</span><span class="self">self</span>.wires[<span class="number">0</span>].name;
-        <span class="prelude-val">Ok</span>(<span class="macro">quote!</span> {
-            <span class="kw">if </span>#wire.is_null() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"null owned handle"</span>.into());
-            }
-        })
-    }
-
-    <span class="kw">fn </span>acknowledgement(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>Context) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;TokenStream&gt;&gt; {
-        <span class="kw">let </span>acknowledged = <span class="kw-2">&amp;</span>context.acknowledged;
-        <span class="comment">// Shared across consuming slots; emit_call emits it once, after checks.
-        </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="kw-2">*</span>#acknowledged = <span class="bool-val">true</span>;)))
-    }
-
-    <span class="kw">fn </span>acquisition(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-        <span class="kw">let </span>wire = <span class="kw-2">&amp;</span><span class="self">self</span>.wires[<span class="number">0</span>].name;
-        <span class="kw">let </span>owned = <span class="kw-2">&amp;</span><span class="self">self</span>.owned;
-        <span class="kw">let </span>pointee = <span class="kw-2">&amp;</span><span class="self">self</span>.pointee;
-        <span class="comment">// Safety relies on the caller's pointer and ownership contract above.
-        </span><span class="prelude-val">Ok</span>(<span class="macro">quote!</span> {
-            <span class="kw">let </span>#owned = <span class="kw">unsafe </span>{ ::std::boxed::Box::&lt;#pointee&gt;::from_raw(#wire.cast::&lt;#pointee&gt;()) };
-        })
-    }
-
-    <span class="kw">fn </span>construction(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Context, target: <span class="kw-2">&amp;</span>Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-        <span class="kw">let </span>owned = <span class="kw-2">&amp;</span><span class="self">self</span>.owned;
-        <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">let </span>#target = #owned;))
-    }
-}
-
-<span class="comment">// Preparation obtains this type from the wrapped signature. Use u64 here
-// to demonstrate the converter without introducing an application type.
-</span><span class="kw">let </span>slot = OwnedBoxInput {
-    pointee: <span class="macro">parse_quote!</span>(u64),
-    wires: [Wire {
-        name: <span class="macro">parse_quote!</span>(raw_value),
-        kind: WireType::OpaquePointer,
-    }],
-    owned: <span class="macro">parse_quote!</span>(__owned_value),
+<span class="kw">let </span>slot = OwnedBoxInput {
+    pointee: <span class="macro">parse_quote!</span>(u64), <span class="comment">// Supplied by preparation from the source type.
+    </span>wires: [Wire { name: <span class="macro">parse_quote!</span>(raw_value), kind: Carrier::OpaquePointer }],
 };
-<span class="kw">let </span>context = Context { acknowledged: <span class="macro">parse_quote!</span>(ownership_taken) };
-
-<span class="comment">// Individual phases are available directly. emit_call orders them across
-// all input slots, checks resource aliases, and invokes the source function.
-</span><span class="macro">assert_eq!</span>(slot.wires().len(), <span class="number">1</span>);
-<span class="macro">assert_eq!</span>(slot.resources(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>[<span class="number">0</span>].access, Access::Move);
-<span class="kw">let </span>validation = slot.validation(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
-<span class="kw">let </span>acknowledgement = slot.acknowledgement(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
-<span class="kw">let </span>acquisition = slot.acquisition(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
-<span class="kw">let </span>target = <span class="macro">parse_quote!</span>(argument);
-<span class="kw">let </span>construction = slot.construction(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>target)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(construction.to_string(),
-           <span class="macro">quote!</span>(<span class="kw">let </span>argument = __owned_value;).to_string());
-
-<span class="comment">// Inspect the emitted phases without compiling or executing a foreign pointer.
-</span><span class="kw">let </span>phases = <span class="macro">quote!</span> {
-    #validation
-    #acknowledgement
-    #acquisition
-    #construction
-};
-<span class="kw">let _</span>: syn::Block = syn::parse2(<span class="macro">quote!</span>({ #phases }))<span class="question-mark">?</span>;</code></pre></div>
-<p>The converter owns any conditional behavior. Wires describe transport only.</p>
-</div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Wire" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#366">Source</a><h4 class="code-header">type <a href="#associatedtype.Wire" class="associatedtype">Wire</a>: <a class="trait" href="trait.WireKind.html" title="trait prebindgen_flat::WireKind">WireKind</a></h4></section></summary><div class="docblock"><p>Adapter-specific boundary description.</p>
-</div></details><details class="toggle" open><summary><section id="associatedtype.Context" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#372">Source</a><h4 class="code-header">type <a href="#associatedtype.Context" class="associatedtype">Context</a></h4></section></summary><div class="docblock"><p>Wrapper-environment data defined and supplied by the language generator.
-The value is used during code generation, for example to name runtime
-parameters or helper functions referenced by emitted code. Use <code>()</code> when
-no such data is needed. See the trait example for the distinction between
-context, prepared slot data and the caller-supplied argument binding.</p>
-</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.wires" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#374">Source</a><h4 class="code-header">fn <a href="#tymethod.wires" class="fn">wires</a>(&amp;self) -&gt; &amp;[<a class="struct" href="struct.Wire.html" title="struct prebindgen_flat::Wire">Wire</a>&lt;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Wire" title="type prebindgen_flat::InputConversion::Wire">Wire</a>&gt;]</h4></section></summary><div class="docblock"><p>Boundary parameters in signature order.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.resources" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#383">Source</a><h4 class="code-header">fn <a href="#tymethod.resources" class="fn">resources</a>(&amp;self, context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.99.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="struct.Resource.html" title="struct prebindgen_flat::Resource">Resource</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Resources used for call-wide alias checking, with identities emitted for this context.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.validation" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#385">Source</a><h4 class="code-header">fn <a href="#tymethod.validation" class="fn">validation</a>(&amp;self, context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;</h4></section></summary><div class="docblock"><p>Fallible validation before any ownership transfer.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.acquisition" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#387">Source</a><h4 class="code-header">fn <a href="#tymethod.acquisition" class="fn">acquisition</a>(&amp;self, context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;</h4></section></summary><div class="docblock"><p>Infallible ownership acquisition after acknowledgement.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.construction" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#392">Source</a><h4 class="code-header">fn <a href="#tymethod.construction" class="fn">construction</a>(
+<span class="kw">let </span>validation = slot.code_fragment_slot(
+    SlotRequest::Validate { null_message: <span class="string">"null owned handle" </span>}, <span class="kw-2">&amp;</span><span class="macro">parse_quote!</span>(()))<span class="question-mark">?</span>;
+<span class="kw">let </span>expected = <span class="macro">parse_quote!</span>(::std::boxed::Box&lt;u64&gt;);
+<span class="kw">let </span>value = slot.code_fragment_slot(SlotRequest::TakeOwnership, <span class="kw-2">&amp;</span>expected)<span class="question-mark">?</span>;
+<span class="kw">let </span>binding = bind_fragment(<span class="kw-2">&amp;</span><span class="macro">parse_quote!</span>(argument), <span class="kw-2">&amp;</span>expected, value)<span class="question-mark">?</span>;
+<span class="kw">let _</span>: syn::Block = syn::parse2(<span class="macro">quote!</span>({ #validation; #binding }))<span class="question-mark">?</span>;
+<span class="kw">let </span>active = slot.code_fragment_wire(<span class="number">0</span>, WireRequest::Active, <span class="kw-2">&amp;</span><span class="macro">parse_quote!</span>(<span class="prelude-ty">Option</span>&lt;bool&gt;))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(active.to_string(), <span class="string">"None"</span>);
+<span class="kw">let </span>wire_value = slot.code_fragment_wire(<span class="number">0</span>, WireRequest::Value, <span class="kw-2">&amp;</span>slot.wires()[<span class="number">0</span>].rust_type())<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(wire_value.to_string(), <span class="string">"raw_value"</span>);</code></pre></div></div></details><h2 id="required-associated-types" class="section-header">Required Associated Types<a href="#required-associated-types" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedtype.Wire" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#214">Source</a><h4 class="code-header">type <a href="#associatedtype.Wire" class="associatedtype">Wire</a>: <a class="trait" href="trait.WireKind.html" title="trait prebindgen_flat::WireKind">WireKind</a></h4></section></summary><div class="docblock"><p>Generator-defined boundary carrier.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.SlotFragment" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#216">Source</a><h4 class="code-header">type <a href="#associatedtype.SlotFragment" class="associatedtype">SlotFragment</a>&lt;'a&gt;</h4></section></summary><div class="docblock"><p>Requests concerning the whole input slot.</p>
+</div></details><details class="toggle" open><summary><section id="associatedtype.WireFragment" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#218">Source</a><h4 class="code-header">type <a href="#associatedtype.WireFragment" class="associatedtype">WireFragment</a>&lt;'a&gt;</h4></section></summary><div class="docblock"><p>Requests concerning one input wire.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.wires" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#220">Source</a><h4 class="code-header">fn <a href="#tymethod.wires" class="fn">wires</a>(&amp;self) -&gt; &amp;[<a class="struct" href="struct.Wire.html" title="struct prebindgen_flat::Wire">Wire</a>&lt;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Wire" title="type prebindgen_flat::InputConversion::Wire">Wire</a>&gt;]</h4></section></summary><div class="docblock"><p>Boundary inputs in signature order.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.code_fragment_slot" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#222-226">Source</a><h4 class="code-header">fn <a href="#tymethod.code_fragment_slot" class="fn">code_fragment_slot</a>(
     &amp;self,
-    context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>,
-    target: &amp;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.Ident.html" title="struct proc_macro2::Ident">Ident</a>,
-) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;</h4></section></summary><div class="docblock"><p>Construct the argument after all inputs have been acquired, binding it to <code>target</code>.
-The caller owns this identifier and passes it to the source function. Emit a
-<code>let</code> binding in the surrounding scope, so borrowed argument storage remains alive.
-Converter-private temporaries must not shadow other caller-supplied bindings.</p>
-</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.acknowledgement" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#379-381">Source</a><h4 class="code-header">fn <a href="#method.acknowledgement" class="fn">acknowledgement</a>(
+    mode: Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.SlotFragment" title="type prebindgen_flat::InputConversion::SlotFragment">SlotFragment</a>&lt;'_&gt;,
+    expected_type: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;</h4></section></summary><div class="docblock"><p>Emit an expression for the whole slot.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.code_fragment_wire" class="method"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#228-233">Source</a><h4 class="code-header">fn <a href="#tymethod.code_fragment_wire" class="fn">code_fragment_wire</a>(
     &amp;self,
-    _context: &amp;Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.Context" title="type prebindgen_flat::InputConversion::Context">Context</a>,
-) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.99.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Shared call acknowledgement, after validation and before acquisition.
-All contributing inputs must return the same token spelling; assembly emits
-it once. Return <code>None</code> when this input needs no acknowledgement. Slot-local
-fallible checks belong in <code>validation</code>, not in this shared operation.</p>
-</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait <b>is</b> <a href="https://doc.rust-lang.org/1.99.1/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><details class="toggle implementors-toggle"><summary><section id="impl-InputConversion-for-InputPlan%3CW,+C%3E" class="impl"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#394-429">Source</a><a href="#impl-InputConversion-for-InputPlan%3CW,+C%3E" class="anchor">§</a><h3 class="code-header">impl&lt;W: <a class="trait" href="trait.WireKind.html" title="trait prebindgen_flat::WireKind">WireKind</a>, C: <a class="trait" href="trait.TemplateContext.html" title="trait prebindgen_flat::TemplateContext">TemplateContext</a>&gt; <a class="trait" href="trait.InputConversion.html" title="trait prebindgen_flat::InputConversion">InputConversion</a> for <a class="struct" href="struct.InputPlan.html" title="struct prebindgen_flat::InputPlan">InputPlan</a>&lt;W, C&gt;</h3></section></summary><div class="impl-items"><section id="associatedtype.Wire-1" class="associatedtype trait-impl"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#395">Source</a><a href="#associatedtype.Wire-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Wire" class="associatedtype">Wire</a> = W</h4></section><section id="associatedtype.Context-1" class="associatedtype trait-impl"><a class="src rightside" href="../src/prebindgen_flat/conversion.rs.html#396">Source</a><a href="#associatedtype.Context-1" class="anchor">§</a><h4 class="code-header">type <a href="#associatedtype.Context" class="associatedtype">Context</a> = C</h4></section></div></details></div><script src="../trait.impl/prebindgen_flat/conversion/trait.InputConversion.js" async></script></section></div></main></body></html>
+    pos: <a class="primitive" href="https://doc.rust-lang.org/1.99.1/std/primitive.usize.html">usize</a>,
+    mode: Self::<a class="associatedtype" href="trait.InputConversion.html#associatedtype.WireFragment" title="type prebindgen_flat::InputConversion::WireFragment">WireFragment</a>&lt;'_&gt;,
+    expected_type: &amp;<a class="enum" href="https://docs.rs/syn/2.0.119/syn/ty/enum.Type.html" title="enum syn::ty::Type">Type</a>,
+) -&gt; <a class="type" href="type.Result.html" title="type prebindgen_flat::Result">Result</a>&lt;<a class="struct" href="https://docs.rs/proc-macro2/1.0.107/proc_macro2/struct.TokenStream.html" title="struct proc_macro2::TokenStream">TokenStream</a>&gt;</h4></section></summary><div class="docblock"><p>Emit an expression for wire <code>pos</code>, or an error for an invalid position.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.99.1/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/prebindgen_flat/conversion/trait.InputConversion.js" async></script></section></div></main></body></html>

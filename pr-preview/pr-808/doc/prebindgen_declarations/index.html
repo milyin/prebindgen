@@ -2,7 +2,7 @@
 <p><a href="declarations/struct.Declarations.html#method.fill" title="method prebindgen_declarations::declarations::Declarations::fill"><code>Declarations::fill</code></a>, <a href="fn.bind_input.html" title="fn prebindgen_declarations::bind_input"><code>bind_input</code></a> and <a href="fn.bind_output.html" title="fn prebindgen_declarations::bind_output"><code>bind_output</code></a> build conversions
 directly in a <a href="type.Bindings.html" title="type prebindgen_declarations::Bindings"><code>Bindings</code></a> model. Recipes and codec input data are used only
 during construction; slots retain wires and code needed by wrapper writers.
-Generation uses <a href="../prebindgen_flat/conversion/fn.emit_call.html" title="fn prebindgen_flat::conversion::emit_call"><code>prebindgen_flat::emit_call</code></a> and the call emitter in <code>prebindgen-flat</code>;
+Generation is owned by the language generator;
 this crate owns only declaration resolution and slot preparation.
 Each <a href="../prebindgen_flat/conversion/struct.Wire.html" title="struct prebindgen_flat::conversion::Wire"><code>Wire</code></a> carries the adapter’s own description in <a href="../prebindgen_flat/conversion/struct.Wire.html#structfield.kind" title="field prebindgen_flat::conversion::Wire::kind"><code>Wire::kind</code></a>.
 Reusable value and boxed-allocation leaves live in <code>prebindgen-conversions</code>.</p>
