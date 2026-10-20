@@ -205,36 +205,46 @@ pub fn source_result_expr() -> TokenStream {
 /// Preparation resolves errors before installing the slot; [`emit_call`]
 /// reads this interface directly, without an intermediate plan.
 ///
-/// This conversion accepts a `u8` wire parameter and builds a Rust `bool` argument.
-/// It validates the wire value before constructing the argument. Since a scalar
-/// has no foreign resource to acquire, it needs no resources or acknowledgement.
+/// This conversion accepts one opaque pointer wire and constructs a
+/// `Box<Document>` argument for a function such as `publish(document: Box<Document>)`.
+/// It demonstrates every method, including ownership transfer and alias checking.
+///
+/// The wrapper supplies an `&mut bool` acknowledgement parameter, initially false.
+/// Validation or alias-check failure leaves it false and ownership with the caller.
+/// After acknowledgement, the wrapper owns the document even if later code fails.
+/// The pointer must come from a compatible `Box<Document>::into_raw`, remain live,
+/// and be used exclusively for this transfer. A null check cannot establish those
+/// conditions.
 ///
 /// ```
-/// use prebindgen_flat::{InputConversion, Resource, Result, Wire, WireKind};
+/// use prebindgen_flat::{Access, InputConversion, Resource, Result, Wire, WireKind};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Ident, Type};
 ///
-/// // The language generator defines its supported boundary carriers.
+/// // The generator defines a closed set of supported boundary carriers.
 /// enum WireType {
-///     U8,
+///     DocumentHandle,
 /// }
 /// impl WireKind for WireType {
 ///     fn rust_type(&self) -> Type {
 ///         match self {
-///             Self::U8 => parse_quote!(u8),
+///             Self::DocumentHandle => parse_quote!(*mut ::std::ffi::c_void),
 ///         }
 ///     }
 /// }
 ///
-/// // The language generator defines the context and supplies it during emission.
-/// struct Context;
-///
-/// // Preparation stores the wire description. The caller supplies the target name.
-/// struct BoolInput {
-///     wires: [Wire<WireType>; 1],
+/// // Name of the wrapper's &mut bool parameter, supplied during generation.
+/// struct Context {
+///     acknowledged: Ident,
 /// }
-/// impl InputConversion for BoolInput {
+///
+/// struct DocumentInput {
+///     wires: [Wire<WireType>; 1],
+///     // Preparation chooses a private temporary unique within the wrapper.
+///     owned: Ident,
+/// }
+/// impl InputConversion for DocumentInput {
 ///     type Wire = WireType;
 ///     type Context = Context;
 ///
@@ -243,43 +253,75 @@ pub fn source_result_expr() -> TokenStream {
 ///     }
 ///
 ///     fn resources(&self, _: &Context) -> Result<Vec<Resource>> {
-///         Ok(vec![]) // A scalar has no foreign resource identity.
+///         let wire = &self.wires[0].name;
+///         Ok(vec![Resource {
+///             identity: quote!(#wire as usize),
+///             access: Access::Move,
+///             active: quote!(true),
+///         }])
 ///     }
 ///
 ///     fn validation(&self, _: &Context) -> Result<TokenStream> {
 ///         let wire = &self.wires[0].name;
 ///         Ok(quote! {
-///             if #wire > 1 {
-///                 return Err("expected 0 or 1 for bool".into());
+///             if #wire.is_null() {
+///                 return Err("null document handle".into());
 ///             }
 ///         })
 ///     }
 ///
-///     // The default acknowledgement() returns None: no ownership is transferred.
+///     fn acknowledgement(&self, context: &Context) -> Result<Option<TokenStream>> {
+///         let acknowledged = &context.acknowledged;
+///         // Shared across consuming slots; emit_call emits it once, after checks.
+///         Ok(Some(quote!(*#acknowledged = true;)))
+///     }
+///
 ///     fn acquisition(&self, _: &Context) -> Result<TokenStream> {
-///         Ok(quote!())
+///         let wire = &self.wires[0].name;
+///         let owned = &self.owned;
+///         // Document is the source Rust type in the generated wrapper's scope.
+///         // Safety relies on the caller's pointer and ownership contract above.
+///         Ok(quote! {
+///             let #owned = unsafe { Box::<Document>::from_raw(#wire.cast::<Document>()) };
+///         })
 ///     }
 ///
 ///     fn construction(&self, _: &Context, target: &Ident) -> Result<TokenStream> {
-///         let wire = &self.wires[0].name;
-///         Ok(quote!(let #target = #wire != 0;))
+///         let owned = &self.owned;
+///         Ok(quote!(let #target = #owned;))
 ///     }
 /// }
 ///
-/// let slot = BoolInput {
+/// let slot = DocumentInput {
 ///     wires: [Wire {
-///         name: parse_quote!(raw_enabled),
-///         kind: WireType::U8,
+///         name: parse_quote!(raw_document),
+///         kind: WireType::DocumentHandle,
 ///     }],
+///     owned: parse_quote!(__owned_document),
 /// };
-/// let context = Context;
+/// let context = Context { acknowledged: parse_quote!(ownership_taken) };
 ///
-/// // Individual phases can be emitted directly. emit_call orders these phases
-/// // across all input slots and passes enabled to the wrapped function.
-/// let target = parse_quote!(enabled);
-/// assert_eq!(slot.construction(&context, &target)?.to_string(),
-///            quote!(let enabled = raw_enabled != 0;).to_string());
-/// # Ok::<(), String>(())
+/// // Individual phases are available directly. emit_call orders them across
+/// // all input slots, checks resource aliases, and invokes the source function.
+/// assert_eq!(slot.wires().len(), 1);
+/// assert_eq!(slot.resources(&context)?[0].access, Access::Move);
+/// let validation = slot.validation(&context)?;
+/// let acknowledgement = slot.acknowledgement(&context)?;
+/// let acquisition = slot.acquisition(&context)?;
+/// let target = parse_quote!(document);
+/// let construction = slot.construction(&context, &target)?;
+/// assert_eq!(construction.to_string(),
+///            quote!(let document = __owned_document;).to_string());
+///
+/// // Inspect the emitted phases without compiling or executing a foreign pointer.
+/// let phases = quote! {
+///     #validation
+///     #acknowledgement
+///     #acquisition
+///     #construction
+/// };
+/// let _: syn::Block = syn::parse2(quote!({ #phases }))?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// The converter owns any conditional behavior. Wires describe transport only.
