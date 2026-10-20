@@ -1,8 +1,8 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
 //! Adapters select a [`Storage`] policy and map
 //! [`BoxedWire`] data into their own wire kind.
-use prebindgen_flat::{Result, Wire};
 use crate::{Access, InputPlan, OutputPlan, Resource};
+use prebindgen_flat::{Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 /// Source type and access mode for a wire carrying a boxed allocation address.
