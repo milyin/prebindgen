@@ -13,6 +13,8 @@ use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod record;
+pub use record::{record_input, record_output};
 mod condition;
 pub use condition::Condition;
 mod component;
@@ -519,24 +521,17 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         children.len()
                     ));
                 }
-                let mut fields = Vec::new();
-                for (field, child) in r.fields.iter().zip(children) {
-                    let mut p = self.input(&field.ty, child, extra, active)?;
-                    self.prefix(
-                        &mut p.wires,
-                        ComponentSegment::Field(field.name.to_string()),
-                    );
-                    validation.extend(p.validation);
-                    acquire.extend(p.acquire);
-                    resources.extend(p.resources);
-                    merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
-                    statements.extend(p.statements);
-                    wires.extend(p.wires);
-                    let name = &field.name;
-                    let arg = p.argument;
-                    fields.push(quote!(#name:#arg));
-                }
-                statements.extend(quote!(let #var:#ty=#ty{#(#fields),*};));
+                return record_input(
+                    self.codec,
+                    ty,
+                    var,
+                    r.fields.iter().zip(children).map(|(field, child)| {
+                        Ok((
+                            field.name.clone(),
+                            self.input(&field.ty, child, extra, active)?,
+                        ))
+                    }),
+                );
             }
             Input::Constructor { function, args } => {
                 let f = self.flat.function(function)?;
@@ -645,13 +640,15 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if r.fields.len() != children.len() {
                     return Err("wrong output field count".into());
                 }
-                for (field, child) in r.fields.iter().zip(children) {
-                    let name = &field.name;
-                    let mut p =
-                        self.output(&field.ty, child, extra, quote!(&(#value).#name), true)?;
-                    self.prefix(&mut p.wires, ComponentSegment::Field(name.to_string()));
-                    append(&mut out, p)?;
-                }
+                return record_output(
+                    self.codec,
+                    self.name(),
+                    value,
+                    r.fields.iter().map(|field| field.name.clone()),
+                    |index, value| {
+                        self.output(&r.fields[index].ty, &children[index], extra, value, true)
+                    },
+                );
             }
             Output::Getter { function, output } => {
                 let f = self.flat.function(function)?;
