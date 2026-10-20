@@ -222,14 +222,15 @@ pub fn source_result_expr() -> TokenStream {
 /// use quote::quote;
 /// use syn::{parse_quote, Ident, Type};
 ///
-/// // The generator defines a closed set of supported boundary carriers.
+/// // The generator defines boundary carriers independently of the wrapped types.
+/// // Any opaque object handle can use this same pointer carrier.
 /// enum WireType {
-///     DocumentHandle,
+///     OpaquePointer,
 /// }
 /// impl WireKind for WireType {
 ///     fn rust_type(&self) -> Type {
 ///         match self {
-///             Self::DocumentHandle => parse_quote!(*mut ::std::ffi::c_void),
+///             Self::OpaquePointer => parse_quote!(*mut ::std::ffi::c_void),
 ///         }
 ///     }
 /// }
@@ -239,6 +240,7 @@ pub fn source_result_expr() -> TokenStream {
 ///     acknowledged: Ident,
 /// }
 ///
+/// // Only the converter knows that this opaque pointer owns a Document.
 /// struct DocumentInput {
 ///     wires: [Wire<WireType>; 1],
 ///     // Preparation chooses a private temporary unique within the wrapper.
@@ -295,7 +297,7 @@ pub fn source_result_expr() -> TokenStream {
 /// let slot = DocumentInput {
 ///     wires: [Wire {
 ///         name: parse_quote!(raw_document),
-///         kind: WireType::DocumentHandle,
+///         kind: WireType::OpaquePointer,
 ///     }],
 ///     owned: parse_quote!(__owned_document),
 /// };
