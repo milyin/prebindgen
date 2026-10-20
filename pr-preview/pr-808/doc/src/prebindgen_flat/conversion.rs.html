@@ -210,419 +210,452 @@
 <a href=#210 id=210 data-nosnippet>210</a>/// `syn::Type`; the converter does not hardcode any wrapped type.
 <a href=#211 id=211 data-nosnippet>211</a>/// It demonstrates every method, including ownership transfer and alias checking.
 <a href=#212 id=212 data-nosnippet>212</a>///
-<a href=#213 id=213 data-nosnippet>213</a>/// The wrapper supplies an `&amp;mut bool` acknowledgement parameter, initially false.
-<a href=#214 id=214 data-nosnippet>214</a>/// Validation or alias-check failure leaves it false and ownership with the caller.
-<a href=#215 id=215 data-nosnippet>215</a>/// After acknowledgement, the wrapper owns the allocation even if later code fails.
-<a href=#216 id=216 data-nosnippet>216</a>/// The pointer must come from a compatible `Box::into_raw` for the prepared
-<a href=#217 id=217 data-nosnippet>217</a>/// pointee type, remain live, and be used exclusively for this transfer.
-<a href=#218 id=218 data-nosnippet>218</a>/// A null check cannot establish those conditions.
-<a href=#219 id=219 data-nosnippet>219</a>///
-<a href=#220 id=220 data-nosnippet>220</a>/// ```
-<a href=#221 id=221 data-nosnippet>221</a>/// use prebindgen_flat::{Access, InputConversion, Resource, Result, Wire, WireKind};
-<a href=#222 id=222 data-nosnippet>222</a>/// use proc_macro2::TokenStream;
-<a href=#223 id=223 data-nosnippet>223</a>/// use quote::quote;
-<a href=#224 id=224 data-nosnippet>224</a>/// use syn::{parse_quote, Ident, Type};
+<a href=#213 id=213 data-nosnippet>213</a>/// `Context` describes the environment that the language generator prepares around
+<a href=#214 id=214 data-nosnippet>214</a>/// the emitted conversion code. The generator defines this type and constructs a
+<a href=#215 id=215 data-nosnippet>215</a>/// value during code generation, then passes it to [`emit_call`] or directly to
+<a href=#216 id=216 data-nosnippet>216</a>/// the slot's methods. Call assembly passes the same context to the input and
+<a href=#217 id=217 data-nosnippet>217</a>/// output conversions. Flat imposes no fields or trait requirements on it.
+<a href=#218 id=218 data-nosnippet>218</a>///
+<a href=#219 id=219 data-nosnippet>219</a>/// In this example, the wrapper exposes an ownership-acknowledgement parameter.
+<a href=#220 id=220 data-nosnippet>220</a>/// `Context::acknowledged` holds that parameter's Rust identifier. The converter
+<a href=#221 id=221 data-nosnippet>221</a>/// uses it to emit an assignment such as `*ownership_taken = true;`. The context
+<a href=#222 id=222 data-nosnippet>222</a>/// exists while generating code; it contains the identifier, not the runtime
+<a href=#223 id=223 data-nosnippet>223</a>/// boolean. The generator must declare that parameter in the generated wrapper
+<a href=#224 id=224 data-nosnippet>224</a>/// with the type and meaning expected by the converter.
 <a href=#225 id=225 data-nosnippet>225</a>///
-<a href=#226 id=226 data-nosnippet>226</a>/// // The generator defines boundary carriers independently of the wrapped types.
-<a href=#227 id=227 data-nosnippet>227</a>/// // Any opaque object handle can use this same pointer carrier.
-<a href=#228 id=228 data-nosnippet>228</a>/// enum WireType {
-<a href=#229 id=229 data-nosnippet>229</a>///     OpaquePointer,
-<a href=#230 id=230 data-nosnippet>230</a>/// }
-<a href=#231 id=231 data-nosnippet>231</a>/// impl WireKind for WireType {
-<a href=#232 id=232 data-nosnippet>232</a>///     fn rust_type(&amp;self) -&gt; Type {
-<a href=#233 id=233 data-nosnippet>233</a>///         match self {
-<a href=#234 id=234 data-nosnippet>234</a>///             Self::OpaquePointer =&gt; parse_quote!(*mut ::std::ffi::c_void),
-<a href=#235 id=235 data-nosnippet>235</a>///         }
-<a href=#236 id=236 data-nosnippet>236</a>///     }
-<a href=#237 id=237 data-nosnippet>237</a>/// }
-<a href=#238 id=238 data-nosnippet>238</a>///
-<a href=#239 id=239 data-nosnippet>239</a>/// // Name of the wrapper's &amp;mut bool parameter, supplied during generation.
-<a href=#240 id=240 data-nosnippet>240</a>/// struct Context {
-<a href=#241 id=241 data-nosnippet>241</a>///     acknowledged: Ident,
-<a href=#242 id=242 data-nosnippet>242</a>/// }
-<a href=#243 id=243 data-nosnippet>243</a>///
-<a href=#244 id=244 data-nosnippet>244</a>/// // A reusable converter prepared for any supported sized pointee type.
-<a href=#245 id=245 data-nosnippet>245</a>/// struct OwnedBoxInput {
-<a href=#246 id=246 data-nosnippet>246</a>///     pointee: Type,
-<a href=#247 id=247 data-nosnippet>247</a>///     wires: [Wire&lt;WireType&gt;; 1],
-<a href=#248 id=248 data-nosnippet>248</a>///     // Preparation chooses a private temporary unique within the wrapper.
-<a href=#249 id=249 data-nosnippet>249</a>///     owned: Ident,
-<a href=#250 id=250 data-nosnippet>250</a>/// }
-<a href=#251 id=251 data-nosnippet>251</a>/// impl InputConversion for OwnedBoxInput {
-<a href=#252 id=252 data-nosnippet>252</a>///     type Wire = WireType;
-<a href=#253 id=253 data-nosnippet>253</a>///     type Context = Context;
-<a href=#254 id=254 data-nosnippet>254</a>///
-<a href=#255 id=255 data-nosnippet>255</a>///     fn wires(&amp;self) -&gt; &amp;[Wire&lt;WireType&gt;] {
-<a href=#256 id=256 data-nosnippet>256</a>///         &amp;self.wires
-<a href=#257 id=257 data-nosnippet>257</a>///     }
-<a href=#258 id=258 data-nosnippet>258</a>///
-<a href=#259 id=259 data-nosnippet>259</a>///     fn resources(&amp;self, _: &amp;Context) -&gt; Result&lt;Vec&lt;Resource&gt;&gt; {
-<a href=#260 id=260 data-nosnippet>260</a>///         let wire = &amp;self.wires[0].name;
-<a href=#261 id=261 data-nosnippet>261</a>///         Ok(vec![Resource {
-<a href=#262 id=262 data-nosnippet>262</a>///             identity: quote!(#wire as usize),
-<a href=#263 id=263 data-nosnippet>263</a>///             access: Access::Move,
-<a href=#264 id=264 data-nosnippet>264</a>///             active: quote!(true),
-<a href=#265 id=265 data-nosnippet>265</a>///         }])
-<a href=#266 id=266 data-nosnippet>266</a>///     }
-<a href=#267 id=267 data-nosnippet>267</a>///
-<a href=#268 id=268 data-nosnippet>268</a>///     fn validation(&amp;self, _: &amp;Context) -&gt; Result&lt;TokenStream&gt; {
-<a href=#269 id=269 data-nosnippet>269</a>///         let wire = &amp;self.wires[0].name;
-<a href=#270 id=270 data-nosnippet>270</a>///         Ok(quote! {
-<a href=#271 id=271 data-nosnippet>271</a>///             if #wire.is_null() {
-<a href=#272 id=272 data-nosnippet>272</a>///                 return Err("null owned handle".into());
-<a href=#273 id=273 data-nosnippet>273</a>///             }
-<a href=#274 id=274 data-nosnippet>274</a>///         })
-<a href=#275 id=275 data-nosnippet>275</a>///     }
-<a href=#276 id=276 data-nosnippet>276</a>///
-<a href=#277 id=277 data-nosnippet>277</a>///     fn acknowledgement(&amp;self, context: &amp;Context) -&gt; Result&lt;Option&lt;TokenStream&gt;&gt; {
-<a href=#278 id=278 data-nosnippet>278</a>///         let acknowledged = &amp;context.acknowledged;
-<a href=#279 id=279 data-nosnippet>279</a>///         // Shared across consuming slots; emit_call emits it once, after checks.
-<a href=#280 id=280 data-nosnippet>280</a>///         Ok(Some(quote!(*#acknowledged = true;)))
-<a href=#281 id=281 data-nosnippet>281</a>///     }
-<a href=#282 id=282 data-nosnippet>282</a>///
-<a href=#283 id=283 data-nosnippet>283</a>///     fn acquisition(&amp;self, _: &amp;Context) -&gt; Result&lt;TokenStream&gt; {
-<a href=#284 id=284 data-nosnippet>284</a>///         let wire = &amp;self.wires[0].name;
-<a href=#285 id=285 data-nosnippet>285</a>///         let owned = &amp;self.owned;
-<a href=#286 id=286 data-nosnippet>286</a>///         let pointee = &amp;self.pointee;
-<a href=#287 id=287 data-nosnippet>287</a>///         // Safety relies on the caller's pointer and ownership contract above.
-<a href=#288 id=288 data-nosnippet>288</a>///         Ok(quote! {
-<a href=#289 id=289 data-nosnippet>289</a>///             let #owned = unsafe { ::std::boxed::Box::&lt;#pointee&gt;::from_raw(#wire.cast::&lt;#pointee&gt;()) };
-<a href=#290 id=290 data-nosnippet>290</a>///         })
-<a href=#291 id=291 data-nosnippet>291</a>///     }
-<a href=#292 id=292 data-nosnippet>292</a>///
-<a href=#293 id=293 data-nosnippet>293</a>///     fn construction(&amp;self, _: &amp;Context, target: &amp;Ident) -&gt; Result&lt;TokenStream&gt; {
-<a href=#294 id=294 data-nosnippet>294</a>///         let owned = &amp;self.owned;
-<a href=#295 id=295 data-nosnippet>295</a>///         Ok(quote!(let #target = #owned;))
-<a href=#296 id=296 data-nosnippet>296</a>///     }
-<a href=#297 id=297 data-nosnippet>297</a>/// }
-<a href=#298 id=298 data-nosnippet>298</a>///
-<a href=#299 id=299 data-nosnippet>299</a>/// // Preparation obtains this type from the wrapped signature. Use u64 here
-<a href=#300 id=300 data-nosnippet>300</a>/// // to demonstrate the converter without introducing an application type.
-<a href=#301 id=301 data-nosnippet>301</a>/// let slot = OwnedBoxInput {
-<a href=#302 id=302 data-nosnippet>302</a>///     pointee: parse_quote!(u64),
-<a href=#303 id=303 data-nosnippet>303</a>///     wires: [Wire {
-<a href=#304 id=304 data-nosnippet>304</a>///         name: parse_quote!(raw_value),
-<a href=#305 id=305 data-nosnippet>305</a>///         kind: WireType::OpaquePointer,
-<a href=#306 id=306 data-nosnippet>306</a>///     }],
-<a href=#307 id=307 data-nosnippet>307</a>///     owned: parse_quote!(__owned_value),
-<a href=#308 id=308 data-nosnippet>308</a>/// };
-<a href=#309 id=309 data-nosnippet>309</a>/// let context = Context { acknowledged: parse_quote!(ownership_taken) };
-<a href=#310 id=310 data-nosnippet>310</a>///
-<a href=#311 id=311 data-nosnippet>311</a>/// // Individual phases are available directly. emit_call orders them across
-<a href=#312 id=312 data-nosnippet>312</a>/// // all input slots, checks resource aliases, and invokes the source function.
-<a href=#313 id=313 data-nosnippet>313</a>/// assert_eq!(slot.wires().len(), 1);
-<a href=#314 id=314 data-nosnippet>314</a>/// assert_eq!(slot.resources(&amp;context)?[0].access, Access::Move);
-<a href=#315 id=315 data-nosnippet>315</a>/// let validation = slot.validation(&amp;context)?;
-<a href=#316 id=316 data-nosnippet>316</a>/// let acknowledgement = slot.acknowledgement(&amp;context)?;
-<a href=#317 id=317 data-nosnippet>317</a>/// let acquisition = slot.acquisition(&amp;context)?;
-<a href=#318 id=318 data-nosnippet>318</a>/// let target = parse_quote!(argument);
-<a href=#319 id=319 data-nosnippet>319</a>/// let construction = slot.construction(&amp;context, &amp;target)?;
-<a href=#320 id=320 data-nosnippet>320</a>/// assert_eq!(construction.to_string(),
-<a href=#321 id=321 data-nosnippet>321</a>///            quote!(let argument = __owned_value;).to_string());
-<a href=#322 id=322 data-nosnippet>322</a>///
-<a href=#323 id=323 data-nosnippet>323</a>/// // Inspect the emitted phases without compiling or executing a foreign pointer.
-<a href=#324 id=324 data-nosnippet>324</a>/// let phases = quote! {
-<a href=#325 id=325 data-nosnippet>325</a>///     #validation
-<a href=#326 id=326 data-nosnippet>326</a>///     #acknowledgement
-<a href=#327 id=327 data-nosnippet>327</a>///     #acquisition
-<a href=#328 id=328 data-nosnippet>328</a>///     #construction
-<a href=#329 id=329 data-nosnippet>329</a>/// };
-<a href=#330 id=330 data-nosnippet>330</a>/// let _: syn::Block = syn::parse2(quote!({ #phases }))?;
-<a href=#331 id=331 data-nosnippet>331</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
-<a href=#332 id=332 data-nosnippet>332</a>/// ```
-<a href=#333 id=333 data-nosnippet>333</a>///
-<a href=#334 id=334 data-nosnippet>334</a>/// The converter owns any conditional behavior. Wires describe transport only.
-<a href=#335 id=335 data-nosnippet>335</a></span><span class="kw">pub trait </span>InputConversion {
-<a href=#336 id=336 data-nosnippet>336</a>    <span class="doccomment">/// Adapter-specific boundary description.
-<a href=#337 id=337 data-nosnippet>337</a>    </span><span class="kw">type </span>Wire: WireKind;
-<a href=#338 id=338 data-nosnippet>338</a>    <span class="doccomment">/// Emission data defined and supplied by the language generator.
-<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">type </span>Context;
-<a href=#340 id=340 data-nosnippet>340</a>    <span class="doccomment">/// Boundary parameters in signature order.
-<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;];
-<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// Shared call acknowledgement, after validation and before acquisition.
-<a href=#343 id=343 data-nosnippet>343</a>    /// All contributing inputs must return the same token spelling; assembly emits
-<a href=#344 id=344 data-nosnippet>344</a>    /// it once. Return `None` when this input needs no acknowledgement. Slot-local
-<a href=#345 id=345 data-nosnippet>345</a>    /// fallible checks belong in `validation`, not in this shared operation.
-<a href=#346 id=346 data-nosnippet>346</a>    </span><span class="kw">fn </span>acknowledgement(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;TokenStream&gt;&gt; {
-<a href=#347 id=347 data-nosnippet>347</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
-<a href=#348 id=348 data-nosnippet>348</a>    }
-<a href=#349 id=349 data-nosnippet>349</a>    <span class="doccomment">/// Resources used for call-wide alias checking, with identities emitted for this context.
-<a href=#350 id=350 data-nosnippet>350</a>    </span><span class="kw">fn </span>resources(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Resource&gt;&gt;;
-<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// Fallible validation before any ownership transfer.
-<a href=#352 id=352 data-nosnippet>352</a>    </span><span class="kw">fn </span>validation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#353 id=353 data-nosnippet>353</a>    <span class="doccomment">/// Infallible ownership acquisition after acknowledgement.
-<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="kw">fn </span>acquisition(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#355 id=355 data-nosnippet>355</a>    <span class="doccomment">/// Construct the argument after all inputs have been acquired, binding it to `target`.
-<a href=#356 id=356 data-nosnippet>356</a>    /// The caller owns this identifier and passes it to the source function. Emit a
-<a href=#357 id=357 data-nosnippet>357</a>    /// `let` binding in the surrounding scope, so borrowed argument storage remains alive.
-<a href=#358 id=358 data-nosnippet>358</a>    /// Converter-private temporaries must not shadow other caller-supplied bindings.
-<a href=#359 id=359 data-nosnippet>359</a>    </span><span class="kw">fn </span>construction(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, target: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#360 id=360 data-nosnippet>360</a>}
-<a href=#361 id=361 data-nosnippet>361</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext&gt; InputConversion <span class="kw">for </span>InputPlan&lt;W, C&gt; {
-<a href=#362 id=362 data-nosnippet>362</a>    <span class="kw">type </span>Wire = W;
-<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">type </span>Context = C;
-<a href=#364 id=364 data-nosnippet>364</a>    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;] {
-<a href=#365 id=365 data-nosnippet>365</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.wires
-<a href=#366 id=366 data-nosnippet>366</a>    }
-<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">fn </span>acknowledgement(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;TokenStream&gt;&gt; {
-<a href=#368 id=368 data-nosnippet>368</a>        <span class="self">self</span>.acknowledgement
-<a href=#369 id=369 data-nosnippet>369</a>            .as_ref()
-<a href=#370 id=370 data-nosnippet>370</a>            .map(|code| context.render(code))
-<a href=#371 id=371 data-nosnippet>371</a>            .transpose()
-<a href=#372 id=372 data-nosnippet>372</a>    }
-<a href=#373 id=373 data-nosnippet>373</a>    <span class="kw">fn </span>resources(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Resource&gt;&gt; {
-<a href=#374 id=374 data-nosnippet>374</a>        <span class="self">self</span>.resources
-<a href=#375 id=375 data-nosnippet>375</a>            .iter()
-<a href=#376 id=376 data-nosnippet>376</a>            .map(|resource| {
-<a href=#377 id=377 data-nosnippet>377</a>                <span class="prelude-val">Ok</span>(Resource {
-<a href=#378 id=378 data-nosnippet>378</a>                    identity: context.render(<span class="kw-2">&amp;</span>resource.identity)<span class="question-mark">?</span>,
-<a href=#379 id=379 data-nosnippet>379</a>                    access: resource.access,
-<a href=#380 id=380 data-nosnippet>380</a>                    active: context.render(<span class="kw-2">&amp;</span>resource.active)<span class="question-mark">?</span>,
-<a href=#381 id=381 data-nosnippet>381</a>                })
-<a href=#382 id=382 data-nosnippet>382</a>            })
-<a href=#383 id=383 data-nosnippet>383</a>            .collect()
-<a href=#384 id=384 data-nosnippet>384</a>    }
-<a href=#385 id=385 data-nosnippet>385</a>    <span class="kw">fn </span>validation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#386 id=386 data-nosnippet>386</a>        context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.validation)
-<a href=#387 id=387 data-nosnippet>387</a>    }
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">fn </span>acquisition(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#389 id=389 data-nosnippet>389</a>        context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.acquire)
-<a href=#390 id=390 data-nosnippet>390</a>    }
-<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">fn </span>construction(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, target: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>statements = context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.statements)<span class="question-mark">?</span>;
-<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw">let </span>value = context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.argument)<span class="question-mark">?</span>;
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(#statements <span class="kw">let </span>#target = #value;))
-<a href=#395 id=395 data-nosnippet>395</a>    }
-<a href=#396 id=396 data-nosnippet>396</a>}
-<a href=#397 id=397 data-nosnippet>397</a><span class="doccomment">/// A fully prepared output conversion stored in a slot.
-<a href=#398 id=398 data-nosnippet>398</a>/// Metadata and generated names must stay consistent across method calls.
-<a href=#399 id=399 data-nosnippet>399</a>/// Code runs in the environment supplied by the language wrapper writer.
-<a href=#400 id=400 data-nosnippet>400</a>/// Preparation resolves errors before installing the slot; [`emit_call`]
-<a href=#401 id=401 data-nosnippet>401</a>/// reads this interface directly, without an intermediate plan.
-<a href=#402 id=402 data-nosnippet>402</a>/// Source-value templates use [`source_result_expr`]; custom implementations can
-<a href=#403 id=403 data-nosnippet>403</a>/// use the explicitly supplied source binding directly. All output phases receive
-<a href=#404 id=404 data-nosnippet>404</a>/// the same binding, chosen by the caller, for the source function's return value.
-<a href=#405 id=405 data-nosnippet>405</a></span><span class="kw">pub trait </span>OutputConversion {
-<a href=#406 id=406 data-nosnippet>406</a>    <span class="doccomment">/// Adapter-specific boundary description.
-<a href=#407 id=407 data-nosnippet>407</a>    </span><span class="kw">type </span>Wire: WireKind;
-<a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// Emission data defined and supplied by the language generator.
-<a href=#409 id=409 data-nosnippet>409</a>    </span><span class="kw">type </span>Context;
-<a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// Boundary results in delivery order.
-<a href=#411 id=411 data-nosnippet>411</a>    </span><span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;];
-<a href=#412 id=412 data-nosnippet>412</a>    <span class="doccomment">/// Output expressions in wire order, valid until commit.
-<a href=#413 id=413 data-nosnippet>413</a>    </span><span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt;;
-<a href=#414 id=414 data-nosnippet>414</a>    <span class="doccomment">/// Prepare owned output temporaries before delivery.
-<a href=#415 id=415 data-nosnippet>415</a>    </span><span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// Fallible delivery code; ownership remains uncommitted on failure.
-<a href=#417 id=417 data-nosnippet>417</a>    </span><span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#418 id=418 data-nosnippet>418</a>    <span class="doccomment">/// Infallibly transfer ownership after successful delivery.
-<a href=#419 id=419 data-nosnippet>419</a>    </span><span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#420 id=420 data-nosnippet>420</a>    <span class="doccomment">/// Infallible wrapper result expression evaluated after commit.
-<a href=#421 id=421 data-nosnippet>421</a>    </span><span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
-<a href=#422 id=422 data-nosnippet>422</a>}
-<a href=#423 id=423 data-nosnippet>423</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext&gt; OutputConversion <span class="kw">for </span>OutputPlan&lt;W, C&gt; {
-<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">type </span>Wire = W;
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">type </span>Context = C;
-<a href=#426 id=426 data-nosnippet>426</a>    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;] {
-<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.wires
+<a href=#226 id=226 data-nosnippet>226</a>/// Preparation stores the conversion-specific information in `OwnedBoxInput`:
+<a href=#227 id=227 data-nosnippet>227</a>/// the pointee type, wire description and private temporary name. Context supplies
+<a href=#228 id=228 data-nosnippet>228</a>/// wrapper-environment bindings shared by conversions. For another generator,
+<a href=#229 id=229 data-nosnippet>229</a>/// these might include a runtime environment identifier or a helper-function path.
+<a href=#230 id=230 data-nosnippet>230</a>/// The converter already determines how conversion works; context supplies the
+<a href=#231 id=231 data-nosnippet>231</a>/// environment in which its emitted code will run. Changing the acknowledgement
+<a href=#232 id=232 data-nosnippet>232</a>/// parameter's name therefore needs a different context value, not a rebuilt slot.
+<a href=#233 id=233 data-nosnippet>233</a>///
+<a href=#234 id=234 data-nosnippet>234</a>/// The final Rust argument binding is supplied separately as `target` to
+<a href=#235 id=235 data-nosnippet>235</a>/// [`InputConversion::construction`]. Similarly, output methods receive the
+<a href=#236 id=236 data-nosnippet>236</a>/// source-result binding explicitly. Neither binding needs to be stored in
+<a href=#237 id=237 data-nosnippet>237</a>/// context. Converters that need no wrapper-specific environment can use `()`
+<a href=#238 id=238 data-nosnippet>238</a>/// as their associated `Context` type.
+<a href=#239 id=239 data-nosnippet>239</a>///
+<a href=#240 id=240 data-nosnippet>240</a>/// The wrapper supplies an `&amp;mut bool` acknowledgement parameter, initially false.
+<a href=#241 id=241 data-nosnippet>241</a>/// Validation or alias-check failure leaves it false and ownership with the caller.
+<a href=#242 id=242 data-nosnippet>242</a>/// After acknowledgement, the wrapper owns the allocation even if later code fails.
+<a href=#243 id=243 data-nosnippet>243</a>/// The pointer must come from a compatible `Box::into_raw` for the prepared
+<a href=#244 id=244 data-nosnippet>244</a>/// pointee type, remain live, and be used exclusively for this transfer.
+<a href=#245 id=245 data-nosnippet>245</a>/// A null check cannot establish those conditions.
+<a href=#246 id=246 data-nosnippet>246</a>///
+<a href=#247 id=247 data-nosnippet>247</a>/// ```
+<a href=#248 id=248 data-nosnippet>248</a>/// use prebindgen_flat::{Access, InputConversion, Resource, Result, Wire, WireKind};
+<a href=#249 id=249 data-nosnippet>249</a>/// use proc_macro2::TokenStream;
+<a href=#250 id=250 data-nosnippet>250</a>/// use quote::quote;
+<a href=#251 id=251 data-nosnippet>251</a>/// use syn::{parse_quote, Ident, Type};
+<a href=#252 id=252 data-nosnippet>252</a>///
+<a href=#253 id=253 data-nosnippet>253</a>/// // The generator defines boundary carriers independently of the wrapped types.
+<a href=#254 id=254 data-nosnippet>254</a>/// // Any opaque object handle can use this same pointer carrier.
+<a href=#255 id=255 data-nosnippet>255</a>/// enum WireType {
+<a href=#256 id=256 data-nosnippet>256</a>///     OpaquePointer,
+<a href=#257 id=257 data-nosnippet>257</a>/// }
+<a href=#258 id=258 data-nosnippet>258</a>/// impl WireKind for WireType {
+<a href=#259 id=259 data-nosnippet>259</a>///     fn rust_type(&amp;self) -&gt; Type {
+<a href=#260 id=260 data-nosnippet>260</a>///         match self {
+<a href=#261 id=261 data-nosnippet>261</a>///             Self::OpaquePointer =&gt; parse_quote!(*mut ::std::ffi::c_void),
+<a href=#262 id=262 data-nosnippet>262</a>///         }
+<a href=#263 id=263 data-nosnippet>263</a>///     }
+<a href=#264 id=264 data-nosnippet>264</a>/// }
+<a href=#265 id=265 data-nosnippet>265</a>///
+<a href=#266 id=266 data-nosnippet>266</a>/// // Generator-owned bindings available to emitted code. This is a code-generation
+<a href=#267 id=267 data-nosnippet>267</a>/// // value, not a runtime context passed to the wrapped Rust function.
+<a href=#268 id=268 data-nosnippet>268</a>/// struct Context {
+<a href=#269 id=269 data-nosnippet>269</a>///     // Name of the wrapper's &amp;mut bool parameter.
+<a href=#270 id=270 data-nosnippet>270</a>///     acknowledged: Ident,
+<a href=#271 id=271 data-nosnippet>271</a>/// }
+<a href=#272 id=272 data-nosnippet>272</a>///
+<a href=#273 id=273 data-nosnippet>273</a>/// // A reusable converter prepared for any supported sized pointee type.
+<a href=#274 id=274 data-nosnippet>274</a>/// struct OwnedBoxInput {
+<a href=#275 id=275 data-nosnippet>275</a>///     pointee: Type,
+<a href=#276 id=276 data-nosnippet>276</a>///     wires: [Wire&lt;WireType&gt;; 1],
+<a href=#277 id=277 data-nosnippet>277</a>///     // Preparation chooses a private temporary unique within the wrapper.
+<a href=#278 id=278 data-nosnippet>278</a>///     owned: Ident,
+<a href=#279 id=279 data-nosnippet>279</a>/// }
+<a href=#280 id=280 data-nosnippet>280</a>/// impl InputConversion for OwnedBoxInput {
+<a href=#281 id=281 data-nosnippet>281</a>///     type Wire = WireType;
+<a href=#282 id=282 data-nosnippet>282</a>///     type Context = Context;
+<a href=#283 id=283 data-nosnippet>283</a>///
+<a href=#284 id=284 data-nosnippet>284</a>///     fn wires(&amp;self) -&gt; &amp;[Wire&lt;WireType&gt;] {
+<a href=#285 id=285 data-nosnippet>285</a>///         &amp;self.wires
+<a href=#286 id=286 data-nosnippet>286</a>///     }
+<a href=#287 id=287 data-nosnippet>287</a>///
+<a href=#288 id=288 data-nosnippet>288</a>///     fn resources(&amp;self, _: &amp;Context) -&gt; Result&lt;Vec&lt;Resource&gt;&gt; {
+<a href=#289 id=289 data-nosnippet>289</a>///         let wire = &amp;self.wires[0].name;
+<a href=#290 id=290 data-nosnippet>290</a>///         Ok(vec![Resource {
+<a href=#291 id=291 data-nosnippet>291</a>///             identity: quote!(#wire as usize),
+<a href=#292 id=292 data-nosnippet>292</a>///             access: Access::Move,
+<a href=#293 id=293 data-nosnippet>293</a>///             active: quote!(true),
+<a href=#294 id=294 data-nosnippet>294</a>///         }])
+<a href=#295 id=295 data-nosnippet>295</a>///     }
+<a href=#296 id=296 data-nosnippet>296</a>///
+<a href=#297 id=297 data-nosnippet>297</a>///     fn validation(&amp;self, _: &amp;Context) -&gt; Result&lt;TokenStream&gt; {
+<a href=#298 id=298 data-nosnippet>298</a>///         let wire = &amp;self.wires[0].name;
+<a href=#299 id=299 data-nosnippet>299</a>///         Ok(quote! {
+<a href=#300 id=300 data-nosnippet>300</a>///             if #wire.is_null() {
+<a href=#301 id=301 data-nosnippet>301</a>///                 return Err("null owned handle".into());
+<a href=#302 id=302 data-nosnippet>302</a>///             }
+<a href=#303 id=303 data-nosnippet>303</a>///         })
+<a href=#304 id=304 data-nosnippet>304</a>///     }
+<a href=#305 id=305 data-nosnippet>305</a>///
+<a href=#306 id=306 data-nosnippet>306</a>///     fn acknowledgement(&amp;self, context: &amp;Context) -&gt; Result&lt;Option&lt;TokenStream&gt;&gt; {
+<a href=#307 id=307 data-nosnippet>307</a>///         let acknowledged = &amp;context.acknowledged;
+<a href=#308 id=308 data-nosnippet>308</a>///         // Shared across consuming slots; emit_call emits it once, after checks.
+<a href=#309 id=309 data-nosnippet>309</a>///         Ok(Some(quote!(*#acknowledged = true;)))
+<a href=#310 id=310 data-nosnippet>310</a>///     }
+<a href=#311 id=311 data-nosnippet>311</a>///
+<a href=#312 id=312 data-nosnippet>312</a>///     fn acquisition(&amp;self, _: &amp;Context) -&gt; Result&lt;TokenStream&gt; {
+<a href=#313 id=313 data-nosnippet>313</a>///         let wire = &amp;self.wires[0].name;
+<a href=#314 id=314 data-nosnippet>314</a>///         let owned = &amp;self.owned;
+<a href=#315 id=315 data-nosnippet>315</a>///         let pointee = &amp;self.pointee;
+<a href=#316 id=316 data-nosnippet>316</a>///         // Safety relies on the caller's pointer and ownership contract above.
+<a href=#317 id=317 data-nosnippet>317</a>///         Ok(quote! {
+<a href=#318 id=318 data-nosnippet>318</a>///             let #owned = unsafe { ::std::boxed::Box::&lt;#pointee&gt;::from_raw(#wire.cast::&lt;#pointee&gt;()) };
+<a href=#319 id=319 data-nosnippet>319</a>///         })
+<a href=#320 id=320 data-nosnippet>320</a>///     }
+<a href=#321 id=321 data-nosnippet>321</a>///
+<a href=#322 id=322 data-nosnippet>322</a>///     fn construction(&amp;self, _: &amp;Context, target: &amp;Ident) -&gt; Result&lt;TokenStream&gt; {
+<a href=#323 id=323 data-nosnippet>323</a>///         let owned = &amp;self.owned;
+<a href=#324 id=324 data-nosnippet>324</a>///         Ok(quote!(let #target = #owned;))
+<a href=#325 id=325 data-nosnippet>325</a>///     }
+<a href=#326 id=326 data-nosnippet>326</a>/// }
+<a href=#327 id=327 data-nosnippet>327</a>///
+<a href=#328 id=328 data-nosnippet>328</a>/// // Preparation obtains this type from the wrapped signature. Use u64 here
+<a href=#329 id=329 data-nosnippet>329</a>/// // to demonstrate the converter without introducing an application type.
+<a href=#330 id=330 data-nosnippet>330</a>/// let slot = OwnedBoxInput {
+<a href=#331 id=331 data-nosnippet>331</a>///     pointee: parse_quote!(u64),
+<a href=#332 id=332 data-nosnippet>332</a>///     wires: [Wire {
+<a href=#333 id=333 data-nosnippet>333</a>///         name: parse_quote!(raw_value),
+<a href=#334 id=334 data-nosnippet>334</a>///         kind: WireType::OpaquePointer,
+<a href=#335 id=335 data-nosnippet>335</a>///     }],
+<a href=#336 id=336 data-nosnippet>336</a>///     owned: parse_quote!(__owned_value),
+<a href=#337 id=337 data-nosnippet>337</a>/// };
+<a href=#338 id=338 data-nosnippet>338</a>/// let context = Context { acknowledged: parse_quote!(ownership_taken) };
+<a href=#339 id=339 data-nosnippet>339</a>///
+<a href=#340 id=340 data-nosnippet>340</a>/// // Individual phases are available directly. emit_call orders them across
+<a href=#341 id=341 data-nosnippet>341</a>/// // all input slots, checks resource aliases, and invokes the source function.
+<a href=#342 id=342 data-nosnippet>342</a>/// assert_eq!(slot.wires().len(), 1);
+<a href=#343 id=343 data-nosnippet>343</a>/// assert_eq!(slot.resources(&amp;context)?[0].access, Access::Move);
+<a href=#344 id=344 data-nosnippet>344</a>/// let validation = slot.validation(&amp;context)?;
+<a href=#345 id=345 data-nosnippet>345</a>/// let acknowledgement = slot.acknowledgement(&amp;context)?;
+<a href=#346 id=346 data-nosnippet>346</a>/// let acquisition = slot.acquisition(&amp;context)?;
+<a href=#347 id=347 data-nosnippet>347</a>/// let target = parse_quote!(argument);
+<a href=#348 id=348 data-nosnippet>348</a>/// let construction = slot.construction(&amp;context, &amp;target)?;
+<a href=#349 id=349 data-nosnippet>349</a>/// assert_eq!(construction.to_string(),
+<a href=#350 id=350 data-nosnippet>350</a>///            quote!(let argument = __owned_value;).to_string());
+<a href=#351 id=351 data-nosnippet>351</a>///
+<a href=#352 id=352 data-nosnippet>352</a>/// // Inspect the emitted phases without compiling or executing a foreign pointer.
+<a href=#353 id=353 data-nosnippet>353</a>/// let phases = quote! {
+<a href=#354 id=354 data-nosnippet>354</a>///     #validation
+<a href=#355 id=355 data-nosnippet>355</a>///     #acknowledgement
+<a href=#356 id=356 data-nosnippet>356</a>///     #acquisition
+<a href=#357 id=357 data-nosnippet>357</a>///     #construction
+<a href=#358 id=358 data-nosnippet>358</a>/// };
+<a href=#359 id=359 data-nosnippet>359</a>/// let _: syn::Block = syn::parse2(quote!({ #phases }))?;
+<a href=#360 id=360 data-nosnippet>360</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
+<a href=#361 id=361 data-nosnippet>361</a>/// ```
+<a href=#362 id=362 data-nosnippet>362</a>///
+<a href=#363 id=363 data-nosnippet>363</a>/// The converter owns any conditional behavior. Wires describe transport only.
+<a href=#364 id=364 data-nosnippet>364</a></span><span class="kw">pub trait </span>InputConversion {
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="doccomment">/// Adapter-specific boundary description.
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">type </span>Wire: WireKind;
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="doccomment">/// Wrapper-environment data defined and supplied by the language generator.
+<a href=#368 id=368 data-nosnippet>368</a>    /// The value is used during code generation, for example to name runtime
+<a href=#369 id=369 data-nosnippet>369</a>    /// parameters or helper functions referenced by emitted code. Use `()` when
+<a href=#370 id=370 data-nosnippet>370</a>    /// no such data is needed. See the trait example for the distinction between
+<a href=#371 id=371 data-nosnippet>371</a>    /// context, prepared slot data and the caller-supplied argument binding.
+<a href=#372 id=372 data-nosnippet>372</a>    </span><span class="kw">type </span>Context;
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="doccomment">/// Boundary parameters in signature order.
+<a href=#374 id=374 data-nosnippet>374</a>    </span><span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;];
+<a href=#375 id=375 data-nosnippet>375</a>    <span class="doccomment">/// Shared call acknowledgement, after validation and before acquisition.
+<a href=#376 id=376 data-nosnippet>376</a>    /// All contributing inputs must return the same token spelling; assembly emits
+<a href=#377 id=377 data-nosnippet>377</a>    /// it once. Return `None` when this input needs no acknowledgement. Slot-local
+<a href=#378 id=378 data-nosnippet>378</a>    /// fallible checks belong in `validation`, not in this shared operation.
+<a href=#379 id=379 data-nosnippet>379</a>    </span><span class="kw">fn </span>acknowledgement(<span class="kw-2">&amp;</span><span class="self">self</span>, _context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;TokenStream&gt;&gt; {
+<a href=#380 id=380 data-nosnippet>380</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+<a href=#381 id=381 data-nosnippet>381</a>    }
+<a href=#382 id=382 data-nosnippet>382</a>    <span class="doccomment">/// Resources used for call-wide alias checking, with identities emitted for this context.
+<a href=#383 id=383 data-nosnippet>383</a>    </span><span class="kw">fn </span>resources(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Resource&gt;&gt;;
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="doccomment">/// Fallible validation before any ownership transfer.
+<a href=#385 id=385 data-nosnippet>385</a>    </span><span class="kw">fn </span>validation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// Infallible ownership acquisition after acknowledgement.
+<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">fn </span>acquisition(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="doccomment">/// Construct the argument after all inputs have been acquired, binding it to `target`.
+<a href=#389 id=389 data-nosnippet>389</a>    /// The caller owns this identifier and passes it to the source function. Emit a
+<a href=#390 id=390 data-nosnippet>390</a>    /// `let` binding in the surrounding scope, so borrowed argument storage remains alive.
+<a href=#391 id=391 data-nosnippet>391</a>    /// Converter-private temporaries must not shadow other caller-supplied bindings.
+<a href=#392 id=392 data-nosnippet>392</a>    </span><span class="kw">fn </span>construction(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, target: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
+<a href=#393 id=393 data-nosnippet>393</a>}
+<a href=#394 id=394 data-nosnippet>394</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext&gt; InputConversion <span class="kw">for </span>InputPlan&lt;W, C&gt; {
+<a href=#395 id=395 data-nosnippet>395</a>    <span class="kw">type </span>Wire = W;
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">type </span>Context = C;
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;] {
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.wires
+<a href=#399 id=399 data-nosnippet>399</a>    }
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">fn </span>acknowledgement(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;TokenStream&gt;&gt; {
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="self">self</span>.acknowledgement
+<a href=#402 id=402 data-nosnippet>402</a>            .as_ref()
+<a href=#403 id=403 data-nosnippet>403</a>            .map(|code| context.render(code))
+<a href=#404 id=404 data-nosnippet>404</a>            .transpose()
+<a href=#405 id=405 data-nosnippet>405</a>    }
+<a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">fn </span>resources(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Resource&gt;&gt; {
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="self">self</span>.resources
+<a href=#408 id=408 data-nosnippet>408</a>            .iter()
+<a href=#409 id=409 data-nosnippet>409</a>            .map(|resource| {
+<a href=#410 id=410 data-nosnippet>410</a>                <span class="prelude-val">Ok</span>(Resource {
+<a href=#411 id=411 data-nosnippet>411</a>                    identity: context.render(<span class="kw-2">&amp;</span>resource.identity)<span class="question-mark">?</span>,
+<a href=#412 id=412 data-nosnippet>412</a>                    access: resource.access,
+<a href=#413 id=413 data-nosnippet>413</a>                    active: context.render(<span class="kw-2">&amp;</span>resource.active)<span class="question-mark">?</span>,
+<a href=#414 id=414 data-nosnippet>414</a>                })
+<a href=#415 id=415 data-nosnippet>415</a>            })
+<a href=#416 id=416 data-nosnippet>416</a>            .collect()
+<a href=#417 id=417 data-nosnippet>417</a>    }
+<a href=#418 id=418 data-nosnippet>418</a>    <span class="kw">fn </span>validation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#419 id=419 data-nosnippet>419</a>        context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.validation)
+<a href=#420 id=420 data-nosnippet>420</a>    }
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">fn </span>acquisition(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#422 id=422 data-nosnippet>422</a>        context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.acquire)
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">fn </span>construction(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, target: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="kw">let </span>statements = context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.statements)<span class="question-mark">?</span>;
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>value = context.render(<span class="kw-2">&amp;</span><span class="self">self</span>.argument)<span class="question-mark">?</span>;
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(#statements <span class="kw">let </span>#target = #value;))
 <a href=#428 id=428 data-nosnippet>428</a>    }
-<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
-<a href=#430 id=430 data-nosnippet>430</a>        <span class="self">self</span>.values
-<a href=#431 id=431 data-nosnippet>431</a>            .iter()
-<a href=#432 id=432 data-nosnippet>432</a>            .map(|code| <span class="kw">crate</span>::emission::render_output(context, code, source))
-<a href=#433 id=433 data-nosnippet>433</a>            .collect()
-<a href=#434 id=434 data-nosnippet>434</a>    }
-<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.statements, source)
-<a href=#437 id=437 data-nosnippet>437</a>    }
-<a href=#438 id=438 data-nosnippet>438</a>    <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#439 id=439 data-nosnippet>439</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.delivery.statements, source)
-<a href=#440 id=440 data-nosnippet>440</a>    }
-<a href=#441 id=441 data-nosnippet>441</a>    <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#442 id=442 data-nosnippet>442</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.commit, source)
-<a href=#443 id=443 data-nosnippet>443</a>    }
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.delivery.result, source)
-<a href=#446 id=446 data-nosnippet>446</a>    }
-<a href=#447 id=447 data-nosnippet>447</a>}
-<a href=#448 id=448 data-nosnippet>448</a>
-<a href=#449 id=449 data-nosnippet>449</a><span class="doccomment">/// An output expression paired with its boundary description.
-<a href=#450 id=450 data-nosnippet>450</a></span><span class="kw">pub struct </span>OutputValue&lt;<span class="lifetime">'a</span>, W: WireKind&gt; {
-<a href=#451 id=451 data-nosnippet>451</a>    <span class="doccomment">/// Boundary carrier and binding name; its meaning is private to the converter.
-<a href=#452 id=452 data-nosnippet>452</a>    </span><span class="kw">pub </span>wire: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Wire&lt;W&gt;,
-<a href=#453 id=453 data-nosnippet>453</a>    <span class="doccomment">/// Expression ready for adapter-specific delivery.
-<a href=#454 id=454 data-nosnippet>454</a>    </span><span class="kw">pub </span>value: TokenStream,
+<a href=#429 id=429 data-nosnippet>429</a>}
+<a href=#430 id=430 data-nosnippet>430</a><span class="doccomment">/// A fully prepared output conversion stored in a slot.
+<a href=#431 id=431 data-nosnippet>431</a>/// Metadata and generated names must stay consistent across method calls.
+<a href=#432 id=432 data-nosnippet>432</a>/// Code runs in the environment supplied by the language wrapper writer.
+<a href=#433 id=433 data-nosnippet>433</a>/// Preparation resolves errors before installing the slot; [`emit_call`]
+<a href=#434 id=434 data-nosnippet>434</a>/// reads this interface directly, without an intermediate plan.
+<a href=#435 id=435 data-nosnippet>435</a>/// Source-value templates use [`source_result_expr`]; custom implementations can
+<a href=#436 id=436 data-nosnippet>436</a>/// use the explicitly supplied source binding directly. All output phases receive
+<a href=#437 id=437 data-nosnippet>437</a>/// the same binding, chosen by the caller, for the source function's return value.
+<a href=#438 id=438 data-nosnippet>438</a></span><span class="kw">pub trait </span>OutputConversion {
+<a href=#439 id=439 data-nosnippet>439</a>    <span class="doccomment">/// Adapter-specific boundary description.
+<a href=#440 id=440 data-nosnippet>440</a>    </span><span class="kw">type </span>Wire: WireKind;
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="doccomment">/// Emission data defined and supplied by the language generator.
+<a href=#442 id=442 data-nosnippet>442</a>    </span><span class="kw">type </span>Context;
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="doccomment">/// Boundary results in delivery order.
+<a href=#444 id=444 data-nosnippet>444</a>    </span><span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;];
+<a href=#445 id=445 data-nosnippet>445</a>    <span class="doccomment">/// Output expressions in wire order, valid until commit.
+<a href=#446 id=446 data-nosnippet>446</a>    </span><span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt;;
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="doccomment">/// Prepare owned output temporaries before delivery.
+<a href=#448 id=448 data-nosnippet>448</a>    </span><span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="doccomment">/// Fallible delivery code; ownership remains uncommitted on failure.
+<a href=#450 id=450 data-nosnippet>450</a>    </span><span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
+<a href=#451 id=451 data-nosnippet>451</a>    <span class="doccomment">/// Infallibly transfer ownership after successful delivery.
+<a href=#452 id=452 data-nosnippet>452</a>    </span><span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
+<a href=#453 id=453 data-nosnippet>453</a>    <span class="doccomment">/// Infallible wrapper result expression evaluated after commit.
+<a href=#454 id=454 data-nosnippet>454</a>    </span><span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt;;
 <a href=#455 id=455 data-nosnippet>455</a>}
-<a href=#456 id=456 data-nosnippet>456</a>
-<a href=#457 id=457 data-nosnippet>457</a><span class="doccomment">/// Result-slot glue executed after output preparation and before ownership commit.
-<a href=#458 id=458 data-nosnippet>458</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#459 id=459 data-nosnippet>459</a></span><span class="kw">pub struct </span>Delivery {
-<a href=#460 id=460 data-nosnippet>460</a>    <span class="doccomment">/// Deliver every output; failure must leave owned temporaries uncommitted.
-<a href=#461 id=461 data-nosnippet>461</a>    </span><span class="kw">pub </span>statements: TokenStream,
-<a href=#462 id=462 data-nosnippet>462</a>    <span class="doccomment">/// Infallible wrapper result expression evaluated after commit.
-<a href=#463 id=463 data-nosnippet>463</a>    </span><span class="kw">pub </span>result: TokenStream,
-<a href=#464 id=464 data-nosnippet>464</a>}
-<a href=#465 id=465 data-nosnippet>465</a><span class="kw">impl </span>Default <span class="kw">for </span>Delivery {
-<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-<a href=#467 id=467 data-nosnippet>467</a>        <span class="self">Self </span>{
-<a href=#468 id=468 data-nosnippet>468</a>            statements: TokenStream::new(),
-<a href=#469 id=469 data-nosnippet>469</a>            result: <span class="macro">quote!</span>(()),
-<a href=#470 id=470 data-nosnippet>470</a>        }
-<a href=#471 id=471 data-nosnippet>471</a>    }
-<a href=#472 id=472 data-nosnippet>472</a>}
-<a href=#473 id=473 data-nosnippet>473</a>
-<a href=#474 id=474 data-nosnippet>474</a><span class="kw">impl</span>&lt;I: InputConversion, O: OutputConversion&gt; <span class="kw">crate</span>::Function&lt;I, O&gt; {
-<a href=#475 id=475 data-nosnippet>475</a>    <span class="doccomment">/// Filled input slots, preserving source parameter order and grouping.
-<a href=#476 id=476 data-nosnippet>476</a>    </span><span class="kw">pub fn </span>input_conversions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw-2">&amp;</span>I&gt;&gt; {
-<a href=#477 id=477 data-nosnippet>477</a>        <span class="self">self</span>.params
-<a href=#478 id=478 data-nosnippet>478</a>            .iter()
-<a href=#479 id=479 data-nosnippet>479</a>            .map(|p| {
-<a href=#480 id=480 data-nosnippet>480</a>                p.ty.slot.as_ref().ok_or_else(|| {
-<a href=#481 id=481 data-nosnippet>481</a>                    <span class="macro">format!</span>(<span class="string">"`{}`: parameter `{}` has no conversion"</span>, <span class="self">self</span>.name, p.name)
-<a href=#482 id=482 data-nosnippet>482</a>                })
-<a href=#483 id=483 data-nosnippet>483</a>            })
-<a href=#484 id=484 data-nosnippet>484</a>            .collect()
-<a href=#485 id=485 data-nosnippet>485</a>    }
-<a href=#486 id=486 data-nosnippet>486</a>    <span class="doccomment">/// Filled result slot. Emission checks the rendered wire and value counts.
-<a href=#487 id=487 data-nosnippet>487</a>    </span><span class="kw">pub fn </span>output_conversion(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>O&gt; {
-<a href=#488 id=488 data-nosnippet>488</a>        <span class="kw">let </span>output = <span class="self">self
-<a href=#489 id=489 data-nosnippet>489</a>            </span>.ret
-<a href=#490 id=490 data-nosnippet>490</a>            .slot
-<a href=#491 id=491 data-nosnippet>491</a>            .as_ref()
-<a href=#492 id=492 data-nosnippet>492</a>            .ok_or_else(|| <span class="macro">format!</span>(<span class="string">"`{}`: result has no conversion"</span>, <span class="self">self</span>.name))<span class="question-mark">?</span>;
-<a href=#493 id=493 data-nosnippet>493</a>        <span class="prelude-val">Ok</span>(output)
-<a href=#494 id=494 data-nosnippet>494</a>    }
-<a href=#495 id=495 data-nosnippet>495</a>    <span class="doccomment">/// Boundary input wires read directly from the slots in parameter order.
-<a href=#496 id=496 data-nosnippet>496</a>    </span><span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Wire&lt;I::Wire&gt;&gt;&gt; {
-<a href=#497 id=497 data-nosnippet>497</a>        <span class="prelude-val">Ok</span>(<span class="self">self
-<a href=#498 id=498 data-nosnippet>498</a>            </span>.input_conversions()<span class="question-mark">?
-<a href=#499 id=499 data-nosnippet>499</a>            </span>.into_iter()
-<a href=#500 id=500 data-nosnippet>500</a>            .flat_map(|i| i.wires()))
-<a href=#501 id=501 data-nosnippet>501</a>    }
-<a href=#502 id=502 data-nosnippet>502</a>    <span class="doccomment">/// Output expressions paired with their wire descriptions, directly from the slot.
-<a href=#503 id=503 data-nosnippet>503</a>    </span><span class="kw">pub fn </span>outputs(
-<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#505 id=505 data-nosnippet>505</a>        context: <span class="kw-2">&amp;</span>O::Context,
-<a href=#506 id=506 data-nosnippet>506</a>        source: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#507 id=507 data-nosnippet>507</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>ExactSizeIterator&lt;Item = OutputValue&lt;<span class="lifetime">'_</span>, O::Wire&gt;&gt;&gt; {
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span>output = <span class="self">self</span>.output_conversion()<span class="question-mark">?</span>;
-<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">let </span>values = output.values(context, source)<span class="question-mark">?</span>;
-<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">if </span>output.wires().len() != values.len() {
-<a href=#511 id=511 data-nosnippet>511</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}`: output wire/value count differs"</span>, <span class="self">self</span>.name));
-<a href=#512 id=512 data-nosnippet>512</a>        }
-<a href=#513 id=513 data-nosnippet>513</a>        <span class="prelude-val">Ok</span>(output
-<a href=#514 id=514 data-nosnippet>514</a>            .wires()
-<a href=#515 id=515 data-nosnippet>515</a>            .iter()
-<a href=#516 id=516 data-nosnippet>516</a>            .zip(values)
-<a href=#517 id=517 data-nosnippet>517</a>            .map(|(wire, value)| OutputValue { wire, value }))
+<a href=#456 id=456 data-nosnippet>456</a><span class="kw">impl</span>&lt;W: WireKind, C: TemplateContext&gt; OutputConversion <span class="kw">for </span>OutputPlan&lt;W, C&gt; {
+<a href=#457 id=457 data-nosnippet>457</a>    <span class="kw">type </span>Wire = W;
+<a href=#458 id=458 data-nosnippet>458</a>    <span class="kw">type </span>Context = C;
+<a href=#459 id=459 data-nosnippet>459</a>    <span class="kw">fn </span>wires(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Wire&lt;<span class="self">Self</span>::Wire&gt;] {
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.wires
+<a href=#461 id=461 data-nosnippet>461</a>    }
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;TokenStream&gt;&gt; {
+<a href=#463 id=463 data-nosnippet>463</a>        <span class="self">self</span>.values
+<a href=#464 id=464 data-nosnippet>464</a>            .iter()
+<a href=#465 id=465 data-nosnippet>465</a>            .map(|code| <span class="kw">crate</span>::emission::render_output(context, code, source))
+<a href=#466 id=466 data-nosnippet>466</a>            .collect()
+<a href=#467 id=467 data-nosnippet>467</a>    }
+<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">fn </span>preparation(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.statements, source)
+<a href=#470 id=470 data-nosnippet>470</a>    }
+<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">fn </span>delivery(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.delivery.statements, source)
+<a href=#473 id=473 data-nosnippet>473</a>    }
+<a href=#474 id=474 data-nosnippet>474</a>    <span class="kw">fn </span>commit(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.commit, source)
+<a href=#476 id=476 data-nosnippet>476</a>    }
+<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">fn </span>result(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span><span class="self">Self</span>::Context, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">crate</span>::emission::render_output(context, <span class="kw-2">&amp;</span><span class="self">self</span>.delivery.result, source)
+<a href=#479 id=479 data-nosnippet>479</a>    }
+<a href=#480 id=480 data-nosnippet>480</a>}
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a><span class="doccomment">/// An output expression paired with its boundary description.
+<a href=#483 id=483 data-nosnippet>483</a></span><span class="kw">pub struct </span>OutputValue&lt;<span class="lifetime">'a</span>, W: WireKind&gt; {
+<a href=#484 id=484 data-nosnippet>484</a>    <span class="doccomment">/// Boundary carrier and binding name; its meaning is private to the converter.
+<a href=#485 id=485 data-nosnippet>485</a>    </span><span class="kw">pub </span>wire: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Wire&lt;W&gt;,
+<a href=#486 id=486 data-nosnippet>486</a>    <span class="doccomment">/// Expression ready for adapter-specific delivery.
+<a href=#487 id=487 data-nosnippet>487</a>    </span><span class="kw">pub </span>value: TokenStream,
+<a href=#488 id=488 data-nosnippet>488</a>}
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a><span class="doccomment">/// Result-slot glue executed after output preparation and before ownership commit.
+<a href=#491 id=491 data-nosnippet>491</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#492 id=492 data-nosnippet>492</a></span><span class="kw">pub struct </span>Delivery {
+<a href=#493 id=493 data-nosnippet>493</a>    <span class="doccomment">/// Deliver every output; failure must leave owned temporaries uncommitted.
+<a href=#494 id=494 data-nosnippet>494</a>    </span><span class="kw">pub </span>statements: TokenStream,
+<a href=#495 id=495 data-nosnippet>495</a>    <span class="doccomment">/// Infallible wrapper result expression evaluated after commit.
+<a href=#496 id=496 data-nosnippet>496</a>    </span><span class="kw">pub </span>result: TokenStream,
+<a href=#497 id=497 data-nosnippet>497</a>}
+<a href=#498 id=498 data-nosnippet>498</a><span class="kw">impl </span>Default <span class="kw">for </span>Delivery {
+<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#500 id=500 data-nosnippet>500</a>        <span class="self">Self </span>{
+<a href=#501 id=501 data-nosnippet>501</a>            statements: TokenStream::new(),
+<a href=#502 id=502 data-nosnippet>502</a>            result: <span class="macro">quote!</span>(()),
+<a href=#503 id=503 data-nosnippet>503</a>        }
+<a href=#504 id=504 data-nosnippet>504</a>    }
+<a href=#505 id=505 data-nosnippet>505</a>}
+<a href=#506 id=506 data-nosnippet>506</a>
+<a href=#507 id=507 data-nosnippet>507</a><span class="kw">impl</span>&lt;I: InputConversion, O: OutputConversion&gt; <span class="kw">crate</span>::Function&lt;I, O&gt; {
+<a href=#508 id=508 data-nosnippet>508</a>    <span class="doccomment">/// Filled input slots, preserving source parameter order and grouping.
+<a href=#509 id=509 data-nosnippet>509</a>    </span><span class="kw">pub fn </span>input_conversions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw-2">&amp;</span>I&gt;&gt; {
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="self">self</span>.params
+<a href=#511 id=511 data-nosnippet>511</a>            .iter()
+<a href=#512 id=512 data-nosnippet>512</a>            .map(|p| {
+<a href=#513 id=513 data-nosnippet>513</a>                p.ty.slot.as_ref().ok_or_else(|| {
+<a href=#514 id=514 data-nosnippet>514</a>                    <span class="macro">format!</span>(<span class="string">"`{}`: parameter `{}` has no conversion"</span>, <span class="self">self</span>.name, p.name)
+<a href=#515 id=515 data-nosnippet>515</a>                })
+<a href=#516 id=516 data-nosnippet>516</a>            })
+<a href=#517 id=517 data-nosnippet>517</a>            .collect()
 <a href=#518 id=518 data-nosnippet>518</a>    }
-<a href=#519 id=519 data-nosnippet>519</a>}
-<a href=#520 id=520 data-nosnippet>520</a>
-<a href=#521 id=521 data-nosnippet>521</a><span class="doccomment">/// Assemble a function call directly from filled slots, without a generator callback.
-<a href=#522 id=522 data-nosnippet>522</a>/// Validates slot completeness, output arity and agreement on shared acknowledgement.
-<a href=#523 id=523 data-nosnippet>523</a>/// The returned code runs inside the wrapper's fallible boundary, in this order:
-<a href=#524 id=524 data-nosnippet>524</a>/// all validation, alias checks, one acknowledgement, all acquisition, argument
-<a href=#525 id=525 data-nosnippet>525</a>/// construction, source invocation, output preparation, delivery and commit.
-<a href=#526 id=526 data-nosnippet>526</a>/// `source` names the variable that receives the source function's return value.
-<a href=#527 id=527 data-nosnippet>527</a>/// Input and output contexts must match, even when the function has no parameters.
-<a href=#528 id=528 data-nosnippet>528</a>///
-<a href=#529 id=529 data-nosnippet>529</a>/// ```compile_fail
-<a href=#530 id=530 data-nosnippet>530</a>/// use prebindgen_flat::{emit_call, Function, InputConversion, OutputConversion};
-<a href=#531 id=531 data-nosnippet>531</a>/// struct OtherContext(syn::Ident);
-<a href=#532 id=532 data-nosnippet>532</a>/// fn incompatible&lt;I, O&gt;(function: &amp;Function&lt;I, O&gt;, context: &amp;syn::Ident)
-<a href=#533 id=533 data-nosnippet>533</a>/// where I: InputConversion&lt;Context = syn::Ident&gt;,
-<a href=#534 id=534 data-nosnippet>534</a>///       O: OutputConversion&lt;Context = OtherContext&gt;,
-<a href=#535 id=535 data-nosnippet>535</a>/// {
-<a href=#536 id=536 data-nosnippet>536</a>///     emit_call(function, context, &amp;syn::parse_quote!(returned)).unwrap();
-<a href=#537 id=537 data-nosnippet>537</a>/// }
-<a href=#538 id=538 data-nosnippet>538</a>/// ```
-<a href=#539 id=539 data-nosnippet>539</a></span><span class="kw">pub fn </span>emit_call&lt;I: InputConversion, O: OutputConversion&lt;Context = I::Context&gt;&gt;(
-<a href=#540 id=540 data-nosnippet>540</a>    function: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Function&lt;I, O&gt;,
-<a href=#541 id=541 data-nosnippet>541</a>    context: <span class="kw-2">&amp;</span>I::Context,
-<a href=#542 id=542 data-nosnippet>542</a>    source: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#543 id=543 data-nosnippet>543</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#544 id=544 data-nosnippet>544</a>    <span class="kw">let </span>inputs = function.input_conversions()<span class="question-mark">?</span>;
-<a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">let </span>output = function.output_conversion()<span class="question-mark">?</span>;
-<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">let _ </span>= function.outputs(context, source)<span class="question-mark">?</span>;
-<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">let </span><span class="kw-2">mut </span>acknowledgement: <span class="prelude-ty">Option</span>&lt;TokenStream&gt; = <span class="prelude-val">None</span>;
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>inputs {
-<a href=#549 id=549 data-nosnippet>549</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(fragment) = input.acknowledgement(context)<span class="question-mark">? </span><span class="kw">else </span>{
-<a href=#550 id=550 data-nosnippet>550</a>            <span class="kw">continue</span>;
-<a href=#551 id=551 data-nosnippet>551</a>        };
-<a href=#552 id=552 data-nosnippet>552</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(previous) = <span class="kw-2">&amp;</span>acknowledgement {
-<a href=#553 id=553 data-nosnippet>553</a>            <span class="kw">if </span>previous.to_string() != fragment.to_string() {
-<a href=#554 id=554 data-nosnippet>554</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
-<a href=#555 id=555 data-nosnippet>555</a>                    <span class="string">"`{}`: conflicting input acknowledgements"</span>,
-<a href=#556 id=556 data-nosnippet>556</a>                    function.name
-<a href=#557 id=557 data-nosnippet>557</a>                ));
-<a href=#558 id=558 data-nosnippet>558</a>            }
-<a href=#559 id=559 data-nosnippet>559</a>        } <span class="kw">else </span>{
-<a href=#560 id=560 data-nosnippet>560</a>            acknowledgement = <span class="prelude-val">Some</span>(fragment);
-<a href=#561 id=561 data-nosnippet>561</a>        }
-<a href=#562 id=562 data-nosnippet>562</a>    }
-<a href=#563 id=563 data-nosnippet>563</a>    <span class="kw">let </span>validation = inputs
-<a href=#564 id=564 data-nosnippet>564</a>        .iter()
-<a href=#565 id=565 data-nosnippet>565</a>        .map(|i| i.validation(context))
-<a href=#566 id=566 data-nosnippet>566</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#567 id=567 data-nosnippet>567</a>    <span class="kw">let </span>resources: Vec&lt;<span class="kw">_</span>&gt; = inputs
-<a href=#568 id=568 data-nosnippet>568</a>        .iter()
-<a href=#569 id=569 data-nosnippet>569</a>        .map(|i| i.resources(context))
-<a href=#570 id=570 data-nosnippet>570</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
-<a href=#571 id=571 data-nosnippet>571</a>        </span>.into_iter()
-<a href=#572 id=572 data-nosnippet>572</a>        .flatten()
-<a href=#573 id=573 data-nosnippet>573</a>        .collect();
-<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">let </span>aliases = validate_resources(<span class="kw-2">&amp;</span>resources);
-<a href=#575 id=575 data-nosnippet>575</a>    <span class="kw">let </span>acquire = inputs
-<a href=#576 id=576 data-nosnippet>576</a>        .iter()
-<a href=#577 id=577 data-nosnippet>577</a>        .map(|i| i.acquisition(context))
-<a href=#578 id=578 data-nosnippet>578</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">let </span>path = <span class="kw-2">&amp;</span>function.path;
-<a href=#580 id=580 data-nosnippet>580</a>    <span class="kw">let </span>prepare = output.preparation(context, source)<span class="question-mark">?</span>;
-<a href=#581 id=581 data-nosnippet>581</a>    <span class="kw">let </span>deliver = output.delivery(context, source)<span class="question-mark">?</span>;
-<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">let </span>commit = output.commit(context, source)<span class="question-mark">?</span>;
-<a href=#583 id=583 data-nosnippet>583</a>    <span class="kw">let </span>result = output.result(context, source)<span class="question-mark">?</span>;
-<a href=#584 id=584 data-nosnippet>584</a>    <span class="kw">let </span><span class="kw-2">mut </span>used: std::collections::BTreeSet&lt;String&gt; = inputs
-<a href=#585 id=585 data-nosnippet>585</a>        .iter()
-<a href=#586 id=586 data-nosnippet>586</a>        .flat_map(|input| input.wires().iter().map(|wire| wire.name.to_string()))
-<a href=#587 id=587 data-nosnippet>587</a>        .chain(std::iter::once(source.to_string()))
-<a href=#588 id=588 data-nosnippet>588</a>        .collect();
-<a href=#589 id=589 data-nosnippet>589</a>    <span class="comment">// Reserve names already used by surrounding phases and the source path.
-<a href=#590 id=590 data-nosnippet>590</a>    // These tokens are emitted once; their code and evaluation order stay unchanged.
-<a href=#591 id=591 data-nosnippet>591</a>    </span>reserve_identifiers(
-<a href=#592 id=592 data-nosnippet>592</a>        <span class="kw-2">&amp;</span><span class="macro">quote!</span>(#path #(#validation)* #aliases #acknowledgement #(#acquire)*
-<a href=#593 id=593 data-nosnippet>593</a>        #prepare #deliver #commit #result),
-<a href=#594 id=594 data-nosnippet>594</a>        <span class="kw-2">&amp;mut </span>used,
-<a href=#595 id=595 data-nosnippet>595</a>    );
-<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">let </span>args: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..inputs.len())
-<a href=#597 id=597 data-nosnippet>597</a>        .map(|index| {
-<a href=#598 id=598 data-nosnippet>598</a>            <span class="kw">let </span><span class="kw-2">mut </span>name = <span class="macro">format!</span>(<span class="string">"__prebindgen_argument_{index}"</span>);
-<a href=#599 id=599 data-nosnippet>599</a>            <span class="kw">while </span>!used.insert(name.clone()) {
-<a href=#600 id=600 data-nosnippet>600</a>                name.push(<span class="string">'_'</span>);
-<a href=#601 id=601 data-nosnippet>601</a>            }
-<a href=#602 id=602 data-nosnippet>602</a>            syn::Ident::new(<span class="kw-2">&amp;</span>name, proc_macro2::Span::call_site())
-<a href=#603 id=603 data-nosnippet>603</a>        })
-<a href=#604 id=604 data-nosnippet>604</a>        .collect();
-<a href=#605 id=605 data-nosnippet>605</a>    <span class="kw">let </span>construct = inputs
-<a href=#606 id=606 data-nosnippet>606</a>        .iter()
-<a href=#607 id=607 data-nosnippet>607</a>        .zip(<span class="kw-2">&amp;</span>args)
-<a href=#608 id=608 data-nosnippet>608</a>        .map(|(input, target)| input.construction(context, target))
-<a href=#609 id=609 data-nosnippet>609</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#610 id=610 data-nosnippet>610</a>    <span class="prelude-val">Ok</span>(<span class="macro">quote!</span> {
-<a href=#611 id=611 data-nosnippet>611</a>        #(#validation)* #aliases #acknowledgement #(#acquire)* #(#construct)*
-<a href=#612 id=612 data-nosnippet>612</a>        <span class="kw">let </span>#source = #path(#(#args),<span class="kw-2">*</span>);
-<a href=#613 id=613 data-nosnippet>613</a>        #prepare #deliver #commit <span class="prelude-val">Ok</span>(#result)
-<a href=#614 id=614 data-nosnippet>614</a>    })
-<a href=#615 id=615 data-nosnippet>615</a>}
-<a href=#616 id=616 data-nosnippet>616</a>
-<a href=#617 id=617 data-nosnippet>617</a><span class="kw">fn </span>reserve_identifiers(code: <span class="kw-2">&amp;</span>TokenStream, used: <span class="kw-2">&amp;mut </span>std::collections::BTreeSet&lt;String&gt;) {
-<a href=#618 id=618 data-nosnippet>618</a>    <span class="kw">for </span>token <span class="kw">in </span>code.clone() {
-<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">match </span>token {
-<a href=#620 id=620 data-nosnippet>620</a>            proc_macro2::TokenTree::Ident(name) =&gt; {
-<a href=#621 id=621 data-nosnippet>621</a>                used.insert(name.to_string());
-<a href=#622 id=622 data-nosnippet>622</a>            }
-<a href=#623 id=623 data-nosnippet>623</a>            proc_macro2::TokenTree::Group(group) =&gt; reserve_identifiers(<span class="kw-2">&amp;</span>group.stream(), used),
-<a href=#624 id=624 data-nosnippet>624</a>            <span class="kw">_ </span>=&gt; {}
-<a href=#625 id=625 data-nosnippet>625</a>        }
-<a href=#626 id=626 data-nosnippet>626</a>    }
-<a href=#627 id=627 data-nosnippet>627</a>}
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="doccomment">/// Filled result slot. Emission checks the rendered wire and value counts.
+<a href=#520 id=520 data-nosnippet>520</a>    </span><span class="kw">pub fn </span>output_conversion(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>O&gt; {
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span>output = <span class="self">self
+<a href=#522 id=522 data-nosnippet>522</a>            </span>.ret
+<a href=#523 id=523 data-nosnippet>523</a>            .slot
+<a href=#524 id=524 data-nosnippet>524</a>            .as_ref()
+<a href=#525 id=525 data-nosnippet>525</a>            .ok_or_else(|| <span class="macro">format!</span>(<span class="string">"`{}`: result has no conversion"</span>, <span class="self">self</span>.name))<span class="question-mark">?</span>;
+<a href=#526 id=526 data-nosnippet>526</a>        <span class="prelude-val">Ok</span>(output)
+<a href=#527 id=527 data-nosnippet>527</a>    }
+<a href=#528 id=528 data-nosnippet>528</a>    <span class="doccomment">/// Boundary input wires read directly from the slots in parameter order.
+<a href=#529 id=529 data-nosnippet>529</a>    </span><span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Wire&lt;I::Wire&gt;&gt;&gt; {
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="prelude-val">Ok</span>(<span class="self">self
+<a href=#531 id=531 data-nosnippet>531</a>            </span>.input_conversions()<span class="question-mark">?
+<a href=#532 id=532 data-nosnippet>532</a>            </span>.into_iter()
+<a href=#533 id=533 data-nosnippet>533</a>            .flat_map(|i| i.wires()))
+<a href=#534 id=534 data-nosnippet>534</a>    }
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="doccomment">/// Output expressions paired with their wire descriptions, directly from the slot.
+<a href=#536 id=536 data-nosnippet>536</a>    </span><span class="kw">pub fn </span>outputs(
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#538 id=538 data-nosnippet>538</a>        context: <span class="kw-2">&amp;</span>O::Context,
+<a href=#539 id=539 data-nosnippet>539</a>        source: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#540 id=540 data-nosnippet>540</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>ExactSizeIterator&lt;Item = OutputValue&lt;<span class="lifetime">'_</span>, O::Wire&gt;&gt;&gt; {
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">let </span>output = <span class="self">self</span>.output_conversion()<span class="question-mark">?</span>;
+<a href=#542 id=542 data-nosnippet>542</a>        <span class="kw">let </span>values = output.values(context, source)<span class="question-mark">?</span>;
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">if </span>output.wires().len() != values.len() {
+<a href=#544 id=544 data-nosnippet>544</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}`: output wire/value count differs"</span>, <span class="self">self</span>.name));
+<a href=#545 id=545 data-nosnippet>545</a>        }
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="prelude-val">Ok</span>(output
+<a href=#547 id=547 data-nosnippet>547</a>            .wires()
+<a href=#548 id=548 data-nosnippet>548</a>            .iter()
+<a href=#549 id=549 data-nosnippet>549</a>            .zip(values)
+<a href=#550 id=550 data-nosnippet>550</a>            .map(|(wire, value)| OutputValue { wire, value }))
+<a href=#551 id=551 data-nosnippet>551</a>    }
+<a href=#552 id=552 data-nosnippet>552</a>}
+<a href=#553 id=553 data-nosnippet>553</a>
+<a href=#554 id=554 data-nosnippet>554</a><span class="doccomment">/// Assemble a function call directly from filled slots, without a generator callback.
+<a href=#555 id=555 data-nosnippet>555</a>/// Validates slot completeness, output arity and agreement on shared acknowledgement.
+<a href=#556 id=556 data-nosnippet>556</a>/// The returned code runs inside the wrapper's fallible boundary, in this order:
+<a href=#557 id=557 data-nosnippet>557</a>/// all validation, alias checks, one acknowledgement, all acquisition, argument
+<a href=#558 id=558 data-nosnippet>558</a>/// construction, source invocation, output preparation, delivery and commit.
+<a href=#559 id=559 data-nosnippet>559</a>/// `source` names the variable that receives the source function's return value.
+<a href=#560 id=560 data-nosnippet>560</a>/// Input and output contexts must match, even when the function has no parameters.
+<a href=#561 id=561 data-nosnippet>561</a>///
+<a href=#562 id=562 data-nosnippet>562</a>/// ```compile_fail
+<a href=#563 id=563 data-nosnippet>563</a>/// use prebindgen_flat::{emit_call, Function, InputConversion, OutputConversion};
+<a href=#564 id=564 data-nosnippet>564</a>/// struct OtherContext(syn::Ident);
+<a href=#565 id=565 data-nosnippet>565</a>/// fn incompatible&lt;I, O&gt;(function: &amp;Function&lt;I, O&gt;, context: &amp;syn::Ident)
+<a href=#566 id=566 data-nosnippet>566</a>/// where I: InputConversion&lt;Context = syn::Ident&gt;,
+<a href=#567 id=567 data-nosnippet>567</a>///       O: OutputConversion&lt;Context = OtherContext&gt;,
+<a href=#568 id=568 data-nosnippet>568</a>/// {
+<a href=#569 id=569 data-nosnippet>569</a>///     emit_call(function, context, &amp;syn::parse_quote!(returned)).unwrap();
+<a href=#570 id=570 data-nosnippet>570</a>/// }
+<a href=#571 id=571 data-nosnippet>571</a>/// ```
+<a href=#572 id=572 data-nosnippet>572</a></span><span class="kw">pub fn </span>emit_call&lt;I: InputConversion, O: OutputConversion&lt;Context = I::Context&gt;&gt;(
+<a href=#573 id=573 data-nosnippet>573</a>    function: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Function&lt;I, O&gt;,
+<a href=#574 id=574 data-nosnippet>574</a>    context: <span class="kw-2">&amp;</span>I::Context,
+<a href=#575 id=575 data-nosnippet>575</a>    source: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#576 id=576 data-nosnippet>576</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">let </span>inputs = function.input_conversions()<span class="question-mark">?</span>;
+<a href=#578 id=578 data-nosnippet>578</a>    <span class="kw">let </span>output = function.output_conversion()<span class="question-mark">?</span>;
+<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">let _ </span>= function.outputs(context, source)<span class="question-mark">?</span>;
+<a href=#580 id=580 data-nosnippet>580</a>    <span class="kw">let </span><span class="kw-2">mut </span>acknowledgement: <span class="prelude-ty">Option</span>&lt;TokenStream&gt; = <span class="prelude-val">None</span>;
+<a href=#581 id=581 data-nosnippet>581</a>    <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>inputs {
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(fragment) = input.acknowledgement(context)<span class="question-mark">? </span><span class="kw">else </span>{
+<a href=#583 id=583 data-nosnippet>583</a>            <span class="kw">continue</span>;
+<a href=#584 id=584 data-nosnippet>584</a>        };
+<a href=#585 id=585 data-nosnippet>585</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(previous) = <span class="kw-2">&amp;</span>acknowledgement {
+<a href=#586 id=586 data-nosnippet>586</a>            <span class="kw">if </span>previous.to_string() != fragment.to_string() {
+<a href=#587 id=587 data-nosnippet>587</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
+<a href=#588 id=588 data-nosnippet>588</a>                    <span class="string">"`{}`: conflicting input acknowledgements"</span>,
+<a href=#589 id=589 data-nosnippet>589</a>                    function.name
+<a href=#590 id=590 data-nosnippet>590</a>                ));
+<a href=#591 id=591 data-nosnippet>591</a>            }
+<a href=#592 id=592 data-nosnippet>592</a>        } <span class="kw">else </span>{
+<a href=#593 id=593 data-nosnippet>593</a>            acknowledgement = <span class="prelude-val">Some</span>(fragment);
+<a href=#594 id=594 data-nosnippet>594</a>        }
+<a href=#595 id=595 data-nosnippet>595</a>    }
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">let </span>validation = inputs
+<a href=#597 id=597 data-nosnippet>597</a>        .iter()
+<a href=#598 id=598 data-nosnippet>598</a>        .map(|i| i.validation(context))
+<a href=#599 id=599 data-nosnippet>599</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">let </span>resources: Vec&lt;<span class="kw">_</span>&gt; = inputs
+<a href=#601 id=601 data-nosnippet>601</a>        .iter()
+<a href=#602 id=602 data-nosnippet>602</a>        .map(|i| i.resources(context))
+<a href=#603 id=603 data-nosnippet>603</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
+<a href=#604 id=604 data-nosnippet>604</a>        </span>.into_iter()
+<a href=#605 id=605 data-nosnippet>605</a>        .flatten()
+<a href=#606 id=606 data-nosnippet>606</a>        .collect();
+<a href=#607 id=607 data-nosnippet>607</a>    <span class="kw">let </span>aliases = validate_resources(<span class="kw-2">&amp;</span>resources);
+<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">let </span>acquire = inputs
+<a href=#609 id=609 data-nosnippet>609</a>        .iter()
+<a href=#610 id=610 data-nosnippet>610</a>        .map(|i| i.acquisition(context))
+<a href=#611 id=611 data-nosnippet>611</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#612 id=612 data-nosnippet>612</a>    <span class="kw">let </span>path = <span class="kw-2">&amp;</span>function.path;
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="kw">let </span>prepare = output.preparation(context, source)<span class="question-mark">?</span>;
+<a href=#614 id=614 data-nosnippet>614</a>    <span class="kw">let </span>deliver = output.delivery(context, source)<span class="question-mark">?</span>;
+<a href=#615 id=615 data-nosnippet>615</a>    <span class="kw">let </span>commit = output.commit(context, source)<span class="question-mark">?</span>;
+<a href=#616 id=616 data-nosnippet>616</a>    <span class="kw">let </span>result = output.result(context, source)<span class="question-mark">?</span>;
+<a href=#617 id=617 data-nosnippet>617</a>    <span class="kw">let </span><span class="kw-2">mut </span>used: std::collections::BTreeSet&lt;String&gt; = inputs
+<a href=#618 id=618 data-nosnippet>618</a>        .iter()
+<a href=#619 id=619 data-nosnippet>619</a>        .flat_map(|input| input.wires().iter().map(|wire| wire.name.to_string()))
+<a href=#620 id=620 data-nosnippet>620</a>        .chain(std::iter::once(source.to_string()))
+<a href=#621 id=621 data-nosnippet>621</a>        .collect();
+<a href=#622 id=622 data-nosnippet>622</a>    <span class="comment">// Reserve names already used by surrounding phases and the source path.
+<a href=#623 id=623 data-nosnippet>623</a>    // These tokens are emitted once; their code and evaluation order stay unchanged.
+<a href=#624 id=624 data-nosnippet>624</a>    </span>reserve_identifiers(
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="kw-2">&amp;</span><span class="macro">quote!</span>(#path #(#validation)* #aliases #acknowledgement #(#acquire)*
+<a href=#626 id=626 data-nosnippet>626</a>        #prepare #deliver #commit #result),
+<a href=#627 id=627 data-nosnippet>627</a>        <span class="kw-2">&amp;mut </span>used,
+<a href=#628 id=628 data-nosnippet>628</a>    );
+<a href=#629 id=629 data-nosnippet>629</a>    <span class="kw">let </span>args: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..inputs.len())
+<a href=#630 id=630 data-nosnippet>630</a>        .map(|index| {
+<a href=#631 id=631 data-nosnippet>631</a>            <span class="kw">let </span><span class="kw-2">mut </span>name = <span class="macro">format!</span>(<span class="string">"__prebindgen_argument_{index}"</span>);
+<a href=#632 id=632 data-nosnippet>632</a>            <span class="kw">while </span>!used.insert(name.clone()) {
+<a href=#633 id=633 data-nosnippet>633</a>                name.push(<span class="string">'_'</span>);
+<a href=#634 id=634 data-nosnippet>634</a>            }
+<a href=#635 id=635 data-nosnippet>635</a>            syn::Ident::new(<span class="kw-2">&amp;</span>name, proc_macro2::Span::call_site())
+<a href=#636 id=636 data-nosnippet>636</a>        })
+<a href=#637 id=637 data-nosnippet>637</a>        .collect();
+<a href=#638 id=638 data-nosnippet>638</a>    <span class="kw">let </span>construct = inputs
+<a href=#639 id=639 data-nosnippet>639</a>        .iter()
+<a href=#640 id=640 data-nosnippet>640</a>        .zip(<span class="kw-2">&amp;</span>args)
+<a href=#641 id=641 data-nosnippet>641</a>        .map(|(input, target)| input.construction(context, target))
+<a href=#642 id=642 data-nosnippet>642</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#643 id=643 data-nosnippet>643</a>    <span class="prelude-val">Ok</span>(<span class="macro">quote!</span> {
+<a href=#644 id=644 data-nosnippet>644</a>        #(#validation)* #aliases #acknowledgement #(#acquire)* #(#construct)*
+<a href=#645 id=645 data-nosnippet>645</a>        <span class="kw">let </span>#source = #path(#(#args),<span class="kw-2">*</span>);
+<a href=#646 id=646 data-nosnippet>646</a>        #prepare #deliver #commit <span class="prelude-val">Ok</span>(#result)
+<a href=#647 id=647 data-nosnippet>647</a>    })
+<a href=#648 id=648 data-nosnippet>648</a>}
+<a href=#649 id=649 data-nosnippet>649</a>
+<a href=#650 id=650 data-nosnippet>650</a><span class="kw">fn </span>reserve_identifiers(code: <span class="kw-2">&amp;</span>TokenStream, used: <span class="kw-2">&amp;mut </span>std::collections::BTreeSet&lt;String&gt;) {
+<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">for </span>token <span class="kw">in </span>code.clone() {
+<a href=#652 id=652 data-nosnippet>652</a>        <span class="kw">match </span>token {
+<a href=#653 id=653 data-nosnippet>653</a>            proc_macro2::TokenTree::Ident(name) =&gt; {
+<a href=#654 id=654 data-nosnippet>654</a>                used.insert(name.to_string());
+<a href=#655 id=655 data-nosnippet>655</a>            }
+<a href=#656 id=656 data-nosnippet>656</a>            proc_macro2::TokenTree::Group(group) =&gt; reserve_identifiers(<span class="kw-2">&amp;</span>group.stream(), used),
+<a href=#657 id=657 data-nosnippet>657</a>            <span class="kw">_ </span>=&gt; {}
+<a href=#658 id=658 data-nosnippet>658</a>        }
+<a href=#659 id=659 data-nosnippet>659</a>    }
+<a href=#660 id=660 data-nosnippet>660</a>}
 </code></pre></div></section></main></body></html>
