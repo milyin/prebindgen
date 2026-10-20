@@ -361,7 +361,7 @@
 <a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">let </span><span class="kw-2">mut </span>materialize = String::new();
 <a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">let </span><span class="kw-2">mut </span>cleanup = String::new();
 <a href=#363 id=363 data-nosnippet>363</a>        <span class="kw">for </span>(i, w) <span class="kw">in </span><span class="self">self</span>.kotlin.iter().enumerate() {
-<a href=#364 id=364 data-nosnippet>364</a>            <span class="kw">if let </span>JniKind::Handle(handle, <span class="kw">_</span>) = <span class="kw-2">&amp;</span>w.kind {
+<a href=#364 id=364 data-nosnippet>364</a>            <span class="kw">if let </span>JniKind::Handle(handle, <span class="kw">_</span>) = w.kind.leaf() {
 <a href=#365 id=365 data-nosnippet>365</a>                <span class="kw">let </span>c = context.class_name(<span class="kw-2">&amp;</span>handle.ty)<span class="question-mark">?</span>;
 <a href=#366 id=366 data-nosnippet>366</a>                output_locals.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"        var {output}{i}: {c}? = null\n"</span>));
 <a href=#367 id=367 data-nosnippet>367</a>                materialize.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"            {output}{i} = {}\n"</span>, delivered[i]));
