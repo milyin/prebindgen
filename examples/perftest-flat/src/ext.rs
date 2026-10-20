@@ -2558,6 +2558,6 @@ pub fn data_envelope_constructed(value: DataEnvelope) -> DataEnvelope {
 }
 
 #[prebindgen]
-pub fn blob_value_get_stamp(value: &BlobValue) -> Stamp {
-    value.stamp
+pub fn blob_value_copy(value: &BlobValue) -> BlobValue {
+    value.clone()
 }

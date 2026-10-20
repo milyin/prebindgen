@@ -162,7 +162,7 @@ impl DataCodec {
             }
             stack.push(key.into());
             let mut fields = Vec::new();
-            let mut getters = BTreeSet::new();
+            let mut getters = BTreeSet::from(["getClass".to_string()]);
             for f in &record.fields {
                 let name = f.name.to_string();
                 let name = name.trim_start_matches("r#");

@@ -1191,7 +1191,7 @@ fn main() {
             .fun(fun!(blob_value_selected).expand_param("value",
                 expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
             .fun(fun!(blob_value_views).expand_return(
-                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_get_stamp)))))
+                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

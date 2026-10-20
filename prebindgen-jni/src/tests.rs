@@ -122,6 +122,10 @@ fn data_classes_reject_unsupported_shapes_before_emission() {
             "pub struct Value { pub x: i64, pub X: i64 }",
             "conflicting JVM getter",
         ),
+        (
+            "pub struct Value { pub Class: i64 }",
+            "conflicting JVM getter",
+        ),
     ] {
         let error = fail(
             JniGen::builder()

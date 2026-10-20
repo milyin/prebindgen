@@ -59,8 +59,8 @@ fun checkDataClasses() {
     check(dataPrimitivesEcho(1, primitives.copy(u8v = 999)) == dataPrimitivesZero())
     invalidData { dataPrimitivesEcho(0, null) }
     invalidData { dataPrimitivesEcho(0, primitives.copy(u8v = 999)) }
-    blobValueViews(blob) { first, second, projectedStamp ->
-        check(first == blob && second == blob && projectedStamp == blob.stamp)
+    blobValueViews(blob) { first, second, projected ->
+        check(first == blob && second == blob && projected == blob)
         check(first.id !== second.id)
     }
     val failure = IllegalStateException("data builder failure")
