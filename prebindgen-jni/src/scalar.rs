@@ -37,7 +37,7 @@ pub fn kotlin(p: Primitive) -> &'static str {
         _ => raw_kotlin(p),
     }
 }
-pub fn input(p: Primitive, name: &syn::Ident) -> (String, String) {
+pub fn input(p: Primitive, name: &str) -> (String, String) {
     match p {
         U64 | Usize => (kotlin(p).into(), format!("{name}.toLong()")),
         I128 | U128 => (format!("{}?", kotlin(p)), format!("{name}?.toByteArray()")),

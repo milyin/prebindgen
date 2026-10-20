@@ -9,10 +9,10 @@ private fun rejected(action: () -> Unit) {
 }
 
 fun checkOwnership() {
-    val report = reportNew(1, 2.0, "original") { _, _, _, _, _, handle -> handle }
-    rejected { reportRelabel(report, null) { _, _, _, _, _, handle -> handle.close() } }
+    val report = reportNew(1, 2.0, "original") { _, _, _, _, handle -> handle }
+    rejected { reportRelabel(report, null) { _, _, _, _, handle -> handle.close() } }
     check(!report.isClosed)
-    reportRelabel(report, "changed") { _, _, _, _, label, handle ->
+    reportRelabel(report, "changed") { _, _, _, label, handle ->
         check(label == "changed" && report.isClosed)
         handle.close()
     }

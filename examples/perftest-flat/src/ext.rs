@@ -2451,3 +2451,113 @@ pub fn report_from_summary(summary: Summary, label: &str) -> Report {
 pub fn report_label(report: Report) -> String {
     report.label
 }
+
+// A value-only record for the replacement engine's data-class boundary coverage.
+// No Clone derive: the output conversion observes individual fields.
+#[prebindgen]
+pub struct DataEnvelope {
+    pub label: String,
+    pub blob: BlobValue,
+    pub unsigned: Unsigned,
+    pub enabled: bool,
+    pub code: char,
+    pub signed: i128,
+    pub wide: u128,
+}
+#[prebindgen]
+pub fn data_envelope_echo(value: DataEnvelope) -> DataEnvelope {
+    value
+}
+#[prebindgen]
+pub fn blob_value_selected(value: BlobValue) -> BlobValue {
+    value
+}
+#[prebindgen]
+pub fn blob_value_views(value: BlobValue) -> BlobValue {
+    value
+}
+
+// These floats exercise data-class equality semantics when byte fields require
+// generated content-based equals/hashCode (NaN and signed zero in particular).
+#[prebindgen]
+pub struct DataFloats {
+    pub bytes: Vec<u8>,
+    pub f: f32,
+    pub d: f64,
+}
+#[prebindgen]
+pub fn data_floats_echo(value: DataFloats) -> DataFloats {
+    value
+}
+
+#[prebindgen]
+pub struct DataPrimitives {
+    pub i8v: i8,
+    pub i16v: i16,
+    pub i32v: i32,
+    pub i64v: i64,
+    pub i128v: i128,
+    pub isizev: isize,
+    pub u8v: u8,
+    pub u16v: u16,
+    pub u32v: u32,
+    pub u64v: u64,
+    pub u128v: u128,
+    pub usizev: usize,
+    pub f32v: f32,
+    pub f64v: f64,
+    pub boolv: bool,
+    pub charv: char,
+}
+#[prebindgen]
+pub fn data_primitives_echo(value: DataPrimitives) -> DataPrimitives {
+    value
+}
+#[prebindgen]
+pub fn data_primitives_zero() -> DataPrimitives {
+    DataPrimitives {
+        i8v: 0,
+        i16v: 0,
+        i32v: 0,
+        i64v: 0,
+        i128v: 0,
+        isizev: 0,
+        u8v: 0,
+        u16v: 0,
+        u32v: 0,
+        u64v: 0,
+        u128v: 0,
+        usizev: 0,
+        f32v: 0.0,
+        f64v: 0.0,
+        boolv: false,
+        charv: '\0',
+    }
+}
+
+#[prebindgen]
+pub fn data_with_storage(storage: Storage, value: DataEnvelope) -> Storage {
+    drop(value);
+    storage
+}
+#[prebindgen]
+pub fn data_envelope_from_blob(blob: BlobValue) -> DataEnvelope {
+    DataEnvelope {
+        label: "from blob".into(),
+        blob,
+        unsigned: unsigned_round_trip(1, 2, 3, 4),
+        enabled: true,
+        code: 'x',
+        signed: -1,
+        wide: 1,
+    }
+}
+#[prebindgen]
+pub fn data_envelope_constructed(value: DataEnvelope) -> DataEnvelope {
+    value
+}
+
+#[prebindgen]
+pub fn blob_value_get_stamp(value: &BlobValue) -> Stamp {
+    value.stamp
+}

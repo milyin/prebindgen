@@ -1,11 +1,13 @@
 //! Generate Rust/JNI wrappers and Kotlin bindings from conversion slots.
-//! Supported declarations include `package!`, `ptr_class!`, `fun!`,
+//! Supported declarations include `package!`, `ptr_class!`, `data_class!`, `fun!`,
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Flat, Result, WireKind};
 
+mod data;
 mod scalar;
+pub use data::{ClassDecl, DataClassDecl, DataWire};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
@@ -25,6 +27,8 @@ pub enum JniKind {
     Handle(Box<BoxedWire>, String),
     /// An `int` selector arm index.
     Selector,
+    /// A value leaf belonging to a Kotlin data-class occurrence.
+    Data(Box<DataWire>),
 }
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
@@ -37,7 +41,7 @@ pub use kotlin::{
     JniInput, JniOutput, JniWire, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
     KotlinOutput, KotlinOutputConversion,
 };
-/// Flat source model with JNI handle conversion data for wrapper emission.
+/// Flat source model with JNI conversion data for wrapper emission.
 ///
 /// Use [`JniCodec`] when binding conversions. Rust rejects a C codec because its
 /// wire type belongs to a different adapter:
@@ -88,15 +92,15 @@ impl PtrClassDecl {
         self
     }
 }
-/// A Kotlin package containing declared handle classes and top-level functions.
+/// A Kotlin package containing handle/data classes and top-level functions.
 ///
 /// Its name is relative to [`JniGenBuilder::set_package_prefix`].
 #[derive(Clone, Default)]
 pub struct PackageDecl {
     /// Relative dotted package name; empty means the root package prefix.
     pub name: String,
-    /// Owning handle classes to emit in this package.
-    pub classes: Vec<PtrClassDecl>,
+    /// Handle and data classes to emit in this package.
+    pub classes: Vec<ClassDecl>,
     /// Source functions to export as top-level Kotlin functions.
     pub functions: Vec<FunctionDecl>,
 }
@@ -111,9 +115,9 @@ impl PackageDecl {
             ..Default::default()
         }
     }
-    /// Add an owning handle class. Duplicate source types or names fail during build.
-    pub fn class(mut self, class: PtrClassDecl) -> Self {
-        self.classes.push(class);
+    /// Add a handle or data class. Duplicate source types or names fail during build.
+    pub fn class(mut self, class: impl Into<ClassDecl>) -> Self {
+        self.classes.push(class.into());
         self
     }
     /// Add a top-level Kotlin function with optional occurrence overrides.
@@ -148,7 +152,9 @@ pub fn __type(s: &str) -> syn::Type {
 /// Generated Rust/JNI bindings and their Kotlin source files.
 ///
 /// Start with [`Self::builder`]. Source capture, expansion declarations and package
-/// placement are resolved before wrapper emission. Selectors keep all alternatives
+/// placement are resolved before wrapper emission. Data classes copy supported
+/// record fields into Kotlin values; handle classes own native allocations.
+/// Selectors keep all alternatives
 /// in one native signature; multiple outputs use a Kotlin builder callback.
 ///
 /// ```
@@ -251,7 +257,7 @@ impl JniGenBuilder {
     /// types are selected for validation. Automatic type discovery follows
     /// unqualified source names (see [`Flat::parse_selected`]); types referenced
     /// only by qualified paths can be selected with an unqualified `ptr_class!`
-    /// declaration, or included through [`Self::flat`]. Mutually exclusive with
+    /// or `data_class!` declaration, or included through [`Self::flat`]. Mutually exclusive with
     /// source and flat input.
     pub fn items(
         mut self,
@@ -321,7 +327,7 @@ impl JniGenBuilder {
         let types: Vec<_> = self
             .packages
             .iter()
-            .flat_map(|p| p.classes.iter().map(|c| c.ty.clone()))
+            .flat_map(|p| p.classes.iter().map(|c| c.ty().clone()))
             .collect();
         let mut flat = match (self.flat, self.source, self.items) {
             (Some(flat), None, None) => flat,
@@ -340,6 +346,7 @@ impl JniGenBuilder {
         validate_package(&self.prefix)?;
         let mut classes = BTreeMap::new();
         let mut functions = Vec::new();
+        let mut declarations = Vec::new();
         let mut seen = BTreeSet::new();
         let mut bound = BTreeSet::new();
         for p in self.packages {
@@ -350,12 +357,12 @@ impl JniGenBuilder {
             };
             validate_package(&pkg)?;
             for c in p.classes {
-                let ty = flat.resolve_type(&c.ty)?;
-                let name = match c.name {
-                    Some(n) => n,
-                    None => match &c.ty {
+                let ty = flat.resolve_type(c.ty())?;
+                let name = match c.name() {
+                    Some(n) => n.clone(),
+                    None => match c.ty() {
                         syn::Type::Path(p) => p.path.segments.last().unwrap().ident.to_string(),
-                        _ => return Err("handle class needs a name".into()),
+                        _ => return Err("class needs a name".into()),
                     },
                 };
                 validate_name(&name)?;
@@ -373,15 +380,16 @@ impl JniGenBuilder {
                             pkg: pkg.clone(),
                             name,
                             ty,
+                            data: matches!(c, ClassDecl::Data(_)),
                         },
                     )
                     .is_some()
                 {
-                    return Err("duplicate handle class for source type".into());
+                    return Err("duplicate class for source type".into());
                 }
             }
             for f in p.functions {
-                defaults.fill(&mut flat, &JniCodec, &f, &())?;
+                declarations.push(f.clone());
                 let name = f.foreign.unwrap_or_else(|| camel(&f.name));
                 validate_name(&name)?;
                 if !seen.insert(format!("{pkg}.{name}")) {
@@ -393,6 +401,10 @@ impl JniGenBuilder {
                 functions.push((f.name, pkg.clone(), name));
             }
         }
+        let codec = data::DataCodec::new(&flat, &classes)?;
+        for declaration in declarations {
+            defaults.fill(&mut flat, &codec, &declaration, &())?;
+        }
         prebindgen_flat::validate_bindings(&flat)?;
         for (name, f) in &flat.functions {
             if f.ret.slot.is_some() && !bound.contains(name) {
@@ -401,13 +413,29 @@ impl JniGenBuilder {
                 ));
             }
         }
-        generate(flat, &self.prefix, &self.init, classes, functions)
+        let mut data_files = BTreeMap::new();
+        for class in classes.values().filter(|class| class.data) {
+            data_files.insert(
+                format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
+                codec.render(class)?,
+            );
+        }
+        classes.retain(|_, class| !class.data);
+        generate(
+            flat,
+            &self.prefix,
+            &self.init,
+            classes,
+            functions,
+            data_files,
+        )
     }
 }
 struct Class {
     pkg: String,
     name: String,
     ty: syn::Type,
+    data: bool,
 }
 impl Class {
     fn fqn(&self) -> String {
@@ -445,7 +473,7 @@ impl Codec for JniCodec {
         let count = plan.wires.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
-            let expr = match &wire.kind {
+            let expr = match wire.kind.leaf() {
                 JniKind::Scalar(p) => scalar::output_java(*p, value),
                 JniKind::Handle(_, _) => {
                     quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
@@ -455,6 +483,7 @@ impl Codec for JniCodec {
                     quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
                 }
                 JniKind::Selector => return Err("selector output is unsupported".into()),
+                JniKind::Data(_) => unreachable!("leaf unwraps data metadata"),
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -674,9 +703,9 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     init: &str,
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
+    mut files: BTreeMap<String, String>,
 ) -> Result<JniGen> {
     let mut rust = TokenStream::new();
-    let mut files = BTreeMap::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
     let mut native = format!("package {prefix}\n\ninternal object JNINative {{\n");
     if !init.is_empty() {
