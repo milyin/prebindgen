@@ -907,3 +907,123 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
 fn source_binding() -> syn::Ident {
     syn::parse_quote!(__result)
 }
+
+#[test]
+fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknowledgements() {
+    use prebindgen_conversions::{Access, Resource};
+    let make = |index: usize, ack: TokenStream| {
+        let name = format_ident!("field{index}");
+        let mut child = TEST_CODEC
+            .input_leaf(
+                &syn::parse_quote!(i64),
+                &Extra::default(),
+                format_ident!("wire{index}"),
+                format_ident!("value{index}"),
+                &Condition::default(),
+            )
+            .unwrap();
+        child.validation = quote!(validate(#index););
+        child.acquire = quote!(acquire(#index););
+        child.acknowledgement = Some(ack);
+        child.resources.push(Resource {
+            identity: quote!(#index),
+            access: Access::Move,
+            active: quote!(selected),
+        });
+        Ok((name, child))
+    };
+    let plan = record_input(
+        &TEST_CODEC,
+        &syn::parse_quote!(Pair),
+        format_ident!("pair"),
+        [make(0, quote!(ack())), make(1, quote!(ack()))],
+    )
+    .unwrap();
+    assert_eq!(
+        plan.validation.to_string(),
+        quote!(validate(0usize); validate(1usize);).to_string()
+    );
+    assert_eq!(
+        plan.acquire.to_string(),
+        quote!(acquire(0usize); acquire(1usize);).to_string()
+    );
+    assert_eq!(plan.resources.len(), 2);
+    assert!(plan
+        .resources
+        .iter()
+        .all(|r| r.access == Access::Move && r.active.to_string() == "selected"));
+    assert_eq!(
+        plan.acknowledgement.unwrap().to_string(),
+        quote!(ack()).to_string()
+    );
+    assert_eq!(
+        plan.wires[1].kind.component,
+        ComponentPath(vec![ComponentSegment::Field("field1".into())])
+    );
+    assert!(record_input(
+        &TEST_CODEC,
+        &syn::parse_quote!(Pair),
+        format_ident!("pair"),
+        [make(0, quote!(ack())), make(1, quote!(different()))]
+    )
+    .unwrap_err()
+    .contains("conflicting input acknowledgements"));
+}
+
+#[test]
+fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delivery() {
+    let make = |early_delivery| {
+        record_output(
+            &TEST_CODEC,
+            format_ident!("record"),
+            quote!(next_record()),
+            [format_ident!("x"), format_ident!("y")],
+            |i, field| {
+                let mut child = TEST_CODEC.output_leaf(
+                    &syn::parse_quote!(i64),
+                    &Extra::default(),
+                    format_ident!("wire{i}"),
+                    field,
+                    true,
+                )?;
+                child.commit = quote!(commit(#i););
+                if early_delivery {
+                    child.delivery.statements = quote!(deliver());
+                }
+                Ok(child)
+            },
+        )
+    };
+    let plan = make(false).unwrap();
+    assert_eq!(
+        plan.statements.to_string().matches("next_record").count(),
+        1
+    );
+    assert_eq!(
+        plan.commit.to_string(),
+        quote!(commit(0usize); commit(1usize);).to_string()
+    );
+    assert_eq!(plan.values.len(), 2);
+    assert_eq!(
+        plan.wires[1].kind.component,
+        ComponentPath(vec![ComponentSegment::Field("y".into())])
+    );
+    assert!(make(true).unwrap_err().contains("finish_output"));
+}
+
+#[test]
+fn shared_empty_record_output_evaluates_without_an_unused_local() {
+    let plan = record_output(
+        &TEST_CODEC,
+        format_ident!("record"),
+        quote!(next_record()),
+        [],
+        |_, _| unreachable!("empty records have no field converters"),
+    )
+    .unwrap();
+    assert_eq!(
+        plan.statements.to_string(),
+        quote!(let _ = &(next_record());).to_string()
+    );
+    assert!(plan.wires.is_empty());
+}

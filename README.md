@@ -45,7 +45,7 @@ work. The retained records demonstrate the supported shapes of the real examples
 | [perftest-flat](examples/perftest-flat) | Payload scalar fields, Stamp, Summary, Unsigned, BlobValue and Report projections |
 | [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/pointer outputs |
 | [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction/projection and Storage creation/release through JNI |
-| [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, subpackages and the SummaryValue class rename |
+| [covertest-kotlin](examples/covertest-kotlin/build.rs) | Data-class round trips, Report projections, strings, Storage, selectors, subpackages and class renames |
 | [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
 | [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
 
@@ -73,7 +73,7 @@ fields give it zero size.
 
 ## Supported generator API
 
-JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `fun!`,
+JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_class!`, `fun!`,
 `.name()`, package prefix and native initialization. `build()` returns `JniGen`;
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
@@ -83,7 +83,38 @@ The declaration layer also supports `expand_param!` constructor/identity variant
 output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
 Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
-BlobValue and Unsigned use handle classes; data-class generation stays disabled.
+Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
+Supported fields are scalars, `String`, `Vec<u8>`, and other declared data classes.
+Owned arguments are reconstructed from Kotlin properties; owned results become
+Kotlin values automatically, without native handles or `close()`. Nested classes
+may be declared in any order and in different packages; `.name(...)` changes the
+Kotlin class name. Byte-array properties use content-based equality, hashing,
+and display. Arrays remain mutable, and Kotlin's generated `copy()` is shallow.
+
+```rust,ignore
+.package(package!("model")
+    .class(data_class!(Stamp))
+    .class(data_class!(BlobValue))
+    .fun(fun!(blob_value_echo)))
+```
+
+Explicit input/output expansions still override the default representation.
+A data-class leaf inside an expansion remains one Kotlin value; an explicit
+`.fields(...)` projection still delivers separate field outputs. The covertest
+uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test records, including nested values,
+selector alternatives, combined outputs, and package/class renaming.
+
+Data classes currently require owned occurrences and at least one field.
+Handle-valued fields, reference fields, aliases, recursive records and invalid
+Kotlin field names are rejected with generation errors. Methods and direct
+`jobject` input are not part of this increment. Field layouts use their declared
+value types; type-wide expansions apply to boundary occurrences, not to the
+properties inside a data class. Output fields are observed and copied, so owned
+`String` and byte-vector fields currently incur a clone. Fixed-size arrays and
+`Option` fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
+as handles. Using it in `configure()` for a type declared only as a data class
+therefore fails with a missing handle-class error unless an explicit expansion
+replaces that slot. Use data-class declarations for automatic value-record conversion.
 
 C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
 `.prefix(...)` and `.opaque_ptr(name, type)`. Opaque declarations generate distinct
@@ -326,7 +357,7 @@ locks; a throwing builder closes output handles, including escaped references.
 C status/out-struct and JNI object-array ABI optimization remain separate work.
 
 Callbacks, enums, options, general collections, borrowed pointer/handle outputs,
-mutable text/byte views, methods, data classes, `convert!`, consuming record
+mutable text/byte views, methods, `convert!`, consuming record
 decomposition, field renaming, local function declarations, domain errors, split
 overloads and shared selector argument storage remain outside this subset.
 

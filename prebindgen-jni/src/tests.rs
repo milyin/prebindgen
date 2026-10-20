@@ -76,3 +76,170 @@ fn scalar_jvm_slots_include_wide_numeric_carriers() {
         }
     }
 }
+
+#[test]
+fn data_classes_resolve_forward_declarations_and_keep_overrides() {
+    let generated = JniGen::builder()
+        .flat(flat("pub struct Inner { pub bytes: Vec<u8> } pub struct Outer { pub inner: Inner, pub id: u64 } pub fn echo(x: Outer) -> Outer {} pub fn make(id: u64) -> Outer {} pub fn id(x: &Outer) -> u64 {}"))
+        .set_package_prefix("test")
+        .package(package!().class(data_class!(Outer).name("Envelope"))
+            .fun(fun!(echo))
+            .fun(fun!(make).expand_return(expand_return!(Outer).field(fun!(id)))))
+        .package(package!("model").class(data_class!(Inner)))
+        .build().unwrap();
+    assert!(generated.kotlin["test/Envelope.kt"].contains("val `inner`: test.model.Inner"));
+    let functions = &generated.kotlin["test/Functions.kt"];
+    assert!(functions.contains("p0_w1: test.Envelope"));
+    assert!(functions.contains("p0_w1.`inner`.`bytes`"));
+    assert!(functions.contains("test.Envelope(test.model.Inner("));
+    assert!(functions.contains("public fun `make`(p0_w1: ULong): ULong"));
+    assert!(!generated.rust.contains("drop_pointer"));
+    assert!(generated.kotlin["test/model/Inner.kt"].contains("contentEquals"));
+}
+
+#[test]
+fn data_classes_reject_unsupported_shapes_before_emission() {
+    for (source, expected) in [
+        ("pub type Value = String;", "named-field record"),
+        ("pub struct Value {}", "at least one field"),
+        (
+            "pub type Handle = String; pub struct Value { pub handle: Handle }",
+            "field `handle` has unsupported type",
+        ),
+        (
+            "pub struct Value { pub child: Value }",
+            "recursive data class",
+        ),
+        (
+            "pub struct Value { pub item: &i64 }",
+            "cannot be a reference",
+        ),
+        (
+            "pub struct Value { pub r#class: i64 }",
+            "invalid Kotlin name",
+        ),
+        (
+            "pub struct Value { pub x: i64, pub X: i64 }",
+            "conflicting JVM getter",
+        ),
+        (
+            "pub struct Value { pub Class: i64 }",
+            "conflicting JVM getter",
+        ),
+    ] {
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(source))
+                .set_package_prefix("test")
+                .package(package!().class(data_class!(Value))),
+        );
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
+#[test]
+fn data_classes_reject_borrowed_occurrences_and_duplicate_representations() {
+    for signature in [
+        "pub fn f(v: &Value) {}",
+        "pub fn f(v: &mut Value) {}",
+        "pub fn f() -> &Value {}",
+    ] {
+        let source = format!("pub struct Value {{ pub n: i64 }} {signature}");
+        assert!(fail(
+            JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .package(package!().class(data_class!(Value)).fun(fun!(f)))
+        )
+        .contains("owned occurrences only"));
+    }
+    assert!(fail(
+        JniGen::builder()
+            .flat(flat("pub struct Value { pub n: i64 }"))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(data_class!(Value))
+                    .class(ptr_class!(Value).name("Handle"))
+            )
+    )
+    .contains("duplicate class"));
+}
+
+#[test]
+fn data_classes_check_copy_and_flattened_call_parameter_limits() {
+    let fields = (0..126)
+        .map(|i| format!("pub f{i}: i64"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!("pub struct Value {{ {fields} }}");
+    assert!(fail(
+        JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Value)))
+    )
+    .contains("copy method"));
+    let source = "pub struct Value { pub n: i64 }".to_owned()
+        + &format!(
+            "pub fn f({}) {{}}",
+            (0..128)
+                .map(|i| format!("v{i}: Value"))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+    assert!(fail(
+        JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(data_class!(Value)).fun(fun!(f)))
+    )
+    .contains("limit is 255"));
+}
+
+#[test]
+fn explicit_data_expansion_replaces_a_configured_handle_slot() {
+    for replace in [false, true] {
+        let mut function = fun!(echo);
+        if replace {
+            function = function.expand_param("value", expand_param!(Value).variant_self());
+        }
+        let result = JniGen::builder()
+            .flat(flat(
+                "pub struct Value { pub n: i64 } pub fn echo(value: Value) -> Value {}",
+            ))
+            .set_package_prefix("test")
+            .configure(|flat| {
+                prebindgen_declarations::bind_input(
+                    flat,
+                    &JniCodec,
+                    "echo",
+                    "value",
+                    &prebindgen_declarations::Input::Leaf,
+                    &(),
+                )
+            })
+            .package(package!().class(data_class!(Value)).fun(function))
+            .build();
+        if replace {
+            assert!(result.unwrap().kotlin["test/Functions.kt"].contains("p0_w1: test.Value"));
+        } else {
+            assert!(result.err().unwrap().contains("no handle class"));
+        }
+    }
+}
+
+#[test]
+fn data_class_properties_and_operators_use_qualified_standard_types() {
+    let generated = JniGen::builder()
+        .flat(flat("pub struct Value { pub n: i64, pub bytes: Vec<u8> }"))
+        .set_package_prefix("test")
+        .package(package!().class(data_class!(Value).name("Long")))
+        .build()
+        .unwrap();
+    let class = &generated.kotlin["test/Long.kt"];
+    assert!(class.contains("val `n`: kotlin.Long"));
+    assert!(class.contains("equals(other: kotlin.Any?): kotlin.Boolean"));
+    assert!(class.contains("hashCode(): kotlin.Int"));
+    assert!(class.contains("toString(): kotlin.String"));
+}

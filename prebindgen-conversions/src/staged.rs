@@ -145,10 +145,20 @@ impl<W: WireKind, C: TemplateContext + 'static> Conversion for InputPlan<W, C> {
                     let identity = context.render(&resource.identity)?;
                     let active = context.render(&resource.active)?;
                     let exclusive = resource.access != Access::Shared;
+                    let conflict = if exclusive {
+                        quote!(identity == other)
+                    } else {
+                        quote!(identity == other && exclusive)
+                    };
+                    let prior_access = if exclusive {
+                        quote!(_)
+                    } else {
+                        quote!(exclusive)
+                    };
                     checks.extend(quote! {
                         if #active {
                             let identity = (#identity) as usize;
-                            if #seen.iter().any(|&(other, exclusive)| identity == other && (#exclusive || exclusive)) {
+                            if #seen.iter().any(|&(other, #prior_access)| #conflict) {
                                 return Err("conflicting input aliases".into());
                             }
                             #seen.push((identity, #exclusive));

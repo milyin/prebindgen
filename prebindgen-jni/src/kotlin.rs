@@ -4,7 +4,7 @@ use prebindgen_flat::{Conversion, Wire, WireKind};
 
 impl WireKind for JniKind {
     fn rust_type(&self) -> syn::Type {
-        match self {
+        match self.leaf() {
             JniKind::Scalar(p) => scalar::rust_type(*p),
             JniKind::Handle(_, _) => syn::parse_quote!(i64),
             JniKind::Selector => syn::parse_quote!(i32),
@@ -14,16 +14,18 @@ impl WireKind for JniKind {
             JniKind::Bytes => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
             }
+            JniKind::Data(_) => unreachable!("leaf unwraps data metadata"),
         }
     }
 }
 fn raw_kt(kind: &JniKind) -> &'static str {
-    match kind {
+    match kind.leaf() {
         JniKind::Scalar(p) => scalar::raw_kotlin(*p),
         JniKind::Handle(_, _) => "Long",
         JniKind::Selector => "Int",
         JniKind::Text => "String?",
         JniKind::Bytes => "ByteArray?",
+        JniKind::Data(_) => unreachable!("leaf unwraps data metadata"),
     }
 }
 
@@ -47,7 +49,7 @@ impl From<&JniKind> for JniWire {
         Self {
             rust_type: kind.rust_type(),
             kotlin_type: raw_kt(kind),
-            parameter_slots: match kind {
+            parameter_slots: match kind.leaf() {
                 JniKind::Handle(_, _) => 2,
                 JniKind::Scalar(p) => scalar::parameter_slots(*p),
                 _ => 1,
@@ -253,10 +255,61 @@ impl KotlinInputConversion for JniInput {
         let mut kt_args = Vec::new();
         let mut locks = Vec::new();
         let mut consumed = Vec::new();
+        let mut records = BTreeSet::new();
         for w in &self.kotlin {
+            if let JniKind::Data(data) = &w.kind {
+                if records.insert(data.root.clone()) {
+                    let nullable = if data.condition == "true" { "" } else { "?" };
+                    kt_params.push(format!("{}: {}{nullable}", data.root, data.record.fqn));
+                }
+                let receiver = if data.condition == "true" {
+                    data.root.clone()
+                } else {
+                    format!("requireNotNull({}) {{ \"null data class\" }}", data.root)
+                };
+                let property = format!(
+                    "{receiver}.{}",
+                    data.path
+                        .iter()
+                        .map(|p| format!("`{p}`"))
+                        .collect::<Vec<_>>()
+                        .join(".")
+                );
+                let argument = match data.leaf.leaf() {
+                    JniKind::Scalar(Primitive::I128 | Primitive::U128) => {
+                        format!("{property}.toByteArray()")
+                    }
+                    JniKind::Scalar(p) => scalar::input(*p, &property).1,
+                    _ => property,
+                };
+                kt_args.push(if data.condition == "true" {
+                    argument
+                } else {
+                    let default = match data.leaf.leaf() {
+                        JniKind::Scalar(Primitive::Bool) => "false",
+                        JniKind::Scalar(Primitive::I8) => "0.toByte()",
+                        JniKind::Scalar(Primitive::I16) => "0.toShort()",
+                        JniKind::Scalar(
+                            Primitive::I64
+                            | Primitive::U32
+                            | Primitive::U64
+                            | Primitive::Isize
+                            | Primitive::Usize,
+                        ) => "0L",
+                        JniKind::Scalar(Primitive::F32) => "0.0f",
+                        JniKind::Scalar(Primitive::F64) => "0.0",
+                        JniKind::Scalar(Primitive::I128 | Primitive::U128)
+                        | JniKind::Text
+                        | JniKind::Bytes => "null",
+                        _ => "0",
+                    };
+                    format!("if ({}) {argument} else {default}", data.condition)
+                });
+                continue;
+            }
             let n = &w.name;
             let (kt, arg) = match &w.kind {
-                JniKind::Scalar(p) => scalar::input(*p, n),
+                JniKind::Scalar(p) => scalar::input(*p, &n.to_string()),
                 JniKind::Handle(handle, condition) => {
                     locks.push(format!(
                         "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
@@ -290,7 +343,7 @@ impl KotlinOutputConversion for JniOutput {
         let mut delivered = Vec::new();
         let mut result_types = Vec::new();
         for (i, w) in self.kotlin.iter().enumerate() {
-            let (kt, decode) = match &w.kind {
+            let (kt, decode) = match w.kind.leaf() {
                 JniKind::Scalar(p) => scalar::output_kotlin(*p, i, result),
                 JniKind::Handle(handle, _) => {
                     let c = context.class_name(&handle.ty)?;
@@ -299,6 +352,7 @@ impl KotlinOutputConversion for JniOutput {
                 JniKind::Text => ("String".into(), format!("{result}[{i}] as String")),
                 JniKind::Bytes => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
                 JniKind::Selector => return Err("selector output is unsupported".into()),
+                JniKind::Data(_) => unreachable!("leaf unwraps data metadata"),
             };
             delivered.push(decode);
             result_types.push(kt);
@@ -316,9 +370,37 @@ impl KotlinOutputConversion for JniOutput {
                 cleanup.push_str(&format!("            try {{ if ({output}{i} != null) {output}{i}.close() else {drop} }} catch (cleanup: Throwable) {{ {failure}.addSuppressed(cleanup) }}\n"));
             }
         }
+        // Record leaves remain contiguous through declaration composition. Group
+        // only data-class occurrences; explicit field projections stay separate.
+        let mut grouped_values = Vec::new();
+        let mut grouped_types = Vec::new();
+        let mut i = 0;
+        while i < self.kotlin.len() {
+            if let JniKind::Data(data) = &self.kotlin[i].kind {
+                let count = data.record.leaf_count();
+                let end = i + count;
+                if end > self.kotlin.len()
+                    || self.kotlin[i..end]
+                        .iter()
+                        .any(|wire| !matches!(&wire.kind, JniKind::Data(d) if d.root == data.root))
+                {
+                    return Err("incomplete data-class output occurrence".into());
+                }
+                grouped_values.push(
+                    data.record
+                        .construct(&mut delivered[i..end].iter().cloned()),
+                );
+                grouped_types.push(data.record.fqn.clone());
+                i = end;
+            } else {
+                grouped_values.push(delivered[i].clone());
+                grouped_types.push(result_types[i].clone());
+                i += 1;
+            }
+        }
         Ok(KotlinOutput {
-            delivered,
-            result_types,
+            delivered: grouped_values,
+            result_types: grouped_types,
             output_locals,
             materialize,
             cleanup,

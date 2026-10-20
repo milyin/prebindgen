@@ -127,7 +127,7 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 
 */
-use prebindgen_jni::{package, ptr_class, JniGen};
+use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 use prebindgen_registry::{expand_param, expand_return, fields, fun};
 
 fn main() {
@@ -408,10 +408,7 @@ fn main() {
 */
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
-                /* Unsupported: this class kind or its binding is not available yet.
-.class(data_class!(Unsigned))
-*/
-                .class(ptr_class!(Unsigned))
+                .class(data_class!(Unsigned))
                 // `Stamp` is a small `Copy` struct of two scalars, so it crosses
                 // as its FIELDS — no array, no raw-memory image. Its readers stay
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
@@ -427,11 +424,12 @@ fn main() {
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                /* Unsupported: data classes are not available yet.
+                /* Unsupported: direct jobject input is not available yet.
 .class(data_class!(BlobValue).jobject_input())
 */
-                // The reduced byte-vector record can already travel as a handle.
-                .class(ptr_class!(BlobValue))
+                // Value records cross as fields and are reconstructed automatically.
+                .class(data_class!(BlobValue))
+                .class(data_class!(Stamp))
                 // Fixed-size arrays of every JNI-primitive element.
                 /* Unsupported: this class kind or its binding is not available yet.
 .class(data_class!(Arrays))
@@ -1147,7 +1145,7 @@ fn main() {
         )
         // Report projects its supported Summary, Stamp and label fields.
         // Project those fields before handing ownership of the Report to Kotlin.
-        .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
+        .expand(expand_return!(Report).fields(fields!(report_to_struct).field("origin", expand_return!(Stamp).field_self())).field_self())
         .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
         .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
         .expand(expand_return!(Stamp).field(fun!(stamp_secs)).field(fun!(stamp_nanos)))
@@ -1180,6 +1178,20 @@ fn main() {
             .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
             .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
             .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
+        .package(package!("values")
+            .class(data_class!(DataEnvelope).name("Envelope"))
+            .class(data_class!(DataFloats))
+                .class(data_class!(DataPrimitives))
+                .fun(fun!(data_primitives_echo).expand_param("value", expand_param!(DataPrimitives).variant_self().variant(fun!(data_primitives_zero))))
+                .fun(fun!(data_primitives_zero))
+            .fun(fun!(data_envelope_echo))
+                .fun(fun!(data_with_storage))
+                .fun(fun!(data_envelope_constructed).expand_param("value", expand_param!(DataEnvelope).variant(fun!(data_envelope_from_blob))))
+            .fun(fun!(data_floats_echo))
+            .fun(fun!(blob_value_selected).expand_param("value",
+                expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
+            .fun(fun!(blob_value_views).expand_return(
+                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

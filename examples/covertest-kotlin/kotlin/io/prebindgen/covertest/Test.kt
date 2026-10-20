@@ -35,16 +35,14 @@ fun main() {
     for (bytes in listOf(byteArrayOf(), byteArrayOf(0, 127, -128, -1))) {
         val blob = blobValueNew(Long.MIN_VALUE, bytes)
         val echoed = blobValueEcho(blob)
-        check(blob.isClosed)
-        check(!echoed.isClosed)
-        expectInvalid { blobValueEcho(blob) }
-        echoed.close()
-        blob.close()
+        check(blob == echoed)
+        check(blob.hashCode() == echoed.hashCode())
+        check(blobValueEcho(blob) == blob) // value inputs remain reusable
     }
     expectInvalid { blobValueNew(0, null) }
     for (label in listOf("", "héllo 世界", "embedded\u0000nul")) {
-        val report = reportNew(42, 3.5, label) { count, total, secs, nanos, projected, handle ->
-            check(count == 42L && total == 3.5 && secs == 1L && nanos == 2L)
+        val report = reportNew(42, 3.5, label) { count, total, stamp, projected, handle ->
+            check(count == 42L && total == 3.5 && stamp.secs == 1L && stamp.nanos == 2L)
             check(projected == label)
             handle
         }
@@ -60,24 +58,25 @@ fun main() {
     var escaped: Report? = null
     val failure = IllegalStateException("builder failure")
     try {
-        reportNew(1, 2.0, "rollback") { _, _, _, _, _, handle -> escaped = handle; throw failure }
+        reportNew(1, 2.0, "rollback") { _, _, _, _, handle -> escaped = handle; throw failure }
     } catch (caught: IllegalStateException) { check(caught === failure) }
     val reclaimed = checkNotNull(escaped)
     check(reclaimed.isClosed)
     reclaimed.close()
-    expectInvalid { reportNew(0, 0.0, null) { _, _, _, _, _, handle -> handle.close() } }
+    expectInvalid { reportNew(0, 0.0, null) { _, _, _, _, handle -> handle.close() } }
     io.prebindgen.covertest.model.stampNew(Long.MIN_VALUE, Long.MAX_VALUE) { secs, nanos ->
         check(secs == Long.MIN_VALUE && nanos == Long.MAX_VALUE)
     }
-    io.prebindgen.covertest.model.unsignedRoundTrip(255, 65535, 4294967295L, ULong.MAX_VALUE).close()
+    check(io.prebindgen.covertest.model.unsignedRoundTrip(255, 65535, 4294967295L, ULong.MAX_VALUE).long == ULong.MAX_VALUE)
     expectInvalid { io.prebindgen.covertest.model.unsignedRoundTrip(256, 0, 0, 0UL) }
     summaryNew(Long.MAX_VALUE, -1.25) { count, total -> check(count == Long.MAX_VALUE && total == -1.25) }
     check(summaryTotalRaw(0, 42, -1.25, null) == -1.25)
     checkOwnership()
     checkPrimitives()
+    checkDataClasses()
     payloadNew(Long.MIN_VALUE, Int.MAX_VALUE, -0.0, true) { id, seq, value, flag ->
         check(id == Long.MIN_VALUE && seq == Int.MAX_VALUE && value.toRawBits() == (-0.0).toRawBits() && flag)
     }
     storageWithPayload(Long.MAX_VALUE, Int.MIN_VALUE, Double.POSITIVE_INFINITY, false).close()
-    println("covertest-kotlin PASS: all primitives, restored fields, selectors, ownership, rollback and concurrent close")
+    println("covertest-kotlin PASS: all primitives, data classes, restored fields, selectors, ownership, rollback and concurrent close")
 }
