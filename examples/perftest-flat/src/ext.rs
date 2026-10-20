@@ -2561,3 +2561,62 @@ pub fn data_envelope_constructed(value: DataEnvelope) -> DataEnvelope {
 pub fn blob_value_copy(value: &BlobValue) -> BlobValue {
     value.clone()
 }
+
+static OWNED_RESOURCE_DROPS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Non-cloneable resource used to verify owned record returns.
+pub struct OwnedResourceImpl {
+    id: i64,
+}
+impl Drop for OwnedResourceImpl {
+    fn drop(&mut self) {
+        OWNED_RESOURCE_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type OwnedResource = OwnedResourceImpl;
+#[prebindgen]
+pub struct ResourcePair {
+    pub first: OwnedResource,
+    pub second: OwnedResource,
+}
+#[prebindgen]
+pub struct ResourceBundle {
+    pub label: String,
+    pub pair: ResourcePair,
+    pub tail: OwnedResource,
+    pub details: DataFloats,
+}
+#[prebindgen]
+pub fn resource_bundle_new() -> ResourceBundle {
+    ResourceBundle {
+        label: "owned bundle".into(),
+        pair: ResourcePair {
+            first: OwnedResourceImpl { id: 1 },
+            second: OwnedResourceImpl { id: 2 },
+        },
+        tail: OwnedResourceImpl { id: 3 },
+        details: DataFloats {
+            bytes: vec![1, 2, 3],
+            f: 1.5,
+            d: 2.5,
+        },
+    }
+}
+#[prebindgen]
+pub fn resource_bundle_label(value: &ResourceBundle) -> String {
+    value.label.clone()
+}
+#[prebindgen]
+pub fn owned_resource_id(value: &OwnedResource) -> i64 {
+    value.id
+}
+#[prebindgen]
+pub fn owned_resource_drops() -> usize {
+    OWNED_RESOURCE_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn resource_bundle_views() -> ResourceBundle {
+    resource_bundle_new()
+}

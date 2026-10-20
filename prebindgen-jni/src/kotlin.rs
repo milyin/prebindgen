@@ -361,7 +361,7 @@ impl KotlinOutputConversion for JniOutput {
         let mut materialize = String::new();
         let mut cleanup = String::new();
         for (i, w) in self.kotlin.iter().enumerate() {
-            if let JniKind::Handle(handle, _) = &w.kind {
+            if let JniKind::Handle(handle, _) = w.kind.leaf() {
                 let c = context.class_name(&handle.ty)?;
                 output_locals.push_str(&format!("        var {output}{i}: {c}? = null\n"));
                 materialize.push_str(&format!("            {output}{i} = {}\n", delivered[i]));

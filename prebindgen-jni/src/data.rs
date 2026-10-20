@@ -1,13 +1,17 @@
-//! Kotlin value-record declarations and their occurrence conversions.
+//! Kotlin record declarations and their occurrence conversions.
 use super::*;
 use prebindgen_declarations::Condition;
 use std::rc::Rc;
 
-/// A Kotlin data class whose fields are copied across the JNI boundary.
+/// A Kotlin data class whose fields are converted across the JNI boundary.
 ///
 /// Supports owned public named-field records containing scalars, `String`,
-/// `Vec<u8>`, and other declared data classes. Handles, references, empty records,
-/// and recursive records are rejected. No native allocation is owned by this class.
+/// `Vec<u8>`, other declared data classes, and declared opaque handles.
+/// Records containing handles (including nested ones) support owned returns only.
+/// Their Rust fields must be movable: the record itself cannot implement `Drop`.
+/// Callers close each returned handle explicitly; data-class `copy` shares those
+/// handle objects and does not duplicate native ownership. References, empty
+/// records, and recursive records are rejected.
 ///
 /// ```
 /// use prebindgen_jni::{JniGen, data_class, package, fun};
@@ -44,7 +48,7 @@ impl DataClassDecl {
 pub enum ClassDecl {
     /// An owning native handle.
     Ptr(PtrClassDecl),
-    /// A value record copied between Kotlin and Rust.
+    /// A record mapped to a Kotlin data class.
     Data(DataClassDecl),
 }
 impl From<PtrClassDecl> for ClassDecl {
@@ -72,7 +76,7 @@ impl ClassDecl {
     }
 }
 #[macro_export]
-/// Declare a Kotlin value record from Rust type syntax.
+/// Declare a Kotlin data class from Rust type syntax.
 ///
 /// Returns [`DataClassDecl`]. The source type need not be in scope. Invalid type
 /// syntax panics; unsupported record fields are diagnosed during build.
@@ -94,6 +98,7 @@ struct DataField {
 enum Shape {
     Value(Value),
     Record(Rc<RecordShape>),
+    Handle(String),
 }
 impl Shape {
     fn kotlin_type(&self) -> String {
@@ -105,6 +110,7 @@ impl Shape {
             Self::Value(Value::Text) => "kotlin.String".into(),
             Self::Value(Value::Bytes) => "kotlin.ByteArray".into(),
             Self::Record(r) => r.fqn.clone(),
+            Self::Handle(fqn) => fqn.clone(),
         }
     }
     fn slots(&self) -> usize {
@@ -192,8 +198,10 @@ impl DataCodec {
                     Shape::Value(value)
                 } else if classes.get(&field_key).is_some_and(|c| c.data) {
                     Shape::Record(resolve(flat, classes, &field_key, stack, records)?)
+                } else if let Some(handle) = classes.get(&field_key) {
+                    Shape::Handle(handle.fqn())
                 } else {
-                    return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<u8>, or declared data class"));
+                    return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<u8>, declared data class, or declared handle"));
                 };
                 fields.push(DataField {
                     name: f.name.clone(),
@@ -251,8 +259,13 @@ impl DataCodec {
             })
             .collect::<Vec<_>>()
             .join(",\n");
+        let lifecycle = if shape.consumes() {
+            "/** Close each handle member explicitly. Copies share the same handle objects. */\n"
+        } else {
+            ""
+        };
         let mut out = format!(
-            "package {}\n\npublic data class {}(\n{fields}\n)",
+            "package {}\n\n{lifecycle}public data class {}(\n{fields}\n)",
             class.pkg, class.name
         );
         if shape
@@ -318,12 +331,26 @@ fn field_name(field: &DataField) -> String {
 }
 
 impl RecordShape {
+    fn consumes(&self) -> bool {
+        self.fields.iter().any(|f| match &f.shape {
+            Shape::Handle(_) => true,
+            Shape::Record(r) => r.consumes(),
+            Shape::Value(_) => false,
+        })
+    }
+
     fn input(
         &self,
         w: &syn::Ident,
         v: &syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<JniKind>> {
+        if self.consumes() {
+            return Err(format!(
+                "data class `{}` contains handles and supports returns only",
+                self.fqn
+            ));
+        }
         let plan = prebindgen_declarations::record_input(
             &JniCodec,
             &self.ty,
@@ -334,6 +361,7 @@ impl RecordShape {
                 let child = match &f.shape {
                     Shape::Value(_) => JniCodec.input_leaf(&f.ty, &(), fw, fv, active)?,
                     Shape::Record(r) => r.input(&fw, &fv, active)?,
+                    Shape::Handle(_) => unreachable!("handle inputs rejected above"),
                 };
                 Ok((f.name.clone(), child))
             }),
@@ -345,23 +373,37 @@ impl RecordShape {
         Ok(plan)
     }
     fn output(&self, w: &syn::Ident, value: TokenStream) -> Result<OutputPlan<JniKind>> {
-        let plan = prebindgen_declarations::record_output(
-            &JniCodec,
-            format_ident!("{w}_record"),
-            value,
-            self.fields.iter().map(|f| f.name.clone()),
-            |i, field| {
-                let f = &self.fields[i];
-                let fw = format_ident!("{w}_f{i}");
-                match &f.shape {
-                    Shape::Value(_) => JniCodec.output_leaf(&f.ty, &(), fw, field, true),
-                    Shape::Record(r) => r.output(&fw, field),
+        let owned = self.consumes();
+        let convert = |i: usize, field| {
+            let f = &self.fields[i];
+            let fw = format_ident!("{w}_f{i}");
+            match &f.shape {
+                Shape::Value(_) | Shape::Handle(_) => {
+                    JniCodec.output_leaf(&f.ty, &(), fw, field, !owned)
                 }
-            },
-        )?;
+                Shape::Record(r) => r.output(&fw, field),
+            }
+        };
+        let plan = if owned {
+            prebindgen_declarations::record_output_owned(
+                &JniCodec,
+                format_ident!("{w}_record"),
+                value,
+                self.fields.iter().map(|f| f.name.clone()),
+                convert,
+            )
+        } else {
+            prebindgen_declarations::record_output(
+                &JniCodec,
+                format_ident!("{w}_record"),
+                value,
+                self.fields.iter().map(|f| f.name.clone()),
+                convert,
+            )
+        }?;
         debug_assert!(
-            plan.commit.is_empty(),
-            "data fields cannot transfer native ownership"
+            owned || plan.commit.is_empty(),
+            "value-only records cannot transfer native ownership"
         );
         Ok(plan)
     }
@@ -370,7 +412,7 @@ impl RecordShape {
             let mut path = path.to_vec();
             path.push(field_name(f));
             match &f.shape {
-                Shape::Value(_) => paths.push(path),
+                Shape::Value(_) | Shape::Handle(_) => paths.push(path),
                 Shape::Record(r) => r.paths(&path, paths),
             }
         }
@@ -399,7 +441,9 @@ impl RecordShape {
             .fields
             .iter()
             .map(|f| match &f.shape {
-                Shape::Value(_) => values.next().expect("one expression per record leaf"),
+                Shape::Value(_) | Shape::Handle(_) => {
+                    values.next().expect("one expression per record leaf")
+                }
                 Shape::Record(r) => r.construct(values),
             })
             .collect::<Vec<_>>();
@@ -409,7 +453,7 @@ impl RecordShape {
         self.fields
             .iter()
             .map(|f| match &f.shape {
-                Shape::Value(_) => 1,
+                Shape::Value(_) | Shape::Handle(_) => 1,
                 Shape::Record(r) => r.leaf_count(),
             })
             .sum()
@@ -425,7 +469,9 @@ impl Codec for DataCodec {
         JniCodec.selector(extra)
     }
     fn consumes(&self, ty: &syn::Type, extra: &()) -> bool {
-        !self.records.contains_key(&type_key(ty)) && JniCodec.consumes(ty, extra)
+        self.records
+            .get(&type_key(ty))
+            .map_or_else(|| JniCodec.consumes(ty, extra), |r| r.consumes())
     }
     fn finish_input(&self, plan: &mut InputPlan<JniKind>, extra: &()) -> Result<()> {
         JniCodec.finish_input(plan, extra)
@@ -459,6 +505,12 @@ impl Codec for DataCodec {
         let Some(record) = self.record(ty)? else {
             return JniCodec.output_leaf(ty, extra, wire, value, borrowed);
         };
+        if borrowed && record.consumes() {
+            return Err(format!(
+                "data class `{}` contains handles and cannot be converted through a shared-reference projection",
+                record.fqn
+            ));
+        }
         let mut plan = record.output(&wire, value)?;
         record.mark(&mut plan.wires, wire.to_string(), "true".into());
         Ok(plan)

@@ -85,3 +85,42 @@ pub fn record_output<C: Codec>(
     }
     Ok(out)
 }
+
+/// Decompose an owned record into field conversions in declaration order.
+///
+/// Unlike [`record_output`], each child receives an owned field expression and
+/// may move it. The caller must provide each field exactly once, ensure Rust
+/// permits moving its fields (in particular, the record must not implement
+/// `Drop`), and mark the containing conversion as consuming. Choose a fresh
+/// `var`. Unmoved fields and prepared child allocations retain Rust ownership
+/// on failure. Children must leave delivery unset; commit follows final delivery.
+pub fn record_output_owned<C: Codec>(
+    codec: &C,
+    var: syn::Ident,
+    value: TokenStream,
+    fields: impl IntoIterator<Item = syn::Ident>,
+    mut convert: impl FnMut(usize, TokenStream) -> Result<OutputPlan<C::Wire, C::Context>>,
+) -> Result<OutputPlan<C::Wire, C::Context>> {
+    let mut fields = fields.into_iter().peekable();
+    let binding = if fields.peek().is_some() {
+        quote!(let #var = #value;)
+    } else {
+        quote!(let _ = #value;)
+    };
+    let mut out = OutputPlan {
+        context: Default::default(),
+        delivery: Default::default(),
+        commit: TokenStream::new(),
+        wires: Vec::new(),
+        statements: binding,
+        values: Vec::new(),
+    };
+    for (index, name) in fields.enumerate() {
+        let mut child = convert(index, quote!(#var.#name))?;
+        for wire in &mut child.wires {
+            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
+        }
+        append(&mut out, child)?;
+    }
+    Ok(out)
+}

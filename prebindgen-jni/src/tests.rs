@@ -243,3 +243,36 @@ fn data_class_properties_and_operators_use_qualified_standard_types() {
     assert!(class.contains("hashCode(): kotlin.Int"));
     assert!(class.contains("toString(): kotlin.String"));
 }
+
+#[test]
+fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
+    let source = "pub struct Handle { pub id: i64 } pub struct Inner { pub handle: Handle } pub struct Bundle { pub inner: Inner, pub label: String } pub fn make() -> Bundle {} pub fn echo(value: Bundle) -> Bundle {} pub struct Outer { pub value: Bundle } pub fn outer() -> Outer {} pub fn outer_fields(value: &Outer) -> Outer {}";
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(data_class!(Bundle))
+                    .class(data_class!(Inner))
+                    .class(ptr_class!(Handle)),
+            )
+    };
+    let generated = base().package(package!().fun(fun!(make))).build().unwrap();
+    assert!(generated.kotlin["test/Inner.kt"].contains("test.Handle"));
+    assert!(generated.kotlin["test/Functions.kt"].contains(".close()"));
+    assert!(!generated.rust.contains("Clone :: clone"));
+    assert!(fail(base().package(package!().fun(fun!(echo)))).contains("returns only"));
+    assert!(fail(base().package(
+        package!().fun(fun!(make).expand_return(expand_return!(Bundle).field_self().field_self()))
+    ))
+    .contains("consume the same value twice"));
+    assert!(fail(
+        base().package(
+            package!().fun(
+                fun!(outer).expand_return(expand_return!(Outer).fields(fields!(outer_fields)))
+            )
+        )
+    )
+    .contains("shared-reference projection"));
+}

@@ -14,7 +14,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 mod record;
-pub use record::{record_input, record_output};
+pub use record::{record_input, record_output, record_output_owned};
 mod condition;
 pub use condition::Condition;
 mod component;

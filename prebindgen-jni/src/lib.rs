@@ -27,7 +27,7 @@ pub enum JniKind {
     Handle(Box<BoxedWire>, String),
     /// An `int` selector arm index.
     Selector,
-    /// A value leaf belonging to a Kotlin data-class occurrence.
+    /// A value or handle leaf belonging to a Kotlin data-class occurrence.
     Data(Box<DataWire>),
 }
 use prebindgen_conversions::Access;
@@ -152,8 +152,9 @@ pub fn __type(s: &str) -> syn::Type {
 /// Generated Rust/JNI bindings and their Kotlin source files.
 ///
 /// Start with [`Self::builder`]. Source capture, expansion declarations and package
-/// placement are resolved before wrapper emission. Data classes copy supported
-/// record fields into Kotlin values; handle classes own native allocations.
+/// placement are resolved before wrapper emission. Data classes map supported
+/// record fields to Kotlin properties, including owning handle members in returns.
+/// Handle classes own native allocations.
 /// Selectors keep all alternatives
 /// in one native signature; multiple outputs use a Kotlin builder callback.
 ///

@@ -1027,3 +1027,69 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
     );
     assert!(plan.wires.is_empty());
 }
+
+#[test]
+fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
+    let plan = record_output_owned(
+        &TEST_CODEC,
+        format_ident!("record"),
+        quote!(make_record(drops.clone())),
+        [format_ident!("first"), format_ident!("second")],
+        |index, field| {
+            let local = format_ident!("box{index}");
+            Ok(OutputPlan {
+                context: Default::default(),
+                delivery: Default::default(),
+                wires: Vec::new(),
+                values: Vec::new(),
+                statements: quote! {
+                    if mode == #index + 1 { return Err(()); }
+                    let #local = Box::new(#field);
+                },
+                // Test delivery reclaims each committed allocation immediately.
+                commit: quote!(unsafe { drop(Box::from_raw(Box::into_raw(#local))); }),
+            })
+        },
+    )
+    .unwrap();
+    let prepare = plan.statements;
+    let commit = plan.commit;
+    let source = quote! {
+        use std::{cell::Cell, rc::Rc};
+        struct Resource(Rc<Cell<usize>>);
+        impl Drop for Resource { fn drop(&mut self) { self.0.set(self.0.get() + 1); } }
+        struct Record { first: Resource, second: Resource }
+        fn make_record(drops: Rc<Cell<usize>>) -> Record {
+            Record { first: Resource(drops.clone()), second: Resource(drops) }
+        }
+        fn convert(drops: Rc<Cell<usize>>, mode: usize) -> Result<(), ()> {
+            #prepare
+            if mode == 3 { return Err(()); } // delivery fails before commit
+            #commit
+            Ok(())
+        }
+        fn main() {
+            for mode in 0..4 {
+                let drops = Rc::new(Cell::new(0));
+                assert_eq!(convert(drops.clone(), mode).is_ok(), mode == 0);
+                assert_eq!(drops.get(), 2);
+            }
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("owned.rs");
+    let exe = dir.path().join("owned");
+    std::fs::write(&file, source.to_string()).unwrap();
+    let compiled = std::process::Command::new("rustc")
+        .arg(&file)
+        .arg("-o")
+        .arg(&exe)
+        .output()
+        .unwrap();
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+    assert!(std::process::Command::new(exe).status().unwrap().success());
+}

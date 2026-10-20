@@ -84,9 +84,9 @@ output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
 Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
 Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
-Supported fields are scalars, `String`, `Vec<u8>`, and other declared data classes.
-Owned arguments are reconstructed from Kotlin properties; owned results become
-Kotlin values automatically, without native handles or `close()`. Nested classes
+Supported fields are scalars, `String`, `Vec<u8>`, other declared data classes,
+and declared opaque handles. Records without handle fields support owned inputs
+and outputs as ordinary Kotlin values, without `close()`. Nested classes
 may be declared in any order and in different packages; `.name(...)` changes the
 Kotlin class name. Byte-array properties use content-based equality, hashing,
 and display. Arrays remain mutable, and Kotlin's generated `copy()` is shallow.
@@ -105,12 +105,26 @@ uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test reco
 selector alternatives, combined outputs, and package/class renaming.
 
 Data classes currently require owned occurrences and at least one field.
-Handle-valued fields, reference fields, aliases, recursive records and invalid
-Kotlin field names are rejected with generation errors. Methods and direct
+Records containing handles, including nested ones, support **owned returns only**.
+Declare the member type with `ptr_class!`; JniGen moves each resource into an
+owning handle without requiring `Clone`. Callers close the handle members
+explicitly. The data class has no collective `close()`, and its `copy()` shares
+the same handle objects. Its Rust record must allow moving its fields and
+therefore cannot implement `Drop` (rustc reports a field-move error in the
+generated bindings). Inputs and shared-reference conversions of these records
+are rejected, as are multiple consuming views of the same result.
+Getters observing a result run before its owned decomposition. Native conversion
+or delivery failure drops unpublished resources; Kotlin delivery failure closes
+the transferred handles, including nested members.
+
+Reference fields, data-class aliases, recursive records and invalid Kotlin field
+names are rejected with generation errors. Methods and direct
 `jobject` input are not part of this increment. Field layouts use their declared
 value types; type-wide expansions apply to boundary occurrences, not to the
-properties inside a data class. Output fields are observed and copied, so owned
-`String` and byte-vector fields currently incur a clone. Fixed-size arrays and
+properties inside a data class. Records without handles use borrowed field
+projection, which clones owned strings and byte vectors. Records containing
+handles use the shared `record_output_owned` helper to move fields; nested
+value-only records retain their borrowed projection. Fixed-size arrays and
 `Option` fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
