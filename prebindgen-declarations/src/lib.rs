@@ -235,9 +235,9 @@ pub trait Codec {
     /// Context supplied by the language generator when emitting stored templates.
     type Context: prebindgen_conversions::TemplateContext + 'static;
     /// Final self-contained input converter installed after preparation.
-    type Input: prebindgen_flat::InputConversion + From<InputPlan<Self::Wire, Self::Context>>;
+    type Input: prebindgen_flat::Conversion + From<InputPlan<Self::Wire, Self::Context>>;
     /// Final self-contained output converter installed after preparation.
-    type Output: prebindgen_flat::OutputConversion + From<OutputPlan<Self::Wire, Self::Context>>;
+    type Output: prebindgen_flat::Conversion + From<OutputPlan<Self::Wire, Self::Context>>;
     /// Preserve a logical path in private preparation metadata when the codec needs it.
     /// The final converter decides how to use this mapping; Flat never interprets it.
     /// Called from the innermost component outward; prepend each segment to its path.

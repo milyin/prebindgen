@@ -2,7 +2,7 @@
 use super::*;
 use crate::staged::{emit_call, StagedFunction};
 use prebindgen_flat::Result;
-use prebindgen_flat::{InputConversion, Wire, WireKind};
+use prebindgen_flat::{Conversion, Wire, WireKind};
 type Flat<I = InputPlan<syn::Type>, O = OutputPlan<syn::Type>> = prebindgen_flat::Flat<I, O>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};

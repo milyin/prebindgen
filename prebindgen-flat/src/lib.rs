@@ -70,7 +70,7 @@ pub struct Field {
 ///
 /// Every parameter carries `Option<I>`; every result carries `Option<O>`.
 /// Record fields describe source structure. Slot payloads belong to the consumer;
-/// generators may use [`InputConversion`] and [`OutputConversion`] for expression
+/// generators may use [`Conversion`] for expression
 /// emission. Source-only inspection uses `Flat<(), ()>` with empty slots.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and

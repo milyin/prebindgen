@@ -171,7 +171,7 @@ impl Declarations {
     ///
     /// * `flat` — the model in which each declaration's type is resolved.
     /// * `decls` — type-wide defaults, at most one per type and direction.
-    pub fn new<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion>(
+    pub fn new<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
         flat: &Flat<I, O>,
         decls: Vec<ExpandDecl>,
     ) -> Result<Self> {
@@ -273,7 +273,7 @@ impl Declarations {
         }
         Ok(())
     }
-    fn input<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion>(
+    fn input<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
         &self,
         flat: &Flat<I, O>,
         ty: &syn::Type,
@@ -323,7 +323,7 @@ impl Declarations {
             Input::Leaf
         })
     }
-    fn output<I: prebindgen_flat::InputConversion, O: prebindgen_flat::OutputConversion>(
+    fn output<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
         &self,
         flat: &Flat<I, O>,
         ty: &syn::Type,

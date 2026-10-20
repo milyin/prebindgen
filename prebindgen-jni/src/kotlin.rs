@@ -1,6 +1,6 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
-use prebindgen_flat::{InputConversion, OutputConversion, Wire, WireKind};
+use prebindgen_flat::{Conversion, Wire, WireKind};
 
 impl WireKind for JniKind {
     fn rust_type(&self) -> syn::Type {
@@ -121,7 +121,7 @@ pub struct KotlinOutput {
 }
 /// Input conversion with opaque Kotlin-side emission.
 pub trait KotlinInputConversion:
-    for<'a> InputConversion<
+    for<'a> Conversion<
     Wire = JniWire,
     SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>,
 >
@@ -131,7 +131,7 @@ pub trait KotlinInputConversion:
 }
 /// Output conversion with opaque Kotlin-side emission.
 pub trait KotlinOutputConversion:
-    for<'a> OutputConversion<
+    for<'a> Conversion<
     Wire = JniWire,
     SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>,
     WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>,
@@ -201,7 +201,7 @@ impl From<OutputPlan<JniKind>> for JniOutput {
     }
 }
 
-impl InputConversion for JniInput {
+impl Conversion for JniInput {
     type Wire = JniWire;
     type SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>;
     type WireFragment<'a> = prebindgen_conversions::InputWireFragment;
@@ -224,7 +224,7 @@ impl InputConversion for JniInput {
         self.rust.code_fragment_wire(pos, mode, expected)
     }
 }
-impl OutputConversion for JniOutput {
+impl Conversion for JniOutput {
     type Wire = JniWire;
     type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>;
     type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>;

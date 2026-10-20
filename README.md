@@ -10,15 +10,16 @@ conversions, and language adapters emit wrappers and foreign declarations.
         ↓ select declared functions, constructors, getters and referenced types
 Flat with empty conversion slots
         ↓ prebindgen-declarations builds and attaches converters
-Flat<I: InputConversion, O: OutputConversion>
+Flat<I: Conversion, O: Conversion>
         (parameter slots: Option<I>; result slots: Option<O>)
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<I, O>` requires conversion traits on
-`I` and `O` and stores them in optional slots. Record declarations preserve Rust
+can have different input recipes. `Flat<I, O>` stores the two payload types in
+optional slots. Both can implement `Conversion` with distinct wire kinds and request enums; the model itself does
+not require that trait. Record declarations preserve Rust
 source structure. Named representation schemas describe logical components,
 source-field associations and adapter-specific type data `R`; wires refer to
 components by stable paths. Flat also preserves source names, locations and guards.
@@ -95,7 +96,7 @@ settings remain commented out in the example manifests.
 
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
-- `InputConversion` and `OutputConversion` each expose `wires()`,
+- `Conversion` exposes `wires()`,
   `code_fragment_slot(mode, expected_type)` and
   `code_fragment_wire(pos, mode, expected_type)`.
 - `wires()` borrows a stable, ordered slice. Conditional wires stay in the list;

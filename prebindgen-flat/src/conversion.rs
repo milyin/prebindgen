@@ -70,9 +70,7 @@ impl<W: WireKind> Wire<W> {
 /// Functions with entirely empty slots remain source-only helpers. This check
 /// neither builds conversions nor changes the model. Adapters call it before
 /// writing wrappers. It does not validate code fragments supplied directly by callers.
-pub fn validate_bindings<I: InputConversion, O: OutputConversion>(
-    flat: &crate::Flat<I, O>,
-) -> Result<()> {
+pub fn validate_bindings<I: Conversion, O: Conversion>(flat: &crate::Flat<I, O>) -> Result<()> {
     for f in flat.functions.values() {
         if f.ret.slot.is_some() {
             for p in &f.params {
@@ -101,7 +99,12 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
     Ok(prettyplease::unparse(&file))
 }
 
-/// Prepared input conversion with a generator-defined request protocol.
+/// Prepared slot conversion with a generator-defined request protocol.
+///
+/// Input and output slots share this interface. Their payload types may define
+/// different wire kinds and request enums; direction comes from the slot in
+/// [`crate::Flat`], not from this trait. An output request can, for example, carry
+/// the source-result identifier without imposing a shared context type.
 ///
 /// Every successful request returns one Rust expression, including `()` for
 /// a no-op. Statements may appear inside a block expression. The caller decides
@@ -114,7 +117,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// settings or other data it needs; no common context or phase order is imposed.
 /// Their lifetime parameter allows requests to borrow that data.
 ///
-/// The wire list is stable and includes conditional wires in signature order.
+/// The wire list is stable and includes conditional wires in boundary order.
 /// Wire request positions index this exact list; invalid positions must return
 /// an error. Activity, access modes and other policies may be requested through
 /// generator-defined variants rather than being interpreted by Flat.
@@ -127,7 +130,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// policy; other implementations may use the expectation to configure emission.
 ///
 /// ```
-/// use prebindgen_flat::{bind_fragment, same_type, InputConversion, Result, Wire, WireKind};
+/// use prebindgen_flat::{bind_fragment, same_type, Conversion, Result, Wire, WireKind};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Type};
@@ -149,7 +152,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///     if same_type(actual, expected) { Ok(()) }
 ///     else { Err("unsupported expected type".into()) }
 /// }
-/// impl InputConversion for OwnedBoxInput {
+/// impl Conversion for OwnedBoxInput {
 ///     type Wire = Carrier;
 ///     type SlotFragment<'a> = SlotRequest<'a>;
 ///     type WireFragment<'a> = WireRequest;
@@ -209,43 +212,14 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// assert_eq!(wire_value.to_string(), "raw_value");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub trait InputConversion {
+pub trait Conversion {
     /// Generator-defined boundary carrier.
     type Wire: WireKind;
-    /// Requests concerning the whole input slot.
+    /// Requests concerning the whole slot.
     type SlotFragment<'a>;
-    /// Requests concerning one input wire.
+    /// Requests concerning one wire.
     type WireFragment<'a>;
-    /// Boundary inputs in signature order.
-    fn wires(&self) -> &[Wire<Self::Wire>];
-    /// Emit an expression for the whole slot.
-    fn code_fragment_slot(
-        &self,
-        mode: Self::SlotFragment<'_>,
-        expected_type: &syn::Type,
-    ) -> Result<TokenStream>;
-    /// Emit an expression for wire `pos`, or an error for an invalid position.
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: Self::WireFragment<'_>,
-        expected_type: &syn::Type,
-    ) -> Result<TokenStream>;
-}
-
-/// Prepared output conversion with a generator-defined request protocol.
-///
-/// Has the same expression and expected-type contract as [`InputConversion`],
-/// but its request enums may be entirely different. In particular, a request can
-/// carry the source-result identifier without imposing a shared context type.
-pub trait OutputConversion {
-    /// Generator-defined boundary carrier.
-    type Wire: WireKind;
-    /// Requests concerning the whole output slot.
-    type SlotFragment<'a>;
-    /// Requests concerning one output wire.
-    type WireFragment<'a>;
-    /// Boundary outputs in delivery order.
+    /// Boundary wires in signature order for inputs or delivery order for outputs.
     fn wires(&self) -> &[Wire<Self::Wire>];
     /// Emit an expression for the whole slot.
     fn code_fragment_slot(
@@ -275,7 +249,7 @@ pub fn bind_fragment(
         syn::parse2(fragment).map_err(|error| format!("expected a Rust expression: {error}"))?;
     Ok(quote!(let #target: #expected_type = #expression;))
 }
-impl<I: InputConversion, O: OutputConversion> crate::Function<I, O> {
+impl<I: Conversion, O: Conversion> crate::Function<I, O> {
     /// Filled input slots, preserving source parameter order and grouping.
     pub fn input_conversions(&self) -> Result<Vec<&I>> {
         self.params

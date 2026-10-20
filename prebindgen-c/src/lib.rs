@@ -437,11 +437,11 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     }
 }
 fn generate<
-    I: for<'a> prebindgen_flat::InputConversion<
+    I: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
-    O: for<'a> prebindgen_flat::OutputConversion<
+    O: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
         WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
@@ -601,7 +601,7 @@ mod generation_tests {
     #[test]
     fn emits_custom_slot_code_without_building_a_plan() {
         struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
-        impl prebindgen_flat::OutputConversion for CountedOutput {
+        impl prebindgen_flat::Conversion for CountedOutput {
             type Wire = CWire;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
             type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>;

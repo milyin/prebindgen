@@ -27,7 +27,7 @@ pub struct InputPlan<W: WireKind, C = ()> {
 }
 /// Output conversion whose owned temporaries survive until successful delivery.
 ///
-/// Optional concrete storage implementing [`prebindgen_flat::OutputConversion`].
+/// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
 #[derive(Clone, Debug)]
 pub struct OutputPlan<W: WireKind, C = ()> {

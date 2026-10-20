@@ -14,7 +14,7 @@ enum InputWire {
     Active,
     Value,
 }
-impl InputConversion for Input {
+impl Conversion for Input {
     type Wire = syn::Type;
     type SlotFragment<'a> = Read<'a>;
     type WireFragment<'a> = InputWire;
@@ -65,7 +65,7 @@ impl InputConversion for Input {
 struct Output {
     wires: [Wire<syn::Type>; 1],
 }
-impl OutputConversion for Output {
+impl Conversion for Output {
     type Wire = syn::Type;
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;

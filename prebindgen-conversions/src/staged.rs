@@ -2,7 +2,7 @@
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
 use crate::{Access, InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Function, InputConversion, OutputConversion, Result, Wire, WireKind};
+use prebindgen_flat::{Conversion, Function, Result, Wire, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -102,7 +102,7 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static> InputConversion for InputPlan<W, C> {
+impl<W: WireKind, C: TemplateContext + 'static> Conversion for InputPlan<W, C> {
     type Wire = W;
     type SlotFragment<'a> = InputFragment<'a, C>;
     type WireFragment<'a> = InputWireFragment;
@@ -174,7 +174,7 @@ impl<W: WireKind, C: TemplateContext + 'static> InputConversion for InputPlan<W,
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static> OutputConversion for OutputPlan<W, C> {
+impl<W: WireKind, C: TemplateContext + 'static> Conversion for OutputPlan<W, C> {
     type Wire = W;
     type SlotFragment<'a> = OutputFragment<'a, C>;
     type WireFragment<'a> = OutputWireFragment<'a, C>;
@@ -256,9 +256,9 @@ pub trait StagedFunction<C, W: WireKind> {
 }
 impl<I, O, C: 'static> StagedFunction<C, O::Wire> for Function<I, O>
 where
-    I: InputConversion,
-    O: OutputConversion,
-    for<'a> O: OutputConversion<WireFragment<'a> = OutputWireFragment<'a, C>>,
+    I: Conversion,
+    O: Conversion,
+    for<'a> O: Conversion<WireFragment<'a> = OutputWireFragment<'a, C>>,
 {
     fn outputs(
         &self,
@@ -296,10 +296,10 @@ pub fn emit_call<I, O, C: 'static>(
     result_type: &syn::Type,
 ) -> Result<TokenStream>
 where
-    I: InputConversion,
-    O: OutputConversion,
-    for<'a> I: InputConversion<SlotFragment<'a> = InputFragment<'a, C>>,
-    for<'a> O: OutputConversion<
+    I: Conversion,
+    O: Conversion,
+    for<'a> I: Conversion<SlotFragment<'a> = InputFragment<'a, C>>,
+    for<'a> O: Conversion<
         SlotFragment<'a> = OutputFragment<'a, C>,
         WireFragment<'a> = OutputWireFragment<'a, C>,
     >,

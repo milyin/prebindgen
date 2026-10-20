@@ -1,7 +1,7 @@
 //! Preparation-only representation declarations and defaults.
 //! Resolve choices and copy required metadata into slots before generation.
 use crate::ComponentPath;
-use prebindgen_flat::{type_key, Flat, InputConversion, OutputConversion, Result};
+use prebindgen_flat::{type_key, Conversion, Flat, Result};
 use std::collections::BTreeMap;
 
 /// Identity used only while resolving preparation declarations.
@@ -104,10 +104,7 @@ impl<R> Representations<R> {
 
 impl<R> Representations<R> {
     /// Validate all registered type shapes, including schemas not used by a function.
-    pub fn validate<I: InputConversion, O: OutputConversion>(
-        &self,
-        flat: &Flat<I, O>,
-    ) -> Result<()> {
+    pub fn validate<I: Conversion, O: Conversion>(&self, flat: &Flat<I, O>) -> Result<()> {
         self.validate_references()?;
         for (id, shape) in self.iter() {
             flat.resolve_type(&shape.source_type)?;
