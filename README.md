@@ -84,9 +84,9 @@ output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
 Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
 Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
-Supported fields are scalars, `String`, `Vec<u8>`, and other declared data classes.
-Owned arguments are reconstructed from Kotlin properties; owned results become
-Kotlin values automatically, without native handles or `close()`. Nested classes
+Supported fields are scalars, `String`, `Vec<u8>`, other declared data classes,
+and declared opaque handles. Records without handle fields support owned inputs
+and outputs as ordinary Kotlin values, without `close()`. Nested classes
 may be declared in any order and in different packages; `.name(...)` changes the
 Kotlin class name. Byte-array properties use content-based equality, hashing,
 and display. Arrays remain mutable, and Kotlin's generated `copy()` is shallow.
@@ -105,12 +105,54 @@ uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test reco
 selector alternatives, combined outputs, and package/class renaming.
 
 Data classes currently require owned occurrences and at least one field.
-Handle-valued fields, reference fields, aliases, recursive records and invalid
-Kotlin field names are rejected with generation errors. Methods and direct
+Records containing handles, including nested ones, support returns only. Declare
+member handle types with `ptr_class!`. Kotlin callers close each handle member;
+the data class has no collective `close()`, and `copy()` shares handle objects.
+
+Output ownership is explicit in the existing expansion hierarchy:
+
+- `.field_self_ref()` borrows the value and all nested fields. Handle fields are
+  cloned into independent owning handles and require Rust `Clone`.
+- `.field_self_into()` moves the value and all nested fields without cloning.
+- `.project_self(Projection::owned().field("details", Projection::borrowed()))`
+  moves fields except the explicitly borrowed `details` subtree. Overrides can nest.
+
+The same declaration works as a type-wide default or a per-function replacement:
+
+```rust,ignore
+.expand(expand_return!(ResourceBundle).field_self_into())
+.package(package!("resources").fun(fun!(resource_bundle_new).expand_return(
+    expand_return!(ResourceBundle).project_self(
+        Projection::owned().field("details", Projection::borrowed())))))
+```
+
+`Projection` is re-exported by `prebindgen_registry` and `prebindgen_jni`.
+Modes propagate recursively unless explicitly overridden; they never depend on
+record contents. Legacy `field_self()` and unexpanded data-class outputs retain
+a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
+Type-wide expansions of field types do not rewrite a data class's properties.
+
+For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
+`.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
+and moves its returned record fields. Both support existing per-field expansion
+overrides through `.field("name", expand_return!(FieldType)...)` on `FieldsDecl`.
+These fields use their type-wide defaults when not overridden.
+`fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
+
+A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
+and duplicate consuming views are rejected. Observing getters run before consuming
+views regardless of declaration order. Rust checks `Clone` requirements and rejects
+field moves from records implementing `Drop`. Native conversion or delivery failure
+drops unpublished resources; Kotlin delivery failure closes transferred handles,
+including nested members. Handle-containing records remain unsupported as inputs.
+
+Reference fields, data-class aliases, recursive records and invalid Kotlin field
+names are rejected with generation errors. Methods and direct
 `jobject` input are not part of this increment. Field layouts use their declared
 value types; type-wide expansions apply to boundary occurrences, not to the
-properties inside a data class. Output fields are observed and copied, so owned
-`String` and byte-vector fields currently incur a clone. Fixed-size arrays and
+properties inside a data class. Borrowed projections clone strings and byte
+vectors; owned projections move them. The shared helpers `record_output` and
+`record_output_owned` implement the respective access modes. Fixed-size arrays and
 `Option` fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion

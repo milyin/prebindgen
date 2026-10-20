@@ -74,6 +74,7 @@ fun main() {
     checkOwnership()
     checkPrimitives()
     checkDataClasses()
+    checkOwnedRecords()
     payloadNew(Long.MIN_VALUE, Int.MAX_VALUE, -0.0, true) { id, seq, value, flag ->
         check(id == Long.MIN_VALUE && seq == Int.MAX_VALUE && value.toRawBits() == (-0.0).toRawBits() && flag)
     }

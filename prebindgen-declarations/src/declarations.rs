@@ -1,7 +1,7 @@
 //! Build-script declarations for input alternatives and output views.
 //! [`Declarations`] builds converters directly in boundary occurrence slots.
 
-use crate::{Codec, Compiler, Condition, Input, Output};
+use crate::{Codec, Compiler, Condition, Input, Output, Projection};
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
 
@@ -51,6 +51,8 @@ pub struct ExpandReturnDecl {
 #[derive(Clone)]
 enum ReturnField {
     Identity,
+    Projected(Projection),
+    IntoFields(FieldsDecl),
     Getter(Box<FunctionDecl>),
     Fields(FieldsDecl),
 }
@@ -97,6 +99,33 @@ impl ExpandReturnDecl {
         self.fields.push(ReturnField::Fields(decl));
         self
     }
+    /// Consume the source accessor's receiver, then move its returned record fields.
+    /// The accessor must take `T`, not `&T`. Per-field expansions still override
+    /// type defaults. Nested data classes retain their borrowed default unless an
+    /// explicit field expansion or type default selects owned projection.
+    /// Observing sibling views run before this consuming view.
+    pub fn fields_into(mut self, decl: FieldsDecl) -> Self {
+        self.fields.push(ReturnField::IntoFields(decl));
+        self
+    }
+    /// Deprecated alias for [`Self::fields_into`].
+    #[deprecated(note = "use fields_into instead")]
+    pub fn fields_self_into(self, decl: FieldsDecl) -> Self {
+        self.fields_into(decl)
+    }
+    /// Append a leaf converted with explicit ownership and optional field policies.
+    pub fn project_self(mut self, projection: Projection) -> Self {
+        self.fields.push(ReturnField::Projected(projection));
+        self
+    }
+    /// Append a shared-reference view; record fields inherit this policy.
+    pub fn field_self_ref(self) -> Self {
+        self.project_self(Projection::borrowed())
+    }
+    /// Append an owned view; record fields inherit this policy.
+    pub fn field_self_into(self) -> Self {
+        self.project_self(Projection::owned())
+    }
     /// Start an output expansion with no views. Add at least one before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
@@ -113,7 +142,8 @@ impl ExpandReturnDecl {
     }
     /// Append the value itself as a leaf, converted by the adapter's codec.
     ///
-    /// For an owning adapter this consumes the value, after observing other views.
+    /// Ownership follows the adapter default: JniGen data classes borrow, while
+    /// owning leaf conversions consume after observing other views.
     pub fn field_self(mut self) -> Self {
         self.fields.push(ReturnField::Identity);
         self
@@ -344,6 +374,7 @@ impl Declarations {
             for field in &d.fields {
                 parts.push(match field {
                     ReturnField::Identity => Output::Leaf,
+                    ReturnField::Projected(p) => Output::Projected(p.clone()),
                     ReturnField::Getter(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
                             return Err(
@@ -354,7 +385,7 @@ impl Declarations {
                         let func = flat.function(&f.name)?;
                         Output::getter(&f.name, self.output(flat, &func.ret.ty, None, stack)?)
                     }
-                    ReturnField::Fields(d) => {
+                    ReturnField::Fields(d) | ReturnField::IntoFields(d) => {
                         let f = flat.function(&d.function)?;
                         let record = flat.record(&f.ret.ty)?;
                         for name in d.overrides.keys() {
@@ -374,7 +405,14 @@ impl Declarations {
                                 )
                             })
                             .collect::<Result<Vec<_>>>()?;
-                        Output::getter(&d.function, Output::fields(children))
+                        if matches!(field, ReturnField::IntoFields(_)) {
+                            Output::Into {
+                                function: d.function.clone(),
+                                output: Box::new(Output::OwnedFields(children)),
+                            }
+                        } else {
+                            Output::getter(&d.function, Output::fields(children))
+                        }
                     }
                 });
             }
@@ -498,9 +536,9 @@ pub fn source_functions<'a>(
     fn output(d: &ExpandReturnDecl, names: &mut Vec<String>) {
         for field in &d.fields {
             match field {
-                ReturnField::Identity => {}
+                ReturnField::Identity | ReturnField::Projected(_) => {}
                 ReturnField::Getter(f) => function(f, names),
-                ReturnField::Fields(d) => {
+                ReturnField::Fields(d) | ReturnField::IntoFields(d) => {
                     names.push(d.function.clone());
                     for d in d.overrides.values() {
                         output(d, names);

@@ -13,8 +13,10 @@ use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod projection;
+pub use projection::{Projection, ProjectionMode};
 mod record;
-pub use record::{record_input, record_output};
+pub use record::{record_input, record_output, record_output_owned};
 mod condition;
 pub use condition::Condition;
 mod component;
@@ -78,14 +80,25 @@ impl Input {
 }
 /// A result conversion recipe, interpreted together with its source type and codec input data.
 ///
-/// Field projections are observations rather than moves. Adapters decide how to
-/// copy or otherwise expose a foreign value observed through a shared reference.
+/// `Fields` observes fields; `OwnedFields` moves them. Explicit `Projected`
+/// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output {
     /// Convert the occurrence type itself with [`Codec::output_leaf`].
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
     Fields(Vec<Output>),
+    /// Move named fields into their output conversions.
+    OwnedFields(Vec<Output>),
+    /// Convert a leaf with an explicit ownership policy.
+    Projected(Projection),
+    /// Call a consuming accessor, then convert its owned result.
+    Into {
+        /// Source accessor taking exactly the owned occurrence type.
+        function: String,
+        /// Conversion of its owned result.
+        output: Box<Output>,
+    },
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         /// Source getter taking exactly one shared reference to the current type.
@@ -130,6 +143,8 @@ impl Output {
     fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C) -> bool {
         match self {
             Self::Leaf => codec.consumes(ty, extra),
+            Self::Projected(p) => p.mode == ProjectionMode::Owned,
+            Self::OwnedFields(_) | Self::Into { .. } => true,
             Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec)),
             _ => false,
         }
@@ -289,6 +304,29 @@ pub trait Codec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<Self::Wire, Self::Context>>;
+    /// Convert a leaf with explicit ownership, independently of its usual policy.
+    ///
+    /// The compiler supplies either an owned value or a shared reference according
+    /// to `projection.mode`. The default supports leaves without field overrides.
+    fn output_projected(
+        &self,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<OutputPlan<Self::Wire, Self::Context>> {
+        if !projection.fields.is_empty() {
+            return Err("this output converter does not support field projection overrides".into());
+        }
+        self.output_leaf(
+            ty,
+            extra,
+            wire,
+            value,
+            projection.mode == ProjectionMode::Borrowed,
+        )
+    }
     /// Complete a composed parameter plan before it is stored in a slot.
     /// Called once per bound parameter, including records and selectors.
     fn finish_input(
@@ -632,7 +670,26 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let w = self.name();
                 return self.codec.output_leaf(ty, extra, w, value, borrowed);
             }
-            Output::Fields(children) => {
+            Output::Projected(projection) => {
+                if borrowed && projection.mode == ProjectionMode::Owned {
+                    return Err(
+                        "owned projection cannot consume a shared-reference occurrence".into(),
+                    );
+                }
+                let value = if !borrowed && projection.mode == ProjectionMode::Borrowed {
+                    quote!(&(#value))
+                } else {
+                    value
+                };
+                return self
+                    .codec
+                    .output_projected(ty, extra, self.name(), value, projection);
+            }
+            Output::Fields(children) | Output::OwnedFields(children) => {
+                let owned = matches!(recipe, Output::OwnedFields(_));
+                if owned && borrowed {
+                    return Err("owned fields cannot consume a shared-reference occurrence".into());
+                }
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(out);
                 }
@@ -640,23 +697,44 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if r.fields.len() != children.len() {
                     return Err("wrong output field count".into());
                 }
-                return record_output(
-                    self.codec,
-                    self.name(),
-                    value,
-                    r.fields.iter().map(|field| field.name.clone()),
-                    |index, value| {
-                        self.output(&r.fields[index].ty, &children[index], extra, value, true)
-                    },
-                );
+                let convert = |index: usize, value| {
+                    self.output(&r.fields[index].ty, &children[index], extra, value, !owned)
+                };
+                return if owned {
+                    record_output_owned(
+                        self.codec,
+                        self.name(),
+                        value,
+                        r.fields.iter().map(|f| f.name.clone()),
+                        convert,
+                    )
+                } else {
+                    record_output(
+                        self.codec,
+                        self.name(),
+                        value,
+                        r.fields.iter().map(|f| f.name.clone()),
+                        convert,
+                    )
+                };
             }
-            Output::Getter { function, output } => {
+            Output::Getter { function, output } | Output::Into { function, output } => {
+                let consuming = matches!(recipe, Output::Into { .. });
+                if consuming && borrowed {
+                    return Err(
+                        "consuming accessor cannot consume a shared-reference occurrence".into(),
+                    );
+                }
                 let f = self.flat.function(function)?;
-                let expected: Type = syn::parse_quote!(&#ty);
+                let expected: Type = if consuming {
+                    ty.clone()
+                } else {
+                    syn::parse_quote!(&#ty)
+                };
                 if f.params.len() != 1 || !same_type(&f.params[0].ty.ty, &expected) {
                     return Err(format!(
-                        "getter `{function}` must take exactly `&{}`",
-                        type_key(ty)
+                        "getter `{function}` must take exactly `{}`",
+                        type_key(&expected)
                     ));
                 }
                 if matches!(f.ret.ty, Type::Reference(_)) {
@@ -664,7 +742,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let v = self.name();
                 let path = &f.path;
-                let arg = if borrowed { value } else { quote!(&#value) };
+                let arg = if borrowed || consuming {
+                    value
+                } else {
+                    quote!(&#value)
+                };
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
                 self.prefix(&mut child.wires, ComponentSegment::Getter(function.clone()));
