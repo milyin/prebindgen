@@ -30,9 +30,7 @@ Wrapper writers use flat's generation API; recursive recipe resolution belongs t
 This branch replaces the generator engine while preserving source capture and
 source-reading support. The supported JniGen `build.rs` declarations keep their
 existing syntax. Import shared declaration types and macros directly from
-`prebindgen-declarations`. The former `prebindgen-registry` facade has been removed;
-replace its Cargo dependency and `prebindgen_registry` imports with
-`prebindgen-declarations` and `prebindgen_declarations`, respectively.
+`prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
 been removed. All eight Rust example crates from `main` are in the workspace.
