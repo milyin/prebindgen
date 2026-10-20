@@ -11,12 +11,28 @@ use prebindgen_flat::{Flat, Primitive, Result, WireKind};
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
 pub enum CWire {
+    /// Wire in an optional group, retaining its C discriminator documentation.
+    Optional(Box<COptionalWire>),
+    /// Wire whose niche is unavailable to its containing composition.
+    NonNiche(Box<CWire>),
     /// A primitive in its C scalar type.
     Scalar(Primitive),
     /// Text or bytes as a pointer/length buffer.
     Buffer,
     /// A typed opaque pointer to a boxed source value.
     Pointer(Box<CPointer>),
+}
+/// Optional-group metadata retained until the C header is emitted.
+#[derive(Clone, Debug)]
+pub struct COptionalWire {
+    inner: CWire,
+    group: std::rc::Rc<COptionalGroup>,
+}
+#[derive(Clone, Debug)]
+struct COptionalGroup {
+    name: String,
+    discriminator: String,
+    niche: Option<prebindgen_declarations::Niche>,
 }
 /// Pointee type and mutability of a C boundary pointer.
 #[derive(Clone, Debug)]
@@ -25,6 +41,15 @@ pub struct CPointer {
     pub ty: syn::Type,
     /// Whether this carrier is a mutable pointer.
     pub mutable: bool,
+}
+impl CWire {
+    fn leaf(&self) -> &Self {
+        match self {
+            Self::NonNiche(w) => w.leaf(),
+            Self::Optional(w) => w.inner.leaf(),
+            _ => self,
+        }
+    }
 }
 impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     fn from(value: prebindgen_conversions::boxed::BoxedWire) -> Self {
@@ -95,10 +120,77 @@ impl Codec for CCodec {
         };
         Ok(())
     }
+    fn prefix_component(
+        &self,
+        wire: &mut CWire,
+        segment: prebindgen_declarations::ComponentSegment,
+    ) {
+        if matches!(
+            segment,
+            prebindgen_declarations::ComponentSegment::Alternative(_)
+        ) {
+            *wire = CWire::NonNiche(Box::new(wire.clone()));
+        }
+    }
+    fn niche(&self, wire: &CWire) -> Option<prebindgen_declarations::Niche> {
+        use prebindgen_declarations::Niche;
+        match wire {
+            CWire::Pointer(_) => Some(Niche::Null),
+            CWire::Scalar(Primitive::Char) => Some(Niche::Integer(0x110000)),
+            _ => None,
+        }
+    }
+    fn absent_value(
+        &self,
+        wire: &CWire,
+        niche: Option<&prebindgen_declarations::Niche>,
+        _: bool,
+    ) -> Result<TokenStream> {
+        let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
+        let wide = prebindgen_conversions::template_parameter("wide_integer_type");
+        Ok(match wire.leaf() {
+            CWire::Pointer(_) => quote!(std::ptr::null_mut()),
+            CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::Scalar(Primitive::I128 | Primitive::U128) => quote!(#wide {hi:0,lo:0}),
+            CWire::Scalar(Primitive::F32 | Primitive::F64) => quote!(0.0),
+            CWire::Scalar(_) => niche
+                .map(|n| n.integer_value())
+                .unwrap_or_else(|| quote!(0)),
+            CWire::NonNiche(_) | CWire::Optional(_) => unreachable!(),
+        })
+    }
+    fn mark_optional(
+        &self,
+        wires: &mut [prebindgen_flat::Wire<CWire>],
+        inner: &[prebindgen_flat::Wire<CWire>],
+        tag: &syn::Ident,
+        layout: &prebindgen_declarations::OptionalLayout,
+        _: bool,
+    ) -> Result<()> {
+        let group = std::rc::Rc::new(COptionalGroup {
+            name: tag.to_string(),
+            discriminator: layout
+                .niche
+                .as_ref()
+                .map(|(i, _)| inner[*i].name.to_string())
+                .unwrap_or_else(|| tag.to_string()),
+            niche: layout.niche.as_ref().map(|(_, n)| n.clone()),
+        });
+        for w in wires {
+            w.kind = CWire::Optional(Box::new(COptionalWire {
+                inner: w.kind.clone(),
+                group: group.clone(),
+            }));
+        }
+        Ok(())
+    }
     fn selector(&self, _: &()) -> CWire {
         CWire::Scalar(Primitive::I32)
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            return self.consumes(inner, &());
+        }
         Value::of(ty).is_none()
     }
     fn input_leaf(
@@ -109,6 +201,17 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = quote::format_ident!("{w}_present");
+            let child = self.input_leaf(
+                inner,
+                &(),
+                quote::format_ident!("{w}_some"),
+                quote::format_ident!("{v}_some"),
+                &active.arm(tag.clone(), 1),
+            )?;
+            return prebindgen_declarations::optional_input(self, &(), tag, v, active, child);
+        }
         let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::Scalar(p)),
@@ -139,6 +242,54 @@ impl Codec for CCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<CWire>> {
+        if let syn::Type::Reference(reference) = ty {
+            if reference.mutability.is_some() {
+                return Err("mutable-reference outputs are unsupported".into());
+            }
+            match prebindgen_flat::type_key(&reference.elem).as_str() {
+                "str" => {
+                    return self.output_leaf(
+                        &syn::parse_quote!(String),
+                        &(),
+                        w,
+                        quote!((#v).to_string()),
+                        false,
+                    )
+                }
+                "[u8]" => {
+                    return self.output_leaf(
+                        &syn::parse_quote!(Vec<u8>),
+                        &(),
+                        w,
+                        quote!((#v).to_vec()),
+                        false,
+                    )
+                }
+                _ => {}
+            }
+            let value = if borrowed { quote!(*#v) } else { v };
+            return self.output_leaf(&reference.elem, &(), w, value, true);
+        }
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = quote::format_ident!("{w}_present");
+            let payload = quote::format_ident!("{w}_payload");
+            let child = self.output_leaf(
+                inner,
+                &(),
+                quote::format_ident!("{w}_some"),
+                quote!(#payload),
+                borrowed,
+            )?;
+            return prebindgen_declarations::optional_output(
+                self,
+                &(),
+                tag,
+                payload,
+                v,
+                borrowed,
+                child,
+            );
+        }
         match Value::of(ty) {
             Some(Value::Scalar(p)) => prebindgen_conversions::value::output(
                 ty,
@@ -389,7 +540,8 @@ impl Generation {
 }
 impl WireKind for CWire {
     fn rust_type(&self) -> syn::Type {
-        match self {
+        match self.leaf() {
+            CWire::NonNiche(_) | CWire::Optional(_) => unreachable!(),
             CWire::Scalar(p) => match p {
                 Primitive::Bool => syn::parse_quote!(u8),
                 Primitive::Char => syn::parse_quote!(u32),
@@ -409,7 +561,8 @@ impl WireKind for CWire {
     }
 }
 fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
-    match &wire.kind {
+    match wire.kind.leaf() {
+        CWire::NonNiche(_) | CWire::Optional(_) => unreachable!(),
         CWire::Scalar(p) => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
             Primitive::Char | Primitive::U32 => "uint32_t".into(),
@@ -486,7 +639,7 @@ fn generate<
             .inputs()?
             .chain(f.outputs(&context, &source)?.map(|output| output.wire))
         {
-            if let CWire::Pointer(pointer) = &wire.kind {
+            if let CWire::Pointer(pointer) = wire.kind.leaf() {
                 if !pointers
                     .iter()
                     .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
@@ -517,6 +670,7 @@ fn generate<
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
+    header.push_str("/* Optional groups below name their discriminator. Rules apply only in active\n * selector arms and present enclosing groups. Absent payload wires are ignored. */\n");
     for (name, ty) in &pointers {
         let drop = format_ident!("{prefix}_drop_{name}");
         tokens.extend(quote!{
@@ -532,6 +686,13 @@ The pointer must be null or a live allocation of the declared type returned by t
         let out = &context.output_pointer;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
+        let inputs = f.inputs()?.collect::<Vec<_>>();
+        let outputs = f
+            .outputs(&context, &source)?
+            .map(|o| o.wire)
+            .collect::<Vec<_>>();
+        header.push_str(&describe_options(&inputs, false));
+        header.push_str(&describe_options(&outputs, true));
         let mut params = Vec::new();
         let mut cparams = Vec::new();
         for w in f.inputs()? {
@@ -576,6 +737,61 @@ The output pointer must be writable. Active input buffers must be readable for t
         rust: prebindgen_flat::rust_source(tokens)?,
         header,
     })
+}
+
+fn describe_options(wires: &[&Wire], output: bool) -> String {
+    fn visit(
+        kind: &CWire,
+        names: &std::collections::BTreeMap<String, String>,
+        parents: &mut Vec<String>,
+        seen: &mut std::collections::BTreeSet<String>,
+        out: &mut String,
+    ) {
+        match kind {
+            CWire::NonNiche(inner) => visit(inner, names, parents, seen, out),
+            CWire::Optional(optional) => {
+                let g = &optional.group;
+                if seen.insert(g.name.clone()) {
+                    let discriminator = &names[&g.discriminator];
+                    let rule=match &g.niche {
+                        None=>format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
+                        Some(prebindgen_declarations::Niche::Null)=>format!("{discriminator} == NULL means None; non-null means Some"),
+                        Some(prebindgen_declarations::Niche::Integer(n))=>format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
+                    };
+                    let parent = if parents.is_empty() {
+                        String::new()
+                    } else {
+                        format!("; only when {} is present", parents.join(" and "))
+                    };
+                    out.push_str(&format!("/* Option group {}: {rule}{parent}. */\n", g.name));
+                }
+                parents.push(g.name.clone());
+                visit(&optional.inner, names, parents, seen, out);
+                parents.pop();
+            }
+            _ => {}
+        }
+    }
+    let names = wires
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            (
+                w.name.to_string(),
+                if output {
+                    format!("output->v{i}")
+                } else {
+                    w.name.to_string()
+                },
+            )
+        })
+        .collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = String::new();
+    for w in wires {
+        visit(&w.kind, &names, &mut Vec::new(), &mut seen, &mut out);
+    }
+    out
 }
 
 #[cfg(test)]

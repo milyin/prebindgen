@@ -13,6 +13,9 @@ use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod optional;
+pub use optional::{optional_input, optional_output, Niche, OptionalLayout};
+pub use prebindgen_flat::option_inner;
 mod projection;
 pub use projection::{Projection, ProjectionMode};
 mod record;
@@ -27,6 +30,8 @@ pub use component::{ComponentPath, ComponentSegment};
 /// Binding expands the recipe into wires and Rust conversion code.
 #[derive(Clone, Debug)]
 pub enum Input {
+    /// Convert an optional payload, gating every conversion phase.
+    Optional(Box<Input>),
     /// Convert the occurrence type itself with [`Codec::input_leaf`].
     Leaf,
     /// Construct a named record from children in field order; an empty list builds unit.
@@ -84,6 +89,8 @@ impl Input {
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output {
+    /// Convert an optional payload without preparing absent values.
+    Optional(Box<Output>),
     /// Convert the occurrence type itself with [`Codec::output_leaf`].
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
@@ -142,6 +149,7 @@ impl Output {
     }
     fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C) -> bool {
         match self {
+            Self::Optional(child) => child.consumes(option_inner(ty).unwrap_or(ty), extra, codec),
             Self::Leaf => codec.consumes(ty, extra),
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } => true,
@@ -319,6 +327,13 @@ pub trait Codec {
         if !projection.fields.is_empty() {
             return Err("this output converter does not support field projection overrides".into());
         }
+        let mut payload = ty;
+        while let Some(inner) = option_inner(payload) {
+            payload = inner;
+        }
+        if projection.mode == ProjectionMode::Owned && matches!(payload, Type::Reference(_)) {
+            return Err("owned projection cannot consume a reference payload".into());
+        }
         self.output_leaf(
             ty,
             extra,
@@ -326,6 +341,30 @@ pub trait Codec {
             value,
             projection.mode == ProjectionMode::Borrowed,
         )
+    }
+    /// Available invalid representation on a wire, consumed by one optional layer.
+    fn niche(&self, _wire: &Self::Wire) -> Option<Niche> {
+        None
+    }
+    /// Inert wire expression used for an absent payload, optionally using a niche.
+    fn absent_value(
+        &self,
+        _wire: &Self::Wire,
+        _niche: Option<&Niche>,
+        _input: bool,
+    ) -> Result<TokenStream> {
+        Err("optional values are unsupported by this codec".into())
+    }
+    /// Retain optional grouping for foreign wrappers and consume inner niches.
+    fn mark_optional(
+        &self,
+        _wires: &mut [Wire<Self::Wire>],
+        _inner: &[Wire<Self::Wire>],
+        _tag: &syn::Ident,
+        _layout: &OptionalLayout,
+        _input: bool,
+    ) -> Result<()> {
+        Err("optional values are unsupported by this codec".into())
     }
     /// Complete a composed parameter plan before it is stored in a slot.
     /// Called once per bound parameter, including records and selectors.
@@ -533,6 +572,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
+            Input::Optional(inner) => {
+                let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
+                let tag = self.name();
+                let child = self.input(ty, inner, extra, &active.arm(tag.clone(), 1))?;
+                return optional_input(self.codec, extra, tag, var, active, child);
+            }
             Input::Leaf => {
                 let w = self.name();
                 return self.codec.input_leaf(ty, extra, w, var, active);
@@ -666,6 +711,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Optional(inner) => {
+                let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
+                let tag = self.name();
+                let payload = self.name();
+                let child = self.output(ty, inner, extra, quote!(#payload), borrowed)?;
+                return optional_output(self.codec, extra, tag, payload, value, borrowed, child);
+            }
             Output::Leaf => {
                 let w = self.name();
                 return self.codec.output_leaf(ty, extra, w, value, borrowed);

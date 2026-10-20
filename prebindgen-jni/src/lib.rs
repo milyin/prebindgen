@@ -7,6 +7,7 @@ use prebindgen_flat::{type_key, Flat, Result, WireKind};
 
 pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
+mod optional;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataWire};
 use prebindgen_conversions::boxed::BoxedWire;
@@ -18,6 +19,10 @@ use prebindgen_flat::Primitive;
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
 pub enum JniKind {
+    /// Conversion wire whose niche is unavailable in its containing composition.
+    NonNiche(Box<JniKind>),
+    /// Wire in an optional group, retaining its nullable Kotlin shape.
+    Optional(Box<optional::OptionalWire>),
     /// A primitive in its JVM carrier.
     Scalar(Primitive),
     /// A `java.lang.String`.
@@ -484,8 +489,10 @@ impl Codec for JniCodec {
                 JniKind::Bytes => {
                     quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
                 }
-                JniKind::Selector => return Err("selector output is unsupported".into()),
-                JniKind::Data(_) => unreachable!("leaf unwraps data metadata"),
+                JniKind::Selector => scalar::output_java(Primitive::I32, value),
+                JniKind::Data(_) | JniKind::Optional(_) | JniKind::NonNiche(_) => {
+                    unreachable!("leaf unwraps metadata")
+                }
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -500,10 +507,47 @@ impl Codec for JniCodec {
         };
         Ok(())
     }
+    fn prefix_component(
+        &self,
+        wire: &mut JniKind,
+        segment: prebindgen_declarations::ComponentSegment,
+    ) {
+        if matches!(
+            segment,
+            prebindgen_declarations::ComponentSegment::Alternative(_)
+        ) && !matches!(wire, JniKind::Data(_) | JniKind::Optional(_))
+        {
+            *wire = JniKind::NonNiche(Box::new(wire.clone()));
+        }
+    }
+    fn niche(&self, wire: &JniKind) -> Option<prebindgen_declarations::Niche> {
+        optional::niche(wire)
+    }
+    fn absent_value(
+        &self,
+        wire: &JniKind,
+        niche: Option<&prebindgen_declarations::Niche>,
+        input: bool,
+    ) -> Result<TokenStream> {
+        optional::absent(wire, niche, input)
+    }
+    fn mark_optional(
+        &self,
+        wires: &mut [prebindgen_flat::Wire<JniKind>],
+        inner: &[prebindgen_flat::Wire<JniKind>],
+        tag: &syn::Ident,
+        layout: &prebindgen_declarations::OptionalLayout,
+        input: bool,
+    ) -> Result<()> {
+        optional::mark(wires, inner, tag, layout, input)
+    }
     fn selector(&self, _: &()) -> JniKind {
         JniKind::Selector
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            return self.consumes(inner, &());
+        }
         Value::of(ty).is_none()
     }
     fn input_leaf(
@@ -514,6 +558,17 @@ impl Codec for JniCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<JniKind>> {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = format_ident!("{w}_present");
+            let child = self.input_leaf(
+                inner,
+                &(),
+                format_ident!("{w}_some"),
+                format_ident!("{v}_some"),
+                &active.arm(tag.clone(), 1),
+            )?;
+            return prebindgen_declarations::optional_input(self, &(), tag, v, active, child);
+        }
         let env = prebindgen_conversions::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
             Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniKind::Scalar(p)),
@@ -546,6 +601,54 @@ impl Codec for JniCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<JniKind>> {
+        if let syn::Type::Reference(reference) = ty {
+            if reference.mutability.is_some() {
+                return Err("mutable-reference outputs are unsupported".into());
+            }
+            match type_key(&reference.elem).as_str() {
+                "str" => {
+                    return self.output_leaf(
+                        &syn::parse_quote!(String),
+                        &(),
+                        w,
+                        quote!((#v).to_string()),
+                        false,
+                    )
+                }
+                "[u8]" => {
+                    return self.output_leaf(
+                        &syn::parse_quote!(Vec<u8>),
+                        &(),
+                        w,
+                        quote!((#v).to_vec()),
+                        false,
+                    )
+                }
+                _ => {}
+            }
+            let value = if borrowed { quote!(*#v) } else { v };
+            return self.output_leaf(&reference.elem, &(), w, value, true);
+        }
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = format_ident!("{w}_present");
+            let payload = format_ident!("{w}_payload");
+            let child = self.output_leaf(
+                inner,
+                &(),
+                format_ident!("{w}_some"),
+                quote!(#payload),
+                borrowed,
+            )?;
+            return prebindgen_declarations::optional_output(
+                self,
+                &(),
+                tag,
+                payload,
+                v,
+                borrowed,
+                child,
+            );
+        }
         // Text and bytes stay Rust values until the wrapper delivers them.
         let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
             Some(Value::Scalar(p)) => {

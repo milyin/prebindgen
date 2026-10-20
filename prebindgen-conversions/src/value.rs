@@ -87,24 +87,26 @@ pub fn input<W: prebindgen_flat::WireKind, C>(
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
     let condition = active.clone();
-    let taken = quote!(#var.expect("active value"));
-    let (statements, argument) = match ty {
+    let (decode, statements, argument) = match ty {
         Type::Reference(r) if matches!(type_key(&r.elem).as_str(), "str" | "[u8]") => {
             let target = &r.elem;
             (
-                quote!(let #var = #taken;),
-                quote!(::core::convert::AsRef::<#target>::as_ref(&#var)),
+                decode,
+                quote!(),
+                quote!(::core::convert::AsRef::<#target>::as_ref(#var.as_ref().expect("active value"))),
             )
         }
         Type::Reference(r) => {
             let owned = &r.elem;
             (
-                quote!(let #var: #owned = ::core::convert::Into::into(#taken);),
-                quote!(&#var),
+                quote!(::core::convert::Into::<#owned>::into(#decode)),
+                quote!(),
+                quote!(#var.as_ref().expect("active value")),
             )
         }
         _ => (
-            quote!(let #var: #ty = ::core::convert::Into::into(#taken);),
+            decode,
+            quote!(let #var: #ty = ::core::convert::Into::into(#var.expect("active value"));),
             quote!(#var),
         ),
     };

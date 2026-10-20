@@ -230,6 +230,53 @@ fn main() {
     ] {
         cbindgen = cbindgen.function(f);
     }
+    cbindgen = cbindgen
+        .opaque_ptr("owned_resource", pq!(OwnedResource))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .opaque_ptr("option_ctor", pq!(OptionCtor))
+        .expand(
+            expand_param!(OptionCtor)
+                .variant(fun!(option_ctor_new))
+                .variant_self(),
+        )
+        .opaque_ptr("option_choice", pq!(OptionChoice))
+        .expand(
+            expand_param!(OptionChoice)
+                .variant(fun!(option_choice_new))
+                .variant_self(),
+        )
+        .expand(expand_param!(OptionalFields).variant(fun!(optional_fields_new)))
+        .expand(expand_return!(OptionalFields).fields_into(fields!(optional_fields_into)));
+    for f in [
+        fun!(resource_choice_id),
+        fun!(option_ctor_new),
+        fun!(option_ctor_id),
+        fun!(option_nested_resource),
+        fun!(option_str_echo),
+        fun!(option_slice_echo),
+        fun!(option_str_len),
+        fun!(option_slice_len),
+        fun!(option_string_len),
+        fun!(option_i64_ref),
+        fun!(option_choice_id),
+        fun!(option_resource_pair),
+        fun!(option_i64),
+        fun!(option_char),
+        fun!(option_u8),
+        fun!(option_bool),
+        fun!(option_text),
+        fun!(option_bytes),
+        fun!(option_unit),
+        fun!(option_nested),
+        fun!(option_nested_char),
+        fun!(option_resource_new),
+        fun!(option_resource_echo),
+        fun!(option_resource_id),
+        fun!(owned_resource_drops),
+        fun!(optional_fields_echo),
+    ] {
+        cbindgen = cbindgen.function(f);
+    }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();

@@ -153,7 +153,7 @@ value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. Fixed-size arrays and
-`Option` fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
+`Option` fields are supported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
@@ -398,10 +398,59 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 C status/out-struct and JNI object-array ABI optimization remain separate work.
 
-Callbacks, enums, options, general collections, borrowed pointer/handle outputs,
-mutable text/byte views, methods, `convert!`, consuming record
-decomposition, field renaming, local function declarations, domain errors, split
+Callbacks, enums, general collections, mutable text/byte views, methods,
+`convert!`, field renaming, local function declarations, domain errors, split
 overloads and shared selector argument storage remain outside this subset.
+
+## Optional values and niches
+
+Both adapters compose `Option<T>` around the existing conversions for `T`,
+including type-wide expansions and explicit borrowed/owned output projections.
+Occurrence overrides may name either the whole `Option<T>` or its payload `T`;
+payload overrides are lifted through the optional layers.
+Absent inputs skip payload validation, resource checks, acquisition and construction.
+Absent outputs skip payload conversion. Prepared output allocations remain owned
+by Rust until delivery succeeds, and Kotlin rollback closes only present handles.
+Borrowed text, byte slices and handle inputs are supported inside `Option`;
+shared-reference outputs copy values or clone handles into independently owned outputs.
+
+A **niche** is a wire representation unavailable to a present payload. The shared
+compiler uses an eligible niche instead of adding a presence wire:
+
+| Payload | C absence | JNI absence |
+|---|---|---|
+| Opaque pointer / handle | Null pointer | Zero handle |
+| `char` | `0x110000` | `-1` |
+| `u8`, `u16`, `u32` | Separate presence flag | `-1` in the wider signed carrier |
+| Other scalars, text, bytes | Separate presence flag | Separate presence flag |
+
+A presence flag is an `i32` with exactly `0` (absent) or `1` (present). Other
+active flags are errors. C callers supply the documented sentinel for absence;
+Kotlin callers supply `null`, and scalar sentinel values supplied as non-null
+arguments are rejected. Buffers have no null niche: a null pointer with zero
+length is a valid empty buffer. No valid scalar value is reserved as a sentinel.
+
+Only unconditional payload wires can donate a niche. Selector-arm wires and
+already optional wires cannot donate theirs to an outer option. Additional
+optional layers therefore use presence flags, preserving every nested state.
+C headers document the exact discriminator argument or result field for each
+optional group, including enclosing optional groups.
+
+Adapter authors expose valid niches through `Codec::niche`; `absent_value` supplies
+inert carriers, and `mark_optional` retains foreign grouping while consuming the
+available niches. Custom codecs must suppress conditional niches during composition.
+The default absence/grouping hooks reject options until the codec implements them.
+
+Kotlin exposes a single converted value as `T?`, including nullable data classes
+and their optional fields. Expanded payloads with multiple parameters retain an
+explicit Boolean presence parameter; nested options and unit similarly retain
+explicit presence where Kotlin nullability alone would lose states. Multiple
+output views use the existing builder lambda, with nullable payload values and
+an outer Boolean for nested options. For example, `Option<Option<i64>>` returns
+`(present: Boolean, value: Long?)`: `(false, null)`, `(true, null)` and `(true, n)`
+are distinct. Data-class declarations reject directly nested options; expose
+those through explicit field expansions instead. Recursive records and
+handle-containing data-class inputs remain unsupported. The C ABI exposes all selected wires directly.
 
 ## API documentation
 

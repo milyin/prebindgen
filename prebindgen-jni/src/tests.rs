@@ -337,3 +337,62 @@ fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
     ))))
     .contains("does not support field projection overrides"));
 }
+
+#[test]
+fn optional_niches_and_nested_presence_preserve_distinct_states() {
+    let source=flat("pub type Handle=String; pub fn h(x:Option<Handle>)->Option<Handle>{} pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{} pub fn scalar(x:Option<i64>)->Option<i64>{} pub fn ch(x:Option<char>)->Option<char>{}");
+    let generated = JniGen::builder()
+        .flat(source)
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Handle))
+                .fun(fun!(h))
+                .fun(fun!(n))
+                .fun(fun!(scalar))
+                .fun(fun!(ch)),
+        )
+        .build()
+        .unwrap();
+    let kt = &generated.kotlin["test/Functions.kt"];
+    assert!(kt.contains("public fun `h`(p0_w3: test.Handle?): test.Handle?"));
+    assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
+    assert!(kt.contains("invalid option payload"));
+    assert!(kt.contains("if (result[0] != 0L)"));
+    assert!(kt.contains("if (result[0] == 1)"));
+    // Validate raw widths independently from the Kotlin nullable surface.
+    let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}");
+    let d = prebindgen_declarations::Declarations::new(&flat, vec![]).unwrap();
+    for (name, count) in [("h", 1), ("n", 2)] {
+        d.fill(
+            &mut flat,
+            &JniCodec,
+            &FunctionDecl::new(syn::parse_str(name).unwrap()),
+            &(),
+        )
+        .unwrap();
+        use prebindgen_flat::Conversion;
+        let f = flat.function(name).unwrap();
+        assert_eq!(f.params[0].ty.slot.as_ref().unwrap().wires().len(), count);
+        assert_eq!(f.ret.slot.as_ref().unwrap().wires().len(), count);
+    }
+}
+
+#[test]
+fn owned_optional_projection_cannot_move_a_reference_payload() {
+    let error =
+        fail(
+            JniGen::builder()
+                .flat(flat(
+                    "pub type Handle=String;pub fn view(x:&Handle)->Option<&Handle>{}",
+                ))
+                .set_package_prefix("test")
+                .package(package!().class(ptr_class!(Handle)).fun(
+                    fun!(view).expand_return(expand_return!(Option<&Handle>).field_self_into()),
+                )),
+        );
+    assert!(
+        error.contains("owned projection cannot consume a reference payload"),
+        "{error}"
+    );
+}

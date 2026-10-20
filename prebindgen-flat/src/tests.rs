@@ -44,7 +44,7 @@ fn refuses_unsupported_syntax_without_dropping_it() {
     for source in [
         "pub async fn f(){}",
         "pub fn f<T>(x:T){}",
-        "pub fn f(x:Option<String>){}",
+        "pub fn f(x:Option<Unknown>){}",
         "pub struct X{field:String}",
         "fn f(){}",
         "pub enum E{A}",
@@ -191,5 +191,20 @@ fn named_object_size_is_checked_by_rust_layout() {
                 "{stderr}"
             );
         }
+    }
+}
+
+#[test]
+fn options_preserve_payload_types_and_reject_malformed_arguments() {
+    let flat=parse("pub struct Item {pub value:i64} pub fn f(x:Option<&Item>)->core::option::Option<std::option::Option<Item>> {}").unwrap();
+    let f = flat.function("f").unwrap();
+    assert!(type_key(option_inner(&f.params[0].ty.ty).unwrap()).contains("Item"));
+    assert!(option_inner(option_inner(&f.ret.ty).unwrap()).is_some());
+    for source in [
+        "pub fn f(x:Option<i64,i64>){}",
+        "pub fn f(x:Option<3>){}",
+        "pub fn f(x:Something::Option<i64>){}",
+    ] {
+        assert!(parse(source).is_err());
     }
 }

@@ -1,6 +1,7 @@
 //! Build-script declarations for input alternatives and output views.
 //! [`Declarations`] builds converters directly in boundary occurrence slots.
 
+use crate::option_inner;
 use crate::{Codec, Compiler, Condition, Input, Output, Projection};
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
@@ -311,6 +312,13 @@ impl Declarations {
         stack: &mut Vec<String>,
     ) -> Result<Input> {
         let key = type_key(ty);
+        if let (Some(inner), Some(decl)) = (option_inner(ty), explicit) {
+            if type_key(&flat.resolve_type(&decl.ty)?) != key {
+                return Ok(Input::Optional(Box::new(
+                    self.input(flat, inner, explicit, stack)?,
+                )));
+            }
+        }
         let d = explicit.or_else(|| self.inputs.get(&key));
         if let Some(d) = d {
             if type_key(&flat.resolve_type(&d.ty)?) != key {
@@ -343,6 +351,11 @@ impl Declarations {
                 _ => Ok(Input::selector(arms)),
             };
         }
+        if let Some(inner) = option_inner(ty) {
+            return Ok(Input::Optional(Box::new(
+                self.input(flat, inner, None, stack)?,
+            )));
+        }
         let key = match ty {
             syn::Type::Reference(r) => type_key(&r.elem),
             _ => key,
@@ -361,6 +374,13 @@ impl Declarations {
         stack: &mut Vec<String>,
     ) -> Result<Output> {
         let key = type_key(ty);
+        if let (Some(inner), Some(decl)) = (option_inner(ty), explicit) {
+            if type_key(&flat.resolve_type(&decl.ty)?) != key {
+                return Ok(Output::Optional(Box::new(
+                    self.output(flat, inner, explicit, stack)?,
+                )));
+            }
+        }
         let d = explicit.or_else(|| self.outputs.get(&key));
         if let Some(d) = d {
             if type_key(&flat.resolve_type(&d.ty)?) != key {
@@ -422,6 +442,11 @@ impl Declarations {
                 1 => Ok(parts.remove(0)),
                 _ => Ok(Output::combine(parts)),
             };
+        }
+        if let Some(inner) = option_inner(ty) {
+            return Ok(Output::Optional(Box::new(
+                self.output(flat, inner, None, stack)?,
+            )));
         }
         Ok(if key == "()" {
             Output::fields([])

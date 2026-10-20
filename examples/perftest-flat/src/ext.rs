@@ -2681,3 +2681,205 @@ pub fn projection_drops() -> usize {
 pub fn projection_pair_views() -> ProjectionPair {
     projection_pair_borrowed()
 }
+
+// Option boundary fixtures shared by C and JNI.
+#[prebindgen]
+pub fn option_i64(value: Option<i64>) -> Option<i64> {
+    value
+}
+#[prebindgen]
+pub fn option_char(value: Option<char>) -> Option<char> {
+    value
+}
+#[prebindgen]
+pub fn option_u8(value: Option<u8>) -> Option<u8> {
+    value
+}
+#[prebindgen]
+pub fn option_bool(value: Option<bool>) -> Option<bool> {
+    value
+}
+#[prebindgen]
+pub fn option_text(value: Option<String>) -> Option<String> {
+    value
+}
+#[prebindgen]
+pub fn option_bytes(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
+    value
+}
+#[prebindgen]
+pub fn option_unit(value: Option<()>) -> Option<()> {
+    value
+}
+#[prebindgen]
+pub fn option_nested(value: Option<Option<i64>>) -> Option<Option<i64>> {
+    value
+}
+#[prebindgen]
+pub fn option_nested_char(value: Option<Option<char>>) -> Option<Option<char>> {
+    value
+}
+#[prebindgen]
+pub fn option_resource_new(present: bool) -> Option<OwnedResource> {
+    present.then(|| OwnedResourceImpl { id: 77 })
+}
+#[prebindgen]
+pub fn option_resource_echo(value: Option<OwnedResource>, valid: char) -> Option<OwnedResource> {
+    let _ = valid;
+    value
+}
+#[prebindgen]
+pub fn option_resource_id(value: Option<&OwnedResource>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+#[prebindgen]
+pub struct OptionalFields {
+    pub count: Option<i64>,
+    pub text: Option<String>,
+    pub letter: Option<char>,
+}
+#[prebindgen]
+pub fn optional_fields_new(
+    count: Option<i64>,
+    text: Option<String>,
+    letter: Option<char>,
+) -> OptionalFields {
+    OptionalFields {
+        count,
+        text,
+        letter,
+    }
+}
+#[prebindgen]
+pub fn optional_fields_into(value: OptionalFields) -> OptionalFields {
+    value
+}
+#[prebindgen]
+pub fn optional_fields_echo(value: Option<OptionalFields>) -> Option<OptionalFields> {
+    value
+}
+#[prebindgen]
+pub struct OptionalResource {
+    pub resource: Option<OwnedResource>,
+    pub details: Option<OptionalFields>,
+}
+#[prebindgen]
+pub fn optional_resource_new(present: bool) -> Option<OptionalResource> {
+    Some(OptionalResource {
+        resource: option_resource_new(present),
+        details: present.then(|| optional_fields_new(Some(9), None, Some('é'))),
+    })
+}
+#[prebindgen]
+pub fn option_str_len(value: Option<&str>) -> Option<usize> {
+    value.map(str::len)
+}
+#[prebindgen]
+pub fn option_slice_len(value: Option<&[u8]>) -> Option<usize> {
+    value.map(<[u8]>::len)
+}
+#[prebindgen]
+pub fn option_string_len(value: Option<&String>) -> Option<usize> {
+    value.map(String::len)
+}
+#[prebindgen]
+pub fn option_i64_ref(value: Option<&i64>) -> Option<i64> {
+    value.copied()
+}
+#[prebindgen]
+pub fn option_projection_views(present: bool) -> Option<ProjectionHandle> {
+    present.then(|| ProjectionHandleImpl(99))
+}
+#[prebindgen]
+pub struct OptionChoice {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn option_choice_new(id: i64) -> OptionChoice {
+    OptionChoice { id }
+}
+#[prebindgen]
+pub fn option_choice_id(value: Option<OptionChoice>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+#[prebindgen]
+pub fn option_resource_pair(first: Option<OwnedResource>, second: Option<OwnedResource>) -> i64 {
+    first.map_or(0, |v| v.id) + second.map_or(0, |v| v.id)
+}
+#[prebindgen]
+pub struct OptionalBytes {
+    pub data: Option<Vec<u8>>,
+}
+#[prebindgen]
+pub fn optional_bytes_echo(value: OptionalBytes) -> OptionalBytes {
+    value
+}
+#[prebindgen]
+pub fn option_resource_mut(value: Option<&mut OwnedResource>) -> i64 {
+    value.map_or(-1, |v| {
+        v.id += 1;
+        v.id
+    })
+}
+#[prebindgen]
+pub fn option_projection_ref(value: &ProjectionHandle, present: bool) -> Option<&ProjectionHandle> {
+    present.then_some(value)
+}
+#[prebindgen]
+pub struct OptionalPair {
+    pub absent: Option<OwnedResource>,
+    pub present: Option<OwnedResource>,
+}
+#[prebindgen]
+pub fn optional_pair_new() -> OptionalPair {
+    OptionalPair {
+        absent: None,
+        present: option_resource_new(true),
+    }
+}
+#[prebindgen]
+pub fn optional_pair_into(value: OptionalPair) -> OptionalPair {
+    value
+}
+#[prebindgen]
+pub fn option_str_echo(value: Option<&str>) -> Option<&str> {
+    value
+}
+#[prebindgen]
+pub fn option_slice_echo(value: Option<&[u8]>) -> Option<&[u8]> {
+    value
+}
+#[prebindgen]
+pub fn option_nested_resource(
+    value: Option<Option<OwnedResource>>,
+) -> Option<Option<OwnedResource>> {
+    value
+}
+#[prebindgen]
+pub struct OptionCtor {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn option_ctor_new(value: Option<i64>) -> OptionCtor {
+    OptionCtor {
+        id: value.unwrap_or(-10),
+    }
+}
+#[prebindgen]
+pub fn option_ctor_id(value: OptionCtor) -> i64 {
+    value.id
+}
+#[prebindgen]
+pub struct ResourceChoice {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn resource_choice_new(resource: OwnedResource, offset: i64) -> ResourceChoice {
+    ResourceChoice {
+        id: resource.id + offset,
+    }
+}
+#[prebindgen]
+pub fn resource_choice_id(value: Option<ResourceChoice>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}

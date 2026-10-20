@@ -45,6 +45,19 @@ impl Codec for TestCodec {
     fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
         wire.component.prepend(segment);
     }
+    fn absent_value(&self, _: &TestWire, _: Option<&Niche>, _: bool) -> Result<TokenStream> {
+        Ok(quote!(Default::default()))
+    }
+    fn mark_optional(
+        &self,
+        _: &mut [Wire<TestWire>],
+        _: &[Wire<TestWire>],
+        _: &syn::Ident,
+        _: &OptionalLayout,
+        _: bool,
+    ) -> Result<()> {
+        Ok(())
+    }
     fn selector(&self, extra: &Extra) -> TestWire {
         TestWire {
             kind: Kind::Selector,
@@ -1146,4 +1159,67 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         error.contains("must take exactly `& crate :: Pair`"),
         "{error}"
     );
+}
+
+#[test]
+fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() {
+    let child = record_output_owned(
+        &TEST_CODEC,
+        format_ident!("record"),
+        quote!(payload),
+        [format_ident!("first"), format_ident!("second")],
+        |index, field| {
+            let local = format_ident!("box{index}");
+            Ok(OutputPlan {
+                context: Default::default(),
+                delivery: Default::default(),
+                wires: vec![],
+                values: vec![],
+                statements: quote!(if mode==#index+1{return Err(());} let #local=Box::new(#field);),
+                commit: quote!(drop(#local);),
+            })
+        },
+    )
+    .unwrap();
+    let plan = optional_output(
+        &TEST_CODEC,
+        &Extra::default(),
+        format_ident!("present"),
+        format_ident!("payload"),
+        quote!(source),
+        false,
+        child,
+    )
+    .unwrap();
+    let prepare = plan.statements;
+    let commit = plan.commit;
+    let source = quote! {
+        use std::{cell::Cell,rc::Rc};
+        struct R(Rc<Cell<usize>>);impl Drop for R{fn drop(&mut self){self.0.set(self.0.get()+1);}}
+        struct Record{first:R,second:R}
+        fn convert(drops:Rc<Cell<usize>>,some:bool,mode:usize)->Result<(),()> {
+            let source=some.then(||Record{first:R(drops.clone()),second:R(drops.clone())});
+            #prepare
+            if mode==3{return Err(());}
+            #commit
+            Ok(())
+        }
+        fn main(){for some in [false,true]{for mode in 0..4 {let drops=Rc::new(Cell::new(0));let result=convert(drops.clone(),some,mode);assert_eq!(result.is_ok(),mode==0 || (!some && mode!=3));assert_eq!(drops.get(),if some{2}else{0});}}}
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("option.rs");
+    let exe = dir.path().join("option");
+    std::fs::write(&file, source.to_string()).unwrap();
+    let result = std::process::Command::new("rustc")
+        .arg(&file)
+        .arg("-o")
+        .arg(&exe)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(std::process::Command::new(exe).status().unwrap().success());
 }

@@ -13,6 +13,7 @@ private fun expectInvalid(action: () -> Unit) {
 
 // Exercises the active subset of the migrated source and build declarations.
 fun main() {
+    checkOptions()
     for (text in listOf("", "ordinary", "héllo 世界", "embedded\u0000nul")) {
         check(stringNew(text) == text)
         check(stringLen(text) == text.encodeToByteArray().size.toULong())
