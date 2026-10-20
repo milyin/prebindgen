@@ -1093,3 +1093,57 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
     );
     assert!(std::process::Command::new(exe).status().unwrap().success());
 }
+
+#[test]
+fn consuming_field_accessors_validate_signatures_and_order_observers() {
+    let mut flat = parse("pub struct Pair { pub first:i64, pub second:i64 } pub fn make()->Pair {} pub fn into_pair(value:Pair)->Pair {} pub fn copy_pair(value:&Pair)->Pair {} pub fn count(value:&Pair)->i64 {}");
+    let declarations = Declarations::new(&flat, vec![]).unwrap();
+    declarations
+        .fill(
+            &mut flat,
+            &TEST_CODEC,
+            &fun!(make).expand_return(
+                expand_return!(Pair)
+                    .fields_self_into(
+                        fields!(into_pair).field("first", expand_return!(i64).field_self_ref()),
+                    )
+                    .field(fun!(count)),
+            ),
+            &Extra::default(),
+        )
+        .unwrap();
+    let statements = flat
+        .function("make")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .statements
+        .to_string();
+    assert!(statements.find("count").unwrap() < statements.find("into_pair").unwrap());
+    let error = declarations
+        .fill(
+            &mut flat,
+            &TEST_CODEC,
+            &fun!(make).expand_return(expand_return!(Pair).fields_self_into(fields!(copy_pair))),
+            &Extra::default(),
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("must take exactly `crate :: Pair`"),
+        "{error}"
+    );
+    let error = declarations
+        .fill(
+            &mut flat,
+            &TEST_CODEC,
+            &fun!(make).expand_return(expand_return!(Pair).fields(fields!(into_pair))),
+            &Extra::default(),
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("must take exactly `& crate :: Pair`"),
+        "{error}"
+    );
+}

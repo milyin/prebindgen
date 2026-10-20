@@ -7,8 +7,12 @@ use std::rc::Rc;
 ///
 /// Supports owned public named-field records containing scalars, `String`,
 /// `Vec<u8>`, other declared data classes, and declared opaque handles.
-/// Records containing handles (including nested ones) support owned returns only.
-/// Their Rust fields must be movable: the record itself cannot implement `Drop`.
+/// Records containing handles (including nested ones) support returns only.
+/// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
+/// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
+/// field overrides. Legacy `field_self()` and unexpanded outputs keep a fixed
+/// borrowed policy, including for handles (which then require `Clone`).
+/// Moving Rust fields requires that the record itself does not implement `Drop`.
 /// Callers close each returned handle explicitly; data-class `copy` shares those
 /// handle objects and does not duplicate native ownership. References, empty
 /// records, and recursive records are rejected.
@@ -259,7 +263,7 @@ impl DataCodec {
             })
             .collect::<Vec<_>>()
             .join(",\n");
-        let lifecycle = if shape.consumes() {
+        let lifecycle = if shape.has_handles() {
             "/** Close each handle member explicitly. Copies share the same handle objects. */\n"
         } else {
             ""
@@ -331,10 +335,10 @@ fn field_name(field: &DataField) -> String {
 }
 
 impl RecordShape {
-    fn consumes(&self) -> bool {
+    fn has_handles(&self) -> bool {
         self.fields.iter().any(|f| match &f.shape {
             Shape::Handle(_) => true,
-            Shape::Record(r) => r.consumes(),
+            Shape::Record(r) => r.has_handles(),
             Shape::Value(_) => false,
         })
     }
@@ -345,7 +349,7 @@ impl RecordShape {
         v: &syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<JniKind>> {
-        if self.consumes() {
+        if self.has_handles() {
             return Err(format!(
                 "data class `{}` contains handles and supports returns only",
                 self.fqn
@@ -372,19 +376,42 @@ impl RecordShape {
         );
         Ok(plan)
     }
-    fn output(&self, w: &syn::Ident, value: TokenStream) -> Result<OutputPlan<JniKind>> {
-        let owned = self.consumes();
-        let convert = |i: usize, field| {
+    fn output(
+        &self,
+        w: &syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<OutputPlan<JniKind>> {
+        for name in projection.fields.keys() {
+            if !self.fields.iter().any(|f| field_name(f) == *name) {
+                return Err(format!(
+                    "data class `{}`: unknown projection field `{name}`",
+                    self.fqn
+                ));
+            }
+        }
+        let owned = projection.mode == ProjectionMode::Owned;
+        let inherited = projection.inherited();
+        let convert = |i: usize, field: TokenStream| {
             let f = &self.fields[i];
+            let policy = projection.fields.get(&field_name(f)).unwrap_or(&inherited);
+            if !owned && policy.mode == ProjectionMode::Owned {
+                return Err(format!("data class `{}` field `{}`: owned projection cannot consume a shared-reference occurrence", self.fqn, field_name(f)));
+            }
+            let value = if owned && policy.mode == ProjectionMode::Borrowed {
+                quote!(&(#field))
+            } else {
+                field
+            };
             let fw = format_ident!("{w}_f{i}");
             match &f.shape {
                 Shape::Value(_) | Shape::Handle(_) => {
-                    JniCodec.output_leaf(&f.ty, &(), fw, field, !owned)
+                    JniCodec.output_projected(&f.ty, &(), fw, value, policy)
                 }
-                Shape::Record(r) => r.output(&fw, field),
+                Shape::Record(r) => r.output(&fw, value, policy),
             }
         };
-        let plan = if owned {
+        if owned {
             prebindgen_declarations::record_output_owned(
                 &JniCodec,
                 format_ident!("{w}_record"),
@@ -400,12 +427,7 @@ impl RecordShape {
                 self.fields.iter().map(|f| f.name.clone()),
                 convert,
             )
-        }?;
-        debug_assert!(
-            owned || plan.commit.is_empty(),
-            "value-only records cannot transfer native ownership"
-        );
-        Ok(plan)
+        }
     }
     fn paths(&self, path: &[String], paths: &mut Vec<Vec<String>>) {
         for f in &self.fields {
@@ -469,9 +491,7 @@ impl Codec for DataCodec {
         JniCodec.selector(extra)
     }
     fn consumes(&self, ty: &syn::Type, extra: &()) -> bool {
-        self.records
-            .get(&type_key(ty))
-            .map_or_else(|| JniCodec.consumes(ty, extra), |r| r.consumes())
+        !self.records.contains_key(&type_key(ty)) && JniCodec.consumes(ty, extra)
     }
     fn finish_input(&self, plan: &mut InputPlan<JniKind>, extra: &()) -> Result<()> {
         JniCodec.finish_input(plan, extra)
@@ -505,13 +525,24 @@ impl Codec for DataCodec {
         let Some(record) = self.record(ty)? else {
             return JniCodec.output_leaf(ty, extra, wire, value, borrowed);
         };
-        if borrowed && record.consumes() {
-            return Err(format!(
-                "data class `{}` contains handles and cannot be converted through a shared-reference projection",
-                record.fqn
-            ));
-        }
-        let mut plan = record.output(&wire, value)?;
+        // The legacy data-class leaf remains a borrowed projection, regardless
+        // of its fields. Ownership transfer requires an explicit projection.
+        let mut plan = record.output(&wire, value, &Projection::borrowed())?;
+        record.mark(&mut plan.wires, wire.to_string(), "true".into());
+        Ok(plan)
+    }
+    fn output_projected(
+        &self,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<OutputPlan<JniKind>> {
+        let Some(record) = self.record(ty)? else {
+            return JniCodec.output_projected(ty, extra, wire, value, projection);
+        };
+        let mut plan = record.output(&wire, value, projection)?;
         record.mark(&mut plan.wires, wire.to_string(), "true".into());
         Ok(plan)
     }

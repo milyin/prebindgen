@@ -105,26 +105,53 @@ uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test reco
 selector alternatives, combined outputs, and package/class renaming.
 
 Data classes currently require owned occurrences and at least one field.
-Records containing handles, including nested ones, support **owned returns only**.
-Declare the member type with `ptr_class!`; JniGen moves each resource into an
-owning handle without requiring `Clone`. Callers close the handle members
-explicitly. The data class has no collective `close()`, and its `copy()` shares
-the same handle objects. Its Rust record must allow moving its fields and
-therefore cannot implement `Drop` (rustc reports a field-move error in the
-generated bindings). Inputs and shared-reference conversions of these records
-are rejected, as are multiple consuming views of the same result.
-Getters observing a result run before its owned decomposition. Native conversion
-or delivery failure drops unpublished resources; Kotlin delivery failure closes
-the transferred handles, including nested members.
+Records containing handles, including nested ones, support returns only. Declare
+member handle types with `ptr_class!`. Kotlin callers close each handle member;
+the data class has no collective `close()`, and `copy()` shares handle objects.
+
+Output ownership is explicit in the existing expansion hierarchy:
+
+- `.field_self_ref()` borrows the value and all nested fields. Handle fields are
+  cloned into independent owning handles and require Rust `Clone`.
+- `.field_self_into()` moves the value and all nested fields without cloning.
+- `.project_self(Projection::owned().field("details", Projection::borrowed()))`
+  moves fields except the explicitly borrowed `details` subtree. Overrides can nest.
+
+The same declaration works as a type-wide default or a per-function replacement:
+
+```rust,ignore
+.expand(expand_return!(ResourceBundle).field_self_into())
+.package(package!("resources").fun(fun!(resource_bundle_new).expand_return(
+    expand_return!(ResourceBundle).project_self(
+        Projection::owned().field("details", Projection::borrowed())))))
+```
+
+`Projection` is re-exported by `prebindgen_registry` and `prebindgen_jni`.
+Modes propagate recursively unless explicitly overridden; they never depend on
+record contents. Legacy `field_self()` and unexpanded data-class outputs retain
+a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
+Type-wide expansions of field types do not rewrite a data class's properties.
+
+For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
+`.fields_self_into(fields!(consuming_accessor))` requires an accessor taking `T`
+and moves its returned record fields. Both support existing per-field expansion
+overrides through `.field("name", expand_return!(FieldType)...)` on `FieldsDecl`.
+These fields use their type-wide defaults when not overridden.
+
+A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
+and duplicate consuming views are rejected. Observing getters run before consuming
+views regardless of declaration order. Rust checks `Clone` requirements and rejects
+field moves from records implementing `Drop`. Native conversion or delivery failure
+drops unpublished resources; Kotlin delivery failure closes transferred handles,
+including nested members. Handle-containing records remain unsupported as inputs.
 
 Reference fields, data-class aliases, recursive records and invalid Kotlin field
 names are rejected with generation errors. Methods and direct
 `jobject` input are not part of this increment. Field layouts use their declared
 value types; type-wide expansions apply to boundary occurrences, not to the
-properties inside a data class. Records without handles use borrowed field
-projection, which clones owned strings and byte vectors. Records containing
-handles use the shared `record_output_owned` helper to move fields; nested
-value-only records retain their borrowed projection. Fixed-size arrays and
+properties inside a data class. Borrowed projections clone strings and byte
+vectors; owned projections move them. The shared helpers `record_output` and
+`record_output_owned` implement the respective access modes. Fixed-size arrays and
 `Option` fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion

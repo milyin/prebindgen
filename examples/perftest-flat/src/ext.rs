@@ -2620,3 +2620,64 @@ pub fn owned_resource_drops() -> usize {
 pub fn resource_bundle_views() -> ResourceBundle {
     resource_bundle_new()
 }
+#[prebindgen]
+pub fn resource_bundle_default() -> ResourceBundle {
+    resource_bundle_new()
+}
+#[prebindgen]
+pub fn resource_bundle_fields() -> ResourceBundle {
+    resource_bundle_new()
+}
+#[prebindgen]
+pub fn resource_bundle_into(value: ResourceBundle) -> ResourceBundle {
+    value
+}
+
+static PROJECTION_CLONES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static PROJECTION_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub struct ProjectionHandleImpl(i64);
+impl Clone for ProjectionHandleImpl {
+    fn clone(&self) -> Self {
+        PROJECTION_CLONES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self(self.0)
+    }
+}
+impl Drop for ProjectionHandleImpl {
+    fn drop(&mut self) {
+        PROJECTION_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type ProjectionHandle = ProjectionHandleImpl;
+#[prebindgen]
+pub struct ProjectionPair {
+    pub first: ProjectionHandle,
+    pub second: ProjectionHandle,
+}
+#[prebindgen]
+pub fn projection_pair_borrowed() -> ProjectionPair {
+    ProjectionPair {
+        first: ProjectionHandleImpl(1),
+        second: ProjectionHandleImpl(2),
+    }
+}
+#[prebindgen]
+pub fn projection_pair_owned() -> ProjectionPair {
+    projection_pair_borrowed()
+}
+#[prebindgen]
+pub fn projection_pair_mixed() -> ProjectionPair {
+    projection_pair_borrowed()
+}
+#[prebindgen]
+pub fn projection_clones() -> usize {
+    PROJECTION_CLONES.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn projection_drops() -> usize {
+    PROJECTION_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn projection_pair_views() -> ProjectionPair {
+    projection_pair_borrowed()
+}

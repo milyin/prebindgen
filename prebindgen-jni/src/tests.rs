@@ -251,6 +251,7 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
         JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
+            .expand(expand_return!(Bundle).field_self_into())
             .package(
                 package!()
                     .class(data_class!(Bundle))
@@ -261,11 +262,11 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
     let generated = base().package(package!().fun(fun!(make))).build().unwrap();
     assert!(generated.kotlin["test/Inner.kt"].contains("test.Handle"));
     assert!(generated.kotlin["test/Functions.kt"].contains(".close()"));
-    assert!(!generated.rust.contains("Clone :: clone"));
+    assert!(!generated.rust.contains("Clone::clone"));
     assert!(fail(base().package(package!().fun(fun!(echo)))).contains("returns only"));
-    assert!(fail(base().package(
-        package!().fun(fun!(make).expand_return(expand_return!(Bundle).field_self().field_self()))
-    ))
+    assert!(fail(base().package(package!().fun(
+        fun!(make).expand_return(expand_return!(Bundle).field_self_into().field_self_into())
+    )))
     .contains("consume the same value twice"));
     assert!(fail(
         base().package(
@@ -274,5 +275,65 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
             )
         )
     )
-    .contains("shared-reference projection"));
+    .contains("shared-reference occurrence"));
+}
+
+#[test]
+fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
+    let source = "pub struct Point { pub x:i64 } pub struct Outer { pub point:Point } pub fn make()->Outer {}";
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(data_class!(Outer))
+                    .class(data_class!(Point)),
+            )
+    };
+    for projection in [
+        Projection::owned(),
+        Projection::borrowed(),
+        Projection::owned().field("point", Projection::borrowed()),
+    ] {
+        base()
+            .package(
+                package!()
+                    .fun(fun!(make).expand_return(expand_return!(Outer).project_self(projection))),
+            )
+            .build()
+            .unwrap();
+    }
+    assert!(fail(
+        base().package(
+            package!().fun(
+                fun!(make)
+                    .expand_return(expand_return!(Outer).project_self(
+                        Projection::owned().field("missing", Projection::borrowed())
+                    ))
+            )
+        )
+    )
+    .contains("unknown projection field"));
+    assert!(fail(
+        base().package(
+            package!().fun(
+                fun!(make).expand_return(
+                    expand_return!(Outer)
+                        .project_self(Projection::borrowed().field("point", Projection::owned()))
+                )
+            )
+        )
+    )
+    .contains("cannot consume a shared-reference"));
+    assert!(fail(base().package(package!().fun(fun!(make).expand_return(
+        expand_return!(Outer).project_self(Projection::owned().field(
+            "point",
+            Projection::owned().field(
+                "x",
+                Projection::borrowed().field("bad", Projection::borrowed())
+            )
+        ))
+    ))))
+    .contains("does not support field projection overrides"));
 }

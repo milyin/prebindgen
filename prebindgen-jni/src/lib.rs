@@ -5,6 +5,7 @@
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Flat, Result, WireKind};
 
+pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataWire};

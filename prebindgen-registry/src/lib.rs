@@ -2,5 +2,5 @@
 #![warn(missing_docs)]
 pub use prebindgen_declarations::{
     expand_param, expand_return, fields, fun, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
-    FieldsDecl, FunctionDecl,
+    FieldsDecl, FunctionDecl, Projection, ProjectionMode,
 };
