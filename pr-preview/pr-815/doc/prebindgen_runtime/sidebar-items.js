@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["boundary","validate_pointer"],"type":["Result"]};
