@@ -1,40 +1,13 @@
 //! Shared optional conversion composition and wire niches.
 use super::*;
 
-/// A wire value excluded from the representation of a present value.
-#[derive(Clone, Debug)]
-pub enum Niche {
-    /// Null address (pointer or integer-encoded handle).
-    Null,
-    /// An invalid integer representation, within the wire's integer range.
-    Integer(i64),
-}
-impl Niche {
-    /// Expression recognizing the present case without decoding the payload.
-    pub fn present(&self, value: TokenStream) -> TokenStream {
-        match self {
-            Self::Null => quote!((#value as usize) != 0),
-            Self::Integer(n) => {
-                let n = syn::parse_str::<syn::Expr>(&n.to_string()).unwrap();
-                quote!(#value != #n)
-            }
-        }
-    }
-    /// Absence expression for a numeric wire. Pointer codecs supply a null pointer.
-    pub fn integer_value(&self) -> TokenStream {
-        match self {
-            Self::Null => quote!(0),
-            Self::Integer(n) => syn::parse_str::<TokenStream>(&n.to_string()).unwrap(),
-        }
-    }
-}
 /// Optional layout chosen from the inner conversion's available wire niches.
 #[derive(Clone, Debug)]
-pub struct OptionalLayout {
+pub struct OptionalLayout<N> {
     /// Inner wire index and its reserved absent representation; otherwise a flag is added.
-    pub niche: Option<(usize, Niche)>,
+    pub niche: Option<(usize, N)>,
 }
-fn layout<C: Codec>(codec: &C, wires: &[Wire<C::Wire>]) -> OptionalLayout {
+fn layout<C: Codec>(codec: &C, wires: &[Wire<C::Wire>]) -> OptionalLayout<C::Niche> {
     OptionalLayout {
         niche: wires
             .iter()
@@ -56,7 +29,7 @@ pub fn optional_input<C: Codec>(
     let mut validation = TokenStream::new();
     if let Some((i, niche)) = &layout.niche {
         let w = &child.wires[*i].name;
-        let present = niche.present(quote!(#w));
+        let present = codec.is_present(&child.wires[*i].kind, niche, quote!(#w))?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
     } else {
         let bad = active.and(quote!(#tag != 0 && #tag != 1));
@@ -80,6 +53,9 @@ pub fn optional_input<C: Codec>(
         );
     }
     codec.mark_optional(&mut child.wires, &inner, &tag, &layout, true)?;
+    if let Some((index, niche)) = &layout.niche {
+        codec.reserve_niche(&mut child.wires[*index].kind, niche)?;
+    }
     Ok(child)
 }
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
@@ -161,5 +137,8 @@ pub fn optional_output<C: Codec>(
         child.values.insert(0, quote!(#tag));
     }
     codec.mark_optional(&mut child.wires, &inner, &tag, &layout, false)?;
+    if let Some((index, niche)) = &layout.niche {
+        codec.reserve_niche(&mut child.wires[*index].kind, niche)?;
+    }
     Ok(child)
 }

@@ -27,12 +27,13 @@ pub enum CWire {
 pub struct COptionalWire {
     inner: CWire,
     group: std::rc::Rc<COptionalGroup>,
+    remaining: Option<CNiche>,
 }
 #[derive(Clone, Debug)]
 struct COptionalGroup {
     name: String,
     discriminator: String,
-    niche: Option<prebindgen_declarations::Niche>,
+    niche: Option<CNiche>,
 }
 /// Pointee type and mutability of a C boundary pointer.
 #[derive(Clone, Debug)]
@@ -94,6 +95,7 @@ use quote::{format_ident, quote};
 /// ```
 pub struct CCodec;
 impl Codec for CCodec {
+    type Niche = CNiche;
     type Extra = ();
     type Wire = CWire;
     type Context = CContext;
@@ -132,20 +134,33 @@ impl Codec for CCodec {
             *wire = CWire::NonNiche(Box::new(wire.clone()));
         }
     }
-    fn niche(&self, wire: &CWire) -> Option<prebindgen_declarations::Niche> {
-        use prebindgen_declarations::Niche;
+    fn niche(&self, wire: &CWire) -> Option<CNiche> {
         match wire {
-            CWire::Pointer(_) => Some(Niche::Null),
-            CWire::Scalar(Primitive::Char) => Some(Niche::Integer(0x110000)),
+            CWire::Optional(w) => w.remaining.clone(),
+            CWire::Pointer(_) => Some(CNiche::Null),
+            CWire::Scalar(Primitive::Char) => Some(CNiche::Integer(0x110000)),
             _ => None,
         }
     }
-    fn absent_value(
-        &self,
-        wire: &CWire,
-        niche: Option<&prebindgen_declarations::Niche>,
-        _: bool,
-    ) -> Result<TokenStream> {
+    fn is_present(&self, _: &CWire, niche: &CNiche, value: TokenStream) -> Result<TokenStream> {
+        Ok(niche.present(value))
+    }
+    fn reserve_niche(&self, wire: &mut CWire, niche: &CNiche) -> Result<()> {
+        let CWire::Optional(w) = wire else {
+            return Err("expected optional wire".into());
+        };
+        w.remaining = match niche {
+            CNiche::Integer(n)
+                if matches!(w.inner.leaf(), CWire::Scalar(Primitive::Char))
+                    && *n < u32::MAX as i64 =>
+            {
+                Some(CNiche::Integer(n + 1))
+            }
+            _ => None,
+        };
+        Ok(())
+    }
+    fn absent_value(&self, wire: &CWire, niche: Option<&CNiche>, _: bool) -> Result<TokenStream> {
         let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
         Ok(match wire.leaf() {
@@ -164,7 +179,7 @@ impl Codec for CCodec {
         wires: &mut [prebindgen_flat::Wire<CWire>],
         inner: &[prebindgen_flat::Wire<CWire>],
         tag: &syn::Ident,
-        layout: &prebindgen_declarations::OptionalLayout,
+        layout: &prebindgen_declarations::OptionalLayout<CNiche>,
         _: bool,
     ) -> Result<()> {
         let group = std::rc::Rc::new(COptionalGroup {
@@ -180,6 +195,7 @@ impl Codec for CCodec {
             w.kind = CWire::Optional(Box::new(COptionalWire {
                 inner: w.kind.clone(),
                 group: group.clone(),
+                remaining: None,
             }));
         }
         Ok(())
@@ -755,8 +771,8 @@ fn describe_options(wires: &[&Wire], output: bool) -> String {
                     let discriminator = &names[&g.discriminator];
                     let rule=match &g.niche {
                         None=>format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
-                        Some(prebindgen_declarations::Niche::Null)=>format!("{discriminator} == NULL means None; non-null means Some"),
-                        Some(prebindgen_declarations::Niche::Integer(n))=>format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
+                        Some(CNiche::Null)=>format!("{discriminator} == NULL means None; non-null means Some"),
+                        Some(CNiche::Integer(n))=>format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
                     };
                     let parent = if parents.is_empty() {
                         String::new()
@@ -797,6 +813,38 @@ fn describe_options(wires: &[&Wire], output: bool) -> String {
 #[cfg(test)]
 mod generation_tests {
     use super::*;
+
+    #[test]
+    fn reservations_exhaust_at_the_carrier_limit_and_suppress_other_wires() {
+        use prebindgen_declarations::{Codec, OptionalLayout};
+        let inner = vec![
+            prebindgen_flat::Wire {
+                name: quote::format_ident!("first"),
+                kind: CWire::Scalar(Primitive::Char),
+            },
+            prebindgen_flat::Wire {
+                name: quote::format_ident!("second"),
+                kind: CWire::Scalar(Primitive::Char),
+            },
+        ];
+        let mut wires = inner.clone();
+        let n = CNiche::Integer(u32::MAX as i64);
+        CCodec
+            .mark_optional(
+                &mut wires,
+                &inner,
+                &quote::format_ident!("tag"),
+                &OptionalLayout {
+                    niche: Some((0, n.clone())),
+                },
+                false,
+            )
+            .unwrap();
+        assert!(CCodec.niche(&wires[0].kind).is_none());
+        assert!(CCodec.niche(&wires[1].kind).is_none());
+        CCodec.reserve_niche(&mut wires[0].kind, &n).unwrap();
+        assert!(CCodec.niche(&wires[0].kind).is_none());
+    }
 
     #[test]
     fn rejects_invalid_pointer_names_during_preparation() {
@@ -861,5 +909,33 @@ mod generation_tests {
         let output = generate(flat, "test", vec![]).unwrap();
         assert!(output.header.contains("test_noop("));
         assert_eq!(count.get(), 1);
+    }
+}
+
+/// A wire value excluded from the representation of a present value.
+#[derive(Clone, Debug)]
+pub enum CNiche {
+    /// Null address (pointer or integer-encoded handle).
+    Null,
+    /// An invalid integer representation, within the wire's integer range.
+    Integer(i64),
+}
+impl CNiche {
+    /// Expression recognizing the present case without decoding the payload.
+    pub(crate) fn present(&self, value: TokenStream) -> TokenStream {
+        match self {
+            Self::Null => quote!((#value as usize) != 0),
+            Self::Integer(n) => {
+                let n = syn::parse_str::<syn::Expr>(&n.to_string()).unwrap();
+                quote!(#value != #n)
+            }
+        }
+    }
+    /// Absence expression for a numeric wire. Pointer codecs supply a null pointer.
+    pub(crate) fn integer_value(&self) -> TokenStream {
+        match self {
+            Self::Null => quote!(0),
+            Self::Integer(n) => syn::parse_str::<TokenStream>(&n.to_string()).unwrap(),
+        }
     }
 }

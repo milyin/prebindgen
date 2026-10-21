@@ -1,6 +1,6 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
-use prebindgen_declarations::{Niche, OptionalLayout};
+use prebindgen_declarations::OptionalLayout;
 use prebindgen_flat::Wire;
 /// One wire in an optional occurrence; inner metadata is preserved recursively.
 #[derive(Clone, Debug)]
@@ -8,18 +8,20 @@ pub struct OptionalWire {
     pub(crate) leaf: JniKind,
     root: String,
     inner: std::rc::Rc<Vec<Wire<JniKind>>>,
-    layout: OptionalLayout,
+    layout: OptionalLayout<JniNiche>,
+    remaining: Option<JniNiche>,
 }
-pub(crate) fn niche(w: &JniKind) -> Option<Niche> {
+pub(crate) fn niche(w: &JniKind) -> Option<JniNiche> {
     match w {
-        JniKind::Handle(..) => Some(Niche::Null),
+        JniKind::Optional(o) => o.remaining.clone(),
+        JniKind::Handle(..) => Some(JniNiche::Null),
         JniKind::Scalar(Primitive::Char | Primitive::U8 | Primitive::U16 | Primitive::U32) => {
-            Some(Niche::Integer(-1))
+            Some(JniNiche::Integer(-1))
         }
         _ => None,
     }
 }
-pub(crate) fn absent(w: &JniKind, niche: Option<&Niche>, input: bool) -> Result<TokenStream> {
+pub(crate) fn absent(w: &JniKind, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
     if !input && matches!(w.leaf(), JniKind::Handle(..)) {
         return Ok(quote!(std::ptr::null_mut()));
     }
@@ -41,7 +43,7 @@ pub(crate) fn mark(
     wires: &mut [Wire<JniKind>],
     inner: &[Wire<JniKind>],
     tag: &syn::Ident,
-    layout: &OptionalLayout,
+    layout: &OptionalLayout<JniNiche>,
     _: bool,
 ) -> Result<()> {
     let inner = std::rc::Rc::new(inner.to_vec());
@@ -51,15 +53,16 @@ pub(crate) fn mark(
             root: tag.to_string(),
             inner: inner.clone(),
             layout: layout.clone(),
+            remaining: None,
         }));
     }
     Ok(())
 }
-pub(crate) fn default_kt(w: &JniKind, niche: Option<&Niche>) -> String {
+pub(crate) fn default_kt(w: &JniKind, niche: Option<&JniNiche>) -> String {
     if let Some(n) = niche {
         let v = match n {
-            Niche::Null => 0,
-            Niche::Integer(n) => *n,
+            JniNiche::Null => 0,
+            JniNiche::Integer(n) => *n,
         };
         return if matches!(
             w.leaf(),
@@ -183,7 +186,7 @@ pub(crate) fn input_kotlin(
                     .filter(|(k, _)| *k == j)
                     .map(|(_, n)| n),
             );
-            let a = if matches!(o.layout.niche.as_ref(),Some((k,Niche::Integer(_))) if *k==j) {
+            let a = if matches!(o.layout.niche.as_ref(),Some((k,JniNiche::Integer(_))) if *k==j) {
                 format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}")
             } else {
                 a
@@ -288,4 +291,54 @@ pub(crate) fn output_kotlin(
         i += count;
     }
     Ok(out)
+}
+
+/// A wire value excluded from the representation of a present value.
+#[derive(Clone, Debug)]
+pub enum JniNiche {
+    /// Null address (pointer or integer-encoded handle).
+    Null,
+    /// An invalid integer representation, within the wire's integer range.
+    Integer(i64),
+}
+impl JniNiche {
+    /// Expression recognizing the present case without decoding the payload.
+    pub(crate) fn present(&self, value: TokenStream) -> TokenStream {
+        match self {
+            Self::Null => quote!((#value as usize) != 0),
+            Self::Integer(n) => {
+                let n = syn::parse_str::<syn::Expr>(&n.to_string()).unwrap();
+                quote!(#value != #n)
+            }
+        }
+    }
+    /// Absence expression for a numeric wire. Pointer codecs supply a null pointer.
+    pub(crate) fn integer_value(&self) -> TokenStream {
+        match self {
+            Self::Null => quote!(0),
+            Self::Integer(n) => syn::parse_str::<TokenStream>(&n.to_string()).unwrap(),
+        }
+    }
+}
+
+pub(crate) fn reserve(wire: &mut JniKind, niche: &JniNiche) -> Result<()> {
+    let JniKind::Optional(w) = wire else {
+        return Err("expected optional wire".into());
+    };
+    let min = if matches!(w.leaf.leaf(), JniKind::Scalar(Primitive::U32)) {
+        i64::MIN
+    } else {
+        i32::MIN as i64
+    };
+    w.remaining = match niche {
+        JniNiche::Integer(n) if *n > min => Some(JniNiche::Integer(n - 1)),
+        _ => None,
+    };
+    Ok(())
+}
+
+impl OptionalWire {
+    pub(crate) fn suppress_niches(&mut self) {
+        self.remaining = None;
+    }
 }

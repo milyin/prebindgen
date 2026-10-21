@@ -152,8 +152,8 @@ names are rejected with generation errors. Methods and direct
 value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
-`record_output_owned` implement the respective access modes. Fixed-size arrays and
-`Option` fields are supported. The low-level `JniCodec` does not know data-class declarations: it binds records
+`record_output_owned` implement the respective access modes. `Option` fields are
+supported; fixed-size arrays remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
@@ -430,16 +430,30 @@ Kotlin callers supply `null`, and scalar sentinel values supplied as non-null
 arguments are rejected. Buffers have no null niche: a null pointer with zero
 length is a valid empty buffer. No valid scalar value is reserved as a sentinel.
 
-Only unconditional payload wires can donate a niche. Selector-arm wires and
-already optional wires cannot donate theirs to an outer option. Additional
-optional layers therefore use presence flags, preserving every nested state.
+Only unconditional payload wires can donate a niche. Selector-arm wires cannot
+supply niches. Optional wires can retain unused representations for outer layers:
+C encodes `Option<Option<char>>` in one `uint32_t` (`0x110001` for outer `None`,
+`0x110000` for `Some(None)`). JNI uses `-2` and `-1` for nested optional chars and
+widened unsigned scalars. Once a domain is exhausted, additional layers use flags.
+A second handle wire cannot donate null after the inner option writes null to all
+its absent handle slots; nested optional handles therefore still need a flag.
 C headers document the exact discriminator argument or result field for each
 optional group, including enclosing optional groups.
 
-Adapter authors expose valid niches through `Codec::niche`; `absent_value` supplies
-inert carriers, and `mark_optional` retains foreign grouping while consuming the
-available niches. Custom codecs must suppress conditional niches during composition.
-The default absence/grouping hooks reject options until the codec implements them.
+Adapters define `Codec::Niche: Clone`; the shared compiler never interprets its
+representation. `niche` selects an excluded representation, `is_present` emits a
+total, side-effect-free presence predicate, and `absent_value` emits its absent
+value. `mark_optional` retains foreign grouping and updates non-discriminator
+domains for their absent defaults; `reserve_niche` then removes the chosen
+representation from the discriminator's remaining domain. Both input and output
+composition use the same protocol. The default hooks reject unsupported operations.
+
+Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
+or structured predicates. A custom float domain may explicitly exclude a NaN
+payload (test raw bits) or all NaNs (test `is_nan`); unrestricted `f32`/`f64` retain
+all valid values and use flags. The C and JNI adapters currently advertise only
+the representations in the table above. Foreign-language predicate rendering and
+transport stability remain adapter responsibilities.
 
 Kotlin exposes a single converted value as `T?`, including nullable data classes
 and their optional fields. Expanded payloads with multiple parameters retain an

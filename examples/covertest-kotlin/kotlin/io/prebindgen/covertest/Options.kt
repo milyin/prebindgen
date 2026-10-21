@@ -4,6 +4,22 @@ import io.prebindgen.covertest.options.*
 import io.prebindgen.covertest.resources.ownedResourceDrops
 
 fun checkOptions() {
+    for (v in listOf(-1L, -2L, -3L)) {
+        try { optionNestedU32(true, v) { _, _ -> Unit }; error("invalid nested u32 accepted") }
+        catch (_: IllegalArgumentException) {}
+    }
+    check(optionNestedU32(false, 99) { present, v -> !present && v == null })
+    check(optionNestedU32(true, null) { present, v -> present && v == null })
+    check(optionNestedU32(true, 4294967295L) { present, v -> present && v == 4294967295L })
+    check(nicheChoiceId(false, 0, -2, null) == -2L)
+    check(nicheChoiceId(true, 0, null, null) == -1L)
+    check(nicheChoiceId(true, 0, 65, null) == 65L)
+    val nicheHandle = nicheChoiceNew(66)
+    check(nicheChoiceId(true, 1, -2, nicheHandle) == 66L && nicheHandle.isClosed)
+    optionNestedProjectionViews(false, false) { present, a, b -> check(!present && a == null && b == null) }
+    optionNestedProjectionViews(true, false) { present, a, b -> check(present && a == null && b == null) }
+    optionNestedProjectionViews(true, true) { present, a, b -> check(present); requireNotNull(a).close(); requireNotNull(b).close() }
+
     for (v in listOf(null, "", "héllo\u0000世界")) check(io.prebindgen.covertest.model.plainNoteEcho(v) == v)
     for (v in listOf(null, 0UL, ULong.MAX_VALUE)) {
         check(io.prebindgen.covertest.model.unsignedOptional(v) == v)

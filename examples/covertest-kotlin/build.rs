@@ -133,9 +133,13 @@ use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 fn main() {
     let binding = JniGen::builder()
         .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .expand(expand_param!(NicheChoiceHandle).variant(fun!(niche_choice_new)).variant_self())
         .expand(expand_param!(OptionCtor).variant(fun!(option_ctor_new)).variant_self())
         .expand(expand_param!(OptionChoice).variant(fun!(option_choice_new)).variant_self())
         .package(package!("options")
+            .class(ptr_class!(NicheChoiceHandle)).fun(fun!(niche_choice_new)).fun(fun!(niche_choice_id))
+            .fun(fun!(option_nested_u32))
+            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
             .class(ptr_class!(OptionChoice))
             .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
             .fun(fun!(option_choice_id))

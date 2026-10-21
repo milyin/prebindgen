@@ -8,6 +8,7 @@ use prebindgen_flat::{type_key, Flat, Result, WireKind};
 pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
 mod optional;
+pub use optional::JniNiche;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataWire};
 use prebindgen_conversions::boxed::BoxedWire;
@@ -457,6 +458,7 @@ impl Class {
 /// to fill [`Bindings`] manually.
 pub struct JniCodec;
 impl Codec for JniCodec {
+    type Niche = crate::optional::JniNiche;
     type Extra = ();
     type Wire = JniKind;
     type Context = JniContext;
@@ -515,18 +517,33 @@ impl Codec for JniCodec {
         if matches!(
             segment,
             prebindgen_declarations::ComponentSegment::Alternative(_)
-        ) && !matches!(wire, JniKind::Data(_) | JniKind::Optional(_))
-        {
-            *wire = JniKind::NonNiche(Box::new(wire.clone()));
+        ) {
+            match wire {
+                JniKind::Optional(o) => o.suppress_niches(),
+                JniKind::Data(_) => {} // Data groups advertise no wire niches.
+                _ => *wire = JniKind::NonNiche(Box::new(wire.clone())),
+            }
         }
     }
-    fn niche(&self, wire: &JniKind) -> Option<prebindgen_declarations::Niche> {
+
+    fn niche(&self, wire: &JniKind) -> Option<crate::optional::JniNiche> {
         optional::niche(wire)
+    }
+    fn is_present(
+        &self,
+        _: &JniKind,
+        niche: &Self::Niche,
+        value: TokenStream,
+    ) -> Result<TokenStream> {
+        Ok(niche.present(value))
+    }
+    fn reserve_niche(&self, wire: &mut JniKind, niche: &Self::Niche) -> Result<()> {
+        crate::optional::reserve(wire, niche)
     }
     fn absent_value(
         &self,
         wire: &JniKind,
-        niche: Option<&prebindgen_declarations::Niche>,
+        niche: Option<&crate::optional::JniNiche>,
         input: bool,
     ) -> Result<TokenStream> {
         optional::absent(wire, niche, input)
@@ -536,7 +553,7 @@ impl Codec for JniCodec {
         wires: &mut [prebindgen_flat::Wire<JniKind>],
         inner: &[prebindgen_flat::Wire<JniKind>],
         tag: &syn::Ident,
-        layout: &prebindgen_declarations::OptionalLayout,
+        layout: &prebindgen_declarations::OptionalLayout<Self::Niche>,
         input: bool,
     ) -> Result<()> {
         optional::mark(wires, inner, tag, layout, input)

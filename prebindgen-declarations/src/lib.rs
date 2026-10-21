@@ -14,7 +14,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 mod optional;
-pub use optional::{optional_input, optional_output, Niche, OptionalLayout};
+pub use optional::{optional_input, optional_output, OptionalLayout};
 pub use prebindgen_flat::option_inner;
 mod projection;
 pub use projection::{Projection, ProjectionMode};
@@ -202,6 +202,7 @@ impl Output {
 /// }
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
+///     type Niche = ();
 ///     type Extra = ();
 ///     type Context = ();
 ///     type Input = InputPlan<Self::Wire>;
@@ -253,6 +254,10 @@ impl Output {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Codec {
+    /// Adapter-owned description of an absent wire representation. Use `()` if unused.
+    /// The shared compiler never interprets this metadata.
+    type Niche: Clone;
+
     /// Input data borrowed while building one occurrence's conversion; use `()` if unused.
     /// The same value is passed through nested conversions. It is not stored in Flat;
     /// hooks retain only the data needed for emission in their code and wires.
@@ -342,26 +347,52 @@ pub trait Codec {
             projection.mode == ProjectionMode::Borrowed,
         )
     }
-    /// Available invalid representation on a wire, consumed by one optional layer.
-    fn niche(&self, _wire: &Self::Wire) -> Option<Niche> {
+    /// An absent representation excluded from this wire's entire valid domain,
+    /// including any already encoded optional states. Never advertise values
+    /// accepted as present payloads or values on conditionally active wires.
+    /// The metadata may describe a single value or a disjoint class of values.
+    fn niche(&self, _wire: &Self::Wire) -> Option<Self::Niche> {
         None
+    }
+    /// Recognize presence without decoding the payload. Called on original inner metadata.
+    /// The expression must be total and side-effect-free for every initialized wire
+    /// value, including inactive placeholders; it must not dereference raw pointers.
+    /// It returns false for every representation reserved by this niche.
+    fn is_present(
+        &self,
+        _wire: &Self::Wire,
+        _niche: &Self::Niche,
+        _value: TokenStream,
+    ) -> Result<TokenStream> {
+        Err("niche presence testing is unsupported by this codec".into())
+    }
+    /// Reserve the chosen absent representation in the resulting optional wire's domain.
+    /// Called after `mark_optional`, on the selected wire only. Subsequent `niche`
+    /// calls must exclude this representation and every valid inner representation.
+    fn reserve_niche(&self, _wire: &mut Self::Wire, _niche: &Self::Niche) -> Result<()> {
+        Err("niche reservation is unsupported by this codec".into())
     }
     /// Inert wire expression used for an absent payload, optionally using a niche.
     fn absent_value(
         &self,
         _wire: &Self::Wire,
-        _niche: Option<&Niche>,
+        _niche: Option<&Self::Niche>,
         _input: bool,
     ) -> Result<TokenStream> {
         Err("optional values are unsupported by this codec".into())
     }
-    /// Retain optional grouping for foreign wrappers and consume inner niches.
+    /// Retain optional grouping for foreign wrappers, preserving wire order and count.
+    /// Update each wire's domain to include its absent default. In particular, unused
+    /// payload niches may be occupied by those defaults. The selected niche is then
+    /// reserved through `reserve_niche`. Do not advertise the chosen niche in this
+    /// intermediate state: expose no remaining niches until reservation completes.
+    /// Never advertise conditional-arm niches.
     fn mark_optional(
         &self,
         _wires: &mut [Wire<Self::Wire>],
         _inner: &[Wire<Self::Wire>],
         _tag: &syn::Ident,
-        _layout: &OptionalLayout,
+        _layout: &OptionalLayout<Self::Niche>,
         _input: bool,
     ) -> Result<()> {
         Err("optional values are unsupported by this codec".into())
@@ -888,3 +919,6 @@ fn merge_acknowledgement(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod niche_tests;

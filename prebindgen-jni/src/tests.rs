@@ -361,9 +361,9 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
     assert!(kt.contains("if (result[0] != 0L)"));
     assert!(kt.contains("if (result[0] == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
-    let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}");
+    let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
     let d = prebindgen_declarations::Declarations::new(&flat, vec![]).unwrap();
-    for (name, count) in [("h", 1), ("n", 2)] {
+    for (name, count) in [("h", 1), ("n", 2), ("ch2", 1), ("u2", 1)] {
         d.fill(
             &mut flat,
             &JniCodec,
@@ -395,4 +395,52 @@ fn owned_optional_projection_cannot_move_a_reference_payload() {
         error.contains("owned projection cannot consume a reference payload"),
         "{error}"
     );
+}
+
+#[test]
+fn optional_niche_reservation_exhausts_and_selector_arms_cannot_donate() {
+    use prebindgen_declarations::{Codec, ComponentSegment, OptionalLayout};
+    for (primitive, min) in [
+        (Primitive::Char, i32::MIN as i64),
+        (Primitive::U32, i64::MIN),
+    ] {
+        let inner = vec![prebindgen_flat::Wire {
+            name: quote::format_ident!("value"),
+            kind: JniKind::Scalar(primitive),
+        }];
+        let mut wires = inner.clone();
+        let niche = JniNiche::Integer(min);
+        JniCodec
+            .mark_optional(
+                &mut wires,
+                &inner,
+                &quote::format_ident!("tag"),
+                &OptionalLayout {
+                    niche: Some((0, niche.clone())),
+                },
+                false,
+            )
+            .unwrap();
+        assert!(JniCodec.niche(&wires[0].kind).is_none());
+        JniCodec.reserve_niche(&mut wires[0].kind, &niche).unwrap();
+        assert!(JniCodec.niche(&wires[0].kind).is_none());
+        let niche = JniNiche::Integer(-1);
+        JniCodec
+            .mark_optional(
+                &mut wires,
+                &inner,
+                &quote::format_ident!("tag"),
+                &OptionalLayout {
+                    niche: Some((0, niche.clone())),
+                },
+                false,
+            )
+            .unwrap();
+        assert!(JniCodec.niche(&wires[0].kind).is_none());
+        JniCodec.reserve_niche(&mut wires[0].kind, &niche).unwrap();
+        assert!(JniCodec.niche(&wires[0].kind).is_some());
+        JniCodec.prefix_component(&mut wires[0].kind, ComponentSegment::Alternative(0));
+        assert!(JniCodec.niche(&wires[0].kind).is_none());
+        assert!(matches!(wires[0].kind, JniKind::Optional(_)));
+    }
 }

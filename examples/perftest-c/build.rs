@@ -239,6 +239,12 @@ fn main() {
     cbindgen = cbindgen
         .opaque_ptr("owned_resource", pq!(OwnedResource))
         .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .opaque_ptr("niche_choice", pq!(NicheChoiceHandle))
+        .expand(
+            expand_param!(NicheChoiceHandle)
+                .variant(fun!(niche_choice_new))
+                .variant_self(),
+        )
         .opaque_ptr("option_ctor", pq!(OptionCtor))
         .expand(
             expand_param!(OptionCtor)
@@ -258,6 +264,9 @@ fn main() {
         fun!(option_ctor_new),
         fun!(option_ctor_id),
         fun!(option_nested_resource),
+        fun!(option_nested_u32),
+        fun!(niche_choice_new),
+        fun!(niche_choice_id),
         fun!(option_str_echo),
         fun!(option_slice_echo),
         fun!(option_str_len),

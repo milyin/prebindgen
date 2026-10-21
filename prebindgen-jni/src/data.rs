@@ -468,6 +468,7 @@ impl RecordShape {
 }
 
 impl Codec for DataCodec {
+    type Niche = crate::optional::JniNiche;
     type Extra = ();
     type Wire = JniKind;
     type Context = JniContext;
@@ -480,13 +481,24 @@ impl Codec for DataCodec {
     ) {
         JniCodec.prefix_component(wire, segment);
     }
-    fn niche(&self, wire: &JniKind) -> Option<prebindgen_declarations::Niche> {
+    fn niche(&self, wire: &JniKind) -> Option<crate::optional::JniNiche> {
         optional::niche(wire)
+    }
+    fn is_present(
+        &self,
+        _: &JniKind,
+        niche: &Self::Niche,
+        value: TokenStream,
+    ) -> Result<TokenStream> {
+        Ok(niche.present(value))
+    }
+    fn reserve_niche(&self, wire: &mut JniKind, niche: &Self::Niche) -> Result<()> {
+        crate::optional::reserve(wire, niche)
     }
     fn absent_value(
         &self,
         wire: &JniKind,
-        niche: Option<&prebindgen_declarations::Niche>,
+        niche: Option<&crate::optional::JniNiche>,
         input: bool,
     ) -> Result<TokenStream> {
         optional::absent(wire, niche, input)
@@ -496,7 +508,7 @@ impl Codec for DataCodec {
         wires: &mut [prebindgen_flat::Wire<JniKind>],
         inner: &[prebindgen_flat::Wire<JniKind>],
         tag: &syn::Ident,
-        layout: &prebindgen_declarations::OptionalLayout,
+        layout: &prebindgen_declarations::OptionalLayout<Self::Niche>,
         input: bool,
     ) -> Result<()> {
         optional::mark(wires, inner, tag, layout, input)

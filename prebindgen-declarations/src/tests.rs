@@ -37,6 +37,7 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
     }
 }
 impl Codec for TestCodec {
+    type Niche = ();
     type Extra = Extra;
     type Wire = TestWire;
     type Context = ();
@@ -45,7 +46,7 @@ impl Codec for TestCodec {
     fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
         wire.component.prepend(segment);
     }
-    fn absent_value(&self, _: &TestWire, _: Option<&Niche>, _: bool) -> Result<TokenStream> {
+    fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
         Ok(quote!(Default::default()))
     }
     fn mark_optional(
@@ -53,7 +54,7 @@ impl Codec for TestCodec {
         _: &mut [Wire<TestWire>],
         _: &[Wire<TestWire>],
         _: &syn::Ident,
-        _: &OptionalLayout,
+        _: &OptionalLayout<()>,
         _: bool,
     ) -> Result<()> {
         Ok(())
@@ -607,6 +608,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
 fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
     impl Codec for FinalizingCodec {
+        type Niche = ();
         type Extra = Extra;
         type Wire = TestWire;
         type Context = ();

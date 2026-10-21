@@ -2869,3 +2869,33 @@ pub fn resource_choice_new(resource: OwnedResource, offset: i64) -> ResourceChoi
 pub fn resource_choice_id(value: Option<ResourceChoice>) -> i64 {
     value.map_or(-1, |v| v.id)
 }
+
+/// Two nested absence states share unused negative values in JNI's widened wire.
+#[prebindgen]
+pub fn option_nested_u32(value: Option<Option<u32>>) -> Option<Option<u32>> {
+    value
+}
+
+pub struct NicheChoice {
+    value: Option<char>,
+}
+#[prebindgen]
+pub type NicheChoiceHandle = NicheChoice;
+#[prebindgen]
+pub fn niche_choice_new(value: Option<char>) -> NicheChoiceHandle {
+    NicheChoice { value }
+}
+#[prebindgen]
+pub fn niche_choice_id(value: Option<NicheChoiceHandle>) -> i64 {
+    value
+        .map(|v| v.value.map(|c| c as i64).unwrap_or(-1))
+        .unwrap_or(-2)
+}
+/// Two handle views must not donate the same null representation to two layers.
+#[prebindgen]
+pub fn option_nested_projection_views(
+    outer: bool,
+    inner: bool,
+) -> Option<Option<ProjectionHandle>> {
+    outer.then(|| option_projection_views(inner))
+}
