@@ -153,12 +153,10 @@
 <a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((i, <span class="kw">_</span>)) = <span class="kw-2">&amp;</span>layout.niche {
 <a href=#154 id=154 data-nosnippet>154</a>        codec.set_niche(<span class="kw-2">&amp;mut </span>tree[<span class="kw-2">*</span>i].kind, remaining);
 <a href=#155 id=155 data-nosnippet>155</a>    }
-<a href=#156 id=156 data-nosnippet>156</a>    tree.enclose(CompositionGroup {
-<a href=#157 id=157 data-nosnippet>157</a>        name: tag.to_string(),
-<a href=#158 id=158 data-nosnippet>158</a>        kind: GroupKind::Optional(OptionalGroup {
-<a href=#159 id=159 data-nosnippet>159</a>            discriminator,
-<a href=#160 id=160 data-nosnippet>160</a>            niche: layout.niche.map(|(<span class="kw">_</span>, n)| n),
-<a href=#161 id=161 data-nosnippet>161</a>        }),
-<a href=#162 id=162 data-nosnippet>162</a>    });
-<a href=#163 id=163 data-nosnippet>163</a>}
+<a href=#156 id=156 data-nosnippet>156</a>    tree.enclose(CompositionGroup::Optional(OptionalGroup {
+<a href=#157 id=157 data-nosnippet>157</a>        presence: tag,
+<a href=#158 id=158 data-nosnippet>158</a>        discriminator,
+<a href=#159 id=159 data-nosnippet>159</a>        niche: layout.niche.map(|(<span class="kw">_</span>, n)| n),
+<a href=#160 id=160 data-nosnippet>160</a>    }));
+<a href=#161 id=161 data-nosnippet>161</a>}
 </code></pre></div></section></main></body></html>

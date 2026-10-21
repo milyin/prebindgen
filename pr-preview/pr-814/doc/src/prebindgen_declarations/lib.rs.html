@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a></span><span class="attr">#![warn(missing_docs)]
 <a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">use </span>prebindgen_conversions::{InputPlan, OutputPlan};
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">mod </span>metadata;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">pub use </span>metadata::{validate_layout, CompositionGroup, GroupKind, OptionalGroup};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">pub use </span>metadata::{validate_layout, CompositionGroup, OptionalGroup};
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>prebindgen_flat::{same_type, type_key, Flat, <span class="prelude-ty">Result</span>, Wire, WireLayout};
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>quote::{format_ident, quote};
@@ -275,7 +275,7 @@
 <a href=#275 id=275 data-nosnippet>275</a>    /// The shared compiler never interprets this metadata.
 <a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">type </span>Niche: Clone;
 <a href=#277 id=277 data-nosnippet>277</a>    <span class="doccomment">/// Adapter-owned group metadata (for example a destination record shape).
-<a href=#278 id=278 data-nosnippet>278</a>    /// Stored in `GroupKind::Adapter`; the final conversion uses the complete
+<a href=#278 id=278 data-nosnippet>278</a>    /// Stored in `CompositionGroup::Adapter`; the final conversion uses the complete
 <a href=#279 id=279 data-nosnippet>279</a>    /// `CompositionGroup&lt;Self::Niche, Self::Group&gt;` as its `Conversion::Group`.
 <a href=#280 id=280 data-nosnippet>280</a>    </span><span class="kw">type </span>Group: Clone;
 <a href=#281 id=281 data-nosnippet>281</a>

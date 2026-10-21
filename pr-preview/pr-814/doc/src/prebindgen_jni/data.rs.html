@@ -437,302 +437,344 @@
 <a href=#437 id=437 data-nosnippet>437</a>        <span class="kw">for </span>wire <span class="kw">in </span>layout.iter_mut() {
 <a href=#438 id=438 data-nosnippet>438</a>            wire.kind.spare_niche = <span class="prelude-val">None</span>;
 <a href=#439 id=439 data-nosnippet>439</a>        }
-<a href=#440 id=440 data-nosnippet>440</a>        layout.enclose(JniGroup {
-<a href=#441 id=441 data-nosnippet>441</a>            name: root.clone(),
-<a href=#442 id=442 data-nosnippet>442</a>            kind: prebindgen_declarations::GroupKind::Adapter(DataGroup {
-<a href=#443 id=443 data-nosnippet>443</a>                root,
-<a href=#444 id=444 data-nosnippet>444</a>                record: <span class="self">self</span>.clone(),
-<a href=#445 id=445 data-nosnippet>445</a>                condition,
-<a href=#446 id=446 data-nosnippet>446</a>            }),
-<a href=#447 id=447 data-nosnippet>447</a>        });
-<a href=#448 id=448 data-nosnippet>448</a>        <span class="prelude-val">Ok</span>(())
-<a href=#449 id=449 data-nosnippet>449</a>    }
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>construct(<span class="kw-2">&amp;</span><span class="self">self</span>, values: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Iterator&lt;Item = String&gt;) -&gt; String {
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">let </span>fields = <span class="self">self
-<a href=#452 id=452 data-nosnippet>452</a>            </span>.fields
-<a href=#453 id=453 data-nosnippet>453</a>            .iter()
-<a href=#454 id=454 data-nosnippet>454</a>            .map(|<span class="kw">_</span>| values.next().expect(<span class="string">"one value per field"</span>))
-<a href=#455 id=455 data-nosnippet>455</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#456 id=456 data-nosnippet>456</a>        <span class="macro">format!</span>(<span class="string">"{}({})"</span>, <span class="self">self</span>.fqn, fields.join(<span class="string">", "</span>))
-<a href=#457 id=457 data-nosnippet>457</a>    }
-<a href=#458 id=458 data-nosnippet>458</a>}
-<a href=#459 id=459 data-nosnippet>459</a>
-<a href=#460 id=460 data-nosnippet>460</a><span class="kw">impl </span>Codec <span class="kw">for </span>DataCodec {
-<a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">type </span>Niche = <span class="kw">crate</span>::optional::JniNiche;
-<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">type </span>Group = DataGroup;
-<a href=#463 id=463 data-nosnippet>463</a>    <span class="kw">type </span>Extra = ();
-<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">type </span>Wire = JniWire;
-<a href=#465 id=465 data-nosnippet>465</a>    <span class="kw">type </span>Context = JniContext;
-<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">type </span>Input = JniInput;
-<a href=#467 id=467 data-nosnippet>467</a>    <span class="kw">type </span>Output = JniOutput;
-<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">fn </span>niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;</span>JniWire) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::optional::JniNiche&gt; {
-<a href=#469 id=469 data-nosnippet>469</a>        wire.spare_niche.clone()
+<a href=#440 id=440 data-nosnippet>440</a>        layout.enclose(JniGroup::Adapter(DataGroup {
+<a href=#441 id=441 data-nosnippet>441</a>            root,
+<a href=#442 id=442 data-nosnippet>442</a>            record: <span class="self">self</span>.clone(),
+<a href=#443 id=443 data-nosnippet>443</a>            condition,
+<a href=#444 id=444 data-nosnippet>444</a>        }));
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="prelude-val">Ok</span>(())
+<a href=#446 id=446 data-nosnippet>446</a>    }
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>construct(<span class="kw-2">&amp;</span><span class="self">self</span>, values: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Iterator&lt;Item = String&gt;) -&gt; String {
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">let </span>fields = <span class="self">self
+<a href=#449 id=449 data-nosnippet>449</a>            </span>.fields
+<a href=#450 id=450 data-nosnippet>450</a>            .iter()
+<a href=#451 id=451 data-nosnippet>451</a>            .map(|<span class="kw">_</span>| values.next().expect(<span class="string">"one value per field"</span>))
+<a href=#452 id=452 data-nosnippet>452</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="macro">format!</span>(<span class="string">"{}({})"</span>, <span class="self">self</span>.fqn, fields.join(<span class="string">", "</span>))
+<a href=#454 id=454 data-nosnippet>454</a>    }
+<a href=#455 id=455 data-nosnippet>455</a>}
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a><span class="kw">impl </span>Codec <span class="kw">for </span>DataCodec {
+<a href=#458 id=458 data-nosnippet>458</a>    <span class="kw">type </span>Niche = <span class="kw">crate</span>::optional::JniNiche;
+<a href=#459 id=459 data-nosnippet>459</a>    <span class="kw">type </span>Group = DataGroup;
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="kw">type </span>Extra = ();
+<a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">type </span>Wire = JniWire;
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">type </span>Context = JniContext;
+<a href=#463 id=463 data-nosnippet>463</a>    <span class="kw">type </span>Input = JniInput;
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">type </span>Output = JniOutput;
+<a href=#465 id=465 data-nosnippet>465</a>    <span class="kw">fn </span>niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;</span>JniWire) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::optional::JniNiche&gt; {
+<a href=#466 id=466 data-nosnippet>466</a>        wire.spare_niche.clone()
+<a href=#467 id=467 data-nosnippet>467</a>    }
+<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">fn </span>set_niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;mut </span>JniWire, niche: <span class="prelude-ty">Option</span>&lt;JniNiche&gt;) {
+<a href=#469 id=469 data-nosnippet>469</a>        wire.spare_niche = niche;
 <a href=#470 id=470 data-nosnippet>470</a>    }
-<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">fn </span>set_niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;mut </span>JniWire, niche: <span class="prelude-ty">Option</span>&lt;JniNiche&gt;) {
-<a href=#472 id=472 data-nosnippet>472</a>        wire.spare_niche = niche;
-<a href=#473 id=473 data-nosnippet>473</a>    }
-<a href=#474 id=474 data-nosnippet>474</a>    <span class="kw">fn </span>is_present(
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>JniWire,
-<a href=#477 id=477 data-nosnippet>477</a>        niche: <span class="kw-2">&amp;</span><span class="self">Self</span>::Niche,
-<a href=#478 id=478 data-nosnippet>478</a>        value: TokenStream,
-<a href=#479 id=479 data-nosnippet>479</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="prelude-val">Ok</span>(niche.present(value))
+<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">fn </span>is_present(
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>JniWire,
+<a href=#474 id=474 data-nosnippet>474</a>        niche: <span class="kw-2">&amp;</span><span class="self">Self</span>::Niche,
+<a href=#475 id=475 data-nosnippet>475</a>        value: TokenStream,
+<a href=#476 id=476 data-nosnippet>476</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="prelude-val">Ok</span>(niche.present(value))
+<a href=#478 id=478 data-nosnippet>478</a>    }
+<a href=#479 id=479 data-nosnippet>479</a>    <span class="kw">fn </span>remaining_niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;</span>JniWire, niche: <span class="kw-2">&amp;</span><span class="self">Self</span>::Niche) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Niche&gt; {
+<a href=#480 id=480 data-nosnippet>480</a>        optional::remaining(wire, niche)
 <a href=#481 id=481 data-nosnippet>481</a>    }
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">fn </span>remaining_niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;</span>JniWire, niche: <span class="kw-2">&amp;</span><span class="self">Self</span>::Niche) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Niche&gt; {
-<a href=#483 id=483 data-nosnippet>483</a>        optional::remaining(wire, niche)
-<a href=#484 id=484 data-nosnippet>484</a>    }
-<a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">fn </span>absent_value(
-<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#487 id=487 data-nosnippet>487</a>        wire: <span class="kw-2">&amp;</span>JniWire,
-<a href=#488 id=488 data-nosnippet>488</a>        niche: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">crate</span>::optional::JniNiche&gt;,
-<a href=#489 id=489 data-nosnippet>489</a>        input: bool,
-<a href=#490 id=490 data-nosnippet>490</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#491 id=491 data-nosnippet>491</a>        optional::absent(wire, niche, input)
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">fn </span>absent_value(
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#484 id=484 data-nosnippet>484</a>        wire: <span class="kw-2">&amp;</span>JniWire,
+<a href=#485 id=485 data-nosnippet>485</a>        niche: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">crate</span>::optional::JniNiche&gt;,
+<a href=#486 id=486 data-nosnippet>486</a>        input: bool,
+<a href=#487 id=487 data-nosnippet>487</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#488 id=488 data-nosnippet>488</a>        optional::absent(wire, niche, input)
+<a href=#489 id=489 data-nosnippet>489</a>    }
+<a href=#490 id=490 data-nosnippet>490</a>    <span class="kw">fn </span>selector(<span class="kw-2">&amp;</span><span class="self">self</span>, extra: <span class="kw-2">&amp;</span>()) -&gt; JniWire {
+<a href=#491 id=491 data-nosnippet>491</a>        JniCodec.selector(extra)
 <a href=#492 id=492 data-nosnippet>492</a>    }
-<a href=#493 id=493 data-nosnippet>493</a>    <span class="kw">fn </span>selector(<span class="kw-2">&amp;</span><span class="self">self</span>, extra: <span class="kw-2">&amp;</span>()) -&gt; JniWire {
-<a href=#494 id=494 data-nosnippet>494</a>        JniCodec.selector(extra)
-<a href=#495 id=495 data-nosnippet>495</a>    }
-<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">fn </span>consumes(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>syn::Type, extra: <span class="kw-2">&amp;</span>()) -&gt; bool {
-<a href=#497 id=497 data-nosnippet>497</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
-<a href=#498 id=498 data-nosnippet>498</a>            <span class="kw">return </span><span class="self">self</span>.consumes(inner, extra);
-<a href=#499 id=499 data-nosnippet>499</a>        }
-<a href=#500 id=500 data-nosnippet>500</a>        !<span class="self">self</span>.records.contains_key(<span class="kw-2">&amp;</span>type_key(ty)) &amp;&amp; JniCodec.consumes(ty, extra)
+<a href=#493 id=493 data-nosnippet>493</a>    <span class="kw">fn </span>consumes(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>syn::Type, extra: <span class="kw-2">&amp;</span>()) -&gt; bool {
+<a href=#494 id=494 data-nosnippet>494</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
+<a href=#495 id=495 data-nosnippet>495</a>            <span class="kw">return </span><span class="self">self</span>.consumes(inner, extra);
+<a href=#496 id=496 data-nosnippet>496</a>        }
+<a href=#497 id=497 data-nosnippet>497</a>        !<span class="self">self</span>.records.contains_key(<span class="kw-2">&amp;</span>type_key(ty)) &amp;&amp; JniCodec.consumes(ty, extra)
+<a href=#498 id=498 data-nosnippet>498</a>    }
+<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">fn </span>finish_input(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;mut </span>InputPlan&lt;JniWire&gt;, extra: <span class="kw-2">&amp;</span>()) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#500 id=500 data-nosnippet>500</a>        JniCodec.finish_input(plan, extra)
 <a href=#501 id=501 data-nosnippet>501</a>    }
-<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">fn </span>finish_input(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;mut </span>InputPlan&lt;JniWire&gt;, extra: <span class="kw-2">&amp;</span>()) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#503 id=503 data-nosnippet>503</a>        JniCodec.finish_input(plan, extra)
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">fn </span>finish_output(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;mut </span>OutputPlan&lt;JniWire&gt;, extra: <span class="kw-2">&amp;</span>()) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#503 id=503 data-nosnippet>503</a>        JniCodec.finish_output(plan, extra)
 <a href=#504 id=504 data-nosnippet>504</a>    }
-<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">fn </span>finish_output(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;mut </span>OutputPlan&lt;JniWire&gt;, extra: <span class="kw-2">&amp;</span>()) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#506 id=506 data-nosnippet>506</a>        JniCodec.finish_output(plan, extra)
-<a href=#507 id=507 data-nosnippet>507</a>    }
-<a href=#508 id=508 data-nosnippet>508</a>    <span class="kw">fn </span>input_leaf(
-<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#510 id=510 data-nosnippet>510</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#511 id=511 data-nosnippet>511</a>        extra: <span class="kw-2">&amp;</span>(),
-<a href=#512 id=512 data-nosnippet>512</a>        wire: syn::Ident,
-<a href=#513 id=513 data-nosnippet>513</a>        var: syn::Ident,
-<a href=#514 id=514 data-nosnippet>514</a>        active: <span class="kw-2">&amp;</span>Condition,
-<a href=#515 id=515 data-nosnippet>515</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;JniWire&gt;&gt; {
-<a href=#516 id=516 data-nosnippet>516</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
-<a href=#517 id=517 data-nosnippet>517</a>            <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{wire}_present"</span>);
-<a href=#518 id=518 data-nosnippet>518</a>            <span class="kw">let </span>child = <span class="self">self</span>.input_leaf(
-<a href=#519 id=519 data-nosnippet>519</a>                inner,
-<a href=#520 id=520 data-nosnippet>520</a>                extra,
-<a href=#521 id=521 data-nosnippet>521</a>                <span class="macro">format_ident!</span>(<span class="string">"{wire}_some"</span>),
-<a href=#522 id=522 data-nosnippet>522</a>                <span class="macro">format_ident!</span>(<span class="string">"{var}_some"</span>),
-<a href=#523 id=523 data-nosnippet>523</a>                <span class="kw-2">&amp;</span>active.arm(tag.clone(), <span class="number">1</span>),
-<a href=#524 id=524 data-nosnippet>524</a>            )<span class="question-mark">?</span>;
-<a href=#525 id=525 data-nosnippet>525</a>            <span class="kw">return </span>prebindgen_declarations::optional_input(<span class="self">self</span>, extra, tag, var, active, child);
-<a href=#526 id=526 data-nosnippet>526</a>        }
-<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(record) = <span class="self">self</span>.record(ty)<span class="question-mark">? </span><span class="kw">else </span>{
-<a href=#528 id=528 data-nosnippet>528</a>            <span class="kw">return </span>JniCodec.input_leaf(ty, extra, wire, var, active);
-<a href=#529 id=529 data-nosnippet>529</a>        };
-<a href=#530 id=530 data-nosnippet>530</a>        record.input(<span class="kw-2">&amp;</span>wire, <span class="kw-2">&amp;</span>var, active)
-<a href=#531 id=531 data-nosnippet>531</a>    }
-<a href=#532 id=532 data-nosnippet>532</a>    <span class="kw">fn </span>output_leaf(
-<a href=#533 id=533 data-nosnippet>533</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#534 id=534 data-nosnippet>534</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#535 id=535 data-nosnippet>535</a>        extra: <span class="kw-2">&amp;</span>(),
-<a href=#536 id=536 data-nosnippet>536</a>        wire: syn::Ident,
-<a href=#537 id=537 data-nosnippet>537</a>        value: TokenStream,
-<a href=#538 id=538 data-nosnippet>538</a>        borrowed: bool,
-<a href=#539 id=539 data-nosnippet>539</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;JniWire&gt;&gt; {
-<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
-<a href=#541 id=541 data-nosnippet>541</a>            <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{wire}_present"</span>);
-<a href=#542 id=542 data-nosnippet>542</a>            <span class="kw">let </span>payload = <span class="macro">format_ident!</span>(<span class="string">"{wire}_payload"</span>);
-<a href=#543 id=543 data-nosnippet>543</a>            <span class="kw">let </span>child = <span class="self">self</span>.output_leaf(
-<a href=#544 id=544 data-nosnippet>544</a>                inner,
-<a href=#545 id=545 data-nosnippet>545</a>                extra,
-<a href=#546 id=546 data-nosnippet>546</a>                <span class="macro">format_ident!</span>(<span class="string">"{wire}_some"</span>),
-<a href=#547 id=547 data-nosnippet>547</a>                <span class="macro">quote!</span>(#payload),
-<a href=#548 id=548 data-nosnippet>548</a>                borrowed,
-<a href=#549 id=549 data-nosnippet>549</a>            )<span class="question-mark">?</span>;
-<a href=#550 id=550 data-nosnippet>550</a>            <span class="kw">return </span>prebindgen_declarations::optional_output(
-<a href=#551 id=551 data-nosnippet>551</a>                <span class="self">self</span>, extra, tag, payload, value, borrowed, child,
-<a href=#552 id=552 data-nosnippet>552</a>            );
-<a href=#553 id=553 data-nosnippet>553</a>        }
-<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(record) = <span class="self">self</span>.record(ty)<span class="question-mark">? </span><span class="kw">else </span>{
-<a href=#555 id=555 data-nosnippet>555</a>            <span class="kw">return </span>JniCodec.output_leaf(ty, extra, wire, value, borrowed);
-<a href=#556 id=556 data-nosnippet>556</a>        };
-<a href=#557 id=557 data-nosnippet>557</a>        <span class="comment">// The legacy data-class leaf remains a borrowed projection, regardless
-<a href=#558 id=558 data-nosnippet>558</a>        // of its fields. Ownership transfer requires an explicit projection.
-<a href=#559 id=559 data-nosnippet>559</a>        </span>record.output(<span class="kw-2">&amp;</span>wire, value, <span class="kw-2">&amp;</span>Projection::borrowed())
-<a href=#560 id=560 data-nosnippet>560</a>    }
-<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">fn </span>output_projected(
-<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#563 id=563 data-nosnippet>563</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#564 id=564 data-nosnippet>564</a>        extra: <span class="kw-2">&amp;</span>(),
-<a href=#565 id=565 data-nosnippet>565</a>        wire: syn::Ident,
-<a href=#566 id=566 data-nosnippet>566</a>        value: TokenStream,
-<a href=#567 id=567 data-nosnippet>567</a>        projection: <span class="kw-2">&amp;</span>Projection,
-<a href=#568 id=568 data-nosnippet>568</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;JniWire&gt;&gt; {
-<a href=#569 id=569 data-nosnippet>569</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
-<a href=#570 id=570 data-nosnippet>570</a>            <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{wire}_present"</span>);
-<a href=#571 id=571 data-nosnippet>571</a>            <span class="kw">let </span>payload = <span class="macro">format_ident!</span>(<span class="string">"{wire}_payload"</span>);
-<a href=#572 id=572 data-nosnippet>572</a>            <span class="kw">let </span>child = <span class="self">self</span>.output_projected(
-<a href=#573 id=573 data-nosnippet>573</a>                inner,
-<a href=#574 id=574 data-nosnippet>574</a>                extra,
-<a href=#575 id=575 data-nosnippet>575</a>                <span class="macro">format_ident!</span>(<span class="string">"{wire}_some"</span>),
-<a href=#576 id=576 data-nosnippet>576</a>                <span class="macro">quote!</span>(#payload),
-<a href=#577 id=577 data-nosnippet>577</a>                projection,
-<a href=#578 id=578 data-nosnippet>578</a>            )<span class="question-mark">?</span>;
-<a href=#579 id=579 data-nosnippet>579</a>            <span class="kw">return </span>prebindgen_declarations::optional_output(
-<a href=#580 id=580 data-nosnippet>580</a>                <span class="self">self</span>,
-<a href=#581 id=581 data-nosnippet>581</a>                extra,
-<a href=#582 id=582 data-nosnippet>582</a>                tag,
-<a href=#583 id=583 data-nosnippet>583</a>                payload,
-<a href=#584 id=584 data-nosnippet>584</a>                value,
-<a href=#585 id=585 data-nosnippet>585</a>                projection.mode == ProjectionMode::Borrowed,
-<a href=#586 id=586 data-nosnippet>586</a>                child,
-<a href=#587 id=587 data-nosnippet>587</a>            );
-<a href=#588 id=588 data-nosnippet>588</a>        }
-<a href=#589 id=589 data-nosnippet>589</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(record) = <span class="self">self</span>.record(ty)<span class="question-mark">? </span><span class="kw">else </span>{
-<a href=#590 id=590 data-nosnippet>590</a>            <span class="kw">return </span>JniCodec.output_projected(ty, extra, wire, value, projection);
-<a href=#591 id=591 data-nosnippet>591</a>        };
-<a href=#592 id=592 data-nosnippet>592</a>        record.output(<span class="kw-2">&amp;</span>wire, value, projection)
-<a href=#593 id=593 data-nosnippet>593</a>    }
-<a href=#594 id=594 data-nosnippet>594</a>}
-<a href=#595 id=595 data-nosnippet>595</a>
-<a href=#596 id=596 data-nosnippet>596</a><span class="kw">impl </span>Shape {
-<a href=#597 id=597 data-nosnippet>597</a>    <span class="kw">fn </span>has_handles(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#598 id=598 data-nosnippet>598</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#599 id=599 data-nosnippet>599</a>            <span class="self">Self</span>::Handle(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-<a href=#600 id=600 data-nosnippet>600</a>            <span class="self">Self</span>::Record(r) =&gt; r.has_handles(),
-<a href=#601 id=601 data-nosnippet>601</a>            <span class="self">Self</span>::Optional(s) =&gt; s.has_handles(),
-<a href=#602 id=602 data-nosnippet>602</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-<a href=#603 id=603 data-nosnippet>603</a>        }
-<a href=#604 id=604 data-nosnippet>604</a>    }
-<a href=#605 id=605 data-nosnippet>605</a>    <span class="kw">fn </span>input(
-<a href=#606 id=606 data-nosnippet>606</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#607 id=607 data-nosnippet>607</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#608 id=608 data-nosnippet>608</a>        w: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#609 id=609 data-nosnippet>609</a>        v: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#610 id=610 data-nosnippet>610</a>        active: <span class="kw-2">&amp;</span>Condition,
-<a href=#611 id=611 data-nosnippet>611</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;JniWire&gt;&gt; {
-<a href=#612 id=612 data-nosnippet>612</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#613 id=613 data-nosnippet>613</a>            <span class="self">Self</span>::Optional(s) =&gt; {
-<a href=#614 id=614 data-nosnippet>614</a>                <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{w}_present"</span>);
-<a href=#615 id=615 data-nosnippet>615</a>                <span class="kw">let </span>child = s.input(
-<a href=#616 id=616 data-nosnippet>616</a>                    prebindgen_declarations::option_inner(ty).unwrap(),
-<a href=#617 id=617 data-nosnippet>617</a>                    <span class="kw-2">&amp;</span><span class="macro">format_ident!</span>(<span class="string">"{w}_some"</span>),
-<a href=#618 id=618 data-nosnippet>618</a>                    <span class="kw-2">&amp;</span><span class="macro">format_ident!</span>(<span class="string">"{v}_some"</span>),
-<a href=#619 id=619 data-nosnippet>619</a>                    <span class="kw-2">&amp;</span>active.arm(tag.clone(), <span class="number">1</span>),
-<a href=#620 id=620 data-nosnippet>620</a>                )<span class="question-mark">?</span>;
-<a href=#621 id=621 data-nosnippet>621</a>                prebindgen_declarations::optional_input(
-<a href=#622 id=622 data-nosnippet>622</a>                    <span class="kw-2">&amp;</span>JniCodec,
-<a href=#623 id=623 data-nosnippet>623</a>                    <span class="kw-2">&amp;</span>(),
-<a href=#624 id=624 data-nosnippet>624</a>                    tag,
-<a href=#625 id=625 data-nosnippet>625</a>                    v.clone(),
-<a href=#626 id=626 data-nosnippet>626</a>                    active,
-<a href=#627 id=627 data-nosnippet>627</a>                    child,
-<a href=#628 id=628 data-nosnippet>628</a>                )
-<a href=#629 id=629 data-nosnippet>629</a>            }
-<a href=#630 id=630 data-nosnippet>630</a>            <span class="self">Self</span>::Record(r) =&gt; r.input(w, v, active),
-<a href=#631 id=631 data-nosnippet>631</a>            <span class="kw">_ </span>=&gt; JniCodec.input_leaf(ty, <span class="kw-2">&amp;</span>(), w.clone(), v.clone(), active),
-<a href=#632 id=632 data-nosnippet>632</a>        }
-<a href=#633 id=633 data-nosnippet>633</a>    }
-<a href=#634 id=634 data-nosnippet>634</a>    <span class="kw">fn </span>output(
-<a href=#635 id=635 data-nosnippet>635</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#636 id=636 data-nosnippet>636</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#637 id=637 data-nosnippet>637</a>        w: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#638 id=638 data-nosnippet>638</a>        value: TokenStream,
-<a href=#639 id=639 data-nosnippet>639</a>        policy: <span class="kw-2">&amp;</span>Projection,
-<a href=#640 id=640 data-nosnippet>640</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;JniWire&gt;&gt; {
-<a href=#641 id=641 data-nosnippet>641</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#642 id=642 data-nosnippet>642</a>            <span class="self">Self</span>::Optional(s) =&gt; {
-<a href=#643 id=643 data-nosnippet>643</a>                <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{w}_present"</span>);
-<a href=#644 id=644 data-nosnippet>644</a>                <span class="kw">let </span>payload = <span class="macro">format_ident!</span>(<span class="string">"{w}_payload"</span>);
-<a href=#645 id=645 data-nosnippet>645</a>                <span class="kw">let </span>child = s.output(
-<a href=#646 id=646 data-nosnippet>646</a>                    prebindgen_declarations::option_inner(ty).unwrap(),
-<a href=#647 id=647 data-nosnippet>647</a>                    <span class="kw-2">&amp;</span><span class="macro">format_ident!</span>(<span class="string">"{w}_some"</span>),
-<a href=#648 id=648 data-nosnippet>648</a>                    <span class="macro">quote!</span>(#payload),
-<a href=#649 id=649 data-nosnippet>649</a>                    policy,
-<a href=#650 id=650 data-nosnippet>650</a>                )<span class="question-mark">?</span>;
-<a href=#651 id=651 data-nosnippet>651</a>                prebindgen_declarations::optional_output(
-<a href=#652 id=652 data-nosnippet>652</a>                    <span class="kw-2">&amp;</span>JniCodec,
-<a href=#653 id=653 data-nosnippet>653</a>                    <span class="kw-2">&amp;</span>(),
-<a href=#654 id=654 data-nosnippet>654</a>                    tag,
-<a href=#655 id=655 data-nosnippet>655</a>                    payload,
-<a href=#656 id=656 data-nosnippet>656</a>                    value,
-<a href=#657 id=657 data-nosnippet>657</a>                    policy.mode == ProjectionMode::Borrowed,
-<a href=#658 id=658 data-nosnippet>658</a>                    child,
-<a href=#659 id=659 data-nosnippet>659</a>                )
-<a href=#660 id=660 data-nosnippet>660</a>            }
-<a href=#661 id=661 data-nosnippet>661</a>            <span class="self">Self</span>::Record(r) =&gt; r.output(w, value, policy),
-<a href=#662 id=662 data-nosnippet>662</a>            <span class="kw">_ </span>=&gt; JniCodec.output_projected(ty, <span class="kw-2">&amp;</span>(), w.clone(), value, policy),
-<a href=#663 id=663 data-nosnippet>663</a>        }
-<a href=#664 id=664 data-nosnippet>664</a>    }
-<a href=#665 id=665 data-nosnippet>665</a>}
-<a href=#666 id=666 data-nosnippet>666</a>
-<a href=#667 id=667 data-nosnippet>667</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input_kotlin(
-<a href=#668 id=668 data-nosnippet>668</a>    nodes: <span class="kw-2">&amp;</span>[kotlin::JniNode],
-<a href=#669 id=669 data-nosnippet>669</a>    d: <span class="kw-2">&amp;</span>DataGroup,
-<a href=#670 id=670 data-nosnippet>670</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#671 id=671 data-nosnippet>671</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinInput&gt; {
-<a href=#672 id=672 data-nosnippet>672</a>    <span class="kw">let </span>inner = kotlin::leaf_wires(nodes);
-<a href=#673 id=673 data-nosnippet>673</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = KotlinInput::default();
-<a href=#674 id=674 data-nosnippet>674</a>    <span class="kw">let </span><span class="kw-2">mut </span>c = kotlin::input_kotlin(nodes, context)<span class="question-mark">?</span>;
-<a href=#675 id=675 data-nosnippet>675</a>    out.parameters.push(<span class="macro">format!</span>(
-<a href=#676 id=676 data-nosnippet>676</a>        <span class="string">"{}: {}{}"</span>,
-<a href=#677 id=677 data-nosnippet>677</a>        d.root,
-<a href=#678 id=678 data-nosnippet>678</a>        d.record.fqn,
-<a href=#679 id=679 data-nosnippet>679</a>        <span class="kw">if </span>d.condition == <span class="string">"true" </span>{ <span class="string">"" </span>} <span class="kw">else </span>{ <span class="string">"?" </span>}
-<a href=#680 id=680 data-nosnippet>680</a>    ));
-<a href=#681 id=681 data-nosnippet>681</a>    <span class="kw">if </span>nodes.len() != d.record.fields.len() || c.parameters.len() != d.record.fields.len() {
-<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"incomplete data-class input occurrence"</span>.into());
-<a href=#683 id=683 data-nosnippet>683</a>    }
-<a href=#684 id=684 data-nosnippet>684</a>    <span class="kw">for </span>(p, field) <span class="kw">in </span>c.parameters.iter().zip(<span class="kw-2">&amp;</span>d.record.fields) {
-<a href=#685 id=685 data-nosnippet>685</a>        <span class="kw">let </span>name = p.split_once(<span class="string">": "</span>).unwrap().<span class="number">0</span>;
-<a href=#686 id=686 data-nosnippet>686</a>        <span class="kw">let </span>receiver = <span class="kw">if </span>d.condition == <span class="string">"true" </span>{
-<a href=#687 id=687 data-nosnippet>687</a>            d.root.clone()
-<a href=#688 id=688 data-nosnippet>688</a>        } <span class="kw">else </span>{
-<a href=#689 id=689 data-nosnippet>689</a>            <span class="macro">format!</span>(<span class="string">"requireNotNull({})"</span>, d.root)
-<a href=#690 id=690 data-nosnippet>690</a>        };
-<a href=#691 id=691 data-nosnippet>691</a>        <span class="kw">let </span>expr = <span class="macro">format!</span>(<span class="string">"{receiver}.`{}`"</span>, field_name(field));
-<a href=#692 id=692 data-nosnippet>692</a>        <span class="kw">for </span>a <span class="kw">in </span>c
-<a href=#693 id=693 data-nosnippet>693</a>            .arguments
-<a href=#694 id=694 data-nosnippet>694</a>            .iter_mut()
-<a href=#695 id=695 data-nosnippet>695</a>            .chain(c.locks.iter_mut())
-<a href=#696 id=696 data-nosnippet>696</a>            .chain(c.consumed.iter_mut())
-<a href=#697 id=697 data-nosnippet>697</a>        {
-<a href=#698 id=698 data-nosnippet>698</a>            <span class="kw">if </span><span class="macro">matches!</span>(
-<a href=#699 id=699 data-nosnippet>699</a>                field.shape,
-<a href=#700 id=700 data-nosnippet>700</a>                Shape::Value(Value::Scalar(Primitive::I128 | Primitive::U128))
-<a href=#701 id=701 data-nosnippet>701</a>            ) {
-<a href=#702 id=702 data-nosnippet>702</a>                <span class="kw-2">*</span>a = a.replace(
-<a href=#703 id=703 data-nosnippet>703</a>                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{name}?.toByteArray()"</span>),
-<a href=#704 id=704 data-nosnippet>704</a>                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{name}.toByteArray()"</span>),
-<a href=#705 id=705 data-nosnippet>705</a>                );
-<a href=#706 id=706 data-nosnippet>706</a>            }
-<a href=#707 id=707 data-nosnippet>707</a>            <span class="kw-2">*</span>a = optional::replace(a, name, <span class="kw-2">&amp;</span>expr);
-<a href=#708 id=708 data-nosnippet>708</a>        }
-<a href=#709 id=709 data-nosnippet>709</a>    }
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="kw">for </span>(j, a) <span class="kw">in </span>c.arguments.into_iter().enumerate() {
-<a href=#711 id=711 data-nosnippet>711</a>        out.arguments.push(<span class="kw">if </span>d.condition == <span class="string">"true" </span>{
-<a href=#712 id=712 data-nosnippet>712</a>            a
-<a href=#713 id=713 data-nosnippet>713</a>        } <span class="kw">else </span>{
-<a href=#714 id=714 data-nosnippet>714</a>            <span class="macro">format!</span>(
-<a href=#715 id=715 data-nosnippet>715</a>                <span class="string">"if ({}) {a} else {}"</span>,
-<a href=#716 id=716 data-nosnippet>716</a>                d.condition,
-<a href=#717 id=717 data-nosnippet>717</a>                optional::default_kt(<span class="kw-2">&amp;</span>inner[j].kind, <span class="prelude-val">None</span>)
-<a href=#718 id=718 data-nosnippet>718</a>            )
-<a href=#719 id=719 data-nosnippet>719</a>        });
-<a href=#720 id=720 data-nosnippet>720</a>    }
-<a href=#721 id=721 data-nosnippet>721</a>    out.locks.extend(c.locks);
-<a href=#722 id=722 data-nosnippet>722</a>    out.consumed.extend(c.consumed);
-<a href=#723 id=723 data-nosnippet>723</a>    <span class="prelude-val">Ok</span>(out)
-<a href=#724 id=724 data-nosnippet>724</a>}
-<a href=#725 id=725 data-nosnippet>725</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>output_kotlin(
-<a href=#726 id=726 data-nosnippet>726</a>    nodes: <span class="kw-2">&amp;</span>[kotlin::JniNode],
-<a href=#727 id=727 data-nosnippet>727</a>    d: <span class="kw-2">&amp;</span>DataGroup,
-<a href=#728 id=728 data-nosnippet>728</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#729 id=729 data-nosnippet>729</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinOutput&gt; {
-<a href=#730 id=730 data-nosnippet>730</a>    <span class="kw">let </span><span class="kw-2">mut </span>c = kotlin::output_kotlin(nodes, context)<span class="question-mark">?</span>;
-<a href=#731 id=731 data-nosnippet>731</a>    <span class="kw">if </span>nodes.len() != d.record.fields.len() || c.delivered.len() != d.record.fields.len() {
-<a href=#732 id=732 data-nosnippet>732</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"incomplete data-class output occurrence"</span>.into());
-<a href=#733 id=733 data-nosnippet>733</a>    }
-<a href=#734 id=734 data-nosnippet>734</a>    c.delivered = <span class="macro">vec!</span>[d.record.construct(<span class="kw-2">&amp;mut </span>c.delivered.into_iter())];
-<a href=#735 id=735 data-nosnippet>735</a>    c.result_types = <span class="macro">vec!</span>[d.record.fqn.clone()];
-<a href=#736 id=736 data-nosnippet>736</a>    <span class="prelude-val">Ok</span>(c)
-<a href=#737 id=737 data-nosnippet>737</a>}
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">fn </span>input_leaf(
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#507 id=507 data-nosnippet>507</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#508 id=508 data-nosnippet>508</a>        extra: <span class="kw-2">&amp;</span>(),
+<a href=#509 id=509 data-nosnippet>509</a>        wire: syn::Ident,
+<a href=#510 id=510 data-nosnippet>510</a>        var: syn::Ident,
+<a href=#511 id=511 data-nosnippet>511</a>        active: <span class="kw-2">&amp;</span>Condition,
+<a href=#512 id=512 data-nosnippet>512</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;JniWire&gt;&gt; {
+<a href=#513 id=513 data-nosnippet>513</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
+<a href=#514 id=514 data-nosnippet>514</a>            <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{wire}_present"</span>);
+<a href=#515 id=515 data-nosnippet>515</a>            <span class="kw">let </span>child = <span class="self">self</span>.input_leaf(
+<a href=#516 id=516 data-nosnippet>516</a>                inner,
+<a href=#517 id=517 data-nosnippet>517</a>                extra,
+<a href=#518 id=518 data-nosnippet>518</a>                <span class="macro">format_ident!</span>(<span class="string">"{wire}_some"</span>),
+<a href=#519 id=519 data-nosnippet>519</a>                <span class="macro">format_ident!</span>(<span class="string">"{var}_some"</span>),
+<a href=#520 id=520 data-nosnippet>520</a>                <span class="kw-2">&amp;</span>active.arm(tag.clone(), <span class="number">1</span>),
+<a href=#521 id=521 data-nosnippet>521</a>            )<span class="question-mark">?</span>;
+<a href=#522 id=522 data-nosnippet>522</a>            <span class="kw">return </span>prebindgen_declarations::optional_input(<span class="self">self</span>, extra, tag, var, active, child);
+<a href=#523 id=523 data-nosnippet>523</a>        }
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(record) = <span class="self">self</span>.record(ty)<span class="question-mark">? </span><span class="kw">else </span>{
+<a href=#525 id=525 data-nosnippet>525</a>            <span class="kw">return </span>JniCodec.input_leaf(ty, extra, wire, var, active);
+<a href=#526 id=526 data-nosnippet>526</a>        };
+<a href=#527 id=527 data-nosnippet>527</a>        record.input(<span class="kw-2">&amp;</span>wire, <span class="kw-2">&amp;</span>var, active)
+<a href=#528 id=528 data-nosnippet>528</a>    }
+<a href=#529 id=529 data-nosnippet>529</a>    <span class="kw">fn </span>output_leaf(
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#531 id=531 data-nosnippet>531</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#532 id=532 data-nosnippet>532</a>        extra: <span class="kw-2">&amp;</span>(),
+<a href=#533 id=533 data-nosnippet>533</a>        wire: syn::Ident,
+<a href=#534 id=534 data-nosnippet>534</a>        value: TokenStream,
+<a href=#535 id=535 data-nosnippet>535</a>        borrowed: bool,
+<a href=#536 id=536 data-nosnippet>536</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;JniWire&gt;&gt; {
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
+<a href=#538 id=538 data-nosnippet>538</a>            <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{wire}_present"</span>);
+<a href=#539 id=539 data-nosnippet>539</a>            <span class="kw">let </span>payload = <span class="macro">format_ident!</span>(<span class="string">"{wire}_payload"</span>);
+<a href=#540 id=540 data-nosnippet>540</a>            <span class="kw">let </span>child = <span class="self">self</span>.output_leaf(
+<a href=#541 id=541 data-nosnippet>541</a>                inner,
+<a href=#542 id=542 data-nosnippet>542</a>                extra,
+<a href=#543 id=543 data-nosnippet>543</a>                <span class="macro">format_ident!</span>(<span class="string">"{wire}_some"</span>),
+<a href=#544 id=544 data-nosnippet>544</a>                <span class="macro">quote!</span>(#payload),
+<a href=#545 id=545 data-nosnippet>545</a>                borrowed,
+<a href=#546 id=546 data-nosnippet>546</a>            )<span class="question-mark">?</span>;
+<a href=#547 id=547 data-nosnippet>547</a>            <span class="kw">return </span>prebindgen_declarations::optional_output(
+<a href=#548 id=548 data-nosnippet>548</a>                <span class="self">self</span>, extra, tag, payload, value, borrowed, child,
+<a href=#549 id=549 data-nosnippet>549</a>            );
+<a href=#550 id=550 data-nosnippet>550</a>        }
+<a href=#551 id=551 data-nosnippet>551</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(record) = <span class="self">self</span>.record(ty)<span class="question-mark">? </span><span class="kw">else </span>{
+<a href=#552 id=552 data-nosnippet>552</a>            <span class="kw">return </span>JniCodec.output_leaf(ty, extra, wire, value, borrowed);
+<a href=#553 id=553 data-nosnippet>553</a>        };
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="comment">// The legacy data-class leaf remains a borrowed projection, regardless
+<a href=#555 id=555 data-nosnippet>555</a>        // of its fields. Ownership transfer requires an explicit projection.
+<a href=#556 id=556 data-nosnippet>556</a>        </span>record.output(<span class="kw-2">&amp;</span>wire, value, <span class="kw-2">&amp;</span>Projection::borrowed())
+<a href=#557 id=557 data-nosnippet>557</a>    }
+<a href=#558 id=558 data-nosnippet>558</a>    <span class="kw">fn </span>output_projected(
+<a href=#559 id=559 data-nosnippet>559</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#560 id=560 data-nosnippet>560</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#561 id=561 data-nosnippet>561</a>        extra: <span class="kw-2">&amp;</span>(),
+<a href=#562 id=562 data-nosnippet>562</a>        wire: syn::Ident,
+<a href=#563 id=563 data-nosnippet>563</a>        value: TokenStream,
+<a href=#564 id=564 data-nosnippet>564</a>        projection: <span class="kw-2">&amp;</span>Projection,
+<a href=#565 id=565 data-nosnippet>565</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;JniWire&gt;&gt; {
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
+<a href=#567 id=567 data-nosnippet>567</a>            <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{wire}_present"</span>);
+<a href=#568 id=568 data-nosnippet>568</a>            <span class="kw">let </span>payload = <span class="macro">format_ident!</span>(<span class="string">"{wire}_payload"</span>);
+<a href=#569 id=569 data-nosnippet>569</a>            <span class="kw">let </span>child = <span class="self">self</span>.output_projected(
+<a href=#570 id=570 data-nosnippet>570</a>                inner,
+<a href=#571 id=571 data-nosnippet>571</a>                extra,
+<a href=#572 id=572 data-nosnippet>572</a>                <span class="macro">format_ident!</span>(<span class="string">"{wire}_some"</span>),
+<a href=#573 id=573 data-nosnippet>573</a>                <span class="macro">quote!</span>(#payload),
+<a href=#574 id=574 data-nosnippet>574</a>                projection,
+<a href=#575 id=575 data-nosnippet>575</a>            )<span class="question-mark">?</span>;
+<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">return </span>prebindgen_declarations::optional_output(
+<a href=#577 id=577 data-nosnippet>577</a>                <span class="self">self</span>,
+<a href=#578 id=578 data-nosnippet>578</a>                extra,
+<a href=#579 id=579 data-nosnippet>579</a>                tag,
+<a href=#580 id=580 data-nosnippet>580</a>                payload,
+<a href=#581 id=581 data-nosnippet>581</a>                value,
+<a href=#582 id=582 data-nosnippet>582</a>                projection.mode == ProjectionMode::Borrowed,
+<a href=#583 id=583 data-nosnippet>583</a>                child,
+<a href=#584 id=584 data-nosnippet>584</a>            );
+<a href=#585 id=585 data-nosnippet>585</a>        }
+<a href=#586 id=586 data-nosnippet>586</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(record) = <span class="self">self</span>.record(ty)<span class="question-mark">? </span><span class="kw">else </span>{
+<a href=#587 id=587 data-nosnippet>587</a>            <span class="kw">return </span>JniCodec.output_projected(ty, extra, wire, value, projection);
+<a href=#588 id=588 data-nosnippet>588</a>        };
+<a href=#589 id=589 data-nosnippet>589</a>        record.output(<span class="kw-2">&amp;</span>wire, value, projection)
+<a href=#590 id=590 data-nosnippet>590</a>    }
+<a href=#591 id=591 data-nosnippet>591</a>}
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a><span class="kw">impl </span>Shape {
+<a href=#594 id=594 data-nosnippet>594</a>    <span class="kw">fn </span>has_handles(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#595 id=595 data-nosnippet>595</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#596 id=596 data-nosnippet>596</a>            <span class="self">Self</span>::Handle(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+<a href=#597 id=597 data-nosnippet>597</a>            <span class="self">Self</span>::Record(r) =&gt; r.has_handles(),
+<a href=#598 id=598 data-nosnippet>598</a>            <span class="self">Self</span>::Optional(s) =&gt; s.has_handles(),
+<a href=#599 id=599 data-nosnippet>599</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#600 id=600 data-nosnippet>600</a>        }
+<a href=#601 id=601 data-nosnippet>601</a>    }
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="kw">fn </span>input(
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#604 id=604 data-nosnippet>604</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#605 id=605 data-nosnippet>605</a>        w: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#606 id=606 data-nosnippet>606</a>        v: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#607 id=607 data-nosnippet>607</a>        active: <span class="kw-2">&amp;</span>Condition,
+<a href=#608 id=608 data-nosnippet>608</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;JniWire&gt;&gt; {
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="self">Self</span>::Optional(s) =&gt; {
+<a href=#611 id=611 data-nosnippet>611</a>                <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{w}_present"</span>);
+<a href=#612 id=612 data-nosnippet>612</a>                <span class="kw">let </span>child = s.input(
+<a href=#613 id=613 data-nosnippet>613</a>                    prebindgen_declarations::option_inner(ty).unwrap(),
+<a href=#614 id=614 data-nosnippet>614</a>                    <span class="kw-2">&amp;</span><span class="macro">format_ident!</span>(<span class="string">"{w}_some"</span>),
+<a href=#615 id=615 data-nosnippet>615</a>                    <span class="kw-2">&amp;</span><span class="macro">format_ident!</span>(<span class="string">"{v}_some"</span>),
+<a href=#616 id=616 data-nosnippet>616</a>                    <span class="kw-2">&amp;</span>active.arm(tag.clone(), <span class="number">1</span>),
+<a href=#617 id=617 data-nosnippet>617</a>                )<span class="question-mark">?</span>;
+<a href=#618 id=618 data-nosnippet>618</a>                prebindgen_declarations::optional_input(
+<a href=#619 id=619 data-nosnippet>619</a>                    <span class="kw-2">&amp;</span>JniCodec,
+<a href=#620 id=620 data-nosnippet>620</a>                    <span class="kw-2">&amp;</span>(),
+<a href=#621 id=621 data-nosnippet>621</a>                    tag,
+<a href=#622 id=622 data-nosnippet>622</a>                    v.clone(),
+<a href=#623 id=623 data-nosnippet>623</a>                    active,
+<a href=#624 id=624 data-nosnippet>624</a>                    child,
+<a href=#625 id=625 data-nosnippet>625</a>                )
+<a href=#626 id=626 data-nosnippet>626</a>            }
+<a href=#627 id=627 data-nosnippet>627</a>            <span class="self">Self</span>::Record(r) =&gt; r.input(w, v, active),
+<a href=#628 id=628 data-nosnippet>628</a>            <span class="kw">_ </span>=&gt; JniCodec.input_leaf(ty, <span class="kw-2">&amp;</span>(), w.clone(), v.clone(), active),
+<a href=#629 id=629 data-nosnippet>629</a>        }
+<a href=#630 id=630 data-nosnippet>630</a>    }
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="kw">fn </span>output(
+<a href=#632 id=632 data-nosnippet>632</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#633 id=633 data-nosnippet>633</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#634 id=634 data-nosnippet>634</a>        w: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#635 id=635 data-nosnippet>635</a>        value: TokenStream,
+<a href=#636 id=636 data-nosnippet>636</a>        policy: <span class="kw-2">&amp;</span>Projection,
+<a href=#637 id=637 data-nosnippet>637</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;JniWire&gt;&gt; {
+<a href=#638 id=638 data-nosnippet>638</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#639 id=639 data-nosnippet>639</a>            <span class="self">Self</span>::Optional(s) =&gt; {
+<a href=#640 id=640 data-nosnippet>640</a>                <span class="kw">let </span>tag = <span class="macro">format_ident!</span>(<span class="string">"{w}_present"</span>);
+<a href=#641 id=641 data-nosnippet>641</a>                <span class="kw">let </span>payload = <span class="macro">format_ident!</span>(<span class="string">"{w}_payload"</span>);
+<a href=#642 id=642 data-nosnippet>642</a>                <span class="kw">let </span>child = s.output(
+<a href=#643 id=643 data-nosnippet>643</a>                    prebindgen_declarations::option_inner(ty).unwrap(),
+<a href=#644 id=644 data-nosnippet>644</a>                    <span class="kw-2">&amp;</span><span class="macro">format_ident!</span>(<span class="string">"{w}_some"</span>),
+<a href=#645 id=645 data-nosnippet>645</a>                    <span class="macro">quote!</span>(#payload),
+<a href=#646 id=646 data-nosnippet>646</a>                    policy,
+<a href=#647 id=647 data-nosnippet>647</a>                )<span class="question-mark">?</span>;
+<a href=#648 id=648 data-nosnippet>648</a>                prebindgen_declarations::optional_output(
+<a href=#649 id=649 data-nosnippet>649</a>                    <span class="kw-2">&amp;</span>JniCodec,
+<a href=#650 id=650 data-nosnippet>650</a>                    <span class="kw-2">&amp;</span>(),
+<a href=#651 id=651 data-nosnippet>651</a>                    tag,
+<a href=#652 id=652 data-nosnippet>652</a>                    payload,
+<a href=#653 id=653 data-nosnippet>653</a>                    value,
+<a href=#654 id=654 data-nosnippet>654</a>                    policy.mode == ProjectionMode::Borrowed,
+<a href=#655 id=655 data-nosnippet>655</a>                    child,
+<a href=#656 id=656 data-nosnippet>656</a>                )
+<a href=#657 id=657 data-nosnippet>657</a>            }
+<a href=#658 id=658 data-nosnippet>658</a>            <span class="self">Self</span>::Record(r) =&gt; r.output(w, value, policy),
+<a href=#659 id=659 data-nosnippet>659</a>            <span class="kw">_ </span>=&gt; JniCodec.output_projected(ty, <span class="kw-2">&amp;</span>(), w.clone(), value, policy),
+<a href=#660 id=660 data-nosnippet>660</a>        }
+<a href=#661 id=661 data-nosnippet>661</a>    }
+<a href=#662 id=662 data-nosnippet>662</a>}
+<a href=#663 id=663 data-nosnippet>663</a>
+<a href=#664 id=664 data-nosnippet>664</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input_kotlin(
+<a href=#665 id=665 data-nosnippet>665</a>    nodes: <span class="kw-2">&amp;</span>[kotlin::JniNode],
+<a href=#666 id=666 data-nosnippet>666</a>    d: <span class="kw-2">&amp;</span>DataGroup,
+<a href=#667 id=667 data-nosnippet>667</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#668 id=668 data-nosnippet>668</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinInput&gt; {
+<a href=#669 id=669 data-nosnippet>669</a>    <span class="kw">let </span>inner = kotlin::leaf_wires(nodes);
+<a href=#670 id=670 data-nosnippet>670</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = KotlinInput::default();
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">let </span><span class="kw-2">mut </span>c = kotlin::input_kotlin(nodes, context)<span class="question-mark">?</span>;
+<a href=#672 id=672 data-nosnippet>672</a>    out.parameters.push(<span class="macro">format!</span>(
+<a href=#673 id=673 data-nosnippet>673</a>        <span class="string">"{}: {}{}"</span>,
+<a href=#674 id=674 data-nosnippet>674</a>        d.root,
+<a href=#675 id=675 data-nosnippet>675</a>        d.record.fqn,
+<a href=#676 id=676 data-nosnippet>676</a>        <span class="kw">if </span>d.condition == <span class="string">"true" </span>{ <span class="string">"" </span>} <span class="kw">else </span>{ <span class="string">"?" </span>}
+<a href=#677 id=677 data-nosnippet>677</a>    ));
+<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">if </span>nodes.len() != d.record.fields.len() || c.parameters.len() != d.record.fields.len() {
+<a href=#679 id=679 data-nosnippet>679</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"incomplete data-class input occurrence"</span>.into());
+<a href=#680 id=680 data-nosnippet>680</a>    }
+<a href=#681 id=681 data-nosnippet>681</a>    <span class="kw">for </span>(p, field) <span class="kw">in </span>c.parameters.iter().zip(<span class="kw-2">&amp;</span>d.record.fields) {
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">let </span>name = p.split_once(<span class="string">": "</span>).unwrap().<span class="number">0</span>;
+<a href=#683 id=683 data-nosnippet>683</a>        <span class="kw">let </span>receiver = <span class="kw">if </span>d.condition == <span class="string">"true" </span>{
+<a href=#684 id=684 data-nosnippet>684</a>            d.root.clone()
+<a href=#685 id=685 data-nosnippet>685</a>        } <span class="kw">else </span>{
+<a href=#686 id=686 data-nosnippet>686</a>            <span class="macro">format!</span>(<span class="string">"requireNotNull({})"</span>, d.root)
+<a href=#687 id=687 data-nosnippet>687</a>        };
+<a href=#688 id=688 data-nosnippet>688</a>        <span class="kw">let </span>expr = <span class="macro">format!</span>(<span class="string">"{receiver}.`{}`"</span>, field_name(field));
+<a href=#689 id=689 data-nosnippet>689</a>        <span class="kw">for </span>a <span class="kw">in </span>c
+<a href=#690 id=690 data-nosnippet>690</a>            .arguments
+<a href=#691 id=691 data-nosnippet>691</a>            .iter_mut()
+<a href=#692 id=692 data-nosnippet>692</a>            .chain(c.locks.iter_mut())
+<a href=#693 id=693 data-nosnippet>693</a>            .chain(c.consumed.iter_mut())
+<a href=#694 id=694 data-nosnippet>694</a>        {
+<a href=#695 id=695 data-nosnippet>695</a>            <span class="kw">if </span><span class="macro">matches!</span>(
+<a href=#696 id=696 data-nosnippet>696</a>                field.shape,
+<a href=#697 id=697 data-nosnippet>697</a>                Shape::Value(Value::Scalar(Primitive::I128 | Primitive::U128))
+<a href=#698 id=698 data-nosnippet>698</a>            ) {
+<a href=#699 id=699 data-nosnippet>699</a>                <span class="kw-2">*</span>a = a.replace(
+<a href=#700 id=700 data-nosnippet>700</a>                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{name}?.toByteArray()"</span>),
+<a href=#701 id=701 data-nosnippet>701</a>                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{name}.toByteArray()"</span>),
+<a href=#702 id=702 data-nosnippet>702</a>                );
+<a href=#703 id=703 data-nosnippet>703</a>            }
+<a href=#704 id=704 data-nosnippet>704</a>            <span class="kw-2">*</span>a = optional::replace(a, name, <span class="kw-2">&amp;</span>expr);
+<a href=#705 id=705 data-nosnippet>705</a>        }
+<a href=#706 id=706 data-nosnippet>706</a>    }
+<a href=#707 id=707 data-nosnippet>707</a>    <span class="kw">for </span>(j, a) <span class="kw">in </span>c.arguments.into_iter().enumerate() {
+<a href=#708 id=708 data-nosnippet>708</a>        out.arguments.push(<span class="kw">if </span>d.condition == <span class="string">"true" </span>{
+<a href=#709 id=709 data-nosnippet>709</a>            a
+<a href=#710 id=710 data-nosnippet>710</a>        } <span class="kw">else </span>{
+<a href=#711 id=711 data-nosnippet>711</a>            <span class="macro">format!</span>(
+<a href=#712 id=712 data-nosnippet>712</a>                <span class="string">"if ({}) {a} else {}"</span>,
+<a href=#713 id=713 data-nosnippet>713</a>                d.condition,
+<a href=#714 id=714 data-nosnippet>714</a>                optional::default_kt(<span class="kw-2">&amp;</span>inner[j].kind, <span class="prelude-val">None</span>)
+<a href=#715 id=715 data-nosnippet>715</a>            )
+<a href=#716 id=716 data-nosnippet>716</a>        });
+<a href=#717 id=717 data-nosnippet>717</a>    }
+<a href=#718 id=718 data-nosnippet>718</a>    out.locks.extend(c.locks);
+<a href=#719 id=719 data-nosnippet>719</a>    out.consumed.extend(c.consumed);
+<a href=#720 id=720 data-nosnippet>720</a>    <span class="prelude-val">Ok</span>(out)
+<a href=#721 id=721 data-nosnippet>721</a>}
+<a href=#722 id=722 data-nosnippet>722</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>output_kotlin(
+<a href=#723 id=723 data-nosnippet>723</a>    nodes: <span class="kw-2">&amp;</span>[kotlin::JniNode],
+<a href=#724 id=724 data-nosnippet>724</a>    d: <span class="kw-2">&amp;</span>DataGroup,
+<a href=#725 id=725 data-nosnippet>725</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#726 id=726 data-nosnippet>726</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinOutput&gt; {
+<a href=#727 id=727 data-nosnippet>727</a>    <span class="kw">let </span><span class="kw-2">mut </span>c = kotlin::output_kotlin(nodes, context)<span class="question-mark">?</span>;
+<a href=#728 id=728 data-nosnippet>728</a>    <span class="kw">if </span>nodes.len() != d.record.fields.len() || c.delivered.len() != d.record.fields.len() {
+<a href=#729 id=729 data-nosnippet>729</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"incomplete data-class output occurrence"</span>.into());
+<a href=#730 id=730 data-nosnippet>730</a>    }
+<a href=#731 id=731 data-nosnippet>731</a>    c.delivered = <span class="macro">vec!</span>[d.record.construct(<span class="kw-2">&amp;mut </span>c.delivered.into_iter())];
+<a href=#732 id=732 data-nosnippet>732</a>    c.result_types = <span class="macro">vec!</span>[d.record.fqn.clone()];
+<a href=#733 id=733 data-nosnippet>733</a>    <span class="prelude-val">Ok</span>(c)
+<a href=#734 id=734 data-nosnippet>734</a>}
+<a href=#735 id=735 data-nosnippet>735</a>
+<a href=#736 id=736 data-nosnippet>736</a><span class="attr">#[cfg(test)]
+<a href=#737 id=737 data-nosnippet>737</a></span><span class="kw">mod </span>group_tests {
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#739 id=739 data-nosnippet>739</a>    <span class="kw">use </span>prebindgen_flat::{Wire, WireLayout, WireNode};
+<a href=#740 id=740 data-nosnippet>740</a>
+<a href=#741 id=741 data-nosnippet>741</a>    <span class="kw">fn </span>record(root: <span class="kw-2">&amp;</span>str) -&gt; WireNode&lt;JniWire, JniGroup&gt; {
+<a href=#742 id=742 data-nosnippet>742</a>        WireNode::Group {
+<a href=#743 id=743 data-nosnippet>743</a>            metadata: JniGroup::Adapter(DataGroup {
+<a href=#744 id=744 data-nosnippet>744</a>                root: root.into(),
+<a href=#745 id=745 data-nosnippet>745</a>                record: Rc::new(RecordShape {
+<a href=#746 id=746 data-nosnippet>746</a>                    ty: <span class="macro">syn::parse_quote!</span>(Empty),
+<a href=#747 id=747 data-nosnippet>747</a>                    fqn: <span class="string">"example.Empty"</span>.into(),
+<a href=#748 id=748 data-nosnippet>748</a>                    fields: <span class="macro">vec!</span>[],
+<a href=#749 id=749 data-nosnippet>749</a>                }),
+<a href=#750 id=750 data-nosnippet>750</a>                condition: <span class="string">"true"</span>.into(),
+<a href=#751 id=751 data-nosnippet>751</a>            }),
+<a href=#752 id=752 data-nosnippet>752</a>            children: WireLayout::default(),
+<a href=#753 id=753 data-nosnippet>753</a>        }
+<a href=#754 id=754 data-nosnippet>754</a>    }
+<a href=#755 id=755 data-nosnippet>755</a>    <span class="attr">#[test]
+<a href=#756 id=756 data-nosnippet>756</a>    </span><span class="kw">fn </span>kotlin_record_and_presence_bindings_share_a_namespace() {
+<a href=#757 id=757 data-nosnippet>757</a>        <span class="kw">let </span><span class="kw-2">mut </span>optional = WireLayout::from(<span class="macro">vec!</span>[Wire {
+<a href=#758 id=758 data-nosnippet>758</a>            name: <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#759 id=759 data-nosnippet>759</a>            kind: JniWire::from(JniKind::Selector),
+<a href=#760 id=760 data-nosnippet>760</a>        }]);
+<a href=#761 id=761 data-nosnippet>761</a>        optional.enclose(JniGroup::Optional(prebindgen_declarations::OptionalGroup {
+<a href=#762 id=762 data-nosnippet>762</a>            presence: <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#763 id=763 data-nosnippet>763</a>            discriminator: <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#764 id=764 data-nosnippet>764</a>            niche: <span class="prelude-val">None</span>,
+<a href=#765 id=765 data-nosnippet>765</a>        }));
+<a href=#766 id=766 data-nosnippet>766</a>        optional.extend(WireLayout::from_nodes(<span class="macro">vec!</span>[record(<span class="string">"value"</span>)]));
+<a href=#767 id=767 data-nosnippet>767</a>        kotlin::validate_layout(<span class="kw-2">&amp;</span>optional).unwrap();
+<a href=#768 id=768 data-nosnippet>768</a>        optional.extend(WireLayout::from_nodes(<span class="macro">vec!</span>[record(<span class="string">"flag"</span>)]));
+<a href=#769 id=769 data-nosnippet>769</a>        <span class="macro">assert!</span>(kotlin::validate_layout(<span class="kw-2">&amp;</span>optional)
+<a href=#770 id=770 data-nosnippet>770</a>            .unwrap_err()
+<a href=#771 id=771 data-nosnippet>771</a>            .contains(<span class="string">"duplicate Kotlin group binding `flag`"</span>));
+<a href=#772 id=772 data-nosnippet>772</a>        <span class="kw">let </span>duplicates = WireLayout::from_nodes(<span class="macro">vec!</span>[record(<span class="string">"value"</span>), record(<span class="string">"value"</span>)]);
+<a href=#773 id=773 data-nosnippet>773</a>        <span class="macro">assert!</span>(kotlin::validate_layout(<span class="kw-2">&amp;</span>duplicates)
+<a href=#774 id=774 data-nosnippet>774</a>            .unwrap_err()
+<a href=#775 id=775 data-nosnippet>775</a>            .contains(<span class="string">"duplicate Kotlin group binding `value`"</span>));
+<a href=#776 id=776 data-nosnippet>776</a>        <span class="comment">// These adapter-owned names impose no constraint on the shared compiler.
+<a href=#777 id=777 data-nosnippet>777</a>        </span>prebindgen_declarations::validate_layout(<span class="kw-2">&amp;</span>duplicates).unwrap();
+<a href=#778 id=778 data-nosnippet>778</a>    }
+<a href=#779 id=779 data-nosnippet>779</a>}
 </code></pre></div></section></main></body></html>
