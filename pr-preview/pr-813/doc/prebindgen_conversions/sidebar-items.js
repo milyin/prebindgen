@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Access"],"fn":["render_template","source_result_expr","template_parameter"],"mod":["boxed","staged","value"],"struct":["Delivery","InputPlan","OutputPlan","Resource"],"trait":["TemplateContext"]};
+window.SIDEBAR_ITEMS = {"enum":["Access"],"fn":["render_template","source_result_expr","template_parameter"],"mod":["boxed","staged","value"],"struct":["Delivery","InputPlan","OutputPlan","Resource"],"trait":["PlanMetadata","TemplateContext"]};
