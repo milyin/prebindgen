@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_flat::ConversionExt;
 fn flat(source: &str) -> Bindings {
     Flat::parse(
         syn::parse_file(source)
@@ -336,4 +337,195 @@ fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
         ))
     ))))
     .contains("does not support field projection overrides"));
+}
+
+#[test]
+fn optional_niches_and_nested_presence_preserve_distinct_states() {
+    let source=flat("pub type Handle=String; pub fn h(x:Option<Handle>)->Option<Handle>{} pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{} pub fn scalar(x:Option<i64>)->Option<i64>{} pub fn ch(x:Option<char>)->Option<char>{}");
+    let generated = JniGen::builder()
+        .flat(source)
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Handle))
+                .fun(fun!(h))
+                .fun(fun!(n))
+                .fun(fun!(scalar))
+                .fun(fun!(ch)),
+        )
+        .build()
+        .unwrap();
+    let kt = &generated.kotlin["test/Functions.kt"];
+    assert!(kt.contains("public fun `h`(p0_w3: test.Handle?): test.Handle?"));
+    assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
+    assert!(kt.contains("invalid option payload"));
+    assert!(kt.contains("if (result[0] != 0L)"));
+    assert!(kt.contains("if (result[0] == 1)"));
+    // Validate raw widths independently from the Kotlin nullable surface.
+    let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
+    let d = prebindgen_declarations::Declarations::new(&flat, vec![]).unwrap();
+    for (name, count) in [("h", 1), ("n", 2), ("ch2", 1), ("u2", 1)] {
+        d.fill(
+            &mut flat,
+            &JniCodec,
+            &FunctionDecl::new(syn::parse_str(name).unwrap()),
+            &(),
+        )
+        .unwrap();
+        let f = flat.function(name).unwrap();
+        assert_eq!(f.params[0].ty.slot.as_ref().unwrap().wires().len(), count);
+        assert_eq!(f.ret.slot.as_ref().unwrap().wires().len(), count);
+    }
+}
+
+#[test]
+fn owned_optional_projection_cannot_move_a_reference_payload() {
+    let error =
+        fail(
+            JniGen::builder()
+                .flat(flat(
+                    "pub type Handle=String;pub fn view(x:&Handle)->Option<&Handle>{}",
+                ))
+                .set_package_prefix("test")
+                .package(package!().class(ptr_class!(Handle)).fun(
+                    fun!(view).expand_return(expand_return!(Option<&Handle>).field_self_into()),
+                )),
+        );
+    assert!(
+        error.contains("owned projection cannot consume a reference payload"),
+        "{error}"
+    );
+}
+
+#[test]
+fn scalar_niches_exhaust_at_the_carrier_limit() {
+    for (primitive, min) in [
+        (Primitive::Char, i32::MIN as i64),
+        (Primitive::U32, i64::MIN),
+    ] {
+        let wire: JniWire = JniWire::scalar(primitive);
+        assert!(JniCodec
+            .remaining_niche(&wire, &JniNiche::Integer(min))
+            .is_none());
+        assert!(matches!(
+            JniCodec.remaining_niche(&wire, &JniNiche::Integer(-1)),
+            Some(JniNiche::Integer(-2))
+        ));
+    }
+}
+
+#[test]
+fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
+    use prebindgen_declarations::{bind_input, Input};
+    let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
+    let input = Input::Optional(Box::new(Input::Fields(vec![Input::Optional(Box::new(
+        Input::Leaf,
+    ))])));
+    bind_input(&mut source, &JniCodec, "echo", "value", &input, &()).unwrap();
+    let generated =
+        JniGen::builder()
+            .flat(source)
+            .set_package_prefix("test")
+            .package(package!().fun(
+                fun!(echo).expand_return(expand_return!(Wrapped).fields(fields!(wrapped_fields))),
+            ))
+            .build()
+            .unwrap();
+    let kt = &generated.kotlin["test/Functions.kt"];
+    assert!(kt.contains(": Boolean,"), "{kt}");
+    assert!(kt.contains(": Long?"), "{kt}");
+    assert!(kt.contains("build: (Boolean, Long?) -> R"), "{kt}");
+}
+
+#[test]
+fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
+    use prebindgen_flat::{Conversion, WireNode};
+    fn reservations(
+        layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+    ) -> Vec<Option<JniNiche>> {
+        let mut result = vec![];
+        for node in layout.nodes() {
+            if let WireNode::Group { metadata, children } = node {
+                if let JniGroup::Optional(optional) = metadata {
+                    result.push(optional.niche.clone());
+                }
+                result.extend(reservations(children));
+            }
+        }
+        result
+    }
+    for base in ["String", "Vec<u8>", "i64", "()"] {
+        for depth in 1..=6 {
+            let mut ty = base.to_string();
+            for _ in 0..depth {
+                ty = format!("Option<{ty}>");
+            }
+            let mut source = flat(&format!("pub fn echo(x:{ty})->{ty}{{}}"));
+            let declarations = prebindgen_declarations::Declarations::new(&source, vec![]).unwrap();
+            declarations
+                .fill(&mut source, &JniCodec, &fun!(echo), &())
+                .unwrap();
+            let function = source.function("echo").unwrap();
+            let input = function.params[0].ty.slot.as_ref().unwrap();
+            let output = function.ret.slot.as_ref().unwrap();
+            let reference = base == "String" || base == "Vec<u8>";
+            let count = if base == "()" || (reference && depth == 1) {
+                1
+            } else {
+                2
+            };
+            assert_eq!(input.wires().len(), count, "input {ty}");
+            assert_eq!(output.wires().len(), count, "output {ty}");
+            let mut expected = if reference {
+                vec![Some(JniNiche::Null)]
+            } else {
+                vec![None]
+            };
+            for i in 1..depth {
+                expected.push(if reference && i == 1 {
+                    None
+                } else {
+                    Some(JniNiche::Integer(-((i - usize::from(reference)) as i64)))
+                });
+            }
+            expected.reverse();
+            assert_eq!(reservations(input.layout()), expected, "input {ty}");
+            assert_eq!(reservations(output.layout()), expected, "output {ty}");
+        }
+    }
+}
+
+#[test]
+fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
+    use prebindgen_declarations::{bind_input, Input};
+    use prebindgen_flat::Conversion;
+    let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
+    let selector = Input::selector([
+        Input::constructor("first", [Input::Leaf]),
+        Input::constructor("second", [Input::Leaf]),
+    ]);
+    bind_input(
+        &mut source,
+        &JniCodec,
+        "echo",
+        "x",
+        &Input::Optional(Box::new(Input::Optional(Box::new(selector)))),
+        &(),
+    )
+    .unwrap();
+    let input = source.function("echo").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap();
+    assert_eq!(input.wires().len(), 3); // one tag + two arm payloads, no option flags
+    assert_eq!(
+        input.layout()[0].kind.available_niche(),
+        Some(JniNiche::Integer(-3))
+    );
+    assert!(input
+        .layout()
+        .iter()
+        .skip(1)
+        .all(|w| w.kind.available_niche().is_none()));
 }

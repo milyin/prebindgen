@@ -360,7 +360,7 @@ impl<I, O> Flat<I, O> {
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
-    /// references without explicit lifetimes. A successful result does not mean
+    /// `Option<T>` recursively, and references without explicit lifetimes. A successful result does not mean
     /// a consumer can use the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
@@ -379,6 +379,10 @@ impl<I, O> Flat<I, O> {
                     }
                 }
                 syn::visit_mut::visit_type_mut(self, ty);
+                if let Some(inner) = option_inner(ty) {
+                    let inner = inner.clone();
+                    *ty = syn::parse_quote!(Option<#inner>);
+                }
             }
         }
         Names(&self.types).visit_type_mut(&mut ty);
@@ -388,6 +392,9 @@ impl<I, O> Flat<I, O> {
     fn validate_type(&self, ty: &Type) -> Result<()> {
         if Primitive::from_type(ty).is_some() || self.types.values().any(|t| same_type(t, ty)) {
             return Ok(());
+        }
+        if let Some(inner) = option_inner(ty) {
+            return self.validate_type(inner);
         }
         match ty {
             Type::Tuple(t) if t.elems.is_empty() => Ok(()),
@@ -475,3 +482,37 @@ mod tests;
 
 #[cfg(test)]
 mod request_tests;
+
+/// Extract the payload type of a standard `Option<T>` spelling.
+pub fn option_inner(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    if p.qself.is_some() {
+        return None;
+    }
+    let names = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    if !matches!(
+        names.as_str(),
+        "Option" | "std::option::Option" | "core::option::Option"
+    ) {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(a) = &p.path.segments.last()?.arguments else {
+        return None;
+    };
+    if a.args.len() != 1 {
+        return None;
+    }
+    match a.args.first()? {
+        syn::GenericArgument::Type(t) => Some(t),
+        _ => None,
+    }
+}
+
+mod layout;
+pub use layout::{WireLayout, WireNode, Wires, WiresMut};

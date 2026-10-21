@@ -67,51 +67,53 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::value;
 /// use quote::quote;
-/// let input = value::input::<syn::Type, ()>(
+/// let input = value::input::<syn::Type, (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
-/// assert_eq!(prebindgen_flat::type_key(&input.wires[0].rust_type()), "& str");
+/// assert_eq!(prebindgen_flat::type_key(&input.layout[0].rust_type()), "& str");
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C>(
+pub fn input<W: prebindgen_flat::WireKind, C, G>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &TokenStream,
     decode: TokenStream,
     kind: W,
-) -> Result<InputPlan<W, C>> {
+) -> Result<InputPlan<W, C, G>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
     let condition = active.clone();
-    let taken = quote!(#var.expect("active value"));
-    let (statements, argument) = match ty {
+    let (decode, statements, argument) = match ty {
         Type::Reference(r) if matches!(type_key(&r.elem).as_str(), "str" | "[u8]") => {
             let target = &r.elem;
             (
-                quote!(let #var = #taken;),
-                quote!(::core::convert::AsRef::<#target>::as_ref(&#var)),
+                decode,
+                quote!(),
+                quote!(::core::convert::AsRef::<#target>::as_ref(#var.as_ref().expect("active value"))),
             )
         }
         Type::Reference(r) => {
             let owned = &r.elem;
             (
-                quote!(let #var: #owned = ::core::convert::Into::into(#taken);),
-                quote!(&#var),
+                quote!(::core::convert::Into::<#owned>::into(#decode)),
+                quote!(),
+                quote!(#var.as_ref().expect("active value")),
             )
         }
         _ => (
-            quote!(let #var: #ty = ::core::convert::Into::into(#taken);),
+            decode,
+            quote!(let #var: #ty = ::core::convert::Into::into(#var.expect("active value"));),
             quote!(#var),
         ),
     };
     Ok(InputPlan {
         context: Default::default(),
         acknowledgement: None,
-        wires: vec![Wire { name: wire, kind }],
+        layout: vec![Wire { name: wire, kind }].into(),
         validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
         acquire: quote!(),
         resources: vec![],
@@ -136,14 +138,14 @@ pub fn input<W: prebindgen_flat::WireKind, C>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W: prebindgen_flat::WireKind, C>(
+pub fn output<W: prebindgen_flat::WireKind, C, G>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputPlan<W, C>> {
+) -> Result<OutputPlan<W, C, G>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };
@@ -162,10 +164,11 @@ pub fn output<W: prebindgen_flat::WireKind, C>(
     Ok(OutputPlan {
         context: Default::default(),
         delivery: Default::default(),
-        wires: vec![Wire {
+        layout: vec![Wire {
             name: wire.clone(),
             kind,
-        }],
+        }]
+        .into(),
         statements,
         values: vec![quote!(#wire)],
         commit: quote!(),

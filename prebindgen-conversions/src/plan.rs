@@ -1,5 +1,5 @@
 use crate::template_parameter;
-use prebindgen_flat::{Wire, WireKind};
+use prebindgen_flat::{WireKind, WireLayout};
 use proc_macro2::TokenStream;
 use quote::quote;
 /// An input conversion split into call-wide validation, acquisition and construction.
@@ -7,11 +7,11 @@ use quote::quote;
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
 #[derive(Clone, Debug)]
-pub struct InputPlan<W: WireKind, C = ()> {
+pub struct InputPlan<W: WireKind, C = (), G = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Flattened boundary parameters in signature order.
-    pub wires: Vec<Wire<W>>,
+    /// Authoritative wire tree; its leaves determine boundary parameter order.
+    pub layout: WireLayout<W, G>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -30,13 +30,13 @@ pub struct InputPlan<W: WireKind, C = ()> {
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
 #[derive(Clone, Debug)]
-pub struct OutputPlan<W: WireKind, C = ()> {
+pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
-    /// Boundary results in delivery order; one entry per expression in `values`.
-    pub wires: Vec<Wire<W>>,
+    /// Authoritative result tree; each leaf corresponds to one entry in `values`.
+    pub layout: WireLayout<W, G>,
     /// Transfer ownership only after all foreign delivery operations succeed.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.

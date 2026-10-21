@@ -13,6 +13,7 @@ private fun expectInvalid(action: () -> Unit) {
 
 // Exercises the active subset of the migrated source and build declarations.
 fun main() {
+    checkOptions()
     for (text in listOf("", "ordinary", "héllo 世界", "embedded\u0000nul")) {
         check(stringNew(text) == text)
         check(stringLen(text) == text.encodeToByteArray().size.toULong())
@@ -67,8 +68,8 @@ fun main() {
     io.prebindgen.covertest.model.stampNew(Long.MIN_VALUE, Long.MAX_VALUE) { secs, nanos ->
         check(secs == Long.MIN_VALUE && nanos == Long.MAX_VALUE)
     }
-    check(io.prebindgen.covertest.model.unsignedRoundTrip(255, 65535, 4294967295L, ULong.MAX_VALUE).long == ULong.MAX_VALUE)
-    expectInvalid { io.prebindgen.covertest.model.unsignedRoundTrip(256, 0, 0, 0UL) }
+    check(io.prebindgen.covertest.model.unsignedRoundTrip(255, 65535, 4294967295L, ULong.MAX_VALUE, null).long == ULong.MAX_VALUE)
+    expectInvalid { io.prebindgen.covertest.model.unsignedRoundTrip(256, 0, 0, 0UL, null) }
     summaryNew(Long.MAX_VALUE, -1.25) { count, total -> check(count == Long.MAX_VALUE && total == -1.25) }
     check(summaryTotalRaw(0, 42, -1.25, null) == -1.25)
     checkOwnership()

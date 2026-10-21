@@ -5,22 +5,11 @@
 //!     `src/lib.rs`), and
 //!   * `kotlin/generated/ **` — the matching typed Kotlin classes.
 //!
-//! The example mirrors the native Rust (`perftest-flat/examples/perftest.rs`) and
-//! C (`perftest-c/c/perftest.c`) micro-benchmarks: `put`/`get`/`callback`, each
-//! moving a **whole** `Payload` across the boundary. A `Payload` returned by
-//! `storage_get` or delivered to a `storage_callback` crosses as a Kotlin
-//! `data class` (`.data_class`) — its fields cross as decoupled primitive leaves
-//! and are reassembled on the Kotlin side via a generated `fromParts(...)` factory
-//! (no Java object is built on the Rust side).
-//!
-//! `Payload.label` is `Option<Box<String>>` (an opaque-pointer string field);
-//! JniGenBuilder maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
-//! `String?` automatically.
-//!
-//! The `large_*_input_sum` pair compares the two Kotlin→Rust data-class input
-//! paths over identical nested structures with 64 `Long` leaves:
-//! `ObjectBoundary64` is recursively flattened, while its structural twin
-//! `ObjectBoundary64Object` uses `.jobject_input()`.
+//! The enabled surface projects `Payload` through its constructor and fields.
+//! `storage_get` delivers four nullable fields to a caller-supplied builder;
+//! `storage_put_opt` accepts an explicit presence flag and constructor arguments.
+//! `Payload.label`, callbacks, collections, and whole-object input declarations
+//! remain disabled pending their respective conversion support.
 
 /* Unsupported: imports and helpers for the disabled declarations.
 use prebindgen_jni::{data_class, package, ptr_class, JniGen};
@@ -131,41 +120,41 @@ fn main() {
         // as decoupled leaves reassembled into a whole `PayloadCallback.run(Payload)` — only
         // WHERE the trampoline is built changes (once, in `payloadHandlerNew`).
         .package(
-            package!("storage").fun(fun!(storage_new)), /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_get))
-                                                        */
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_put_by_take))
-                                                        */
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_put_by_read))
-                                                        */
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(payload_handler_new))
-                                                        */
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_callback))
-                                                        */
-                                                                        // Array (slice / Vec) API. `storage_put_slice(&[Payload])` takes a
-                                                                        // `List<Payload>` (decoded element-by-element into an owned `Vec`, then
-                                                                        // borrowed as a slice); `storage_get_vec() -> Option<Vec<Payload>>` returns
-                                                                        // a `List<Payload>?`. The element is a `data class`, so the return is a
-                                                                        // **fixed fold**: each element's fields cross as decoupled raw leaves and a
-                                                                        // hoisted Kotlin folder reassembles them via `fromParts` and appends to the
-                                                                        // list — no `ArrayList` and no per-element Java object on the Rust side.
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_put_slice))
-                                                        */
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_get_vec))
-                                                        */
-                                                                        // Whole-batch callback: prepared once, fired with the entire `List<Payload>`.
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(payload_vec_handler_new))
-                                                        */
-                                                                        /* Unsupported: the signature or function options need unsupported conversions.
-                                                        .fun(fun!(storage_callback_vec))
-                                                        */
+            package!("storage")
+                .fun(fun!(storage_new))
+                .fun(fun!(storage_get)),
+            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(storage_put_by_take))
+            */
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(storage_put_by_read))
+            */
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(payload_handler_new))
+            */
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(storage_callback))
+            */
+                            // Array (slice / Vec) API. `storage_put_slice(&[Payload])` takes a
+                            // `List<Payload>` (decoded element-by-element into an owned `Vec`, then
+                            // borrowed as a slice); `storage_get_vec() -> Option<Vec<Payload>>` returns
+                            // a `List<Payload>?`. The element is a `data class`, so the return is a
+                            // **fixed fold**: each element's fields cross as decoupled raw leaves and a
+                            // hoisted Kotlin folder reassembles them via `fromParts` and appends to the
+                            // list — no `ArrayList` and no per-element Java object on the Rust side.
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(storage_put_slice))
+            */
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(storage_get_vec))
+            */
+                            // Whole-batch callback: prepared once, fired with the entire `List<Payload>`.
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(payload_vec_handler_new))
+            */
+                            /* Unsupported: the signature or function options need unsupported conversions.
+            .fun(fun!(storage_callback_vec))
+            */
         );
 
     /* Unsupported: source-tree artifact publishing and the old surface report.
@@ -197,7 +186,8 @@ fn main() {
         .package(
             package!()
                 .fun(fun!(payload_new))
-                .fun(fun!(storage_with_payload)),
+                .fun(fun!(storage_with_payload))
+                .fun(fun!(storage_put_opt)),
         );
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let jni = binding.build().expect("build supported declarations");

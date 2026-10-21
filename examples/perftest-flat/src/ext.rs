@@ -45,18 +45,14 @@ mod handles {
         pub(super) total: f64,
     }
 
-    // Disabled: the reduced Archive is zero-sized; flat objects must have nonzero size.
-    // #[derive(Default)]
-    // pub struct Archive {
-    //     // Unsupported field/value:         pub(super) latest: Option<Summary>,
-    //     // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-    //     // — the return shape whose encoder must match on the value behind the
-    //     // reference rather than moving it.
-    //     // Unsupported field/value:         pub(super) reading: Reading,
-    //     // The same, optional, for the `Option<&Reading>` shape.
-    //     // Unsupported field/value:         pub(super) fallback: Option<Reading>,
-    // }
-    //
+    #[derive(Default)]
+    pub struct Archive {
+        pub(super) latest: Option<Summary>,
+        // Unsupported: sum-valued archive fields.
+        // pub(super) reading: Reading,
+        // pub(super) fallback: Option<Reading>,
+    }
+
     // Disabled: unsupported by the current binding subset
     // pub struct Ledger {
     //         pub(super) filed: Option<Report>,
@@ -1417,7 +1413,7 @@ pub struct Unsigned {
     pub short: u16,
     pub int: u32,
     pub long: u64,
-    // Unsupported: pub maybe_long: Option<u64>,
+    pub maybe_long: Option<u64>,
 }
 
 // Round-trip direct unsigned parameters through an unsigned data-class
@@ -1428,32 +1424,29 @@ pub fn unsigned_round_trip(
     short: u16,
     int: u32,
     long: u64,
-    // Unsupported: maybe_long: Option<u64>,
+    maybe_long: Option<u64>,
 ) -> Unsigned {
     Unsigned {
         byte,
         short,
         int,
         long,
-        // Unsupported: maybe_long,
+        maybe_long,
     }
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Direct nullable `u64` projection in both directions.
-// #[prebindgen]
-// pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
-//     value
-// }
+/// Direct nullable `u64` projection in both directions.
+#[prebindgen]
+pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
+    value
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Read the optional `u64` field through the flattened data-class input ABI.
-// /// With no natural niche it crosses as `(present, raw Long)`, never a boxed
-// /// `java.lang.Long`/`JObject`.
-// #[prebindgen]
-// pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
-//     value.maybe_long
-// }
+/// Read the optional `u64` field through a borrowed opaque handle in C.
+/// JNI binding remains disabled until borrowed data-class inputs are supported.
+#[prebindgen]
+pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
+    value.maybe_long
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Deliver a `u64` through the generated typed/raw callback twin.
@@ -1548,9 +1541,8 @@ pub fn unsigned_round_trip(
 // **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 // zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 // owned handle (the JVM keeps its handle past the call).
-// Disabled: the reduced Archive is zero-sized.
-// #[prebindgen]
-// pub type Archive = handles::Archive;
+#[prebindgen]
+pub type Archive = handles::Archive;
 
 // Disabled: unsupported by the current binding subset
 // impl Default for Archive {
@@ -1563,19 +1555,17 @@ pub fn unsigned_round_trip(
 //     }
 // }
 
-// Disabled: the reduced Archive is zero-sized.
 // Create an empty archive.
-// #[prebindgen]
-// pub fn archive_new() -> Archive {
-//     Archive::default()
-// }
+#[prebindgen]
+pub fn archive_new() -> Archive {
+    Archive::default()
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Store a summary, consuming it (owned-handle input).
-// #[prebindgen]
-// pub fn archive_store(a: &mut Archive, s: Summary) {
-//     a.latest = Some(s);
-// }
+/// Store a summary, consuming it (owned-handle input).
+#[prebindgen]
+pub fn archive_store(a: &mut Archive, s: Summary) {
+    a.latest = Some(s);
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Store the `which` alternative as the archive's own reading, and the same one
@@ -1607,13 +1597,12 @@ pub fn unsigned_round_trip(
 //     a.fallback.as_ref()
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
-// /// empty, otherwise cloned into a fresh owned handle by the JVM binding).
-// #[prebindgen]
-// pub fn archive_latest(a: &Archive) -> Option<&Summary> {
-//     a.latest.as_ref()
-// }
+/// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
+/// empty, otherwise cloned into a fresh owned handle by the JVM binding).
+#[prebindgen]
+pub fn archive_latest(a: &Archive) -> Option<&Summary> {
+    a.latest.as_ref()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Misc coverage shapes: 3-handle call, Vec<String> return, Option<data-class>
@@ -1638,18 +1627,17 @@ pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
 //         .collect()
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
-// #[prebindgen]
-// pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
-//     match p {
-//         Some(p) => {
-//             s.payloads.push(p);
-//             true
-//         }
-//         None => false,
-//     }
-// }
+/// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
+#[prebindgen]
+pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
+    match p {
+        Some(p) => {
+            s.payloads.push(p);
+            true
+        }
+        None => false,
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
@@ -1955,13 +1943,11 @@ pub fn report_into_struct(r: Report) -> ReportStruct {
 //     Box::new(note)
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The same crossing with nothing wrapped — the control the wrapped form must
-// /// match, since the model says the two signatures are the same type.
-// #[prebindgen]
-// pub fn plain_note_echo(note: Option<String>) -> Option<String> {
-//     note
-// }
+/// Round-trip an optional string without transparent wrappers.
+#[prebindgen]
+pub fn plain_note_echo(note: Option<String>) -> Option<String> {
+    note
+}
 
 // Disabled: unsupported by the current binding subset
 // /// A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
@@ -2545,7 +2531,7 @@ pub fn data_envelope_from_blob(blob: BlobValue) -> DataEnvelope {
     DataEnvelope {
         label: "from blob".into(),
         blob,
-        unsigned: unsigned_round_trip(1, 2, 3, 4),
+        unsigned: unsigned_round_trip(1, 2, 3, 4, None),
         enabled: true,
         code: 'x',
         signed: -1,
@@ -2680,4 +2666,304 @@ pub fn projection_drops() -> usize {
 #[prebindgen]
 pub fn projection_pair_views() -> ProjectionPair {
     projection_pair_borrowed()
+}
+
+// Option boundary fixtures shared by C and JNI.
+#[prebindgen]
+pub fn option_i64(value: Option<i64>) -> Option<i64> {
+    value
+}
+#[prebindgen]
+pub fn option_char(value: Option<char>) -> Option<char> {
+    value
+}
+#[prebindgen]
+pub fn option_u8(value: Option<u8>) -> Option<u8> {
+    value
+}
+#[prebindgen]
+pub fn option_bool(value: Option<bool>) -> Option<bool> {
+    value
+}
+#[prebindgen]
+pub fn option_text(value: Option<String>) -> Option<String> {
+    value
+}
+#[prebindgen]
+pub fn option_bytes(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
+    value
+}
+#[prebindgen]
+pub fn option_unit(value: Option<()>) -> Option<()> {
+    value
+}
+#[prebindgen]
+pub fn option_nested(value: Option<Option<i64>>) -> Option<Option<i64>> {
+    value
+}
+#[prebindgen]
+pub fn option_nested_char(value: Option<Option<char>>) -> Option<Option<char>> {
+    value
+}
+#[prebindgen]
+pub fn option_resource_new(present: bool) -> Option<OwnedResource> {
+    present.then(|| OwnedResourceImpl { id: 77 })
+}
+#[prebindgen]
+pub fn option_resource_echo(value: Option<OwnedResource>, valid: char) -> Option<OwnedResource> {
+    let _ = valid;
+    value
+}
+#[prebindgen]
+pub fn option_resource_id(value: Option<&OwnedResource>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+#[prebindgen]
+pub struct OptionalFields {
+    pub count: Option<i64>,
+    pub text: Option<String>,
+    pub letter: Option<char>,
+}
+#[prebindgen]
+pub fn optional_fields_new(
+    count: Option<i64>,
+    text: Option<String>,
+    letter: Option<char>,
+) -> OptionalFields {
+    OptionalFields {
+        count,
+        text,
+        letter,
+    }
+}
+#[prebindgen]
+pub fn optional_fields_into(value: OptionalFields) -> OptionalFields {
+    value
+}
+#[prebindgen]
+pub fn optional_fields_echo(value: Option<OptionalFields>) -> Option<OptionalFields> {
+    value
+}
+#[prebindgen]
+pub struct OptionalResource {
+    pub resource: Option<OwnedResource>,
+    pub details: Option<OptionalFields>,
+}
+#[prebindgen]
+pub fn optional_resource_new(present: bool) -> Option<OptionalResource> {
+    Some(OptionalResource {
+        resource: option_resource_new(present),
+        details: present.then(|| optional_fields_new(Some(9), None, Some('é'))),
+    })
+}
+#[prebindgen]
+pub fn option_str_len(value: Option<&str>) -> Option<usize> {
+    value.map(str::len)
+}
+#[prebindgen]
+pub fn option_slice_len(value: Option<&[u8]>) -> Option<usize> {
+    value.map(<[u8]>::len)
+}
+#[prebindgen]
+pub fn option_string_len(value: Option<&String>) -> Option<usize> {
+    value.map(String::len)
+}
+#[prebindgen]
+pub fn option_i64_ref(value: Option<&i64>) -> Option<i64> {
+    value.copied()
+}
+#[prebindgen]
+pub fn option_projection_views(present: bool) -> Option<ProjectionHandle> {
+    present.then(|| ProjectionHandleImpl(99))
+}
+#[prebindgen]
+pub struct OptionChoice {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn option_choice_new(id: i64) -> OptionChoice {
+    OptionChoice { id }
+}
+#[prebindgen]
+pub fn option_choice_id(value: Option<OptionChoice>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+#[prebindgen]
+pub fn option_resource_pair(first: Option<OwnedResource>, second: Option<OwnedResource>) -> i64 {
+    first.map_or(0, |v| v.id) + second.map_or(0, |v| v.id)
+}
+#[prebindgen]
+pub struct OptionalBytes {
+    pub data: Option<Vec<u8>>,
+}
+#[prebindgen]
+pub fn optional_bytes_echo(value: OptionalBytes) -> OptionalBytes {
+    value
+}
+#[prebindgen]
+pub fn option_resource_mut(value: Option<&mut OwnedResource>) -> i64 {
+    value.map_or(-1, |v| {
+        v.id += 1;
+        v.id
+    })
+}
+#[prebindgen]
+pub fn option_projection_ref(value: &ProjectionHandle, present: bool) -> Option<&ProjectionHandle> {
+    present.then_some(value)
+}
+#[prebindgen]
+pub struct OptionalPair {
+    pub absent: Option<OwnedResource>,
+    pub present: Option<OwnedResource>,
+}
+#[prebindgen]
+pub fn optional_pair_new() -> OptionalPair {
+    OptionalPair {
+        absent: None,
+        present: option_resource_new(true),
+    }
+}
+#[prebindgen]
+pub fn optional_pair_into(value: OptionalPair) -> OptionalPair {
+    value
+}
+#[prebindgen]
+pub fn option_str_echo(value: Option<&str>) -> Option<&str> {
+    value
+}
+#[prebindgen]
+pub fn option_slice_echo(value: Option<&[u8]>) -> Option<&[u8]> {
+    value
+}
+#[prebindgen]
+pub fn option_nested_resource(
+    value: Option<Option<OwnedResource>>,
+) -> Option<Option<OwnedResource>> {
+    value
+}
+#[prebindgen]
+pub struct OptionCtor {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn option_ctor_new(value: Option<i64>) -> OptionCtor {
+    OptionCtor {
+        id: value.unwrap_or(-10),
+    }
+}
+#[prebindgen]
+pub fn option_ctor_id(value: OptionCtor) -> i64 {
+    value.id
+}
+#[prebindgen]
+pub struct ResourceChoice {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn resource_choice_new(resource: OwnedResource, offset: i64) -> ResourceChoice {
+    ResourceChoice {
+        id: resource.id + offset,
+    }
+}
+#[prebindgen]
+pub fn resource_choice_id(value: Option<ResourceChoice>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+
+/// Two nested absence states share unused negative values in JNI's widened wire.
+#[prebindgen]
+pub fn option_nested_u32(value: Option<Option<u32>>) -> Option<Option<u32>> {
+    value
+}
+
+pub struct NicheChoice {
+    value: Option<char>,
+}
+#[prebindgen]
+pub type NicheChoiceHandle = NicheChoice;
+#[prebindgen]
+pub fn niche_choice_new(value: Option<char>) -> NicheChoiceHandle {
+    NicheChoice { value }
+}
+#[prebindgen]
+pub fn niche_choice_id(value: Option<NicheChoiceHandle>) -> i64 {
+    value
+        .map(|v| v.value.map(|c| c as i64).unwrap_or(-1))
+        .unwrap_or(-2)
+}
+/// Two handle views must not donate the same null representation to two layers.
+#[prebindgen]
+pub fn option_nested_projection_views(
+    outer: bool,
+    inner: bool,
+) -> Option<Option<ProjectionHandle>> {
+    outer.then(|| option_projection_views(inner))
+}
+
+/// A single nullable field, kept distinct from absence of the whole record.
+#[prebindgen]
+pub struct OptionalField {
+    pub value: Option<i64>,
+}
+#[prebindgen]
+pub fn optional_field_new(present: bool, value: Option<i64>) -> Option<OptionalField> {
+    present.then_some(OptionalField { value })
+}
+#[prebindgen]
+pub fn optional_field_fields(value: &OptionalField) -> OptionalField {
+    OptionalField { value: value.value }
+}
+
+// Nullable references exhaust null once, then share a presence flag's negative
+// values across further option layers. Full-domain scalars start with that flag.
+#[prebindgen]
+pub fn option_triple_text(value: Option<Option<Option<String>>>) -> Option<Option<Option<String>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_bytes(
+    value: Option<Option<Option<Vec<u8>>>>,
+) -> Option<Option<Option<Vec<u8>>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_i64(value: Option<Option<Option<i64>>>) -> Option<Option<Option<i64>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_unit(value: Option<Option<Option<()>>>) -> Option<Option<Option<()>>> {
+    value
+}
+#[prebindgen]
+pub fn nested_niche_choice_id(value: Option<Option<NicheChoiceHandle>>) -> i64 {
+    value.map(niche_choice_id).unwrap_or(-3)
+}
+
+// Multi-parameter constructors keep an explicit outer presence argument in
+// Kotlin. A null discriminator must not override a caller's present=true.
+#[prebindgen]
+pub struct TextNicheInput {
+    pub text: String,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn text_niche_input_new(text: String, number: i64) -> TextNicheInput {
+    TextNicheInput { text, number }
+}
+#[prebindgen]
+pub fn optional_text_input_len(value: Option<TextNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.text.len() as i64 + v.number)
+}
+#[prebindgen]
+pub struct BytesNicheInput {
+    pub bytes: Vec<u8>,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn bytes_niche_input_new(bytes: Vec<u8>, number: i64) -> BytesNicheInput {
+    BytesNicheInput { bytes, number }
+}
+#[prebindgen]
+pub fn optional_bytes_input_len(value: Option<BytesNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.bytes.len() as i64 + v.number)
 }

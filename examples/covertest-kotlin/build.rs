@@ -52,7 +52,7 @@
 //! | `constant!(N).with(ty!, path!)`       | `val COVER_VERSION` from binding-local `crate::cover_version()` |
 //! | `constant!(N).expr(ty!, expr!)`       | `COVER_BANNER` = binding-defined `format!` expression |
 //! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
-//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
@@ -132,6 +132,38 @@ use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .expand(expand_param!(TextNicheInput).variant(fun!(text_niche_input_new)))
+        .expand(expand_param!(BytesNicheInput).variant(fun!(bytes_niche_input_new)))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .expand(expand_param!(NicheChoiceHandle).variant(fun!(niche_choice_new)).variant_self())
+        .expand(expand_param!(OptionCtor).variant(fun!(option_ctor_new)).variant_self())
+        .expand(expand_param!(OptionChoice).variant(fun!(option_choice_new)).variant_self())
+        .package(package!("options")
+            .class(ptr_class!(NicheChoiceHandle)).fun(fun!(niche_choice_new)).fun(fun!(niche_choice_id))
+            .fun(fun!(option_nested_u32))
+            .fun(fun!(option_triple_text)).fun(fun!(option_triple_bytes))
+            .fun(fun!(option_triple_i64)).fun(fun!(option_triple_unit))
+            .fun(fun!(optional_text_input_len)).fun(fun!(optional_bytes_input_len))
+            .fun(fun!(nested_niche_choice_id))
+            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .class(ptr_class!(OptionChoice))
+            .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
+            .fun(fun!(option_choice_id))
+            .fun(fun!(option_str_echo)).fun(fun!(option_slice_echo)).fun(fun!(option_str_len)).fun(fun!(option_slice_len)).fun(fun!(option_string_len)).fun(fun!(option_i64_ref))
+            .fun(fun!(option_resource_pair)).fun(fun!(resource_choice_id))
+            .fun(fun!(optional_pair_new).expand_return(expand_return!(OptionalPair).fields_into(fields!(optional_pair_into).field("present",expand_return!(OwnedResource).field_self_into()))))
+            .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .class(data_class!(OptionalFields))
+            .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
+            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref))
+            .class(data_class!(OptionalResource))
+            .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
+            .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
+            .fun(fun!(option_nested)).fun(fun!(option_nested_char))
+            .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
+            .fun(fun!(optional_fields_echo))
+            .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
+            .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.
 .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
@@ -497,8 +529,7 @@ fn main() {
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-                // Disabled: the reduced Archive is zero-sized.
-                // .class(ptr_class!(Archive).name("SummaryVault"))
+                .class(ptr_class!(Archive).name("SummaryVault"))
                 .class(ptr_class!(Summary).name("SummaryValue")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
@@ -799,9 +830,7 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(boxed_note_echo))
 */
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(plain_note_echo))
-*/
+                .fun(fun!(plain_note_echo))
                 // Transparent wrappers on the INPUT side (#292 item 3), one per
                 // specialized lowering. These rebuild their parameter rather
                 // than decoding it, so the erased wrapper has to go back on
@@ -880,10 +909,8 @@ fn main() {
 .fun(fun!(object_boundary_value))
 */
                 .fun(fun!(unsigned_round_trip))
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(unsigned_optional))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
+                .fun(fun!(unsigned_optional))
+                /* Unsupported: borrowed data-class inputs.
 .fun(fun!(unsigned_data_maybe))
 */
                 /* Unsupported: the signature or function options need unsupported conversions.
@@ -1024,7 +1051,7 @@ fn main() {
                 // the dual-arm type default — the selector also encodes absence
                 // (`-1` = `None`); the borrow-identity arm clones, so the
                 // caller's handle survives the call.
-                /* Unsupported: the signature or function options need unsupported conversions.
+                /* Unsupported: helper source requires multiple source streams.
 .fun(fun!(summary_total_opt))
 */
                 // Record-built generic folds (#105): `Vec<Summary>` and
@@ -1039,17 +1066,14 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(summary_series_opt))
 */
-                // The borrowed-accessor trio. `archive_latest` suppresses the default
-                // Summary return-field default so the BORROWED handle path (clone into a
-                // fresh owned handle, null when absent) is what crosses.
-                // Disabled: the reduced Archive is zero-sized.
-                // .fun(fun!(archive_new))
+                // The borrowed accessor returns a fresh cloned handle when present.
+                // The owned Summary expansion does not apply to &Summary.
+                .fun(fun!(archive_new))
+                .fun(fun!(archive_store))
+                .fun(fun!(archive_latest))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self()))
 */,
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
@@ -1057,9 +1081,7 @@ fn main() {
         .package(
             package!("storage")
                 .fun(fun!(storage_new))
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_get))
-*/
+                .fun(fun!(storage_get))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(storage_put_by_take))
 */
@@ -1114,9 +1136,7 @@ fn main() {
 .fun(fun!(storage_labels))
 */
                 // Option<data-class> input.
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_put_opt))
-*/
+                .fun(fun!(storage_put_opt))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).

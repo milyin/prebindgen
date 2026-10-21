@@ -6,7 +6,7 @@ use std::rc::Rc;
 /// A Kotlin data class whose fields are converted across the JNI boundary.
 ///
 /// Supports owned public named-field records containing scalars, `String`,
-/// `Vec<u8>`, other declared data classes, and declared opaque handles.
+/// `Vec<u8>`, other declared data classes, declared opaque handles, and optional fields.
 /// Records containing handles (including nested ones) support returns only.
 /// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
 /// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
@@ -100,13 +100,22 @@ struct DataField {
 }
 #[derive(Clone, Debug)]
 enum Shape {
+    Optional(Box<Shape>),
     Value(Value),
     Record(Rc<RecordShape>),
     Handle(String),
 }
 impl Shape {
+    fn is_bytes(&self) -> bool {
+        match self {
+            Self::Value(Value::Bytes) => true,
+            Self::Optional(s) => s.is_bytes(),
+            _ => false,
+        }
+    }
     fn kotlin_type(&self) -> String {
         match self {
+            Self::Optional(inner) => format!("{}?", inner.kotlin_type()),
             Self::Value(Value::Scalar(Primitive::I128 | Primitive::U128)) => {
                 "java.math.BigInteger".into()
             }
@@ -124,25 +133,12 @@ impl Shape {
         }
     }
 }
-/// Private preparation metadata connecting a flattened value wire to a data class.
-///
-/// Constructed by the JNI declaration compiler; wrapper writers see only its
-/// underlying transport through [`JniWire`].
+/// Kotlin record information attached to a parent node in the wire tree.
 #[derive(Clone, Debug)]
-pub struct DataWire {
-    pub(crate) leaf: JniKind,
+pub struct DataGroup {
     pub(crate) root: String,
-    pub(crate) record: Rc<RecordShape>,
-    pub(crate) path: Vec<String>,
+    pub(crate) class_name: String,
     pub(crate) condition: String,
-}
-impl JniKind {
-    pub(crate) fn leaf(&self) -> &Self {
-        match self {
-            Self::Data(d) => d.leaf.leaf(),
-            _ => self,
-        }
-    }
 }
 
 pub(crate) struct DataCodec {
@@ -193,12 +189,20 @@ impl DataCodec {
                         "data class `{key}` field `{name}` has a conflicting JVM getter `{getter}`"
                     ));
                 }
-                let field_key = type_key(&f.ty);
-                let shape = if matches!(f.ty, syn::Type::Reference(_)) {
+                let optional = prebindgen_declarations::option_inner(&f.ty);
+                let field_ty = optional.unwrap_or(&f.ty);
+                if optional
+                    .and_then(prebindgen_declarations::option_inner)
+                    .is_some()
+                {
+                    return Err("nested Option data fields require an explicit expansion".into());
+                }
+                let field_key = type_key(field_ty);
+                let shape = if matches!(field_ty, syn::Type::Reference(_)) {
                     return Err(format!(
                         "data class `{key}` field `{name}` cannot be a reference"
                     ));
-                } else if let Some(value) = Value::of(&f.ty) {
+                } else if let Some(value) = Value::of(field_ty) {
                     Shape::Value(value)
                 } else if classes.get(&field_key).is_some_and(|c| c.data) {
                     Shape::Record(resolve(flat, classes, &field_key, stack, records)?)
@@ -210,7 +214,11 @@ impl DataCodec {
                 fields.push(DataField {
                     name: f.name.clone(),
                     ty: f.ty.clone(),
-                    shape,
+                    shape: if optional.is_some() {
+                        Shape::Optional(Box::new(shape))
+                    } else {
+                        shape
+                    },
                 });
             }
             // Kotlin's generated copy$default also needs a receiver, default masks,
@@ -272,18 +280,14 @@ impl DataCodec {
             "package {}\n\n{lifecycle}public data class {}(\n{fields}\n)",
             class.pkg, class.name
         );
-        if shape
-            .fields
-            .iter()
-            .any(|f| matches!(f.shape, Shape::Value(Value::Bytes)))
-        {
+        if shape.fields.iter().any(|f| f.shape.is_bytes()) {
             let equal = shape
                 .fields
                 .iter()
                 .map(|f| {
                     let n = field_name(f);
                     match f.shape {
-                        Shape::Value(Value::Bytes) => {
+                        _ if f.shape.is_bytes() => {
                             format!("this.`{n}`.contentEquals(other.`{n}`)")
                         }
                         Shape::Value(Value::Scalar(Primitive::F32 | Primitive::F64)) => {
@@ -299,7 +303,7 @@ impl DataCodec {
                 .iter()
                 .map(|f| {
                     let n = field_name(f);
-                    if matches!(f.shape, Shape::Value(Value::Bytes)) {
+                    if f.shape.is_bytes() {
                         format!("this.`{n}`.contentHashCode()")
                     } else {
                         format!("this.`{n}`.hashCode()")
@@ -315,7 +319,7 @@ impl DataCodec {
                 .iter()
                 .map(|f| {
                     let n = field_name(f);
-                    let suffix = if matches!(f.shape, Shape::Value(Value::Bytes)) {
+                    let suffix = if f.shape.is_bytes() {
                         ".contentToString()"
                     } else {
                         ""
@@ -337,6 +341,7 @@ fn field_name(field: &DataField) -> String {
 impl RecordShape {
     fn has_handles(&self) -> bool {
         self.fields.iter().any(|f| match &f.shape {
+            Shape::Optional(s) => s.has_handles(),
             Shape::Handle(_) => true,
             Shape::Record(r) => r.has_handles(),
             Shape::Value(_) => false,
@@ -348,25 +353,21 @@ impl RecordShape {
         w: &syn::Ident,
         v: &syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<JniKind>> {
+    ) -> Result<InputPlan<JniWire>> {
         if self.has_handles() {
             return Err(format!(
                 "data class `{}` contains handles and supports returns only",
                 self.fqn
             ));
         }
-        let plan = prebindgen_declarations::record_input(
+        let mut plan = prebindgen_declarations::record_input(
             &JniCodec,
             &self.ty,
             v.clone(),
             self.fields.iter().enumerate().map(|(i, f)| {
                 let fw = format_ident!("{w}_f{i}");
                 let fv = format_ident!("{v}_f{i}");
-                let child = match &f.shape {
-                    Shape::Value(_) => JniCodec.input_leaf(&f.ty, &(), fw, fv, active)?,
-                    Shape::Record(r) => r.input(&fw, &fv, active)?,
-                    Shape::Handle(_) => unreachable!("handle inputs rejected above"),
-                };
+                let child = f.shape.input(&f.ty, &fw, &fv, active)?;
                 Ok((f.name.clone(), child))
             }),
         )?;
@@ -374,6 +375,7 @@ impl RecordShape {
             plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
             "data fields must remain value-only"
         );
+        self.mark(&mut plan.layout, w.to_string(), kotlin_condition(active))?;
         Ok(plan)
     }
     fn output(
@@ -381,7 +383,7 @@ impl RecordShape {
         w: &syn::Ident,
         value: TokenStream,
         projection: &Projection,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
         for name in projection.fields.keys() {
             if !self.fields.iter().any(|f| field_name(f) == *name) {
                 return Err(format!(
@@ -404,14 +406,9 @@ impl RecordShape {
                 field
             };
             let fw = format_ident!("{w}_f{i}");
-            match &f.shape {
-                Shape::Value(_) | Shape::Handle(_) => {
-                    JniCodec.output_projected(&f.ty, &(), fw, value, policy)
-                }
-                Shape::Record(r) => r.output(&fw, value, policy),
-            }
+            f.shape.output(&f.ty, &fw, value, policy)
         };
-        if owned {
+        let mut plan = if owned {
             prebindgen_declarations::record_output_owned(
                 &JniCodec,
                 format_ident!("{w}_record"),
@@ -427,76 +424,96 @@ impl RecordShape {
                 self.fields.iter().map(|f| f.name.clone()),
                 convert,
             )
-        }
-    }
-    fn paths(&self, path: &[String], paths: &mut Vec<Vec<String>>) {
-        for f in &self.fields {
-            let mut path = path.to_vec();
-            path.push(field_name(f));
-            match &f.shape {
-                Shape::Value(_) | Shape::Handle(_) => paths.push(path),
-                Shape::Record(r) => r.paths(&path, paths),
-            }
-        }
+        }?;
+        self.mark(&mut plan.layout, w.to_string(), "true".into())?;
+        Ok(plan)
     }
     fn mark(
-        self: &Rc<Self>,
-        wires: &mut [prebindgen_flat::Wire<JniKind>],
+        &self,
+        layout: &mut prebindgen_flat::WireLayout<JniWire, JniGroup>,
         root: String,
         condition: String,
-    ) {
-        let mut paths = Vec::new();
-        self.paths(&[], &mut paths);
-        assert_eq!(wires.len(), paths.len());
-        for (wire, path) in wires.iter_mut().zip(paths) {
-            wire.kind = JniKind::Data(Box::new(DataWire {
-                leaf: wire.kind.clone(),
-                root: root.clone(),
-                record: self.clone(),
-                path,
-                condition: condition.clone(),
-            }));
+    ) -> Result<()> {
+        for wire in layout.iter_mut() {
+            wire.kind.clear_niche();
         }
-    }
-    pub(crate) fn construct(&self, values: &mut impl Iterator<Item = String>) -> String {
-        let fields = self
-            .fields
-            .iter()
-            .map(|f| match &f.shape {
-                Shape::Value(_) | Shape::Handle(_) => {
-                    values.next().expect("one expression per record leaf")
-                }
-                Shape::Record(r) => r.construct(values),
-            })
-            .collect::<Vec<_>>();
-        format!("{}({})", self.fqn, fields.join(", "))
-    }
-    pub(crate) fn leaf_count(&self) -> usize {
-        self.fields
-            .iter()
-            .map(|f| match &f.shape {
-                Shape::Value(_) | Shape::Handle(_) => 1,
-                Shape::Record(r) => r.leaf_count(),
-            })
-            .sum()
+        let mut nodes = std::mem::take(layout).into_nodes();
+        let [prebindgen_flat::WireNode::Group { metadata, .. }] = nodes.as_mut_slice() else {
+            return Err("record compiler must produce one field collection".into());
+        };
+        if !matches!(metadata, JniGroup::Fields(None)) {
+            return Err("record annotation requires a field collection".into());
+        }
+        *metadata = JniGroup::Fields(Some(DataGroup {
+            root,
+            class_name: self.fqn.clone(),
+            condition,
+        }));
+        *layout = prebindgen_flat::WireLayout::from_nodes(nodes);
+        Ok(())
     }
 }
+
 impl Codec for DataCodec {
+    type Niche = crate::optional::JniNiche;
+    type Group = JniGroup;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<JniNiche>,
+    ) -> JniGroup {
+        JniCodec.optional_group(presence, discriminator, niche)
+    }
+    fn field_group(&self, name: syn::Ident) -> JniGroup {
+        JniCodec.field_group(name)
+    }
+    fn fields_group(&self) -> JniGroup {
+        JniCodec.fields_group()
+    }
     type Extra = ();
-    type Wire = JniKind;
+    type Wire = JniWire;
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
-    fn selector(&self, extra: &()) -> JniKind {
+    fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
+        wire.available_niche()
+    }
+    fn set_niche(&self, wire: &mut JniWire, niche: Option<JniNiche>) {
+        JniCodec.set_niche(wire, niche);
+    }
+    fn is_present(
+        &self,
+        wire: &JniWire,
+        niche: &Self::Niche,
+        value: TokenStream,
+    ) -> Result<TokenStream> {
+        Ok(niche.present(wire, value))
+    }
+    fn remaining_niche(&self, wire: &JniWire, niche: &Self::Niche) -> Option<Self::Niche> {
+        optional::remaining(wire, niche)
+    }
+    fn absent_value(
+        &self,
+        wire: &JniWire,
+        niche: Option<&crate::optional::JniNiche>,
+        input: bool,
+    ) -> Result<TokenStream> {
+        optional::absent(wire, niche, input)
+    }
+    fn selector(&self, extra: &()) -> JniWire {
         JniCodec.selector(extra)
     }
     fn consumes(&self, ty: &syn::Type, extra: &()) -> bool {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            return self.consumes(inner, extra);
+        }
         !self.records.contains_key(&type_key(ty)) && JniCodec.consumes(ty, extra)
     }
-    fn finish_input(&self, plan: &mut InputPlan<JniKind>, extra: &()) -> Result<()> {
+    fn finish_input(&self, plan: &mut InputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_input(plan, extra)
     }
-    fn finish_output(&self, plan: &mut OutputPlan<JniKind>, extra: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_output(plan, extra)
     }
     fn input_leaf(
@@ -506,13 +523,22 @@ impl Codec for DataCodec {
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<JniKind>> {
+    ) -> Result<InputPlan<JniWire>> {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = format_ident!("{wire}_present");
+            let child = self.input_leaf(
+                inner,
+                extra,
+                format_ident!("{wire}_some"),
+                format_ident!("{var}_some"),
+                &active.arm(tag.clone(), 1),
+            )?;
+            return prebindgen_declarations::optional_input(self, extra, tag, var, active, child);
+        }
         let Some(record) = self.record(ty)? else {
             return JniCodec.input_leaf(ty, extra, wire, var, active);
         };
-        let mut plan = record.input(&wire, &var, active)?;
-        record.mark(&mut plan.wires, wire.to_string(), kotlin_condition(active));
-        Ok(plan)
+        record.input(&wire, &var, active)
     }
     fn output_leaf(
         &self,
@@ -521,15 +547,27 @@ impl Codec for DataCodec {
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = format_ident!("{wire}_present");
+            let payload = format_ident!("{wire}_payload");
+            let child = self.output_leaf(
+                inner,
+                extra,
+                format_ident!("{wire}_some"),
+                quote!(#payload),
+                borrowed,
+            )?;
+            return prebindgen_declarations::optional_output(
+                self, extra, tag, payload, value, borrowed, child,
+            );
+        }
         let Some(record) = self.record(ty)? else {
             return JniCodec.output_leaf(ty, extra, wire, value, borrowed);
         };
         // The legacy data-class leaf remains a borrowed projection, regardless
         // of its fields. Ownership transfer requires an explicit projection.
-        let mut plan = record.output(&wire, value, &Projection::borrowed())?;
-        record.mark(&mut plan.wires, wire.to_string(), "true".into());
-        Ok(plan)
+        record.output(&wire, value, &Projection::borrowed())
     }
     fn output_projected(
         &self,
@@ -538,12 +576,263 @@ impl Codec for DataCodec {
         wire: syn::Ident,
         value: TokenStream,
         projection: &Projection,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
+        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
+            let tag = format_ident!("{wire}_present");
+            let payload = format_ident!("{wire}_payload");
+            let child = self.output_projected(
+                inner,
+                extra,
+                format_ident!("{wire}_some"),
+                quote!(#payload),
+                projection,
+            )?;
+            return prebindgen_declarations::optional_output(
+                self,
+                extra,
+                tag,
+                payload,
+                value,
+                projection.mode == ProjectionMode::Borrowed,
+                child,
+            );
+        }
         let Some(record) = self.record(ty)? else {
             return JniCodec.output_projected(ty, extra, wire, value, projection);
         };
-        let mut plan = record.output(&wire, value, projection)?;
-        record.mark(&mut plan.wires, wire.to_string(), "true".into());
-        Ok(plan)
+        record.output(&wire, value, projection)
+    }
+}
+
+impl Shape {
+    fn has_handles(&self) -> bool {
+        match self {
+            Self::Handle(_) => true,
+            Self::Record(r) => r.has_handles(),
+            Self::Optional(s) => s.has_handles(),
+            _ => false,
+        }
+    }
+    fn input(
+        &self,
+        ty: &syn::Type,
+        w: &syn::Ident,
+        v: &syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        match self {
+            Self::Optional(s) => {
+                let tag = format_ident!("{w}_present");
+                let child = s.input(
+                    prebindgen_declarations::option_inner(ty).unwrap(),
+                    &format_ident!("{w}_some"),
+                    &format_ident!("{v}_some"),
+                    &active.arm(tag.clone(), 1),
+                )?;
+                prebindgen_declarations::optional_input(
+                    &JniCodec,
+                    &(),
+                    tag,
+                    v.clone(),
+                    active,
+                    child,
+                )
+            }
+            Self::Record(r) => r.input(w, v, active),
+            _ => JniCodec.input_leaf(ty, &(), w.clone(), v.clone(), active),
+        }
+    }
+    fn output(
+        &self,
+        ty: &syn::Type,
+        w: &syn::Ident,
+        value: TokenStream,
+        policy: &Projection,
+    ) -> Result<OutputPlan<JniWire>> {
+        match self {
+            Self::Optional(s) => {
+                let tag = format_ident!("{w}_present");
+                let payload = format_ident!("{w}_payload");
+                let child = s.output(
+                    prebindgen_declarations::option_inner(ty).unwrap(),
+                    &format_ident!("{w}_some"),
+                    quote!(#payload),
+                    policy,
+                )?;
+                prebindgen_declarations::optional_output(
+                    &JniCodec,
+                    &(),
+                    tag,
+                    payload,
+                    value,
+                    policy.mode == ProjectionMode::Borrowed,
+                    child,
+                )
+            }
+            Self::Record(r) => r.output(w, value, policy),
+            _ => JniCodec.output_projected(ty, &(), w.clone(), value, policy),
+        }
+    }
+}
+
+type FieldNode<'a> = (
+    &'a syn::Ident,
+    &'a prebindgen_flat::WireLayout<JniWire, JniGroup>,
+);
+fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
+    nodes
+        .iter()
+        .map(|node| match node {
+            kotlin::JniNode::Group {
+                metadata: JniGroup::Field(name),
+                children,
+            } => Ok((name, children)),
+            _ => Err("Kotlin record requires named field children".into()),
+        })
+        .collect()
+}
+pub(crate) fn input_kotlin(
+    nodes: &[kotlin::JniNode],
+    d: &DataGroup,
+    context: &KotlinContext<'_>,
+) -> Result<KotlinInput> {
+    let inner = kotlin::leaf_wires(nodes);
+    let mut out = KotlinInput::default();
+    let mut c = kotlin::input_kotlin(nodes, context)?;
+    out.parameters.push(format!(
+        "{}: {}{}",
+        d.root,
+        d.class_name,
+        if d.condition == "true" { "" } else { "?" }
+    ));
+    let fields = fields(nodes)?;
+    if c.parameters.len() != fields.len() {
+        return Err("incomplete data-class input occurrence".into());
+    }
+    for (p, (field, children)) in c.parameters.iter().zip(&fields) {
+        let name = p.split_once(": ").unwrap().0;
+        let receiver = if d.condition == "true" {
+            d.root.clone()
+        } else {
+            format!("requireNotNull({})", d.root)
+        };
+        let expr = format!(
+            "{receiver}.`{}`",
+            field.to_string().trim_start_matches("r#")
+        );
+        for a in c
+            .arguments
+            .iter_mut()
+            .chain(c.locks.iter_mut())
+            .chain(c.consumed.iter_mut())
+        {
+            if matches!(children.nodes(), [kotlin::JniNode::Wire(w)] if matches!(w.kind, JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. }))
+            {
+                *a = a.replace(
+                    &format!("{name}?.toByteArray()"),
+                    &format!("{name}.toByteArray()"),
+                );
+            }
+            *a = optional::replace(a, name, &expr);
+        }
+    }
+    for (j, a) in c.arguments.into_iter().enumerate() {
+        out.arguments.push(if d.condition == "true" {
+            a
+        } else {
+            format!(
+                "if ({}) {a} else {}",
+                d.condition,
+                optional::default_kt(&inner[j].kind, None)
+            )
+        });
+    }
+    out.locks.extend(c.locks);
+    out.consumed.extend(c.consumed);
+    Ok(out)
+}
+pub(crate) fn output_kotlin(
+    nodes: &[kotlin::JniNode],
+    d: &DataGroup,
+    context: &KotlinContext<'_>,
+) -> Result<KotlinOutput> {
+    let mut c = kotlin::output_kotlin(nodes, context)?;
+    if c.delivered.len() != fields(nodes)?.len() {
+        return Err("incomplete data-class output occurrence".into());
+    }
+    c.delivered = vec![format!("{}({})", d.class_name, c.delivered.join(", "))];
+    c.result_types = vec![d.class_name.clone()];
+    Ok(c)
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+    use prebindgen_flat::{Wire, WireLayout, WireNode};
+
+    fn record(root: &str) -> WireNode<JniWire, JniGroup> {
+        WireNode::Group {
+            metadata: JniGroup::Fields(Some(DataGroup {
+                root: root.into(),
+                class_name: "example.Empty".into(),
+                condition: "true".into(),
+            })),
+            children: WireLayout::default(),
+        }
+    }
+    #[test]
+    fn kotlin_record_and_presence_bindings_share_a_namespace() {
+        let mut optional = WireLayout::from(vec![Wire {
+            name: syn::parse_quote!(flag),
+            kind: JniWire::selector(),
+        }]);
+        optional.enclose(JniGroup::Optional(JniOptional {
+            presence: syn::parse_quote!(flag),
+            discriminator: syn::parse_quote!(flag),
+            niche: None,
+        }));
+        optional.extend(WireLayout::from_nodes(vec![record("value")]));
+        crate::group::validate_layout(&optional).unwrap();
+        optional.extend(WireLayout::from_nodes(vec![record("flag")]));
+        assert!(crate::group::validate_layout(&optional)
+            .unwrap_err()
+            .contains("duplicate Kotlin group binding `flag`"));
+        let duplicates = WireLayout::from_nodes(vec![record("value"), record("value")]);
+        assert!(crate::group::validate_layout(&duplicates)
+            .unwrap_err()
+            .contains("duplicate Kotlin group binding `value`"));
+        // These adapter-owned names impose no constraint on the shared compiler.
+        duplicates.validate().unwrap();
+    }
+    #[test]
+    fn kotlin_record_emission_reads_names_from_shared_fields() {
+        let mut field = WireLayout::from(vec![Wire {
+            name: syn::parse_quote!(incoming),
+            kind: JniWire::scalar(Primitive::I32),
+        }]);
+        field.enclose(JniGroup::Field(syn::parse_quote!(r#type)));
+        field.enclose(JniGroup::Fields(Some(DataGroup {
+            root: "point".into(),
+            class_name: "example.Point".into(),
+            condition: "true".into(),
+        })));
+        crate::group::validate_layout(&field).unwrap();
+        let classes = BTreeMap::new();
+        let context = KotlinContext {
+            classes: &classes,
+            result: "result",
+            failure: "failure",
+            output_prefix: "output",
+        };
+        let input = kotlin::input_kotlin(field.nodes(), &context).unwrap();
+        assert_eq!(input.parameters, ["point: example.Point"]);
+        assert!(input.arguments[0].contains("point.`type`"));
+        let output = kotlin::output_kotlin(field.nodes(), &context).unwrap();
+        assert_eq!(output.result_types, ["example.Point"]);
+        assert!(output.delivered[0].contains("example.Point(result[0]"));
+        // An empty record still denotes one Kotlin object with no ABI wires.
+        let empty = WireLayout::from_nodes(vec![record("empty")]);
+        let output = kotlin::output_kotlin(empty.nodes(), &context).unwrap();
+        assert_eq!(output.delivered, ["example.Empty()"]);
     }
 }

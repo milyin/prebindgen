@@ -103,9 +103,6 @@ fn main() {
     // out-param-into-init, out-param-into-uninit).
     cbindgen = cbindgen.function(fun!(storage_new));
     /* Unsupported: this declaration requires unsupported conversions or builder options.
-    cbindgen = cbindgen.function(pq!(storage_get)).panic();
-    */
-    /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.function(pq!(storage_put_by_take)).panic();
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
@@ -197,7 +194,16 @@ fn main() {
         .function(fun!(summary_new))
         .function(fun!(summary_total_raw))
         .function(fun!(stamp_new))
-        .function(fun!(unsigned_round_trip));
+        .function(fun!(unsigned_round_trip))
+        .function(fun!(plain_note_echo))
+        .function(fun!(unsigned_optional))
+        .function(fun!(unsigned_data_maybe))
+        .function(fun!(storage_get))
+        .function(fun!(storage_put_opt))
+        .opaque_ptr("archive", pq!(Archive))
+        .function(fun!(archive_new))
+        .function(fun!(archive_store))
+        .function(fun!(archive_latest));
     cbindgen = cbindgen
         .function(fun!(report_label).expand_param(
             "report",
@@ -227,6 +233,62 @@ fn main() {
         fun!(primitive_bool),
         fun!(primitive_char),
         fun!(primitive_unit),
+    ] {
+        cbindgen = cbindgen.function(f);
+    }
+    cbindgen = cbindgen
+        .opaque_ptr("owned_resource", pq!(OwnedResource))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .opaque_ptr("niche_choice", pq!(NicheChoiceHandle))
+        .expand(
+            expand_param!(NicheChoiceHandle)
+                .variant(fun!(niche_choice_new))
+                .variant_self(),
+        )
+        .opaque_ptr("option_ctor", pq!(OptionCtor))
+        .expand(
+            expand_param!(OptionCtor)
+                .variant(fun!(option_ctor_new))
+                .variant_self(),
+        )
+        .opaque_ptr("option_choice", pq!(OptionChoice))
+        .expand(
+            expand_param!(OptionChoice)
+                .variant(fun!(option_choice_new))
+                .variant_self(),
+        )
+        .expand(expand_param!(OptionalFields).variant(fun!(optional_fields_new)))
+        .expand(expand_return!(OptionalFields).fields_into(fields!(optional_fields_into)));
+    for f in [
+        fun!(resource_choice_id),
+        fun!(option_ctor_new),
+        fun!(option_ctor_id),
+        fun!(option_nested_resource),
+        fun!(option_nested_u32),
+        fun!(niche_choice_new),
+        fun!(niche_choice_id),
+        fun!(option_str_echo),
+        fun!(option_slice_echo),
+        fun!(option_str_len),
+        fun!(option_slice_len),
+        fun!(option_string_len),
+        fun!(option_i64_ref),
+        fun!(option_choice_id),
+        fun!(option_resource_pair),
+        fun!(option_i64),
+        fun!(option_char),
+        fun!(option_u8),
+        fun!(option_bool),
+        fun!(option_text),
+        fun!(option_bytes),
+        fun!(option_unit),
+        fun!(option_nested),
+        fun!(option_nested_char),
+        fun!(option_resource_new),
+        fun!(option_resource_echo),
+        fun!(option_resource_id),
+        fun!(owned_resource_drops),
+        fun!(optional_fields_echo),
     ] {
         cbindgen = cbindgen.function(f);
     }

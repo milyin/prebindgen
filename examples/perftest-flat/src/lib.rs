@@ -141,16 +141,12 @@ pub fn storage_new() -> Storage {
     Storage::default()
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Return a clone of the **first** stored payload, or `None` if the storage is empty
-// /// (by value; crosses by reinterpret, the `label` becoming a fresh owned `string_t *`
-// /// the C caller must drop). Across the C ABI an `Option<Payload>` lowers to
-// /// `bool storage_get(const storage_t *, payload_t *out)` (true + writes `*out` if
-// /// present); in Kotlin it surfaces as a nullable `Payload?`.
-// #[prebindgen]
-// pub fn storage_get(s: &Storage) -> Option<Payload> {
-//     s.payloads.first().cloned()
-// }
+/// Return a clone of the first stored payload, or `None` for empty storage.
+/// The binding declarations project its fields and preserve optional presence.
+#[prebindgen]
+pub fn storage_get(s: &Storage) -> Option<Payload> {
+    s.payloads.first().cloned()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Five parameter-passing semantics for a `Payload` value struct, demonstrating the
