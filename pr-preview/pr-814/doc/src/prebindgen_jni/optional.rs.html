@@ -88,7 +88,7 @@
 <a href=#88 id=88 data-nosnippet>88</a>}
 <a href=#89 id=89 data-nosnippet>89</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>input_kotlin(
 <a href=#90 id=90 data-nosnippet>90</a>    children: <span class="kw-2">&amp;</span>[kotlin::JniNode],
-<a href=#91 id=91 data-nosnippet>91</a>    o: <span class="kw-2">&amp;</span>prebindgen_declarations::OptionalGroup&lt;JniNiche&gt;,
+<a href=#91 id=91 data-nosnippet>91</a>    o: <span class="kw-2">&amp;</span>JniOptional,
 <a href=#92 id=92 data-nosnippet>92</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#93 id=93 data-nosnippet>93</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinInput&gt; {
 <a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">let </span>root = <span class="kw-2">&amp;</span>o.presence.to_string();
@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>}
 <a href=#164 id=164 data-nosnippet>164</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>output_kotlin(
 <a href=#165 id=165 data-nosnippet>165</a>    children: <span class="kw-2">&amp;</span>[kotlin::JniNode],
-<a href=#166 id=166 data-nosnippet>166</a>    o: <span class="kw-2">&amp;</span>prebindgen_declarations::OptionalGroup&lt;JniNiche&gt;,
+<a href=#166 id=166 data-nosnippet>166</a>    o: <span class="kw-2">&amp;</span>JniOptional,
 <a href=#167 id=167 data-nosnippet>167</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#168 id=168 data-nosnippet>168</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinOutput&gt; {
 <a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">let </span>wires = kotlin::leaf_wires(children);

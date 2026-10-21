@@ -288,12 +288,12 @@
 <a href=#288 id=288 data-nosnippet>288</a>        </span>};
 <a href=#289 id=289 data-nosnippet>289</a>        <span class="kw">for </span>input <span class="kw">in </span>inputs.iter_mut().flatten() {
 <a href=#290 id=290 data-nosnippet>290</a>            codec.finish_input(input, extra)<span class="question-mark">?</span>;
-<a href=#291 id=291 data-nosnippet>291</a>            <span class="kw">crate</span>::validate_layout(<span class="kw-2">&amp;</span>input.layout)<span class="question-mark">?</span>;
+<a href=#291 id=291 data-nosnippet>291</a>            input.layout.validate()<span class="question-mark">?</span>;
 <a href=#292 id=292 data-nosnippet>292</a>        }
 <a href=#293 id=293 data-nosnippet>293</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = <span class="kw-2">&amp;mut </span>output {
 <a href=#294 id=294 data-nosnippet>294</a>            codec.finish_output(output, extra)<span class="question-mark">?</span>;
 <a href=#295 id=295 data-nosnippet>295</a>            output.validate_value_count()<span class="question-mark">?</span>;
-<a href=#296 id=296 data-nosnippet>296</a>            <span class="kw">crate</span>::validate_layout(<span class="kw-2">&amp;</span>output.layout)<span class="question-mark">?</span>;
+<a href=#296 id=296 data-nosnippet>296</a>            output.layout.validate()<span class="question-mark">?</span>;
 <a href=#297 id=297 data-nosnippet>297</a>        }
 <a href=#298 id=298 data-nosnippet>298</a>        <span class="comment">// Install slots only after every conversion has compiled successfully.
 <a href=#299 id=299 data-nosnippet>299</a>        </span><span class="kw">let </span>dest = flat.function_mut(<span class="kw-2">&amp;</span>decl.name)<span class="question-mark">?</span>;
