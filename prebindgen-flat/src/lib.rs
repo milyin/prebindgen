@@ -66,6 +66,23 @@ pub struct Field {
     /// Qualified source type.
     pub ty: Type,
 }
+/// A fieldless Rust enum, retaining source discriminant expressions.
+#[derive(Clone, Debug)]
+pub struct FieldlessEnum {
+    /// Qualified source enum type.
+    pub ty: Type,
+    /// Variants in source order, without an imposed foreign representation.
+    pub variants: Vec<EnumVariant>,
+}
+/// A variant with no payload fields.
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    /// Source variant name.
+    pub name: syn::Ident,
+    /// Explicit source discriminant, or an implicit successor when absent.
+    pub discriminant: Option<syn::Expr>,
+}
+
 /// Source structure with independently configured input and output conversions.
 ///
 /// Every parameter carries `Option<I>`; every result carries `Option<O>`.
@@ -91,6 +108,8 @@ pub struct Flat<I = (), O = ()> {
     pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by `type_key` of their qualified type.
     pub records: BTreeMap<String, Record>,
+    /// Fieldless enums indexed by qualified source type.
+    pub enums: BTreeMap<String, FieldlessEnum>,
     /// Declared type names mapped to qualified Rust types, including opaque aliases.
     pub types: BTreeMap<String, Type>,
     /// Constants every adapter must emit: captured feature guards and generated
@@ -169,9 +188,10 @@ impl<I, O> Flat<I, O> {
         }))
     }
 
-    /// Read captured items; only free functions, named records and opaque aliases
-    /// belong to this subset. Rejects duplicate names, non-public declarations,
-    /// unsupported signatures and types, and inaccessible record fields.
+    /// Read captured free functions, named records, fieldless enums and opaque aliases.
+    /// Only exhaustive enums with unconditional fieldless variants belong to this
+    /// subset. Rejects duplicate names, non-public declarations, unsupported
+    /// signatures and types, and inaccessible record fields.
     ///
     /// Input and output slots start at `None`; no default conversion is required.
     /// Unqualified declared types and callable paths are qualified with the captured
@@ -189,6 +209,7 @@ impl<I, O> Flat<I, O> {
             let visibility = match item {
                 syn::Item::Fn(f) => Some(&f.vis),
                 syn::Item::Struct(s) => Some(&s.vis),
+                syn::Item::Enum(e) => Some(&e.vis),
                 syn::Item::Type(t) => Some(&t.vis),
                 _ => None,
             };
@@ -198,6 +219,7 @@ impl<I, O> Flat<I, O> {
             let id = match item {
                 syn::Item::Fn(f) => &f.sig.ident,
                 syn::Item::Struct(s) => &s.ident,
+                syn::Item::Enum(e) => &e.ident,
                 syn::Item::Type(t) => &t.ident,
                 syn::Item::Const(c) if c.ident == "_" => continue,
                 _ => return Err(format!("unsupported flat item: {}", item.to_token_stream())),
@@ -219,6 +241,7 @@ impl<I, O> Flat<I, O> {
         let mut flat = Self {
             functions: BTreeMap::new(),
             records: BTreeMap::new(),
+            enums: BTreeMap::new(),
             types,
             guards: Vec::new(),
         };
@@ -307,6 +330,54 @@ impl<I, O> Flat<I, O> {
                     }
                     flat.records
                         .insert(type_key(&ty), Record { ty, fields: out });
+                }
+                syn::Item::Enum(e) => {
+                    if e.attrs.iter().any(|a| {
+                        a.path().is_ident("non_exhaustive")
+                            || a.path().is_ident("cfg")
+                            || a.path().is_ident("cfg_attr")
+                    }) {
+                        return Err("conditional or non-exhaustive enums are unsupported".into());
+                    }
+                    if !e.generics.params.is_empty() || e.generics.where_clause.is_some() {
+                        return Err("generic enums are unsupported".into());
+                    }
+                    if e.variants.is_empty() {
+                        return Err("fieldless enums require at least one variant".into());
+                    }
+                    let ty = flat.types[&e.ident.to_string()].clone();
+                    let mut variants = Vec::new();
+                    let mut names = BTreeSet::new();
+                    for variant in e.variants {
+                        if !matches!(variant.fields, syn::Fields::Unit) {
+                            return Err("only fieldless enum variants are supported".into());
+                        }
+                        if variant.attrs.iter().any(|a| {
+                            a.path().is_ident("cfg")
+                                || a.path().is_ident("cfg_attr")
+                                || a.path().is_ident("non_exhaustive")
+                        }) {
+                            return Err(
+                                "conditional or non-exhaustive enum variants are unsupported"
+                                    .into(),
+                            );
+                        }
+                        if !names.insert(
+                            variant
+                                .ident
+                                .to_string()
+                                .trim_start_matches("r#")
+                                .to_string(),
+                        ) {
+                            return Err("duplicate enum variant".into());
+                        }
+                        variants.push(EnumVariant {
+                            name: variant.ident,
+                            discriminant: variant.discriminant.map(|(_, e)| e),
+                        });
+                    }
+                    flat.enums
+                        .insert(type_key(&ty), FieldlessEnum { ty, variants });
                 }
                 syn::Item::Type(t) => {
                     if !t.generics.params.is_empty() || t.generics.where_clause.is_some() {
@@ -459,6 +530,7 @@ impl<I, O> Flat<I, O> {
         Ok(Flat {
             functions,
             records: self.records,
+            enums: self.enums,
             types: self.types,
             guards: self.guards,
         })

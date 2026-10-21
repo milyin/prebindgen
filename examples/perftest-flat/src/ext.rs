@@ -115,50 +115,46 @@ use crate::{Payload, Storage};
 // Priority — a primitive-repr enum (→ Kotlin `enum class`, jint wire).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Coarse importance bucket derived from a payload's `value`. A C-like
-// /// `#[repr(i32)]` enum with explicit discriminants, mapped by the binding to a
-// /// Kotlin `enum class` (and a C enum).
-// #[prebindgen]
-// #[repr(i32)]
-// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-// pub enum Priority {
-//     Low = 0,
-//     Normal = 1,
-//     High = 2,
-// }
+/// Coarse importance bucket derived from a payload's `value`. A C-like
+/// `#[repr(i32)]` enum with explicit discriminants, mapped by the binding to a
+/// Kotlin `enum class` and named C integer constants.
+#[prebindgen]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Priority {
+    Low = 0,
+    Normal = 1,
+    High = 2,
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Classify a payload by magnitude of its `value` (enum **return**).
-// #[prebindgen]
-// pub fn payload_priority(p: &Payload) -> Priority {
-//     let v = p.value.abs();
-//     if v < 10.0 {
-//         Priority::Low
-//     } else if v < 100.0 {
-//         Priority::High
-//     } else {
-//         Priority::Normal
-//     }
-// }
+/// Classify a payload by magnitude of its `value` (enum **return**).
+#[prebindgen]
+pub fn payload_priority(p: &Payload) -> Priority {
+    let v = p.value.abs();
+    if v < 10.0 {
+        Priority::Low
+    } else if v < 100.0 {
+        Priority::High
+    } else {
+        Priority::Normal
+    }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Numeric weight of a priority (enum **by-value parameter**).
-// #[prebindgen]
-// pub fn priority_weight(p: Priority) -> i32 {
-//     match p {
-//         Priority::Low => 1,
-//         Priority::Normal => 5,
-//         Priority::High => 10,
-//     }
-// }
+/// Numeric weight of a priority (enum **by-value parameter**).
+#[prebindgen]
+pub fn priority_weight(p: Priority) -> i32 {
+    match p {
+        Priority::Low => 1,
+        Priority::Normal => 5,
+        Priority::High => 10,
+    }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Resolve an optional priority against a fallback (`Option<enum>` parameter).
-// #[prebindgen]
-// pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
-//     p.unwrap_or(fallback)
-// }
+/// Resolve an optional priority against a fallback (`Option<enum>` parameter).
+#[prebindgen]
+pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
+    p.unwrap_or(fallback)
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
@@ -2966,4 +2962,105 @@ pub fn bytes_niche_input_new(bytes: Vec<u8>, number: i64) -> BytesNicheInput {
 #[prebindgen]
 pub fn optional_bytes_input_len(value: Option<BytesNicheInput>) -> i64 {
     value.map_or(-1, |v| v.bytes.len() as i64 + v.number)
+}
+
+// Sparse discriminants include the default option sentinel and force each
+// adapter to find unused representations rather than assuming -1 is invalid.
+#[prebindgen]
+#[repr(i32)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum SparseCode {
+    Bottom = -2147483648,
+    MinusTwo = -2,
+    MinusOne,
+    Zero,
+    Seven = 7,
+    Eight,
+    Top = 2147483647,
+}
+#[prebindgen]
+pub fn sparse_echo(value: SparseCode) -> SparseCode {
+    value
+}
+#[prebindgen]
+pub fn sparse_optional(value: Option<SparseCode>) -> Option<SparseCode> {
+    value
+}
+#[prebindgen]
+pub fn sparse_nested(value: Option<Option<SparseCode>>) -> Option<Option<SparseCode>> {
+    value
+}
+#[prebindgen]
+pub fn sparse_ref(value: &SparseCode) -> i32 {
+    match value {
+        SparseCode::Bottom => i32::MIN,
+        SparseCode::MinusTwo => -2,
+        SparseCode::MinusOne => -1,
+        SparseCode::Zero => 0,
+        SparseCode::Seven => 7,
+        SparseCode::Eight => 8,
+        SparseCode::Top => i32::MAX,
+    }
+}
+#[prebindgen]
+pub fn sparse_borrowed(value: &SparseCode) -> &SparseCode {
+    value
+}
+#[prebindgen]
+pub struct EnumRecord {
+    pub priority: Priority,
+    pub code: Option<SparseCode>,
+}
+#[prebindgen]
+pub fn enum_record_echo(value: EnumRecord) -> EnumRecord {
+    value
+}
+// Generated Kotlin infrastructure names must not steal source variant names.
+#[prebindgen]
+#[repr(i32)]
+#[allow(non_camel_case_types)]
+pub enum EnumNames {
+    Companion = 4,
+    wireValue = 9,
+    fromWire = 12,
+    r#type = 14,
+    when = 16,
+    name = 20,
+    ordinal = 21,
+    entries = 22,
+    value = 24,
+    kotlin = 25,
+}
+#[prebindgen]
+pub fn enum_names_echo(entry: EnumNames) -> EnumNames {
+    entry
+}
+
+#[prebindgen]
+pub fn enum_record_new(priority: Priority, code: Option<SparseCode>) -> EnumRecord {
+    EnumRecord { priority, code }
+}
+#[prebindgen]
+pub fn enum_record_into(value: EnumRecord) -> EnumRecord {
+    value
+}
+
+#[prebindgen]
+pub fn enum_boundary_probe(
+    bytes: &[u8],
+    value: Option<Option<SparseCode>>,
+    text: &str,
+) -> Option<Option<SparseCode>> {
+    let _ = (bytes, text);
+    value
+}
+
+#[prebindgen]
+pub fn enum_payload_new(value: f64) -> Payload {
+    Payload {
+        id: 0,
+        seq: 0,
+        value,
+        flag: false,
+    }
 }

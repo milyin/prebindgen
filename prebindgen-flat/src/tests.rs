@@ -47,7 +47,7 @@ fn refuses_unsupported_syntax_without_dropping_it() {
         "pub fn f(x:Option<Unknown>){}",
         "pub struct X{field:String}",
         "fn f(){}",
-        "pub enum E{A}",
+        "pub enum E{A(i32)}",
     ] {
         assert!(parse(source).is_err(), "{source}");
     }
@@ -85,7 +85,7 @@ fn mapping_visits_only_boundary_slots_and_preserves_source_structure() {
 
 #[test]
 fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
-    let source = "pub type Handle = hidden::Private; pub enum Unsupported { A } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
+    let source = "pub type Handle = hidden::Private; pub enum Unsupported { A(i32) } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
     let items = || {
         syn::parse_file(source)
             .unwrap()
@@ -101,7 +101,7 @@ fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
     assert!(
         Flat::<TestInput, TestOutput>::parse_selected(items(), &["bad".into()], &[])
             .unwrap_err()
-            .contains("unsupported flat item")
+            .contains("fieldless enum")
     );
 }
 
@@ -206,5 +206,40 @@ fn options_preserve_payload_types_and_reject_malformed_arguments() {
         "pub fn f(x:Something::Option<i64>){}",
     ] {
         assert!(parse(source).is_err());
+    }
+}
+
+#[test]
+fn fieldless_enum_source_metadata_survives_selection_and_slot_mapping() {
+    let flat = parse("pub enum Code { A = -3, B, C = 8 } pub struct Record { pub code: Option<Code> } pub fn echo(x: Record) -> Record {}").unwrap();
+    let source = &flat.enums["source_crate :: Code"];
+    assert_eq!(
+        source
+            .variants
+            .iter()
+            .map(|v| v.name.to_string())
+            .collect::<Vec<_>>(),
+        ["A", "B", "C"]
+    );
+    assert!(source.variants[1].discriminant.is_none());
+    let mapped = flat
+        .map_slots(
+            |_, _| Ok(Some(TestInput(0))),
+            |_, _| Ok(Some(TestOutput(0))),
+        )
+        .unwrap();
+    assert_eq!(mapped.enums.len(), 1);
+    assert_eq!(mapped.enums["source_crate :: Code"].variants.len(), 3);
+    for bad in [
+        "enum E { A }",
+        "pub enum E<T> { A }",
+        "pub enum E {}",
+        "pub enum E { A {} }",
+        "pub enum E { #[cfg(test)] A, B }",
+        "#[non_exhaustive] pub enum E { A, B }",
+        "#[cfg(test)] pub enum E { A, B }",
+        "#[cfg_attr(test, non_exhaustive)] pub enum E { A, B }",
+    ] {
+        assert!(parse(bad).is_err(), "{bad}");
     }
 }

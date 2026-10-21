@@ -4,6 +4,54 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+static void check_enums(void) {
+    perftest_enum_payload_new_result payload = {0};
+    perftest_payload_priority_result classified = {0};
+    assert(perftest_enum_payload_new(50.0, &payload) == 0);
+    assert(perftest_payload_priority(payload.v0, &classified) == 0 && classified.v0 == perftest_priority_High);
+    assert(perftest_drop_enum_payload(payload.v0) == 0);
+    perftest_priority_weight_result weight = {0};
+    assert(perftest_priority_weight(perftest_priority_Low, &weight) == 0 && weight.v0 == 1);
+    assert(perftest_priority_weight(perftest_priority_Normal, &weight) == 0 && weight.v0 == 5);
+    assert(perftest_priority_weight(perftest_priority_High, &weight) == 0 && weight.v0 == 10);
+    assert(perftest_priority_weight(3, &weight) != 0);
+    perftest_priority_or_result priority = {0};
+    assert(perftest_priority_or(-1, perftest_priority_High, &priority) == 0 && priority.v0 == perftest_priority_High);
+    assert(perftest_priority_or(perftest_priority_Low, perftest_priority_High, &priority) == 0 && priority.v0 == perftest_priority_Low);
+    const perftest_code codes[] = { perftest_code_Bottom, perftest_code_MinusTwo, perftest_code_MinusOne,
+        perftest_code_Zero, perftest_code_Seven, perftest_code_Eight, perftest_code_Top };
+    assert(perftest_code_Bottom == INT32_MIN && perftest_code_Top == INT32_MAX);
+    assert(perftest_code_MinusOne == -1 && perftest_code_Eight == 8);
+    perftest_sparse_echo_result echoed = {0};
+    perftest_sparse_optional_result optional = {0};
+    perftest_sparse_nested_result nested = {0};
+    perftest_sparse_ref_result borrowed = {0};
+    perftest_sparse_borrowed_result returned = {0};
+    perftest_enum_record_echo_result record = {0};
+    for (size_t i = 0; i < sizeof(codes) / sizeof(*codes); ++i) {
+        perftest_code code = codes[i];
+        assert(perftest_sparse_echo(code, &echoed) == 0 && echoed.v0 == code);
+        assert(perftest_sparse_optional(code, &optional) == 0 && optional.v0 == code);
+        assert(perftest_sparse_nested(code, &nested) == 0 && nested.v0 == code);
+        assert(perftest_sparse_ref(code, &borrowed) == 0 && borrowed.v0 == code);
+        assert(perftest_sparse_borrowed(code, &returned) == 0 && returned.v0 == code);
+        assert(perftest_enum_record_echo(perftest_priority_High, code, &record) == 0 && record.v0 == perftest_priority_High && record.v1 == code);
+    }
+    assert(perftest_enum_record_echo(perftest_priority_Low, -3, &record) == 0 && record.v1 == -3);
+    assert(perftest_sparse_optional(-3, &optional) == 0 && optional.v0 == -3);
+    assert(perftest_sparse_nested(-3, &nested) == 0 && nested.v0 == -3);
+    assert(perftest_sparse_nested(-4, &nested) == 0 && nested.v0 == -4);
+    const int32_t invalid[] = {-5, -4, -3, 1, 6, 9};
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(*invalid); ++i) {
+        echoed.v0 = 12345;
+        assert(perftest_sparse_echo(invalid[i], &echoed) != 0 && echoed.v0 == 12345);
+    }
+    optional.v0 = 12345; nested.v0 = 12345;
+    assert(perftest_sparse_optional(-4, &optional) != 0 && optional.v0 == 12345);
+    assert(perftest_sparse_nested(-5, &nested) != 0 && nested.v0 == 12345);
+    perftest_enum_names_echo_result names = {0};
+    assert(perftest_enum_names_echo(perftest_enum_names_type, &names) == 0 && names.v0 == 14);
+}
 static void check_options(void) {
     perftest_option_str_echo_result echoed = {0};
     assert(perftest_option_str_echo(0, (perftest_buffer){NULL, 0}, &echoed) == 0 && echoed.v0 == 0);
@@ -91,6 +139,7 @@ static void check_options(void) {
 }
 int main(void) {
     check_options();
+    check_enums();
     perftest_storage_new_result storage = {0};
     assert(perftest_storage_new(&storage) == 0);
     assert(perftest_drop_storage(storage.v0) == 0);

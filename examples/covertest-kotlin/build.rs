@@ -128,10 +128,19 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 */
 use prebindgen_declarations::{expand_param, expand_return, fields, fun};
-use prebindgen_jni::{data_class, package, ptr_class, JniGen};
+use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .package(package!("enums")
+            .fun(fun!(enum_boundary_probe)).class(enum_class!(Priority))
+            .class(ptr_class!(Payload).name("EnumPayload"))
+            .fun(fun!(enum_payload_new).expand_return(expand_return!(Payload).field_self_into()))
+            .fun(fun!(payload_priority)).class(enum_class!(SparseCode).name("Code"))
+            .class(enum_class!(EnumNames).variant_name("name","Name").variant_name("ordinal","Ordinal").variant_name("entries","Entries").variant_name("kotlin","Kotlin")).class(data_class!(EnumRecord))
+            .fun(fun!(priority_weight)).fun(fun!(priority_or))
+            .fun(fun!(sparse_echo)).fun(fun!(sparse_optional)).fun(fun!(sparse_nested))
+            .fun(fun!(sparse_ref)).fun(fun!(sparse_borrowed)).fun(fun!(enum_record_echo)).fun(fun!(enum_names_echo)))
         .expand(expand_param!(TextNicheInput).variant(fun!(text_niche_input_new)))
         .expand(expand_param!(BytesNicheInput).variant(fun!(bytes_niche_input_new)))
         .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
@@ -308,7 +317,7 @@ fn main() {
                 // generated interface on an ENUM with a per-decl name, and the
                 // hand-written `Ranked` (which extends `PriorityKind`) is
                 // attached via `.implements` (#54).
-                /* Unsupported: this class kind or its binding is not available yet.
+                /* Unsupported: enum interface/implements customization.
 .class(
                     enum_class!(Priority)
                         .interface_name("PriorityKind")
@@ -687,19 +696,10 @@ fn main() {
 */,
         )
         // ── Free functions, grouped by subpackage ───────────────────────────
-        // model: enum return/param/option + value-class return + Vec<value> +
-        //        Option<scalar>.
+        // model: value-class return, Vec<value> and Option<scalar>.
+        // Enum entry points are bound in the `enums` package above.
         .package(
             package!("model")
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(payload_priority))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(priority_weight))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(priority_or))
-*/
                 .fun(fun!(stamp_new))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(stamp_series))

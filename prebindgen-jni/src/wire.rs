@@ -9,6 +9,13 @@ use super::*;
 /// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
+    /// A fieldless Rust enum carried as a checked JVM `int`.
+    Enum {
+        /// Valid source variants and generated Kotlin class information.
+        enum_type: Box<JniEnum>,
+        /// Next unused integer representation, or `None` when unavailable.
+        next_integer_niche: Option<i32>,
+    },
     /// A primitive in its JVM carrier.
     Scalar {
         /// Source primitive that determines the Rust/JVM conversion.
@@ -94,9 +101,10 @@ impl JniWire {
             | Self::Bytes {
                 null_niche_available: true,
             } => Some(JniNiche::Null),
-            Self::Selector { next_integer_niche } => {
-                next_integer_niche.map(|n| JniNiche::Integer(n.into()))
-            }
+            Self::Selector { next_integer_niche }
+            | Self::Enum {
+                next_integer_niche, ..
+            } => next_integer_niche.map(|n| JniNiche::Integer(n.into())),
             _ => None,
         }
     }
@@ -125,6 +133,15 @@ impl JniWire {
                 },
                 Some(JniNiche::Null),
             ) => *null_niche_available = true,
+            (
+                Self::Enum {
+                    enum_type,
+                    next_integer_niche,
+                },
+                Some(JniNiche::Integer(n)),
+            ) if enum_type.mapping.is_niche(n) => {
+                *next_integer_niche = Some(n as i32);
+            }
             (Self::Selector { next_integer_niche }, Some(JniNiche::Integer(n)))
                 if n < 0 && i32::try_from(n).is_ok() =>
             {
@@ -155,7 +172,10 @@ impl JniWire {
             | Self::Bytes {
                 null_niche_available,
             } => *null_niche_available = false,
-            Self::Selector { next_integer_niche } => *next_integer_niche = None,
+            Self::Selector { next_integer_niche }
+            | Self::Enum {
+                next_integer_niche, ..
+            } => *next_integer_niche = None,
         }
     }
     // Reserved niches live on optional groups after availability has advanced or
@@ -170,6 +190,11 @@ impl JniWire {
             (Self::Handle { .. } | Self::Text { .. } | Self::Bytes { .. }, JniNiche::Null) => {
                 Ok(())
             }
+            (Self::Enum { enum_type, .. }, JniNiche::Integer(n))
+                if enum_type.mapping.is_niche(*n) =>
+            {
+                Ok(())
+            }
             (Self::Selector { .. }, JniNiche::Integer(n))
                 if *n < 0 && i32::try_from(*n).is_ok() =>
             {
@@ -179,6 +204,9 @@ impl JniWire {
         }
     }
     pub(crate) fn validate(&self) -> Result<()> {
+        if let Self::Enum { enum_type, .. } = self {
+            enum_type.validate()?;
+        }
         match self.available_niche() {
             Some(niche) => self.validate_niche(&niche),
             None => Ok(()),
@@ -189,7 +217,7 @@ impl JniWire {
         match self {
             Self::Scalar { primitive, .. } => scalar::raw_kotlin(*primitive),
             Self::Handle { .. } => "Long",
-            Self::Selector { .. } => "Int",
+            Self::Selector { .. } | Self::Enum { .. } => "Int",
             Self::Text { .. } => "String?",
             Self::Bytes { .. } => "ByteArray?",
         }
@@ -208,7 +236,7 @@ impl WireKind for JniWire {
         match self {
             Self::Scalar { primitive, .. } => scalar::rust_type(*primitive),
             Self::Handle { .. } => syn::parse_quote!(i64),
-            Self::Selector { .. } => syn::parse_quote!(i32),
+            Self::Selector { .. } | Self::Enum { .. } => syn::parse_quote!(i32),
             Self::Text { .. } => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
             }

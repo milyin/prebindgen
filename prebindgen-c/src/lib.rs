@@ -11,6 +11,13 @@ use prebindgen_flat::{Flat, Primitive, Result, WireKind};
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
 pub enum CCarrier {
+    /// Fieldless enum represented by checked `int32_t` values.
+    Enum {
+        /// Unprefixed C typedef name.
+        name: String,
+        /// Valid source variants and their integer representations.
+        mapping: Box<prebindgen_declarations::EnumMapping>,
+    },
     /// A primitive in its C scalar type.
     Scalar(Primitive),
     /// Text or bytes as a pointer/length buffer.
@@ -31,6 +38,9 @@ impl From<CCarrier> for CWire {
         let niche = match &carrier {
             CCarrier::Pointer(_) => Some(CNiche::Null),
             CCarrier::Scalar(Primitive::Char) => Some(CNiche::Integer(0x110000)),
+            CCarrier::Enum { mapping, .. } => {
+                mapping.initial_niche().map(|n| CNiche::Integer(n.into()))
+            }
             _ => None,
         };
         Self {
@@ -55,6 +65,7 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
         }
     }
 }
+mod enums;
 mod group;
 use group::validate_layout;
 pub use group::{CGroup, COptional};
@@ -154,6 +165,19 @@ impl Codec for CCodec {
     }
     fn remaining_niche(&self, wire: &CWire, niche: &CNiche) -> Option<CNiche> {
         match niche {
+            CNiche::Integer(n) if matches!(&wire.carrier, CCarrier::Enum { .. }) => {
+                let CCarrier::Enum { mapping, .. } = &wire.carrier else {
+                    unreachable!()
+                };
+                if !mapping.is_niche(*n) {
+                    return None;
+                }
+                i32::try_from(*n)
+                    .ok()?
+                    .checked_sub(1)
+                    .and_then(|n| mapping.unused_at_or_below(n))
+                    .map(|n| CNiche::Integer(n.into()))
+            }
             CNiche::Integer(n)
                 if matches!(&wire.carrier, CCarrier::Scalar(Primitive::Char))
                     && *n < u32::MAX as i64 =>
@@ -171,7 +195,7 @@ impl Codec for CCodec {
             CCarrier::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
             CCarrier::Scalar(Primitive::I128 | Primitive::U128) => quote!(#wide {hi:0,lo:0}),
             CCarrier::Scalar(Primitive::F32 | Primitive::F64) => quote!(0.0),
-            CCarrier::Scalar(_) => niche
+            CCarrier::Scalar(_) | CCarrier::Enum { .. } => niche
                 .map(|n| n.integer_value())
                 .unwrap_or_else(|| quote!(0)),
         })
@@ -377,6 +401,7 @@ pub struct Cbindgen {
     functions: Vec<prebindgen_declarations::FunctionDecl>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
+    enums: Vec<(String, syn::Type)>,
 }
 impl Cbindgen {
     /// Create an unconfigured builder with the symbol prefix `pb`.
@@ -388,6 +413,7 @@ impl Cbindgen {
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
+            enums: Vec::new(),
         }
     }
     /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
@@ -437,6 +463,7 @@ impl Cbindgen {
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
+            enums: Vec::new(),
         }
     }
     /// Set the prefix for exported functions, C types and destructors.
@@ -461,6 +488,13 @@ impl Cbindgen {
         self.pointers.push((name.into(), ty));
         self
     }
+    /// Bind a fieldless source enum as a named `int32_t` C type and constants.
+    /// Source integer discriminants are preserved and checked on input. Register
+    /// the type explicitly; `name` is the unprefixed C typedef/constant prefix.
+    pub fn enum_type(mut self, name: &str, ty: syn::Type) -> Self {
+        self.enums.push((name.into(), ty));
+        self
+    }
     /// Resolve declarations, build converters and generate both output texts.
     ///
     /// Does not write files. Returns an error for conflicting sources, invalid or
@@ -479,11 +513,38 @@ impl Cbindgen {
                 &self
                     .pointers
                     .iter()
+                    .chain(&self.enums)
                     .map(|(_, ty)| ty.clone())
                     .collect::<Vec<_>>(),
             )?,
             _ => return Err("supply exactly one source or flat model".into()),
         };
+        let mut enum_map = std::collections::BTreeMap::new();
+        let mut enum_names = std::collections::BTreeSet::new();
+        for (name, ty) in self.enums {
+            prebindgen_declarations::ident(&name)?;
+            if !enum_names.insert(name.clone()) {
+                return Err("duplicate C enum name".into());
+            }
+            let ty = flat.resolve_type(&ty)?;
+            let key = prebindgen_flat::type_key(&ty);
+            let source = flat
+                .enums
+                .get(&key)
+                .ok_or("enum_type requires a fieldless enum declaration")?;
+            let mapping = prebindgen_declarations::EnumMapping::new(source)?;
+            for (variant, _) in &mapping.variants {
+                prebindgen_declarations::ident(&format!(
+                    "v_{}",
+                    variant.to_string().trim_start_matches("r#")
+                ))?;
+            }
+            flat.guards.extend(mapping.guards());
+            if enum_map.insert(key, (name, mapping)).is_some() {
+                return Err("duplicate C enum source type".into());
+            }
+        }
+        let codec = enums::EnumCodec { enums: enum_map };
         let declarations = prebindgen_declarations::Declarations::new(&flat, self.expansions)?;
         let mut names = std::collections::BTreeSet::new();
         for decl in self.functions {
@@ -493,7 +554,7 @@ impl Cbindgen {
             if decl.foreign.is_some() {
                 return Err("C function renaming is outside this subset".into());
             }
-            declarations.fill(&mut flat, &CCodec, &decl, &())?;
+            declarations.fill(&mut flat, &codec, &decl, &())?;
         }
         let pointers = self
             .pointers
@@ -504,7 +565,12 @@ impl Cbindgen {
             })
             .collect::<Result<Vec<_>>>()?;
         prebindgen_flat::validate_bindings(&flat)?;
-        generate(flat, &self.prefix, pointers)
+        generate(
+            flat,
+            &self.prefix,
+            pointers,
+            codec.enums.into_values().collect(),
+        )
     }
 }
 /// Generated Rust bindings and their corresponding C header.
@@ -533,6 +599,7 @@ impl Generation {
 impl WireKind for CWire {
     fn rust_type(&self) -> syn::Type {
         match &self.carrier {
+            CCarrier::Enum { .. } => syn::parse_quote!(i32),
             CCarrier::Scalar(p) => match p {
                 Primitive::Bool => syn::parse_quote!(u8),
                 Primitive::Char => syn::parse_quote!(u32),
@@ -553,6 +620,7 @@ impl WireKind for CWire {
 }
 fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     match &wire.kind.carrier {
+        CCarrier::Enum { name, .. } => format!("{prefix}_{name}"),
         CCarrier::Scalar(p) => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
             Primitive::Char | Primitive::U32 => "uint32_t".into(),
@@ -595,12 +663,36 @@ fn generate<
     flat: Flat<I, O>,
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
+    enums: Vec<(String, prebindgen_declarations::EnumMapping)>,
 ) -> Result<Generation> {
     let mut calls = Vec::new();
     let error = format_ident!("{prefix}_last_error");
     let free = format_ident!("{prefix}_free_buffer");
-    let mut symbols = std::collections::BTreeSet::from([error.to_string(), free.to_string()]);
+    let mut symbols = std::collections::BTreeSet::from([
+        error.to_string(),
+        free.to_string(),
+        format!("{prefix}_buffer"),
+        format!("{prefix}_int128"),
+        format!("{prefix}_H"),
+    ]);
+    for (name, mapping) in &enums {
+        if !symbols.insert(format!("{prefix}_{name}")) {
+            return Err("duplicate C enum symbol".into());
+        }
+        for (variant, _) in &mapping.variants {
+            let variant = variant.to_string();
+            if !symbols.insert(format!(
+                "{prefix}_{name}_{}",
+                variant.trim_start_matches("r#")
+            )) {
+                return Err("duplicate C enum constant".into());
+            }
+        }
+    }
     for (name, _) in &pointers {
+        if !symbols.insert(format!("{prefix}_{name}")) {
+            return Err("C enum and pointer names collide".into());
+        }
         if !symbols.insert(format!("{prefix}_drop_{name}")) {
             return Err("duplicate C destructor".into());
         }
@@ -616,6 +708,9 @@ fn generate<
             validate_layout(slot.layout())?;
         }
         let result_type = format_ident!("{prefix}_{}_result", f.name);
+        if !symbols.insert(result_type.to_string()) {
+            return Err("duplicate C result type symbol".into());
+        }
         let context = CContext {
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
@@ -637,6 +732,18 @@ fn generate<
             .inputs()?
             .chain(f.outputs(&context, &source)?.map(|output| output.wire))
         {
+            if let CCarrier::Enum { name, mapping } = &wire.kind.carrier {
+                if !enums.iter().any(|(declared, m)| {
+                    declared == name
+                        && prebindgen_flat::same_type(&m.ty, &mapping.ty)
+                        && m.variants
+                            .iter()
+                            .map(|(n, v)| (n.to_string(), v))
+                            .eq(mapping.variants.iter().map(|(n, v)| (n.to_string(), v)))
+                }) {
+                    return Err("declare a matching C enum type for this wire".into());
+                }
+            }
             if let CCarrier::Pointer(pointer) = &wire.kind.carrier {
                 if !pointers
                     .iter()
@@ -668,6 +775,21 @@ fn generate<
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
+    for (name, mapping) in &enums {
+        header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
+        for (variant, value) in &mapping.variants {
+            let variant = variant.to_string();
+            let value = if *value == i32::MIN {
+                "INT32_MIN".into()
+            } else {
+                value.to_string()
+            };
+            header.push_str(&format!(
+                "#define {prefix}_{name}_{} (({prefix}_{name})({value}))\n",
+                variant.trim_start_matches("r#")
+            ));
+        }
+    }
     header.push_str("/* Field paths below start at a source parameter or return and list their ABI values.\n * Optional groups below name their discriminator. Rules apply only in active\n * selector arms and present enclosing groups. Absent payload wires are ignored. */\n");
     for (name, ty) in &pointers {
         let drop = format_ident!("{prefix}_drop_{name}");
@@ -1019,7 +1141,7 @@ mod generation_tests {
         .unwrap();
         flat.function_mut("noop").unwrap().ret.slot =
             Some(CountedOutput(count.clone(), Default::default()));
-        let output = generate(flat, "test", vec![]).unwrap();
+        let output = generate(flat, "test", vec![], vec![]).unwrap();
         assert!(output.header.contains("test_noop("));
         assert_eq!(count.get(), 1);
     }
