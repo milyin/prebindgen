@@ -4,6 +4,31 @@ import io.prebindgen.covertest.options.*
 import io.prebindgen.covertest.resources.ownedResourceDrops
 
 fun checkOptions() {
+    for (v in listOf(null, "", "héllo\u0000世界")) check(io.prebindgen.covertest.model.plainNoteEcho(v) == v)
+    for (v in listOf(null, 0UL, ULong.MAX_VALUE)) {
+        check(io.prebindgen.covertest.model.unsignedOptional(v) == v)
+        check(io.prebindgen.covertest.model.unsignedRoundTrip(0, 0, 0, 0UL, v).maybe_long == v)
+    }
+    val stored = io.prebindgen.covertest.storage.storageNew()
+    io.prebindgen.covertest.storage.storageGet(stored) { id, seq, value, flag ->
+        check(id == null && seq == null && value == null && flag == null)
+    }
+    check(!io.prebindgen.covertest.storage.storagePutOpt(stored, false, 0, 0, 0.0, false))
+    check(io.prebindgen.covertest.storage.storagePutOpt(stored, true, 42, 7, 1.5, false))
+    io.prebindgen.covertest.storage.storageGet(stored) { id, seq, value, flag ->
+        check(id == 42L && seq == 7 && value == 1.5 && flag == false)
+    }
+    stored.close()
+    val archive = io.prebindgen.covertest.analytics.archiveNew()
+    check(io.prebindgen.covertest.analytics.archiveLatest(archive) == null)
+    io.prebindgen.covertest.analytics.archiveStore(archive, 0, 2, 40.0, null)
+    val first = io.prebindgen.covertest.analytics.archiveLatest(archive)!!
+    val second = io.prebindgen.covertest.analytics.archiveLatest(archive)!!
+    archive.close()
+    check(summaryTotalRaw(1, 0, 0.0, first) == 40.0)
+    check(first.isClosed && !second.isClosed)
+    check(summaryTotalRaw(1, 0, 0.0, second) == 40.0)
+
     for (v in listOf(null, 0L, Long.MIN_VALUE, Long.MAX_VALUE)) check(optionI64(v) == v)
     for (v in listOf(null, 0, 0x10ffff)) check(optionChar(v) == v)
     for (v in listOf(null, 0, 255)) check(optionU8(v) == v)

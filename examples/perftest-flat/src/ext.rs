@@ -45,18 +45,14 @@ mod handles {
         pub(super) total: f64,
     }
 
-    // Disabled: the reduced Archive is zero-sized; flat objects must have nonzero size.
-    // #[derive(Default)]
-    // pub struct Archive {
-    //     // Unsupported field/value:         pub(super) latest: Option<Summary>,
-    //     // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-    //     // — the return shape whose encoder must match on the value behind the
-    //     // reference rather than moving it.
-    //     // Unsupported field/value:         pub(super) reading: Reading,
-    //     // The same, optional, for the `Option<&Reading>` shape.
-    //     // Unsupported field/value:         pub(super) fallback: Option<Reading>,
-    // }
-    //
+    #[derive(Default)]
+    pub struct Archive {
+        pub(super) latest: Option<Summary>,
+        // Unsupported: sum-valued archive fields.
+        // pub(super) reading: Reading,
+        // pub(super) fallback: Option<Reading>,
+    }
+
     // Disabled: unsupported by the current binding subset
     // pub struct Ledger {
     //         pub(super) filed: Option<Report>,
@@ -1417,7 +1413,7 @@ pub struct Unsigned {
     pub short: u16,
     pub int: u32,
     pub long: u64,
-    // Unsupported: pub maybe_long: Option<u64>,
+    pub maybe_long: Option<u64>,
 }
 
 // Round-trip direct unsigned parameters through an unsigned data-class
@@ -1428,32 +1424,29 @@ pub fn unsigned_round_trip(
     short: u16,
     int: u32,
     long: u64,
-    // Unsupported: maybe_long: Option<u64>,
+    maybe_long: Option<u64>,
 ) -> Unsigned {
     Unsigned {
         byte,
         short,
         int,
         long,
-        // Unsupported: maybe_long,
+        maybe_long,
     }
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Direct nullable `u64` projection in both directions.
-// #[prebindgen]
-// pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
-//     value
-// }
+/// Direct nullable `u64` projection in both directions.
+#[prebindgen]
+pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
+    value
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Read the optional `u64` field through the flattened data-class input ABI.
-// /// With no natural niche it crosses as `(present, raw Long)`, never a boxed
-// /// `java.lang.Long`/`JObject`.
-// #[prebindgen]
-// pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
-//     value.maybe_long
-// }
+/// Read the optional `u64` field through a borrowed opaque handle in C.
+/// JNI binding remains disabled until borrowed data-class inputs are supported.
+#[prebindgen]
+pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
+    value.maybe_long
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Deliver a `u64` through the generated typed/raw callback twin.
@@ -1548,9 +1541,8 @@ pub fn unsigned_round_trip(
 // **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 // zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 // owned handle (the JVM keeps its handle past the call).
-// Disabled: the reduced Archive is zero-sized.
-// #[prebindgen]
-// pub type Archive = handles::Archive;
+#[prebindgen]
+pub type Archive = handles::Archive;
 
 // Disabled: unsupported by the current binding subset
 // impl Default for Archive {
@@ -1563,19 +1555,17 @@ pub fn unsigned_round_trip(
 //     }
 // }
 
-// Disabled: the reduced Archive is zero-sized.
 // Create an empty archive.
-// #[prebindgen]
-// pub fn archive_new() -> Archive {
-//     Archive::default()
-// }
+#[prebindgen]
+pub fn archive_new() -> Archive {
+    Archive::default()
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Store a summary, consuming it (owned-handle input).
-// #[prebindgen]
-// pub fn archive_store(a: &mut Archive, s: Summary) {
-//     a.latest = Some(s);
-// }
+/// Store a summary, consuming it (owned-handle input).
+#[prebindgen]
+pub fn archive_store(a: &mut Archive, s: Summary) {
+    a.latest = Some(s);
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Store the `which` alternative as the archive's own reading, and the same one
@@ -1607,13 +1597,12 @@ pub fn unsigned_round_trip(
 //     a.fallback.as_ref()
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
-// /// empty, otherwise cloned into a fresh owned handle by the JVM binding).
-// #[prebindgen]
-// pub fn archive_latest(a: &Archive) -> Option<&Summary> {
-//     a.latest.as_ref()
-// }
+/// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
+/// empty, otherwise cloned into a fresh owned handle by the JVM binding).
+#[prebindgen]
+pub fn archive_latest(a: &Archive) -> Option<&Summary> {
+    a.latest.as_ref()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Misc coverage shapes: 3-handle call, Vec<String> return, Option<data-class>
@@ -1638,18 +1627,17 @@ pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
 //         .collect()
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
-// #[prebindgen]
-// pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
-//     match p {
-//         Some(p) => {
-//             s.payloads.push(p);
-//             true
-//         }
-//         None => false,
-//     }
-// }
+/// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
+#[prebindgen]
+pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
+    match p {
+        Some(p) => {
+            s.payloads.push(p);
+            true
+        }
+        None => false,
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
@@ -1955,13 +1943,11 @@ pub fn report_into_struct(r: Report) -> ReportStruct {
 //     Box::new(note)
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The same crossing with nothing wrapped — the control the wrapped form must
-// /// match, since the model says the two signatures are the same type.
-// #[prebindgen]
-// pub fn plain_note_echo(note: Option<String>) -> Option<String> {
-//     note
-// }
+/// Round-trip an optional string without transparent wrappers.
+#[prebindgen]
+pub fn plain_note_echo(note: Option<String>) -> Option<String> {
+    note
+}
 
 // Disabled: unsupported by the current binding subset
 // /// A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
@@ -2545,7 +2531,7 @@ pub fn data_envelope_from_blob(blob: BlobValue) -> DataEnvelope {
     DataEnvelope {
         label: "from blob".into(),
         blob,
-        unsigned: unsigned_round_trip(1, 2, 3, 4),
+        unsigned: unsigned_round_trip(1, 2, 3, 4, None),
         enabled: true,
         code: 'x',
         signed: -1,

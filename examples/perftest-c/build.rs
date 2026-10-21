@@ -103,9 +103,6 @@ fn main() {
     // out-param-into-init, out-param-into-uninit).
     cbindgen = cbindgen.function(fun!(storage_new));
     /* Unsupported: this declaration requires unsupported conversions or builder options.
-    cbindgen = cbindgen.function(pq!(storage_get)).panic();
-    */
-    /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.function(pq!(storage_put_by_take)).panic();
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
@@ -197,7 +194,16 @@ fn main() {
         .function(fun!(summary_new))
         .function(fun!(summary_total_raw))
         .function(fun!(stamp_new))
-        .function(fun!(unsigned_round_trip));
+        .function(fun!(unsigned_round_trip))
+        .function(fun!(plain_note_echo))
+        .function(fun!(unsigned_optional))
+        .function(fun!(unsigned_data_maybe))
+        .function(fun!(storage_get))
+        .function(fun!(storage_put_opt))
+        .opaque_ptr("archive", pq!(Archive))
+        .function(fun!(archive_new))
+        .function(fun!(archive_store))
+        .function(fun!(archive_latest));
     cbindgen = cbindgen
         .function(fun!(report_label).expand_param(
             "report",

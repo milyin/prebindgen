@@ -23,7 +23,7 @@ fun checkDataClasses() {
     check(blobValueEcho(blob) == blob)
     val (stamp, id) = blob
     check(stamp == blob.stamp && id.contentEquals(bytes))
-    val unsigned = Unsigned(255, 65535, 4294967295L, ULong.MAX_VALUE)
+    val unsigned = Unsigned(255, 65535, 4294967295L, ULong.MAX_VALUE, null)
     val min128 = BigInteger.ONE.shiftLeft(127).negate()
     val max128 = BigInteger.ONE.shiftLeft(128).subtract(BigInteger.ONE)
     val envelope = Envelope("héllo\u0000世界", blob, unsigned, true, 0x10ffff, min128, max128)

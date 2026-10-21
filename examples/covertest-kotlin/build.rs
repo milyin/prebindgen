@@ -52,7 +52,7 @@
 //! | `constant!(N).with(ty!, path!)`       | `val COVER_VERSION` from binding-local `crate::cover_version()` |
 //! | `constant!(N).expr(ty!, expr!)`       | `COVER_BANNER` = binding-defined `format!` expression |
 //! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
-//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
@@ -518,8 +518,7 @@ fn main() {
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-                // Disabled: the reduced Archive is zero-sized.
-                // .class(ptr_class!(Archive).name("SummaryVault"))
+                .class(ptr_class!(Archive).name("SummaryVault"))
                 .class(ptr_class!(Summary).name("SummaryValue")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
@@ -820,9 +819,7 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(boxed_note_echo))
 */
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(plain_note_echo))
-*/
+                .fun(fun!(plain_note_echo))
                 // Transparent wrappers on the INPUT side (#292 item 3), one per
                 // specialized lowering. These rebuild their parameter rather
                 // than decoding it, so the erased wrapper has to go back on
@@ -901,10 +898,8 @@ fn main() {
 .fun(fun!(object_boundary_value))
 */
                 .fun(fun!(unsigned_round_trip))
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(unsigned_optional))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
+                .fun(fun!(unsigned_optional))
+                /* Unsupported: borrowed data-class inputs.
 .fun(fun!(unsigned_data_maybe))
 */
                 /* Unsupported: the signature or function options need unsupported conversions.
@@ -1045,7 +1040,7 @@ fn main() {
                 // the dual-arm type default — the selector also encodes absence
                 // (`-1` = `None`); the borrow-identity arm clones, so the
                 // caller's handle survives the call.
-                /* Unsupported: the signature or function options need unsupported conversions.
+                /* Unsupported: helper source requires multiple source streams.
 .fun(fun!(summary_total_opt))
 */
                 // Record-built generic folds (#105): `Vec<Summary>` and
@@ -1060,17 +1055,14 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(summary_series_opt))
 */
-                // The borrowed-accessor trio. `archive_latest` suppresses the default
-                // Summary return-field default so the BORROWED handle path (clone into a
-                // fresh owned handle, null when absent) is what crosses.
-                // Disabled: the reduced Archive is zero-sized.
-                // .fun(fun!(archive_new))
+                // The borrowed accessor returns a fresh cloned handle when present.
+                // The owned Summary expansion does not apply to &Summary.
+                .fun(fun!(archive_new))
+                .fun(fun!(archive_store))
+                .fun(fun!(archive_latest))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self()))
 */,
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
@@ -1078,9 +1070,7 @@ fn main() {
         .package(
             package!("storage")
                 .fun(fun!(storage_new))
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_get))
-*/
+                .fun(fun!(storage_get))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(storage_put_by_take))
 */
@@ -1135,9 +1125,7 @@ fn main() {
 .fun(fun!(storage_labels))
 */
                 // Option<data-class> input.
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_put_opt))
-*/
+                .fun(fun!(storage_put_opt))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).
