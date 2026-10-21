@@ -1,27 +1,29 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
-pub(crate) fn base_niche(w: &JniKind) -> Option<JniNiche> {
-    match w {
-        JniKind::Handle(..) => Some(JniNiche::Null),
-        JniKind::Scalar(Primitive::Char | Primitive::U8 | Primitive::U16 | Primitive::U32) => {
-            Some(JniNiche::Integer(-1))
-        }
-        _ => None,
-    }
-}
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
-    if !input && matches!(&w.carrier, JniKind::Handle(..)) {
+    if !input && matches!(w, JniWire::Handle { .. }) {
         return Ok(quote!(std::ptr::null_mut()));
     }
     if let Some(n) = niche {
         return Ok(n.integer_value());
     }
-    Ok(match &w.carrier {
-        JniKind::Scalar(Primitive::F32 | Primitive::F64) => quote!(0.0),
-        JniKind::Text if !input => quote!(String::new()),
-        JniKind::Bytes if !input => quote!(Vec::<u8>::new()),
-        JniKind::Scalar(Primitive::I128 | Primitive::U128) if !input => quote!([0u8; 16]),
-        JniKind::Text | JniKind::Bytes | JniKind::Scalar(Primitive::I128 | Primitive::U128) => {
+    Ok(match w {
+        JniWire::Scalar {
+            primitive: Primitive::F32 | Primitive::F64,
+            ..
+        } => quote!(0.0),
+        JniWire::Text if !input => quote!(String::new()),
+        JniWire::Bytes if !input => quote!(Vec::<u8>::new()),
+        JniWire::Scalar {
+            primitive: Primitive::I128 | Primitive::U128,
+            ..
+        } if !input => quote!([0u8; 16]),
+        JniWire::Text
+        | JniWire::Bytes
+        | JniWire::Scalar {
+            primitive: Primitive::I128 | Primitive::U128,
+            ..
+        } => {
             quote!(Default::default())
         }
         _ => quote!(0),
@@ -34,32 +36,31 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
             JniNiche::Integer(n) => *n,
         };
         return if matches!(
-            &w.carrier,
-            JniKind::Handle(..)
-                | JniKind::Scalar(
-                    Primitive::U32
+            w,
+            JniWire::Handle { .. }
+                | JniWire::Scalar {
+                    primitive: Primitive::U32
                         | Primitive::I64
                         | Primitive::U64
                         | Primitive::Isize
-                        | Primitive::Usize
-                )
+                        | Primitive::Usize,
+                    ..
+                }
         ) {
             format!("{v}L")
         } else {
             v.to_string()
         };
     }
-    match &w.carrier {
-        JniKind::Scalar(Primitive::Bool) => "false",
-        JniKind::Scalar(Primitive::I8) => "0.toByte()",
-        JniKind::Scalar(Primitive::I16) => "0.toShort()",
-        JniKind::Handle(..)
-        | JniKind::Scalar(
-            Primitive::U32 | Primitive::I64 | Primitive::U64 | Primitive::Isize | Primitive::Usize,
-        ) => "0L",
-        JniKind::Scalar(Primitive::F32) => "0.0f",
-        JniKind::Scalar(Primitive::F64) => "0.0",
-        JniKind::Text | JniKind::Bytes | JniKind::Scalar(Primitive::I128 | Primitive::U128) => {
+    match w {
+        JniWire::Scalar { primitive: Primitive::Bool, .. } => "false",
+        JniWire::Scalar { primitive: Primitive::I8, .. } => "0.toByte()",
+        JniWire::Scalar { primitive: Primitive::I16, .. } => "0.toShort()",
+        JniWire::Handle { .. }
+        | JniWire::Scalar { primitive: Primitive::U32 | Primitive::I64 | Primitive::U64 | Primitive::Isize | Primitive::Usize, .. } => "0L",
+        JniWire::Scalar { primitive: Primitive::F32, .. } => "0.0f",
+        JniWire::Scalar { primitive: Primitive::F64, .. } => "0.0",
+        JniWire::Text | JniWire::Bytes | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
             "null"
         }
         _ => "0",
@@ -205,7 +206,7 @@ pub(crate) fn output_kotlin(
 }
 
 /// A wire value excluded from the representation of a present value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JniNiche {
     /// Null address (pointer or integer-encoded handle).
     Null,
@@ -233,13 +234,12 @@ impl JniNiche {
 }
 
 pub(crate) fn remaining(wire: &JniWire, niche: &JniNiche) -> Option<JniNiche> {
-    let min = if matches!(&wire.carrier, JniKind::Scalar(Primitive::U32)) {
-        i64::MIN
-    } else {
-        i32::MIN as i64
+    wire.validate_niche(niche).ok()?;
+    let JniNiche::Integer(n) = niche else {
+        return None;
     };
-    match niche {
-        JniNiche::Integer(n) if *n > min => Some(JniNiche::Integer(n - 1)),
-        _ => None,
-    }
+    let next = JniNiche::Integer(n.checked_sub(1)?);
+    // Stop at the carrier boundary or the next valid payload value. Do not
+    // advertise a reserved range's neighbour merely because it fits an integer.
+    wire.validate_niche(&next).ok().map(|()| next)
 }

@@ -284,10 +284,15 @@ stores the adapter's description of that individual wire in `kind`. `Wire<W>` re
 `W: WireKind`, whose `rust_type()` returns a `syn::Type` for the boundary carrier.
 Both writers use this API to declare Rust parameters and result fields. A plain
 `syn::Type` implements `WireKind` when no additional metadata is needed.
-C uses `CWire` for scalars,
-buffers and typed pointers. JNI's `JniWire` describes Rust/Kotlin carrier types and
-JVM parameter width, plus its conversion information. Both keep the remaining
-available niche in `spare_niche`. All leaf information is accessible through
+C uses `CWire` for scalars, buffers and typed pointers, with its remaining niche
+in `spare_niche`. JNI uses a single `JniWire` enum for scalars, handles, text,
+bytes and selectors. Only scalar and handle variants store niche availability:
+`next_integer_niche` and `null_niche_available`, respectively. Constructors
+`JniWire::scalar` and `JniWire::handle` initialize that state; `available_niche()`,
+checked `set_niche(...)` and `clear_niche()` read and update it. Used niche
+representations remain separate `JniNiche` values on optional parent metadata.
+JNI derives Rust/Kotlin carrier types and JVM parameter width from the variant.
+All leaf information is accessible through
 `wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
 carrier types.
 

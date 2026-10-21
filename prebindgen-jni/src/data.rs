@@ -435,7 +435,7 @@ impl RecordShape {
         condition: String,
     ) -> Result<()> {
         for wire in layout.iter_mut() {
-            wire.kind.spare_niche = None;
+            wire.kind.clear_niche();
         }
         let mut nodes = std::mem::take(layout).into_nodes();
         let [prebindgen_flat::WireNode::Group { metadata, .. }] = nodes.as_mut_slice() else {
@@ -477,10 +477,10 @@ impl Codec for DataCodec {
     type Input = JniInput;
     type Output = JniOutput;
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
-        wire.spare_niche.clone()
+        wire.available_niche()
     }
     fn set_niche(&self, wire: &mut JniWire, niche: Option<JniNiche>) {
-        wire.spare_niche = niche;
+        JniCodec.set_niche(wire, niche);
     }
     fn is_present(
         &self,
@@ -726,7 +726,7 @@ pub(crate) fn input_kotlin(
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
         {
-            if matches!(children.nodes(), [kotlin::JniNode::Wire(w)] if matches!(w.kind.carrier, JniKind::Scalar(Primitive::I128 | Primitive::U128)))
+            if matches!(children.nodes(), [kotlin::JniNode::Wire(w)] if matches!(w.kind, JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. }))
             {
                 *a = a.replace(
                     &format!("{name}?.toByteArray()"),
@@ -784,7 +784,7 @@ mod group_tests {
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
         let mut optional = WireLayout::from(vec![Wire {
             name: syn::parse_quote!(flag),
-            kind: JniWire::from(JniKind::Selector),
+            kind: JniWire::Selector,
         }]);
         optional.enclose(JniGroup::Optional(JniOptional {
             presence: syn::parse_quote!(flag),
@@ -808,7 +808,7 @@ mod group_tests {
     fn kotlin_record_emission_reads_names_from_shared_fields() {
         let mut field = WireLayout::from(vec![Wire {
             name: syn::parse_quote!(incoming),
-            kind: JniWire::from(JniKind::Scalar(Primitive::I32)),
+            kind: JniWire::scalar(Primitive::I32),
         }]);
         field.enclose(JniGroup::Field(syn::parse_quote!(r#type)));
         field.enclose(JniGroup::Fields(Some(DataGroup {

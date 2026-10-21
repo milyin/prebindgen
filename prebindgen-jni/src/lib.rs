@@ -16,32 +16,17 @@ pub use group::{JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::{ConversionExt, Primitive};
-/// Carrier and conversion information for one JNI boundary value.
-///
-/// This adapter-specific type keeps C and JNI converters from being mixed in
-/// one model: their codecs use different carriers and allocation layouts.
-#[derive(Clone, Debug)]
-pub enum JniKind {
-    /// A primitive in its JVM carrier.
-    Scalar(Primitive),
-    /// A `java.lang.String`.
-    Text,
-    /// A `byte[]`.
-    Bytes,
-    /// A boxed allocation address in a `long`, owned by a Kotlin handle class.
-    Handle(Box<BoxedWire>, String),
-    /// An `int` selector arm index.
-    Selector,
-}
+mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
+pub use wire::JniWire;
 mod emission;
 pub use emission::JniContext;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup>;
 mod kotlin;
 pub use kotlin::{
-    JniInput, JniOutput, JniWire, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
+    JniInput, JniOutput, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
     KotlinOutput, KotlinOutputConversion,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
@@ -499,16 +484,16 @@ impl Codec for JniCodec {
         let count = plan.layout.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.layout.iter().zip(&plan.values).enumerate() {
-            let expr = match &wire.kind.carrier {
-                JniKind::Scalar(p) => scalar::output_java(*p, value),
-                JniKind::Handle(_, _) => {
+            let expr = match &wire.kind {
+                JniWire::Scalar { primitive: p, .. } => scalar::output_java(*p, value),
+                JniWire::Handle { .. } => {
                     quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
                 }
-                JniKind::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
-                JniKind::Bytes => {
+                JniWire::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
+                JniWire::Bytes => {
                     quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
                 }
-                JniKind::Selector => scalar::output_java(Primitive::I32, value),
+                JniWire::Selector => scalar::output_java(Primitive::I32, value),
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -524,10 +509,11 @@ impl Codec for JniCodec {
         Ok(())
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
-        wire.spare_niche.clone()
+        wire.available_niche()
     }
     fn set_niche(&self, wire: &mut JniWire, niche: Option<JniNiche>) {
-        wire.spare_niche = niche;
+        wire.set_niche(niche)
+            .expect("JNI codec supplied an incompatible niche");
     }
     fn is_present(
         &self,
@@ -549,7 +535,7 @@ impl Codec for JniCodec {
         optional::absent(wire, niche, input)
     }
     fn selector(&self, _: &()) -> JniWire {
-        JniKind::Selector.into()
+        JniWire::Selector
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
@@ -578,14 +564,14 @@ impl Codec for JniCodec {
         }
         let env = prebindgen_conversions::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
-            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniKind::Scalar(p)),
+            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::scalar(p)),
             Some(Value::Text) => (
                 quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
-                JniKind::Text,
+                JniWire::Text,
             ),
             Some(Value::Bytes) => (
                 quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
-                JniKind::Bytes,
+                JniWire::Bytes,
             ),
             None => {
                 return prebindgen_conversions::boxed::input(
@@ -594,11 +580,11 @@ impl Codec for JniCodec {
                     w,
                     v,
                     &active.rust(),
-                    |b| JniKind::Handle(Box::new(b), kotlin_condition(active)).into(),
+                    |b| JniWire::handle(b, kotlin_condition(active)),
                 )
             }
         };
-        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind.into())
+        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
     }
     fn output_leaf(
         &self,
@@ -665,18 +651,18 @@ impl Codec for JniCodec {
                     v,
                     borrowed,
                     |v| scalar::encode(p, v),
-                    JniKind::Scalar(p).into(),
+                    JniWire::scalar(p),
                 )
             }
-            Some(Value::Text) => (|v| v, JniKind::Text),
-            Some(Value::Bytes) => (|v| v, JniKind::Bytes),
+            Some(Value::Text) => (|v| v, JniWire::Text),
+            Some(Value::Bytes) => (|v| v, JniWire::Bytes),
             None => {
                 return prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
-                    JniKind::Handle(Box::new(b), "true".into()).into()
+                    JniWire::handle(b, "true")
                 })
             }
         };
-        prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind.into())
+        prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
     }
 }
 fn storage() -> prebindgen_conversions::boxed::Storage {

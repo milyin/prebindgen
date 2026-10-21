@@ -403,7 +403,7 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
         (Primitive::Char, i32::MIN as i64),
         (Primitive::U32, i64::MIN),
     ] {
-        let wire: JniWire = JniKind::Scalar(primitive).into();
+        let wire: JniWire = JniWire::scalar(primitive);
         assert!(JniCodec
             .remaining_niche(&wire, &JniNiche::Integer(min))
             .is_none());

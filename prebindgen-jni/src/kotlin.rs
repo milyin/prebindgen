@@ -1,69 +1,7 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
 use crate::group::validate_layout;
-use prebindgen_flat::{Conversion, Wire, WireKind};
-
-impl WireKind for JniKind {
-    fn rust_type(&self) -> syn::Type {
-        match self {
-            JniKind::Scalar(p) => scalar::rust_type(*p),
-            JniKind::Handle(_, _) => syn::parse_quote!(i64),
-            JniKind::Selector => syn::parse_quote!(i32),
-            JniKind::Text => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
-            }
-            JniKind::Bytes => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
-            }
-        }
-    }
-}
-fn raw_kt(kind: &JniKind) -> &'static str {
-    match kind {
-        JniKind::Scalar(p) => scalar::raw_kotlin(*p),
-        JniKind::Handle(_, _) => "Long",
-        JniKind::Selector => "Int",
-        JniKind::Text => "String?",
-        JniKind::Bytes => "ByteArray?",
-    }
-}
-
-/// One JNI value and the metadata used to convert it in this slot.
-#[derive(Clone, Debug)]
-pub struct JniWire {
-    /// Carrier and conversion information for this individual value.
-    pub carrier: JniKind,
-    /// Unused representation still available for an enclosing optional value.
-    pub spare_niche: Option<JniNiche>,
-}
-impl WireKind for JniWire {
-    fn rust_type(&self) -> syn::Type {
-        self.carrier.rust_type()
-    }
-}
-impl From<JniKind> for JniWire {
-    fn from(carrier: JniKind) -> Self {
-        let niche = optional::base_niche(&carrier);
-        Self {
-            carrier,
-            spare_niche: niche,
-        }
-    }
-}
-impl JniWire {
-    /// Kotlin type used by the native declaration.
-    pub fn kotlin_type(&self) -> &'static str {
-        raw_kt(&self.carrier)
-    }
-    /// JVM argument slots occupied by this value.
-    pub fn parameter_slots(&self) -> usize {
-        match &self.carrier {
-            JniKind::Handle(..) => 2,
-            JniKind::Scalar(p) => scalar::parameter_slots(*p),
-            _ => 1,
-        }
-    }
-}
+use prebindgen_flat::{Conversion, Wire};
 
 /// Configured names for a generated handle class and its native destructor.
 #[derive(Clone, Debug)]
@@ -231,9 +169,11 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
     let mut consumed = Vec::new();
     for w in wires {
         let n = &w.name;
-        let (kt, arg) = match &w.kind.carrier {
-            JniKind::Scalar(p) => scalar::input(*p, &n.to_string()),
-            JniKind::Handle(handle, condition) => {
+        let (kt, arg) = match &w.kind {
+            JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
+            JniWire::Handle {
+                handle, condition, ..
+            } => {
                 locks.push(format!(
                     "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
                 ));
@@ -245,7 +185,7 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
                     format!("{n}?.raw ?: 0L"),
                 )
             }
-            _ => (raw_kt(&w.kind.carrier).into(), n.to_string()),
+            _ => (w.kind.kotlin_type().into(), n.to_string()),
         };
         kt_params.push(format!("{n}: {kt}"));
         kt_args.push(arg);
@@ -270,15 +210,15 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     let mut delivered = Vec::new();
     let mut result_types = Vec::new();
     for (i, w) in wires.iter().enumerate() {
-        let (kt, decode) = match &w.kind.carrier {
-            JniKind::Scalar(p) => scalar::output_kotlin(*p, i, result),
-            JniKind::Handle(handle, _) => {
+        let (kt, decode) = match &w.kind {
+            JniWire::Scalar { primitive: p, .. } => scalar::output_kotlin(*p, i, result),
+            JniWire::Handle { handle, .. } => {
                 let c = context.class_name(&handle.ty)?;
                 (c.clone(), format!("{c}({result}[{i}] as Long)"))
             }
-            JniKind::Text => ("String".into(), format!("{result}[{i}] as String")),
-            JniKind::Bytes => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
-            JniKind::Selector => ("Int".into(), format!("{result}[{i}] as Int")),
+            JniWire::Text => ("String".into(), format!("{result}[{i}] as String")),
+            JniWire::Bytes => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
+            JniWire::Selector => ("Int".into(), format!("{result}[{i}] as Int")),
         };
         delivered.push(decode);
         result_types.push(kt);
@@ -287,7 +227,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     let mut materialize = String::new();
     let mut cleanup = String::new();
     for (i, w) in wires.iter().enumerate() {
-        if let JniKind::Handle(handle, _) = &w.kind.carrier {
+        if let JniWire::Handle { handle, .. } = &w.kind {
             let c = context.class_name(&handle.ty)?;
             output_locals.push_str(&format!("        var {output}{i}: {c}? = null\n"));
             materialize.push_str(&format!("            {output}{i} = {}\n", delivered[i]));
@@ -436,14 +376,14 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        let JniKind::Handle(_, condition) = &mut plan.layout[0].kind.carrier else {
+        let JniWire::Handle { condition, .. } = &mut plan.layout[0].kind else {
             panic!()
         };
         *condition = "isEnabled() && count > 3".into();
         JniCodec.finish_input(&mut plan, &()).unwrap();
         let input = JniInput::from(plan);
         // A handle and an ordinary i64 expose identical transport information.
-        let scalar = JniWire::from(JniKind::Scalar(Primitive::I64));
+        let scalar = JniWire::scalar(Primitive::I64);
         assert_eq!(
             prebindgen_flat::type_key(&input.wire(0).unwrap().kind.rust_type()),
             prebindgen_flat::type_key(&scalar.rust_type())
