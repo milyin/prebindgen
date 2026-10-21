@@ -2938,3 +2938,32 @@ pub fn option_triple_unit(value: Option<Option<Option<()>>>) -> Option<Option<Op
 pub fn nested_niche_choice_id(value: Option<Option<NicheChoiceHandle>>) -> i64 {
     value.map(niche_choice_id).unwrap_or(-3)
 }
+
+// Multi-parameter constructors keep an explicit outer presence argument in
+// Kotlin. A null discriminator must not override a caller's present=true.
+#[prebindgen]
+pub struct TextNicheInput {
+    pub text: String,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn text_niche_input_new(text: String, number: i64) -> TextNicheInput {
+    TextNicheInput { text, number }
+}
+#[prebindgen]
+pub fn optional_text_input_len(value: Option<TextNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.text.len() as i64 + v.number)
+}
+#[prebindgen]
+pub struct BytesNicheInput {
+    pub bytes: Vec<u8>,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn bytes_niche_input_new(bytes: Vec<u8>, number: i64) -> BytesNicheInput {
+    BytesNicheInput { bytes, number }
+}
+#[prebindgen]
+pub fn optional_bytes_input_len(value: Option<BytesNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.bytes.len() as i64 + v.number)
+}

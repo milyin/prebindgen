@@ -56,6 +56,20 @@ fun checkOptions() {
     check(optionBytes(byteArrayOf(0, -1))!!.contentEquals(byteArrayOf(0, -1)))
     check(optionStrEcho("") == "")
     check(optionSliceEcho(byteArrayOf())!!.isEmpty())
+    // Explicit presence must agree with a non-null discriminator even when
+    // an expanded constructor exposes nullable raw reference parameters.
+    check(optionalTextInputLen(false, null, 9) == -1L)
+    check(optionalTextInputLen(false, "ignored", 9) == -1L)
+    check(optionalTextInputLen(true, "", 5) == 5L)
+    check(optionalTextInputLen(true, "é", 5) == 7L)
+    try { optionalTextInputLen(true, null, 5); error("null present text accepted") }
+    catch (_: IllegalArgumentException) {}
+    check(optionalBytesInputLen(false, null, 9) == -1L)
+    check(optionalBytesInputLen(false, byteArrayOf(1), 9) == -1L)
+    check(optionalBytesInputLen(true, byteArrayOf(), 5) == 5L)
+    check(optionalBytesInputLen(true, byteArrayOf(0, -1), 5) == 7L)
+    try { optionalBytesInputLen(true, null, 5); error("null present bytes accepted") }
+    catch (_: IllegalArgumentException) {}
     // Call the two reference fixtures directly to check the native ABI and
     // rejection of malformed tags without Kotlin's argument guards. Their
     // (Int, reference) signatures are unique in this fixture manifest; selecting

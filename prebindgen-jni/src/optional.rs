@@ -152,10 +152,14 @@ pub(crate) fn input_kotlin(
             .as_ref()
             .filter(|_| inner[j].name == o.discriminator);
         let default = default_kt(&inner[j].kind, niche);
-        let a = if matches!(niche, Some(JniNiche::Integer(_))) {
-            format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}")
-        } else {
-            a
+        let a = match niche {
+            Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
+            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+                // An explicit presence parameter must not silently become None
+                // when a nullable raw reference is passed for its discriminator.
+                format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
+            }
+            _ => a,
         };
         out.arguments
             .push(format!("if ({presence}) {a} else {default}"));
