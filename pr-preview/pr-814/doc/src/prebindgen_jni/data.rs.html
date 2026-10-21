@@ -484,11 +484,11 @@
 <a href=#484 id=484 data-nosnippet>484</a>    }
 <a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">fn </span>is_present(
 <a href=#486 id=486 data-nosnippet>486</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#487 id=487 data-nosnippet>487</a>        <span class="kw">_</span>: <span class="kw-2">&amp;</span>JniWire,
+<a href=#487 id=487 data-nosnippet>487</a>        wire: <span class="kw-2">&amp;</span>JniWire,
 <a href=#488 id=488 data-nosnippet>488</a>        niche: <span class="kw-2">&amp;</span><span class="self">Self</span>::Niche,
 <a href=#489 id=489 data-nosnippet>489</a>        value: TokenStream,
 <a href=#490 id=490 data-nosnippet>490</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#491 id=491 data-nosnippet>491</a>        <span class="prelude-val">Ok</span>(niche.present(value))
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="prelude-val">Ok</span>(niche.present(wire, value))
 <a href=#492 id=492 data-nosnippet>492</a>    }
 <a href=#493 id=493 data-nosnippet>493</a>    <span class="kw">fn </span>remaining_niche(<span class="kw-2">&amp;</span><span class="self">self</span>, wire: <span class="kw-2">&amp;</span>JniWire, niche: <span class="kw-2">&amp;</span><span class="self">Self</span>::Niche) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Niche&gt; {
 <a href=#494 id=494 data-nosnippet>494</a>        optional::remaining(wire, niche)
@@ -784,7 +784,7 @@
 <a href=#784 id=784 data-nosnippet>784</a>    </span><span class="kw">fn </span>kotlin_record_and_presence_bindings_share_a_namespace() {
 <a href=#785 id=785 data-nosnippet>785</a>        <span class="kw">let </span><span class="kw-2">mut </span>optional = WireLayout::from(<span class="macro">vec!</span>[Wire {
 <a href=#786 id=786 data-nosnippet>786</a>            name: <span class="macro">syn::parse_quote!</span>(flag),
-<a href=#787 id=787 data-nosnippet>787</a>            kind: JniWire::Selector,
+<a href=#787 id=787 data-nosnippet>787</a>            kind: JniWire::selector(),
 <a href=#788 id=788 data-nosnippet>788</a>        }]);
 <a href=#789 id=789 data-nosnippet>789</a>        optional.enclose(JniGroup::Optional(JniOptional {
 <a href=#790 id=790 data-nosnippet>790</a>            presence: <span class="macro">syn::parse_quote!</span>(flag),

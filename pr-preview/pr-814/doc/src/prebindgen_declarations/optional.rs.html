@@ -146,12 +146,21 @@
 <a href=#146 id=146 data-nosnippet>146</a>        .niche
 <a href=#147 id=147 data-nosnippet>147</a>        .as_ref()
 <a href=#148 id=148 data-nosnippet>148</a>        .and_then(|(i, n)| codec.remaining_niche(<span class="kw-2">&amp;</span>tree[<span class="kw-2">*</span>i].kind, n));
-<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">for </span>wire <span class="kw">in </span>tree.iter_mut() {
-<a href=#150 id=150 data-nosnippet>150</a>        codec.set_niche(<span class="kw-2">&amp;mut </span>wire.kind, <span class="prelude-val">None</span>);
-<a href=#151 id=151 data-nosnippet>151</a>    }
-<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((i, <span class="kw">_</span>)) = <span class="kw-2">&amp;</span>layout.niche {
-<a href=#153 id=153 data-nosnippet>153</a>        codec.set_niche(<span class="kw-2">&amp;mut </span>tree[<span class="kw-2">*</span>i].kind, remaining);
-<a href=#154 id=154 data-nosnippet>154</a>    }
-<a href=#155 id=155 data-nosnippet>155</a>    tree.enclose(codec.optional_group(tag, discriminator, layout.niche.map(|(<span class="kw">_</span>, n)| n)));
-<a href=#156 id=156 data-nosnippet>156</a>}
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="comment">// A new presence flag is always active, and its excluded representations
+<a href=#150 id=150 data-nosnippet>150</a>    // remain available to enclosing options. Payload wires may be inactive.
+<a href=#151 id=151 data-nosnippet>151</a>    </span><span class="kw">let </span>flag_niche = layout
+<a href=#152 id=152 data-nosnippet>152</a>        .niche
+<a href=#153 id=153 data-nosnippet>153</a>        .is_none()
+<a href=#154 id=154 data-nosnippet>154</a>        .then(|| codec.niche(<span class="kw-2">&amp;</span>tree[<span class="number">0</span>].kind))
+<a href=#155 id=155 data-nosnippet>155</a>        .flatten();
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">for </span>wire <span class="kw">in </span>tree.iter_mut() {
+<a href=#157 id=157 data-nosnippet>157</a>        codec.set_niche(<span class="kw-2">&amp;mut </span>wire.kind, <span class="prelude-val">None</span>);
+<a href=#158 id=158 data-nosnippet>158</a>    }
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>((i, <span class="kw">_</span>)) = <span class="kw-2">&amp;</span>layout.niche {
+<a href=#160 id=160 data-nosnippet>160</a>        codec.set_niche(<span class="kw-2">&amp;mut </span>tree[<span class="kw-2">*</span>i].kind, remaining);
+<a href=#161 id=161 data-nosnippet>161</a>    } <span class="kw">else </span>{
+<a href=#162 id=162 data-nosnippet>162</a>        codec.set_niche(<span class="kw-2">&amp;mut </span>tree[<span class="number">0</span>].kind, flag_niche);
+<a href=#163 id=163 data-nosnippet>163</a>    }
+<a href=#164 id=164 data-nosnippet>164</a>    tree.enclose(codec.optional_group(tag, discriminator, layout.niche.map(|(<span class="kw">_</span>, n)| n)));
+<a href=#165 id=165 data-nosnippet>165</a>}
 </code></pre></div></section></main></body></html>
