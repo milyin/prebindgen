@@ -3,7 +3,7 @@
     pub name: <a class="enum" href="https://doc.rust-lang.org/1.99.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.99.1/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A Kotlin data class whose fields are converted across the JNI boundary.</p>
 <p>Supports owned public named-field records containing scalars, <code>String</code>,
-<code>Vec&lt;u8&gt;</code>, other declared data classes, and declared opaque handles.
+<code>Vec&lt;u8&gt;</code>, other declared data classes, declared opaque handles, and optional fields.
 Records containing handles (including nested ones) support returns only.
 Output ownership is declared with <code>expand_return!</code>: <code>field_self_ref()</code> borrows
 and <code>field_self_into()</code> moves, recursively. <code>project_self(Projection)</code> allows
