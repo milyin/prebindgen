@@ -132,6 +132,8 @@ use prebindgen_jni::{data_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .expand(expand_param!(TextNicheInput).variant(fun!(text_niche_input_new)))
+        .expand(expand_param!(BytesNicheInput).variant(fun!(bytes_niche_input_new)))
         .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
         .expand(expand_param!(NicheChoiceHandle).variant(fun!(niche_choice_new)).variant_self())
         .expand(expand_param!(OptionCtor).variant(fun!(option_ctor_new)).variant_self())
@@ -139,6 +141,10 @@ fn main() {
         .package(package!("options")
             .class(ptr_class!(NicheChoiceHandle)).fun(fun!(niche_choice_new)).fun(fun!(niche_choice_id))
             .fun(fun!(option_nested_u32))
+            .fun(fun!(option_triple_text)).fun(fun!(option_triple_bytes))
+            .fun(fun!(option_triple_i64)).fun(fun!(option_triple_unit))
+            .fun(fun!(optional_text_input_len)).fun(fun!(optional_bytes_input_len))
+            .fun(fun!(nested_niche_choice_id))
             .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
             .class(ptr_class!(OptionChoice))
             .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
@@ -156,6 +162,7 @@ fn main() {
             .fun(fun!(option_nested)).fun(fun!(option_nested_char))
             .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
             .fun(fun!(optional_fields_echo))
+            .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
             .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.

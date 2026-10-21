@@ -2,7 +2,7 @@
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
 use crate::{Access, InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Conversion, Function, Result, Wire, WireKind};
+use prebindgen_flat::{Conversion, ConversionExt, Function, Result, Wire, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -102,12 +102,13 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for InputPlan<W, C, M> {
+impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C, G> {
     type Wire = W;
+    type Group = G;
     type SlotFragment<'a> = InputFragment<'a, C>;
     type WireFragment<'a> = InputWireFragment;
-    fn wires(&self) -> &[Wire<W>] {
-        &self.wires
+    fn layout(&self) -> &prebindgen_flat::WireLayout<W, G> {
+        &self.layout
     }
     fn code_fragment_slot(
         &self,
@@ -176,7 +177,7 @@ impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for InputPlan<W, C
         _expected_type: &syn::Type,
     ) -> Result<TokenStream> {
         let wire = self
-            .wires
+            .layout
             .get(pos)
             .ok_or_else(|| format!("invalid input wire position {pos}"))?;
         let name = &wire.name;
@@ -184,12 +185,13 @@ impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for InputPlan<W, C
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for OutputPlan<W, C, M> {
+impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, C, G> {
     type Wire = W;
+    type Group = G;
     type SlotFragment<'a> = OutputFragment<'a, C>;
     type WireFragment<'a> = OutputWireFragment<'a, C>;
-    fn wires(&self) -> &[Wire<W>] {
-        &self.wires
+    fn layout(&self) -> &prebindgen_flat::WireLayout<W, G> {
+        &self.layout
     }
     fn code_fragment_slot(
         &self,
@@ -239,9 +241,13 @@ impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for OutputPlan<W, 
         expression(crate::emission::render_output(context, code, source)?)
     }
 }
-impl<W: WireKind, C, M> OutputPlan<W, C, M> {
+impl<W: WireKind, C, G> OutputPlan<W, C, G> {
+    /// Check that every tree leaf has one output expression.
+    pub fn validate_value_count(&self) -> Result<()> {
+        self.check_arity()
+    }
     fn check_arity(&self) -> Result<()> {
-        if self.wires.len() != self.values.len() {
+        if self.layout.len() != self.values.len() {
             return Err("output wire/value count differs".into());
         }
         Ok(())
@@ -278,7 +284,6 @@ where
         let output = self.output_conversion()?;
         output
             .wires()
-            .iter()
             .enumerate()
             .map(|(pos, wire)| {
                 let value = output.code_fragment_wire(

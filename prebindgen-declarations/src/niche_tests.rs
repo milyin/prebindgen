@@ -1,7 +1,7 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), Composition<Sentinel, ()>>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), Composition<Sentinel, ()>>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), String>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), String>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -18,6 +18,7 @@ struct Sentinel {
 struct Domain {
     ty: Type,
     unused: Vec<Sentinel>,
+    remaining: Option<usize>,
     prefix: bool,
     valid: TokenStream,
 }
@@ -29,7 +30,21 @@ impl WireKind for Domain {
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
-    type Group = ();
+    type Group = String;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<Sentinel>,
+    ) -> String {
+        format!("optional:{presence}:{discriminator}:{niche:?}")
+    }
+    fn field_group(&self, name: syn::Ident) -> String {
+        format!("member:{name}")
+    }
+    fn fields_group(&self) -> String {
+        "record".into()
+    }
     type Extra = ();
     type Context = ();
     type Wire = Domain;
@@ -39,6 +54,7 @@ impl Codec for DomainCodec {
         Domain {
             ty: syn::parse_quote!(i32),
             unused: vec![],
+            remaining: None,
             prefix: false,
             valid: quote!(true),
         }
@@ -67,7 +83,14 @@ impl Codec for DomainCodec {
         unreachable!()
     }
     fn niche(&self, wire: &Domain) -> Option<Sentinel> {
-        wire.unused.first().cloned()
+        wire.remaining.and_then(|i| wire.unused.get(i)).cloned()
+    }
+    fn set_niche(&self, wire: &mut Domain, niche: Option<Sentinel>) {
+        wire.remaining = niche.and_then(|n| {
+            wire.unused
+                .iter()
+                .position(|s| s.value.to_string() == n.value.to_string())
+        });
     }
     fn is_present(&self, _: &Domain, n: &Sentinel, v: TokenStream) -> Result<TokenStream> {
         let absent = (n.absent)(v, n.value.clone());
@@ -110,9 +133,8 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
             quote!(true)
         };
         return InputPlan {
-            metadata: Default::default(),
             context: Default::default(),
-            wires,
+            layout: wires.into(),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
             acquire: quote!(),
             resources: vec![],
@@ -156,10 +178,9 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             values.insert(0, quote!(123i32));
         }
         return OutputPlan {
-            metadata: Default::default(),
             context: Default::default(),
             delivery: Default::default(),
-            wires,
+            layout: wires.into(),
             statements: quote!(let raw = #source; if !(#valid) #(|| #invalid)* { return Err("invalid payload"); }),
             commit: quote!(),
             values,
@@ -256,6 +277,7 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                 } else {
                     quote!(true)
                 },
+                remaining: Some(0),
                 unused: values
                     .iter()
                     .cloned()
@@ -269,21 +291,21 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                 let inp = input(&domain, depth, Condition::default());
                 let out = output(&domain, depth, quote!(source));
                 let expected = 1 + usize::from(prefix) + depth.saturating_sub(domain.unused.len());
-                assert_eq!(inp.wires.len(), expected);
-                assert_eq!(out.wires.len(), expected);
+                assert_eq!(inp.layout.len(), expected);
+                assert_eq!(out.layout.len(), expected);
                 let decode = format_ident!("decode{case}_{depth}_{suffix}");
                 let encode = format_ident!("encode{case}_{depth}_{suffix}");
                 let mut source_ty = ty.clone();
                 for _ in 0..depth {
                     source_ty = syn::parse_quote!(Option<#source_ty>);
                 }
-                let params = inp.wires.iter().map(|w| {
+                let params = inp.layout.iter().map(|w| {
                     let n = &w.name;
                     let t = w.kind.rust_type();
                     quote!(#n:#t)
                 });
-                let names = inp.wires.iter().map(|w| &w.name).collect::<Vec<_>>();
-                let types = out.wires.iter().map(|w| w.kind.rust_type());
+                let names = inp.layout.iter().map(|w| &w.name).collect::<Vec<_>>();
+                let types = out.layout.iter().map(|w| w.kind.rust_type());
                 let validation = inp.validation;
                 let construct = inp.statements;
                 let argument = inp.argument;
@@ -354,9 +376,10 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
 }
 
 #[test]
-fn optional_domains_live_on_plans_and_only_the_discriminator_keeps_a_niche() {
+fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     let domain = Domain {
         ty: syn::parse_quote!(u8),
+        remaining: Some(0),
         unused: vec![
             Sentinel {
                 value: quote!(3u8),
@@ -373,7 +396,7 @@ fn optional_domains_live_on_plans_and_only_the_discriminator_keeps_a_niche() {
     let mut child = output(&domain, 0, quote!(payload));
     // A second view has the same base domain, but its absent default cannot be
     // treated as an independent discriminator by the enclosing optional layer.
-    child.wires.push(Wire {
+    child.layout.push(Wire {
         name: format_ident!("second"),
         kind: domain.clone(),
     });
@@ -389,16 +412,16 @@ fn optional_domains_live_on_plans_and_only_the_discriminator_keeps_a_niche() {
     )
     .unwrap();
     assert_eq!(
-        plan.metadata.domains["raw"]
-            .as_ref()
+        DomainCodec
+            .niche(&plan.layout[0].kind)
             .unwrap()
             .value
             .to_string(),
         "4u8"
     );
-    assert!(plan.metadata.domains["second"].is_none());
-    assert_eq!(plan.wires[0].kind.unused.len(), 2); // Wire's base domain is unchanged.
-    assert_eq!(plan.wires[1].kind.unused.len(), 2);
+    assert!(DomainCodec.niche(&plan.layout[1].kind).is_none());
+    assert_eq!(plan.layout[0].kind.unused.len(), 2); // Wire's base domain is unchanged.
+    assert_eq!(plan.layout[1].kind.unused.len(), 2);
     plan = optional_output(
         &DomainCodec,
         &(),
@@ -409,8 +432,11 @@ fn optional_domains_live_on_plans_and_only_the_discriminator_keeps_a_niche() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.wires.len(), 2);
-    assert!(plan.metadata.domains.values().all(Option::is_none));
+    assert_eq!(plan.layout.len(), 2);
+    assert!(plan
+        .layout
+        .iter()
+        .all(|w| DomainCodec.niche(&w.kind).is_none()));
     plan = optional_output(
         &DomainCodec,
         &(),
@@ -421,21 +447,20 @@ fn optional_domains_live_on_plans_and_only_the_discriminator_keeps_a_niche() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.wires.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
-    assert_eq!(plan.wires[0].name, "tag3");
-    plan.metadata.validate(&plan.wires).unwrap();
-    assert_eq!(plan.metadata.roots, ["tag3"]);
-    assert_eq!(plan.metadata.groups["tag3"].children, ["tag2"]);
-    assert_eq!(plan.metadata.groups["tag2"].children, ["tag1"]);
+    assert_eq!(plan.layout.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
+    assert_eq!(plan.layout[0].name, "tag3");
+    plan.layout.validate().unwrap();
+    let prebindgen_flat::WireNode::Group { metadata, children } = &plan.layout.nodes()[0] else {
+        panic!()
+    };
+    assert!(metadata.starts_with("optional:tag3:"));
+    let prebindgen_flat::WireNode::Group { metadata, .. } = &children.nodes()[1] else {
+        panic!()
+    };
+    assert!(metadata.starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
-    independent.metadata.suppress(&independent.wires);
-    assert!(independent.metadata.domains["raw"].is_none());
-    assert_eq!(
-        DomainCodec
-            .niche(&independent.wires[0].kind)
-            .unwrap()
-            .value
-            .to_string(),
-        "3u8"
-    );
+    for w in independent.layout.iter_mut() {
+        DomainCodec.set_niche(&mut w.kind, None);
+    }
+    assert!(DomainCodec.niche(&independent.layout[0].kind).is_none());
 }

@@ -2899,3 +2899,71 @@ pub fn option_nested_projection_views(
 ) -> Option<Option<ProjectionHandle>> {
     outer.then(|| option_projection_views(inner))
 }
+
+/// A single nullable field, kept distinct from absence of the whole record.
+#[prebindgen]
+pub struct OptionalField {
+    pub value: Option<i64>,
+}
+#[prebindgen]
+pub fn optional_field_new(present: bool, value: Option<i64>) -> Option<OptionalField> {
+    present.then_some(OptionalField { value })
+}
+#[prebindgen]
+pub fn optional_field_fields(value: &OptionalField) -> OptionalField {
+    OptionalField { value: value.value }
+}
+
+// Nullable references exhaust null once, then share a presence flag's negative
+// values across further option layers. Full-domain scalars start with that flag.
+#[prebindgen]
+pub fn option_triple_text(value: Option<Option<Option<String>>>) -> Option<Option<Option<String>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_bytes(
+    value: Option<Option<Option<Vec<u8>>>>,
+) -> Option<Option<Option<Vec<u8>>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_i64(value: Option<Option<Option<i64>>>) -> Option<Option<Option<i64>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_unit(value: Option<Option<Option<()>>>) -> Option<Option<Option<()>>> {
+    value
+}
+#[prebindgen]
+pub fn nested_niche_choice_id(value: Option<Option<NicheChoiceHandle>>) -> i64 {
+    value.map(niche_choice_id).unwrap_or(-3)
+}
+
+// Multi-parameter constructors keep an explicit outer presence argument in
+// Kotlin. A null discriminator must not override a caller's present=true.
+#[prebindgen]
+pub struct TextNicheInput {
+    pub text: String,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn text_niche_input_new(text: String, number: i64) -> TextNicheInput {
+    TextNicheInput { text, number }
+}
+#[prebindgen]
+pub fn optional_text_input_len(value: Option<TextNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.text.len() as i64 + v.number)
+}
+#[prebindgen]
+pub struct BytesNicheInput {
+    pub bytes: Vec<u8>,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn bytes_niche_input_new(bytes: Vec<u8>, number: i64) -> BytesNicheInput {
+    BytesNicheInput { bytes, number }
+}
+#[prebindgen]
+pub fn optional_bytes_input_len(value: Option<BytesNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.bytes.len() as i64 + v.number)
+}

@@ -1,5 +1,5 @@
 use crate::template_parameter;
-use prebindgen_flat::{Wire, WireKind};
+use prebindgen_flat::{WireKind, WireLayout};
 use proc_macro2::TokenStream;
 use quote::quote;
 /// An input conversion split into call-wide validation, acquisition and construction.
@@ -7,13 +7,11 @@ use quote::quote;
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
 #[derive(Clone, Debug)]
-pub struct InputPlan<W: WireKind, C = (), M = ()> {
+pub struct InputPlan<W: WireKind, C = (), G = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Flattened boundary parameters in signature order.
-    pub wires: Vec<Wire<W>>,
-    /// Occurrence-level composition metadata, separate from the flat ABI wires.
-    pub metadata: M,
+    /// Authoritative wire tree; its leaves determine boundary parameter order.
+    pub layout: WireLayout<W, G>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -32,15 +30,13 @@ pub struct InputPlan<W: WireKind, C = (), M = ()> {
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
 #[derive(Clone, Debug)]
-pub struct OutputPlan<W: WireKind, C = (), M = ()> {
+pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
-    /// Boundary results in delivery order; one entry per expression in `values`.
-    pub wires: Vec<Wire<W>>,
-    /// Occurrence-level composition metadata, separate from the flat ABI wires.
-    pub metadata: M,
+    /// Authoritative result tree; each leaf corresponds to one entry in `values`.
+    pub layout: WireLayout<W, G>,
     /// Transfer ownership only after all foreign delivery operations succeed.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
@@ -91,15 +87,4 @@ impl Default for Delivery {
 /// calling [`crate::TemplateContext::render`] for generator-specific parameters.
 pub fn source_result_expr() -> TokenStream {
     template_parameter("source_result")
-}
-
-/// Metadata that can be combined when conversion plans are composed.
-pub trait PlanMetadata: Default {
-    /// Merge another independently prepared occurrence; reject conflicting identities.
-    fn merge(&mut self, other: Self) -> prebindgen_flat::Result<()>;
-}
-impl PlanMetadata for () {
-    fn merge(&mut self, _: Self) -> prebindgen_flat::Result<()> {
-        Ok(())
-    }
 }

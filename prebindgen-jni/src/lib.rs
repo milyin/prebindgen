@@ -9,38 +9,24 @@ pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
 mod optional;
 pub use optional::JniNiche;
+mod group;
 mod scalar;
-type JniComposition = prebindgen_declarations::Composition<JniNiche, data::DataGroup>;
 pub use data::{ClassDecl, DataClassDecl, DataGroup};
+pub use group::{JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
-use prebindgen_flat::Primitive;
-/// Preparation metadata consumed when building a JNI slot converter.
-///
-/// This adapter-specific type keeps C and JNI converters from being mixed in
-/// one model: their codecs use different carriers and allocation layouts.
-#[derive(Clone, Debug)]
-pub enum JniKind {
-    /// A primitive in its JVM carrier.
-    Scalar(Primitive),
-    /// A `java.lang.String`.
-    Text,
-    /// A `byte[]`.
-    Bytes,
-    /// A boxed allocation address in a `long`, owned by a Kotlin handle class.
-    Handle(Box<BoxedWire>, String),
-    /// An `int` selector arm index.
-    Selector,
-}
+use prebindgen_flat::{ConversionExt, Primitive};
+mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
+pub use wire::JniWire;
 mod emission;
 pub use emission::JniContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniComposition>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniComposition>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup>;
 mod kotlin;
 pub use kotlin::{
-    JniInput, JniOutput, JniWire, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
+    JniInput, JniOutput, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
     KotlinOutput, KotlinOutputConversion,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
@@ -454,13 +440,32 @@ impl Class {
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
-    type Group = data::DataGroup;
+    type Group = JniGroup;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<JniNiche>,
+    ) -> JniGroup {
+        JniGroup::Optional(JniOptional {
+            presence,
+            discriminator,
+            niche,
+        })
+    }
+    fn field_group(&self, name: syn::Ident) -> JniGroup {
+        JniGroup::Field(name)
+    }
+    fn fields_group(&self) -> JniGroup {
+        JniGroup::Fields(None)
+    }
     type Extra = ();
-    type Wire = JniKind;
+    type Wire = JniWire;
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
-    fn finish_input(&self, plan: &mut InputPlan<JniKind>, _: &()) -> Result<()> {
+    fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
+        group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let ownership = prebindgen_conversions::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
@@ -473,21 +478,24 @@ impl Codec for JniCodec {
         }
         Ok(())
     }
-    fn finish_output(&self, plan: &mut OutputPlan<JniKind>, _: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+        group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
-        let count = plan.wires.len();
+        let count = plan.layout.len();
         let mut encode = TokenStream::new();
-        for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
+        for (i, (wire, value)) in plan.layout.iter().zip(&plan.values).enumerate() {
             let expr = match &wire.kind {
-                JniKind::Scalar(p) => scalar::output_java(*p, value),
-                JniKind::Handle(_, _) => {
+                JniWire::Scalar { primitive: p, .. } => scalar::output_java(*p, value),
+                JniWire::Handle { .. } => {
                     quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
                 }
-                JniKind::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
-                JniKind::Bytes => {
-                    quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
+                JniWire::Text { .. } => {
+                    quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::text_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
                 }
-                JniKind::Selector => scalar::output_java(Primitive::I32, value),
+                JniWire::Bytes { .. } => {
+                    quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::bytes_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
+                }
+                JniWire::Selector { .. } => scalar::output_java(Primitive::I32, value),
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -502,30 +510,34 @@ impl Codec for JniCodec {
         };
         Ok(())
     }
-    fn niche(&self, wire: &JniKind) -> Option<crate::optional::JniNiche> {
-        optional::niche(wire)
+    fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
+        wire.available_niche()
+    }
+    fn set_niche(&self, wire: &mut JniWire, niche: Option<JniNiche>) {
+        wire.set_niche(niche)
+            .expect("JNI codec supplied an incompatible niche");
     }
     fn is_present(
         &self,
-        _: &JniKind,
+        wire: &JniWire,
         niche: &Self::Niche,
         value: TokenStream,
     ) -> Result<TokenStream> {
-        Ok(niche.present(value))
+        Ok(niche.present(wire, value))
     }
-    fn remaining_niche(&self, wire: &JniKind, niche: &Self::Niche) -> Option<Self::Niche> {
+    fn remaining_niche(&self, wire: &JniWire, niche: &Self::Niche) -> Option<Self::Niche> {
         optional::remaining(wire, niche)
     }
     fn absent_value(
         &self,
-        wire: &JniKind,
+        wire: &JniWire,
         niche: Option<&crate::optional::JniNiche>,
         input: bool,
     ) -> Result<TokenStream> {
         optional::absent(wire, niche, input)
     }
-    fn selector(&self, _: &()) -> JniKind {
-        JniKind::Selector
+    fn selector(&self, _: &()) -> JniWire {
+        JniWire::selector()
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
@@ -540,7 +552,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<InputPlan<JniKind>> {
+    ) -> Result<InputPlan<JniWire>> {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             let tag = format_ident!("{w}_present");
             let child = self.input_leaf(
@@ -554,14 +566,14 @@ impl Codec for JniCodec {
         }
         let env = prebindgen_conversions::template_parameter("environment");
         let (decode, kind) = match Value::of(ty) {
-            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniKind::Scalar(p)),
+            Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::scalar(p)),
             Some(Value::Text) => (
                 quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
-                JniKind::Text,
+                JniWire::text(),
             ),
             Some(Value::Bytes) => (
                 quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
-                JniKind::Bytes,
+                JniWire::bytes(),
             ),
             None => {
                 return prebindgen_conversions::boxed::input(
@@ -570,7 +582,7 @@ impl Codec for JniCodec {
                     w,
                     v,
                     &active.rust(),
-                    |b| JniKind::Handle(Box::new(b), kotlin_condition(active)),
+                    |b| JniWire::handle(b, kotlin_condition(active)),
                 )
             }
         };
@@ -583,7 +595,7 @@ impl Codec for JniCodec {
         w: syn::Ident,
         v: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
         if let syn::Type::Reference(reference) = ty {
             if reference.mutability.is_some() {
                 return Err("mutable-reference outputs are unsupported".into());
@@ -632,7 +644,8 @@ impl Codec for JniCodec {
                 child,
             );
         }
-        // Text and bytes stay Rust values until the wrapper delivers them.
+        // Text and bytes stay optional Rust payloads until delivery. This keeps
+        // a null reference distinct from a present empty string or byte array.
         let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
             Some(Value::Scalar(p)) => {
                 return prebindgen_conversions::value::output(
@@ -641,14 +654,14 @@ impl Codec for JniCodec {
                     v,
                     borrowed,
                     |v| scalar::encode(p, v),
-                    JniKind::Scalar(p),
+                    JniWire::scalar(p),
                 )
             }
-            Some(Value::Text) => (|v| v, JniKind::Text),
-            Some(Value::Bytes) => (|v| v, JniKind::Bytes),
+            Some(Value::Text) => (|v| quote!(Some(#v)), JniWire::text()),
+            Some(Value::Bytes) => (|v| quote!(Some(#v)), JniWire::bytes()),
             None => {
                 return prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
-                    JniKind::Handle(Box::new(b), "true".into())
+                    JniWire::handle(b, "true")
                 })
             }
         };
@@ -853,7 +866,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             let n = &w.name;
             let rt = w.kind.rust_type();
             params.push(quote!(#n:#rt));
-            raw_params.push(format!("{n}: {}", w.kind.kotlin_type));
+            raw_params.push(format!("{n}: {}", w.kind.kotlin_type()));
         }
         for input in f.input_conversions()? {
             let code = input.kotlin(&kotlin_context)?;
@@ -889,8 +902,8 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             raw_params.push("ownership: BooleanArray".into());
             kt_args.push("ownership".into());
         }
-        let slots: usize =
-            usize::from(has_consumes) + f.inputs()?.map(|w| w.kind.parameter_slots).sum::<usize>();
+        let slots: usize = usize::from(has_consumes)
+            + f.inputs()?.map(|w| w.kind.parameter_slots()).sum::<usize>();
         if slots > 255 {
             return Err(format!(
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"

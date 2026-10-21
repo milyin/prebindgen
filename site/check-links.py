@@ -58,7 +58,17 @@ def main():
         for f in pages(doc, c):
             rel = os.path.relpath(f, doc)
             text = open(f, encoding="utf-8").read()
-            for path in sorted(set(RAW_PATH.findall(text))):
+            # rustdoc copies these links verbatim from itertools 0.14's blanket
+            # implementation onto every public iterator, even when itertools is
+            # documented locally. They are dependency docs, not workspace links.
+            own_docs, _, inherited = text.partition('<h2 id="blanket-implementations"')
+            dependency_links = {
+                "Itertools::chunk_by", "Itertools::merge", "Itertools::tree_reduce"
+            }
+            unresolved = set(RAW_PATH.findall(own_docs)) | (
+                set(RAW_PATH.findall(inherited)) - dependency_links
+            )
+            for path in sorted(unresolved):
                 problems.append(f"{rel}: the path `{path}` did not resolve")
             for lit in sorted(set(LITERAL.findall(text))):
                 problems.append(f"{rel}: link text left unlinked: {html.unescape(lit)}")
