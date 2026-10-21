@@ -1,5 +1,6 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
+use prebindgen_declarations::GroupStructure;
 use prebindgen_flat::{Conversion, Wire, WireKind};
 
 impl WireKind for JniKind {
@@ -324,12 +325,19 @@ pub(crate) fn validate_layout(
     fn visit(nodes: &[JniNode], names: &mut std::collections::BTreeSet<String>) -> Result<()> {
         for node in nodes {
             if let JniNode::Group { metadata, children } = node {
-                let name = match metadata {
-                    JniGroup::Optional(o) => o.presence.to_string(),
-                    JniGroup::Adapter(d) => d.root.clone(),
-                };
-                if !names.insert(name.clone()) {
-                    return Err(format!("duplicate Kotlin group binding `{name}`"));
+                if let GroupStructure::Optional(o) = &metadata.structure {
+                    let name = o.presence.to_string();
+                    if !names.insert(name.clone()) {
+                        return Err(format!("duplicate Kotlin group binding `{name}`"));
+                    }
+                }
+                if let Some(d) = &metadata.annotation {
+                    if !matches!(metadata.structure, GroupStructure::Fields) {
+                        return Err("Kotlin record annotation requires a field collection".into());
+                    }
+                    if !names.insert(d.root.clone()) {
+                        return Err(format!("duplicate Kotlin group binding `{}`", d.root));
+                    }
                 }
                 visit(children.nodes(), names)?;
             }
@@ -339,17 +347,37 @@ pub(crate) fn validate_layout(
     visit(layout.nodes(), &mut std::collections::BTreeSet::new())
 }
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
-    nodes.iter().any(|node|matches!(node,JniNode::Group{metadata,..} if matches!(metadata,JniGroup::Optional(_))))
+    nodes.iter().any(|node| match node {
+        JniNode::Wire(_) => false,
+        JniNode::Group { metadata, children } => match &metadata.structure {
+            GroupStructure::Optional(_) => true,
+            _ if metadata.annotation.is_some() => false,
+            _ => has_optional(children.nodes()),
+        },
+    })
 }
 pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     for node in nodes {
         let c = match node {
             JniNode::Wire(w) => input_leaves(&[w], context)?,
-            JniNode::Group { metadata, children } => match metadata {
-                JniGroup::Optional(o) => optional::input_kotlin(children.nodes(), o, context)?,
-                JniGroup::Adapter(d) => data::input_kotlin(children.nodes(), d, context)?,
-            },
+            JniNode::Group { metadata, children } => {
+                if let Some(d) = &metadata.annotation {
+                    data::input_kotlin(children.nodes(), d, context)?
+                } else {
+                    match &metadata.structure {
+                        GroupStructure::Optional(o) => {
+                            optional::input_kotlin(children.nodes(), o, context)?
+                        }
+                        GroupStructure::Fields | GroupStructure::Field(_) => {
+                            input_kotlin(children.nodes(), context)?
+                        }
+                        GroupStructure::Custom => {
+                            return Err("unsupported custom Kotlin structure".into())
+                        }
+                    }
+                }
+            }
         };
         out.parameters.extend(c.parameters);
         out.arguments.extend(c.arguments);
@@ -398,9 +426,20 @@ pub(crate) fn output_kotlin(
         let (mut c, count) = match node {
             JniNode::Wire(w) => (output_leaves(&[w], &ctx)?, 1),
             JniNode::Group { metadata, children } => {
-                let c = match metadata {
-                    JniGroup::Optional(o) => optional::output_kotlin(children.nodes(), o, &ctx)?,
-                    JniGroup::Adapter(d) => data::output_kotlin(children.nodes(), d, &ctx)?,
+                let c = if let Some(d) = &metadata.annotation {
+                    data::output_kotlin(children.nodes(), d, &ctx)?
+                } else {
+                    match &metadata.structure {
+                        GroupStructure::Optional(o) => {
+                            optional::output_kotlin(children.nodes(), o, &ctx)?
+                        }
+                        GroupStructure::Fields | GroupStructure::Field(_) => {
+                            output_kotlin(children.nodes(), &ctx)?
+                        }
+                        GroupStructure::Custom => {
+                            return Err("unsupported custom Kotlin structure".into())
+                        }
+                    }
                 };
                 (c, children.len())
             }

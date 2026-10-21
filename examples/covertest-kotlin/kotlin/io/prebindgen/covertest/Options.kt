@@ -69,6 +69,10 @@ fun checkOptions() {
     check(optionalBytesEcho(bytesRecord) == bytesRecord)
     check(optionalBytesEcho(bytesRecord).hashCode() == bytesRecord.hashCode())
     check(optionalBytesEcho(OptionalBytes(null)) == OptionalBytes(null))
+    // An unannotated field expansion must preserve the outer presence bit.
+    check(optionalFieldNew(false, 7) { present, value -> !present && value == null })
+    check(optionalFieldNew(true, null) { present, value -> present && value == null })
+    check(optionalFieldNew(true, 7) { present, value -> present && value == 7L })
     check(optionalFieldsEcho(null) == null)
     for (v in listOf(OptionalFields(null, null, null), OptionalFields(8, "", 0), OptionalFields(9, "é", 65))) {
         check(optionalFieldsEcho(v) == v)

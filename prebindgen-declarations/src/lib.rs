@@ -10,7 +10,7 @@
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
 mod metadata;
-pub use metadata::{validate_layout, CompositionGroup, OptionalGroup};
+pub use metadata::{validate_layout, CompositionGroup, GroupStructure, OptionalGroup};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire, WireLayout};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -274,8 +274,8 @@ pub trait Codec {
     /// Adapter-owned description of an absent wire representation. Use `()` if unused.
     /// The shared compiler never interprets this metadata.
     type Niche: Clone;
-    /// Adapter-owned group metadata (for example a destination record shape).
-    /// Stored in `CompositionGroup::Adapter`; the final conversion uses the complete
+    /// Adapter annotations attached to shared structural groups, for example a
+    /// destination class name on a field collection. The final conversion uses the complete
     /// `CompositionGroup<Self::Niche, Self::Group>` as its `Conversion::Group`.
     type Group: Clone;
 
@@ -623,6 +623,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
+                    wires.enclose(CompositionGroup::new(GroupStructure::Fields));
                     return Ok(InputPlan {
                         context: Default::default(),
                         acknowledgement,
@@ -785,6 +786,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
                 if type_key(ty) == "()" && children.is_empty() {
+                    out.layout
+                        .enclose(CompositionGroup::new(GroupStructure::Fields));
                     return Ok(out);
                 }
                 let r = self.flat.record(ty)?;

@@ -156,6 +156,7 @@ fn main() {
             .fun(fun!(option_nested)).fun(fun!(option_nested_char))
             .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
             .fun(fun!(optional_fields_echo))
+            .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
             .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.

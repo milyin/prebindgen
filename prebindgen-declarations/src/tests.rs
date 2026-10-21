@@ -1229,3 +1229,72 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
     );
     assert!(std::process::Command::new(exe).status().unwrap().success());
 }
+
+#[test]
+fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
+    use prebindgen_flat::WireNode;
+    let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
+    let input = Input::Fields(vec![
+        Input::Optional(Box::new(Input::Leaf)),
+        Input::Fields(vec![]),
+        Input::Fields(vec![Input::Leaf, Input::Leaf]),
+    ]);
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "echo",
+        "value",
+        &input,
+        &Extra::default(),
+    )
+    .unwrap();
+    fn check(layout: &WireLayout<TestWire, CompositionGroup<(), ()>>) {
+        validate_layout(layout).unwrap();
+        assert_eq!(layout.len(), 4);
+        let [WireNode::Group { metadata, children }] = layout.nodes() else {
+            panic!()
+        };
+        assert!(matches!(metadata.structure, GroupStructure::Fields));
+        let mut names = Vec::new();
+        let mut widths = Vec::new();
+        for node in children.nodes() {
+            let WireNode::Group { metadata, children } = node else {
+                panic!()
+            };
+            let GroupStructure::Field(name) = &metadata.structure else {
+                panic!()
+            };
+            names.push(name.to_string());
+            widths.push(children.len());
+        }
+        assert_eq!(names, ["maybe", "empty", "pair"]);
+        assert_eq!(widths, [2, 0, 2]);
+        for (i, wire) in layout.iter().enumerate() {
+            assert!(std::ptr::eq(wire, layout.get(i).unwrap()));
+        }
+    }
+    check(
+        &flat.function("echo").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap()
+            .layout,
+    );
+    for owned in [false, true] {
+        let fields = vec![
+            Output::Optional(Box::new(Output::Leaf)),
+            Output::Fields(vec![]),
+            Output::Fields(vec![Output::Leaf, Output::Leaf]),
+        ];
+        let output = if owned {
+            Output::OwnedFields(fields)
+        } else {
+            Output::Fields(fields)
+        };
+        bind_output(&mut flat, &TEST_CODEC, "echo", &output, &Extra::default()).unwrap();
+        let plan = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
+        check(&plan.layout);
+        assert_eq!(plan.values.len(), 4);
+    }
+}

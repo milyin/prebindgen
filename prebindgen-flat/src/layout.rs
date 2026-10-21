@@ -67,6 +67,11 @@ impl<W: WireKind, G> WireLayout<W, G> {
             .collect();
         Self { nodes, ends }
     }
+    /// Consume the tree into its immediate children for structural editing.
+    /// Rebuild it with `from_nodes` to derive fresh wire positions.
+    pub fn into_nodes(self) -> Vec<WireNode<W, G>> {
+        self.nodes
+    }
     /// Immediate children of this tree, including group metadata.
     pub fn nodes(&self) -> &[WireNode<W, G>] {
         &self.nodes

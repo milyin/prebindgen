@@ -2899,3 +2899,17 @@ pub fn option_nested_projection_views(
 ) -> Option<Option<ProjectionHandle>> {
     outer.then(|| option_projection_views(inner))
 }
+
+/// A single nullable field, kept distinct from absence of the whole record.
+#[prebindgen]
+pub struct OptionalField {
+    pub value: Option<i64>,
+}
+#[prebindgen]
+pub fn optional_field_new(present: bool, value: Option<i64>) -> Option<OptionalField> {
+    present.then_some(OptionalField { value })
+}
+#[prebindgen]
+pub fn optional_field_fields(value: &OptionalField) -> OptionalField {
+    OptionalField { value: value.value }
+}

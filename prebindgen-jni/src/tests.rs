@@ -413,3 +413,26 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
         ));
     }
 }
+
+#[test]
+fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
+    use prebindgen_declarations::{bind_input, Input};
+    let mut source = flat("pub struct Wrapped { pub value: Option<i64> } pub fn wrapped_fields(x: &Wrapped) -> Wrapped {} pub fn echo(value: Option<Wrapped>) -> Option<Wrapped> {}");
+    let input = Input::Optional(Box::new(Input::Fields(vec![Input::Optional(Box::new(
+        Input::Leaf,
+    ))])));
+    bind_input(&mut source, &JniCodec, "echo", "value", &input, &()).unwrap();
+    let generated =
+        JniGen::builder()
+            .flat(source)
+            .set_package_prefix("test")
+            .package(package!().fun(
+                fun!(echo).expand_return(expand_return!(Wrapped).fields(fields!(wrapped_fields))),
+            ))
+            .build()
+            .unwrap();
+    let kt = &generated.kotlin["test/Functions.kt"];
+    assert!(kt.contains(": Boolean,"), "{kt}");
+    assert!(kt.contains(": Long?"), "{kt}");
+    assert!(kt.contains("build: (Boolean, Long?) -> R"), "{kt}");
+}

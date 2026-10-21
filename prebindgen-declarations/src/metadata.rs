@@ -2,17 +2,43 @@
 use super::*;
 use prebindgen_flat::WireNode;
 
-/// How the children of a tree node form one value.
+/// Shared structure and optional destination-specific information for a parent node.
 ///
-/// The node owns its children in `WireLayout`; this description contains only
-/// the information needed to interpret them. For example, an optional integer
-/// has a flag leaf and an integer leaf, and its group names the flag to inspect.
+/// The structure describes how the children form a value. An annotation can add
+/// destination information, such as the Kotlin class constructed from fields,
+/// without replacing that structure. Physical wires still belong only to leaves.
 #[derive(Clone, Debug)]
-pub enum CompositionGroup<N, G> {
-    /// Describes how to distinguish `None` from `Some`.
+pub struct CompositionGroup<N, A> {
+    /// Meaning of the ordered children, independent of the destination language.
+    pub structure: GroupStructure<N>,
+    /// Destination-specific information attached to this same structural node.
+    pub annotation: Option<A>,
+}
+impl<N, A> CompositionGroup<N, A> {
+    /// Describe a shared structure without destination-specific information.
+    pub fn new(structure: GroupStructure<N>) -> Self {
+        Self {
+            structure,
+            annotation: None,
+        }
+    }
+    /// Attach destination-specific information while preserving the structure.
+    pub fn annotated(mut self, annotation: A) -> Self {
+        self.annotation = Some(annotation);
+        self
+    }
+}
+/// Meaning of a parent's children, produced by the shared declaration compiler.
+#[derive(Clone, Debug)]
+pub enum GroupStructure<N> {
+    /// Optional payload and its presence rule.
     Optional(OptionalGroup<N>),
-    /// Adapter information, such as the Kotlin class constructed from fields.
-    Adapter(G),
+    /// Ordered named fields. Each immediate child must be a `Field` group.
+    Fields,
+    /// One source field; its children may contain zero, one or several wires.
+    Field(syn::Ident),
+    /// Adapter-defined structure. Requires an annotation describing its meaning.
+    Custom,
 }
 /// How an optional node decides whether its child value is present.
 #[derive(Clone, Debug)]
@@ -27,8 +53,9 @@ pub struct OptionalGroup<N> {
     /// Remaining available niches belong to the leaf's wire kind instead.
     pub niche: Option<N>,
 }
-/// Check optional discriminator references as well as the tree's unique physical wire names.
-/// Empty adapter groups are allowed; an optional group needs a discriminator wire.
+/// Check physical wire names, optional bindings and references, and field structure.
+/// Field collections contain uniquely named field children, including empty fields.
+/// Custom structures require an adapter annotation describing their meaning.
 pub fn validate_layout<W: prebindgen_flat::WireKind, N, G>(
     layout: &WireLayout<W, CompositionGroup<N, G>>,
 ) -> Result<()> {
@@ -36,10 +63,11 @@ pub fn validate_layout<W: prebindgen_flat::WireKind, N, G>(
     fn visit<W: prebindgen_flat::WireKind, N, G>(
         layout: &WireLayout<W, CompositionGroup<N, G>>,
         bindings: &mut std::collections::BTreeSet<String>,
+        in_fields: bool,
     ) -> Result<()> {
         for node in layout.nodes() {
             if let WireNode::Group { metadata, children } = node {
-                if let CompositionGroup::Optional(o) = metadata {
+                if let GroupStructure::Optional(o) = &metadata.structure {
                     if !bindings.insert(o.presence.to_string()) {
                         return Err(format!(
                             "duplicate optional presence binding `{}`",
@@ -55,12 +83,41 @@ pub fn validate_layout<W: prebindgen_flat::WireKind, N, G>(
                         return Err("optional flag must be the first child wire".into());
                     }
                 }
-                visit(children, bindings)?;
+                match &metadata.structure {
+                    GroupStructure::Field(_) if !in_fields => {
+                        return Err(
+                            "named field must be a direct child of a field collection".into()
+                        );
+                    }
+                    GroupStructure::Fields => {
+                        let mut fields = std::collections::BTreeSet::new();
+                        for child in children.nodes() {
+                            let WireNode::Group { metadata, .. } = child else {
+                                return Err("field collection requires named field children".into());
+                            };
+                            let GroupStructure::Field(name) = &metadata.structure else {
+                                return Err("field collection requires named field children".into());
+                            };
+                            if !fields.insert(name.to_string()) {
+                                return Err(format!("duplicate field `{name}`"));
+                            }
+                        }
+                    }
+                    GroupStructure::Custom if metadata.annotation.is_none() => {
+                        return Err("custom structure requires an adapter annotation".into());
+                    }
+                    _ => {}
+                }
+                visit(
+                    children,
+                    bindings,
+                    matches!(metadata.structure, GroupStructure::Fields),
+                )?;
             }
         }
         Ok(())
     }
-    visit(layout, &mut std::collections::BTreeSet::new())
+    visit(layout, &mut std::collections::BTreeSet::new(), false)
 }
 
 #[cfg(test)]
@@ -73,11 +130,11 @@ mod tests {
         }
     }
     fn optional(name: &str, discriminator: &str, niche: Option<()>) -> CompositionGroup<(), ()> {
-        CompositionGroup::Optional(OptionalGroup {
+        CompositionGroup::new(GroupStructure::Optional(OptionalGroup {
             presence: syn::parse_str(name).unwrap(),
             discriminator: syn::parse_str(discriminator).unwrap(),
             niche,
-        })
+        }))
     }
     #[test]
     fn nested_options_share_one_leaf_but_keep_distinct_group_rules() {
@@ -97,7 +154,7 @@ mod tests {
     #[test]
     fn flags_are_direct_children_and_adapter_groups_need_no_identity() {
         let mut layout: WireLayout<_, _> = vec![wire("flag")].into();
-        layout.enclose(CompositionGroup::Adapter(()));
+        layout.enclose(CompositionGroup::new(GroupStructure::Custom).annotated(()));
         layout.enclose(optional("option", "flag", None));
         assert!(validate_layout(&layout)
             .unwrap_err()
@@ -110,10 +167,52 @@ mod tests {
             .unwrap_err()
             .contains("duplicate optional presence"));
         let mut empty: WireLayout<syn::Type, CompositionGroup<(), ()>> = WireLayout::default();
-        empty.enclose(CompositionGroup::Adapter(()));
-        empty.enclose(CompositionGroup::Adapter(()));
+        empty.enclose(CompositionGroup::new(GroupStructure::Custom).annotated(()));
+        empty.enclose(CompositionGroup::new(GroupStructure::Custom).annotated(()));
         validate_layout(&empty).unwrap();
         empty.enclose(optional("bad", "missing", Some(())));
         assert!(validate_layout(&empty).is_err());
+    }
+    #[test]
+    fn shared_structures_accept_annotations_and_validate_field_children() {
+        let mut field: WireLayout<_, CompositionGroup<(), &str>> = vec![wire("value")].into();
+        field.enclose(CompositionGroup::new(GroupStructure::Field(
+            syn::parse_quote!(x),
+        )));
+        field.enclose(CompositionGroup::new(GroupStructure::Fields).annotated("KotlinPoint"));
+        validate_layout(&field).unwrap();
+        field.enclose(
+            CompositionGroup::new(GroupStructure::Optional(OptionalGroup {
+                presence: syn::parse_quote!(present),
+                discriminator: syn::parse_quote!(value),
+                niche: Some(()),
+            }))
+            .annotated("nullable point"),
+        );
+        validate_layout(&field).unwrap();
+        let mut invalid: WireLayout<_, CompositionGroup<(), ()>> = vec![wire("value")].into();
+        invalid.enclose(CompositionGroup::new(GroupStructure::Fields));
+        assert!(validate_layout(&invalid)
+            .unwrap_err()
+            .contains("named field children"));
+        let mut a: WireLayout<syn::Type, CompositionGroup<(), ()>> = WireLayout::default();
+        a.enclose(CompositionGroup::new(GroupStructure::Field(
+            syn::parse_quote!(x),
+        )));
+        a.extend(a.clone());
+        a.enclose(CompositionGroup::new(GroupStructure::Fields));
+        assert!(validate_layout(&a).unwrap_err().contains("duplicate field"));
+        let mut orphan: WireLayout<syn::Type, CompositionGroup<(), ()>> = WireLayout::default();
+        orphan.enclose(CompositionGroup::new(GroupStructure::Field(
+            syn::parse_quote!(orphan),
+        )));
+        assert!(validate_layout(&orphan)
+            .unwrap_err()
+            .contains("direct child"));
+        let mut custom: WireLayout<syn::Type, CompositionGroup<(), ()>> = WireLayout::default();
+        custom.enclose(CompositionGroup::new(GroupStructure::Custom));
+        assert!(validate_layout(&custom)
+            .unwrap_err()
+            .contains("requires an adapter annotation"));
     }
 }

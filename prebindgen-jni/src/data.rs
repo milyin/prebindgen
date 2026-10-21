@@ -137,7 +137,7 @@ impl Shape {
 #[derive(Clone, Debug)]
 pub struct DataGroup {
     pub(crate) root: String,
-    pub(crate) record: Rc<RecordShape>,
+    pub(crate) class_name: String,
     pub(crate) condition: String,
 }
 
@@ -375,7 +375,7 @@ impl RecordShape {
             plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
             "data fields must remain value-only"
         );
-        Rc::new(self.clone()).mark(&mut plan.layout, w.to_string(), kotlin_condition(active))?;
+        self.mark(&mut plan.layout, w.to_string(), kotlin_condition(active))?;
         Ok(plan)
     }
     fn output(
@@ -425,11 +425,11 @@ impl RecordShape {
                 convert,
             )
         }?;
-        Rc::new(self.clone()).mark(&mut plan.layout, w.to_string(), "true".into())?;
+        self.mark(&mut plan.layout, w.to_string(), "true".into())?;
         Ok(plan)
     }
     fn mark(
-        self: &Rc<Self>,
+        &self,
         layout: &mut prebindgen_flat::WireLayout<JniWire, JniGroup>,
         root: String,
         condition: String,
@@ -437,20 +437,23 @@ impl RecordShape {
         for wire in layout.iter_mut() {
             wire.kind.spare_niche = None;
         }
-        layout.enclose(JniGroup::Adapter(DataGroup {
+        let mut nodes = std::mem::take(layout).into_nodes();
+        let [prebindgen_flat::WireNode::Group { metadata, .. }] = nodes.as_mut_slice() else {
+            return Err("record compiler must produce one field collection".into());
+        };
+        if !matches!(
+            metadata.structure,
+            prebindgen_declarations::GroupStructure::Fields
+        ) {
+            return Err("record annotation requires a field collection".into());
+        }
+        metadata.annotation = Some(DataGroup {
             root,
-            record: self.clone(),
+            class_name: self.fqn.clone(),
             condition,
-        }));
+        });
+        *layout = prebindgen_flat::WireLayout::from_nodes(nodes);
         Ok(())
-    }
-    pub(crate) fn construct(&self, values: &mut impl Iterator<Item = String>) -> String {
-        let fields = self
-            .fields
-            .iter()
-            .map(|_| values.next().expect("one value per field"))
-            .collect::<Vec<_>>();
-        format!("{}({})", self.fqn, fields.join(", "))
     }
 }
 
@@ -661,6 +664,22 @@ impl Shape {
     }
 }
 
+type FieldNode<'a> = (
+    &'a syn::Ident,
+    &'a prebindgen_flat::WireLayout<JniWire, JniGroup>,
+);
+fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
+    nodes
+        .iter()
+        .map(|node| match node {
+            kotlin::JniNode::Group { metadata, children } => match &metadata.structure {
+                prebindgen_declarations::GroupStructure::Field(name) => Ok((name, children)),
+                _ => Err("Kotlin record requires named field children".into()),
+            },
+            _ => Err("Kotlin record requires named field children".into()),
+        })
+        .collect()
+}
 pub(crate) fn input_kotlin(
     nodes: &[kotlin::JniNode],
     d: &DataGroup,
@@ -672,30 +691,32 @@ pub(crate) fn input_kotlin(
     out.parameters.push(format!(
         "{}: {}{}",
         d.root,
-        d.record.fqn,
+        d.class_name,
         if d.condition == "true" { "" } else { "?" }
     ));
-    if nodes.len() != d.record.fields.len() || c.parameters.len() != d.record.fields.len() {
+    let fields = fields(nodes)?;
+    if c.parameters.len() != fields.len() {
         return Err("incomplete data-class input occurrence".into());
     }
-    for (p, field) in c.parameters.iter().zip(&d.record.fields) {
+    for (p, (field, children)) in c.parameters.iter().zip(&fields) {
         let name = p.split_once(": ").unwrap().0;
         let receiver = if d.condition == "true" {
             d.root.clone()
         } else {
             format!("requireNotNull({})", d.root)
         };
-        let expr = format!("{receiver}.`{}`", field_name(field));
+        let expr = format!(
+            "{receiver}.`{}`",
+            field.to_string().trim_start_matches("r#")
+        );
         for a in c
             .arguments
             .iter_mut()
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
         {
-            if matches!(
-                field.shape,
-                Shape::Value(Value::Scalar(Primitive::I128 | Primitive::U128))
-            ) {
+            if matches!(children.nodes(), [kotlin::JniNode::Wire(w)] if matches!(w.kind.carrier, JniKind::Scalar(Primitive::I128 | Primitive::U128)))
+            {
                 *a = a.replace(
                     &format!("{name}?.toByteArray()"),
                     &format!("{name}.toByteArray()"),
@@ -725,11 +746,11 @@ pub(crate) fn output_kotlin(
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let mut c = kotlin::output_kotlin(nodes, context)?;
-    if nodes.len() != d.record.fields.len() || c.delivered.len() != d.record.fields.len() {
+    if c.delivered.len() != fields(nodes)?.len() {
         return Err("incomplete data-class output occurrence".into());
     }
-    c.delivered = vec![d.record.construct(&mut c.delivered.into_iter())];
-    c.result_types = vec![d.record.fqn.clone()];
+    c.delivered = vec![format!("{}({})", d.class_name, c.delivered.join(", "))];
+    c.result_types = vec![d.class_name.clone()];
     Ok(c)
 }
 
@@ -740,15 +761,13 @@ mod group_tests {
 
     fn record(root: &str) -> WireNode<JniWire, JniGroup> {
         WireNode::Group {
-            metadata: JniGroup::Adapter(DataGroup {
-                root: root.into(),
-                record: Rc::new(RecordShape {
-                    ty: syn::parse_quote!(Empty),
-                    fqn: "example.Empty".into(),
-                    fields: vec![],
-                }),
-                condition: "true".into(),
-            }),
+            metadata: JniGroup::new(prebindgen_declarations::GroupStructure::Fields).annotated(
+                DataGroup {
+                    root: root.into(),
+                    class_name: "example.Empty".into(),
+                    condition: "true".into(),
+                },
+            ),
             children: WireLayout::default(),
         }
     }
@@ -758,11 +777,15 @@ mod group_tests {
             name: syn::parse_quote!(flag),
             kind: JniWire::from(JniKind::Selector),
         }]);
-        optional.enclose(JniGroup::Optional(prebindgen_declarations::OptionalGroup {
-            presence: syn::parse_quote!(flag),
-            discriminator: syn::parse_quote!(flag),
-            niche: None,
-        }));
+        optional.enclose(JniGroup::new(
+            prebindgen_declarations::GroupStructure::Optional(
+                prebindgen_declarations::OptionalGroup {
+                    presence: syn::parse_quote!(flag),
+                    discriminator: syn::parse_quote!(flag),
+                    niche: None,
+                },
+            ),
+        ));
         optional.extend(WireLayout::from_nodes(vec![record("value")]));
         kotlin::validate_layout(&optional).unwrap();
         optional.extend(WireLayout::from_nodes(vec![record("flag")]));
@@ -775,5 +798,40 @@ mod group_tests {
             .contains("duplicate Kotlin group binding `value`"));
         // These adapter-owned names impose no constraint on the shared compiler.
         prebindgen_declarations::validate_layout(&duplicates).unwrap();
+    }
+    #[test]
+    fn kotlin_record_emission_reads_names_from_shared_fields() {
+        let mut field = WireLayout::from(vec![Wire {
+            name: syn::parse_quote!(incoming),
+            kind: JniWire::from(JniKind::Scalar(Primitive::I32)),
+        }]);
+        field.enclose(JniGroup::new(
+            prebindgen_declarations::GroupStructure::Field(syn::parse_quote!(r#type)),
+        ));
+        field.enclose(
+            JniGroup::new(prebindgen_declarations::GroupStructure::Fields).annotated(DataGroup {
+                root: "point".into(),
+                class_name: "example.Point".into(),
+                condition: "true".into(),
+            }),
+        );
+        kotlin::validate_layout(&field).unwrap();
+        let classes = BTreeMap::new();
+        let context = KotlinContext {
+            classes: &classes,
+            result: "result",
+            failure: "failure",
+            output_prefix: "output",
+        };
+        let input = kotlin::input_kotlin(field.nodes(), &context).unwrap();
+        assert_eq!(input.parameters, ["point: example.Point"]);
+        assert!(input.arguments[0].contains("point.`type`"));
+        let output = kotlin::output_kotlin(field.nodes(), &context).unwrap();
+        assert_eq!(output.result_types, ["example.Point"]);
+        assert!(output.delivered[0].contains("example.Point(result[0]"));
+        // An empty record still denotes one Kotlin object with no ABI wires.
+        let empty = WireLayout::from_nodes(vec![record("empty")]);
+        let output = kotlin::output_kotlin(empty.nodes(), &context).unwrap();
+        assert_eq!(output.delivered, ["example.Empty()"]);
     }
 }

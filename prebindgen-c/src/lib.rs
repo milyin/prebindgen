@@ -593,10 +593,10 @@ fn generate<
             continue;
         }
         for slot in f.params.iter().filter_map(|p| p.ty.slot.as_ref()) {
-            prebindgen_declarations::validate_layout(slot.layout())?;
+            validate_layout(slot.layout())?;
         }
         if let Some(slot) = f.ret.slot.as_ref() {
-            prebindgen_declarations::validate_layout(slot.layout())?;
+            validate_layout(slot.layout())?;
         }
         let result_type = format_ident!("{prefix}_{}_result", f.name);
         let context = CContext {
@@ -651,7 +651,7 @@ fn generate<
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
-    header.push_str("/* Optional groups below name their discriminator. Rules apply only in active\n * selector arms and present enclosing groups. Absent payload wires are ignored. */\n");
+    header.push_str("/* Field paths below start at a source parameter or return and list their ABI values.\n * Optional groups below name their discriminator. Rules apply only in active\n * selector arms and present enclosing groups. Absent payload wires are ignored. */\n");
     for (name, ty) in &pointers {
         let drop = format_ident!("{prefix}_drop_{name}");
         tokens.extend(quote!{
@@ -675,20 +675,22 @@ The pointer must be null or a live allocation of the declared type returned by t
         let mut next_option_label = 0;
         for param in &f.params {
             if let Some(slot) = &param.ty.slot {
-                header.push_str(&describe_options(
+                header.push_str(&describe_groups(
                     slot.layout(),
                     &inputs,
                     false,
                     &mut next_option_label,
+                    &param.name.to_string(),
                 ));
             }
         }
         if let Some(slot) = &f.ret.slot {
-            header.push_str(&describe_options(
+            header.push_str(&describe_groups(
                 slot.layout(),
                 &outputs,
                 true,
                 &mut next_option_label,
+                "return",
             ));
         }
         let mut params = Vec::new();
@@ -737,7 +739,36 @@ The output pointer must be writable. Active input buffers must be readable for t
     })
 }
 
-fn describe_options(
+fn validate_layout(
+    layout: &prebindgen_flat::WireLayout<
+        CWire,
+        prebindgen_declarations::CompositionGroup<CNiche, ()>,
+    >,
+) -> Result<()> {
+    prebindgen_declarations::validate_layout(layout)?;
+    fn visit(
+        layout: &prebindgen_flat::WireLayout<
+            CWire,
+            prebindgen_declarations::CompositionGroup<CNiche, ()>,
+        >,
+    ) -> Result<()> {
+        for node in layout.nodes() {
+            if let prebindgen_flat::WireNode::Group { metadata, children } = node {
+                if matches!(
+                    metadata.structure,
+                    prebindgen_declarations::GroupStructure::Custom
+                ) {
+                    return Err("unsupported custom C structure".into());
+                }
+                visit(children)?;
+            }
+        }
+        Ok(())
+    }
+    visit(layout)
+}
+
+fn describe_groups(
     layout: &prebindgen_flat::WireLayout<
         CWire,
         prebindgen_declarations::CompositionGroup<CNiche, ()>,
@@ -745,6 +776,7 @@ fn describe_options(
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
+    root: &str,
 ) -> String {
     fn visit(
         layout: &prebindgen_flat::WireLayout<
@@ -755,10 +787,11 @@ fn describe_options(
         parents: &mut Vec<String>,
         out: &mut String,
         next_label: &mut usize,
+        field_path: &mut Vec<String>,
     ) {
         for node in layout.nodes() {
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
-                if let prebindgen_declarations::CompositionGroup::Optional(g) = metadata {
+                if let prebindgen_declarations::GroupStructure::Optional(g) = &metadata.structure {
                     let label = format!("option{}", *next_label);
                     *next_label += 1;
                     let discriminator = &names[&g.discriminator.to_string()];
@@ -774,10 +807,29 @@ fn describe_options(
                     };
                     out.push_str(&format!("/* Option group {}: {rule}{parent}. */\n", label));
                     parents.push(label);
-                    visit(children, names, parents, out, next_label);
+                    visit(children, names, parents, out, next_label, field_path);
                     parents.pop();
+                } else if let prebindgen_declarations::GroupStructure::Field(name) =
+                    &metadata.structure
+                {
+                    field_path.push(name.to_string().trim_start_matches("r#").into());
+                    let values = children
+                        .iter()
+                        .map(|w| names[&w.name.to_string()].clone())
+                        .collect::<Vec<_>>();
+                    let values = if values.is_empty() {
+                        "no boundary values".into()
+                    } else {
+                        values.join(", ")
+                    };
+                    out.push_str(&format!(
+                        "/* Field {}: {values}. */\n",
+                        field_path.join(".")
+                    ));
+                    visit(children, names, parents, out, next_label, field_path);
+                    field_path.pop();
                 } else {
-                    visit(children, names, parents, out, next_label);
+                    visit(children, names, parents, out, next_label, field_path);
                 }
             }
         }
@@ -797,7 +849,14 @@ fn describe_options(
         })
         .collect();
     let mut out = String::new();
-    visit(layout, &names, &mut Vec::new(), &mut out, next_label);
+    visit(
+        layout,
+        &names,
+        &mut Vec::new(),
+        &mut out,
+        next_label,
+        &mut vec![root.trim_start_matches("r#").into()],
+    );
     out
 }
 
@@ -830,6 +889,40 @@ mod generation_tests {
     }
 
     #[test]
+    fn header_describes_shared_nested_empty_and_multiwire_fields() {
+        use prebindgen_declarations::{bind_output, Output};
+        let source = syn::parse_file("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub empty: Empty, pub pair: Pair, pub maybe: Option<i32> } pub fn make() -> Record { unreachable!() }").unwrap();
+        let mut flat =
+            Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let recipe = Output::Fields(vec![
+            Output::Fields(vec![]),
+            Output::Fields(vec![Output::Leaf, Output::Leaf]),
+            Output::Optional(Box::new(Output::Leaf)),
+        ]);
+        bind_output(&mut flat, &CCodec, "make", &recipe, &()).unwrap();
+        let header = Cbindgen::new(flat).build().unwrap().header;
+        assert!(header.contains("Field return.empty: no boundary values."));
+        assert!(header.contains("Field return.pair: output->v0, output->v1."));
+        assert!(header.contains("Field return.pair.x: output->v0."));
+        assert!(header.contains("Field return.pair.y: output->v1."));
+        assert!(header.contains("Field return.maybe: output->v2, output->v3."));
+    }
+
+    #[test]
+    fn rejects_custom_structures_without_c_semantics() {
+        let mut layout = prebindgen_flat::WireLayout::default();
+        layout.enclose(
+            prebindgen_declarations::CompositionGroup::new(
+                prebindgen_declarations::GroupStructure::Custom,
+            )
+            .annotated(()),
+        );
+        assert!(validate_layout(&layout)
+            .unwrap_err()
+            .contains("unsupported custom C structure"));
+    }
+
+    #[test]
     fn character_niches_exhaust_at_the_carrier_limit() {
         let wire: CWire = CCarrier::Scalar(Primitive::Char).into();
         assert!(CCodec
@@ -843,7 +936,7 @@ mod generation_tests {
 
     #[test]
     fn shared_compiler_suppresses_niches_in_selector_arms() {
-        use prebindgen_declarations::{bind_input, CompositionGroup, Input};
+        use prebindgen_declarations::{bind_input, GroupStructure, Input};
         for (payload, arm) in [
             ("char", Input::Leaf),
             ("Option<char>", Input::Optional(Box::new(Input::Leaf))),
@@ -887,7 +980,7 @@ mod generation_tests {
             else {
                 panic!()
             };
-            let CompositionGroup::Optional(optional) = group else {
+            let GroupStructure::Optional(optional) = &group.structure else {
                 panic!()
             };
             assert!(optional.niche.is_none());

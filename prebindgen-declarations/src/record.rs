@@ -2,6 +2,8 @@
 use super::*;
 
 /// Construct a named Rust record from field conversion plans in declaration order.
+/// The layout has a shared `Fields` parent and one named `Field` child per field,
+/// preserving empty fields and fields represented by multiple physical wires.
 ///
 /// Adapters can use this when a single language-level leaf represents a record.
 /// The caller supplies every field exactly once, with the correct source type,
@@ -37,16 +39,22 @@ pub fn record_input<C: Codec>(
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
+        child
+            .layout
+            .enclose(CompositionGroup::new(GroupStructure::Field(name.clone())));
         out.layout.extend(child.layout);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
+    out.layout
+        .enclose(CompositionGroup::new(GroupStructure::Fields));
     Ok(out)
 }
 
 /// Observe a named Rust record through shared field references, evaluating it once.
+/// The layout retains the same `Fields`/`Field` structure as [`record_input`].
 ///
 /// The caller validates the field count and types against the source record.
 /// `fields` supplies source field names in declaration order. `convert` receives
@@ -81,12 +89,18 @@ pub fn record_output<C: Codec>(
         for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
+        child
+            .layout
+            .enclose(CompositionGroup::new(GroupStructure::Field(name)));
         append(&mut out, child)?;
     }
+    out.layout
+        .enclose(CompositionGroup::new(GroupStructure::Fields));
     Ok(out)
 }
 
 /// Decompose an owned record into field conversions in declaration order.
+/// The layout retains the same `Fields`/`Field` structure as [`record_input`].
 ///
 /// Unlike [`record_output`], each child receives an owned field expression and
 /// may move it. The caller must provide each field exactly once, ensure Rust
@@ -120,7 +134,12 @@ pub fn record_output_owned<C: Codec>(
         for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
+        child
+            .layout
+            .enclose(CompositionGroup::new(GroupStructure::Field(name)));
         append(&mut out, child)?;
     }
+    out.layout
+        .enclose(CompositionGroup::new(GroupStructure::Fields));
     Ok(out)
 }
