@@ -17,13 +17,7 @@ impl EnumCodec {
             .map(|(name, m)| (name.as_str(), m))
     }
     fn wire(name: &str, mapping: &EnumMapping) -> CWire {
-        CWire {
-            carrier: CCarrier::Enum {
-                name: name.into(),
-                mapping: Box::new(mapping.clone()),
-            },
-            spare_niche: mapping.initial_niche().map(|n| CNiche::Integer(n.into())),
-        }
+        CWire::enumeration(name, mapping.clone())
     }
 }
 impl Codec for EnumCodec {
@@ -227,7 +221,7 @@ mod tests {
             )]),
         };
         let wire = EnumCodec::wire("code", &mapping);
-        assert!(matches!(wire.spare_niche, Some(CNiche::Integer(-3))));
+        assert!(matches!(wire.available_niche(), Some(CNiche::Integer(-3))));
         assert!(matches!(
             codec.remaining_niche(&wire, &CNiche::Integer(8)),
             Some(CNiche::Integer(6))
@@ -250,7 +244,7 @@ mod tests {
             assert_eq!(input.layout.len(), 1);
             assert_eq!(output.layout.len(), 1);
             assert!(
-                matches!(input.layout[0].kind.spare_niche,Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(input.layout[0].kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
             super::super::group::validate_layout(&input.layout).unwrap();
             super::super::group::validate_layout(&output.layout).unwrap();
@@ -277,7 +271,7 @@ mod tests {
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
-        tree[0].kind.spare_niche = None;
+        tree[0].kind.clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
         tree.enclose(group("outer", -2));
         assert!(super::super::group::validate_layout(&tree)
@@ -288,9 +282,15 @@ mod tests {
     fn malformed_enum_niches_are_rejected_before_emission() {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
-        for n in [CNiche::Integer(-1), CNiche::Integer(i64::MAX), CNiche::Null] {
+        for n in [-1, 0] {
             let mut wire = EnumCodec::wire("code", &mapping);
-            wire.spare_niche = Some(n);
+            let CWire::Enum {
+                next_integer_niche, ..
+            } = &mut wire
+            else {
+                unreachable!()
+            };
+            *next_integer_niche = Some(n);
             let layout: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
                 name: syn::parse_quote!(value),
                 kind: wire,
