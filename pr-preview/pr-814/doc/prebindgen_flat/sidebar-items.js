@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Primitive","WireNode"],"fn":["bind_fragment","option_inner","rust_source","same_type","type_key","validate_bindings"],"struct":["Field","Flat","Function","Param","Record","TypeUse","Wire","WireLayout","Wires","WiresMut"],"trait":["Conversion","ConversionExt","WireKind"],"type":["Result"]};
