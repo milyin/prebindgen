@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_flat::ConversionExt;
 fn flat(source: &str) -> Bindings {
     Flat::parse(
         syn::parse_file(source)
@@ -371,7 +372,6 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
             &(),
         )
         .unwrap();
-        use prebindgen_flat::Conversion;
         let f = flat.function(name).unwrap();
         assert_eq!(f.params[0].ty.slot.as_ref().unwrap().wires().len(), count);
         assert_eq!(f.ret.slot.as_ref().unwrap().wires().len(), count);
@@ -403,7 +403,7 @@ fn scalar_niches_exhaust_at_the_carrier_limit() {
         (Primitive::Char, i32::MIN as i64),
         (Primitive::U32, i64::MIN),
     ] {
-        let wire = JniKind::Scalar(primitive);
+        let wire: JniWire = JniKind::Scalar(primitive).into();
         assert!(JniCodec
             .remaining_niche(&wire, &JniNiche::Integer(min))
             .is_none());

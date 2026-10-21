@@ -1,6 +1,6 @@
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), Composition<(), ()>>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), Composition<(), ()>>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), CompositionGroup<(), ()>>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), CompositionGroup<(), ()>>;
 use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
@@ -39,6 +39,10 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
     }
 }
 impl Codec for TestCodec {
+    fn niche(&self, _: &TestWire) -> Option<()> {
+        None
+    }
+    fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
     type Group = ();
     type Extra = Extra;
@@ -84,13 +88,13 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
-            metadata: Default::default(),
             context: Default::default(),
             acknowledgement: None,
-            wires: vec![Wire {
+            layout: vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
-            }],
+            }]
+            .into(),
             validation: quote!(),
             acquire: quote!(),
             resources: vec![],
@@ -115,13 +119,13 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
-            metadata: Default::default(),
             context: Default::default(),
             delivery: Default::default(),
-            wires: vec![Wire {
+            layout: vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
-            }],
+            }]
+            .into(),
             statements: quote!(let #w=send_token(#v);),
             values: vec![quote!(#w)],
             commit: quote!(),
@@ -180,10 +184,10 @@ fn different_occurrences_have_different_converters() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.wires.len(), 3);
-    assert_eq!(y.wires.len(), 1);
-    assert!(x.wires.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.wires[0].kind.name, "y");
+    assert_eq!(x.layout.len(), 3);
+    assert_eq!(y.layout.len(), 1);
+    assert!(x.layout.iter().all(|w| w.kind.name == "x"));
+    assert_eq!(y.layout[0].kind.name, "y");
 }
 #[test]
 fn rejects_incomplete_slots() {
@@ -281,7 +285,7 @@ fn observations_precede_move_but_wires_keep_order() {
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(o.wires[0].kind.kind == Kind::Token);
+    assert!(o.layout[0].kind.kind == Kind::Token);
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -346,7 +350,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
             .slot
             .as_ref()
             .unwrap()
-            .wires
+            .layout
             .len(),
         3
     );
@@ -361,12 +365,12 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.wires.len(), 3);
-    assert!(x.wires[2].kind.kind == Kind::Token);
-    assert!(x.wires.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.wires.len(), 1);
-    assert_eq!(y.wires[0].kind.name, "override");
-    assert_eq!(f.ret.slot.as_ref().unwrap().wires[0].kind.name, "result");
+    assert_eq!(x.layout.len(), 3);
+    assert!(x.layout[2].kind.kind == Kind::Token);
+    assert!(x.layout.iter().all(|w| w.kind.name == "x"));
+    assert_eq!(y.layout.len(), 1);
+    assert_eq!(y.layout[0].kind.name, "override");
+    assert_eq!(f.ret.slot.as_ref().unwrap().layout[0].kind.name, "result");
     assert!(x.validation.to_string().contains("\"x\""));
 }
 #[test]
@@ -416,8 +420,8 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
     let wires = f
         .params
         .iter()
-        .flat_map(|p| &p.ty.slot.as_ref().unwrap().wires)
-        .chain(&f.ret.slot.as_ref().unwrap().wires)
+        .flat_map(|p| &p.ty.slot.as_ref().unwrap().layout)
+        .chain(&f.ret.slot.as_ref().unwrap().layout)
         .collect::<Vec<_>>();
     let names = wires
         .iter()
@@ -441,10 +445,10 @@ fn field_defaults_follow_type_expansions() {
     )
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
-    assert!(output.wires[0].kind.kind == Kind::Value(Value::Text));
-    assert!(output.wires[1].kind.kind == Kind::Value(Value::Bytes));
-    assert_eq!(output.wires[0].kind.ty, "String");
-    assert_eq!(output.wires[1].kind.ty, "Vec < u8 >");
+    assert!(output.layout[0].kind.kind == Kind::Value(Value::Text));
+    assert!(output.layout[1].kind.kind == Kind::Value(Value::Bytes));
+    assert_eq!(output.layout[0].kind.ty, "String");
+    assert_eq!(output.layout[1].kind.ty, "Vec < u8 >");
 }
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
@@ -464,12 +468,12 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let input = f.params[0].ty.slot.as_ref().unwrap();
     let output = f.ret.slot.as_ref().unwrap();
     let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
-    assert_eq!(input.wires[0].kind.kind, scalar);
-    assert_eq!(output.wires[0].kind.kind, scalar);
-    assert_eq!(input.wires[0].kind.name, "scalar");
-    assert_eq!(input.wires[0].kind.ty, "i64");
-    assert_eq!(output.wires[0].kind.name, "scalar");
-    assert_eq!(output.wires[0].kind.ty, "i64");
+    assert_eq!(input.layout[0].kind.kind, scalar);
+    assert_eq!(output.layout[0].kind.kind, scalar);
+    assert_eq!(input.layout[0].kind.name, "scalar");
+    assert_eq!(input.layout[0].kind.ty, "i64");
+    assert_eq!(output.layout[0].kind.name, "scalar");
+    assert_eq!(output.layout[0].kind.ty, "i64");
     assert!(input.validation.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
@@ -527,7 +531,7 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &[Wire<TestWire>]| {
+    let foreign = |wires: &WireLayout<TestWire, CompositionGroup<(), ()>>| {
         wires
             .iter()
             .filter_map(|w| match &w.kind.kind {
@@ -537,18 +541,18 @@ fn nested_recipes_use_only_the_callers_extra() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        foreign(&f.params[0].ty.slot.as_ref().unwrap().wires),
+        foreign(&f.params[0].ty.slot.as_ref().unwrap().layout),
         vec![
             ("x", "crate :: Payload".into()),
             ("x", "crate :: Key".into())
         ]
     );
     assert_eq!(
-        foreign(&f.params[1].ty.slot.as_ref().unwrap().wires),
+        foreign(&f.params[1].ty.slot.as_ref().unwrap().layout),
         vec![("y", "crate :: Key".into())]
     );
     assert_eq!(
-        foreign(&f.ret.slot.as_ref().unwrap().wires),
+        foreign(&f.ret.slot.as_ref().unwrap().layout),
         vec![
             ("result", "crate :: Payload".into()),
             ("result", "crate :: Key".into())
@@ -603,6 +607,10 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
 fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
     impl Codec for FinalizingCodec {
+        fn niche(&self, _: &TestWire) -> Option<()> {
+            None
+        }
+        fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
         type Group = ();
         type Extra = Extra;
@@ -650,7 +658,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 plan.acknowledgement.as_ref().unwrap().to_string(),
                 quote!(ack();).to_string()
             );
-            assert_eq!(plan.wires.len(), 2);
+            assert_eq!(plan.layout.len(), 2);
             Ok(())
         }
         fn finish_output(&self, plan: &mut OutputPlan<TestWire>, extra: &Extra) -> Result<()> {
@@ -658,7 +666,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 return Err("finalization failed".into());
             }
             assert!(plan.delivery.statements.is_empty());
-            assert!(plan.wires.is_empty());
+            assert!(plan.layout.is_empty());
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
@@ -790,7 +798,7 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .slot
         .as_ref()
         .unwrap()
-        .wires;
+        .layout;
     let ty = syn::parse_quote!(crate::Point);
     shapes
         .validate_mapping(&ty, &id, wires.iter().map(|w| (&w.name, &w.kind.component)))
@@ -799,7 +807,7 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .validate_mapping(
             &ty,
             &id,
-            wires[..1].iter().map(|w| (&w.name, &w.kind.component))
+            wires.iter().take(1).map(|w| (&w.name, &w.kind.component))
         )
         .unwrap_err()
         .contains("has no wire"));
@@ -968,7 +976,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         quote!(ack()).to_string()
     );
     assert_eq!(
-        plan.wires[1].kind.component,
+        plan.layout[1].kind.component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
     assert!(record_input(
@@ -1016,7 +1024,7 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
     );
     assert_eq!(plan.values.len(), 2);
     assert_eq!(
-        plan.wires[1].kind.component,
+        plan.layout[1].kind.component,
         ComponentPath(vec![ComponentSegment::Field("y".into())])
     );
     assert!(make(true).unwrap_err().contains("finish_output"));
@@ -1036,7 +1044,7 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
         plan.statements.to_string(),
         quote!(let _ = &(next_record());).to_string()
     );
-    assert!(plan.wires.is_empty());
+    assert!(plan.layout.is_empty());
 }
 
 #[test]
@@ -1049,10 +1057,9 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
-                metadata: Default::default(),
                 context: Default::default(),
                 delivery: Default::default(),
-                wires: Vec::new(),
+                layout: Default::default(),
                 values: Vec::new(),
                 statements: quote! {
                     if mode == #index + 1 { return Err(()); }
@@ -1170,10 +1177,9 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
-                metadata: Default::default(),
                 context: Default::default(),
                 delivery: Default::default(),
-                wires: vec![],
+                layout: vec![].into(),
                 values: vec![],
                 statements: quote!(if mode==#index+1{return Err(());} let #local=Box::new(#field);),
                 commit: quote!(drop(#local);),

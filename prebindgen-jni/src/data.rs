@@ -133,7 +133,7 @@ impl Shape {
         }
     }
 }
-/// Destination record grouping stored on a conversion plan, never in its wires.
+/// Kotlin record information attached to a parent node in the wire tree.
 #[derive(Clone, Debug)]
 pub struct DataGroup {
     pub(crate) root: String,
@@ -353,7 +353,7 @@ impl RecordShape {
         w: &syn::Ident,
         v: &syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<JniKind>> {
+    ) -> Result<InputPlan<JniWire>> {
         if self.has_handles() {
             return Err(format!(
                 "data class `{}` contains handles and supports returns only",
@@ -375,12 +375,7 @@ impl RecordShape {
             plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
             "data fields must remain value-only"
         );
-        Rc::new(self.clone()).mark(
-            &plan.wires,
-            &mut plan.metadata,
-            w.to_string(),
-            kotlin_condition(active),
-        )?;
+        Rc::new(self.clone()).mark(&mut plan.layout, w.to_string(), kotlin_condition(active))?;
         Ok(plan)
     }
     fn output(
@@ -388,7 +383,7 @@ impl RecordShape {
         w: &syn::Ident,
         value: TokenStream,
         projection: &Projection,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
         for name in projection.fields.keys() {
             if !self.fields.iter().any(|f| field_name(f) == *name) {
                 return Err(format!(
@@ -430,32 +425,27 @@ impl RecordShape {
                 convert,
             )
         }?;
-        Rc::new(self.clone()).mark(
-            &plan.wires,
-            &mut plan.metadata,
-            w.to_string(),
-            "true".into(),
-        )?;
+        Rc::new(self.clone()).mark(&mut plan.layout, w.to_string(), "true".into())?;
         Ok(plan)
     }
     fn mark(
         self: &Rc<Self>,
-        wires: &[prebindgen_flat::Wire<JniKind>],
-        metadata: &mut JniComposition,
+        layout: &mut prebindgen_flat::WireLayout<JniWire, JniGroup>,
         root: String,
         condition: String,
     ) -> Result<()> {
-        // Record fields do not donate niches to enclosing optional occurrences.
-        metadata.suppress(wires);
-        metadata.enclose(
-            root.clone(),
-            wires.iter().map(|w| w.name.clone()).collect(),
-            prebindgen_declarations::GroupKind::Adapter(DataGroup {
+        for wire in layout.iter_mut() {
+            wire.kind.spare_niche = None;
+        }
+        layout.enclose(JniGroup {
+            name: root.clone(),
+            kind: prebindgen_declarations::GroupKind::Adapter(DataGroup {
                 root,
                 record: self.clone(),
                 condition,
             }),
-        )
+        });
+        Ok(())
     }
     pub(crate) fn construct(&self, values: &mut impl Iterator<Item = String>) -> String {
         let fields = self
@@ -471,33 +461,36 @@ impl Codec for DataCodec {
     type Niche = crate::optional::JniNiche;
     type Group = DataGroup;
     type Extra = ();
-    type Wire = JniKind;
+    type Wire = JniWire;
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
-    fn niche(&self, wire: &JniKind) -> Option<crate::optional::JniNiche> {
-        optional::niche(wire)
+    fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
+        wire.spare_niche.clone()
+    }
+    fn set_niche(&self, wire: &mut JniWire, niche: Option<JniNiche>) {
+        wire.spare_niche = niche;
     }
     fn is_present(
         &self,
-        _: &JniKind,
+        _: &JniWire,
         niche: &Self::Niche,
         value: TokenStream,
     ) -> Result<TokenStream> {
         Ok(niche.present(value))
     }
-    fn remaining_niche(&self, wire: &JniKind, niche: &Self::Niche) -> Option<Self::Niche> {
+    fn remaining_niche(&self, wire: &JniWire, niche: &Self::Niche) -> Option<Self::Niche> {
         optional::remaining(wire, niche)
     }
     fn absent_value(
         &self,
-        wire: &JniKind,
+        wire: &JniWire,
         niche: Option<&crate::optional::JniNiche>,
         input: bool,
     ) -> Result<TokenStream> {
         optional::absent(wire, niche, input)
     }
-    fn selector(&self, extra: &()) -> JniKind {
+    fn selector(&self, extra: &()) -> JniWire {
         JniCodec.selector(extra)
     }
     fn consumes(&self, ty: &syn::Type, extra: &()) -> bool {
@@ -506,10 +499,10 @@ impl Codec for DataCodec {
         }
         !self.records.contains_key(&type_key(ty)) && JniCodec.consumes(ty, extra)
     }
-    fn finish_input(&self, plan: &mut InputPlan<JniKind>, extra: &()) -> Result<()> {
+    fn finish_input(&self, plan: &mut InputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_input(plan, extra)
     }
-    fn finish_output(&self, plan: &mut OutputPlan<JniKind>, extra: &()) -> Result<()> {
+    fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_output(plan, extra)
     }
     fn input_leaf(
@@ -519,7 +512,7 @@ impl Codec for DataCodec {
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<JniKind>> {
+    ) -> Result<InputPlan<JniWire>> {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             let tag = format_ident!("{wire}_present");
             let child = self.input_leaf(
@@ -543,7 +536,7 @@ impl Codec for DataCodec {
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             let tag = format_ident!("{wire}_present");
             let payload = format_ident!("{wire}_payload");
@@ -572,7 +565,7 @@ impl Codec for DataCodec {
         wire: syn::Ident,
         value: TokenStream,
         projection: &Projection,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             let tag = format_ident!("{wire}_present");
             let payload = format_ident!("{wire}_payload");
@@ -615,7 +608,7 @@ impl Shape {
         w: &syn::Ident,
         v: &syn::Ident,
         active: &Condition,
-    ) -> Result<InputPlan<JniKind>> {
+    ) -> Result<InputPlan<JniWire>> {
         match self {
             Self::Optional(s) => {
                 let tag = format_ident!("{w}_present");
@@ -644,7 +637,7 @@ impl Shape {
         w: &syn::Ident,
         value: TokenStream,
         policy: &Projection,
-    ) -> Result<OutputPlan<JniKind>> {
+    ) -> Result<OutputPlan<JniWire>> {
         match self {
             Self::Optional(s) => {
                 let tag = format_ident!("{w}_present");
@@ -672,193 +665,73 @@ impl Shape {
 }
 
 pub(crate) fn input_kotlin(
-    wires: &[prebindgen_flat::Wire<JniKind>],
-    metadata: &JniComposition,
-    roots: &[String],
+    nodes: &[kotlin::JniNode],
+    d: &DataGroup,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
+    let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
-    let mut i = 0;
-    while i < wires.len() {
-        let group = metadata.starting_at(roots, &wires[i].name);
-        let Some(prebindgen_declarations::CompositionGroup {
-            kind: prebindgen_declarations::GroupKind::Adapter(d),
-            ..
-        }) = group
-        else {
-            let end = (i + 1..wires.len())
-                .find(|j| {
-                    metadata
-                        .starting_at(roots, &wires[*j].name)
-                        .is_some_and(|g| {
-                            matches!(g.kind, prebindgen_declarations::GroupKind::Adapter(_))
-                        })
-                })
-                .unwrap_or(wires.len());
-            let scope = roots
-                .iter()
-                .filter(|id| {
-                    metadata.groups[*id]
-                        .members
-                        .first()
-                        .is_some_and(|n| wires[i..end].iter().any(|w| &w.name == n))
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            let c = kotlin::input_kotlin(&wires[i..end], metadata, &scope, context)?;
-            out.parameters.extend(c.parameters);
-            out.arguments.extend(c.arguments);
-            out.locks.extend(c.locks);
-            out.consumed.extend(c.consumed);
-            i = end;
-            continue;
-        };
-        let group = group.unwrap();
-        let end = i + group.members.len();
-        let inner = &wires[i..end];
-        let mut c = kotlin::input_kotlin(inner, metadata, &group.children, context)?;
-        out.parameters.push(format!(
-            "{}: {}{}",
-            d.root,
-            d.record.fqn,
-            if d.condition == "true" { "" } else { "?" }
-        ));
-        for p in &c.parameters {
-            let name = p.split_once(": ").unwrap().0;
-            let field = d
-                .record
-                .fields
-                .iter()
-                .enumerate()
-                .find(|(index, _)| {
-                    let prefix = format!("{}_f{index}", d.root);
-                    name == prefix || name.starts_with(&(prefix + "_"))
-                })
-                .ok_or("data parameter has no field")?
-                .1;
-            let receiver = if d.condition == "true" {
-                d.root.clone()
-            } else {
-                format!("requireNotNull({})", d.root)
-            };
-            let expr = format!("{receiver}.`{}`", field_name(field));
-            for a in c
-                .arguments
-                .iter_mut()
-                .chain(c.locks.iter_mut())
-                .chain(c.consumed.iter_mut())
-            {
-                if matches!(
-                    field.shape,
-                    Shape::Value(Value::Scalar(Primitive::I128 | Primitive::U128))
-                ) {
-                    *a = a.replace(
-                        &format!("{name}?.toByteArray()"),
-                        &format!("{name}.toByteArray()"),
-                    );
-                }
-                *a = optional::replace(a, name, &expr);
-            }
-        }
-        for (j, a) in c.arguments.into_iter().enumerate() {
-            out.arguments.push(if d.condition == "true" {
-                a
-            } else {
-                format!(
-                    "if ({}) {a} else {}",
-                    d.condition,
-                    optional::default_kt(&inner[j].kind, None)
-                )
-            });
-        }
-        out.locks.extend(c.locks);
-        out.consumed.extend(c.consumed);
-        i = end;
+    let mut c = kotlin::input_kotlin(nodes, context)?;
+    out.parameters.push(format!(
+        "{}: {}{}",
+        d.root,
+        d.record.fqn,
+        if d.condition == "true" { "" } else { "?" }
+    ));
+    if nodes.len() != d.record.fields.len() || c.parameters.len() != d.record.fields.len() {
+        return Err("incomplete data-class input occurrence".into());
     }
+    for (p, field) in c.parameters.iter().zip(&d.record.fields) {
+        let name = p.split_once(": ").unwrap().0;
+        let receiver = if d.condition == "true" {
+            d.root.clone()
+        } else {
+            format!("requireNotNull({})", d.root)
+        };
+        let expr = format!("{receiver}.`{}`", field_name(field));
+        for a in c
+            .arguments
+            .iter_mut()
+            .chain(c.locks.iter_mut())
+            .chain(c.consumed.iter_mut())
+        {
+            if matches!(
+                field.shape,
+                Shape::Value(Value::Scalar(Primitive::I128 | Primitive::U128))
+            ) {
+                *a = a.replace(
+                    &format!("{name}?.toByteArray()"),
+                    &format!("{name}.toByteArray()"),
+                );
+            }
+            *a = optional::replace(a, name, &expr);
+        }
+    }
+    for (j, a) in c.arguments.into_iter().enumerate() {
+        out.arguments.push(if d.condition == "true" {
+            a
+        } else {
+            format!(
+                "if ({}) {a} else {}",
+                d.condition,
+                optional::default_kt(&inner[j].kind, None)
+            )
+        });
+    }
+    out.locks.extend(c.locks);
+    out.consumed.extend(c.consumed);
     Ok(out)
 }
 pub(crate) fn output_kotlin(
-    wires: &[prebindgen_flat::Wire<JniKind>],
-    metadata: &JniComposition,
-    roots: &[String],
+    nodes: &[kotlin::JniNode],
+    d: &DataGroup,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    let mut out = KotlinOutput {
-        delivered: vec![],
-        result_types: vec![],
-        output_locals: String::new(),
-        materialize: String::new(),
-        cleanup: String::new(),
-    };
-    let mut i = 0;
-    while i < wires.len() {
-        let group = metadata.starting_at(roots, &wires[i].name);
-        let (end, record, scope) = if let Some(prebindgen_declarations::CompositionGroup {
-            kind: prebindgen_declarations::GroupKind::Adapter(d),
-            members,
-            children,
-            ..
-        }) = group
-        {
-            (i + members.len(), Some(d.record.clone()), children.clone())
-        } else {
-            let end = (i + 1..wires.len())
-                .find(|j| {
-                    metadata
-                        .starting_at(roots, &wires[*j].name)
-                        .is_some_and(|g| {
-                            matches!(g.kind, prebindgen_declarations::GroupKind::Adapter(_))
-                        })
-                })
-                .unwrap_or(wires.len());
-            let scope = roots
-                .iter()
-                .filter(|id| {
-                    metadata.groups[*id]
-                        .members
-                        .first()
-                        .is_some_and(|n| wires[i..end].iter().any(|w| &w.name == n))
-                })
-                .cloned()
-                .collect();
-            (end, None, scope)
-        };
-        let inner = &wires[i..end];
-        let local = format!("{}_record{i}", context.result);
-        let prefix = format!("{}r{i}_", context.output_prefix);
-        let ctx = KotlinContext {
-            result: &local,
-            output_prefix: &prefix,
-            ..*context
-        };
-        let mut c = kotlin::output_kotlin(inner, metadata, &scope, &ctx)?;
-        for text in
-            c.delivered
-                .iter_mut()
-                .chain([&mut c.output_locals, &mut c.materialize, &mut c.cleanup])
-        {
-            for j in 0..inner.len() {
-                *text = text.replace(
-                    &format!("{local}[{j}]"),
-                    &format!("{}[{}]", context.result, i + j),
-                );
-            }
-        }
-        out.output_locals.push_str(&c.output_locals);
-        out.materialize.push_str(&c.materialize);
-        out.cleanup.push_str(&c.cleanup);
-        if let Some(r) = record {
-            if c.delivered.len() != r.fields.len() {
-                return Err("incomplete data-class output occurrence".into());
-            }
-            out.delivered
-                .push(r.construct(&mut c.delivered.into_iter()));
-            out.result_types.push(r.fqn.clone());
-        } else {
-            out.delivered.extend(c.delivered);
-            out.result_types.extend(c.result_types);
-        }
-        i = end;
+    let mut c = kotlin::output_kotlin(nodes, context)?;
+    if nodes.len() != d.record.fields.len() || c.delivered.len() != d.record.fields.len() {
+        return Err("incomplete data-class output occurrence".into());
     }
-    Ok(out)
+    c.delivered = vec![d.record.construct(&mut c.delivered.into_iter())];
+    c.result_types = vec![d.record.fqn.clone()];
+    Ok(c)
 }

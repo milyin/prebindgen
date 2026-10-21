@@ -513,3 +513,6 @@ pub fn option_inner(ty: &Type) -> Option<&Type> {
         _ => None,
     }
 }
+
+mod layout;
+pub use layout::{WireLayout, WireNode, Wires, WiresMut};

@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 struct Input {
-    wires: [Wire<syn::Type>; 1],
+    layout: WireLayout<syn::Type>,
 }
 enum Read<'a> {
     Decode { bias: &'a i32 },
@@ -16,10 +16,11 @@ enum InputWire {
 }
 impl Conversion for Input {
     type Wire = syn::Type;
+    type Group = ();
     type SlotFragment<'a> = Read<'a>;
     type WireFragment<'a> = InputWire;
-    fn wires(&self) -> &[Wire<syn::Type>] {
-        &self.wires
+    fn layout(&self) -> &WireLayout<syn::Type> {
+        &self.layout
     }
     fn code_fragment_slot(&self, mode: Read<'_>, expected: &syn::Type) -> Result<TokenStream> {
         match mode {
@@ -27,7 +28,7 @@ impl Conversion for Input {
                 if !same_type(expected, &syn::parse_quote!(i32)) {
                     return Err("expected i32".into());
                 }
-                let wire = &self.wires[0].name;
+                let wire = &self.layout[0].name;
                 Ok(quote!(i32::from(#wire) + #bias))
             }
             Read::Noop => {
@@ -44,7 +45,7 @@ impl Conversion for Input {
         mode: InputWire,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        let wire = self.wires.get(pos).ok_or("wire out of range")?;
+        let wire = self.layout.get(pos).ok_or("wire out of range")?;
         match mode {
             InputWire::Active => {
                 if !same_type(expected, &syn::parse_quote!(Option<bool>)) {
@@ -63,15 +64,16 @@ impl Conversion for Input {
     }
 }
 struct Output {
-    wires: [Wire<syn::Type>; 1],
+    layout: WireLayout<syn::Type>,
 }
 impl Conversion for Output {
     type Wire = syn::Type;
+    type Group = ();
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;
     type WireFragment<'a> = &'a syn::Ident;
-    fn wires(&self) -> &[Wire<syn::Type>] {
-        &self.wires
+    fn layout(&self) -> &WireLayout<syn::Type> {
+        &self.layout
     }
     fn code_fragment_slot(&self, source: &syn::Ident, expected: &syn::Type) -> Result<TokenStream> {
         if !same_type(expected, &syn::parse_quote!(i64)) {
@@ -85,7 +87,7 @@ impl Conversion for Output {
         source: &syn::Ident,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        self.wires.get(pos).ok_or("wire out of range")?;
+        self.layout.get(pos).ok_or("wire out of range")?;
         self.code_fragment_slot(source, expected)
     }
 }
@@ -93,16 +95,18 @@ impl Conversion for Output {
 #[test]
 fn independent_protocols_compose_into_compilable_expressions() {
     let input = Input {
-        wires: [Wire {
+        layout: vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(u8),
-        }],
+        }]
+        .into(),
     };
     let output = Output {
-        wires: [Wire {
+        layout: vec![Wire {
             name: syn::parse_quote!(out),
             kind: syn::parse_quote!(i64),
-        }],
+        }]
+        .into(),
     };
     let decoded = syn::parse_quote!(decoded);
     let bias = 7;

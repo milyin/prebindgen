@@ -17,10 +17,9 @@ pub fn record_input<C: Codec>(
     fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
 ) -> Result<CodecInput<C>> {
     let mut out: CodecInput<C> = InputPlan {
-        metadata: Default::default(),
         context: Default::default(),
         acknowledgement: None,
-        wires: Vec::new(),
+        layout: Default::default(),
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
         resources: Vec::new(),
@@ -30,16 +29,15 @@ pub fn record_input<C: Codec>(
     let mut values = Vec::new();
     for field in fields {
         let (name, mut child) = field?;
-        for wire in &mut child.wires {
+        for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        out.metadata.merge(child.metadata)?;
         out.validation.extend(child.validation);
         out.acquire.extend(child.acquire);
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        out.wires.extend(child.wires);
+        out.layout.extend(child.layout);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
@@ -71,17 +69,16 @@ pub fn record_output<C: Codec>(
         quote!(let _ = &(#value);)
     };
     let mut out = OutputPlan {
-        metadata: Default::default(),
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        wires: Vec::new(),
+        layout: Default::default(),
         statements: binding,
         values: Vec::new(),
     };
     for (index, name) in fields.enumerate() {
         let mut child = convert(index, quote!(&#var.#name))?;
-        for wire in &mut child.wires {
+        for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
         append(&mut out, child)?;
@@ -111,17 +108,16 @@ pub fn record_output_owned<C: Codec>(
         quote!(let _ = #value;)
     };
     let mut out = OutputPlan {
-        metadata: Default::default(),
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        wires: Vec::new(),
+        layout: Default::default(),
         statements: binding,
         values: Vec::new(),
     };
     for (index, name) in fields.enumerate() {
         let mut child = convert(index, quote!(#var.#name))?;
-        for wire in &mut child.wires {
+        for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
         append(&mut out, child)?;

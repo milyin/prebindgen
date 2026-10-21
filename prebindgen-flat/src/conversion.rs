@@ -52,7 +52,8 @@ pub struct Wire<W: WireKind> {
     /// Generated identifier used by conversion code and wrapper signatures.
     pub name: syn::Ident,
     /// Transport description implementing [`WireKind`].
-    /// Logical fields, selection rules and ownership behavior belong inside the converter.
+    /// Stores information about this individual value, such as conversion access
+    /// and available niches. Relationships between values belong on parent tree nodes.
     pub kind: W,
 }
 
@@ -130,7 +131,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// policy; other implementations may use the expectation to configure emission.
 ///
 /// ```
-/// use prebindgen_flat::{bind_fragment, same_type, Conversion, Result, Wire, WireKind};
+/// use prebindgen_flat::{bind_fragment, same_type, Conversion, ConversionExt, Result, Wire, WireKind};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Type};
@@ -146,7 +147,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// enum WireRequest { Value, Active }
 /// struct OwnedBoxInput {
 ///     pointee: Type,
-///     wires: [Wire<Carrier>; 1],
+///     layout: prebindgen_flat::WireLayout<Carrier>,
 /// }
 /// fn expect(actual: &Type, expected: &Type) -> Result<()> {
 ///     if same_type(actual, expected) { Ok(()) }
@@ -154,13 +155,14 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// }
 /// impl Conversion for OwnedBoxInput {
 ///     type Wire = Carrier;
+///     type Group = ();
 ///     type SlotFragment<'a> = SlotRequest<'a>;
 ///     type WireFragment<'a> = WireRequest;
-///     fn wires(&self) -> &[Wire<Carrier>] { &self.wires }
+///     fn layout(&self) -> &prebindgen_flat::WireLayout<Carrier> { &self.layout }
 ///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
 ///         -> Result<TokenStream>
 ///     {
-///         let name = &self.wires[0].name;
+///         let name = &self.layout[0].name;
 ///         let pointee = &self.pointee;
 ///         match mode {
 ///             SlotRequest::Validate { null_message } => {
@@ -182,7 +184,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///     fn code_fragment_wire(&self, pos: usize, mode: WireRequest, expected: &Type)
 ///         -> Result<TokenStream>
 ///     {
-///         let wire = self.wires.get(pos).ok_or("invalid wire position")?;
+///         let wire = self.layout.get(pos).ok_or("invalid wire position")?;
 ///         match mode {
 ///             WireRequest::Value => {
 ///                 expect(&wire.rust_type(), expected)?;
@@ -198,7 +200,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// }
 /// let slot = OwnedBoxInput {
 ///     pointee: parse_quote!(u64), // Supplied by preparation from the source type.
-///     wires: [Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }],
+///     layout: vec![Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }].into(),
 /// };
 /// let validation = slot.code_fragment_slot(
 ///     SlotRequest::Validate { null_message: "null owned handle" }, &parse_quote!(()))?;
@@ -208,19 +210,21 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// let _: syn::Block = syn::parse2(quote!({ #validation; #binding }))?;
 /// let active = slot.code_fragment_wire(0, WireRequest::Active, &parse_quote!(Option<bool>))?;
 /// assert_eq!(active.to_string(), "None");
-/// let wire_value = slot.code_fragment_wire(0, WireRequest::Value, &slot.wires()[0].rust_type())?;
+/// let wire_value = slot.code_fragment_wire(0, WireRequest::Value, &slot.wire(0)?.rust_type())?;
 /// assert_eq!(wire_value.to_string(), "raw_value");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Conversion {
     /// Generator-defined boundary carrier.
     type Wire: WireKind;
+    /// Metadata describing how child values form records, options or alternatives.
+    type Group;
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
     /// Requests concerning one wire.
     type WireFragment<'a>;
-    /// Boundary wires in signature order for inputs or delivery order for outputs.
-    fn wires(&self) -> &[Wire<Self::Wire>];
+    /// Authoritative tree containing the slot's wires and group metadata.
+    fn layout(&self) -> &crate::WireLayout<Self::Wire, Self::Group>;
     /// Emit an expression for the whole slot.
     fn code_fragment_slot(
         &self,
@@ -234,6 +238,28 @@ pub trait Conversion {
         mode: Self::WireFragment<'_>,
         expected_type: &syn::Type,
     ) -> Result<TokenStream>;
+}
+
+/// Wire access derived exclusively from a conversion's tree.
+///
+/// Import this extension trait alongside [`Conversion`] to call `wires()` and
+/// `wire(position)`. Its blanket implementation prevents a slot implementation
+/// from supplying a different wire order than the tree used for grouping.
+pub trait ConversionExt: Conversion {
+    /// All physical wires in depth-first, left-to-right ABI order.
+    fn wires(&self) -> crate::Wires<'_, Self::Wire, Self::Group>;
+    /// A wire at its current ABI position, or an error when out of range.
+    fn wire(&self, position: usize) -> Result<&Wire<Self::Wire>>;
+}
+impl<T: Conversion + ?Sized> ConversionExt for T {
+    fn wires(&self) -> crate::Wires<'_, Self::Wire, Self::Group> {
+        self.layout().iter()
+    }
+    fn wire(&self, position: usize) -> Result<&Wire<Self::Wire>> {
+        self.layout()
+            .get(position)
+            .ok_or_else(|| format!("invalid wire position {position}"))
+    }
 }
 
 /// Bind an emitted expression to a caller-selected name and expected Rust type.

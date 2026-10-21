@@ -169,11 +169,14 @@ settings remain commented out in the example manifests.
 
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
-- `Conversion` exposes `wires()`,
+- `Conversion` exposes its authoritative `layout()` tree,
   `code_fragment_slot(mode, expected_type)` and
   `code_fragment_wire(pos, mode, expected_type)`.
-- `wires()` borrows a stable, ordered slice. Conditional wires stay in the list;
-  `pos` indexes that list and an invalid position is an error.
+- Import `ConversionExt` to use `wires()` (an iterator borrowing the tree's leaves)
+  and `wire(pos)` (checked lookup). Both derive their order from `layout()`;
+  converters cannot override them. Walk leaves depth first, left to right,
+  including inactive alternatives. `pos` uses that order; invalid positions are
+  errors. Finish structural edits before emission, which borrows the slot immutably.
 - Each generator defines its slot and wire request enums. Variants carry only the
   data that operation needs. Associated request types have a lifetime parameter
   so they can borrow names, contexts or other configuration without cloning it.
@@ -277,18 +280,21 @@ Both adapters treat values as copies and every other leaf type as a boxed object
 so a type alias such as `type Key = String` crosses as an object.
 
 A wire is one generated boundary parameter or result component. `Wire<W>`
-stores the adapter's transport description in `kind`. `Wire<W>` requires
+stores the adapter's description of that individual wire in `kind`. `Wire<W>` requires
 `W: WireKind`, whose `rust_type()` returns a `syn::Type` for the boundary carrier.
 Both writers use this API to declare Rust parameters and result fields. A plain
 `syn::Type` implements `WireKind` when no additional metadata is needed.
 C uses `CWire` for scalars,
 buffers and typed pointers. JNI's `JniWire` describes Rust/Kotlin carrier types and
-JVM parameter width. Ownership and selector semantics remain private to the slots.
-C and JNI retain distinct carrier types.
+JVM parameter width, plus its conversion information. Both keep the remaining
+available niche in `spare_niche`. All leaf information is accessible through
+`wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
+carrier types.
 
 `Codec::Input` and `Codec::Output` select the final slot implementations. After
 composition and finalization, preparation converts its plans into these types;
-JNI uses this step to hide its preparation metadata inside `JniInput`/`JniOutput`.
+JNI keeps one plan in `JniInput`/`JniOutput`; Rust and Kotlin emission read the
+same tree.
 Simple codecs may use `InputPlan`/`OutputPlan` directly. Declarations compose leaves, fields, constructors,
 input selectors and combined outputs. The composition model requires neither
 handles nor boxed storage. It has no object registry or universal `Send`
@@ -449,31 +455,45 @@ one niche, or `None` when exhausted. The shared compiler suppresses niches on
 other payload wires and on inactive selector arms. Both input and output
 composition use this protocol.
 
-Every `Wire` describes one complete FFI value. `Composition`, stored in
-`InputPlan::metadata` and `OutputPlan::metadata`, explains how those values fit
-together. For example, an `Option<i32>` passed as `present` and `value` needs a
-**group** describing both wires: `present` is a 0/1 flag, and `value` is ignored
-when the flag is 0. JNI adds a record group describing how field wires form a
-Kotlin data class; C exposes the field wires without one. In JNI, an optional
-record has a record group inside an optional group. These descriptions refer to
-the plan's wires by name.
+Every `Wire` describes one complete FFI value. Each conversion owns a
+`WireLayout<W, G>` tree: leaves contain `Wire<W>`, and parent nodes contain `G`
+metadata plus their children. The tree is the source of both wire order and
+grouping. For example:
 
-`Composition::domains` tracks which unused representation each wire can still
-offer for an enclosing option. An entry containing `Some(n)` offers `n`; an entry
-containing `None` prevents that wire from supplying a niche; a missing entry asks
-the codec for its default. After C uses `0x110000` for `None` in `Option<char>`,
-for example, that wire can still offer `0x110001` to an enclosing option.
+```text
+Optional<Point>       metadata: inspect the "present" flag
+├── present: int32_t  wire position 0
+└── Point            metadata: construct a Kotlin Point from its fields
+    ├── x: double    wire position 1
+    └── y: double    wire position 2
+```
 
-The compiler checks the wire names and group descriptions before installing the
-conversion. JNI stores Kotlin record information in its adapter-specific `Group`
-type. The C header writer reads optional groups through `CComposition` to explain
-which arguments or result fields indicate presence. Custom C slots can use that
-trait's default method when they need no optional-group documentation.
+`wires()` yields the three leaf wires, including their `W` information.
+`layout().nodes()` exposes the parent metadata and nesting. Groups can have no
+wires, as needed for unit values or future enum variants without payloads.
+Each physical wire appears once. Multiple ancestors may inspect that same leaf:
+nested optional chars, for example, use different absent values on one wire.
 
-Custom codecs declare `type Group` (use `()` when unused), return plans whose
-metadata is a `Composition`, and report leftover niches through `remaining_niche`.
-`InputPlan` and `OutputPlan` take the metadata type as a third parameter, defaulting
-to `()`.
+The shared declaration compiler puts `CompositionGroup<Niche, Group>` on option
+and adapter-defined parent nodes. `OptionalGroup` names the descendant wire that
+indicates presence and records the niche already used by that option (or the
+separate flag). The leaf's `W` records which niche remains available for further
+wrapping. After C uses `0x110000` for `None` in `Option<char>`, that leaf can still
+offer `0x110001` to an enclosing option. `Codec::set_niche` updates this state;
+`Codec::niche` reads it. `None` means no niche is available.
+
+JNI adds record groups to construct Kotlin data classes. C exposes record fields
+without a record group and reads optional nodes to document presence rules.
+Shared helpers preserve nested groups when combining plans and check wire and
+group names plus optional discriminator references before installing a slot.
+
+Custom converters implement `Conversion::layout` and declare `Conversion::Group`;
+use `()` when no grouping information is needed. Custom codecs also declare their
+adapter-specific `Codec::Group`, return `CodecInput<Self>`/`CodecOutput<Self>`, and
+implement the paired `niche` and `set_niche` methods. `InputPlan<W, C, G>` and `OutputPlan<W, C, G>` store the tree
+in `layout`; `G` is metadata for parent nodes, defaulting to `()`. Shared value and
+boxed helpers create leaf-only trees with that group type. Wire metadata belongs
+only in `W`. Both adapters expose the tree through the common conversion API.
 
 Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
 or structured predicates. A custom float domain may explicitly exclude a NaN
