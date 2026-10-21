@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["CNiche","CWire"],"struct":["CCodec","CContext","CPointer","Cbindgen","Generation"],"trait":["CComposition"],"type":["Bindings"]};
