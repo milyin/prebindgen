@@ -1,9 +1,9 @@
 (function() {
-    const implementors = Object.fromEntries([["prebindgen_c",[["impl <a class=\"trait\" href=\"prebindgen_flat/conversion/trait.WireKind.html\" title=\"trait prebindgen_flat::conversion::WireKind\">WireKind</a> for <a class=\"struct\" href=\"prebindgen_c/struct.CWire.html\" title=\"struct prebindgen_c::CWire\">CWire</a>",0]]],["prebindgen_flat",[]],["prebindgen_jni",[["impl <a class=\"trait\" href=\"prebindgen_flat/conversion/trait.WireKind.html\" title=\"trait prebindgen_flat::conversion::WireKind\">WireKind</a> for <a class=\"enum\" href=\"prebindgen_jni/enum.JniKind.html\" title=\"enum prebindgen_jni::JniKind\">JniKind</a>",0],["impl <a class=\"trait\" href=\"prebindgen_flat/conversion/trait.WireKind.html\" title=\"trait prebindgen_flat::conversion::WireKind\">WireKind</a> for <a class=\"struct\" href=\"prebindgen_jni/struct.JniWire.html\" title=\"struct prebindgen_jni::JniWire\">JniWire</a>",0]]]]);
+    const implementors = Object.fromEntries([["prebindgen_c",[["impl <a class=\"trait\" href=\"prebindgen_flat/conversion/trait.WireKind.html\" title=\"trait prebindgen_flat::conversion::WireKind\">WireKind</a> for <a class=\"struct\" href=\"prebindgen_c/struct.CWire.html\" title=\"struct prebindgen_c::CWire\">CWire</a>",0]]],["prebindgen_flat",[]],["prebindgen_jni",[["impl <a class=\"trait\" href=\"prebindgen_flat/conversion/trait.WireKind.html\" title=\"trait prebindgen_flat::conversion::WireKind\">WireKind</a> for <a class=\"enum\" href=\"prebindgen_jni/enum.JniWire.html\" title=\"enum prebindgen_jni::JniWire\">JniWire</a>",0]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":59,"fragment_lengths":[282,23,563]}
+//{"start":59,"fragment_lengths":[282,23,289]}
