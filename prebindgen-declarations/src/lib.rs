@@ -307,8 +307,11 @@ pub trait Codec {
     /// Complete description of one wire, including its type and adapter metadata.
     /// Grouping belongs to parent nodes; no wire kind contains child wires.
     type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
-    /// Describe the `i32` arm index wire that the declaration compiler creates for [`Input::Selector`].
+    /// Describe an `i32` selector tag or optional presence flag.
     ///
+    /// Selector arm indices start at zero; optional flags use 0 and 1. A codec
+    /// may advertise excluded negative values as niches for enclosing options.
+    /// A newly added flag retains its own niches; inactive payload wires do not.
     /// `extra` is the occurrence data of the conversion that contains the selector.
     fn selector(&self, extra: &Self::Extra) -> Self::Wire;
     /// Whether a leaf output consumes the current source value.

@@ -2913,3 +2913,28 @@ pub fn optional_field_new(present: bool, value: Option<i64>) -> Option<OptionalF
 pub fn optional_field_fields(value: &OptionalField) -> OptionalField {
     OptionalField { value: value.value }
 }
+
+// Nullable references exhaust null once, then share a presence flag's negative
+// values across further option layers. Full-domain scalars start with that flag.
+#[prebindgen]
+pub fn option_triple_text(value: Option<Option<Option<String>>>) -> Option<Option<Option<String>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_bytes(
+    value: Option<Option<Option<Vec<u8>>>>,
+) -> Option<Option<Option<Vec<u8>>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_i64(value: Option<Option<Option<i64>>>) -> Option<Option<Option<i64>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_unit(value: Option<Option<Option<()>>>) -> Option<Option<Option<()>>> {
+    value
+}
+#[prebindgen]
+pub fn nested_niche_choice_id(value: Option<Option<NicheChoiceHandle>>) -> i64 {
+    value.map(niche_choice_id).unwrap_or(-3)
+}

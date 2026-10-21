@@ -216,9 +216,9 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
                 let c = context.class_name(&handle.ty)?;
                 (c.clone(), format!("{c}({result}[{i}] as Long)"))
             }
-            JniWire::Text => ("String".into(), format!("{result}[{i}] as String")),
-            JniWire::Bytes => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
-            JniWire::Selector => ("Int".into(), format!("{result}[{i}] as Int")),
+            JniWire::Text { .. } => ("String".into(), format!("{result}[{i}] as String")),
+            JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
+            JniWire::Selector { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
         };
         delivered.push(decode);
         result_types.push(kt);

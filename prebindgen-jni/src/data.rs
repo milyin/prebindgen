@@ -484,11 +484,11 @@ impl Codec for DataCodec {
     }
     fn is_present(
         &self,
-        _: &JniWire,
+        wire: &JniWire,
         niche: &Self::Niche,
         value: TokenStream,
     ) -> Result<TokenStream> {
-        Ok(niche.present(value))
+        Ok(niche.present(wire, value))
     }
     fn remaining_niche(&self, wire: &JniWire, niche: &Self::Niche) -> Option<Self::Niche> {
         optional::remaining(wire, niche)
@@ -784,7 +784,7 @@ mod group_tests {
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
         let mut optional = WireLayout::from(vec![Wire {
             name: syn::parse_quote!(flag),
-            kind: JniWire::Selector,
+            kind: JniWire::selector(),
         }]);
         optional.enclose(JniGroup::Optional(JniOptional {
             presence: syn::parse_quote!(flag),

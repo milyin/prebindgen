@@ -489,11 +489,13 @@ impl Codec for JniCodec {
                 JniWire::Handle { .. } => {
                     quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
                 }
-                JniWire::Text => quote!(::prebindgen_jni_runtime::text_object(&mut #env,&#value)?),
-                JniWire::Bytes => {
-                    quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
+                JniWire::Text { .. } => {
+                    quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::text_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
                 }
-                JniWire::Selector => scalar::output_java(Primitive::I32, value),
+                JniWire::Bytes { .. } => {
+                    quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::bytes_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
+                }
+                JniWire::Selector { .. } => scalar::output_java(Primitive::I32, value),
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -517,11 +519,11 @@ impl Codec for JniCodec {
     }
     fn is_present(
         &self,
-        _: &JniWire,
+        wire: &JniWire,
         niche: &Self::Niche,
         value: TokenStream,
     ) -> Result<TokenStream> {
-        Ok(niche.present(value))
+        Ok(niche.present(wire, value))
     }
     fn remaining_niche(&self, wire: &JniWire, niche: &Self::Niche) -> Option<Self::Niche> {
         optional::remaining(wire, niche)
@@ -535,7 +537,7 @@ impl Codec for JniCodec {
         optional::absent(wire, niche, input)
     }
     fn selector(&self, _: &()) -> JniWire {
-        JniWire::Selector
+        JniWire::selector()
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
@@ -567,11 +569,11 @@ impl Codec for JniCodec {
             Some(Value::Scalar(p)) => (scalar::decode(p, &w), JniWire::scalar(p)),
             Some(Value::Text) => (
                 quote!(::prebindgen_jni_runtime::text(&mut #env,&#w)?),
-                JniWire::Text,
+                JniWire::text(),
             ),
             Some(Value::Bytes) => (
                 quote!(::prebindgen_jni_runtime::bytes(&mut #env,&#w)?),
-                JniWire::Bytes,
+                JniWire::bytes(),
             ),
             None => {
                 return prebindgen_conversions::boxed::input(
@@ -642,7 +644,8 @@ impl Codec for JniCodec {
                 child,
             );
         }
-        // Text and bytes stay Rust values until the wrapper delivers them.
+        // Text and bytes stay optional Rust payloads until delivery. This keeps
+        // a null reference distinct from a present empty string or byte array.
         let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
             Some(Value::Scalar(p)) => {
                 return prebindgen_conversions::value::output(
@@ -654,8 +657,8 @@ impl Codec for JniCodec {
                     JniWire::scalar(p),
                 )
             }
-            Some(Value::Text) => (|v| v, JniWire::Text),
-            Some(Value::Bytes) => (|v| v, JniWire::Bytes),
+            Some(Value::Text) => (|v| quote!(Some(#v)), JniWire::text()),
+            Some(Value::Bytes) => (|v| quote!(Some(#v)), JniWire::bytes()),
             None => {
                 return prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
                     JniWire::handle(b, "true")

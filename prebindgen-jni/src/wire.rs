@@ -3,10 +3,10 @@ use super::*;
 
 /// One self-sufficient JNI value and its conversion information.
 ///
-/// Only scalar and handle variants carry niche availability. This is mutable
-/// state for the current slot: consuming or suppressing a niche must not restore
-/// the variant's initial availability. Use [`Self::scalar`] and [`Self::handle`]
-/// to initialize it, and [`Self::set_niche`] to check updates.
+/// Niche availability is mutable state for the current slot. Consuming or
+/// suppressing a niche must not restore the variant's initial availability.
+/// Use the variant constructors to initialize it, and [`Self::set_niche`] to
+/// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
     /// A primitive in its JVM carrier.
@@ -25,14 +25,42 @@ pub enum JniWire {
         /// Whether null is still available to an enclosing option.
         null_niche_available: bool,
     },
-    /// A `java.lang.String`, with no advertised niche.
-    Text,
-    /// A `byte[]`, with no advertised niche.
-    Bytes,
-    /// An `int` selector arm index, with no advertised niche.
-    Selector,
+    /// A non-null `java.lang.String` when present.
+    Text {
+        /// Whether a null reference is still available to an enclosing option.
+        null_niche_available: bool,
+    },
+    /// A non-null `byte[]` when present, including an empty array.
+    Bytes {
+        /// Whether a null reference is still available to an enclosing option.
+        null_niche_available: bool,
+    },
+    /// An `int` selector with nonnegative valid tags (including 0/1 presence flags).
+    Selector {
+        /// Next unused negative tag, or `None` when unavailable.
+        /// Positive unused tags are not advertised because arm counts vary.
+        next_integer_niche: Option<i32>,
+    },
 }
 impl JniWire {
+    /// Describe a string with its null-reference niche initially available.
+    pub fn text() -> Self {
+        Self::Text {
+            null_niche_available: true,
+        }
+    }
+    /// Describe bytes with their null-reference niche initially available.
+    pub fn bytes() -> Self {
+        Self::Bytes {
+            null_niche_available: true,
+        }
+    }
+    /// Describe nonnegative selector tags with negative niches starting at -1.
+    pub fn selector() -> Self {
+        Self::Selector {
+            next_integer_niche: Some(-1),
+        }
+    }
     /// Initialize a scalar's niche availability from its primitive domain.
     pub fn scalar(primitive: Primitive) -> Self {
         let next_integer_niche = integer_niche_min(primitive).map(|_| -1);
@@ -59,7 +87,16 @@ impl JniWire {
             Self::Handle {
                 null_niche_available: true,
                 ..
+            }
+            | Self::Text {
+                null_niche_available: true,
+            }
+            | Self::Bytes {
+                null_niche_available: true,
             } => Some(JniNiche::Null),
+            Self::Selector { next_integer_niche } => {
+                next_integer_niche.map(|n| JniNiche::Integer(n.into()))
+            }
             _ => None,
         }
     }
@@ -79,9 +116,20 @@ impl JniWire {
                 Self::Handle {
                     null_niche_available,
                     ..
+                }
+                | Self::Text {
+                    null_niche_available,
+                }
+                | Self::Bytes {
+                    null_niche_available,
                 },
                 Some(JniNiche::Null),
             ) => *null_niche_available = true,
+            (Self::Selector { next_integer_niche }, Some(JniNiche::Integer(n)))
+                if n < 0 && i32::try_from(n).is_ok() =>
+            {
+                *next_integer_niche = Some(n as i32)
+            }
             (wire, None) => wire.clear_niche(),
             _ => {
                 return Err(
@@ -100,8 +148,14 @@ impl JniWire {
             Self::Handle {
                 null_niche_available,
                 ..
+            }
+            | Self::Text {
+                null_niche_available,
+            }
+            | Self::Bytes {
+                null_niche_available,
             } => *null_niche_available = false,
-            _ => {}
+            Self::Selector { next_integer_niche } => *next_integer_niche = None,
         }
     }
     // Reserved niches live on optional groups after availability has advanced or
@@ -113,7 +167,14 @@ impl JniWire {
             {
                 Ok(())
             }
-            (Self::Handle { .. }, JniNiche::Null) => Ok(()),
+            (Self::Handle { .. } | Self::Text { .. } | Self::Bytes { .. }, JniNiche::Null) => {
+                Ok(())
+            }
+            (Self::Selector { .. }, JniNiche::Integer(n))
+                if *n < 0 && i32::try_from(*n).is_ok() =>
+            {
+                Ok(())
+            }
             _ => Err("niche is incompatible with the JNI wire variant or primitive domain".into()),
         }
     }
@@ -128,9 +189,9 @@ impl JniWire {
         match self {
             Self::Scalar { primitive, .. } => scalar::raw_kotlin(*primitive),
             Self::Handle { .. } => "Long",
-            Self::Selector => "Int",
-            Self::Text => "String?",
-            Self::Bytes => "ByteArray?",
+            Self::Selector { .. } => "Int",
+            Self::Text { .. } => "String?",
+            Self::Bytes { .. } => "ByteArray?",
         }
     }
     /// JVM argument slots occupied by this value.
@@ -147,11 +208,11 @@ impl WireKind for JniWire {
         match self {
             Self::Scalar { primitive, .. } => scalar::rust_type(*primitive),
             Self::Handle { .. } => syn::parse_quote!(i64),
-            Self::Selector => syn::parse_quote!(i32),
-            Self::Text => {
+            Self::Selector { .. } => syn::parse_quote!(i32),
+            Self::Text { .. } => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
             }
-            Self::Bytes => {
+            Self::Bytes { .. } => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
             }
         }
@@ -200,7 +261,7 @@ mod tests {
         )
     }
     #[test]
-    fn only_supported_variants_initialize_niches() {
+    fn wire_constructors_initialize_only_excluded_representations() {
         for primitive in [
             Primitive::Char,
             Primitive::U8,
@@ -231,13 +292,49 @@ mod tests {
             assert!(JniWire::scalar(primitive).available_niche().is_none());
         }
         assert!(matches!(handle().available_niche(), Some(JniNiche::Null)));
-        for mut wire in [JniWire::Text, JniWire::Bytes, JniWire::Selector] {
-            assert!(wire.available_niche().is_none());
-            assert!(wire.set_niche(Some(JniNiche::Null)).is_err());
+        for mut wire in [JniWire::text(), JniWire::bytes()] {
+            assert_eq!(wire.available_niche(), Some(JniNiche::Null));
             assert!(wire.set_niche(Some(JniNiche::Integer(-1))).is_err());
-            wire.set_niche(None).unwrap();
+            assert_eq!(wire.available_niche(), Some(JniNiche::Null));
+            wire.clear_niche();
             assert!(wire.available_niche().is_none());
+            wire.validate_niche(&JniNiche::Null).unwrap();
         }
+    }
+    #[test]
+    fn selector_niches_advance_exhaust_and_validate_without_reinitialization() {
+        let mut wire = JniWire::selector();
+        assert_eq!(wire.available_niche(), Some(JniNiche::Integer(-1)));
+        for n in [-1, -2, -12345, i32::MIN as i64] {
+            wire.set_niche(Some(JniNiche::Integer(n))).unwrap();
+            assert_eq!(wire.available_niche(), Some(JniNiche::Integer(n)));
+            let next = optional::remaining(&wire, &JniNiche::Integer(n));
+            assert_eq!(
+                next,
+                (n > i32::MIN as i64).then_some(JniNiche::Integer(n - 1))
+            );
+        }
+        for bad in [
+            JniNiche::Null,
+            JniNiche::Integer(0),
+            JniNiche::Integer(1),
+            JniNiche::Integer(i32::MIN as i64 - 1),
+            JniNiche::Integer(i64::MAX),
+        ] {
+            assert!(wire.set_niche(Some(bad)).is_err());
+            assert_eq!(
+                wire.available_niche(),
+                Some(JniNiche::Integer(i32::MIN as i64))
+            );
+        }
+        wire.clear_niche();
+        assert!(wire.available_niche().is_none());
+        wire.validate_niche(&JniNiche::Integer(-1)).unwrap();
+        assert!(JniWire::Selector {
+            next_integer_niche: Some(0)
+        }
+        .validate()
+        .is_err());
     }
     #[test]
     fn scalar_niches_advance_exhaust_and_reject_invalid_updates_atomically() {

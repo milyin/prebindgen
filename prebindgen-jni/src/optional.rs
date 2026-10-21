@@ -1,6 +1,15 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
+    // Prepared reference outputs are Option<String>/Option<Vec<u8>>. None
+    // becomes a Java null at delivery; Some(empty) stays a non-null object.
+    if matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. }) {
+        return Ok(if input {
+            quote!(Default::default())
+        } else {
+            quote!(None)
+        });
+    }
     if !input && matches!(w, JniWire::Handle { .. }) {
         return Ok(quote!(std::ptr::null_mut()));
     }
@@ -12,15 +21,11 @@ pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Resu
             primitive: Primitive::F32 | Primitive::F64,
             ..
         } => quote!(0.0),
-        JniWire::Text if !input => quote!(String::new()),
-        JniWire::Bytes if !input => quote!(Vec::<u8>::new()),
         JniWire::Scalar {
             primitive: Primitive::I128 | Primitive::U128,
             ..
         } if !input => quote!([0u8; 16]),
-        JniWire::Text
-        | JniWire::Bytes
-        | JniWire::Scalar {
+        JniWire::Scalar {
             primitive: Primitive::I128 | Primitive::U128,
             ..
         } => {
@@ -30,6 +35,11 @@ pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Resu
     })
 }
 pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
+    if matches!(niche, Some(JniNiche::Null))
+        && matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. })
+    {
+        return "null".into();
+    }
     if let Some(n) = niche {
         let v = match n {
             JniNiche::Null => 0,
@@ -60,7 +70,7 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
         | JniWire::Scalar { primitive: Primitive::U32 | Primitive::I64 | Primitive::U64 | Primitive::Isize | Primitive::Usize, .. } => "0L",
         JniWire::Scalar { primitive: Primitive::F32, .. } => "0.0f",
         JniWire::Scalar { primitive: Primitive::F64, .. } => "0.0",
-        JniWire::Text | JniWire::Bytes | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
+        JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
             "null"
         }
         _ => "0",
@@ -208,15 +218,18 @@ pub(crate) fn output_kotlin(
 /// A wire value excluded from the representation of a present value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JniNiche {
-    /// Null address (pointer or integer-encoded handle).
+    /// Null reference or address (including integer-encoded handles).
     Null,
     /// An invalid integer representation, within the wire's integer range.
     Integer(i64),
 }
 impl JniNiche {
     /// Expression recognizing the present case without decoding the payload.
-    pub(crate) fn present(&self, value: TokenStream) -> TokenStream {
+    pub(crate) fn present(&self, wire: &JniWire, value: TokenStream) -> TokenStream {
         match self {
+            Self::Null if matches!(wire, JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+                quote!(!#value.is_null())
+            }
             Self::Null => quote!((#value as usize) != 0),
             Self::Integer(n) => {
                 let n = syn::parse_str::<syn::Expr>(&n.to_string()).unwrap();

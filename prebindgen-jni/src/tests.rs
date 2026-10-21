@@ -436,3 +436,96 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
     assert!(kt.contains(": Long?"), "{kt}");
     assert!(kt.contains("build: (Boolean, Long?) -> R"), "{kt}");
 }
+
+#[test]
+fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
+    use prebindgen_flat::{Conversion, WireNode};
+    fn reservations(
+        layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+    ) -> Vec<Option<JniNiche>> {
+        let mut result = vec![];
+        for node in layout.nodes() {
+            if let WireNode::Group { metadata, children } = node {
+                if let JniGroup::Optional(optional) = metadata {
+                    result.push(optional.niche.clone());
+                }
+                result.extend(reservations(children));
+            }
+        }
+        result
+    }
+    for base in ["String", "Vec<u8>", "i64", "()"] {
+        for depth in 1..=6 {
+            let mut ty = base.to_string();
+            for _ in 0..depth {
+                ty = format!("Option<{ty}>");
+            }
+            let mut source = flat(&format!("pub fn echo(x:{ty})->{ty}{{}}"));
+            let declarations = prebindgen_declarations::Declarations::new(&source, vec![]).unwrap();
+            declarations
+                .fill(&mut source, &JniCodec, &fun!(echo), &())
+                .unwrap();
+            let function = source.function("echo").unwrap();
+            let input = function.params[0].ty.slot.as_ref().unwrap();
+            let output = function.ret.slot.as_ref().unwrap();
+            let reference = base == "String" || base == "Vec<u8>";
+            let count = if base == "()" || (reference && depth == 1) {
+                1
+            } else {
+                2
+            };
+            assert_eq!(input.wires().len(), count, "input {ty}");
+            assert_eq!(output.wires().len(), count, "output {ty}");
+            let mut expected = if reference {
+                vec![Some(JniNiche::Null)]
+            } else {
+                vec![None]
+            };
+            for i in 1..depth {
+                expected.push(if reference && i == 1 {
+                    None
+                } else {
+                    Some(JniNiche::Integer(-((i - usize::from(reference)) as i64)))
+                });
+            }
+            expected.reverse();
+            assert_eq!(reservations(input.layout()), expected, "input {ty}");
+            assert_eq!(reservations(output.layout()), expected, "output {ty}");
+        }
+    }
+}
+
+#[test]
+fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
+    use prebindgen_declarations::{bind_input, Input};
+    use prebindgen_flat::Conversion;
+    let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
+    let selector = Input::selector([
+        Input::constructor("first", [Input::Leaf]),
+        Input::constructor("second", [Input::Leaf]),
+    ]);
+    bind_input(
+        &mut source,
+        &JniCodec,
+        "echo",
+        "x",
+        &Input::Optional(Box::new(Input::Optional(Box::new(selector)))),
+        &(),
+    )
+    .unwrap();
+    let input = source.function("echo").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap();
+    assert_eq!(input.wires().len(), 3); // one tag + two arm payloads, no option flags
+    assert_eq!(
+        input.layout()[0].kind.available_niche(),
+        Some(JniNiche::Integer(-3))
+    );
+    assert!(input
+        .layout()
+        .iter()
+        .skip(1)
+        .all(|w| w.kind.available_niche().is_none()));
+}

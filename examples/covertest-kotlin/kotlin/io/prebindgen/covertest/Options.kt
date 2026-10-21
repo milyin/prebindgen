@@ -50,8 +50,67 @@ fun checkOptions() {
     for (v in listOf(null, 0, 255)) check(optionU8(v) == v)
     for (v in listOf(null, false, true)) check(optionBool(v) == v)
     for (v in listOf(null, "", "héllo\u0000世界")) check(optionText(v) == v)
+    // Null and empty must remain different both in parameters and results.
     check(optionBytes(null) == null)
+    check(optionBytes(byteArrayOf())!!.isEmpty())
     check(optionBytes(byteArrayOf(0, -1))!!.contentEquals(byteArrayOf(0, -1)))
+    check(optionStrEcho("") == "")
+    check(optionSliceEcho(byteArrayOf())!!.isEmpty())
+    // Call the two reference fixtures directly to check the native ABI and
+    // rejection of malformed tags without Kotlin's argument guards. Their
+    // (Int, reference) signatures are unique in this fixture manifest; selecting
+    // by signature keeps the check independent of generated call numbering.
+    for (referenceType in listOf(String::class.java, ByteArray::class.java)) {
+        val native = JNINative::class.java.declaredMethods.single {
+            it.name.startsWith("call") && it.parameterTypes.contentEquals(arrayOf(Int::class.javaPrimitiveType, referenceType))
+        }
+        val empty: Any = if (referenceType == String::class.java) "" else byteArrayOf()
+        for ((tag, payload) in listOf(-1 to empty, 0 to empty, 1 to null, 1 to empty)) {
+            val result = native.invoke(null, tag, payload) as Array<*>
+            check(result.size == 2 && result[0] == tag)
+            if (tag != 1 || payload == null) check(result[1] == null)
+            else if (payload is String) check(result[1] == "")
+            else check((result[1] as ByteArray).isEmpty())
+        }
+        for (tag in listOf(-2, Int.MIN_VALUE, 2, Int.MAX_VALUE)) {
+            try { native.invoke(null, tag, empty); error("invalid native presence tag accepted") }
+            catch (e: java.lang.reflect.InvocationTargetException) { check(e.cause is IllegalArgumentException) }
+        }
+    }
+    check(optionTripleText(false, true, "ignored") { outer, inner, v -> !outer && inner == null && v == null })
+    check(optionTripleText(true, false, "ignored") { outer, inner, v -> outer && inner == false && v == null })
+    check(optionTripleText(true, true, null) { outer, inner, v -> outer && inner == true && v == null })
+    for (text in listOf("", "héllo\u0000世界")) {
+        check(optionTripleText(true, true, text) { outer, inner, v -> outer && inner == true && v == text })
+    }
+    check(optionTripleBytes(false, true, byteArrayOf(9)) { outer, inner, v -> !outer && inner == null && v == null })
+    check(optionTripleBytes(true, false, byteArrayOf(9)) { outer, inner, v -> outer && inner == false && v == null })
+    check(optionTripleBytes(true, true, null) { outer, inner, v -> outer && inner == true && v == null })
+    for (bytes in listOf(byteArrayOf(), byteArrayOf(0, -1, 127))) {
+        check(optionTripleBytes(true, true, bytes) { outer, inner, v -> outer && inner == true && v!!.contentEquals(bytes) })
+    }
+    check(optionTripleI64(false, true, 9) { outer, inner, v -> !outer && inner == null && v == null })
+    check(optionTripleI64(true, false, 9) { outer, inner, v -> outer && inner == false && v == null })
+    check(optionTripleI64(true, true, null) { outer, inner, v -> outer && inner == true && v == null })
+    for (v in listOf(Long.MIN_VALUE, 0L, Long.MAX_VALUE)) {
+        check(optionTripleI64(true, true, v) { outer, inner, value -> outer && inner == true && value == v })
+    }
+    check(optionTripleUnit(false, true, true) { outer, inner, unit -> !outer && inner == null && unit == null })
+    check(optionTripleUnit(true, false, true) { outer, inner, unit -> outer && inner == false && unit == null })
+    check(optionTripleUnit(true, true, false) { outer, inner, unit -> outer && inner == true && unit == false })
+    check(optionTripleUnit(true, true, true) { outer, inner, unit -> outer && inner == true && unit == true })
+    check(nestedNicheChoiceId(false, true, 0, 65, null) == -3L)
+    check(nestedNicheChoiceId(true, false, 0, 65, null) == -2L)
+    check(nestedNicheChoiceId(true, true, 0, null, null) == -1L)
+    check(nestedNicheChoiceId(true, true, 0, 65, null) == 65L)
+    val selectorHandle = nicheChoiceNew(66)
+    check(nestedNicheChoiceId(false, true, 1, null, selectorHandle) == -3L && !selectorHandle.isClosed)
+    check(nestedNicheChoiceId(true, false, 1, null, selectorHandle) == -2L && !selectorHandle.isClosed)
+    check(nestedNicheChoiceId(true, true, 1, null, selectorHandle) == 66L && selectorHandle.isClosed)
+    for (tag in listOf(-1, -2, Int.MIN_VALUE, 2, Int.MAX_VALUE)) {
+        try { nestedNicheChoiceId(true, true, tag, 65, null); error("invalid selector accepted") }
+        catch (_: IllegalArgumentException) {}
+    }
     check(!optionUnit(false)); check(optionUnit(true))
     check(optionNested(false, 7) { present, v -> !present && v == null })
     check(optionNested(true, null) { present, v -> present && v == null })

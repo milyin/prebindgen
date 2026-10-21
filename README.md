@@ -286,9 +286,9 @@ Both writers use this API to declare Rust parameters and result fields. A plain
 `syn::Type` implements `WireKind` when no additional metadata is needed.
 C uses `CWire` for scalars, buffers and typed pointers, with its remaining niche
 in `spare_niche`. JNI uses a single `JniWire` enum for scalars, handles, text,
-bytes and selectors. Only scalar and handle variants store niche availability:
-`next_integer_niche` and `null_niche_available`, respectively. Constructors
-`JniWire::scalar` and `JniWire::handle` initialize that state; `available_niche()`,
+bytes and selectors. Scalar and selector variants store `next_integer_niche`;
+handles, text and bytes store `null_niche_available`. Constructors
+`JniWire::{scalar, handle, text, bytes, selector}` initialize that state; `available_niche()`,
 checked `set_niche(...)` and `clear_niche()` read and update it. Used niche
 representations remain separate `JniNiche` values on optional parent metadata.
 JNI derives Rust/Kotlin carrier types and JVM parameter width from the variant.
@@ -433,22 +433,32 @@ compiler uses an eligible niche instead of adding a presence wire:
 | Opaque pointer / handle | Null pointer | Zero handle |
 | `char` | `0x110000` | `-1` |
 | `u8`, `u16`, `u32` | Separate presence flag | `-1` in the wider signed carrier |
-| Other scalars, text, bytes | Separate presence flag | Separate presence flag |
+| Text, bytes | Separate presence flag | Null Java reference |
+| Selector tag | Separate presence flag | `-1` (valid arm indices are nonnegative) |
+| Other scalars | Separate presence flag | Separate presence flag |
 
 A presence flag is an `i32` with exactly `0` (absent) or `1` (present). Other
 active flags are errors. C callers supply the documented sentinel for absence;
 Kotlin callers supply `null`, and scalar sentinel values supplied as non-null
-arguments are rejected. Buffers have no null niche: a null pointer with zero
-length is a valid empty buffer. No valid scalar value is reserved as a sentinel.
+arguments are rejected. C buffers have no null niche: a null pointer with zero
+length is a valid empty buffer. JNI strings and byte arrays use null for absence;
+empty strings and arrays remain non-null present values. No valid scalar value
+is reserved as a sentinel.
 
 Only unconditional payload wires can donate a niche. Selector-arm wires cannot
 supply niches. Optional plans can retain unused representations for outer layers:
 C encodes `Option<Option<char>>` in one `uint32_t` (`0x110001` for outer `None`,
 `0x110000` for `Some(None)`). JNI uses `-2` and `-1` for nested optional chars and
 widened unsigned scalars. Once a domain is exhausted, additional layers use flags.
-A handle's only niche is null. Once an inner option uses it, an enclosing option
-adds a flag. Other wires in an optional payload cannot supply another niche,
-because an absent payload fills them with default values.
+A JNI handle, string or byte array offers null once. Once an inner option uses
+it, an enclosing option adds a flag. JNI selector tags and newly added presence
+flags offer negative values in sequence, so further enclosing options can reuse
+the tag instead of adding more flags. For example, `Option<Option<Option<String>>>`
+uses one string reference and one tag: tag `-1` means outer `None`, tag `0` means
+`Some(None)`, and tag `1` allows the reference to distinguish `Some(Some(None))`
+from `Some(Some(Some(text)))`. Selector-arm payload wires remain ineligible;
+the selector tag itself is unconditional. Other wires in an optional payload
+cannot supply another niche, because an absent payload fills them with defaults.
 C headers document the exact discriminator argument or result field for each
 optional group, including enclosing optional groups.
 

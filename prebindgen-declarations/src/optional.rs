@@ -146,11 +146,20 @@ fn mark<C: Codec>(
         .niche
         .as_ref()
         .and_then(|(i, n)| codec.remaining_niche(&tree[*i].kind, n));
+    // A new presence flag is always active, and its excluded representations
+    // remain available to enclosing options. Payload wires may be inactive.
+    let flag_niche = layout
+        .niche
+        .is_none()
+        .then(|| codec.niche(&tree[0].kind))
+        .flatten();
     for wire in tree.iter_mut() {
         codec.set_niche(&mut wire.kind, None);
     }
     if let Some((i, _)) = &layout.niche {
         codec.set_niche(&mut tree[*i].kind, remaining);
+    } else {
+        codec.set_niche(&mut tree[0].kind, flag_niche);
     }
     tree.enclose(codec.optional_group(tag, discriminator, layout.niche.map(|(_, n)| n)));
 }
