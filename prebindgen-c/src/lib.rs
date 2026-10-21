@@ -11,8 +11,9 @@ use prebindgen_flat::{Flat, Primitive, Result, WireKind};
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
 pub enum CWire {
-    /// Wire in an optional group, retaining its C discriminator documentation.
-    Optional(Box<COptionalWire>),
+    /// Generator metadata associating this wire with one `Option` layer.
+    /// The wrapper adds no ABI field; its underlying wire keeps its C type.
+    Optional(Box<COptionalWireMetadata>),
     /// Wire whose niche is unavailable to its containing composition.
     NonNiche(Box<CWire>),
     /// A primitive in its C scalar type.
@@ -22,17 +23,41 @@ pub enum CWire {
     /// A typed opaque pointer to a boxed source value.
     Pointer(Box<CPointer>),
 }
-/// Optional-group metadata retained until the C header is emitted.
+/// Generator metadata for one wire belonging to an `Option` layer.
+///
+/// An optional payload can expand into several C arguments or result fields.
+/// Each wire gets its own metadata wrapper, but all wires in the same layer
+/// share one group describing how the whole payload's presence is determined.
+/// These are generator-side descriptions, not structs emitted into the C ABI.
+///
+/// For example, an `Option<Record>` expanded into an integer and a character
+/// has two wire wrappers sharing a group whose discriminator is the character.
+/// That group reserves `0x110000` for absence. Only the character wire can then
+/// offer `0x110001` to an enclosing option; the integer wire cannot donate it.
+/// Nested options wrap `inner` again, preserving each layer's presence rule for
+/// header documentation while reusing the same ABI wire when a niche is available.
 #[derive(Clone, Debug)]
-pub struct COptionalWire {
+pub struct COptionalWireMetadata {
+    /// The wire before this optional layer, possibly carrying inner option metadata.
     inner: CWire,
-    group: std::rc::Rc<COptionalGroup>,
+    /// Presence rule shared by every wire in this optional layer, including any flag.
+    group: std::rc::Rc<COptionGroup>,
+    /// An unused representation of this particular wire, available to an outer option.
+    /// Initially absent; `reserve_niche` exposes any remainder on the discriminator
+    /// wire only. This differs from `group.niche`, which the current layer has used.
     remaining: Option<CNiche>,
 }
+/// One `Option` layer's shared presence rule, used to document the generated C ABI.
+/// This describes the whole expanded payload; per-wire remaining niches belong
+/// to `COptionalWireMetadata` rather than to this shared group.
 #[derive(Clone, Debug)]
-struct COptionalGroup {
+struct COptionGroup {
+    /// Unique generated identifier, also used to relate nested groups in header comments.
     name: String,
+    /// Name of the payload wire carrying the niche, or of the separate presence flag.
     discriminator: String,
+    /// Representation reserved for this layer's absence. `None` means the
+    /// discriminator is a separate 0/1 flag, not that the payload is absent.
     niche: Option<CNiche>,
 }
 /// Pointee type and mutability of a C boundary pointer.
@@ -182,7 +207,7 @@ impl Codec for CCodec {
         layout: &prebindgen_declarations::OptionalLayout<CNiche>,
         _: bool,
     ) -> Result<()> {
-        let group = std::rc::Rc::new(COptionalGroup {
+        let group = std::rc::Rc::new(COptionGroup {
             name: tag.to_string(),
             discriminator: layout
                 .niche
@@ -192,7 +217,7 @@ impl Codec for CCodec {
             niche: layout.niche.as_ref().map(|(_, n)| n.clone()),
         });
         for w in wires {
-            w.kind = CWire::Optional(Box::new(COptionalWire {
+            w.kind = CWire::Optional(Box::new(COptionalWireMetadata {
                 inner: w.kind.clone(),
                 group: group.clone(),
                 remaining: None,
