@@ -672,13 +672,24 @@ The pointer must be null or a live allocation of the declared type returned by t
             .outputs(&context, &source)?
             .map(|o| o.wire)
             .collect::<Vec<_>>();
+        let mut next_option_label = 0;
         for param in &f.params {
             if let Some(slot) = &param.ty.slot {
-                header.push_str(&describe_options(slot.layout(), &inputs, false));
+                header.push_str(&describe_options(
+                    slot.layout(),
+                    &inputs,
+                    false,
+                    &mut next_option_label,
+                ));
             }
         }
         if let Some(slot) = &f.ret.slot {
-            header.push_str(&describe_options(slot.layout(), &outputs, true));
+            header.push_str(&describe_options(
+                slot.layout(),
+                &outputs,
+                true,
+                &mut next_option_label,
+            ));
         }
         let mut params = Vec::new();
         let mut cparams = Vec::new();
@@ -733,6 +744,7 @@ fn describe_options(
     >,
     wires: &[&Wire],
     output: bool,
+    next_label: &mut usize,
 ) -> String {
     fn visit(
         layout: &prebindgen_flat::WireLayout<
@@ -742,10 +754,13 @@ fn describe_options(
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
+        next_label: &mut usize,
     ) {
         for node in layout.nodes() {
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
-                if let prebindgen_declarations::GroupKind::Optional(g) = &metadata.kind {
+                if let prebindgen_declarations::CompositionGroup::Optional(g) = metadata {
+                    let label = format!("option{}", *next_label);
+                    *next_label += 1;
                     let discriminator = &names[&g.discriminator.to_string()];
                     let rule=match &g.niche {
                         None=>format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
@@ -757,15 +772,12 @@ fn describe_options(
                     } else {
                         format!("; only when {} is present", parents.join(" and "))
                     };
-                    out.push_str(&format!(
-                        "/* Option group {}: {rule}{parent}. */\n",
-                        metadata.name
-                    ));
-                    parents.push(metadata.name.clone());
-                    visit(children, names, parents, out);
+                    out.push_str(&format!("/* Option group {}: {rule}{parent}. */\n", label));
+                    parents.push(label);
+                    visit(children, names, parents, out, next_label);
                     parents.pop();
                 } else {
-                    visit(children, names, parents, out);
+                    visit(children, names, parents, out, next_label);
                 }
             }
         }
@@ -785,13 +797,37 @@ fn describe_options(
         })
         .collect();
     let mut out = String::new();
-    visit(layout, &names, &mut Vec::new(), &mut out);
+    visit(layout, &names, &mut Vec::new(), &mut out, next_label);
     out
 }
 
 #[cfg(test)]
 mod generation_tests {
     use super::*;
+
+    #[test]
+    fn option_comment_labels_are_unique_across_parameters_and_result() {
+        use prebindgen_declarations::{bind_input, bind_output, Input, Output};
+        let source = syn::parse_file("pub fn echo(a: Option<Option<char>>, b: Option<Option<char>>) -> Option<Option<char>> { a }").unwrap();
+        let mut flat =
+            Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let input = Input::Optional(Box::new(Input::Optional(Box::new(Input::Leaf))));
+        for param in ["a", "b"] {
+            bind_input(&mut flat, &CCodec, "echo", param, &input, &()).unwrap();
+        }
+        let output = Output::Optional(Box::new(Output::Optional(Box::new(Output::Leaf))));
+        bind_output(&mut flat, &CCodec, "echo", &output, &()).unwrap();
+        let header = Cbindgen::new(flat).build().unwrap().header;
+        for i in 0..6 {
+            assert_eq!(
+                header.matches(&format!("Option group option{i}:")).count(),
+                1
+            );
+        }
+        for parent in [0, 2, 4] {
+            assert!(header.contains(&format!("only when option{parent} is present")));
+        }
+    }
 
     #[test]
     fn character_niches_exhaust_at_the_carrier_limit() {
@@ -807,7 +843,7 @@ mod generation_tests {
 
     #[test]
     fn shared_compiler_suppresses_niches_in_selector_arms() {
-        use prebindgen_declarations::{bind_input, GroupKind, Input};
+        use prebindgen_declarations::{bind_input, CompositionGroup, Input};
         for (payload, arm) in [
             ("char", Input::Leaf),
             ("Option<char>", Input::Optional(Box::new(Input::Leaf))),
@@ -851,7 +887,7 @@ mod generation_tests {
             else {
                 panic!()
             };
-            let GroupKind::Optional(optional) = &group.kind else {
+            let CompositionGroup::Optional(optional) = group else {
                 panic!()
             };
             assert!(optional.niche.is_none());

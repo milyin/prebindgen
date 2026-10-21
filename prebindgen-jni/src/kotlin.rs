@@ -219,7 +219,7 @@ impl Conversion for JniOutput {
 }
 impl KotlinInputConversion for JniInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
-        prebindgen_declarations::validate_layout(self.layout())?;
+        validate_layout(self.layout())?;
         input_kotlin(self.layout().nodes(), context)
     }
 }
@@ -258,7 +258,7 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
 }
 impl KotlinOutputConversion for JniOutput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
-        prebindgen_declarations::validate_layout(self.layout())?;
+        validate_layout(self.layout())?;
         output_kotlin(self.layout().nodes(), context)
     }
 }
@@ -315,21 +315,40 @@ pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
     }
     out
 }
+// Record roots and presence bindings become Kotlin parameter names and appear in
+// substitution expressions. Their shared namespace is a JNI concern.
+pub(crate) fn validate_layout(
+    layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+) -> Result<()> {
+    prebindgen_declarations::validate_layout(layout)?;
+    fn visit(nodes: &[JniNode], names: &mut std::collections::BTreeSet<String>) -> Result<()> {
+        for node in nodes {
+            if let JniNode::Group { metadata, children } = node {
+                let name = match metadata {
+                    JniGroup::Optional(o) => o.presence.to_string(),
+                    JniGroup::Adapter(d) => d.root.clone(),
+                };
+                if !names.insert(name.clone()) {
+                    return Err(format!("duplicate Kotlin group binding `{name}`"));
+                }
+                visit(children.nodes(), names)?;
+            }
+        }
+        Ok(())
+    }
+    visit(layout.nodes(), &mut std::collections::BTreeSet::new())
+}
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
-    nodes.iter().any(|node|matches!(node,JniNode::Group{metadata,..} if matches!(metadata.kind,prebindgen_declarations::GroupKind::Optional(_))))
+    nodes.iter().any(|node|matches!(node,JniNode::Group{metadata,..} if matches!(metadata,JniGroup::Optional(_))))
 }
 pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     for node in nodes {
         let c = match node {
             JniNode::Wire(w) => input_leaves(&[w], context)?,
-            JniNode::Group { metadata, children } => match &metadata.kind {
-                prebindgen_declarations::GroupKind::Optional(o) => {
-                    optional::input_kotlin(children.nodes(), metadata, o, context)?
-                }
-                prebindgen_declarations::GroupKind::Adapter(d) => {
-                    data::input_kotlin(children.nodes(), d, context)?
-                }
+            JniNode::Group { metadata, children } => match metadata {
+                JniGroup::Optional(o) => optional::input_kotlin(children.nodes(), o, context)?,
+                JniGroup::Adapter(d) => data::input_kotlin(children.nodes(), d, context)?,
             },
         };
         out.parameters.extend(c.parameters);
@@ -379,13 +398,9 @@ pub(crate) fn output_kotlin(
         let (mut c, count) = match node {
             JniNode::Wire(w) => (output_leaves(&[w], &ctx)?, 1),
             JniNode::Group { metadata, children } => {
-                let c = match &metadata.kind {
-                    prebindgen_declarations::GroupKind::Optional(o) => {
-                        optional::output_kotlin(children.nodes(), o, &ctx)?
-                    }
-                    prebindgen_declarations::GroupKind::Adapter(d) => {
-                        data::output_kotlin(children.nodes(), d, &ctx)?
-                    }
+                let c = match metadata {
+                    JniGroup::Optional(o) => optional::output_kotlin(children.nodes(), o, &ctx)?,
+                    JniGroup::Adapter(d) => data::output_kotlin(children.nodes(), d, &ctx)?,
                 };
                 (c, children.len())
             }

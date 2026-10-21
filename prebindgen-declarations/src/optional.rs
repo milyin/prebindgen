@@ -153,11 +153,9 @@ fn mark<C: Codec>(
     if let Some((i, _)) = &layout.niche {
         codec.set_niche(&mut tree[*i].kind, remaining);
     }
-    tree.enclose(CompositionGroup {
-        name: tag.to_string(),
-        kind: GroupKind::Optional(OptionalGroup {
-            discriminator,
-            niche: layout.niche.map(|(_, n)| n),
-        }),
-    });
+    tree.enclose(CompositionGroup::Optional(OptionalGroup {
+        presence: tag,
+        discriminator,
+        niche: layout.niche.map(|(_, n)| n),
+    }));
 }

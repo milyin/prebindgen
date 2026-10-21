@@ -88,11 +88,10 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
 }
 pub(crate) fn input_kotlin(
     children: &[kotlin::JniNode],
-    group: &JniGroup,
     o: &prebindgen_declarations::OptionalGroup<JniNiche>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
-    let root = &group.name;
+    let root = &o.presence.to_string();
     let nodes = &children[usize::from(o.niche.is_none())..];
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();

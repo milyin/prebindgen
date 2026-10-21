@@ -8,15 +8,7 @@ use prebindgen_flat::WireNode;
 /// the information needed to interpret them. For example, an optional integer
 /// has a flag leaf and an integer leaf, and its group names the flag to inspect.
 #[derive(Clone, Debug)]
-pub struct CompositionGroup<N, G> {
-    /// Generated name for this value, unique within the slot.
-    pub name: String,
-    /// An optional value or a value described by the language adapter.
-    pub kind: GroupKind<N, G>,
-}
-/// Interpretation of a group's child values.
-#[derive(Clone, Debug)]
-pub enum GroupKind<N, G> {
+pub enum CompositionGroup<N, G> {
     /// Describes how to distinguish `None` from `Some`.
     Optional(OptionalGroup<N>),
     /// Adapter information, such as the Kotlin class constructed from fields.
@@ -25,13 +17,17 @@ pub enum GroupKind<N, G> {
 /// How an optional node decides whether its child value is present.
 #[derive(Clone, Debug)]
 pub struct OptionalGroup<N> {
+    /// Normalized 0/1 presence binding used by the prepared payload conditions.
+    /// Unique within the slot. With a separate flag it equals `discriminator`;
+    /// with a niche it may be a computed local rather than a physical wire.
+    pub presence: syn::Ident,
     /// Name of a descendant wire to inspect: a flag or a payload wire with a niche.
     pub discriminator: syn::Ident,
     /// Reserved representation for `None`, or `None` when a separate 0/1 flag is used.
     /// Remaining available niches belong to the leaf's wire kind instead.
     pub niche: Option<N>,
 }
-/// Check shared group references as well as the tree's unique physical wire names.
+/// Check optional discriminator references as well as the tree's unique physical wire names.
 /// Empty adapter groups are allowed; an optional group needs a discriminator wire.
 pub fn validate_layout<W: prebindgen_flat::WireKind, N, G>(
     layout: &WireLayout<W, CompositionGroup<N, G>>,
@@ -39,14 +35,17 @@ pub fn validate_layout<W: prebindgen_flat::WireKind, N, G>(
     layout.validate()?;
     fn visit<W: prebindgen_flat::WireKind, N, G>(
         layout: &WireLayout<W, CompositionGroup<N, G>>,
-        names: &mut std::collections::BTreeSet<String>,
+        bindings: &mut std::collections::BTreeSet<String>,
     ) -> Result<()> {
         for node in layout.nodes() {
             if let WireNode::Group { metadata, children } = node {
-                if !names.insert(metadata.name.clone()) {
-                    return Err(format!("duplicate group name `{}`", metadata.name));
-                }
-                if let GroupKind::Optional(o) = &metadata.kind {
+                if let CompositionGroup::Optional(o) = metadata {
+                    if !bindings.insert(o.presence.to_string()) {
+                        return Err(format!(
+                            "duplicate optional presence binding `{}`",
+                            o.presence
+                        ));
+                    }
                     if !children.iter().any(|w| w.name == o.discriminator) {
                         return Err("optional discriminator outside group".into());
                     }
@@ -56,7 +55,7 @@ pub fn validate_layout<W: prebindgen_flat::WireKind, N, G>(
                         return Err("optional flag must be the first child wire".into());
                     }
                 }
-                visit(children, names)?;
+                visit(children, bindings)?;
             }
         }
         Ok(())
@@ -74,13 +73,11 @@ mod tests {
         }
     }
     fn optional(name: &str, discriminator: &str, niche: Option<()>) -> CompositionGroup<(), ()> {
-        CompositionGroup {
-            name: name.into(),
-            kind: GroupKind::Optional(OptionalGroup {
-                discriminator: syn::parse_str(discriminator).unwrap(),
-                niche,
-            }),
-        }
+        CompositionGroup::Optional(OptionalGroup {
+            presence: syn::parse_str(name).unwrap(),
+            discriminator: syn::parse_str(discriminator).unwrap(),
+            niche,
+        })
     }
     #[test]
     fn nested_options_share_one_leaf_but_keep_distinct_group_rules() {
@@ -89,18 +86,18 @@ mod tests {
         layout.enclose(optional("outer", "value", Some(())));
         validate_layout(&layout).unwrap();
         assert_eq!(layout.len(), 1);
+        assert!(layout
+            .iter()
+            .all(|w| w.name != "inner" && w.name != "outer"));
         layout.enclose(optional("wrong", "missing", Some(())));
         assert!(validate_layout(&layout)
             .unwrap_err()
             .contains("outside group"));
     }
     #[test]
-    fn flags_are_direct_children_and_group_names_are_unique() {
+    fn flags_are_direct_children_and_adapter_groups_need_no_identity() {
         let mut layout: WireLayout<_, _> = vec![wire("flag")].into();
-        layout.enclose(CompositionGroup {
-            name: "record".into(),
-            kind: GroupKind::Adapter(()),
-        });
+        layout.enclose(CompositionGroup::Adapter(()));
         layout.enclose(optional("option", "flag", None));
         assert!(validate_layout(&layout)
             .unwrap_err()
@@ -111,12 +108,10 @@ mod tests {
         layout.enclose(optional("option", "flag", Some(())));
         assert!(validate_layout(&layout)
             .unwrap_err()
-            .contains("duplicate group"));
+            .contains("duplicate optional presence"));
         let mut empty: WireLayout<syn::Type, CompositionGroup<(), ()>> = WireLayout::default();
-        empty.enclose(CompositionGroup {
-            name: "unit".into(),
-            kind: GroupKind::Adapter(()),
-        });
+        empty.enclose(CompositionGroup::Adapter(()));
+        empty.enclose(CompositionGroup::Adapter(()));
         validate_layout(&empty).unwrap();
         empty.enclose(optional("bad", "missing", Some(())));
         assert!(validate_layout(&empty).is_err());

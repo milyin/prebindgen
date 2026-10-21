@@ -458,14 +458,14 @@ composition use this protocol.
 Every `Wire` describes one complete FFI value. Each conversion owns a
 `WireLayout<W, G>` tree: leaves contain `Wire<W>`, and parent nodes contain `G`
 metadata plus their children. The tree is the source of both wire order and
-grouping. For example:
+grouping. For example, a JNI optional record can use:
 
 ```text
-Optional<Point>       metadata: inspect the "present" flag
-├── present: int32_t  wire position 0
+Option<Point>       metadata: inspect the "present" flag
+├── present: jint  wire position 0
 └── Point            metadata: construct a Kotlin Point from its fields
-    ├── x: double    wire position 1
-    └── y: double    wire position 2
+    ├── x: jdouble    wire position 1
+    └── y: jdouble    wire position 2
 ```
 
 `wires()` yields the three leaf wires, including their `W` information.
@@ -475,17 +475,21 @@ Each physical wire appears once. Multiple ancestors may inspect that same leaf:
 nested optional chars, for example, use different absent values on one wire.
 
 The shared declaration compiler puts `CompositionGroup<Niche, Group>` on option
-and adapter-defined parent nodes. `OptionalGroup` names the descendant wire that
+and adapter-defined parent nodes. Its variants are `Optional` and `Adapter`;
+adapter nodes need no generic names or identities. `OptionalGroup` names the descendant wire that
 indicates presence and records the niche already used by that option (or the
-separate flag). The leaf's `W` records which niche remains available for further
-wrapping. After C uses `0x110000` for `None` in `Option<char>`, that leaf can still
+separate flag). It also stores the normalized presence binding used by payload
+conditions, which can be a computed local rather than a physical wire. The leaf's
+`W` records which niche remains available for further wrapping. After C uses
+`0x110000` for `None` in `Option<char>`, that leaf can still
 offer `0x110001` to an enclosing option. `Codec::set_niche` updates this state;
 `Codec::niche` reads it. `None` means no niche is available.
 
 JNI adds record groups to construct Kotlin data classes. C exposes record fields
 without a record group and reads optional nodes to document presence rules.
-Shared helpers preserve nested groups when combining plans and check wire and
-group names plus optional discriminator references before installing a slot.
+Shared helpers preserve nested groups when combining plans and check wire names,
+optional presence bindings and
+discriminator references before installing a slot.
 
 Custom converters implement `Conversion::layout` and declare `Conversion::Group`;
 use `()` when no grouping information is needed. Custom codecs also declare their

@@ -10,7 +10,7 @@
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
 mod metadata;
-pub use metadata::{validate_layout, CompositionGroup, GroupKind, OptionalGroup};
+pub use metadata::{validate_layout, CompositionGroup, OptionalGroup};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire, WireLayout};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -275,7 +275,7 @@ pub trait Codec {
     /// The shared compiler never interprets this metadata.
     type Niche: Clone;
     /// Adapter-owned group metadata (for example a destination record shape).
-    /// Stored in `GroupKind::Adapter`; the final conversion uses the complete
+    /// Stored in `CompositionGroup::Adapter`; the final conversion uses the complete
     /// `CompositionGroup<Self::Niche, Self::Group>` as its `Conversion::Group`.
     type Group: Clone;
 

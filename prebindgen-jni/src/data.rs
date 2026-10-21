@@ -437,14 +437,11 @@ impl RecordShape {
         for wire in layout.iter_mut() {
             wire.kind.spare_niche = None;
         }
-        layout.enclose(JniGroup {
-            name: root.clone(),
-            kind: prebindgen_declarations::GroupKind::Adapter(DataGroup {
-                root,
-                record: self.clone(),
-                condition,
-            }),
-        });
+        layout.enclose(JniGroup::Adapter(DataGroup {
+            root,
+            record: self.clone(),
+            condition,
+        }));
         Ok(())
     }
     pub(crate) fn construct(&self, values: &mut impl Iterator<Item = String>) -> String {
@@ -734,4 +731,49 @@ pub(crate) fn output_kotlin(
     c.delivered = vec![d.record.construct(&mut c.delivered.into_iter())];
     c.result_types = vec![d.record.fqn.clone()];
     Ok(c)
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+    use prebindgen_flat::{Wire, WireLayout, WireNode};
+
+    fn record(root: &str) -> WireNode<JniWire, JniGroup> {
+        WireNode::Group {
+            metadata: JniGroup::Adapter(DataGroup {
+                root: root.into(),
+                record: Rc::new(RecordShape {
+                    ty: syn::parse_quote!(Empty),
+                    fqn: "example.Empty".into(),
+                    fields: vec![],
+                }),
+                condition: "true".into(),
+            }),
+            children: WireLayout::default(),
+        }
+    }
+    #[test]
+    fn kotlin_record_and_presence_bindings_share_a_namespace() {
+        let mut optional = WireLayout::from(vec![Wire {
+            name: syn::parse_quote!(flag),
+            kind: JniWire::from(JniKind::Selector),
+        }]);
+        optional.enclose(JniGroup::Optional(prebindgen_declarations::OptionalGroup {
+            presence: syn::parse_quote!(flag),
+            discriminator: syn::parse_quote!(flag),
+            niche: None,
+        }));
+        optional.extend(WireLayout::from_nodes(vec![record("value")]));
+        kotlin::validate_layout(&optional).unwrap();
+        optional.extend(WireLayout::from_nodes(vec![record("flag")]));
+        assert!(kotlin::validate_layout(&optional)
+            .unwrap_err()
+            .contains("duplicate Kotlin group binding `flag`"));
+        let duplicates = WireLayout::from_nodes(vec![record("value"), record("value")]);
+        assert!(kotlin::validate_layout(&duplicates)
+            .unwrap_err()
+            .contains("duplicate Kotlin group binding `value`"));
+        // These adapter-owned names impose no constraint on the shared compiler.
+        prebindgen_declarations::validate_layout(&duplicates).unwrap();
+    }
 }

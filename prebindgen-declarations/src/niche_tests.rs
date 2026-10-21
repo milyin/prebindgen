@@ -439,11 +439,11 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     let prebindgen_flat::WireNode::Group { metadata, children } = &plan.layout.nodes()[0] else {
         panic!()
     };
-    assert_eq!(metadata.name, "tag3");
+    assert!(matches!(metadata, CompositionGroup::Optional(o) if o.presence == "tag3"));
     let prebindgen_flat::WireNode::Group { metadata, .. } = &children.nodes()[1] else {
         panic!()
     };
-    assert_eq!(metadata.name, "tag2");
+    assert!(matches!(metadata, CompositionGroup::Optional(o) if o.presence == "tag2"));
     let mut independent = output(&domain, 0, quote!(payload));
     for w in independent.layout.iter_mut() {
         DomainCodec.set_niche(&mut w.kind, None);
