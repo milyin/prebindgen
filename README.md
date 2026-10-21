@@ -108,6 +108,21 @@ configuration. A dedicated introductory JniGen guide is tracked in [#57].
 
 [#57]: https://github.com/milyin/prebindgen/issues/57
 
+#### Android class loading (0.5.1 bugfix)
+
+Version 0.5.1 fixes generated struct encoding and callback interface lookup
+on native worker threads, where Android's default JNI class lookup cannot
+see application classes. Regenerate the bindings with `prebindgen-jni` 0.5.1
+and use `prebindgen-jni-runtime` 0.5.1 or later in the binding library.
+
+For Android, call `prebindgen_jni_runtime::init_class_loader(env, anchor_class_fqn)`
+from `JNI_OnLoad`, passing the mutable JNI environment and the slash-separated
+name of an application class loaded by the binding library's class loader.
+Handle initialization errors before starting native callbacks. The first
+recorded loader is reused for subsequent class lookups. See the
+[`init_class_loader` API documentation](https://docs.rs/prebindgen-jni-runtime/0.5.1/prebindgen_jni_runtime/fn.init_class_loader.html)
+for details.
+
 ### 1. In the Common FFI Library Crate (e.g., `example-flat`)
 
 Mark the types and functions that form your FFI surface with the `prebindgen` macro and export the prebindgen output directory path. The source crate stays **plain idiomatic Rust** — opaque handles are ordinary types returned by value, fallible calls return `Result<T, E>`; the language adapter does the C-ABI lowering, so there is no `#[repr(C)]` here.

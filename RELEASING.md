@@ -92,10 +92,12 @@ while still running the complete release from CI.
    as CI does — a stable-only run misses MSRV lints.
 3. Merge the release-preparation PR into `main` only after CI passes. The
    workflow refuses to dispatch from any branch but `main`.
-4. **Rehearse the whole order first.** For each crate in the order above, open
+4. Optionally rehearse each crate immediately before publishing it: open
    **Actions → Publish to crates.io → Run workflow**, select `main`, choose the
    crate, enter `0.5.0`, and enable **dry_run**. This runs every check and
    `cargo publish --dry-run` without publishing, tagging, or releasing.
+   A dry run still requires that crate's dependency versions on crates.io;
+   publish its predecessors before rehearsing a dependent crate.
 5. Publish for real, one crate at a time in the same order: same dispatch with
    **dry_run** unchecked.
 6. Approve the `crates-io` environment deployment if approval is required.
@@ -149,10 +151,12 @@ authentication on the next dispatch.
    - update the README, `docs/`, and API documentation as needed;
    - run the local release checks shown above.
 
-2. Merge the PR into `main` after CI passes.
+2. Merge the PR into `main` after CI passes. Keep `main` at that commit until
+   all eight publication runs finish so the release uses one source revision.
 3. Run **Actions → Publish to crates.io** from `main` once per crate, in the
    publish order above, with the exact manifest version and without the `v`
-   prefix. Enable **dry_run** first if you want a rehearsal.
+   prefix. Enable **dry_run** first if you want a rehearsal, after that
+   crate's dependency versions are published on crates.io.
 4. Confirm the crates.io version, `<crate>-v<version>` tag, GitHub release, and
    docs.rs documentation for each.
 

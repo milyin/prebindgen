@@ -19,7 +19,8 @@ name: Publish to crates.io
 #
 # `dry_run` runs every check and `cargo publish --dry-run`, then stops before
 # the registry is touched. It creates no tag and no release. Use it to rehearse
-# the whole order before publishing anything for real.
+# each crate after its dependency versions are published on crates.io; a dry
+# run still needs those registry dependencies to package and verify the crate.
 
 on:
   workflow_dispatch:
