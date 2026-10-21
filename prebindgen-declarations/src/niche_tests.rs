@@ -1,7 +1,7 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), CompositionGroup<Sentinel, ()>>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), CompositionGroup<Sentinel, ()>>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), String>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), String>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -30,7 +30,21 @@ impl WireKind for Domain {
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
-    type Group = ();
+    type Group = String;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<Sentinel>,
+    ) -> String {
+        format!("optional:{presence}:{discriminator}:{niche:?}")
+    }
+    fn field_group(&self, name: syn::Ident) -> String {
+        format!("member:{name}")
+    }
+    fn fields_group(&self) -> String {
+        "record".into()
+    }
     type Extra = ();
     type Context = ();
     type Wire = Domain;
@@ -435,15 +449,15 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     .unwrap();
     assert_eq!(plan.layout.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
     assert_eq!(plan.layout[0].name, "tag3");
-    validate_layout(&plan.layout).unwrap();
+    plan.layout.validate().unwrap();
     let prebindgen_flat::WireNode::Group { metadata, children } = &plan.layout.nodes()[0] else {
         panic!()
     };
-    assert!(matches!(&metadata.structure, GroupStructure::Optional(o) if o.presence == "tag3"));
+    assert!(metadata.starts_with("optional:tag3:"));
     let prebindgen_flat::WireNode::Group { metadata, .. } = &children.nodes()[1] else {
         panic!()
     };
-    assert!(matches!(&metadata.structure, GroupStructure::Optional(o) if o.presence == "tag2"));
+    assert!(metadata.starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
     for w in independent.layout.iter_mut() {
         DomainCodec.set_niche(&mut w.kind, None);

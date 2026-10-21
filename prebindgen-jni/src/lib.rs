@@ -9,9 +9,10 @@ pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
 mod optional;
 pub use optional::JniNiche;
+mod group;
 mod scalar;
-type JniGroup = prebindgen_declarations::CompositionGroup<JniNiche, data::DataGroup>;
 pub use data::{ClassDecl, DataClassDecl, DataGroup};
+pub use group::{JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::{ConversionExt, Primitive};
@@ -454,13 +455,32 @@ impl Class {
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
-    type Group = data::DataGroup;
+    type Group = JniGroup;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<JniNiche>,
+    ) -> JniGroup {
+        JniGroup::Optional(JniOptional {
+            presence,
+            discriminator,
+            niche,
+        })
+    }
+    fn field_group(&self, name: syn::Ident) -> JniGroup {
+        JniGroup::Field(name)
+    }
+    fn fields_group(&self) -> JniGroup {
+        JniGroup::Fields(None)
+    }
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
+        group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let ownership = prebindgen_conversions::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
@@ -474,6 +494,7 @@ impl Codec for JniCodec {
         Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+        group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let count = plan.layout.len();
         let mut encode = TokenStream::new();

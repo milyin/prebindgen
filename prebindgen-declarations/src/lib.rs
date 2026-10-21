@@ -9,8 +9,6 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
-mod metadata;
-pub use metadata::{validate_layout, CompositionGroup, GroupStructure, OptionalGroup};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire, WireLayout};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -28,17 +26,10 @@ mod component;
 pub use component::{ComponentPath, ComponentSegment};
 
 /// Input preparation plan, including the codec's composition metadata.
-pub type CodecInput<C> = InputPlan<
-    <C as Codec>::Wire,
-    <C as Codec>::Context,
-    CompositionGroup<<C as Codec>::Niche, <C as Codec>::Group>,
->;
+pub type CodecInput<C> = InputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Group>;
 /// Output preparation plan, including the codec's composition metadata.
-pub type CodecOutput<C> = OutputPlan<
-    <C as Codec>::Wire,
-    <C as Codec>::Context,
-    CompositionGroup<<C as Codec>::Niche, <C as Codec>::Group>,
->;
+pub type CodecOutput<C> =
+    OutputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Group>;
 
 /// A recipe for converting boundary inputs into one source argument.
 ///
@@ -224,6 +215,9 @@ impl Output {
 ///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
+///     fn optional_group(&self, _: Ident, _: Ident, _: Option<()>) {}
+///     fn field_group(&self, _: Ident) {}
+///     fn fields_group(&self) {}
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
 ///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
 ///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
@@ -274,10 +268,26 @@ pub trait Codec {
     /// Adapter-owned description of an absent wire representation. Use `()` if unused.
     /// The shared compiler never interprets this metadata.
     type Niche: Clone;
-    /// Adapter annotations attached to shared structural groups, for example a
-    /// destination class name on a field collection. The final conversion uses the complete
-    /// `CompositionGroup<Self::Niche, Self::Group>` as its `Conversion::Group`.
+    /// Complete adapter-owned metadata for a parent node in the wire tree.
+    /// The shared compiler creates it through the group hooks below and never
+    /// interprets it. Use `()` when no group information is needed.
     type Group: Clone;
+    /// Describe an optional value in the adapter's own metadata format.
+    /// `presence` is the normalized 0/1 binding used by payload conditions.
+    /// `discriminator` names a descendant wire; `niche` is its reserved absent
+    /// representation, or `None` when a separate flag is the first child.
+    /// With a flag, `presence` and `discriminator` name that same wire.
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<Self::Niche>,
+    ) -> Self::Group;
+    /// Describe one named source field, whose subtree may contain any number of wires.
+    fn field_group(&self, name: syn::Ident) -> Self::Group;
+    /// Describe a record or unit value's ordered collection of field subtrees.
+    /// The shared helpers check field-name uniqueness before calling this hook.
+    fn fields_group(&self) -> Self::Group;
 
     /// Input data borrowed while building one occurrence's conversion; use `()` if unused.
     /// The same value is passed through nested conversions. It is not stored in Flat;
@@ -464,8 +474,7 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W, C = (), N = (), G = ()> =
-    Flat<InputPlan<W, C, CompositionGroup<N, G>>, OutputPlan<W, C, CompositionGroup<N, G>>>;
+pub type Bindings<W, C = (), G = ()> = Flat<InputPlan<W, C, G>, OutputPlan<W, C, G>>;
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -516,7 +525,7 @@ pub fn bind_input<C: Codec>(
         &Condition::default(),
     )?;
     codec.finish_input(&mut conversion, extra)?;
-    validate_layout(&conversion.layout)?;
+    conversion.layout.validate()?;
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
     Ok(())
 }
@@ -560,7 +569,7 @@ pub fn bind_output<C: Codec>(
     )?;
     codec.finish_output(&mut conversion, extra)?;
     conversion.validate_value_count()?;
-    validate_layout(&conversion.layout)?;
+    conversion.layout.validate()?;
     flat.function_mut(function)?.ret.slot = Some(conversion.into());
     Ok(())
 }
@@ -586,11 +595,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         self.next.set(next + 1);
         n
     }
-    fn prefix(
-        &self,
-        wires: &mut WireLayout<C::Wire, CompositionGroup<C::Niche, C::Group>>,
-        segment: ComponentSegment,
-    ) {
+    fn prefix(&self, wires: &mut WireLayout<C::Wire, C::Group>, segment: ComponentSegment) {
         for wire in wires {
             self.codec.prefix_component(&mut wire.kind, segment.clone());
         }
@@ -623,7 +628,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
-                    wires.enclose(CompositionGroup::new(GroupStructure::Fields));
+                    wires.enclose(self.codec.fields_group());
                     return Ok(InputPlan {
                         context: Default::default(),
                         acknowledgement,
@@ -786,8 +791,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
                 if type_key(ty) == "()" && children.is_empty() {
-                    out.layout
-                        .enclose(CompositionGroup::new(GroupStructure::Fields));
+                    out.layout.enclose(self.codec.fields_group());
                     return Ok(out);
                 }
                 let r = self.flat.record(ty)?;

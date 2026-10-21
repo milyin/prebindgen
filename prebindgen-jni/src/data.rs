@@ -441,17 +441,14 @@ impl RecordShape {
         let [prebindgen_flat::WireNode::Group { metadata, .. }] = nodes.as_mut_slice() else {
             return Err("record compiler must produce one field collection".into());
         };
-        if !matches!(
-            metadata.structure,
-            prebindgen_declarations::GroupStructure::Fields
-        ) {
+        if !matches!(metadata, JniGroup::Fields(None)) {
             return Err("record annotation requires a field collection".into());
         }
-        metadata.annotation = Some(DataGroup {
+        *metadata = JniGroup::Fields(Some(DataGroup {
             root,
             class_name: self.fqn.clone(),
             condition,
-        });
+        }));
         *layout = prebindgen_flat::WireLayout::from_nodes(nodes);
         Ok(())
     }
@@ -459,7 +456,21 @@ impl RecordShape {
 
 impl Codec for DataCodec {
     type Niche = crate::optional::JniNiche;
-    type Group = DataGroup;
+    type Group = JniGroup;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<JniNiche>,
+    ) -> JniGroup {
+        JniCodec.optional_group(presence, discriminator, niche)
+    }
+    fn field_group(&self, name: syn::Ident) -> JniGroup {
+        JniCodec.field_group(name)
+    }
+    fn fields_group(&self) -> JniGroup {
+        JniCodec.fields_group()
+    }
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
@@ -672,10 +683,10 @@ fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
         .iter()
         .map(|node| match node {
-            kotlin::JniNode::Group { metadata, children } => match &metadata.structure {
-                prebindgen_declarations::GroupStructure::Field(name) => Ok((name, children)),
-                _ => Err("Kotlin record requires named field children".into()),
-            },
+            kotlin::JniNode::Group {
+                metadata: JniGroup::Field(name),
+                children,
+            } => Ok((name, children)),
             _ => Err("Kotlin record requires named field children".into()),
         })
         .collect()
@@ -761,13 +772,11 @@ mod group_tests {
 
     fn record(root: &str) -> WireNode<JniWire, JniGroup> {
         WireNode::Group {
-            metadata: JniGroup::new(prebindgen_declarations::GroupStructure::Fields).annotated(
-                DataGroup {
-                    root: root.into(),
-                    class_name: "example.Empty".into(),
-                    condition: "true".into(),
-                },
-            ),
+            metadata: JniGroup::Fields(Some(DataGroup {
+                root: root.into(),
+                class_name: "example.Empty".into(),
+                condition: "true".into(),
+            })),
             children: WireLayout::default(),
         }
     }
@@ -777,27 +786,23 @@ mod group_tests {
             name: syn::parse_quote!(flag),
             kind: JniWire::from(JniKind::Selector),
         }]);
-        optional.enclose(JniGroup::new(
-            prebindgen_declarations::GroupStructure::Optional(
-                prebindgen_declarations::OptionalGroup {
-                    presence: syn::parse_quote!(flag),
-                    discriminator: syn::parse_quote!(flag),
-                    niche: None,
-                },
-            ),
-        ));
+        optional.enclose(JniGroup::Optional(JniOptional {
+            presence: syn::parse_quote!(flag),
+            discriminator: syn::parse_quote!(flag),
+            niche: None,
+        }));
         optional.extend(WireLayout::from_nodes(vec![record("value")]));
-        kotlin::validate_layout(&optional).unwrap();
+        crate::group::validate_layout(&optional).unwrap();
         optional.extend(WireLayout::from_nodes(vec![record("flag")]));
-        assert!(kotlin::validate_layout(&optional)
+        assert!(crate::group::validate_layout(&optional)
             .unwrap_err()
             .contains("duplicate Kotlin group binding `flag`"));
         let duplicates = WireLayout::from_nodes(vec![record("value"), record("value")]);
-        assert!(kotlin::validate_layout(&duplicates)
+        assert!(crate::group::validate_layout(&duplicates)
             .unwrap_err()
             .contains("duplicate Kotlin group binding `value`"));
         // These adapter-owned names impose no constraint on the shared compiler.
-        prebindgen_declarations::validate_layout(&duplicates).unwrap();
+        duplicates.validate().unwrap();
     }
     #[test]
     fn kotlin_record_emission_reads_names_from_shared_fields() {
@@ -805,17 +810,13 @@ mod group_tests {
             name: syn::parse_quote!(incoming),
             kind: JniWire::from(JniKind::Scalar(Primitive::I32)),
         }]);
-        field.enclose(JniGroup::new(
-            prebindgen_declarations::GroupStructure::Field(syn::parse_quote!(r#type)),
-        ));
-        field.enclose(
-            JniGroup::new(prebindgen_declarations::GroupStructure::Fields).annotated(DataGroup {
-                root: "point".into(),
-                class_name: "example.Point".into(),
-                condition: "true".into(),
-            }),
-        );
-        kotlin::validate_layout(&field).unwrap();
+        field.enclose(JniGroup::Field(syn::parse_quote!(r#type)));
+        field.enclose(JniGroup::Fields(Some(DataGroup {
+            root: "point".into(),
+            class_name: "example.Point".into(),
+            condition: "true".into(),
+        })));
+        crate::group::validate_layout(&field).unwrap();
         let classes = BTreeMap::new();
         let context = KotlinContext {
             classes: &classes,

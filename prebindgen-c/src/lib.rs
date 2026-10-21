@@ -55,20 +55,15 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
         }
     }
 }
+mod group;
+use group::validate_layout;
+pub use group::{CGroup, COptional};
 use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<
-    W,
-    CContext,
-    prebindgen_declarations::CompositionGroup<CNiche, ()>,
->;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<
-    W,
-    CContext,
-    prebindgen_declarations::CompositionGroup<CNiche, ()>,
->;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, CGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, CGroup>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -99,13 +94,35 @@ use quote::{format_ident, quote};
 pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
-    type Group = ();
+    type Group = CGroup;
+    fn optional_group(
+        &self,
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<CNiche>,
+    ) -> CGroup {
+        CGroup::Optional(COptional {
+            presence,
+            discriminator,
+            niche,
+        })
+    }
+    fn field_group(&self, name: syn::Ident) -> CGroup {
+        CGroup::Field(name)
+    }
+    fn fields_group(&self) -> CGroup {
+        CGroup::Fields
+    }
     type Extra = ();
     type Wire = CWire;
     type Context = CContext;
     type Input = InputPlan<CWire>;
     type Output = OutputPlan<CWire>;
+    fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
+        validate_layout(&plan.layout)
+    }
     fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
+        validate_layout(&plan.layout)?;
         let mut values: Vec<_> = plan
             .values
             .iter()
@@ -565,12 +582,12 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
 fn generate<
     I: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
-        Group = prebindgen_declarations::CompositionGroup<CNiche, ()>,
+        Group = CGroup,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
     O: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
-        Group = prebindgen_declarations::CompositionGroup<CNiche, ()>,
+        Group = CGroup,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
         WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
     >,
@@ -739,50 +756,15 @@ The output pointer must be writable. Active input buffers must be readable for t
     })
 }
 
-fn validate_layout(
-    layout: &prebindgen_flat::WireLayout<
-        CWire,
-        prebindgen_declarations::CompositionGroup<CNiche, ()>,
-    >,
-) -> Result<()> {
-    prebindgen_declarations::validate_layout(layout)?;
-    fn visit(
-        layout: &prebindgen_flat::WireLayout<
-            CWire,
-            prebindgen_declarations::CompositionGroup<CNiche, ()>,
-        >,
-    ) -> Result<()> {
-        for node in layout.nodes() {
-            if let prebindgen_flat::WireNode::Group { metadata, children } = node {
-                if matches!(
-                    metadata.structure,
-                    prebindgen_declarations::GroupStructure::Custom
-                ) {
-                    return Err("unsupported custom C structure".into());
-                }
-                visit(children)?;
-            }
-        }
-        Ok(())
-    }
-    visit(layout)
-}
-
 fn describe_groups(
-    layout: &prebindgen_flat::WireLayout<
-        CWire,
-        prebindgen_declarations::CompositionGroup<CNiche, ()>,
-    >,
+    layout: &prebindgen_flat::WireLayout<CWire, CGroup>,
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
     root: &str,
 ) -> String {
     fn visit(
-        layout: &prebindgen_flat::WireLayout<
-            CWire,
-            prebindgen_declarations::CompositionGroup<CNiche, ()>,
-        >,
+        layout: &prebindgen_flat::WireLayout<CWire, CGroup>,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
@@ -791,7 +773,7 @@ fn describe_groups(
     ) {
         for node in layout.nodes() {
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
-                if let prebindgen_declarations::GroupStructure::Optional(g) = &metadata.structure {
+                if let CGroup::Optional(g) = metadata {
                     let label = format!("option{}", *next_label);
                     *next_label += 1;
                     let discriminator = &names[&g.discriminator.to_string()];
@@ -809,9 +791,7 @@ fn describe_groups(
                     parents.push(label);
                     visit(children, names, parents, out, next_label, field_path);
                     parents.pop();
-                } else if let prebindgen_declarations::GroupStructure::Field(name) =
-                    &metadata.structure
-                {
+                } else if let CGroup::Field(name) = metadata {
                     field_path.push(name.to_string().trim_start_matches("r#").into());
                     let values = children
                         .iter()
@@ -909,20 +889,6 @@ mod generation_tests {
     }
 
     #[test]
-    fn rejects_custom_structures_without_c_semantics() {
-        let mut layout = prebindgen_flat::WireLayout::default();
-        layout.enclose(
-            prebindgen_declarations::CompositionGroup::new(
-                prebindgen_declarations::GroupStructure::Custom,
-            )
-            .annotated(()),
-        );
-        assert!(validate_layout(&layout)
-            .unwrap_err()
-            .contains("unsupported custom C structure"));
-    }
-
-    #[test]
     fn character_niches_exhaust_at_the_carrier_limit() {
         let wire: CWire = CCarrier::Scalar(Primitive::Char).into();
         assert!(CCodec
@@ -936,7 +902,7 @@ mod generation_tests {
 
     #[test]
     fn shared_compiler_suppresses_niches_in_selector_arms() {
-        use prebindgen_declarations::{bind_input, GroupStructure, Input};
+        use prebindgen_declarations::{bind_input, Input};
         for (payload, arm) in [
             ("char", Input::Leaf),
             ("Option<char>", Input::Optional(Box::new(Input::Leaf))),
@@ -980,7 +946,7 @@ mod generation_tests {
             else {
                 panic!()
             };
-            let GroupStructure::Optional(optional) = &group.structure else {
+            let CGroup::Optional(optional) = group else {
                 panic!()
             };
             assert!(optional.niche.is_none());
@@ -1008,14 +974,11 @@ mod generation_tests {
     fn emits_custom_slot_code_without_building_a_plan() {
         struct CountedOutput(
             std::rc::Rc<std::cell::Cell<usize>>,
-            prebindgen_flat::WireLayout<
-                CWire,
-                prebindgen_declarations::CompositionGroup<CNiche, ()>,
-            >,
+            prebindgen_flat::WireLayout<CWire, CGroup>,
         );
         impl prebindgen_flat::Conversion for CountedOutput {
             type Wire = CWire;
-            type Group = prebindgen_declarations::CompositionGroup<CNiche, ()>;
+            type Group = CGroup;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
             type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>;
             fn layout(&self) -> &prebindgen_flat::WireLayout<Self::Wire, Self::Group> {

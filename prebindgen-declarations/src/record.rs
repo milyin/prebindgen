@@ -2,7 +2,7 @@
 use super::*;
 
 /// Construct a named Rust record from field conversion plans in declaration order.
-/// The layout has a shared `Fields` parent and one named `Field` child per field,
+/// Group hooks describe the collection and each named field in adapter metadata,
 /// preserving empty fields and fields represented by multiple physical wires.
 ///
 /// Adapters can use this when a single language-level leaf represents a record.
@@ -29,8 +29,10 @@ pub fn record_input<C: Codec>(
         argument: quote!(#var),
     };
     let mut values = Vec::new();
+    let mut names = std::collections::BTreeSet::new();
     for field in fields {
         let (name, mut child) = field?;
+        check_field(&mut names, &name)?;
         for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
@@ -39,22 +41,19 @@ pub fn record_input<C: Codec>(
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        child
-            .layout
-            .enclose(CompositionGroup::new(GroupStructure::Field(name.clone())));
+        child.layout.enclose(codec.field_group(name.clone()));
         out.layout.extend(child.layout);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-    out.layout
-        .enclose(CompositionGroup::new(GroupStructure::Fields));
+    out.layout.enclose(codec.fields_group());
     Ok(out)
 }
 
 /// Observe a named Rust record through shared field references, evaluating it once.
-/// The layout retains the same `Fields`/`Field` structure as [`record_input`].
+/// Group hooks preserve field boundaries as in [`record_input`].
 ///
 /// The caller validates the field count and types against the source record.
 /// `fields` supplies source field names in declaration order. `convert` receives
@@ -84,23 +83,22 @@ pub fn record_output<C: Codec>(
         statements: binding,
         values: Vec::new(),
     };
+    let mut names = std::collections::BTreeSet::new();
     for (index, name) in fields.enumerate() {
+        check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
         for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        child
-            .layout
-            .enclose(CompositionGroup::new(GroupStructure::Field(name)));
+        child.layout.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    out.layout
-        .enclose(CompositionGroup::new(GroupStructure::Fields));
+    out.layout.enclose(codec.fields_group());
     Ok(out)
 }
 
 /// Decompose an owned record into field conversions in declaration order.
-/// The layout retains the same `Fields`/`Field` structure as [`record_input`].
+/// Group hooks preserve field boundaries as in [`record_input`].
 ///
 /// Unlike [`record_output`], each child receives an owned field expression and
 /// may move it. The caller must provide each field exactly once, ensure Rust
@@ -129,17 +127,24 @@ pub fn record_output_owned<C: Codec>(
         statements: binding,
         values: Vec::new(),
     };
+    let mut names = std::collections::BTreeSet::new();
     for (index, name) in fields.enumerate() {
+        check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
         for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        child
-            .layout
-            .enclose(CompositionGroup::new(GroupStructure::Field(name)));
+        child.layout.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    out.layout
-        .enclose(CompositionGroup::new(GroupStructure::Fields));
+    out.layout.enclose(codec.fields_group());
     Ok(out)
+}
+
+fn check_field(names: &mut std::collections::BTreeSet<String>, name: &syn::Ident) -> Result<()> {
+    use syn::ext::IdentExt;
+    if !names.insert(name.unraw().to_string()) {
+        return Err(format!("duplicate field `{name}`"));
+    }
+    Ok(())
 }

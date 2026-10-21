@@ -288,12 +288,12 @@ impl Declarations {
         };
         for input in inputs.iter_mut().flatten() {
             codec.finish_input(input, extra)?;
-            crate::validate_layout(&input.layout)?;
+            input.layout.validate()?;
         }
         if let Some(output) = &mut output {
             codec.finish_output(output, extra)?;
             output.validate_value_count()?;
-            crate::validate_layout(&output.layout)?;
+            output.layout.validate()?;
         }
         // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;

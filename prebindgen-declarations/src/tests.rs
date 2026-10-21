@@ -1,6 +1,13 @@
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), CompositionGroup<(), ()>>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), CompositionGroup<(), ()>>;
+#[derive(Clone, Debug)]
+enum TestGroup {
+    Maybe,
+    Record,
+    Member(syn::Ident),
+}
+type Bindings<W> = super::Bindings<W, (), TestGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup>;
 use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
@@ -44,7 +51,16 @@ impl Codec for TestCodec {
     }
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
-    type Group = ();
+    type Group = TestGroup;
+    fn optional_group(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
+        TestGroup::Maybe
+    }
+    fn field_group(&self, name: syn::Ident) -> TestGroup {
+        TestGroup::Member(name)
+    }
+    fn fields_group(&self) -> TestGroup {
+        TestGroup::Record
+    }
     type Extra = Extra;
     type Wire = TestWire;
     type Context = ();
@@ -531,7 +547,7 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &WireLayout<TestWire, CompositionGroup<(), ()>>| {
+    let foreign = |wires: &WireLayout<TestWire, TestGroup>| {
         wires
             .iter()
             .filter_map(|w| match &w.kind.kind {
@@ -612,7 +628,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
-        type Group = ();
+        type Group = TestGroup;
+        fn optional_group(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
+            TestGroup::Maybe
+        }
+        fn field_group(&self, name: syn::Ident) -> TestGroup {
+            TestGroup::Member(name)
+        }
+        fn fields_group(&self) -> TestGroup {
+            TestGroup::Record
+        }
         type Extra = Extra;
         type Wire = TestWire;
         type Context = ();
@@ -1248,20 +1273,20 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &WireLayout<TestWire, CompositionGroup<(), ()>>) {
-        validate_layout(layout).unwrap();
+    fn check(layout: &WireLayout<TestWire, TestGroup>) {
+        layout.validate().unwrap();
         assert_eq!(layout.len(), 4);
         let [WireNode::Group { metadata, children }] = layout.nodes() else {
             panic!()
         };
-        assert!(matches!(metadata.structure, GroupStructure::Fields));
+        assert!(matches!(metadata, TestGroup::Record));
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.nodes() {
             let WireNode::Group { metadata, children } = node else {
                 panic!()
             };
-            let GroupStructure::Field(name) = &metadata.structure else {
+            let TestGroup::Member(name) = metadata else {
                 panic!()
             };
             names.push(name.to_string());
@@ -1296,5 +1321,58 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         let plan = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
         check(&plan.layout);
         assert_eq!(plan.values.len(), 4);
+    }
+}
+
+#[test]
+fn record_helpers_check_source_field_names_without_reading_group_metadata() {
+    let names = || [syn::parse_quote!(x), syn::parse_quote!(r#x)];
+    let fields = names().into_iter().enumerate().map(|(i, name)| {
+        TEST_CODEC
+            .input_leaf(
+                &syn::parse_quote!(i64),
+                &Extra::default(),
+                format_ident!("w{i}"),
+                format_ident!("v{i}"),
+                &Condition::default(),
+            )
+            .map(|plan| (name, plan))
+    });
+    let error = record_input(
+        &TEST_CODEC,
+        &syn::parse_quote!(Record),
+        syn::parse_quote!(record),
+        fields,
+    )
+    .unwrap_err();
+    assert!(error.contains("duplicate field"));
+    for owned in [false, true] {
+        let convert = |i, value| {
+            TEST_CODEC.output_leaf(
+                &syn::parse_quote!(i64),
+                &Extra::default(),
+                format_ident!("w{i}"),
+                value,
+                !owned,
+            )
+        };
+        let result = if owned {
+            record_output_owned(
+                &TEST_CODEC,
+                syn::parse_quote!(record),
+                quote!(source),
+                names(),
+                convert,
+            )
+        } else {
+            record_output(
+                &TEST_CODEC,
+                syn::parse_quote!(record),
+                quote!(source),
+                names(),
+                convert,
+            )
+        };
+        assert!(result.unwrap_err().contains("duplicate field"));
     }
 }

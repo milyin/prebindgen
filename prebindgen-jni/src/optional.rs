@@ -88,7 +88,7 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
 }
 pub(crate) fn input_kotlin(
     children: &[kotlin::JniNode],
-    o: &prebindgen_declarations::OptionalGroup<JniNiche>,
+    o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let root = &o.presence.to_string();
@@ -163,7 +163,7 @@ pub(crate) fn input_kotlin(
 }
 pub(crate) fn output_kotlin(
     children: &[kotlin::JniNode],
-    o: &prebindgen_declarations::OptionalGroup<JniNiche>,
+    o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let wires = kotlin::leaf_wires(children);

@@ -7,10 +7,7 @@ struct OptionalLayout<N> {
     /// Inner wire index and its reserved absent representation; otherwise a flag is added.
     pub niche: Option<(usize, N)>,
 }
-fn layout<C: Codec>(
-    codec: &C,
-    wires: &WireLayout<C::Wire, CompositionGroup<C::Niche, C::Group>>,
-) -> OptionalLayout<C::Niche> {
+fn layout<C: Codec>(codec: &C, wires: &WireLayout<C::Wire, C::Group>) -> OptionalLayout<C::Niche> {
     OptionalLayout {
         niche: wires
             .iter()
@@ -20,6 +17,7 @@ fn layout<C: Codec>(
 }
 /// Wrap an input plan whose activation condition includes `tag == 1`.
 /// The payload's construction is guarded as well as its validation/acquisition.
+/// Choose `tag` and `var` fresh within the complete slot.
 pub fn optional_input<C: Codec>(
     codec: &C,
     extra: &C::Extra,
@@ -56,6 +54,7 @@ pub fn optional_input<C: Codec>(
 }
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
 /// `child` must be unfinalized and refer to the supplied payload binding.
+/// Choose `tag` and `payload` fresh within the complete slot.
 /// Values must own their data or point into owners retained by `child.commit`.
 /// The commit must be infallible and must not borrow an emission context that
 /// delivery still needs: it is captured in a move closure until delivery succeeds.
@@ -134,7 +133,7 @@ pub fn optional_output<C: Codec>(
 
 fn mark<C: Codec>(
     codec: &C,
-    tree: &mut WireLayout<C::Wire, CompositionGroup<C::Niche, C::Group>>,
+    tree: &mut WireLayout<C::Wire, C::Group>,
     tag: syn::Ident,
     layout: OptionalLayout<C::Niche>,
 ) {
@@ -153,11 +152,5 @@ fn mark<C: Codec>(
     if let Some((i, _)) = &layout.niche {
         codec.set_niche(&mut tree[*i].kind, remaining);
     }
-    tree.enclose(CompositionGroup::new(GroupStructure::Optional(
-        OptionalGroup {
-            presence: tag,
-            discriminator,
-            niche: layout.niche.map(|(_, n)| n),
-        },
-    )));
+    tree.enclose(codec.optional_group(tag, discriminator, layout.niche.map(|(_, n)| n)));
 }

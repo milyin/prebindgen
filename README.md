@@ -462,66 +462,64 @@ grouping. For example, a JNI optional record can use this tree (wire names are
 illustrative):
 
 ```text
-Optional                     structure: inspect the "present" flag
+JniGroup::Optional           inspect the "present" flag
 ├── present: jint            wire position 0
-└── Fields                   annotation: construct Kotlin Point
-    ├── Field("x")
+└── JniGroup::Fields(Some)    construct Kotlin Point
+    ├── JniGroup::Field("x")
     │   └── x_value: jdouble  wire position 1
-    └── Field("y")
+    └── JniGroup::Field("y")
         └── y_value: jdouble  wire position 2
 ```
 
 `wires()` yields the three leaf wires, including their `W` information.
-`layout().nodes()` exposes the structure, annotations and nesting. Each physical
+`layout().nodes()` exposes adapter metadata and nesting. Each physical
 wire appears once. Multiple ancestors may inspect that same leaf: nested optional
 chars, for example, use different absent values on one wire.
 
-The shared declaration compiler uses `CompositionGroup<Niche, Annotation>` for
-parent metadata. It contains two independent parts:
+The shared compiler builds conversion code from recipes and stores parent metadata
+in the adapter's `Codec::Group` type. It never interprets that stored metadata.
+Three codec hooks supply it while the compiler constructs the tree:
 
-- `structure: GroupStructure<Niche>` describes `Optional`, `Fields`, a named
-  `Field`, or a `Custom` structure.
-- `annotation: Option<Annotation>` adds destination-specific information to that
-  same node. A Kotlin class name can annotate `Fields` without hiding its fields.
-  `Custom` requires an annotation defining the adapter-specific meaning.
+- `optional_group(presence, discriminator, niche)` describes the presence binding,
+  the descendant wire to inspect, and the representation reserved for absence.
+- `field_group(name)` describes one source field and its subtree, which can have
+  zero, one or several wires.
+- `fields_group()` describes the ordered collection of field subtrees, including
+  an empty record or unit value.
 
-Shared record helpers produce a `Fields` parent with one `Field(source_name)`
-child per source field. A field can contain zero, one or several wires, including
-nested structures. Empty records retain an empty `Fields` node. Field boundaries
-and names therefore remain available for input construction and both borrowed
-and owned output projection. Enum alternatives will need their own concrete
-semantics when enum conversion is implemented; no enum variants are declared yet.
-`Custom` is an extension point for other adapters. The built-in C and JNI adapters
-reject custom structures they do not implement.
+Adapters choose the return values freely. A codec that needs no group metadata
+can use `type Group = ()` and return `()` from all three hooks. The tree still
+preserves field boundaries and wire order. Codecs can also use their own enum,
+a string, or another metadata representation without a common wrapper.
 
-`OptionalGroup` identifies the descendant wire indicating presence and records
-the niche reserved by that option, or a separate flag. It also stores the
-normalized presence binding used by payload conditions; that binding can be a
-computed local rather than a physical wire. The leaf's `W` records the niche
-still available to an enclosing option. After C uses `0x110000` for `None` in
-`Option<char>`, that leaf can offer `0x110001` to the next option. `Codec::set_niche`
-updates this state; `Codec::niche` reads it. `None` means no niche remains.
+C stores `CGroup::{Optional, Fields, Field}` to generate header comments for
+presence rules, source field paths and their boundary values. JNI stores
+`JniGroup::{Optional, Fields, Field}`. Its `Fields` variant can contain Kotlin
+class and binding information; field names and order remain in the child nodes.
+Both adapters render expanded fields, and JNI can construct a data class from
+those same field subtrees. The diagram above illustrates JNI metadata; these
+variant names are adapter choices.
 
-JNI annotates shared `Fields` nodes with a Kotlin class name and binding
-information. It reads field names and order from the tree, without keeping a
-second field list in the annotation. C reads those same nodes to document source
-field paths rooted at each parameter or return and their boundary values, alongside
-optional presence rules.
-Unannotated field structures remain expanded values in both adapters.
+For an option, the compiler chooses the discriminator and absent representation
+before calling the hook. The hook receives the normalized presence binding used
+by the prepared payload conditions; it can be a computed local rather than a
+physical wire. The leaf's `W` records the niche still available to an enclosing
+option. After C reserves `0x110000` for `None` in `Option<char>`, that leaf can
+offer `0x110001` to the next option. `Codec::set_niche` updates this state;
+`Codec::niche` reads it. `None` means no niche remains.
 
-Shared validation checks wire names, optional bindings and discriminator
-references, and uniquely named field children. JNI additionally checks the
-binding names and annotations it interprets. Adapter annotations can accompany
-any shared structure; each adapter defines which combinations it supports.
+Record helpers check source field-name uniqueness while constructing input and
+borrowed/owned output conversions. Shared finalization checks physical wire
+names and output expression counts. Each adapter validates the metadata it
+stores, including optional references, field grouping and Kotlin binding names.
 
 Custom converters implement `Conversion::layout` and declare `Conversion::Group`;
-use `()` when no grouping information is needed. Custom codecs declare their
-annotation type as `Codec::Group`, return `CodecInput<Self>`/`CodecOutput<Self>`,
-and implement the paired `niche` and `set_niche` methods. `InputPlan<W, C, G>` and
-`OutputPlan<W, C, G>` store the tree in `layout`; their `G` describes parent
-metadata, defaulting to `()`. Shared value and boxed helpers create leaf-only
-trees with that group type. Information about each individual wire belongs in
-`W`. Both adapters expose the tree through the common conversion API.
+use `()` when no grouping information is needed. Custom codecs return
+`CodecInput<Self>`/`CodecOutput<Self>`, implement the three group hooks, and
+implement the paired `niche` and `set_niche` methods. `Bindings<W, C, G>`,
+`InputPlan<W, C, G>` and `OutputPlan<W, C, G>` use `G` directly as parent metadata,
+defaulting to `()`. Shared value and boxed helpers create leaf-only trees with
+that group type. Information about each individual wire belongs in `W`.
 
 Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
 or structured predicates. A custom float domain may explicitly exclude a NaN
