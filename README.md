@@ -435,8 +435,9 @@ supply niches. Optional plans can retain unused representations for outer layers
 C encodes `Option<Option<char>>` in one `uint32_t` (`0x110001` for outer `None`,
 `0x110000` for `Some(None)`). JNI uses `-2` and `-1` for nested optional chars and
 widened unsigned scalars. Once a domain is exhausted, additional layers use flags.
-A second handle wire cannot donate null after the inner option writes null to all
-its absent handle slots; nested optional handles therefore still need a flag.
+A handle's only niche is null. Once an inner option uses it, an enclosing option
+adds a flag. Other wires in an optional payload cannot supply another niche,
+because an absent payload fills them with default values.
 C headers document the exact discriminator argument or result field for each
 optional group, including enclosing optional groups.
 
@@ -448,19 +449,31 @@ one niche, or `None` when exhausted. The shared compiler suppresses niches on
 other payload wires and on inactive selector arms. Both input and output
 composition use this protocol.
 
-Every `Wire` still describes one complete FFI value. Optional presence rules,
-record grouping and remaining domains belong to `InputPlan::metadata` and
-`OutputPlan::metadata`, using the shared `Composition<Niche, Group>` type.
-Groups reference existing wire names; child-group references describe nesting
-without embedding wires inside other wires. The compiler validates unique names,
-group spans and references before installing conversions. JNI keeps Kotlin record
-metadata in its adapter-specific `Group` type. C header emission reads optional
-groups through `CComposition`; custom C slots can implement its default method
-when they need no optional-group documentation.
+Every `Wire` describes one complete FFI value. `Composition`, stored in
+`InputPlan::metadata` and `OutputPlan::metadata`, explains how those values fit
+together. For example, an `Option<i32>` passed as `present` and `value` needs a
+**group** describing both wires: `present` is a 0/1 flag, and `value` is ignored
+when the flag is 0. JNI adds a record group describing how field wires form a
+Kotlin data class; C exposes the field wires without one. In JNI, an optional
+record has a record group inside an optional group. These descriptions refer to
+the plan's wires by name.
 
-Custom codecs now declare `type Group` (use `()` when unused), return plans with
-composition metadata, and implement `remaining_niche` instead of mutating wires.
-Generic conversion plans accept a third metadata parameter, defaulting to `()`.
+`Composition::domains` tracks which unused representation each wire can still
+offer for an enclosing option. An entry containing `Some(n)` offers `n`; an entry
+containing `None` prevents that wire from supplying a niche; a missing entry asks
+the codec for its default. After C uses `0x110000` for `None` in `Option<char>`,
+for example, that wire can still offer `0x110001` to an enclosing option.
+
+The compiler checks the wire names and group descriptions before installing the
+conversion. JNI stores Kotlin record information in its adapter-specific `Group`
+type. The C header writer reads optional groups through `CComposition` to explain
+which arguments or result fields indicate presence. Custom C slots can use that
+trait's default method when they need no optional-group documentation.
+
+Custom codecs declare `type Group` (use `()` when unused), return plans whose
+metadata is a `Composition`, and report leftover niches through `remaining_niche`.
+`InputPlan` and `OutputPlan` take the metadata type as a third parameter, defaulting
+to `()`.
 
 Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
 or structured predicates. A custom float domain may explicitly exclude a NaN

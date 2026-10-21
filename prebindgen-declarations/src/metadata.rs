@@ -1,25 +1,65 @@
-//! Occurrence-level composition facts referencing flat wires by their existing names.
+//! Explain how the FFI values in a conversion plan represent the source value.
 use super::*;
 use std::collections::BTreeMap;
 
-/// Flat group graph and per-wire domain overrides for one conversion occurrence.
-/// Wire names and group names are generated identifiers, not positional indices;
-/// concatenating plans never renumbers existing references.
+/// Describes how a conversion's FFI values fit together.
 ///
-/// For example, two niche-encoded `Option` layers may share one `char` carrier:
-/// the flat wire list contains only `value`; the outer group names `value` as
-/// its discriminator and references the inner group as a child. Each group
-/// retains its own absent representation. The wire itself contains neither
-/// an option nor another wire. A flag-encoded layer instead references its
-/// separate flag and payload wires in order.
+/// A conversion plan has a list of **wires**: the individual values passed across
+/// the FFI boundary. This metadata explains how to interpret those values together.
+/// It is stored in [`InputPlan::metadata`] or [`OutputPlan::metadata`] and is used
+/// while generating bindings; it is not passed across the FFI boundary.
+///
+/// For example, C can represent an `Option<i32>` with two wires:
+///
+/// ```text
+/// present: int32_t    0 for None, 1 for Some
+/// value:   int32_t    the integer inside Some; ignored for None
+/// ```
+///
+/// A **group** is a named description of the wires that together represent a
+/// value. For this example, one optional group lists `present` and `value`, says
+/// that `present` decides between `None` and `Some`, and identifies `value` as
+/// the payload. The C adapter uses that information to document the arguments;
+/// the JNI adapter uses optional groups to generate nullable Kotlin parameters
+/// and results where possible.
+///
+/// Groups can contain other groups. For example, an optional record can have an
+/// outer group describing whether the record is present and a child group
+/// describing how its fields form the record. [`groups`](Self::groups) stores all
+/// these descriptions by name. [`roots`](Self::roots) lists the groups that have
+/// no parent. Groups refer to wires by name; the wires stay in the plan's list.
+///
+/// Some types have a **niche**: an otherwise unused representation that can stand
+/// for `None` without adding a presence flag. For example, C uses `0x110000`,
+/// which is not a valid Rust `char`, for `None` in `Option<char>`. Once that value
+/// is taken, an enclosing option needs a different unused value or a flag.
+/// [`domains`](Self::domains) records which niche, if any, each wire can still
+/// offer to an enclosing option. It does not describe the wire's full set of
+/// valid values.
+///
+/// `N` is the adapter's description of a niche. `G` holds information for groups
+/// specific to an adapter, such as the Kotlin class to construct from record
+/// fields. Use `()` for either type when that information is not needed.
 #[derive(Clone, Debug)]
 pub struct Composition<N, G> {
-    /// Groups keyed by their generated identifiers. Groups contain no wire values.
+    /// Every group in this conversion, including nested groups, indexed by name.
+    /// Each entry describes which wires represent a value and how to interpret them.
     pub groups: BTreeMap<String, CompositionGroup<N, G>>,
-    /// Outermost groups, in composition order.
+    /// Names of the groups that are not children of another group.
+    /// They appear in the same order as their wires in the plan. A wire that needs
+    /// no grouping can be omitted from all groups; it needs no entry here.
     pub roots: Vec<String>,
-    /// Wire-name overrides: `Some(n)` is a remaining niche, `None` suppresses niches.
-    /// Missing entries defer to the codec's domain for the concrete wire type.
+    /// Whether each wire may supply an unused representation for another `Option`.
+    /// Keys are wire names. The three cases mean:
+    ///
+    /// - No entry: ask [`Codec::niche`] what the wire's type offers.
+    /// - `Some(n)`: use `n` as the next unused representation for `None`.
+    /// - `None`: do not use this wire to encode another `None`.
+    ///
+    /// For example, after `Option<char>` reserves `0x110000` on a C wire named
+    /// `value`, its entry offers `0x110001` for an enclosing option. Other wires
+    /// in the same optional value get `None`: their defaults for an absent value
+    /// must not accidentally be used to distinguish another option layer.
     pub domains: BTreeMap<String, Option<N>>,
 }
 impl<N, G> Default for Composition<N, G> {
@@ -31,34 +71,56 @@ impl<N, G> Default for Composition<N, G> {
         }
     }
 }
-/// One logical value's relationship to a flat set of FFI wires.
+/// Describes the wires that together represent one value, such as an option or record.
+///
+/// For `Option<i32>` encoded as a flag and an integer, `members` names both wires
+/// and `kind` explains the flag. For a record, `members` names the wires for its
+/// fields and `kind` holds the adapter's instructions for constructing the record.
+/// A nested value can have its own group, listed in `children`.
 #[derive(Clone, Debug)]
 pub struct CompositionGroup<N, G> {
-    /// Stable generated name identifying this group within the occurrence.
+    /// Name of this group, unique within the conversion plan.
+    /// Must match the key used in [`Composition::groups`].
     pub name: String,
-    /// Ordered names of all wires used by the group, including a presence flag.
+    /// Names of all wires used to represent this value, in the plan's wire order.
+    /// Includes wires used by child groups and any separate presence flag.
+    /// These wires must occupy consecutive positions in the plan.
     pub members: Vec<syn::Ident>,
-    /// Direct child group names; nesting belongs here, never in a wire type.
+    /// Names of groups immediately inside this one, in wire order.
+    /// For an optional record, this can name the group describing the record's
+    /// fields. Each name refers to an entry in [`Composition::groups`].
     pub children: Vec<String>,
-    /// Optional presence rule or adapter-specific logical grouping.
+    /// How to interpret the listed wires: as an option or as an adapter-defined value.
     pub kind: GroupKind<N, G>,
 }
-/// Meaning of a group; destination record metadata remains adapter-owned.
+/// What value a group's wires represent and how to interpret them.
 #[derive(Clone, Debug)]
 pub enum GroupKind<N, G> {
-    /// An `Option` layer.
+    /// An option: records how to distinguish `None` from `Some` and find its payload.
     Optional(OptionalGroup<N>),
-    /// An adapter-specific logical value, such as a Kotlin data class.
+    /// A value described by the language adapter, such as a Kotlin data class
+    /// constructed from several field wires.
     Adapter(G),
 }
-/// Presence rule for one optional layer, shared by all its member wires.
+/// How a group's wires encode `None` and `Some(payload)`.
+///
+/// With a separate presence flag, `discriminator` names that flag, `niche` is
+/// `None`, and `payload` lists the other wires. With a niche, `discriminator`
+/// names one of the payload wires and `niche` describes its reserved `None`
+/// representation. Each layer of a nested option has its own description.
 #[derive(Clone, Debug)]
 pub struct OptionalGroup<N> {
-    /// Existing wire identifier carrying the niche or the separate 0/1 flag.
+    /// Name of the wire to inspect to decide whether the option is present.
+    /// This is either a separate 0/1 flag or a payload wire with a reserved
+    /// representation for `None`.
     pub discriminator: syn::Ident,
-    /// Representation consumed by this layer; `None` means a separate flag.
+    /// `Some(n)` means this option uses `n` to encode `None` on `discriminator`.
+    /// `None` means `discriminator` is a separate flag: 0 for absent, 1 for present.
+    /// Unlike [`Composition::domains`], this describes the representation already
+    /// chosen for this option, not one available to an enclosing option.
     pub niche: Option<N>,
-    /// Payload wire names, excluding a separate presence flag.
+    /// Names of the wires encoding the value inside `Some`, in wire order.
+    /// Excludes a separate presence flag. These values are ignored for `None`.
     pub payload: Vec<syn::Ident>,
 }
 impl<N, G> PlanMetadata for Composition<N, G> {
@@ -78,13 +140,21 @@ impl<N, G> PlanMetadata for Composition<N, G> {
     }
 }
 impl<N, G> Composition<N, G> {
-    /// Suppress niches of conditionally active wires without changing their ABI types.
+    /// Prevent enclosing options from using these wires to encode `None`.
+    ///
+    /// Writes `None` to their [`domains`](Self::domains) entries. For example,
+    /// a wire used only in one constructor alternative cannot tell us whether
+    /// the whole optional input is present when another alternative is selected.
     pub fn suppress<W: prebindgen_flat::WireKind>(&mut self, wires: &[Wire<W>]) {
         for wire in wires {
             self.domains.insert(wire.name.to_string(), None);
         }
     }
-    /// Enclose all current root groups in one new group referencing the supplied wires.
+    /// Add a parent group around the groups currently listed in [`roots`](Self::roots).
+    ///
+    /// Those groups become its children, and `roots` becomes just `[name]`.
+    /// `members` must name all wires belonging to the new parent, including its
+    /// children's wires. Returns an error if `name` already identifies a group.
     pub fn enclose(
         &mut self,
         name: String,
@@ -107,7 +177,10 @@ impl<N, G> Composition<N, G> {
         self.roots.push(name);
         Ok(())
     }
-    /// Find an outer group beginning at a wire in the supplied group scope.
+    /// Among the supplied group names, find the group whose first wire is `name`.
+    ///
+    /// Pass [`roots`](Self::roots) to search the outermost groups, or a group's
+    /// `children` to search immediately inside it. This does not search descendants.
     pub fn starting_at(
         &self,
         roots: &[String],
@@ -121,8 +194,12 @@ impl<N, G> Composition<N, G> {
 }
 
 impl<N, G> Composition<N, G> {
-    /// Check identifier uniqueness, references and ordered contiguous group spans.
-    /// Ungrouped wires are ordinary scalar values; roots list only explicit groups.
+    /// Check that these descriptions agree with the conversion plan's wire list.
+    ///
+    /// Rejects duplicate wire names, missing references, empty groups, cycles and
+    /// groups whose wires are not consecutive or in order. Also checks that each
+    /// optional group's flag or niche wire and payload belong to that group.
+    /// Wires without a group are allowed.
     pub fn validate<W: prebindgen_flat::WireKind>(&self, wires: &[Wire<W>]) -> Result<()> {
         use std::collections::BTreeSet;
         let names: Vec<_> = wires.iter().map(|w| w.name.clone()).collect();
