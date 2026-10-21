@@ -10,7 +10,8 @@ mod data;
 mod optional;
 pub use optional::JniNiche;
 mod scalar;
-pub use data::{ClassDecl, DataClassDecl, DataWire};
+type JniComposition = prebindgen_declarations::Composition<JniNiche, data::DataGroup>;
+pub use data::{ClassDecl, DataClassDecl, DataGroup};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
@@ -20,10 +21,6 @@ use prebindgen_flat::Primitive;
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
 pub enum JniKind {
-    /// Conversion wire whose niche is unavailable in its containing composition.
-    NonNiche(Box<JniKind>),
-    /// Wire in an optional group, retaining its nullable Kotlin shape.
-    Optional(Box<optional::OptionalWire>),
     /// A primitive in its JVM carrier.
     Scalar(Primitive),
     /// A `java.lang.String`.
@@ -34,15 +31,13 @@ pub enum JniKind {
     Handle(Box<BoxedWire>, String),
     /// An `int` selector arm index.
     Selector,
-    /// A value or handle leaf belonging to a Kotlin data-class occurrence.
-    Data(Box<DataWire>),
 }
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
 mod emission;
 pub use emission::JniContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniComposition>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniComposition>;
 mod kotlin;
 pub use kotlin::{
     JniInput, JniOutput, JniWire, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
@@ -459,6 +454,7 @@ impl Class {
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
+    type Group = data::DataGroup;
     type Extra = ();
     type Wire = JniKind;
     type Context = JniContext;
@@ -482,7 +478,7 @@ impl Codec for JniCodec {
         let count = plan.wires.len();
         let mut encode = TokenStream::new();
         for (i, (wire, value)) in plan.wires.iter().zip(&plan.values).enumerate() {
-            let expr = match wire.kind.leaf() {
+            let expr = match &wire.kind {
                 JniKind::Scalar(p) => scalar::output_java(*p, value),
                 JniKind::Handle(_, _) => {
                     quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
@@ -492,9 +488,6 @@ impl Codec for JniCodec {
                     quote!(::prebindgen_jni_runtime::bytes_object(&mut #env,&#value)?)
                 }
                 JniKind::Selector => scalar::output_java(Primitive::I32, value),
-                JniKind::Data(_) | JniKind::Optional(_) | JniKind::NonNiche(_) => {
-                    unreachable!("leaf unwraps metadata")
-                }
             };
             let i = i as i32;
             encode.extend(quote! {
@@ -509,23 +502,6 @@ impl Codec for JniCodec {
         };
         Ok(())
     }
-    fn prefix_component(
-        &self,
-        wire: &mut JniKind,
-        segment: prebindgen_declarations::ComponentSegment,
-    ) {
-        if matches!(
-            segment,
-            prebindgen_declarations::ComponentSegment::Alternative(_)
-        ) {
-            match wire {
-                JniKind::Optional(o) => o.suppress_niches(),
-                JniKind::Data(_) => {} // Data groups advertise no wire niches.
-                _ => *wire = JniKind::NonNiche(Box::new(wire.clone())),
-            }
-        }
-    }
-
     fn niche(&self, wire: &JniKind) -> Option<crate::optional::JniNiche> {
         optional::niche(wire)
     }
@@ -537,8 +513,8 @@ impl Codec for JniCodec {
     ) -> Result<TokenStream> {
         Ok(niche.present(value))
     }
-    fn reserve_niche(&self, wire: &mut JniKind, niche: &Self::Niche) -> Result<()> {
-        crate::optional::reserve(wire, niche)
+    fn remaining_niche(&self, wire: &JniKind, niche: &Self::Niche) -> Option<Self::Niche> {
+        optional::remaining(wire, niche)
     }
     fn absent_value(
         &self,
@@ -547,16 +523,6 @@ impl Codec for JniCodec {
         input: bool,
     ) -> Result<TokenStream> {
         optional::absent(wire, niche, input)
-    }
-    fn mark_optional(
-        &self,
-        wires: &mut [prebindgen_flat::Wire<JniKind>],
-        inner: &[prebindgen_flat::Wire<JniKind>],
-        tag: &syn::Ident,
-        layout: &prebindgen_declarations::OptionalLayout<Self::Niche>,
-        input: bool,
-    ) -> Result<()> {
-        optional::mark(wires, inner, tag, layout, input)
     }
     fn selector(&self, _: &()) -> JniKind {
         JniKind::Selector

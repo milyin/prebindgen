@@ -102,7 +102,7 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static> Conversion for InputPlan<W, C> {
+impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for InputPlan<W, C, M> {
     type Wire = W;
     type SlotFragment<'a> = InputFragment<'a, C>;
     type WireFragment<'a> = InputWireFragment;
@@ -184,7 +184,7 @@ impl<W: WireKind, C: TemplateContext + 'static> Conversion for InputPlan<W, C> {
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static> Conversion for OutputPlan<W, C> {
+impl<W: WireKind, C: TemplateContext + 'static, M> Conversion for OutputPlan<W, C, M> {
     type Wire = W;
     type SlotFragment<'a> = OutputFragment<'a, C>;
     type WireFragment<'a> = OutputWireFragment<'a, C>;
@@ -239,7 +239,7 @@ impl<W: WireKind, C: TemplateContext + 'static> Conversion for OutputPlan<W, C> 
         expression(crate::emission::render_output(context, code, source)?)
     }
 }
-impl<W: WireKind, C> OutputPlan<W, C> {
+impl<W: WireKind, C, M> OutputPlan<W, C, M> {
     fn check_arity(&self) -> Result<()> {
         if self.wires.len() != self.values.len() {
             return Err("output wire/value count differs".into());

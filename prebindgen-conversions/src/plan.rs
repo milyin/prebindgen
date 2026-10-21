@@ -7,11 +7,13 @@ use quote::quote;
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
 #[derive(Clone, Debug)]
-pub struct InputPlan<W: WireKind, C = ()> {
+pub struct InputPlan<W: WireKind, C = (), M = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Flattened boundary parameters in signature order.
     pub wires: Vec<Wire<W>>,
+    /// Occurrence-level composition metadata, separate from the flat ABI wires.
+    pub metadata: M,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -30,13 +32,15 @@ pub struct InputPlan<W: WireKind, C = ()> {
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
 #[derive(Clone, Debug)]
-pub struct OutputPlan<W: WireKind, C = ()> {
+pub struct OutputPlan<W: WireKind, C = (), M = ()> {
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
     /// Boundary results in delivery order; one entry per expression in `values`.
     pub wires: Vec<Wire<W>>,
+    /// Occurrence-level composition metadata, separate from the flat ABI wires.
+    pub metadata: M,
     /// Transfer ownership only after all foreign delivery operations succeed.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
@@ -87,4 +91,15 @@ impl Default for Delivery {
 /// calling [`crate::TemplateContext::render`] for generator-specific parameters.
 pub fn source_result_expr() -> TokenStream {
     template_parameter("source_result")
+}
+
+/// Metadata that can be combined when conversion plans are composed.
+pub trait PlanMetadata: Default {
+    /// Merge another independently prepared occurrence; reject conflicting identities.
+    fn merge(&mut self, other: Self) -> prebindgen_flat::Result<()>;
+}
+impl PlanMetadata for () {
+    fn merge(&mut self, _: Self) -> prebindgen_flat::Result<()> {
+        Ok(())
+    }
 }

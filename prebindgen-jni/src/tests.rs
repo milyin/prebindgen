@@ -398,49 +398,18 @@ fn owned_optional_projection_cannot_move_a_reference_payload() {
 }
 
 #[test]
-fn optional_niche_reservation_exhausts_and_selector_arms_cannot_donate() {
-    use prebindgen_declarations::{Codec, ComponentSegment, OptionalLayout};
+fn scalar_niches_exhaust_at_the_carrier_limit() {
     for (primitive, min) in [
         (Primitive::Char, i32::MIN as i64),
         (Primitive::U32, i64::MIN),
     ] {
-        let inner = vec![prebindgen_flat::Wire {
-            name: quote::format_ident!("value"),
-            kind: JniKind::Scalar(primitive),
-        }];
-        let mut wires = inner.clone();
-        let niche = JniNiche::Integer(min);
-        JniCodec
-            .mark_optional(
-                &mut wires,
-                &inner,
-                &quote::format_ident!("tag"),
-                &OptionalLayout {
-                    niche: Some((0, niche.clone())),
-                },
-                false,
-            )
-            .unwrap();
-        assert!(JniCodec.niche(&wires[0].kind).is_none());
-        JniCodec.reserve_niche(&mut wires[0].kind, &niche).unwrap();
-        assert!(JniCodec.niche(&wires[0].kind).is_none());
-        let niche = JniNiche::Integer(-1);
-        JniCodec
-            .mark_optional(
-                &mut wires,
-                &inner,
-                &quote::format_ident!("tag"),
-                &OptionalLayout {
-                    niche: Some((0, niche.clone())),
-                },
-                false,
-            )
-            .unwrap();
-        assert!(JniCodec.niche(&wires[0].kind).is_none());
-        JniCodec.reserve_niche(&mut wires[0].kind, &niche).unwrap();
-        assert!(JniCodec.niche(&wires[0].kind).is_some());
-        JniCodec.prefix_component(&mut wires[0].kind, ComponentSegment::Alternative(0));
-        assert!(JniCodec.niche(&wires[0].kind).is_none());
-        assert!(matches!(wires[0].kind, JniKind::Optional(_)));
+        let wire = JniKind::Scalar(primitive);
+        assert!(JniCodec
+            .remaining_niche(&wire, &JniNiche::Integer(min))
+            .is_none());
+        assert!(matches!(
+            JniCodec.remaining_niche(&wire, &JniNiche::Integer(-1)),
+            Some(JniNiche::Integer(-2))
+        ));
     }
 }

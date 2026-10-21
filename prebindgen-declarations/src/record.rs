@@ -14,9 +14,10 @@ pub fn record_input<C: Codec>(
     codec: &C,
     ty: &Type,
     var: syn::Ident,
-    fields: impl IntoIterator<Item = Result<(syn::Ident, InputPlan<C::Wire, C::Context>)>>,
-) -> Result<InputPlan<C::Wire, C::Context>> {
-    let mut out = InputPlan {
+    fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
+) -> Result<CodecInput<C>> {
+    let mut out: CodecInput<C> = InputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         acknowledgement: None,
         wires: Vec::new(),
@@ -32,6 +33,7 @@ pub fn record_input<C: Codec>(
         for wire in &mut child.wires {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
+        out.metadata.merge(child.metadata)?;
         out.validation.extend(child.validation);
         out.acquire.extend(child.acquire);
         out.resources.extend(child.resources);
@@ -60,8 +62,8 @@ pub fn record_output<C: Codec>(
     var: syn::Ident,
     value: TokenStream,
     fields: impl IntoIterator<Item = syn::Ident>,
-    mut convert: impl FnMut(usize, TokenStream) -> Result<OutputPlan<C::Wire, C::Context>>,
-) -> Result<OutputPlan<C::Wire, C::Context>> {
+    mut convert: impl FnMut(usize, TokenStream) -> Result<CodecOutput<C>>,
+) -> Result<CodecOutput<C>> {
     let mut fields = fields.into_iter().peekable();
     let binding = if fields.peek().is_some() {
         quote!(let #var = &(#value);)
@@ -69,6 +71,7 @@ pub fn record_output<C: Codec>(
         quote!(let _ = &(#value);)
     };
     let mut out = OutputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
@@ -99,8 +102,8 @@ pub fn record_output_owned<C: Codec>(
     var: syn::Ident,
     value: TokenStream,
     fields: impl IntoIterator<Item = syn::Ident>,
-    mut convert: impl FnMut(usize, TokenStream) -> Result<OutputPlan<C::Wire, C::Context>>,
-) -> Result<OutputPlan<C::Wire, C::Context>> {
+    mut convert: impl FnMut(usize, TokenStream) -> Result<CodecOutput<C>>,
+) -> Result<CodecOutput<C>> {
     let mut fields = fields.into_iter().peekable();
     let binding = if fields.peek().is_some() {
         quote!(let #var = #value;)
@@ -108,6 +111,7 @@ pub fn record_output_owned<C: Codec>(
         quote!(let _ = #value;)
     };
     let mut out = OutputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),

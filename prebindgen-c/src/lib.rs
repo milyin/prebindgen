@@ -11,54 +11,12 @@ use prebindgen_flat::{Flat, Primitive, Result, WireKind};
 /// one model: their codecs use different carriers and allocation layouts.
 #[derive(Clone, Debug)]
 pub enum CWire {
-    /// Generator metadata associating this wire with one `Option` layer.
-    /// The wrapper adds no ABI field; its underlying wire keeps its C type.
-    Optional(Box<COptionalWireMetadata>),
-    /// Wire whose niche is unavailable to its containing composition.
-    NonNiche(Box<CWire>),
     /// A primitive in its C scalar type.
     Scalar(Primitive),
     /// Text or bytes as a pointer/length buffer.
     Buffer,
     /// A typed opaque pointer to a boxed source value.
     Pointer(Box<CPointer>),
-}
-/// Generator metadata for one wire belonging to an `Option` layer.
-///
-/// An optional payload can expand into several C arguments or result fields.
-/// Each wire gets its own metadata wrapper, but all wires in the same layer
-/// share one group describing how the whole payload's presence is determined.
-/// These are generator-side descriptions, not structs emitted into the C ABI.
-///
-/// For example, an `Option<Record>` expanded into an integer and a character
-/// has two wire wrappers sharing a group whose discriminator is the character.
-/// That group reserves `0x110000` for absence. Only the character wire can then
-/// offer `0x110001` to an enclosing option; the integer wire cannot donate it.
-/// Nested options wrap `inner` again, preserving each layer's presence rule for
-/// header documentation while reusing the same ABI wire when a niche is available.
-#[derive(Clone, Debug)]
-pub struct COptionalWireMetadata {
-    /// The wire before this optional layer, possibly carrying inner option metadata.
-    inner: CWire,
-    /// Presence rule shared by every wire in this optional layer, including any flag.
-    group: std::rc::Rc<COptionGroup>,
-    /// An unused representation of this particular wire, available to an outer option.
-    /// Initially absent; `reserve_niche` exposes any remainder on the discriminator
-    /// wire only. This differs from `group.niche`, which the current layer has used.
-    remaining: Option<CNiche>,
-}
-/// One `Option` layer's shared presence rule, used to document the generated C ABI.
-/// This describes the whole expanded payload; per-wire remaining niches belong
-/// to `COptionalWireMetadata` rather than to this shared group.
-#[derive(Clone, Debug)]
-struct COptionGroup {
-    /// Unique generated identifier, also used to relate nested groups in header comments.
-    name: String,
-    /// Name of the payload wire carrying the niche, or of the separate presence flag.
-    discriminator: String,
-    /// Representation reserved for this layer's absence. `None` means the
-    /// discriminator is a separate 0/1 flag, not that the payload is absent.
-    niche: Option<CNiche>,
 }
 /// Pointee type and mutability of a C boundary pointer.
 #[derive(Clone, Debug)]
@@ -67,15 +25,6 @@ pub struct CPointer {
     pub ty: syn::Type,
     /// Whether this carrier is a mutable pointer.
     pub mutable: bool,
-}
-impl CWire {
-    fn leaf(&self) -> &Self {
-        match self {
-            Self::NonNiche(w) => w.leaf(),
-            Self::Optional(w) => w.inner.leaf(),
-            _ => self,
-        }
-    }
 }
 impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     fn from(value: prebindgen_conversions::boxed::BoxedWire) -> Self {
@@ -89,8 +38,16 @@ use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<
+    W,
+    CContext,
+    prebindgen_declarations::Composition<CNiche, ()>,
+>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<
+    W,
+    CContext,
+    prebindgen_declarations::Composition<CNiche, ()>,
+>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -121,6 +78,7 @@ use quote::{format_ident, quote};
 pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
+    type Group = ();
     type Extra = ();
     type Wire = CWire;
     type Context = CContext;
@@ -147,21 +105,8 @@ impl Codec for CCodec {
         };
         Ok(())
     }
-    fn prefix_component(
-        &self,
-        wire: &mut CWire,
-        segment: prebindgen_declarations::ComponentSegment,
-    ) {
-        if matches!(
-            segment,
-            prebindgen_declarations::ComponentSegment::Alternative(_)
-        ) {
-            *wire = CWire::NonNiche(Box::new(wire.clone()));
-        }
-    }
     fn niche(&self, wire: &CWire) -> Option<CNiche> {
         match wire {
-            CWire::Optional(w) => w.remaining.clone(),
             CWire::Pointer(_) => Some(CNiche::Null),
             CWire::Scalar(Primitive::Char) => Some(CNiche::Integer(0x110000)),
             _ => None,
@@ -170,25 +115,20 @@ impl Codec for CCodec {
     fn is_present(&self, _: &CWire, niche: &CNiche, value: TokenStream) -> Result<TokenStream> {
         Ok(niche.present(value))
     }
-    fn reserve_niche(&self, wire: &mut CWire, niche: &CNiche) -> Result<()> {
-        let CWire::Optional(w) = wire else {
-            return Err("expected optional wire".into());
-        };
-        w.remaining = match niche {
+    fn remaining_niche(&self, wire: &CWire, niche: &CNiche) -> Option<CNiche> {
+        match niche {
             CNiche::Integer(n)
-                if matches!(w.inner.leaf(), CWire::Scalar(Primitive::Char))
-                    && *n < u32::MAX as i64 =>
+                if matches!(wire, CWire::Scalar(Primitive::Char)) && *n < u32::MAX as i64 =>
             {
                 Some(CNiche::Integer(n + 1))
             }
             _ => None,
-        };
-        Ok(())
+        }
     }
     fn absent_value(&self, wire: &CWire, niche: Option<&CNiche>, _: bool) -> Result<TokenStream> {
         let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
-        Ok(match wire.leaf() {
+        Ok(match wire {
             CWire::Pointer(_) => quote!(std::ptr::null_mut()),
             CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
             CWire::Scalar(Primitive::I128 | Primitive::U128) => quote!(#wide {hi:0,lo:0}),
@@ -196,34 +136,7 @@ impl Codec for CCodec {
             CWire::Scalar(_) => niche
                 .map(|n| n.integer_value())
                 .unwrap_or_else(|| quote!(0)),
-            CWire::NonNiche(_) | CWire::Optional(_) => unreachable!(),
         })
-    }
-    fn mark_optional(
-        &self,
-        wires: &mut [prebindgen_flat::Wire<CWire>],
-        inner: &[prebindgen_flat::Wire<CWire>],
-        tag: &syn::Ident,
-        layout: &prebindgen_declarations::OptionalLayout<CNiche>,
-        _: bool,
-    ) -> Result<()> {
-        let group = std::rc::Rc::new(COptionGroup {
-            name: tag.to_string(),
-            discriminator: layout
-                .niche
-                .as_ref()
-                .map(|(i, _)| inner[*i].name.to_string())
-                .unwrap_or_else(|| tag.to_string()),
-            niche: layout.niche.as_ref().map(|(_, n)| n.clone()),
-        });
-        for w in wires {
-            w.kind = CWire::Optional(Box::new(COptionalWireMetadata {
-                inner: w.kind.clone(),
-                group: group.clone(),
-                remaining: None,
-            }));
-        }
-        Ok(())
     }
     fn selector(&self, _: &()) -> CWire {
         CWire::Scalar(Primitive::I32)
@@ -581,8 +494,7 @@ impl Generation {
 }
 impl WireKind for CWire {
     fn rust_type(&self) -> syn::Type {
-        match self.leaf() {
-            CWire::NonNiche(_) | CWire::Optional(_) => unreachable!(),
+        match self {
             CWire::Scalar(p) => match p {
                 Primitive::Bool => syn::parse_quote!(u8),
                 Primitive::Char => syn::parse_quote!(u32),
@@ -602,8 +514,7 @@ impl WireKind for CWire {
     }
 }
 fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
-    match wire.kind.leaf() {
-        CWire::NonNiche(_) | CWire::Optional(_) => unreachable!(),
+    match &wire.kind {
         CWire::Scalar(p) => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
             Primitive::Char | Primitive::U32 => "uint32_t".into(),
@@ -631,15 +542,17 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
     }
 }
 fn generate<
-    I: for<'a> prebindgen_flat::Conversion<
-        Wire = CWire,
-        SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
-    >,
-    O: for<'a> prebindgen_flat::Conversion<
-        Wire = CWire,
-        SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
-        WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
-    >,
+    I: CComposition
+        + for<'a> prebindgen_flat::Conversion<
+            Wire = CWire,
+            SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
+        >,
+    O: CComposition
+        + for<'a> prebindgen_flat::Conversion<
+            Wire = CWire,
+            SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
+            WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
+        >,
 >(
     flat: Flat<I, O>,
     prefix: &str,
@@ -657,6 +570,16 @@ fn generate<
     for f in flat.functions.values() {
         if f.ret.slot.is_none() {
             continue;
+        }
+        for slot in f.params.iter().filter_map(|p| p.ty.slot.as_ref()) {
+            if let Some(metadata) = slot.composition() {
+                metadata.validate(prebindgen_flat::Conversion::wires(slot))?;
+            }
+        }
+        if let Some(slot) = f.ret.slot.as_ref() {
+            if let Some(metadata) = slot.composition() {
+                metadata.validate(prebindgen_flat::Conversion::wires(slot))?;
+            }
         }
         let result_type = format_ident!("{prefix}_{}_result", f.name);
         let context = CContext {
@@ -680,7 +603,7 @@ fn generate<
             .inputs()?
             .chain(f.outputs(&context, &source)?.map(|output| output.wire))
         {
-            if let CWire::Pointer(pointer) = wire.kind.leaf() {
+            if let CWire::Pointer(pointer) = &wire.kind {
                 if !pointers
                     .iter()
                     .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
@@ -732,8 +655,14 @@ The pointer must be null or a live allocation of the declared type returned by t
             .outputs(&context, &source)?
             .map(|o| o.wire)
             .collect::<Vec<_>>();
-        header.push_str(&describe_options(&inputs, false));
-        header.push_str(&describe_options(&outputs, true));
+        for param in &f.params {
+            if let Some(metadata) = param.ty.slot.as_ref().and_then(CComposition::composition) {
+                header.push_str(&describe_options(metadata, &inputs, false));
+            }
+        }
+        if let Some(metadata) = f.ret.slot.as_ref().and_then(CComposition::composition) {
+            header.push_str(&describe_options(metadata, &outputs, true));
+        }
         let mut params = Vec::new();
         let mut cparams = Vec::new();
         for w in f.inputs()? {
@@ -780,37 +709,58 @@ The output pointer must be writable. Active input buffers must be readable for t
     })
 }
 
-fn describe_options(wires: &[&Wire], output: bool) -> String {
+/// Optional composition facts supplied by a C conversion slot.
+/// Custom conversions may use the default when no optional documentation is needed.
+pub trait CComposition: prebindgen_flat::Conversion<Wire = CWire> {
+    /// Metadata describing logical groups of the slot's flat ABI wires.
+    fn composition(&self) -> Option<&prebindgen_declarations::Composition<CNiche, ()>> {
+        None
+    }
+}
+impl CComposition for InputPlan<CWire> {
+    fn composition(&self) -> Option<&prebindgen_declarations::Composition<CNiche, ()>> {
+        Some(&self.metadata)
+    }
+}
+impl CComposition for OutputPlan<CWire> {
+    fn composition(&self) -> Option<&prebindgen_declarations::Composition<CNiche, ()>> {
+        Some(&self.metadata)
+    }
+}
+fn describe_options(
+    metadata: &prebindgen_declarations::Composition<CNiche, ()>,
+    wires: &[&Wire],
+    output: bool,
+) -> String {
     fn visit(
-        kind: &CWire,
+        metadata: &prebindgen_declarations::Composition<CNiche, ()>,
+        id: &str,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
-        seen: &mut std::collections::BTreeSet<String>,
         out: &mut String,
     ) {
-        match kind {
-            CWire::NonNiche(inner) => visit(inner, names, parents, seen, out),
-            CWire::Optional(optional) => {
-                let g = &optional.group;
-                if seen.insert(g.name.clone()) {
-                    let discriminator = &names[&g.discriminator];
-                    let rule=match &g.niche {
-                        None=>format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
-                        Some(CNiche::Null)=>format!("{discriminator} == NULL means None; non-null means Some"),
-                        Some(CNiche::Integer(n))=>format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
-                    };
-                    let parent = if parents.is_empty() {
-                        String::new()
-                    } else {
-                        format!("; only when {} is present", parents.join(" and "))
-                    };
-                    out.push_str(&format!("/* Option group {}: {rule}{parent}. */\n", g.name));
-                }
-                parents.push(g.name.clone());
-                visit(&optional.inner, names, parents, seen, out);
-                parents.pop();
+        let group = &metadata.groups[id];
+        if let prebindgen_declarations::GroupKind::Optional(g) = &group.kind {
+            let discriminator = &names[&g.discriminator.to_string()];
+            let rule=match &g.niche {
+                None=>format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
+                Some(CNiche::Null)=>format!("{discriminator} == NULL means None; non-null means Some"),
+                Some(CNiche::Integer(n))=>format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
+            };
+            let parent = if parents.is_empty() {
+                String::new()
+            } else {
+                format!("; only when {} is present", parents.join(" and "))
+            };
+            out.push_str(&format!(
+                "/* Option group {}: {rule}{parent}. */\n",
+                group.name
+            ));
+            parents.push(group.name.clone());
+            for child in &group.children {
+                visit(metadata, child, names, parents, out);
             }
-            _ => {}
+            parents.pop();
         }
     }
     let names = wires
@@ -827,10 +777,9 @@ fn describe_options(wires: &[&Wire], output: bool) -> String {
             )
         })
         .collect();
-    let mut seen = std::collections::BTreeSet::new();
     let mut out = String::new();
-    for w in wires {
-        visit(&w.kind, &names, &mut Vec::new(), &mut seen, &mut out);
+    for id in &metadata.roots {
+        visit(metadata, id, &names, &mut Vec::new(), &mut out);
     }
     out
 }
@@ -840,35 +789,49 @@ mod generation_tests {
     use super::*;
 
     #[test]
-    fn reservations_exhaust_at_the_carrier_limit_and_suppress_other_wires() {
-        use prebindgen_declarations::{Codec, OptionalLayout};
-        let inner = vec![
-            prebindgen_flat::Wire {
-                name: quote::format_ident!("first"),
-                kind: CWire::Scalar(Primitive::Char),
-            },
-            prebindgen_flat::Wire {
-                name: quote::format_ident!("second"),
-                kind: CWire::Scalar(Primitive::Char),
-            },
-        ];
-        let mut wires = inner.clone();
-        let n = CNiche::Integer(u32::MAX as i64);
-        CCodec
-            .mark_optional(
-                &mut wires,
-                &inner,
-                &quote::format_ident!("tag"),
-                &OptionalLayout {
-                    niche: Some((0, n.clone())),
-                },
-                false,
-            )
-            .unwrap();
-        assert!(CCodec.niche(&wires[0].kind).is_none());
-        assert!(CCodec.niche(&wires[1].kind).is_none());
-        CCodec.reserve_niche(&mut wires[0].kind, &n).unwrap();
-        assert!(CCodec.niche(&wires[0].kind).is_none());
+    fn character_niches_exhaust_at_the_carrier_limit() {
+        let wire = CWire::Scalar(Primitive::Char);
+        assert!(CCodec
+            .remaining_niche(&wire, &CNiche::Integer(u32::MAX as i64))
+            .is_none());
+        assert!(matches!(
+            CCodec.remaining_niche(&wire, &CNiche::Integer(0x110000)),
+            Some(CNiche::Integer(0x110001))
+        ));
+    }
+
+    #[test]
+    fn shared_compiler_suppresses_niches_in_selector_arms() {
+        use prebindgen_declarations::{bind_input, GroupKind, Input};
+        for (payload, arm) in [
+            ("char", Input::Leaf),
+            ("Option<char>", Input::Optional(Box::new(Input::Leaf))),
+        ] {
+            let source =
+                syn::parse_file(&format!("pub fn echo(value: Option<{payload}>) {{}}")).unwrap();
+            let mut flat =
+                Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+            let recipe = Input::Optional(Box::new(Input::Selector(vec![arm.clone(), arm])));
+            bind_input(&mut flat, &CCodec, "echo", "value", &recipe, &()).unwrap();
+            let plan = flat.function("echo").unwrap().params[0]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap();
+            // Presence flag + selector + two char carriers. Even a remaining
+            // niche of an optional arm cannot describe the outer option.
+            assert_eq!(plan.wires.len(), 4);
+            let group = &plan.metadata.groups[&plan.metadata.roots[0]];
+            let GroupKind::Optional(optional) = &group.kind else {
+                panic!()
+            };
+            assert!(optional.niche.is_none());
+            assert_eq!(optional.discriminator, plan.wires[0].name);
+            for wire in &plan.wires[2..] {
+                assert!(CCodec.niche(&wire.kind).is_some());
+                assert!(plan.metadata.domains[&wire.name.to_string()].is_none());
+            }
+        }
     }
 
     #[test]
@@ -890,6 +853,7 @@ mod generation_tests {
     #[test]
     fn emits_custom_slot_code_without_building_a_plan() {
         struct CountedOutput(std::rc::Rc<std::cell::Cell<usize>>);
+        impl CComposition for CountedOutput {}
         impl prebindgen_flat::Conversion for CountedOutput {
             type Wire = CWire;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;

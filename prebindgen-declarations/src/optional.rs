@@ -3,16 +3,24 @@ use super::*;
 
 /// Optional layout chosen from the inner conversion's available wire niches.
 #[derive(Clone, Debug)]
-pub struct OptionalLayout<N> {
+struct OptionalLayout<N> {
     /// Inner wire index and its reserved absent representation; otherwise a flag is added.
     pub niche: Option<(usize, N)>,
 }
-fn layout<C: Codec>(codec: &C, wires: &[Wire<C::Wire>]) -> OptionalLayout<C::Niche> {
+fn layout<C: Codec>(
+    codec: &C,
+    wires: &[Wire<C::Wire>],
+    metadata: &Composition<C::Niche, C::Group>,
+) -> OptionalLayout<C::Niche> {
     OptionalLayout {
-        niche: wires
-            .iter()
-            .enumerate()
-            .find_map(|(i, w)| codec.niche(&w.kind).map(|n| (i, n))),
+        niche: wires.iter().enumerate().find_map(|(i, w)| {
+            metadata
+                .domains
+                .get(&w.name.to_string())
+                .cloned()
+                .unwrap_or_else(|| codec.niche(&w.kind))
+                .map(|n| (i, n))
+        }),
     }
 }
 /// Wrap an input plan whose activation condition includes `tag == 1`.
@@ -23,9 +31,9 @@ pub fn optional_input<C: Codec>(
     tag: syn::Ident,
     var: syn::Ident,
     active: &Condition,
-    mut child: InputPlan<C::Wire, C::Context>,
-) -> Result<InputPlan<C::Wire, C::Context>> {
-    let layout = layout(codec, &child.wires);
+    mut child: CodecInput<C>,
+) -> Result<CodecInput<C>> {
+    let layout = layout(codec, &child.wires, &child.metadata);
     let mut validation = TokenStream::new();
     if let Some((i, niche)) = &layout.niche {
         let w = &child.wires[*i].name;
@@ -42,7 +50,11 @@ pub fn optional_input<C: Codec>(
     let selected = active.arm(tag.clone(), 1).rust();
     child.statements = quote!(let #var = if #selected {#body Some(#arg)} else {None};);
     child.argument = quote!(#var);
-    let inner = child.wires.clone();
+    let inner = child
+        .wires
+        .iter()
+        .map(|w| w.name.clone())
+        .collect::<Vec<_>>();
     if layout.niche.is_none() {
         child.wires.insert(
             0,
@@ -52,10 +64,7 @@ pub fn optional_input<C: Codec>(
             },
         );
     }
-    codec.mark_optional(&mut child.wires, &inner, &tag, &layout, true)?;
-    if let Some((index, niche)) = &layout.niche {
-        codec.reserve_niche(&mut child.wires[*index].kind, niche)?;
-    }
+    mark(codec, &mut child.metadata, &child.wires, inner, tag, layout)?;
     Ok(child)
 }
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
@@ -70,8 +79,8 @@ pub fn optional_output<C: Codec>(
     payload: syn::Ident,
     value: TokenStream,
     borrowed: bool,
-    mut child: OutputPlan<C::Wire, C::Context>,
-) -> Result<OutputPlan<C::Wire, C::Context>> {
+    mut child: CodecOutput<C>,
+) -> Result<CodecOutput<C>> {
     if !child.delivery.statements.is_empty()
         || child.delivery.result.to_string() != quote!(()).to_string()
     {
@@ -80,7 +89,7 @@ pub fn optional_output<C: Codec>(
     if child.wires.len() != child.values.len() {
         return Err("optional output wire/value count mismatch".into());
     }
-    let layout = layout(codec, &child.wires);
+    let layout = layout(codec, &child.wires, &child.metadata);
     let mut defaults = Vec::new();
     for (i, w) in child.wires.iter().enumerate() {
         defaults.push(
@@ -125,7 +134,11 @@ pub fn optional_output<C: Codec>(
     };
     child.commit = quote!(if let Some(#action_var) = #commit_var {#action_var();});
     child.values = names.iter().map(|n| quote!(#n)).collect();
-    let inner = child.wires.clone();
+    let inner = child
+        .wires
+        .iter()
+        .map(|w| w.name.clone())
+        .collect::<Vec<_>>();
     if layout.niche.is_none() {
         child.wires.insert(
             0,
@@ -136,9 +149,37 @@ pub fn optional_output<C: Codec>(
         );
         child.values.insert(0, quote!(#tag));
     }
-    codec.mark_optional(&mut child.wires, &inner, &tag, &layout, false)?;
-    if let Some((index, niche)) = &layout.niche {
-        codec.reserve_niche(&mut child.wires[*index].kind, niche)?;
-    }
+    mark(codec, &mut child.metadata, &child.wires, inner, tag, layout)?;
     Ok(child)
+}
+
+fn mark<C: Codec>(
+    codec: &C,
+    metadata: &mut Composition<C::Niche, C::Group>,
+    wires: &[Wire<C::Wire>],
+    payload: Vec<syn::Ident>,
+    tag: syn::Ident,
+    layout: OptionalLayout<C::Niche>,
+) -> Result<()> {
+    let discriminator = layout
+        .niche
+        .as_ref()
+        .map(|(i, _)| wires[*i].name.clone())
+        .unwrap_or(tag.clone());
+    metadata.suppress(wires);
+    if let Some((i, niche)) = &layout.niche {
+        metadata.domains.insert(
+            wires[*i].name.to_string(),
+            codec.remaining_niche(&wires[*i].kind, niche),
+        );
+    }
+    metadata.enclose(
+        tag.to_string(),
+        wires.iter().map(|w| w.name.clone()).collect(),
+        GroupKind::Optional(OptionalGroup {
+            discriminator,
+            niche: layout.niche.map(|(_, n)| n),
+            payload,
+        }),
+    )
 }

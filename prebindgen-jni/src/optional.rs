@@ -1,19 +1,8 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
-use prebindgen_declarations::OptionalLayout;
 use prebindgen_flat::Wire;
-/// One wire in an optional occurrence; inner metadata is preserved recursively.
-#[derive(Clone, Debug)]
-pub struct OptionalWire {
-    pub(crate) leaf: JniKind,
-    root: String,
-    inner: std::rc::Rc<Vec<Wire<JniKind>>>,
-    layout: OptionalLayout<JniNiche>,
-    remaining: Option<JniNiche>,
-}
 pub(crate) fn niche(w: &JniKind) -> Option<JniNiche> {
     match w {
-        JniKind::Optional(o) => o.remaining.clone(),
         JniKind::Handle(..) => Some(JniNiche::Null),
         JniKind::Scalar(Primitive::Char | Primitive::U8 | Primitive::U16 | Primitive::U32) => {
             Some(JniNiche::Integer(-1))
@@ -22,13 +11,13 @@ pub(crate) fn niche(w: &JniKind) -> Option<JniNiche> {
     }
 }
 pub(crate) fn absent(w: &JniKind, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
-    if !input && matches!(w.leaf(), JniKind::Handle(..)) {
+    if !input && matches!(w, JniKind::Handle(..)) {
         return Ok(quote!(std::ptr::null_mut()));
     }
     if let Some(n) = niche {
         return Ok(n.integer_value());
     }
-    Ok(match w.leaf() {
+    Ok(match w {
         JniKind::Scalar(Primitive::F32 | Primitive::F64) => quote!(0.0),
         JniKind::Text if !input => quote!(String::new()),
         JniKind::Bytes if !input => quote!(Vec::<u8>::new()),
@@ -39,25 +28,6 @@ pub(crate) fn absent(w: &JniKind, niche: Option<&JniNiche>, input: bool) -> Resu
         _ => quote!(0),
     })
 }
-pub(crate) fn mark(
-    wires: &mut [Wire<JniKind>],
-    inner: &[Wire<JniKind>],
-    tag: &syn::Ident,
-    layout: &OptionalLayout<JniNiche>,
-    _: bool,
-) -> Result<()> {
-    let inner = std::rc::Rc::new(inner.to_vec());
-    for w in wires {
-        w.kind = JniKind::Optional(Box::new(OptionalWire {
-            leaf: w.kind.clone(),
-            root: tag.to_string(),
-            inner: inner.clone(),
-            layout: layout.clone(),
-            remaining: None,
-        }));
-    }
-    Ok(())
-}
 pub(crate) fn default_kt(w: &JniKind, niche: Option<&JniNiche>) -> String {
     if let Some(n) = niche {
         let v = match n {
@@ -65,7 +35,7 @@ pub(crate) fn default_kt(w: &JniKind, niche: Option<&JniNiche>) -> String {
             JniNiche::Integer(n) => *n,
         };
         return if matches!(
-            w.leaf(),
+            w,
             JniKind::Handle(..)
                 | JniKind::Scalar(
                     Primitive::U32
@@ -80,7 +50,7 @@ pub(crate) fn default_kt(w: &JniKind, niche: Option<&JniNiche>) -> String {
             v.to_string()
         };
     }
-    match w.leaf() {
+    match w {
         JniKind::Scalar(Primitive::Bool) => "false",
         JniKind::Scalar(Primitive::I8) => "0.toByte()",
         JniKind::Scalar(Primitive::I16) => "0.toShort()",
@@ -119,16 +89,18 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
 }
 pub(crate) fn input_kotlin(
     wires: &[Wire<JniKind>],
+    metadata: &JniComposition,
+    roots: &[String],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     let mut i = 0;
     while i < wires.len() {
-        let JniKind::Optional(o) = &wires[i].kind else {
+        let Some(group) = metadata.starting_at(roots, &wires[i].name) else {
             let end = (i + 1..wires.len())
-                .find(|j| matches!(wires[*j].kind, JniKind::Optional(_)))
+                .find(|j| metadata.starting_at(roots, &wires[*j].name).is_some())
                 .unwrap_or(wires.len());
-            let c = kotlin::input_kotlin(&wires[i..end], context)?;
+            let c = kotlin::input_kotlin(&wires[i..end], metadata, &[], context)?;
             out.parameters.extend(c.parameters);
             out.arguments.extend(c.arguments);
             out.locks.extend(c.locks);
@@ -136,33 +108,44 @@ pub(crate) fn input_kotlin(
             i = end;
             continue;
         };
-        let mut c = kotlin::input_kotlin(&o.inner, context)?;
+        let prebindgen_declarations::GroupKind::Optional(o) = &group.kind else {
+            return Err("expected optional group".into());
+        };
+        let root = &group.name;
+        let flag = usize::from(o.niche.is_none());
+        let inner = &wires[i + flag..i + group.members.len()];
+        let mut c = kotlin::input_kotlin(inner, metadata, &group.children, context)?;
         // A single converted value is idiomatic T?. Multiple views retain an
         // explicit presence argument so Some with nullable components is distinct.
-        let presence =
-            if c.parameters.len() == 1 && !matches!(o.inner[0].kind, JniKind::Optional(_)) {
-                let (name, ty) = c.parameters[0].split_once(": ").unwrap();
-                let name = name.to_string();
-                let ty = ty.trim_end_matches('?');
-                out.parameters.push(format!("{name}: {ty}?"));
-                for a in c
-                    .arguments
-                    .iter_mut()
-                    .chain(c.locks.iter_mut())
-                    .chain(c.consumed.iter_mut())
-                {
-                    *a = a
-                        .replace(&format!("{name}?.raw ?: 0L"), &format!("{name}.raw"))
-                        .replace(&format!("{name}?."), &format!("{name}."))
-                        .replace(&format!("{name}!!"), &name);
-                    *a = replace(a, &name, &format!("requireNotNull({name})"));
-                }
-                format!("{name} != null")
-            } else {
-                out.parameters.push(format!("{}: Boolean", o.root));
-                out.parameters.extend(c.parameters.clone());
-                o.root.clone()
-            };
+        let presence = if c.parameters.len() == 1
+            && !group.children.iter().any(|id| {
+                matches!(
+                    metadata.groups[id].kind,
+                    prebindgen_declarations::GroupKind::Optional(_)
+                )
+            }) {
+            let (name, ty) = c.parameters[0].split_once(": ").unwrap();
+            let name = name.to_string();
+            let ty = ty.trim_end_matches('?');
+            out.parameters.push(format!("{name}: {ty}?"));
+            for a in c
+                .arguments
+                .iter_mut()
+                .chain(c.locks.iter_mut())
+                .chain(c.consumed.iter_mut())
+            {
+                *a = a
+                    .replace(&format!("{name}?.raw ?: 0L"), &format!("{name}.raw"))
+                    .replace(&format!("{name}?."), &format!("{name}."))
+                    .replace(&format!("{name}!!"), &name);
+                *a = replace(a, &name, &format!("requireNotNull({name})"));
+            }
+            format!("{name} != null")
+        } else {
+            out.parameters.push(format!("{}: Boolean", root));
+            out.parameters.extend(c.parameters.clone());
+            root.to_string()
+        };
         let tag = format!("(if ({presence}) 1 else 0)");
         for a in c
             .arguments
@@ -171,22 +154,19 @@ pub(crate) fn input_kotlin(
             .chain(c.consumed.iter_mut())
         {
             // Every payload expression below runs only in the present branch.
-            *a = a.replace(&format!("{} == 1", o.root), "true");
-            *a = replace(a, &o.root, "1");
+            *a = a.replace(&format!("{} == 1", root), "true");
+            *a = replace(a, root, "1");
         }
-        if o.layout.niche.is_none() {
+        if o.niche.is_none() {
             out.arguments.push(tag);
         }
         for (j, a) in c.arguments.into_iter().enumerate() {
-            let default = default_kt(
-                &o.inner[j].kind,
-                o.layout
-                    .niche
-                    .as_ref()
-                    .filter(|(k, _)| *k == j)
-                    .map(|(_, n)| n),
-            );
-            let a = if matches!(o.layout.niche.as_ref(),Some((k,JniNiche::Integer(_))) if *k==j) {
+            let niche = o
+                .niche
+                .as_ref()
+                .filter(|_| inner[j].name == o.discriminator);
+            let default = default_kt(&inner[j].kind, niche);
+            let a = if matches!(niche, Some(JniNiche::Integer(_))) {
                 format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}")
             } else {
                 a
@@ -204,12 +184,14 @@ pub(crate) fn input_kotlin(
                 .into_iter()
                 .map(|s| format!("if ({presence}) {{ {s} }}")),
         );
-        i += o.inner.len() + usize::from(o.layout.niche.is_none());
+        i += inner.len() + usize::from(o.niche.is_none());
     }
     Ok(out)
 }
 pub(crate) fn output_kotlin(
     wires: &[Wire<JniKind>],
+    metadata: &JniComposition,
+    roots: &[String],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let mut out = KotlinOutput {
@@ -221,26 +203,35 @@ pub(crate) fn output_kotlin(
     };
     let mut i = 0;
     while i < wires.len() {
-        let (inner, count, offset, present) = if let JniKind::Optional(o) = &wires[i].kind {
-            let flag = usize::from(o.layout.niche.is_none());
-            let present = if let Some((j, n)) = &o.layout.niche {
-                let v = default_kt(&o.inner[*j].kind, Some(n));
-                format!("{}[{}] != {v}", context.result, i + j)
+        let (inner, count, offset, present, scope) =
+            if let Some(group) = metadata.starting_at(roots, &wires[i].name) {
+                let prebindgen_declarations::GroupKind::Optional(o) = &group.kind else {
+                    return Err("expected optional group".into());
+                };
+                let flag = usize::from(o.niche.is_none());
+                let present = if let Some(n) = &o.niche {
+                    let j = wires[i..i + group.members.len()]
+                        .iter()
+                        .position(|w| w.name == o.discriminator)
+                        .unwrap();
+                    let v = default_kt(&wires[i + j].kind, Some(n));
+                    format!("{}[{}] != {v}", context.result, i + j)
+                } else {
+                    format!("{}[{i}] == 1", context.result)
+                };
+                (
+                    &wires[i + flag..i + group.members.len()],
+                    group.members.len(),
+                    i + flag,
+                    Some(present),
+                    group.children.as_slice(),
+                )
             } else {
-                format!("{}[{i}] == 1", context.result)
+                let end = (i + 1..wires.len())
+                    .find(|j| metadata.starting_at(roots, &wires[*j].name).is_some())
+                    .unwrap_or(wires.len());
+                (&wires[i..end], end - i, i, None, &[][..])
             };
-            (
-                o.inner.as_slice(),
-                o.inner.len() + flag,
-                i + flag,
-                Some(present),
-            )
-        } else {
-            let end = (i + 1..wires.len())
-                .find(|j| matches!(wires[*j].kind, JniKind::Optional(_)))
-                .unwrap_or(wires.len());
-            (&wires[i..end], end - i, i, None)
-        };
         let local = format!("{}_segment{i}", context.result);
         let prefix = format!("{}s{i}_", context.output_prefix);
         let ctx = KotlinContext {
@@ -248,7 +239,7 @@ pub(crate) fn output_kotlin(
             output_prefix: &prefix,
             ..*context
         };
-        let mut c = kotlin::output_kotlin(inner, &ctx)?;
+        let mut c = kotlin::output_kotlin(inner, metadata, scope, &ctx)?;
         for text in
             c.delivered
                 .iter_mut()
@@ -264,7 +255,12 @@ pub(crate) fn output_kotlin(
         out.output_locals.push_str(&c.output_locals);
         if let Some(p) = present {
             if c.delivered.is_empty()
-                || inner.iter().any(|w| matches!(w.kind, JniKind::Optional(_)))
+                || scope.iter().any(|id| {
+                    matches!(
+                        metadata.groups[id].kind,
+                        prebindgen_declarations::GroupKind::Optional(_)
+                    )
+                })
             {
                 out.delivered.push(p.clone());
                 out.result_types.push("Boolean".into());
@@ -321,24 +317,14 @@ impl JniNiche {
     }
 }
 
-pub(crate) fn reserve(wire: &mut JniKind, niche: &JniNiche) -> Result<()> {
-    let JniKind::Optional(w) = wire else {
-        return Err("expected optional wire".into());
-    };
-    let min = if matches!(w.leaf.leaf(), JniKind::Scalar(Primitive::U32)) {
+pub(crate) fn remaining(wire: &JniKind, niche: &JniNiche) -> Option<JniNiche> {
+    let min = if matches!(wire, JniKind::Scalar(Primitive::U32)) {
         i64::MIN
     } else {
         i32::MIN as i64
     };
-    w.remaining = match niche {
+    match niche {
         JniNiche::Integer(n) if *n > min => Some(JniNiche::Integer(n - 1)),
         _ => None,
-    };
-    Ok(())
-}
-
-impl OptionalWire {
-    pub(crate) fn suppress_niches(&mut self) {
-        self.remaining = None;
     }
 }

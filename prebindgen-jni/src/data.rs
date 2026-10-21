@@ -133,26 +133,12 @@ impl Shape {
         }
     }
 }
-/// Private preparation metadata connecting a flattened value wire to a data class.
-///
-/// Constructed by the JNI declaration compiler; wrapper writers see only its
-/// underlying transport through [`JniWire`].
+/// Destination record grouping stored on a conversion plan, never in its wires.
 #[derive(Clone, Debug)]
-pub struct DataWire {
-    pub(crate) leaf: JniKind,
+pub struct DataGroup {
     pub(crate) root: String,
     pub(crate) record: Rc<RecordShape>,
     pub(crate) condition: String,
-}
-impl JniKind {
-    pub(crate) fn leaf(&self) -> &Self {
-        match self {
-            Self::Data(d) => d.leaf.leaf(),
-            Self::Optional(o) => o.leaf.leaf(),
-            Self::NonNiche(w) => w.leaf(),
-            _ => self,
-        }
-    }
 }
 
 pub(crate) struct DataCodec {
@@ -389,7 +375,12 @@ impl RecordShape {
             plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
             "data fields must remain value-only"
         );
-        Rc::new(self.clone()).mark(&mut plan.wires, w.to_string(), kotlin_condition(active));
+        Rc::new(self.clone()).mark(
+            &plan.wires,
+            &mut plan.metadata,
+            w.to_string(),
+            kotlin_condition(active),
+        )?;
         Ok(plan)
     }
     fn output(
@@ -439,23 +430,32 @@ impl RecordShape {
                 convert,
             )
         }?;
-        Rc::new(self.clone()).mark(&mut plan.wires, w.to_string(), "true".into());
+        Rc::new(self.clone()).mark(
+            &plan.wires,
+            &mut plan.metadata,
+            w.to_string(),
+            "true".into(),
+        )?;
         Ok(plan)
     }
     fn mark(
         self: &Rc<Self>,
-        wires: &mut [prebindgen_flat::Wire<JniKind>],
+        wires: &[prebindgen_flat::Wire<JniKind>],
+        metadata: &mut JniComposition,
         root: String,
         condition: String,
-    ) {
-        for wire in wires {
-            wire.kind = JniKind::Data(Box::new(DataWire {
-                leaf: wire.kind.clone(),
-                root: root.clone(),
+    ) -> Result<()> {
+        // Record fields do not donate niches to enclosing optional occurrences.
+        metadata.suppress(wires);
+        metadata.enclose(
+            root.clone(),
+            wires.iter().map(|w| w.name.clone()).collect(),
+            prebindgen_declarations::GroupKind::Adapter(DataGroup {
+                root,
                 record: self.clone(),
-                condition: condition.clone(),
-            }));
-        }
+                condition,
+            }),
+        )
     }
     pub(crate) fn construct(&self, values: &mut impl Iterator<Item = String>) -> String {
         let fields = self
@@ -469,18 +469,12 @@ impl RecordShape {
 
 impl Codec for DataCodec {
     type Niche = crate::optional::JniNiche;
+    type Group = DataGroup;
     type Extra = ();
     type Wire = JniKind;
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
-    fn prefix_component(
-        &self,
-        wire: &mut JniKind,
-        segment: prebindgen_declarations::ComponentSegment,
-    ) {
-        JniCodec.prefix_component(wire, segment);
-    }
     fn niche(&self, wire: &JniKind) -> Option<crate::optional::JniNiche> {
         optional::niche(wire)
     }
@@ -492,8 +486,8 @@ impl Codec for DataCodec {
     ) -> Result<TokenStream> {
         Ok(niche.present(value))
     }
-    fn reserve_niche(&self, wire: &mut JniKind, niche: &Self::Niche) -> Result<()> {
-        crate::optional::reserve(wire, niche)
+    fn remaining_niche(&self, wire: &JniKind, niche: &Self::Niche) -> Option<Self::Niche> {
+        optional::remaining(wire, niche)
     }
     fn absent_value(
         &self,
@@ -502,16 +496,6 @@ impl Codec for DataCodec {
         input: bool,
     ) -> Result<TokenStream> {
         optional::absent(wire, niche, input)
-    }
-    fn mark_optional(
-        &self,
-        wires: &mut [prebindgen_flat::Wire<JniKind>],
-        inner: &[prebindgen_flat::Wire<JniKind>],
-        tag: &syn::Ident,
-        layout: &prebindgen_declarations::OptionalLayout<Self::Niche>,
-        input: bool,
-    ) -> Result<()> {
-        optional::mark(wires, inner, tag, layout, input)
     }
     fn selector(&self, extra: &()) -> JniKind {
         JniCodec.selector(extra)
@@ -689,16 +673,39 @@ impl Shape {
 
 pub(crate) fn input_kotlin(
     wires: &[prebindgen_flat::Wire<JniKind>],
+    metadata: &JniComposition,
+    roots: &[String],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     let mut i = 0;
     while i < wires.len() {
-        let JniKind::Data(d) = &wires[i].kind else {
+        let group = metadata.starting_at(roots, &wires[i].name);
+        let Some(prebindgen_declarations::CompositionGroup {
+            kind: prebindgen_declarations::GroupKind::Adapter(d),
+            ..
+        }) = group
+        else {
             let end = (i + 1..wires.len())
-                .find(|j| matches!(wires[*j].kind, JniKind::Data(_)))
+                .find(|j| {
+                    metadata
+                        .starting_at(roots, &wires[*j].name)
+                        .is_some_and(|g| {
+                            matches!(g.kind, prebindgen_declarations::GroupKind::Adapter(_))
+                        })
+                })
                 .unwrap_or(wires.len());
-            let c = kotlin::input_kotlin(&wires[i..end], context)?;
+            let scope = roots
+                .iter()
+                .filter(|id| {
+                    metadata.groups[*id]
+                        .members
+                        .first()
+                        .is_some_and(|n| wires[i..end].iter().any(|w| &w.name == n))
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let c = kotlin::input_kotlin(&wires[i..end], metadata, &scope, context)?;
             out.parameters.extend(c.parameters);
             out.arguments.extend(c.arguments);
             out.locks.extend(c.locks);
@@ -706,20 +713,10 @@ pub(crate) fn input_kotlin(
             i = end;
             continue;
         };
-        let end = (i + 1..wires.len())
-            .find(|j| !matches!(&wires[*j].kind,JniKind::Data(other) if other.root==d.root))
-            .unwrap_or(wires.len());
-        let mut inner = Vec::new();
-        for w in &wires[i..end] {
-            let JniKind::Data(d) = &w.kind else {
-                unreachable!()
-            };
-            inner.push(prebindgen_flat::Wire {
-                name: w.name.clone(),
-                kind: d.leaf.clone(),
-            });
-        }
-        let mut c = kotlin::input_kotlin(&inner, context)?;
+        let group = group.unwrap();
+        let end = i + group.members.len();
+        let inner = &wires[i..end];
+        let mut c = kotlin::input_kotlin(inner, metadata, &group.children, context)?;
         out.parameters.push(format!(
             "{}: {}{}",
             d.root,
@@ -782,6 +779,8 @@ pub(crate) fn input_kotlin(
 }
 pub(crate) fn output_kotlin(
     wires: &[prebindgen_flat::Wire<JniKind>],
+    metadata: &JniComposition,
+    roots: &[String],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let mut out = KotlinOutput {
@@ -793,32 +792,38 @@ pub(crate) fn output_kotlin(
     };
     let mut i = 0;
     while i < wires.len() {
-        let (end, record) = if let JniKind::Data(d) = &wires[i].kind {
-            (
-                (i + 1..wires.len())
-                    .find(|j| !matches!(&wires[*j].kind,JniKind::Data(other) if other.root==d.root))
-                    .unwrap_or(wires.len()),
-                Some(d.record.clone()),
-            )
+        let group = metadata.starting_at(roots, &wires[i].name);
+        let (end, record, scope) = if let Some(prebindgen_declarations::CompositionGroup {
+            kind: prebindgen_declarations::GroupKind::Adapter(d),
+            members,
+            children,
+            ..
+        }) = group
+        {
+            (i + members.len(), Some(d.record.clone()), children.clone())
         } else {
-            (
-                (i + 1..wires.len())
-                    .find(|j| matches!(wires[*j].kind, JniKind::Data(_)))
-                    .unwrap_or(wires.len()),
-                None,
-            )
+            let end = (i + 1..wires.len())
+                .find(|j| {
+                    metadata
+                        .starting_at(roots, &wires[*j].name)
+                        .is_some_and(|g| {
+                            matches!(g.kind, prebindgen_declarations::GroupKind::Adapter(_))
+                        })
+                })
+                .unwrap_or(wires.len());
+            let scope = roots
+                .iter()
+                .filter(|id| {
+                    metadata.groups[*id]
+                        .members
+                        .first()
+                        .is_some_and(|n| wires[i..end].iter().any(|w| &w.name == n))
+                })
+                .cloned()
+                .collect();
+            (end, None, scope)
         };
-        let inner = wires[i..end]
-            .iter()
-            .map(|w| prebindgen_flat::Wire {
-                name: w.name.clone(),
-                kind: if let JniKind::Data(d) = &w.kind {
-                    d.leaf.clone()
-                } else {
-                    w.kind.clone()
-                },
-            })
-            .collect::<Vec<_>>();
+        let inner = &wires[i..end];
         let local = format!("{}_record{i}", context.result);
         let prefix = format!("{}r{i}_", context.output_prefix);
         let ctx = KotlinContext {
@@ -826,7 +831,7 @@ pub(crate) fn output_kotlin(
             output_prefix: &prefix,
             ..*context
         };
-        let mut c = kotlin::output_kotlin(&inner, &ctx)?;
+        let mut c = kotlin::output_kotlin(inner, metadata, &scope, &ctx)?;
         for text in
             c.delivered
                 .iter_mut()

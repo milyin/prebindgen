@@ -1,4 +1,6 @@
 use super::*;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), Composition<(), ()>>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), Composition<(), ()>>;
 use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
@@ -38,6 +40,7 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 impl Codec for TestCodec {
     type Niche = ();
+    type Group = ();
     type Extra = Extra;
     type Wire = TestWire;
     type Context = ();
@@ -48,16 +51,6 @@ impl Codec for TestCodec {
     }
     fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
         Ok(quote!(Default::default()))
-    }
-    fn mark_optional(
-        &self,
-        _: &mut [Wire<TestWire>],
-        _: &[Wire<TestWire>],
-        _: &syn::Ident,
-        _: &OptionalLayout<()>,
-        _: bool,
-    ) -> Result<()> {
-        Ok(())
     }
     fn selector(&self, extra: &Extra) -> TestWire {
         TestWire {
@@ -91,6 +84,7 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
+            metadata: Default::default(),
             context: Default::default(),
             acknowledgement: None,
             wires: vec![Wire {
@@ -121,6 +115,7 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
+            metadata: Default::default(),
             context: Default::default(),
             delivery: Default::default(),
             wires: vec![Wire {
@@ -609,6 +604,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
     impl Codec for FinalizingCodec {
         type Niche = ();
+        type Group = ();
         type Extra = Extra;
         type Wire = TestWire;
         type Context = ();
@@ -1053,6 +1049,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                metadata: Default::default(),
                 context: Default::default(),
                 delivery: Default::default(),
                 wires: Vec::new(),
@@ -1173,6 +1170,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                metadata: Default::default(),
                 context: Default::default(),
                 delivery: Default::default(),
                 wires: vec![],

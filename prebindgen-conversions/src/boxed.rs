@@ -70,7 +70,7 @@ impl Storage {
 /// ```
 /// use prebindgen_conversions::boxed;
 /// use prebindgen_conversions::Access;
-/// let input = boxed::input::<syn::Type, ()>(
+/// let input = boxed::input::<syn::Type, (), ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     &quote::quote!(true), |boxed| {
@@ -84,14 +84,14 @@ impl Storage {
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C>(
+pub fn input<W: prebindgen_flat::WireKind, C, M: Default>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputPlan<W, C>> {
+) -> Result<InputPlan<W, C, M>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -130,6 +130,7 @@ pub fn input<W: prebindgen_flat::WireKind, C>(
         ),
     };
     Ok(InputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         acknowledgement: None,
         wires: vec![Wire {
@@ -167,14 +168,14 @@ pub fn input<W: prebindgen_flat::WireKind, C>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W: prebindgen_flat::WireKind, C>(
+pub fn output<W: prebindgen_flat::WireKind, C, M: Default>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputPlan<W, C>> {
+) -> Result<OutputPlan<W, C, M>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -186,6 +187,7 @@ pub fn output<W: prebindgen_flat::WireKind, C>(
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
     Ok(OutputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         delivery: Default::default(),
         wires: vec![Wire {

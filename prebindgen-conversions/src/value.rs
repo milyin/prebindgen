@@ -67,7 +67,7 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::value;
 /// use quote::quote;
-/// let input = value::input::<syn::Type, ()>(
+/// let input = value::input::<syn::Type, (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
@@ -75,14 +75,14 @@ impl Value {
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C>(
+pub fn input<W: prebindgen_flat::WireKind, C, M: Default>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &TokenStream,
     decode: TokenStream,
     kind: W,
-) -> Result<InputPlan<W, C>> {
+) -> Result<InputPlan<W, C, M>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
@@ -111,6 +111,7 @@ pub fn input<W: prebindgen_flat::WireKind, C>(
         ),
     };
     Ok(InputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         acknowledgement: None,
         wires: vec![Wire { name: wire, kind }],
@@ -138,14 +139,14 @@ pub fn input<W: prebindgen_flat::WireKind, C>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W: prebindgen_flat::WireKind, C>(
+pub fn output<W: prebindgen_flat::WireKind, C, M: Default>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputPlan<W, C>> {
+) -> Result<OutputPlan<W, C, M>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };
@@ -162,6 +163,7 @@ pub fn output<W: prebindgen_flat::WireKind, C>(
     let expr = encode(value);
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
+        metadata: Default::default(),
         context: Default::default(),
         delivery: Default::default(),
         wires: vec![Wire {

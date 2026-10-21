@@ -1,5 +1,7 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), Composition<Sentinel, ()>>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), Composition<Sentinel, ()>>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -16,7 +18,6 @@ struct Sentinel {
 struct Domain {
     ty: Type,
     unused: Vec<Sentinel>,
-    pending: Vec<Sentinel>,
     prefix: bool,
     valid: TokenStream,
 }
@@ -28,6 +29,7 @@ impl WireKind for Domain {
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
+    type Group = ();
     type Extra = ();
     type Context = ();
     type Wire = Domain;
@@ -37,7 +39,6 @@ impl Codec for DomainCodec {
         Domain {
             ty: syn::parse_quote!(i32),
             unused: vec![],
-            pending: vec![],
             prefix: false,
             valid: quote!(true),
         }
@@ -76,32 +77,12 @@ impl Codec for DomainCodec {
         Ok(n.map(|n| n.value.clone())
             .unwrap_or_else(|| quote!(Default::default())))
     }
-    fn mark_optional(
-        &self,
-        wires: &mut [Wire<Domain>],
-        _: &[Wire<Domain>],
-        _: &syn::Ident,
-        layout: &OptionalLayout<Sentinel>,
-        _: bool,
-    ) -> Result<()> {
-        // Defaults on non-selected wires may occupy their unused representations.
-        // Conservatively expose only the selected wire's remaining domain.
-        for (i, w) in wires.iter_mut().enumerate() {
-            let unused = std::mem::take(&mut w.kind.unused);
-            w.kind.pending = if matches!(&layout.niche, Some((j, _)) if i==*j) {
-                unused
-            } else {
-                vec![]
-            };
-            assert!(self.niche(&w.kind).is_none());
-        }
-        Ok(())
-    }
-    fn reserve_niche(&self, wire: &mut Domain, n: &Sentinel) -> Result<()> {
-        assert_eq!(wire.pending[0].value.to_string(), n.value.to_string());
-        wire.pending.remove(0);
-        wire.unused = std::mem::take(&mut wire.pending);
-        Ok(())
+    fn remaining_niche(&self, wire: &Domain, n: &Sentinel) -> Option<Sentinel> {
+        let index = wire
+            .unused
+            .iter()
+            .position(|s| s.value.to_string() == n.value.to_string())?;
+        wire.unused.get(index + 1).cloned()
     }
 }
 fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> {
@@ -129,6 +110,7 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
             quote!(true)
         };
         return InputPlan {
+            metadata: Default::default(),
             context: Default::default(),
             wires,
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
@@ -174,6 +156,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             values.insert(0, quote!(123i32));
         }
         return OutputPlan {
+            metadata: Default::default(),
             context: Default::default(),
             delivery: Default::default(),
             wires,
@@ -267,7 +250,6 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
             let suffix = usize::from(prefix);
             let domain = Domain {
                 ty: ty.clone(),
-                pending: vec![],
                 prefix,
                 valid: if case == 0 {
                     quote!(raw <= 2)
@@ -369,4 +351,91 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
         String::from_utf8_lossy(&result.stderr)
     );
     assert!(std::process::Command::new(exe).status().unwrap().success());
+}
+
+#[test]
+fn optional_domains_live_on_plans_and_only_the_discriminator_keeps_a_niche() {
+    let domain = Domain {
+        ty: syn::parse_quote!(u8),
+        unused: vec![
+            Sentinel {
+                value: quote!(3u8),
+                absent: equal,
+            },
+            Sentinel {
+                value: quote!(4u8),
+                absent: equal,
+            },
+        ],
+        prefix: false,
+        valid: quote!(true),
+    };
+    let mut child = output(&domain, 0, quote!(payload));
+    // A second view has the same base domain, but its absent default cannot be
+    // treated as an independent discriminator by the enclosing optional layer.
+    child.wires.push(Wire {
+        name: format_ident!("second"),
+        kind: domain.clone(),
+    });
+    child.values.push(quote!(raw));
+    let mut plan = optional_output(
+        &DomainCodec,
+        &(),
+        format_ident!("tag1"),
+        format_ident!("payload"),
+        quote!(source),
+        false,
+        child,
+    )
+    .unwrap();
+    assert_eq!(
+        plan.metadata.domains["raw"]
+            .as_ref()
+            .unwrap()
+            .value
+            .to_string(),
+        "4u8"
+    );
+    assert!(plan.metadata.domains["second"].is_none());
+    assert_eq!(plan.wires[0].kind.unused.len(), 2); // Wire's base domain is unchanged.
+    assert_eq!(plan.wires[1].kind.unused.len(), 2);
+    plan = optional_output(
+        &DomainCodec,
+        &(),
+        format_ident!("tag2"),
+        format_ident!("outer_payload"),
+        quote!(outer_source),
+        false,
+        plan,
+    )
+    .unwrap();
+    assert_eq!(plan.wires.len(), 2);
+    assert!(plan.metadata.domains.values().all(Option::is_none));
+    plan = optional_output(
+        &DomainCodec,
+        &(),
+        format_ident!("tag3"),
+        format_ident!("outermost_payload"),
+        quote!(outermost_source),
+        false,
+        plan,
+    )
+    .unwrap();
+    assert_eq!(plan.wires.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
+    assert_eq!(plan.wires[0].name, "tag3");
+    plan.metadata.validate(&plan.wires).unwrap();
+    assert_eq!(plan.metadata.roots, ["tag3"]);
+    assert_eq!(plan.metadata.groups["tag3"].children, ["tag2"]);
+    assert_eq!(plan.metadata.groups["tag2"].children, ["tag1"]);
+    let mut independent = output(&domain, 0, quote!(payload));
+    independent.metadata.suppress(&independent.wires);
+    assert!(independent.metadata.domains["raw"].is_none());
+    assert_eq!(
+        DomainCodec
+            .niche(&independent.wires[0].kind)
+            .unwrap()
+            .value
+            .to_string(),
+        "3u8"
+    );
 }

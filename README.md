@@ -431,7 +431,7 @@ arguments are rejected. Buffers have no null niche: a null pointer with zero
 length is a valid empty buffer. No valid scalar value is reserved as a sentinel.
 
 Only unconditional payload wires can donate a niche. Selector-arm wires cannot
-supply niches. Optional wires can retain unused representations for outer layers:
+supply niches. Optional plans can retain unused representations for outer layers:
 C encodes `Option<Option<char>>` in one `uint32_t` (`0x110001` for outer `None`,
 `0x110000` for `Some(None)`). JNI uses `-2` and `-1` for nested optional chars and
 widened unsigned scalars. Once a domain is exhausted, additional layers use flags.
@@ -443,10 +443,24 @@ optional group, including enclosing optional groups.
 Adapters define `Codec::Niche: Clone`; the shared compiler never interprets its
 representation. `niche` selects an excluded representation, `is_present` emits a
 total, side-effect-free presence predicate, and `absent_value` emits its absent
-value. `mark_optional` retains foreign grouping and updates non-discriminator
-domains for their absent defaults; `reserve_niche` then removes the chosen
-representation from the discriminator's remaining domain. Both input and output
-composition use the same protocol. The default hooks reject unsupported operations.
+value. `remaining_niche` reports the next unused representation after consuming
+one niche, or `None` when exhausted. The shared compiler suppresses niches on
+other payload wires and on inactive selector arms. Both input and output
+composition use this protocol.
+
+Every `Wire` still describes one complete FFI value. Optional presence rules,
+record grouping and remaining domains belong to `InputPlan::metadata` and
+`OutputPlan::metadata`, using the shared `Composition<Niche, Group>` type.
+Groups reference existing wire names; child-group references describe nesting
+without embedding wires inside other wires. The compiler validates unique names,
+group spans and references before installing conversions. JNI keeps Kotlin record
+metadata in its adapter-specific `Group` type. C header emission reads optional
+groups through `CComposition`; custom C slots can implement its default method
+when they need no optional-group documentation.
+
+Custom codecs now declare `type Group` (use `()` when unused), return plans with
+composition metadata, and implement `remaining_niche` instead of mutating wires.
+Generic conversion plans accept a third metadata parameter, defaulting to `()`.
 
 Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
 or structured predicates. A custom float domain may explicitly exclude a NaN
