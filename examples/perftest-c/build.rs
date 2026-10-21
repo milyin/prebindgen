@@ -7,6 +7,23 @@ fn main() {
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .enum_type("priority", pq!(Priority))
+        .opaque_ptr("enum_payload", pq!(Payload))
+        .function(fun!(enum_payload_new).expand_return(expand_return!(Payload).field_self_into()))
+        .function(fun!(payload_priority))
+        .enum_type("code", pq!(SparseCode))
+        .enum_type("enum_names", pq!(EnumNames))
+        .expand(expand_param!(EnumRecord).variant(fun!(enum_record_new)))
+        .expand(expand_return!(EnumRecord).fields_into(fields!(enum_record_into)))
+        .function(fun!(priority_weight))
+        .function(fun!(priority_or))
+        .function(fun!(sparse_echo))
+        .function(fun!(sparse_optional))
+        .function(fun!(sparse_nested))
+        .function(fun!(sparse_ref))
+        .function(fun!(sparse_borrowed))
+        .function(fun!(enum_record_echo))
+        .function(fun!(enum_names_echo))
         /* Unsupported: old C output naming or memory policy.
         .source_module(pq!(perftest_flat))
         */

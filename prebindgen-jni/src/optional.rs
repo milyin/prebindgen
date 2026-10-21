@@ -255,6 +255,13 @@ pub(crate) fn remaining(wire: &JniWire, niche: &JniNiche) -> Option<JniNiche> {
     let JniNiche::Integer(n) = niche else {
         return None;
     };
+    if let JniWire::Enum { enum_type, .. } = wire {
+        return i32::try_from(*n)
+            .ok()?
+            .checked_sub(1)
+            .and_then(|n| enum_type.mapping.unused_at_or_below(n))
+            .map(|n| JniNiche::Integer(n.into()));
+    }
     let next = JniNiche::Integer(n.checked_sub(1)?);
     // Stop at the carrier boundary or the next valid payload value. Do not
     // advertise a reserved range's neighbour merely because it fits an integer.

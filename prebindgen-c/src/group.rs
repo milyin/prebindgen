@@ -26,10 +26,24 @@ pub struct COptional {
 
 pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> {
     layout.validate()?;
+    for wire in layout.iter() {
+        if let CCarrier::Enum { mapping, .. } = &wire.kind.carrier {
+            mapping.validate()?;
+            if wire
+                .kind
+                .spare_niche
+                .as_ref()
+                .is_some_and(|n| !matches!(n,CNiche::Integer(v) if mapping.is_niche(*v)))
+            {
+                return Err("invalid available C enum niche".into());
+            }
+        }
+    }
     fn visit(
         layout: &WireLayout<CWire, CGroup>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
+        reserved: &mut std::collections::BTreeMap<String, Vec<i64>>,
     ) -> Result<()> {
         for node in layout.nodes() {
             if let WireNode::Group { metadata, children } = node {
@@ -40,8 +54,27 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
                             o.presence
                         ));
                     }
-                    if !children.iter().any(|w| w.name == o.discriminator) {
-                        return Err("optional discriminator outside group".into());
+                    let wire = children
+                        .iter()
+                        .find(|w| w.name == o.discriminator)
+                        .ok_or("optional discriminator outside group")?;
+                    if let (CCarrier::Enum { mapping, .. }, Some(niche)) =
+                        (&wire.kind.carrier, &o.niche)
+                    {
+                        let CNiche::Integer(n) = niche else {
+                            return Err("invalid reserved C enum niche".into());
+                        };
+                        if !mapping.is_niche(*n) {
+                            return Err("invalid reserved C enum niche".into());
+                        }
+                        if matches!(wire.kind.spare_niche, Some(CNiche::Integer(v)) if v == *n) {
+                            return Err("available C enum niche is already reserved".into());
+                        }
+                        let values = reserved.entry(o.discriminator.to_string()).or_default();
+                        if values.contains(n) {
+                            return Err("duplicate C enum niche reservation".into());
+                        }
+                        values.push(*n);
                     }
                     if o.niche.is_none()
                         && !matches!(children.nodes().first(),Some(WireNode::Wire(w)) if w.name==o.discriminator)
@@ -71,12 +104,22 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
                     }
                     _ => {}
                 }
-                visit(children, bindings, matches!(metadata, CGroup::Fields))?;
+                visit(
+                    children,
+                    bindings,
+                    matches!(metadata, CGroup::Fields),
+                    reserved,
+                )?;
             }
         }
         Ok(())
     }
-    visit(layout, &mut std::collections::BTreeSet::new(), false)
+    visit(
+        layout,
+        &mut std::collections::BTreeSet::new(),
+        false,
+        &mut std::collections::BTreeMap::new(),
+    )
 }
 
 #[cfg(test)]

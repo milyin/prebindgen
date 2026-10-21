@@ -171,6 +171,10 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
         let n = &w.name;
         let (kt, arg) = match &w.kind {
             JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
+            JniWire::Enum { enum_type, .. } => (
+                enum_type.class_name.clone(),
+                format!("{n}.{}", enum_type.value_member()),
+            ),
             JniWire::Handle {
                 handle, condition, ..
             } => {
@@ -219,6 +223,14 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
             JniWire::Text { .. } => ("String".into(), format!("{result}[{i}] as String")),
             JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
             JniWire::Selector { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
+            JniWire::Enum { enum_type, .. } => (
+                enum_type.class_name.clone(),
+                format!(
+                    "{}.{}({result}[{i}] as Int)",
+                    enum_type.class_name,
+                    enum_type.decode_member()
+                ),
+            ),
         };
         delivered.push(decode);
         result_types.push(kt);

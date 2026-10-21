@@ -53,7 +53,7 @@ Source selection happens before subset validation. Automatic dependency discover
 follows unqualified declared type names. Types referenced only through qualified
 paths need explicit selection by their unqualified declaration name, for example
 with `ptr_class!(Foo)` or `.opaque_ptr("foo", syn::parse_quote!(Foo))`; an already
-parsed `Flat` model can also include them. Unbound enums, callbacks,
+parsed `Flat` model can also include them. Unbound data-carrying enums, callbacks,
 collections and functions can stay in the source crate; selecting one still
 produces a generation error when its shape is unsupported. Both annotated flat
 examples also have tests that parse the entire captured surface, ensuring no
@@ -73,7 +73,7 @@ fields give it zero size.
 
 ## Supported generator API
 
-JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_class!`, `fun!`,
+JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_class!`, `enum_class!`, `fun!`,
 `.name()`, package prefix and native initialization. `build()` returns `JniGen`;
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
@@ -286,7 +286,7 @@ Both writers use this API to declare Rust parameters and result fields. A plain
 `syn::Type` implements `WireKind` when no additional metadata is needed.
 C uses `CWire` for scalars, buffers and typed pointers, with its remaining niche
 in `spare_niche`. JNI uses a single `JniWire` enum for scalars, handles, text,
-bytes and selectors. Scalar and selector variants store `next_integer_niche`;
+bytes and selectors. Scalar, enum and selector variants store `next_integer_niche`;
 handles, text and bytes store `null_niche_available`. Constructors
 `JniWire::{scalar, handle, text, bytes, selector}` initialize that state; `available_niche()`,
 checked `set_niche(...)` and `clear_niche()` read and update it. Used niche
@@ -409,9 +409,57 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 C status/out-struct and JNI object-array ABI optimization remain separate work.
 
-Callbacks, enums, general collections, mutable text/byte views, methods,
+Callbacks, data-carrying enums, general collections, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, domain errors, split
 overloads and shared selector argument storage remain outside this subset.
+
+## Fieldless enums
+
+Declare an enum explicitly in each adapter:
+
+```rust,ignore
+// JNI/Kotlin
+.package(package!("model").class(enum_class!(Priority)))
+// C
+.enum_type("priority", syn::parse_quote!(Priority))
+```
+
+Both adapters currently use a signed 32-bit integer representation. They preserve
+Rust discriminants, including negative values, gaps and implicit successors.
+Kotlin emits an `enum class` with a `wireValue` property and checked `fromWire`
+factory; ordinal positions never define the binding. Infrastructure members are
+renamed with leading underscores if a source variant uses the same name.
+Kotlin's built-in entry names `name`, `ordinal`, `entries`, and the generated
+code's package reference `kotlin` require an explicit
+override, for example `enum_class!(Code).variant_name("name", "Name")`.
+Unknown overrides, duplicate overrides and duplicate foreign entry names fail
+at generation time. Source variants are never renamed implicitly.
+C emits an `int32_t` typedef and named constants, for example
+`pb_priority_High`. The C compiler's native enum layout is not part of the ABI.
+
+`prebindgen-flat` retains variant names and source discriminant expressions.
+`prebindgen-declarations::EnumMapping` resolves the integer mapping and generates
+exhaustive output matches and checked input matches for both adapters. Generated
+Rust assertions compare the mapping with the actual source discriminants. No
+integer is transmuted into an enum. Rust `repr` attributes do not determine the
+foreign carrier. No `Copy` or `Clone` implementation is required, and shared
+references are converted by value. Mutable enum references are unsupported.
+
+Enums work as parameters, results, fields of Kotlin data classes, and fields in
+explicit C constructor/projection expansions. `Option<Enum>` and nested options
+reserve unused integer representations, starting below zero and skipping actual
+variant values. For an enum with variants `-2`, `-1` and `0`, the first two
+absence representations are `-3` and `-4`. Unknown active inputs are rejected;
+reserved values are accepted only by the corresponding optional layers.
+
+This increment supports exhaustive, nongeneric enums with unconditional
+fieldless variants. Discriminants must be integer literals (optionally negative
+or parenthesized) or implicit successors, all within `i32`; expressions involving
+constants or arithmetic are diagnosed during generation. Enums with payloads,
+`cfg`/`cfg_attr`-decorated enums or variants and `#[non_exhaustive]` remain unsupported. The existing
+nonzero-size rule still applies; a single-variant enum can use `#[repr(i32)]`.
+Enums implementing `Drop` are unsupported: Rust rejects the generated source
+checks that cast variant discriminants to integers.
 
 ## Optional values and niches
 
@@ -432,6 +480,7 @@ compiler uses an eligible niche instead of adding a presence wire:
 |---|---|---|
 | Opaque pointer / handle | Null pointer | Zero handle |
 | `char` | `0x110000` | `-1` |
+| Fieldless enum | Unused integer | Unused integer |
 | `u8`, `u16`, `u32` | Separate presence flag | `-1` in the wider signed carrier |
 | Text, bytes | Separate presence flag | Null Java reference |
 | Selector tag | Separate presence flag | `-1` (valid arm indices are nonnegative) |

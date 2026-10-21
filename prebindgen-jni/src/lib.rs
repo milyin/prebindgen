@@ -7,6 +7,8 @@ use prebindgen_flat::{type_key, Flat, Result, WireKind};
 
 pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
+mod enums;
+pub use enums::{EnumClassDecl, JniEnum};
 mod optional;
 pub use optional::JniNiche;
 mod group;
@@ -370,6 +372,11 @@ impl JniGenBuilder {
                             name,
                             ty,
                             data: matches!(c, ClassDecl::Data(_)),
+                            enumeration: matches!(c, ClassDecl::Enum(_)),
+                            variant_names: match c {
+                                ClassDecl::Enum(c) => c.variant_names,
+                                _ => Vec::new(),
+                            },
                         },
                     )
                     .is_some()
@@ -391,6 +398,9 @@ impl JniGenBuilder {
             }
         }
         let codec = data::DataCodec::new(&flat, &classes)?;
+        for enumeration in codec.enums.values() {
+            flat.guards.extend(enumeration.mapping.guards());
+        }
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
         }
@@ -409,7 +419,13 @@ impl JniGenBuilder {
                 codec.render(class)?,
             );
         }
-        classes.retain(|_, class| !class.data);
+        for class in classes.values().filter(|class| class.enumeration) {
+            data_files.insert(
+                format!("{}/{}.kt", class.pkg.replace('.', "/"), class.name),
+                codec.enums[&type_key(&class.ty)].render(class)?,
+            );
+        }
+        classes.retain(|_, class| !class.data && !class.enumeration);
         generate(
             flat,
             &self.prefix,
@@ -425,6 +441,8 @@ struct Class {
     name: String,
     ty: syn::Type,
     data: bool,
+    enumeration: bool,
+    variant_names: Vec<(String, String)>,
 }
 impl Class {
     fn fqn(&self) -> String {
@@ -495,7 +513,9 @@ impl Codec for JniCodec {
                 JniWire::Bytes { .. } => {
                     quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::bytes_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
                 }
-                JniWire::Selector { .. } => scalar::output_java(Primitive::I32, value),
+                JniWire::Selector { .. } | JniWire::Enum { .. } => {
+                    scalar::output_java(Primitive::I32, value)
+                }
             };
             let i = i as i32;
             encode.extend(quote! {

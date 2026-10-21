@@ -13,6 +13,8 @@ use prebindgen_flat::{same_type, type_key, Flat, Result, Wire, WireLayout};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod enums;
+pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
 pub use optional::{optional_input, optional_output};
 pub use prebindgen_flat::option_inner;

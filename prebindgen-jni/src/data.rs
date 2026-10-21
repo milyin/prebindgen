@@ -54,6 +54,8 @@ pub enum ClassDecl {
     Ptr(PtrClassDecl),
     /// A record mapped to a Kotlin data class.
     Data(DataClassDecl),
+    /// A fieldless enum mapped to a Kotlin enum class.
+    Enum(EnumClassDecl),
 }
 impl From<PtrClassDecl> for ClassDecl {
     fn from(value: PtrClassDecl) -> Self {
@@ -65,17 +67,24 @@ impl From<DataClassDecl> for ClassDecl {
         Self::Data(value)
     }
 }
+impl From<EnumClassDecl> for ClassDecl {
+    fn from(value: EnumClassDecl) -> Self {
+        Self::Enum(value)
+    }
+}
 impl ClassDecl {
     pub(crate) fn ty(&self) -> &syn::Type {
         match self {
             Self::Ptr(c) => &c.ty,
             Self::Data(c) => &c.ty,
+            Self::Enum(c) => &c.ty,
         }
     }
     pub(crate) fn name(&self) -> &Option<String> {
         match self {
             Self::Ptr(c) => &c.name,
             Self::Data(c) => &c.name,
+            Self::Enum(c) => &c.name,
         }
     }
 }
@@ -104,6 +113,7 @@ enum Shape {
     Value(Value),
     Record(Rc<RecordShape>),
     Handle(String),
+    Enum(Box<JniEnum>),
 }
 impl Shape {
     fn is_bytes(&self) -> bool {
@@ -124,6 +134,7 @@ impl Shape {
             Self::Value(Value::Bytes) => "kotlin.ByteArray".into(),
             Self::Record(r) => r.fqn.clone(),
             Self::Handle(fqn) => fqn.clone(),
+            Self::Enum(e) => e.class_name.clone(),
         }
     }
     fn slots(&self) -> usize {
@@ -143,6 +154,7 @@ pub struct DataGroup {
 
 pub(crate) struct DataCodec {
     records: BTreeMap<String, Rc<RecordShape>>,
+    pub(crate) enums: BTreeMap<String, JniEnum>,
 }
 impl DataCodec {
     pub(crate) fn new<I, O>(flat: &Flat<I, O>, classes: &BTreeMap<String, Class>) -> Result<Self> {
@@ -206,6 +218,8 @@ impl DataCodec {
                     Shape::Value(value)
                 } else if classes.get(&field_key).is_some_and(|c| c.data) {
                     Shape::Record(resolve(flat, classes, &field_key, stack, records)?)
+                } else if let Some(class) = classes.get(&field_key).filter(|c| c.enumeration) {
+                    Shape::Enum(Box::new(JniEnum::from_class(flat, class)?))
                 } else if let Some(handle) = classes.get(&field_key) {
                     Shape::Handle(handle.fqn())
                 } else {
@@ -238,13 +252,30 @@ impl DataCodec {
             records.insert(key.into(), shape.clone());
             Ok(shape)
         }
+        for (key, _) in classes.iter().filter(|(_, c)| c.enumeration) {
+            if !flat.enums.contains_key(key) {
+                return Err("enum_class requires a fieldless source enum".into());
+            }
+        }
         let mut records = BTreeMap::new();
         for (key, class) in classes {
             if class.data {
                 resolve(flat, classes, key, &mut Vec::new(), &mut records)?;
             }
         }
-        Ok(Self { records })
+        let mut enums = BTreeMap::new();
+        for (key, class) in classes.iter().filter(|(_, c)| c.enumeration) {
+            enums.insert(key.clone(), JniEnum::from_class(flat, class)?);
+        }
+        Ok(Self { records, enums })
+    }
+    fn enum_type(&self, ty: &syn::Type) -> Option<&JniEnum> {
+        let ty = if let syn::Type::Reference(r) = ty {
+            &r.elem
+        } else {
+            ty
+        };
+        self.enums.get(&type_key(ty))
     }
     fn record(&self, ty: &syn::Type) -> Result<Option<&Rc<RecordShape>>> {
         if let syn::Type::Reference(r) = ty {
@@ -344,7 +375,7 @@ impl RecordShape {
             Shape::Optional(s) => s.has_handles(),
             Shape::Handle(_) => true,
             Shape::Record(r) => r.has_handles(),
-            Shape::Value(_) => false,
+            Shape::Value(_) | Shape::Enum(_) => false,
         })
     }
 
@@ -508,7 +539,9 @@ impl Codec for DataCodec {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             return self.consumes(inner, extra);
         }
-        !self.records.contains_key(&type_key(ty)) && JniCodec.consumes(ty, extra)
+        !self.records.contains_key(&type_key(ty))
+            && self.enum_type(ty).is_none()
+            && JniCodec.consumes(ty, extra)
     }
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_input(plan, extra)
@@ -534,6 +567,9 @@ impl Codec for DataCodec {
                 &active.arm(tag.clone(), 1),
             )?;
             return prebindgen_declarations::optional_input(self, extra, tag, var, active, child);
+        }
+        if let Some(e) = self.enum_type(ty) {
+            return e.input(ty, wire, var, active);
         }
         let Some(record) = self.record(ty)? else {
             return JniCodec.input_leaf(ty, extra, wire, var, active);
@@ -561,6 +597,12 @@ impl Codec for DataCodec {
             return prebindgen_declarations::optional_output(
                 self, extra, tag, payload, value, borrowed, child,
             );
+        }
+        if let Some(e) = self.enum_type(ty) {
+            if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
+                return Err("mutable-reference outputs are unsupported".into());
+            }
+            return Ok(e.output(wire, value));
         }
         let Some(record) = self.record(ty)? else {
             return JniCodec.output_leaf(ty, extra, wire, value, borrowed);
@@ -596,6 +638,15 @@ impl Codec for DataCodec {
                 projection.mode == ProjectionMode::Borrowed,
                 child,
             );
+        }
+        if let Some(e) = self.enum_type(ty) {
+            if projection.mode == ProjectionMode::Owned && matches!(ty, syn::Type::Reference(_)) {
+                return Err("owned projection cannot consume a reference payload".into());
+            }
+            if !projection.fields.is_empty() {
+                return Err("enum values do not have projection fields".into());
+            }
+            return Ok(e.output(wire, value));
         }
         let Some(record) = self.record(ty)? else {
             return JniCodec.output_projected(ty, extra, wire, value, projection);
@@ -639,6 +690,7 @@ impl Shape {
                 )
             }
             Self::Record(r) => r.input(w, v, active),
+            Self::Enum(e) => e.input(ty, w.clone(), v.clone(), active),
             _ => JniCodec.input_leaf(ty, &(), w.clone(), v.clone(), active),
         }
     }
@@ -670,6 +722,12 @@ impl Shape {
                 )
             }
             Self::Record(r) => r.output(w, value, policy),
+            Self::Enum(e) => {
+                if !policy.fields.is_empty() {
+                    return Err("enum values do not have projection fields".into());
+                }
+                Ok(e.output(w.clone(), value))
+            }
             _ => JniCodec.output_projected(ty, &(), w.clone(), value, policy),
         }
     }
