@@ -1,5 +1,7 @@
 # prebindgen
 
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/milyin/prebindgen?utm_source=badge)
+
 A tool for separating the implementation of FFI interfaces from language-specific binding generation, allowing each to reside in different crates.
 
 ## Stability in 0.5

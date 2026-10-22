@@ -43,6 +43,11 @@ tempfile = { workspace = true }
 # Cargo strips the dev-dep from the published manifest. Needed so the crate-level
 # and `Source` doctests can actually run `#[prebindgen]` instead of being ```ignore.
 prebindgen-proc-macro = { path = "../prebindgen-proc-macro" }
+divan = { version = "5.0.2", package = "codspeed-divan-compat" }
+
+[[bench]]
+name = "source"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
