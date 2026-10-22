@@ -74,7 +74,7 @@ fun checkOwnership() {
             try {
                 gate.await()
                 try { summaryTotalRaw(1, 0, 0.0, owner) }
-                catch (_: IllegalStateException) { }
+                catch (_: IllegalArgumentException) { }
             } catch (e: Throwable) { failure.set(e) }
         }
         val closer = Thread { gate.await(); owner.close() }
@@ -85,7 +85,7 @@ fun checkOwnership() {
     failure.get()?.let { throw it }
     val borrowed = storageWithPayload(1, 0, 0.0, false)
     val reader = Thread {
-        try { repeat(2000) { try { storageLen(borrowed) } catch (_: IllegalStateException) { } } }
+        try { repeat(2000) { try { storageLen(borrowed) } catch (_: IllegalArgumentException) { } } }
         catch (e: Throwable) { failure.set(e) }
     }
     reader.start(); borrowed.close(); reader.join()

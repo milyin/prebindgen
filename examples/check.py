@@ -44,17 +44,13 @@ for name in ["covertest-kotlin", "perftest-kotlin"]:
     subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
     subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-jar", str(jar)], check=True)
 
-# Java callers must be able to catch the checked exception declared on a
-# generated Kotlin Result wrapper. Compiling this fails without @Throws.
+# Java callers can recover through the same typed domain-error callback.
 java_test = build / "ResultJava.java"
 java_test.write_text("""public class ResultJava {
     public static void main(String[] args) {
-        try { io.prebindgen.covertest.results.FunctionsKt.resultScalar(-7L); }
-        catch (java.io.IOException e) {
-            if (!"failure -7 世界".equals(e.getMessage())) throw new AssertionError(e);
-            return;
-        }
-        throw new AssertionError("expected source exception");
+        long recovered = io.prebindgen.covertest.results.FunctionsKt.resultScalar(
+            -7L, message -> { throw new AssertionError(message); }, code -> -code);
+        if (recovered != 7L) throw new AssertionError(recovered);
     }
 }
 """)

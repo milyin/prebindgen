@@ -15,6 +15,12 @@ pub struct CContext {
     pub output_pointer: syn::Ident,
     /// Concrete result structure constructor.
     pub output_type: syn::Path,
+    /// Optional explicit Result error output parameter.
+    pub error_pointer: syn::Ident,
+    /// Records that a source error has already been delivered.
+    pub error_reported: syn::Ident,
+    /// Infallible statements appended after output ownership commits.
+    pub output_committed: TokenStream,
     /// Byte buffer carrier constructor.
     pub buffer_type: syn::Path,
     /// Wide integer carrier constructor.
@@ -25,6 +31,9 @@ pub struct CContext {
 impl TemplateContext for CContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         render_template(code, &|name| match name {
+            "output_committed" => Ok(self.output_committed.clone()),
+            "error_pointer" => Ok(self.error_pointer.to_token_stream()),
+            "error_reported" => Ok(self.error_reported.to_token_stream()),
             "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),
             "output_pointer" => Ok(self.output_pointer.to_token_stream()),
             "output_type" => Ok(self.output_type.to_token_stream()),

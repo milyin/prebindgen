@@ -13,10 +13,10 @@ private fun collectionInvalid(action: () -> Unit) {
 
 fun checkCollections() {
     collectionNumbers { values, tag -> check(values == listOf(7L, 9L) && tag == 42L) }
+    val throwResult = ResultFailureHandler<Nothing> { code -> throw java.io.IOException("failure $code 世界") }
     val numbers = listOf(Long.MIN_VALUE, 0L, Long.MAX_VALUE)
     check(collectionI64(numbers) == numbers)
     check(collectionI64(emptyList()).isEmpty())
-    collectionInvalid { collectionI64(null) }
     check(collectionSlice(numbers) == numbers)
     check(collectionBorrow(numbers) == numbers)
     val text = listOf("", "héllo 世界", "embedded\u0000nul")
@@ -33,8 +33,8 @@ fun checkCollections() {
     check(collectionEnum(listOf(Code.Bottom, Code.Seven, Code.Top)) == listOf(Code.Bottom, Code.Seven, Code.Top))
     check(collectionProbe(listOf(0, 65, 0x10ffff), "") == listOf(0, 65, 0x10ffff))
     collectionInvalid { collectionProbe(listOf(65, 0xd800), "") }
-    check(collectionResult(numbers, true) == numbers)
-    try { collectionResult(numbers, false); error("expected domain error") } catch (_: java.io.IOException) {}
+    check(collectionResult(numbers, true, onError = throwResult) == numbers)
+    try { collectionResult(numbers, false, onError = throwResult); error("expected domain error") } catch (_: java.io.IOException) {}
     val storage = io.prebindgen.covertest.storage.storageNew()
     check(storageGetVec(storage) == null)
     val payloads = listOf(Payload(5, 2, 1.5, true), Payload(9, -1, -2.0, false))
@@ -42,22 +42,39 @@ fun checkCollections() {
     check(storageGetVec(storage) == payloads)
     storage.close()
 
+    var nullRouted = false
+    check(collectionHandles(listOf(null), 65, 0,
+        onBindingError = JniErrorHandler { nullRouted = true; emptyList() },
+        onError = throwResult).isEmpty())
+    check(nullRouted)
+    var aliasRouted = false
+    val aliasProbe = collectionResourceNew(99)
+    check(collectionHandles(listOf(aliasProbe, aliasProbe), 65, 0,
+        onBindingError = JniErrorHandler { aliasRouted = true; emptyList() },
+        onError = throwResult).isEmpty())
+    check(aliasRouted && !aliasProbe.isClosed)
+    aliasProbe.close()
+    var closedRouted = false
+    check(collectionHandles(listOf(aliasProbe), 65, 0,
+        onBindingError = JniErrorHandler { closedRouted = true; emptyList() },
+        onError = throwResult).isEmpty())
+    check(closedRouted)
     val start = ownedResourceDrops()
     val handles = listOf(collectionResourceNew(1), collectionResourceNew(2))
-    collectionInvalid { collectionHandles(handles, 0xd800, 0) }
+    collectionInvalid { collectionHandles(handles, 0xd800, 0, onError = throwResult) }
     check(handles.none { it.isClosed })
-    collectionInvalid { collectionHandles(listOf(handles[0], handles[0]), 65, 0) }
+    collectionInvalid { collectionHandles(listOf(handles[0], handles[0]), 65, 0, onError = throwResult) }
     collectionInvalid { collectionAlias(handles, handles[1]) }
     check(handles.none { it.isClosed })
     check(collectionResourceIds(listOf(handles[0], handles[0])) == listOf(1L, 1L))
     check(handles.none { it.isClosed })
-    val moved = collectionHandles(handles, 65, 0)
+    val moved = collectionHandles(handles, 65, 0, onError = throwResult)
     check(handles.all { it.isClosed })
     check(moved.map(::ownedResourceId) == listOf(1L, 2L))
     moved.forEach { it.close() }
     for (mode in listOf(1, 2)) {
         val inputs = listOf(collectionResourceNew(3), collectionResourceNew(4))
-        try { collectionHandles(inputs, 65, mode); error("expected collection failure") }
+        try { collectionHandles(inputs, 65, mode, onError = throwResult); error("expected collection failure") }
         catch (_: java.io.IOException) { check(mode == 1) }
         catch (_: IllegalArgumentException) { check(mode == 2) }
         check(inputs.all { it.isClosed })
@@ -94,7 +111,7 @@ fun checkCollections() {
     check(nestedHandle.isClosed)
     // Dynamic handle lists must not add one JVM stack frame per lock.
     val many = List(4000) { collectionResourceNew(it.toLong()) }
-    collectionHandles(many, 65, 0).forEach { it.close() }
+    collectionHandles(many, 65, 0, onError = throwResult).forEach { it.close() }
     check(many.all { it.isClosed })
     // A mutable/custom input list is read once, before locks are chosen.
     val first = collectionResourceNew(7)
@@ -104,11 +121,37 @@ fun checkCollections() {
         override val size: Int get() = 1
         override fun get(index: Int) = if (reads++ == 0) first else second
     }
-    val snapshot = collectionHandles(changing, 65, 0)
+    val snapshot = collectionHandles(changing, 65, 0, onError = throwResult)
     check(reads == 1 && first.isClosed && !second.isClosed)
     check(ownedResourceId(snapshot.single()) == 7L)
     snapshot.single().close(); second.close()
     check(collectionI64(List(20000) { it.toLong() }).size == 20000)
+
+    // Typed domain errors reuse collection projections and scope every owned element.
+    val errorStart = ownedResourceDrops()
+    var errorResources: List<io.prebindgen.covertest.resources.OwnedResource>? = null
+    collectionFail(onError = CollectionErrorHandler { resources, codes ->
+        check(resources.map(::ownedResourceId) == listOf(71L, 72L))
+        check(codes == listOf(listOf(7L, 9L), emptyList<Long>()))
+        errorResources = resources
+    })
+    check(checkNotNull(errorResources).all { it.isClosed })
+    check(ownedResourceDrops() == errorStart + 2uL)
+    val handlerFailure = IllegalStateException("collection error callback")
+    try {
+        collectionFail(onError = CollectionErrorHandler<Unit> { resources, _ ->
+            check(resources.size == 2)
+            throw handlerFailure
+        })
+        error("callback did not throw")
+    } catch (caught: IllegalStateException) { check(caught === handlerFailure) }
+    check(ownedResourceDrops() == errorStart + 4uL)
+    var retained: io.prebindgen.covertest.resources.OwnedResource? = null
+    collectionFail(onError = CollectionErrorHandler { resources, _ -> retained = resources.first().take() })
+    check(ownedResourceId(checkNotNull(retained)) == 71L)
+    check(ownedResourceDrops() == errorStart + 5uL)
+    retained!!.close()
+    check(ownedResourceDrops() == errorStart + 6uL)
 
     // Exercise raw JNI validation, including an invalid but inactive payload.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
@@ -118,14 +161,22 @@ fun checkCollections() {
     val probe = method(String::class.java)
     for (bad in listOf(null, arrayOf<Any?>(), arrayOf<Any?>(null), arrayOf<Any?>("bad"), arrayOf<Any?>(0xd800))) {
         collectionInvalid {
-            try { probe.invoke(null, arrayOf<Any?>(bad), "") }
+            try {
+                val packet = probe.invoke(null, arrayOf<Any?>(bad), "") as Array<*>
+                check(packet[0] is String)
+                throw IllegalArgumentException(packet[0] as String)
+            }
             catch (e: InvocationTargetException) { throw e.cause!! }
         }
     }
     val optional = method(Short::class.javaPrimitiveType!!)
     optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(0, "ignored")), 0.toShort())
     collectionInvalid {
-        try { optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(1, "invalid active")), 0.toShort()) }
+        try {
+            val packet = optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(1, "invalid active")), 0.toShort()) as Array<*>
+            check(packet[0] is String)
+            throw IllegalArgumentException(packet[0] as String)
+        }
         catch (e: InvocationTargetException) { throw e.cause!! }
     }
 }

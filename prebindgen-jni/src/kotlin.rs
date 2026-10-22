@@ -19,6 +19,9 @@ pub struct KotlinContext<'a> {
     pub result: &'a str,
     /// Caught delivery exception to which rollback failures are attached.
     pub failure: &'a str,
+    /// Optional mutable nullable Throwable collecting cleanup failures in a finally
+    /// block. Without one, cleanup failures are suppressed on `failure`.
+    pub cleanup_failure: Option<&'a str>,
     /// Prefix for variables retaining materialized outputs during rollback.
     pub output_prefix: &'a str,
 }
@@ -226,7 +229,12 @@ impl KotlinOutputConversion for JniOutput {
 }
 fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinOutput> {
     let result = context.result;
-    let failure = context.failure;
+    let suppress_cleanup = match context.cleanup_failure {
+        Some(target) => format!(
+            "if ({target} == null) {target} = cleanup else {target}!!.addSuppressed(cleanup)"
+        ),
+        None => format!("{}.addSuppressed(cleanup)", context.failure),
+    };
     let output = context.output_prefix;
     let mut delivered = Vec::new();
     let mut result_types = Vec::new();
@@ -263,7 +271,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
             materialize.push_str(&format!("            {output}{i} = {}\n", delivered[i]));
             delivered[i] = format!("requireNotNull({output}{i})");
             let drop = context.drop_handle(&handle.ty, &format!("{result}[{i}] as Long"))?;
-            cleanup.push_str(&format!("            try {{ val owner = {output}{i}; if (owner != null) owner.close() else {drop} }} catch (cleanup: Throwable) {{ {failure}.addSuppressed(cleanup) }}\n"));
+            cleanup.push_str(&format!("            try {{ val owner = {output}{i}; if (owner != null) owner.close() else {drop} }} catch (cleanup: Throwable) {{ {suppress_cleanup} }}\n"));
         }
     }
     Ok(KotlinOutput {
@@ -333,7 +341,7 @@ pub(crate) fn remap_output(
             .iter_mut()
             .chain([&mut c.output_locals, &mut c.materialize, &mut c.cleanup])
     {
-        for i in 0..count {
+        for i in (0..count).rev() {
             *text = text.replace(
                 &format!("{local}[{i}]"),
                 &format!("{result}[{}]", offset + i),
@@ -400,6 +408,7 @@ mod tests {
             classes: &classes,
             result: "native_values",
             failure: "delivery_error",
+            cleanup_failure: None,
             output_prefix: "wrapped_",
         };
         // This condition is arbitrary Kotlin code, not a declaration selector path.

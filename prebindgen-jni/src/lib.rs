@@ -24,6 +24,7 @@ use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
 pub use wire::JniWire;
 mod emission;
+mod errors;
 pub use emission::JniContext;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup>;
@@ -312,14 +313,16 @@ impl JniGenBuilder {
         self.init = init.into();
         self
     }
-    /// Route a source Result error type to a JVM exception class.
+    /// Supply an optional throwing default for the Kotlin domain-error callback.
     ///
     /// `class` is a fully qualified dotted JVM binary name; use `$` between
     /// nested classes (for example `example.Errors$Rejected`). The class must exist at
-    /// runtime, extend Throwable, and provide a public String constructor.
+    /// Kotlin compile time, extend Throwable, and provide a public String constructor.
     /// Result-returning functions also require `error_mapper` or
-    /// `FunctionDecl::on_error` to select their message mapper. Binding failures
-    /// continue to use IllegalArgumentException.
+    /// `FunctionDecl::on_error` to select their message mapper. Kotlin invokes this
+    /// default after JNI and handle locks finish; callers can replace `onError`
+    /// with a recovering callback. Without this setting `onError` is required.
+    /// Binding failures use the separate `onBindingError` callback.
     /// Duplicate registrations for the same resolved source type are rejected.
     pub fn error_class(mut self, ty: syn::Type, class: impl Into<String>) -> Self {
         self.error_classes.push((ty, class.into()));
@@ -390,7 +393,15 @@ impl JniGenBuilder {
                     },
                 };
                 validate_name(&name)?;
-                if name == "JNINative" || name == "Functions" || name == "NativeHandle" {
+                if [
+                    "JNINative",
+                    "Functions",
+                    "NativeHandle",
+                    "JniErrorHandler",
+                    "HandleValidationFailure",
+                ]
+                .contains(&name.as_str())
+                {
                     return Err("reserved generated class name".into());
                 }
                 let fqn = format!("{pkg}.{name}");
@@ -438,17 +449,22 @@ impl JniGenBuilder {
                 validate_name(nested)?;
             }
             let ty = flat.resolve_type(&ty)?;
-            if codec
-                .error_classes
-                .insert(type_key(&ty), class.replace('.', "/"))
-                .is_some()
-            {
+            if codec.error_classes.insert(type_key(&ty), class).is_some() {
                 return Err("duplicate exception class for source error type".into());
             }
         }
         for enumeration in codec.enums.values() {
             flat.guards.extend(enumeration.mapping.guards());
         }
+        let errors = errors::prepare(
+            &mut flat,
+            &mut codec,
+            &defaults,
+            &declarations,
+            &classes,
+            &self.prefix,
+            &mut seen,
+        )?;
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
         }
@@ -481,7 +497,7 @@ impl JniGenBuilder {
             classes,
             functions,
             data_files,
-            &codec.error_classes,
+            errors,
         )
     }
 }
@@ -546,12 +562,19 @@ impl Codec for JniCodec {
         Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+        plan.fallible = true;
         group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
-        let count = plan.layout.len();
-        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result))?;
+        let count = plan.layout.len() + 1;
+        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result), 1)?;
+        let mark = prebindgen_conversions::template_parameter("mark_output");
+        plan.commit
+            .extend(prebindgen_conversions::template_parameter(
+                "output_committed",
+            ));
         plan.delivery = prebindgen_conversions::Delivery {
-            statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode),
+            statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode
+                #mark),
             result: quote!(result.into_raw()),
         };
         Ok(())
@@ -746,6 +769,7 @@ pub(crate) fn encode_array(
     layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
     values: &[TokenStream],
     array: &syn::Ident,
+    offset: usize,
 ) -> Result<TokenStream> {
     let env = prebindgen_conversions::template_parameter("environment");
     let mut encode = TokenStream::new();
@@ -768,7 +792,7 @@ pub(crate) fn encode_array(
                 scalar::output_java(Primitive::I32, value)
             }
         };
-        let i = i as i32;
+        let i = (i + offset) as i32;
         encode.extend(quote! {
             let object = #expr;
             #env.set_object_array_element(&#array, #i, &object).map_err(|e|e.to_string())?;
@@ -915,10 +939,11 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
     mut files: BTreeMap<String, String>,
-    error_classes: &BTreeMap<String, String>,
+    errors: BTreeMap<String, errors::ErrorBinding>,
 ) -> Result<JniGen> {
-    let mut rust = TokenStream::new();
+    let mut rust = errors::emit(&errors)?;
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
+    errors::interfaces(prefix, &mut files)?;
     let mut native = format!("package {prefix}\n\ninternal object JNINative {{\n");
     if !init.is_empty() {
         native.push_str(&format!("    init {{ {init} }}\n"));
@@ -934,7 +959,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name);
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = lock.run {{ lock(); try {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }} finally {{ unlock() }} }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     let kotlin_classes = classes
@@ -950,24 +975,29 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             )
         })
         .collect();
+    errors::handler_files(
+        &errors,
+        &KotlinContext {
+            classes: &kotlin_classes,
+            result: "result",
+            failure: "failure",
+            cleanup_failure: None,
+            output_prefix: "errorOutput",
+        },
+        &mut files,
+    )?;
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let throws = if let Some((_, error)) = prebindgen_flat::result_parts(&f.ret.ty) {
-            let class = error_classes
-                .get(&type_key(error))
-                .ok_or("Result return requires an explicit error_class")?;
-            format!(
-                "@kotlin.jvm.Throws({}::class)\n",
-                class.replace(['/', '$'], ".")
-            )
-        } else {
-            String::new()
-        };
+        let error = errors.get(&source);
+        let throws = error.map_or_else(String::new, |error| error.throws());
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
         let context = JniContext {
             environment: env.clone(),
             acknowledgement: ownership.clone(),
+            domain_output: format_ident!("domain_output"),
+            is_domain_error: false,
+            output_committed: quote!(),
         };
         let source = format_ident!("source_value");
         let method = format!("call{index}");
@@ -978,6 +1008,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             classes: &kotlin_classes,
             result: "result",
             failure: "failure",
+            cleanup_failure: None,
             output_prefix: "output",
         };
         let mut kt_params = Vec::new();
@@ -1043,13 +1074,21 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             &source,
             &syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
         )?;
+        let mut kotlin_output = f.output_conversion()?.kotlin(&kotlin_context)?;
+        kotlin::remap_output(
+            &mut kotlin_output,
+            kotlin_context.result,
+            kotlin_context.result,
+            1,
+            f.output_conversion()?.wires().len(),
+        );
         let KotlinOutput {
             delivered,
             result_types,
             output_locals,
             materialize,
             cleanup,
-        } = f.output_conversion()?.kotlin(&kotlin_context)?;
+        } = kotlin_output;
         if delivered.len() != result_types.len() {
             return Err("Kotlin output expression/type count differs".into());
         }
@@ -1057,9 +1096,18 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
+    #[allow(unused_mut)]
+    let mut domain_output = None;
     match ::prebindgen_runtime::boundary(||{
      #body
-    }){Ok(result)=>result,Err(e)=>{::prebindgen_jni_runtime::fail(&mut #env,&e);std::ptr::null_mut()}}
+    }){Ok(result)=>result,Err(e)=>{
+        if let Some(result) = domain_output { result } else {
+            match ::prebindgen_jni_runtime::binding_packet(&mut #env, &e) {
+                Ok(result) => result.into_raw(),
+                Err(message) => { ::prebindgen_jni_runtime::fail(&mut #env, &message); std::ptr::null_mut() }
+            }
+        }
+    }}
    }
   });
         native.push_str(&format!(
@@ -1085,14 +1133,37 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         } else {
             format!("{output_locals}        try {{\n{materialize}            {end}\n        }} catch ({failure}: Throwable) {{\n{cleanup}            throw {failure}\n        }}")
         };
-        let call = format!("{prefix}.JNINative.{method}({})", kt_args.join(", "));
+        let argument_locals = kt_args.iter().enumerate().map(|(i, arg)| format!("val nativeArgument{i} = try {{ {arg} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid input\") }}")).collect::<Vec<_>>().join("; ");
+        let argument_names = (0..kt_args.len())
+            .map(|i| format!("nativeArgument{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let call =
+            format!("run {{ {argument_locals}; {prefix}.JNINative.{method}({argument_names}) }}");
         let call = if has_consumes {
             format!("val ownership = BooleanArray(1)\n        try {{ {call} }} finally {{ if (ownership[0]) {{ {} }} }}", consumed.join("; "))
         } else {
             call
         };
-        let native_call = if locks.is_empty() && lock_groups.is_empty() {
-            format!("val {result} = {call}\n        {end}")
+        let binding_name = if error.is_some() {
+            "onBindingError"
+        } else {
+            "onError"
+        };
+        let build = if delivered.len() > 1 {
+            kt_params.pop()
+        } else {
+            None
+        };
+        kt_params.push(format!("{binding_name}: {prefix}.JniErrorHandler<{ret}> = {prefix}.JniErrorHandler {{ message -> throw IllegalArgumentException(message) }}"));
+        if let Some(error) = error {
+            kt_params.push(error.parameter(&ret));
+        }
+        if let Some(build) = build {
+            kt_params.push(build);
+        }
+        let call = if locks.is_empty() && lock_groups.is_empty() {
+            call
         } else {
             let mut all_locks = if locks.is_empty() {
                 "kotlin.collections.emptyList<Nothing>()".to_string()
@@ -1102,8 +1173,18 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             for group in lock_groups {
                 all_locks = format!("({all_locks} + ({group}))");
             }
-            format!("val {result} = {prefix}.withHandleLocks({all_locks}) {{\n        {call}\n    }}\n{end}")
+            format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
         };
+        // Catch local handle validation separately from the native invocation: pending JVM
+        // exceptions and exceptions from user callbacks must retain their original identity.
+        let call = format!("try {{ {call} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}");
+        let domain = if let Some(error) = error {
+            let delivery = errors::delivery(error, &kotlin_context)?;
+            format!("true -> {{ {delivery} }}")
+        } else {
+            String::new()
+        };
+        let native_call = format!("val {result} = {call}\n    when ({result}[0]) {{\n        null -> {{ {end} }}\n        {domain}\n        is String -> {binding_name}.run({result}[0] as String)\n        else -> error(\"invalid native result channel\")\n    }}");
         let text = packages.entry(pkg).or_default();
         text.push_str(&format!(
             "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
@@ -1117,7 +1198,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         if files
             .insert(
                 path,
-                format!("@file:Suppress(\"UNUSED_VARIABLE\")\npackage {pkg}\n\n{body}"),
+                format!("@file:Suppress(\"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\")\npackage {pkg}\n\n{body}"),
             )
             .is_some()
         {

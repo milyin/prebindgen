@@ -64,6 +64,32 @@ pub fn array<'a>(env: &mut JNIEnv<'a>, len: usize) -> Result<JObjectArray<'a>> {
     env.new_object_array(len, "java/lang/Object", JObject::null())
         .map_err(|e| e.to_string())
 }
+/// Mark a converted output array as a typed domain error before ownership commit.
+/// Slot zero is reserved for the channel: null means success, Boolean.TRUE
+/// means domain error, and a String means binding failure. Success needs no
+/// extra allocation or tag boxing; every payload starts at slot one.
+pub fn mark_domain_packet(env: &mut JNIEnv<'_>, packet: &JObjectArray<'_>) -> Result<()> {
+    let tag = env
+        .get_static_field("java/lang/Boolean", "TRUE", "Ljava/lang/Boolean;")
+        .and_then(|v| v.l())
+        .map_err(|e| e.to_string())?;
+    env.set_object_array_element(packet, 0, &tag)
+        .map_err(|e| e.to_string())?;
+    env.delete_local_ref(tag).map_err(|e| e.to_string())?;
+    Ok(())
+}
+/// Deliver a binding failure as data, preserving any already pending JVM exception.
+pub fn binding_packet<'a>(env: &mut JNIEnv<'a>, message: &str) -> Result<JObjectArray<'a>> {
+    if env.exception_check().map_err(|e| e.to_string())? {
+        return Err(message.to_owned());
+    }
+    let packet = array(env, 1)?;
+    let text = text_object(env, message)?;
+    env.set_object_array_element(&packet, 0, &text)
+        .map_err(|e| e.to_string())?;
+    env.delete_local_ref(text).map_err(|e| e.to_string())?;
+    Ok(packet)
+}
 /// Raise `IllegalArgumentException` with `message` unless a JVM exception is
 /// already pending.
 ///
@@ -74,19 +100,6 @@ pub fn fail(env: &mut JNIEnv<'_>, message: &str) {
     if matches!(env.exception_check(), Ok(false)) {
         let _ = env.throw_new("java/lang/IllegalArgumentException", message);
     }
-}
-
-/// Raise the explicitly configured source-error exception and return its message.
-///
-/// `class` is a JVM binary class name using slashes. The class must extend
-/// Throwable and expose a String constructor. Existing pending exceptions are
-/// preserved, including lookup/allocation failures. Generated wrappers then
-/// return without delivering success outputs; `fail` preserves this exception.
-pub fn domain_error(env: &mut JNIEnv<'_>, class: &str, message: String) -> Result<String> {
-    if !env.exception_check().map_err(|e| e.to_string())? {
-        env.throw_new(class, &message).map_err(|e| e.to_string())?;
-    }
-    Ok(message)
 }
 
 /// Decode `value`, the bytes of `BigInteger.toByteArray()` (big-endian two's

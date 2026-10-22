@@ -8,6 +8,9 @@ use quote::quote;
 /// Generators may use this protocol or implement their own request types.
 #[derive(Clone, Debug)]
 pub struct InputPlan<W: WireKind, C = (), G = ()> {
+    /// Whether validation or construction can return a binding error. This
+    /// excludes panics and allocation aborts. Composition preserves child flags.
+    pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Authoritative wire tree; its leaves determine boundary parameter order.
@@ -31,6 +34,9 @@ pub struct InputPlan<W: WireKind, C = (), G = ()> {
 /// Delivery and ownership commit are separate requests.
 #[derive(Clone, Debug)]
 pub struct OutputPlan<W: WireKind, C = (), G = ()> {
+    /// Whether preparation or delivery can return a binding error, excluding
+    /// panics and allocation aborts. Adapters must mark custom fallible code.
+    pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.

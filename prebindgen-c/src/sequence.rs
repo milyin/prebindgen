@@ -44,6 +44,7 @@ pub(crate) fn output(
         quote!(#field:#value)
     });
     Ok(SequenceOutput {
+        fallible: false,
         carrier: CWire::Rows,
         begin: quote!(let mut #wire:Vec<#row>=Vec::with_capacity(#length);),
         enter: quote!(),
@@ -67,4 +68,97 @@ pub(crate) fn schemas<'a>(
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn emit_schemas(
+    schemas: Vec<(&Wire, &WireLayout<CWire, CGroup>)>,
+    output_carriers: &std::collections::BTreeSet<String>,
+    context: &CContext,
+    prefix: &str,
+    pointers: &[(String, syn::Type)],
+    symbols: &mut std::collections::BTreeSet<String>,
+    tokens: &mut TokenStream,
+    header: &mut String,
+) -> Result<()> {
+    for (carrier, element) in schemas {
+        let row = &context.row_types[&carrier.name.to_string()];
+        let base = row.to_string();
+        let base = base.trim_start_matches("__PbRow_");
+        let c_row = format!("{prefix}_{base}_row");
+        let c_rows = format!("{prefix}_{base}_rows");
+        let free_rows = format_ident!("{prefix}_{base}_rows_free");
+        let is_output = output_carriers.contains(&carrier.name.to_string());
+        let mut row_symbols = vec![c_row.clone(), c_rows.clone()];
+        if is_output {
+            row_symbols.push(free_rows.to_string());
+        }
+        for symbol in row_symbols {
+            if !symbols.insert(symbol) {
+                return Err("duplicate C collection symbol".into());
+            }
+        }
+        let fields = element
+            .iter()
+            .enumerate()
+            .map(|(i, w)| {
+                let name = format_ident!("v{i}");
+                let ty = w.rust_type();
+                quote!(pub #name:#ty)
+            })
+            .collect::<Vec<_>>();
+        tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
+        header.push_str("typedef struct {\n");
+        for (i, w) in element.iter().enumerate() {
+            header.push_str(&format!(
+                "    {} v{i};\n",
+                c_ty(w, prefix, pointers, context)
+            ));
+        }
+        header.push_str(&format!(
+            "}} {c_row};\ntypedef struct {{ {c_row} *data; size_t len; }} {c_rows};\n"
+        ));
+        if is_output {
+            header.push_str(&format!("/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */\nvoid {free_rows}({c_rows} rows);\n"));
+            tokens.extend(quote! {
+                    #[doc="# Safety\nThe rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields."]
+                    #[no_mangle]pub unsafe extern "C" fn #free_rows(rows:__PbRows){if rows.len!=0{drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(rows.data as *mut #row,rows.len)));}}
+                });
+        }
+    }
+    Ok(())
+}
+
+/// Reclaim a committed output that will not reach its caller, including nested rows.
+pub(crate) fn release(
+    layout: &WireLayout<CWire, CGroup>,
+    values: &[TokenStream],
+    context: &CContext,
+    catch_panics: bool,
+) -> TokenStream {
+    let mut schemas = Vec::new();
+    self::schemas(layout, &mut schemas);
+    let mut code = TokenStream::new();
+    for (wire, value) in layout.iter().zip(values) {
+        match &wire.kind {
+            CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
+            CWire::Pointer { pointer, .. } => {
+                let ty = &pointer.ty;
+                let drop = quote!(drop(Box::from_raw((#value) as *mut #ty)););
+                let drop = if catch_panics {
+                    quote!(let _ = ::prebindgen_runtime::boundary(|| { #drop Ok(()) });)
+                } else { drop };
+                code.extend(quote! { if !(#value).is_null() { #drop } });
+            }
+            CWire::Rows => {
+                let row=&context.row_types[&wire.name.to_string()];
+                let element=schemas.iter().find(|(carrier,_)|carrier.name==wire.name).unwrap().1;
+                let fields=element.iter().enumerate().map(|(i,_)|{let field=format_ident!("v{i}");quote!(row.#field)}).collect::<Vec<_>>();
+                let child=release(element,&fields,context,catch_panics);
+                code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
+            }
+            _=>{}
+        }
+    }
+    code
 }

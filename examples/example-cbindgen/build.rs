@@ -144,7 +144,7 @@ fn main() {
         // Unsupported signature: pq!(note_new_after),
         // Unsupported signature: pq!(note_new_flagged),
     ] {
-        cbindgen = cbindgen.function(function);
+        cbindgen = cbindgen.function(function).panic();
     }
     /* Unsupported: these signatures require unsupported conversions.
     if unstable {
@@ -194,8 +194,11 @@ fn main() {
     cbindgen = cbindgen
         .opaque_ptr("local_counter", pq!(LocalCounter))
         .function(fun!(local_counter_new))
+        .panic()
         .function(fun!(local_counter_value))
+        .panic()
         .function(fun!(local_counter_label))
+        .panic()
         .opaque_ptr("caption", pq!(Caption))
         .opaque_ptr("foo", pq!(Foo));
 

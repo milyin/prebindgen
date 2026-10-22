@@ -21,6 +21,8 @@ public abstract class NativeHandle internal constructor(raw: Long) : AutoCloseab
     }
 }
 
+internal class HandleValidationFailure(message: String) : IllegalStateException(message)
+
 // One order for all parameters, including selected constructor arguments.
 // Generated constructors are internal: one Kotlin owner exists per allocation.
 internal fun <R> withHandleLocks(handles: List<NativeHandle>, body: () -> R): R {
@@ -31,7 +33,7 @@ internal fun <R> withHandleLocks(handles: List<NativeHandle>, body: () -> R): R 
             handle.lock.lock()
             acquired++
         }
-        check(ordered.none { it.isClosed }) { "closed or consumed handle" }
+        if (ordered.any { it.isClosed }) throw HandleValidationFailure("closed or consumed handle")
         return body()
     } finally {
         for (index in acquired - 1 downTo 0) ordered[index].lock.unlock()

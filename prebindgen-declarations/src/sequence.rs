@@ -23,6 +23,9 @@ pub struct SequenceInput<W> {
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
 pub struct SequenceOutput<W> {
+    /// Whether preparing or delivering the array transport can return a binding
+    /// error, in addition to failures from converting its elements.
+    pub fallible: bool,
     /// One self-sufficient carrier for the array.
     pub carrier: W,
     /// Initialize the raw array builder, with the supplied element count available.
@@ -223,6 +226,7 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Mutable => unreachable!(),
     };
     Ok(InputPlan {
+        fallible: true,
         context: Default::default(),
         acknowledgement: None,
         layout: WireLayout::from_nodes(vec![WireNode::Sequence {
@@ -296,6 +300,7 @@ pub(crate) fn output<C: Codec>(
     let prepare = child.statements;
     let child_commit = child.commit;
     let SequenceOutput {
+        fallible,
         carrier,
         begin,
         enter,
@@ -305,6 +310,7 @@ pub(crate) fn output<C: Codec>(
         commit,
     } = transport;
     Ok(OutputPlan {
+        fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
         layout: WireLayout::from_nodes(vec![WireNode::Sequence {

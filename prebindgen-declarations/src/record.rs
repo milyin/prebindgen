@@ -19,6 +19,7 @@ pub fn record_input<C: Codec>(
     fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
 ) -> Result<CodecInput<C>> {
     let mut out: CodecInput<C> = InputPlan {
+        fallible: false,
         context: Default::default(),
         acknowledgement: None,
         layout: Default::default(),
@@ -36,6 +37,7 @@ pub fn record_input<C: Codec>(
         for wire in &mut child.layout {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
+        out.fallible |= child.fallible;
         out.validation.extend(child.validation);
         out.acquire.extend(child.acquire);
         out.resources.extend(child.resources);
@@ -76,6 +78,7 @@ pub fn record_output<C: Codec>(
         quote!(let _ = &(#value);)
     };
     let mut out = OutputPlan {
+        fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
@@ -120,6 +123,7 @@ pub fn record_output_owned<C: Codec>(
         quote!(let _ = #value;)
     };
     let mut out = OutputPlan {
+        fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),

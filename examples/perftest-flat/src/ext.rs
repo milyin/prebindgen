@@ -3078,6 +3078,28 @@ pub fn result_error_message(error: ResultFailure) -> String {
     format!("failure {} 世界", error.code)
 }
 #[prebindgen]
+pub fn result_drop_error_into(error: CDropError) -> CDropError {
+    error
+}
+#[prebindgen]
+pub fn result_pair_error_into(error: CResultError) -> CResultError {
+    error
+}
+/// Typed error projection; errors keep their source domain instead of becoming strings.
+#[prebindgen]
+pub fn result_error_code(error: &ResultFailure) -> i64 {
+    assert_ne!(error.code, 99, "error getter panic");
+    error.code
+}
+#[prebindgen]
+pub fn result_resource_error_into(error: CResourceError) -> CResourceError {
+    error
+}
+#[prebindgen]
+pub fn result_rich_error_into(error: CRichError) -> CRichError {
+    error
+}
+#[prebindgen]
 pub fn result_error_drops() -> usize {
     RESULT_ERROR_DROPS.load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -3149,6 +3171,178 @@ pub fn result_other(succeed: bool) -> Result<i64, String> {
     } else {
         Err("other error".into())
     }
+}
+
+/// A structured error remains a structured value at the C boundary.
+#[prebindgen]
+pub struct CResultError {
+    pub code: i64,
+    pub message: String,
+}
+impl From<String> for CResultError {
+    fn from(message: String) -> Self {
+        Self { code: -1, message }
+    }
+}
+#[prebindgen]
+pub fn c_result_structured(text: &str, mode: i32) -> Result<i64, CResultError> {
+    match mode {
+        0 => Ok(text.len() as i64),
+        1 => Err(CResultError {
+            code: 7,
+            message: "source 世界\0details".into(),
+        }),
+        _ => panic!("structured source panic"),
+    }
+}
+#[prebindgen]
+pub struct CResourceError {
+    pub resource: OwnedResource,
+    pub message: String,
+}
+impl From<String> for CResourceError {
+    fn from(message: String) -> Self {
+        Self {
+            resource: OwnedResourceImpl { id: 0 },
+            message,
+        }
+    }
+}
+#[prebindgen]
+pub fn c_result_resource_error(fail: bool) -> Result<(), CResourceError> {
+    if fail {
+        Err(CResourceError {
+            resource: OwnedResourceImpl { id: 91 },
+            message: "resource error".into(),
+        })
+    } else {
+        Ok(())
+    }
+}
+#[prebindgen]
+pub struct CResultPair {
+    pub number: i64,
+    pub character: char,
+}
+#[prebindgen]
+pub fn c_result_late_niche(fail: bool) -> Result<CResultPair, CResultError> {
+    if fail {
+        Err(CResultError {
+            code: 8,
+            message: "late niche".into(),
+        })
+    } else {
+        Ok(CResultPair {
+            number: 42,
+            character: 'A',
+        })
+    }
+}
+#[prebindgen]
+pub fn c_result_pair_into(value: CResultPair) -> CResultPair {
+    value
+}
+#[prebindgen]
+pub fn c_result_bool(fail: bool) -> Result<bool, CResultError> {
+    if fail {
+        Err(CResultError {
+            code: 9,
+            message: "bool error".into(),
+        })
+    } else {
+        Ok(false)
+    }
+}
+#[prebindgen]
+pub struct CPanicError {
+    pub message: String,
+}
+impl From<String> for CPanicError {
+    fn from(_: String) -> Self {
+        panic!("error constructor panic")
+    }
+}
+#[prebindgen]
+pub fn c_result_panic_error() -> Result<(), CPanicError> {
+    panic!("source panic before error constructor")
+}
+#[prebindgen]
+pub struct CRichError {
+    pub kind: SparseCode,
+    pub message: Option<String>,
+}
+impl From<String> for CRichError {
+    fn from(message: String) -> Self {
+        Self {
+            kind: SparseCode::MinusOne,
+            message: Some(message),
+        }
+    }
+}
+#[prebindgen]
+pub fn c_result_rich_error(present: bool) -> Result<(), CRichError> {
+    Err(CRichError {
+        kind: SparseCode::Seven,
+        message: present.then(|| "rich error".into()),
+    })
+}
+#[prebindgen]
+pub fn c_result_optional_handle(mode: i32) -> Result<Option<OwnedResource>, CResultError> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(OwnedResourceImpl { id: 77 })),
+        _ => Err(CResultError {
+            code: 10,
+            message: "optional handle error".into(),
+        }),
+    }
+}
+
+pub struct CPanicOutputImpl {
+    _marker: u8,
+}
+impl Drop for CPanicOutputImpl {
+    fn drop(&mut self) {
+        panic!("late output source drop panic")
+    }
+}
+#[prebindgen]
+pub type CPanicOutput = CPanicOutputImpl;
+#[prebindgen]
+pub fn c_panic_output_value(_value: &CPanicOutput) -> OwnedResource {
+    OwnedResourceImpl { id: 12 }
+}
+#[prebindgen]
+pub fn c_result_drop_panic() -> Result<CPanicOutput, CResultError> {
+    Ok(CPanicOutputImpl { _marker: 1 })
+}
+#[prebindgen]
+pub struct CDropError {
+    pub resource: CPanicOutput,
+}
+impl From<String> for CDropError {
+    fn from(_: String) -> Self {
+        Self {
+            resource: CPanicOutputImpl { _marker: 1 },
+        }
+    }
+}
+#[prebindgen]
+pub fn c_result_error_drop() -> Result<(), CDropError> {
+    Err(CDropError {
+        resource: CPanicOutputImpl { _marker: 1 },
+    })
+}
+
+/// Exercises a void destructor whose source Drop panics.
+#[prebindgen]
+pub fn c_panic_output_new() -> CPanicOutput {
+    CPanicOutputImpl { _marker: 1 }
+}
+/// Source panics abort even when ordinary binding conversions are infallible.
+#[prebindgen]
+pub fn c_plain_panic() -> i64 {
+    panic!("non-Result source panic")
 }
 
 // Runtime-sized collections exercise the same element recipes as scalar calls.
@@ -3306,4 +3500,50 @@ pub fn collection_resource_clone(value: &OwnedResource) -> OwnedResource {
 #[prebindgen]
 pub fn collection_resource_ids(values: &[OwnedResource]) -> Vec<i64> {
     values.iter().map(|v| v.id).collect()
+}
+
+// Result wrappers let C callers observe conversion failures without aborting.
+#[prebindgen]
+pub fn collection_try_construct_all(values: Vec<CollectionItem>) -> Result<i64, ResultFailure> {
+    Ok(collection_construct_all(values))
+}
+#[prebindgen]
+pub fn collection_try_make_items() -> Result<Vec<CollectionItem>, ResultFailure> {
+    Ok(collection_make_items())
+}
+#[prebindgen]
+pub struct CollectionError {
+    pub resources: Vec<OwnedResource>,
+    pub codes: Vec<Vec<i64>>,
+}
+impl From<String> for CollectionError {
+    fn from(_: String) -> Self {
+        Self {
+            resources: vec![],
+            codes: vec![],
+        }
+    }
+}
+#[prebindgen]
+pub fn collection_error_into(value: CollectionError) -> CollectionError {
+    value
+}
+#[prebindgen]
+pub fn collection_fail() -> Result<(), CollectionError> {
+    Err(CollectionError {
+        resources: vec![OwnedResourceImpl { id: 71 }, OwnedResourceImpl { id: 72 }],
+        codes: vec![vec![7, 9], vec![]],
+    })
+}
+
+#[prebindgen]
+pub fn collection_late_values(_value: &CPanicOutput) -> Vec<Vec<OwnedResource>> {
+    vec![
+        vec![OwnedResourceImpl { id: 81 }],
+        vec![OwnedResourceImpl { id: 82 }],
+    ]
+}
+#[prebindgen]
+pub fn collection_late_drop() -> Result<CPanicOutput, CResultError> {
+    Ok(CPanicOutputImpl { _marker: 1 })
 }

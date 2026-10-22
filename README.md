@@ -386,14 +386,16 @@ Other adapters can choose different storage in their leaf conversions; there is
 no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
-C wrappers still return status and write output structs only on success. Text
-and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow that
-memory, while owned inputs copy it. Callers free returned buffers exactly once.
-`last_error` is thread-local; clearing it on success allocates nothing.
-An exported source function returns `-1` if it fails before ownership acceptance: its owned inputs
-remain valid. It returns `-2` if it fails after acceptance: active owned inputs
-have been consumed. This distinction also covers source and output-conversion
-panics; a failure never restores transferred ownership.
+C functions without `Result` return their first boundary value directly; any
+additional values use output pointers. Unit functions and destructors return
+`void`. Text and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow
+that memory, while owned inputs copy it. Callers free returned buffers exactly once.
+
+A non-Result function with a fallible binding conversion must be explicitly
+declared with `.function(fun!(name)).panic()`. Without that declaration, generation
+fails. Invalid inputs or conversion failures then abort at the C boundary; source
+and destructor panics also abort. Use `Result<T, E>` when the caller needs to
+recover from an error. Error messages use the explicit Result error output.
 
 **JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
@@ -416,7 +418,7 @@ not safe native inputs.
 Rust panics are caught when unwinding is enabled. JNI still boxes outputs into
 an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
-C status/out-struct and JNI object-array ABI optimization remain separate work.
+Further JNI object-array ABI optimization remains separate work.
 
 Callbacks, data-carrying enums, maps/sets, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, split
@@ -428,8 +430,8 @@ overloads and shared selector argument storage remain outside this subset.
 output declarations. They can contain scalars, strings, byte arrays, fieldless
 enums, options, records and owned handles; owned vectors can be nested. Options
 around a collection distinguish absence from an empty collection, and
-`Result<Vec<T>, E>` uses the declared error mapper. `Vec<u8>` and byte slices
-keep their existing byte-buffer transport.
+`Result<Vec<T>, E>` uses the declared typed error projection or message mapper.
+`Vec<u8>` and byte slices keep their existing byte-buffer transport.
 
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit
@@ -449,8 +451,11 @@ transfer owned handles, text buffers and nested row buffers using their matching
 destructors. Do not pass stack storage or a different row schema to that function.
 This permits moving element handles back into Rust before freeing their old row
 storage. Failed output preparation reclaims unpublished elements automatically.
+A structured error's generated destructor releases its collection fields recursively,
+including owned elements and nested row allocations.
 
-JNI exposes `List<T>` and transports rows through object arrays. Each element
+JNI exposes `List<T>` (nullable for optional collections) and transports rows
+through object arrays. Each element
 must expose exactly one Kotlin input/output value; declare a data class to wrap
 multiple fields. General collection fields inside data classes are not yet
 supported. Inputs snapshot list structure once before choosing locks, then read
@@ -473,20 +478,20 @@ shared validation, acquisition, construction and output-ownership phases.
 
 ## Result returns
 
-Declare how to render source errors explicitly. A mapper takes exactly `E` or
-`&E` and returns `String`; ownership follows that signature. No error fields or
-`Display` implementation are inferred. For example, for a source function
+Declare how to project source errors explicitly, using typed output expansions
+or a message mapper. A mapper takes exactly `E` or `&E` and returns `String`;
+ownership follows that signature. No error fields or `Display` implementation
+are inferred. For example, for a source function
 `open_session(...) -> Result<Session, Error>` and helper
 `error_message(error: &Error) -> String`:
 
 ```rust,ignore
-// C builder: the mapper is a default for all returns with this error type.
-.error_mapper(syn::parse_quote!(Error), fun!(error_message))
+// C builder: return a caller-owned message through char **error.
+.opaque_error(syn::parse_quote!(Error), fun!(error_message))
 .function(fun!(open_session))
 
-// JNI builder: also choose a JVM exception class for the error type.
-.error_mapper(syn::parse_quote!(Error), fun!(error_message))
-.error_class(syn::parse_quote!(Error), "java.io.IOException")
+// JNI builder: project typed error fields, just as for ordinary outputs.
+.expand(expand_return!(Error).fields_into(fields!(error_into_parts)))
 .package(package!().fun(fun!(open_session)))
 ```
 
@@ -498,21 +503,68 @@ the same conversions as an ordinary return. `Err` skips all success-output
 preparation and delivery. Source errors and unpublished success values are
 released through ordinary Rust ownership.
 
-C reports the mapped message through its thread-local `last_error`, with the
-ownership statuses described above. Success-output storage stays unchanged on
-failure. JNI throws the configured class and emits `@Throws` so Java callers can
-catch checked exceptions. The exception class must be on the Kotlin compile
-classpath, extend `Throwable`, and have a public `String` constructor at runtime.
-Use JVM binary names for nested classes, such as `example.Errors$Rejected`.
-Binding failures and caught Rust panics still use `IllegalArgumentException`;
-choose a different class when callers need to distinguish source errors. JNI
-preserves an existing pending exception, including exception-class lookup and
-allocation failures. A mapper panic is a binding failure rather than a mapped
-source error. Consumed Kotlin handles are marked consumed even when a source
-error or panic interrupts the call.
+C follows the explicit error-output convention. `.opaque_error(type, mapper)`
+(or `.error_mapper(type, mapper)`) delivers an allocated C string through
+`char **error`; release it with `<prefix>_free_error`. Alternatively,
+`.error("error_name", type)` declares a record error, whose fields use ordinary
+output declarations. C receives `<prefix>_error_name *error`; release its owned
+fields with `<prefix>_drop_error_name`. Structured source errors preserve their
+fields, and binding failures construct the same error type through `From<String>`.
+If converting a source error fails before delivery, C reports that failure through
+`From<String>`. If constructing or converting this replacement also fails, C
+initializes the error record to zero, with no owned allocations, so its generated
+destructor remains safe. An error output can be NULL to discard details.
+Success leaves error storage unchanged; release any prior error before reusing
+that storage.
 
-`Result<(), E>` uses the existing zero-value success convention: a dummy output
-struct in C and Kotlin `Unit`. Error routing supports only an outermost owned
+For Result calls, a success wire with an unused niche is returned directly, with
+that niche indicating failure (for example NULL for a handle). If no success
+wire has a niche, the function returns `bool` and writes success values through
+output parameters. Those outputs remain unchanged on failure. For example:
+
+```c
+int64_t value;
+char *error = NULL;
+if (!demo_read(&value, &error)) {
+    fprintf(stderr, "%s\n", error);
+    demo_free_error(error);
+}
+```
+
+Calls that consume handles additionally require `bool *ownership`: false means
+validation failed before transfer; true means the active handles were consumed,
+including when the source function or a later conversion fails. All success,
+ownership and error output storage must be pairwise disjoint. This explicit
+flag reports whether Rust accepted ownership before returning a Result failure.
+Non-Result calls need no ownership flag because failures abort the process.
+
+JNI follows the production adapter's callback model. `Err(E)` is converted
+through the ordinary output declarations for `E`, including `expand_return!`,
+data/enum classes and explicit borrowed/owned projections. The generated
+`<Error>Handler<R>.run(...)` receives these typed values. A message mapper is an
+explicit alternative that generates `<Error>MessageHandler<R>` with one String
+parameter. Neither representation is selected from the error's field contents.
+
+A fallible Kotlin function takes `onError` for domain errors and
+`onBindingError: JniErrorHandler<ReturnType>` for conversion failures, closed
+handles and caught Rust panics. An infallible function has just the binding
+callback, named `onError`. A handler may return a fallback value of the function's
+return type or throw. Both handlers execute after the native call returns and
+after handle locks are released. Owned handles passed to a domain handler are
+closed after it finishes, including when it throws; use `handle.take()` to retain
+an owning handle beyond the callback. Native input ownership acknowledgements
+are applied before invoking a handler.
+
+Binding handlers default to throwing `IllegalArgumentException` in Kotlin.
+Domain handlers are required unless `.error_class(E, "java.io.IOException")`
+explicitly supplies a throwing default for a message-mapped error. That convenience
+also emits `@Throws` for Java callers; it does not throw the source exception
+inside JNI. Callers can replace either default with their own callback. Existing
+pending JVM exceptions, such as allocation failures, propagate unchanged.
+An error projection or mapper that fails is a binding failure.
+
+`Result<(), E>` returns a C boolean without a dummy success output and Kotlin
+`Unit`. Error routing supports only an outermost owned
 `Result<T, E>` return. Result inputs, Result-valued fields, borrowed Results,
 nested Results inside the success value, and fallible helpers used as expansion constructors or getters are
 not yet supported. Spell both generic arguments explicitly using `Result`,
@@ -520,10 +572,11 @@ not yet supported. Spell both generic arguments explicitly using `Result`,
 `io::Result<T>` are not resolved. Named opaque aliases remain opaque.
 
 Adapter authors can use the shared `Output::Result` recipe through `bind_output`.
-The declaration compiler validates the mapper and unwraps the result before
-preparing the success conversion. `Codec::result_error` selects how the mapped
-message enters the adapter's error channel; its default rejects unsupported
-routing. No Result-specific wire type, niche, or group metadata is introduced.
+The declaration compiler validates any selected mapper and unwraps the result
+before preparing the success conversion. `Codec::result_error_value` receives
+the owned error and an optional mapper expression; its default requires a mapper
+and delegates to `Codec::result_error`. C can preserve declared error fields;
+JNI preserves typed outputs or explicitly mapped messages for its domain callback. No Result-specific wire type, niche, or group metadata is introduced.
 
 ## Fieldless enums
 
