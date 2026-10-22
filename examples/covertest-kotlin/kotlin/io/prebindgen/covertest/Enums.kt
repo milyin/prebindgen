@@ -45,12 +45,14 @@ fun checkEnums() {
             arrayOf(ByteArray::class.java, Int::class.javaPrimitiveType, String::class.java))
     }
     for (tag in listOf(-4, -3, -2, -1, 0, 7, 8, Int.MIN_VALUE, Int.MAX_VALUE)) {
-        val result = native.invoke(null, byteArrayOf(), tag, "") as Array<*>
+        val packet = native.invoke(null, byteArrayOf(), tag, "") as Array<*>
+        check(packet[0] == null)
+        val result = packet.drop(1)
         check(result.size == 1 && result[0] == tag)
     }
     for (bad in listOf(-5, 1, 6, 9)) {
-        try { native.invoke(null, byteArrayOf(), bad, ""); error("invalid native enum accepted") }
-        catch (e: java.lang.reflect.InvocationTargetException) { check(e.cause is IllegalArgumentException) }
+        val packet = native.invoke(null, byteArrayOf(), bad, "") as Array<*>
+        check(packet[0] is String)
     }
     check(enumBoundaryProbe(byteArrayOf(), false, Code.Seven, "") { present, code -> !present && code == null })
     check(enumBoundaryProbe(byteArrayOf(), true, null, "") { present, code -> present && code == null })

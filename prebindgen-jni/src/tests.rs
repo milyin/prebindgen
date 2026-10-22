@@ -93,7 +93,9 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
     assert!(functions.contains("p0_w1: test.Envelope"));
     assert!(functions.contains("p0_w1.`inner`.`bytes`"));
     assert!(functions.contains("test.Envelope(test.model.Inner("));
-    assert!(functions.contains("public fun `make`(p0_w1: ULong): ULong"));
+    assert!(
+        functions.contains("public fun `make`(p0_w1: ULong, onError: test.JniErrorHandler<ULong>")
+    );
     assert!(!generated.rust.contains("drop_pointer"));
     assert!(generated.kotlin["test/model/Inner.kt"].contains("contentEquals"));
 }
@@ -356,11 +358,13 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .build()
         .unwrap();
     let kt = &generated.kotlin["test/Functions.kt"];
-    assert!(kt.contains("public fun `h`(p0_w3: test.Handle?): test.Handle?"));
+    assert!(kt.contains(
+        "public fun `h`(p0_w3: test.Handle?, onError: test.JniErrorHandler<test.Handle?>"
+    ));
     assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
     assert!(kt.contains("invalid option payload"));
-    assert!(kt.contains("if (result[0] != 0L)"));
-    assert!(kt.contains("if (result[0] == 1)"));
+    assert!(kt.contains("if (result[1] != 0L)"));
+    assert!(kt.contains("if (result[1] == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
     let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
     let d = prebindgen_declarations::Declarations::new(&flat, vec![]).unwrap();
@@ -531,7 +535,7 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
 }
 
 #[test]
-fn result_exception_policy_is_explicit_and_checked_exceptions_are_declared() {
+fn result_callbacks_support_explicit_message_mapping_and_optional_throwing_defaults() {
     let source = "pub type E=String; pub fn message(e:&E)->String{} pub fn read()->Result<i64,E>{}";
     let builder = || {
         JniGen::builder()
@@ -540,7 +544,9 @@ fn result_exception_policy_is_explicit_and_checked_exceptions_are_declared() {
             .package(package!().fun(fun!(read)))
             .error_mapper(syn::parse_quote!(E), fun!(message))
     };
-    assert!(fail(builder()).contains("error_class"));
+    let callback = builder().build().unwrap();
+    assert!(callback.kotlin["test/Functions.kt"].contains("onError: test.EMessageHandler<Long>"));
+    assert!(!callback.rust.contains("domain_error("));
     for class in ["", "bad/name", "bad.Errors$", "bad.Errors$$Nested"] {
         assert!(builder()
             .error_class(syn::parse_quote!(E), class)
@@ -560,7 +566,7 @@ fn result_exception_policy_is_explicit_and_checked_exceptions_are_declared() {
         .error_class(syn::parse_quote!(E), "test.Errors$Nested")
         .build()
         .unwrap();
-    assert!(nested.rust.contains("test/Errors$Nested"));
+    assert!(!nested.rust.contains("test/Errors$Nested"));
     assert!(nested
         .kotlin
         .values()
@@ -571,6 +577,36 @@ fn result_exception_policy_is_explicit_and_checked_exceptions_are_declared() {
         .unwrap();
     let kotlin = output.kotlin.values().cloned().collect::<String>();
     assert!(kotlin.contains("@kotlin.jvm.Throws(java.io.IOException::class)"));
-    assert!(output.rust.contains("java/io/IOException"));
+    assert!(!output.rust.contains("java/io/IOException"));
+    assert!(kotlin.contains("throw java.io.IOException(message)"));
     syn::parse_file(&output.rust).unwrap();
+}
+
+#[test]
+fn result_errors_use_declared_typed_output_projections_without_a_mapper() {
+    let generated = JniGen::builder()
+        .flat(flat("pub struct E { pub code: i64, pub message: Option<String> } pub fn parts(e:E)->E{} pub fn read()->Result<i64,E>{} pub fn another()->Result<i64,E>{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(E).fields_into(fields!(parts)))
+        .package(package!().fun(fun!(read)).fun(fun!(another)))
+        .build().unwrap();
+    let handler = &generated.kotlin["test/EHandler.kt"];
+    assert!(handler.contains("v0: Long, v1: String?"));
+    let functions = &generated.kotlin["test/Functions.kt"];
+    assert!(functions.contains("onError: test.EHandler<Long>"));
+    assert!(functions.contains("onBindingError: test.JniErrorHandler<Long>"));
+    assert!(!generated.rust.contains("domain_error("));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn result_unit_error_has_a_zero_argument_domain_handler() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn empty()->Result<i64,()>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(empty)))
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/EmptyErrorHandler.kt"].contains("run(): R"));
+    syn::parse_file(&generated.rust).unwrap();
 }

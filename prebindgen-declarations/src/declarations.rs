@@ -322,10 +322,7 @@ impl Declarations {
         let mut output = if decl.ret.is_some() || decl.error.is_some() || source.ret.slot.is_none()
         {
             let recipe = if let Some((ok, error_ty)) = result_parts(&source.ret.ty) {
-                let mapper = decl
-                    .error
-                    .as_deref()
-                    .or_else(|| self.errors.get(&type_key(error_ty)));
+                let mapper = self.error_mapper_for(decl, error_ty);
                 if mapper.is_some_and(|mapper| {
                     !mapper.params.is_empty()
                         || mapper.ret.is_some()
@@ -449,6 +446,26 @@ impl Declarations {
                 .map(|field| self.output(flat, &field.ty, None, &mut Vec::new()))
                 .collect::<Result<Vec<_>>>()?,
         ))
+    }
+    /// Resolve the declared output representation for an owned value, including
+    /// type-wide expansions. Adapters can reuse it for alternate output channels.
+    pub fn output_recipe<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+        &self,
+        flat: &Flat<I, O>,
+        ty: &syn::Type,
+    ) -> Result<Output> {
+        self.output(flat, ty, None, &mut Vec::new())
+    }
+    /// Select the explicit message mapper for this function's Result error.
+    pub fn error_mapper_for<'a>(
+        &'a self,
+        declaration: &'a FunctionDecl,
+        ty: &syn::Type,
+    ) -> Option<&'a FunctionDecl> {
+        declaration
+            .error
+            .as_deref()
+            .or_else(|| self.errors.get(&type_key(ty)))
     }
     fn output<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
         &self,

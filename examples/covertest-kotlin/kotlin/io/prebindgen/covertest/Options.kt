@@ -80,15 +80,17 @@ fun checkOptions() {
         }
         val empty: Any = if (referenceType == String::class.java) "" else byteArrayOf()
         for ((tag, payload) in listOf(-1 to empty, 0 to empty, 1 to null, 1 to empty)) {
-            val result = native.invoke(null, tag, payload) as Array<*>
+            val packet = native.invoke(null, tag, payload) as Array<*>
+            check(packet[0] == null)
+            val result = packet.drop(1)
             check(result.size == 2 && result[0] == tag)
             if (tag != 1 || payload == null) check(result[1] == null)
             else if (payload is String) check(result[1] == "")
             else check((result[1] as ByteArray).isEmpty())
         }
         for (tag in listOf(-2, Int.MIN_VALUE, 2, Int.MAX_VALUE)) {
-            try { native.invoke(null, tag, empty); error("invalid native presence tag accepted") }
-            catch (e: java.lang.reflect.InvocationTargetException) { check(e.cause is IllegalArgumentException) }
+            val packet = native.invoke(null, tag, empty) as Array<*>
+            check(packet[0] is String)
         }
     }
     check(optionTripleText(false, true, "ignored") { outer, inner, v -> !outer && inner == null && v == null })
@@ -200,7 +202,7 @@ fun checkOptions() {
     check(optionResourceMut(returned) == 78L)
     returned.close()
     check(ownedResourceDrops() == start + 1uL)
-    try {optionResourceId(returned); error("closed optional handle accepted")} catch (_: IllegalStateException) {}
+    try {optionResourceId(returned); error("closed optional handle accepted")} catch (_: IllegalArgumentException) {}
     val none = optionalResourceNew(false)!!
     check(none.resource == null && none.details == null)
     val record = optionalResourceNew(true)!!

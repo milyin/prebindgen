@@ -424,9 +424,10 @@ overloads and shared selector argument storage remain outside this subset.
 
 ## Result returns
 
-Declare how to render source errors explicitly. A mapper takes exactly `E` or
-`&E` and returns `String`; ownership follows that signature. No error fields or
-`Display` implementation are inferred. For example, for a source function
+Declare how to project source errors explicitly, using typed output expansions
+or a message mapper. A mapper takes exactly `E` or `&E` and returns `String`;
+ownership follows that signature. No error fields or `Display` implementation
+are inferred. For example, for a source function
 `open_session(...) -> Result<Session, Error>` and helper
 `error_message(error: &Error) -> String`:
 
@@ -435,9 +436,8 @@ Declare how to render source errors explicitly. A mapper takes exactly `E` or
 .opaque_error(syn::parse_quote!(Error), fun!(error_message))
 .function(fun!(open_session))
 
-// JNI builder: also choose a JVM exception class for the error type.
-.error_mapper(syn::parse_quote!(Error), fun!(error_message))
-.error_class(syn::parse_quote!(Error), "java.io.IOException")
+// JNI builder: project typed error fields, just as for ordinary outputs.
+.expand(expand_return!(Error).fields_into(fields!(error_into_parts)))
 .package(package!().fun(fun!(open_session)))
 ```
 
@@ -486,16 +486,30 @@ flag replaces the ownership distinction that non-Result calls still encode in
 API. Result calls deliver errors through their explicit output and do not change
 that thread-local message.
 
-JNI throws the configured class and emits `@Throws` so Java callers can
-catch checked exceptions. The exception class must be on the Kotlin compile
-classpath, extend `Throwable`, and have a public `String` constructor at runtime.
-Use JVM binary names for nested classes, such as `example.Errors$Rejected`.
-Binding failures and caught Rust panics still use `IllegalArgumentException`;
-choose a different class when callers need to distinguish source errors. JNI
-preserves an existing pending exception, including exception-class lookup and
-allocation failures. A mapper panic is a binding failure rather than a mapped
-source error. Consumed Kotlin handles are marked consumed even when a source
-error or panic interrupts the call.
+JNI follows the production adapter's callback model. `Err(E)` is converted
+through the ordinary output declarations for `E`, including `expand_return!`,
+data/enum classes and explicit borrowed/owned projections. The generated
+`<Error>Handler<R>.run(...)` receives these typed values. A message mapper is an
+explicit alternative that generates `<Error>MessageHandler<R>` with one String
+parameter. Neither representation is selected from the error's field contents.
+
+A fallible Kotlin function takes `onError` for domain errors and
+`onBindingError: JniErrorHandler<ReturnType>` for conversion failures, closed
+handles and caught Rust panics. An infallible function has just the binding
+callback, named `onError`. A handler may return a fallback value of the function's
+return type or throw. Both handlers execute after the native call returns and
+after handle locks are released. Owned handles passed to a domain handler are
+closed after it finishes, including when it throws; use `handle.take()` to retain
+an owning handle beyond the callback. Native input ownership acknowledgements
+are applied before invoking a handler.
+
+Binding handlers default to throwing `IllegalArgumentException` in Kotlin.
+Domain handlers are required unless `.error_class(E, "java.io.IOException")`
+explicitly supplies a throwing default for a message-mapped error. That convenience
+also emits `@Throws` for Java callers; it does not throw the source exception
+inside JNI. Callers can replace either default with their own callback. Existing
+pending JVM exceptions, such as allocation failures, propagate unchanged.
+An error projection or mapper that fails is a binding failure.
 
 `Result<(), E>` returns a C boolean without a dummy success output and Kotlin
 `Unit`. Error routing supports only an outermost owned
@@ -510,7 +524,7 @@ The declaration compiler validates any selected mapper and unwraps the result
 before preparing the success conversion. `Codec::result_error_value` receives
 the owned error and an optional mapper expression; its default requires a mapper
 and delegates to `Codec::result_error`. C can preserve declared error fields;
-JNI reports the mapped message through its configured exception class. No Result-specific wire type, niche, or group metadata is introduced.
+JNI preserves typed outputs or explicitly mapped messages for its domain callback. No Result-specific wire type, niche, or group metadata is introduced.
 
 ## Fieldless enums
 

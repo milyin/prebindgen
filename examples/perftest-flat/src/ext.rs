@@ -3075,6 +3075,28 @@ pub fn result_error_message(error: ResultFailure) -> String {
     format!("failure {} 世界", error.code)
 }
 #[prebindgen]
+pub fn result_drop_error_into(error: CDropError) -> CDropError {
+    error
+}
+#[prebindgen]
+pub fn result_pair_error_into(error: CResultError) -> CResultError {
+    error
+}
+/// Typed error projection; errors keep their source domain instead of becoming strings.
+#[prebindgen]
+pub fn result_error_code(error: &ResultFailure) -> i64 {
+    assert_ne!(error.code, 99, "error getter panic");
+    error.code
+}
+#[prebindgen]
+pub fn result_resource_error_into(error: CResourceError) -> CResourceError {
+    error
+}
+#[prebindgen]
+pub fn result_rich_error_into(error: CRichError) -> CRichError {
+    error
+}
+#[prebindgen]
 pub fn result_error_drops() -> usize {
     RESULT_ERROR_DROPS.load(std::sync::atomic::Ordering::SeqCst)
 }

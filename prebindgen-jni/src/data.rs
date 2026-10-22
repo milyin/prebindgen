@@ -154,6 +154,7 @@ pub struct DataGroup {
 
 pub(crate) struct DataCodec {
     pub(crate) error_classes: BTreeMap<String, String>,
+    pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
     records: BTreeMap<String, Rc<RecordShape>>,
     pub(crate) enums: BTreeMap<String, JniEnum>,
 }
@@ -272,6 +273,7 @@ impl DataCodec {
             records,
             enums,
             error_classes: BTreeMap::new(),
+            error_helpers: BTreeMap::new(),
         })
     }
     fn enum_type(&self, ty: &syn::Type) -> Option<&JniEnum> {
@@ -512,15 +514,21 @@ impl Codec for DataCodec {
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
-    fn result_error(&self, ty: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
-        let class = self.error_classes.get(&type_key(ty)).ok_or_else(|| {
-            format!(
-                "register an explicit error_class for Result error `{}`",
-                type_key(ty)
-            )
-        })?;
+    fn result_error_value(
+        &self,
+        ty: &syn::Type,
+        value: TokenStream,
+        message: Option<TokenStream>,
+        _: &(),
+    ) -> Result<TokenStream> {
+        let helper = self
+            .error_helpers
+            .get(&(type_key(ty), message.is_some()))
+            .ok_or("missing declared JNI error output")?;
         let env = prebindgen_conversions::template_parameter("environment");
-        Ok(quote!(::prebindgen_jni_runtime::domain_error(&mut #env, #class, #message)?))
+        let reported = prebindgen_conversions::template_parameter("domain_output");
+        let value = message.unwrap_or(value);
+        Ok(quote!({#helper(&mut #env, #value, &mut #reported)?; String::new()}))
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()
@@ -895,6 +903,7 @@ mod group_tests {
             classes: &classes,
             result: "result",
             failure: "failure",
+            cleanup_failure: None,
             output_prefix: "output",
         };
         let input = kotlin::input_kotlin(field.nodes(), &context).unwrap();
