@@ -584,6 +584,7 @@ fn collections_reject_unsupported_element_and_view_contracts() {
         "pub fn f(x:Vec<Result<i64,i64>>) {}",
         "pub fn f()->Vec<Result<i64,i64>> {}",
         "pub fn f()->Vec<()> {}",
+        "pub fn f()->Vec<&i64> {}",
     ] {
         let b = JniGen::builder()
             .flat(flat(source))

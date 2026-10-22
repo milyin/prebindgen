@@ -261,8 +261,11 @@ pub(crate) fn output<C: Codec>(
     mode: ProjectionMode,
     child: CodecOutput<C>,
 ) -> Result<CodecOutput<C>> {
-    let (_, view) =
+    let (element_type, view) =
         prebindgen_flat::sequence_parts(ty).ok_or("sequence recipe requires a collection")?;
+    if matches!(element_type, Type::Reference(_)) {
+        return Err("collection reference elements are unsupported; use owned elements".into());
+    }
     if view == SequenceView::Mutable {
         return Err("mutable collection outputs are unsupported".into());
     }
