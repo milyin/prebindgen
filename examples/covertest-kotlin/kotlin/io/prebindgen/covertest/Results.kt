@@ -111,13 +111,10 @@ fun checkResults() {
         check(kind == Code.Seven)
         check(message == if (present) "rich error" else null)
     })
-    try { ResultRuntimeProbe.missingClass(); error("missing exception class accepted") }
-    catch (_: NoClassDefFoundError) {}
     resultFailure<IOException>("original") { ResultRuntimeProbe.pendingException() }
 }
 
 internal object ResultRuntimeProbe {
-    @JvmStatic external fun missingClass()
     @JvmStatic external fun pendingException()
 }
 

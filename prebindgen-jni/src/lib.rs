@@ -448,11 +448,7 @@ impl JniGenBuilder {
                 validate_name(nested)?;
             }
             let ty = flat.resolve_type(&ty)?;
-            if codec
-                .error_classes
-                .insert(type_key(&ty), class.replace('.', "/"))
-                .is_some()
-            {
+            if codec.error_classes.insert(type_key(&ty), class).is_some() {
                 return Err("duplicate exception class for source error type".into());
             }
         }

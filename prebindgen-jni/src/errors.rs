@@ -14,10 +14,7 @@ pub(crate) struct ErrorBinding {
 impl ErrorBinding {
     pub fn throws(&self) -> String {
         self.exception.as_ref().map_or_else(String::new, |class| {
-            format!(
-                "@kotlin.jvm.Throws({}::class)\n",
-                class.replace(['/', '$'], ".")
-            )
+            format!("@kotlin.jvm.Throws({}::class)\n", class.replace('$', "."))
         })
     }
     pub fn parameter(&self, ret: &str) -> String {
@@ -25,7 +22,7 @@ impl ErrorBinding {
             format!(
                 " = {} {{ message -> throw {}(message) }}",
                 self.handler,
-                class.replace(['/', '$'], ".")
+                class.replace('$', ".")
             )
         });
         format!("onError: {}<{ret}>{default}", self.handler)

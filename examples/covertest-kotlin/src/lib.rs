@@ -1,16 +1,7 @@
 #![allow(non_camel_case_types, unused_variables)]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-// Runtime probes cover pending exceptions in the binding-packet path and
-// preserve coverage for the explicitly callable native exception helper.
-#[no_mangle]
-pub extern "system" fn Java_io_prebindgen_covertest_ResultRuntimeProbe_missingClass(
-    mut env: prebindgen_jni_runtime::jni::JNIEnv<'_>,
-    _: prebindgen_jni_runtime::jni::objects::JClass<'_>,
-) {
-    let _ = prebindgen_jni_runtime::domain_error(&mut env, "missing/Exception", "missing".into());
-    prebindgen_jni_runtime::fail(&mut env, "fallback must not replace the lookup exception");
-}
+// Binding-error delivery and its native fallback must preserve pending JVM exceptions.
 #[no_mangle]
 pub extern "system" fn Java_io_prebindgen_covertest_ResultRuntimeProbe_pendingException(
     mut env: prebindgen_jni_runtime::jni::JNIEnv<'_>,

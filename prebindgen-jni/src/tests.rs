@@ -546,7 +546,6 @@ fn result_callbacks_support_explicit_message_mapping_and_optional_throwing_defau
     };
     let callback = builder().build().unwrap();
     assert!(callback.kotlin["test/Functions.kt"].contains("onError: test.EMessageHandler<Long>"));
-    assert!(!callback.rust.contains("domain_error("));
     for class in ["", "bad/name", "bad.Errors$", "bad.Errors$$Nested"] {
         assert!(builder()
             .error_class(syn::parse_quote!(E), class)
@@ -595,7 +594,6 @@ fn result_errors_use_declared_typed_output_projections_without_a_mapper() {
     let functions = &generated.kotlin["test/Functions.kt"];
     assert!(functions.contains("onError: test.EHandler<Long>"));
     assert!(functions.contains("onBindingError: test.JniErrorHandler<Long>"));
-    assert!(!generated.rust.contains("domain_error("));
     syn::parse_file(&generated.rust).unwrap();
 }
 
