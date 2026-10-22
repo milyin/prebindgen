@@ -178,7 +178,7 @@
 <a href=#178 id=178 data-nosnippet>178</a>            fields.push(<span class="macro">quote!</span>(<span class="kw">pub </span>unused:u8));
 <a href=#179 id=179 data-nosnippet>179</a>            header.push_str(<span class="string">"    uint8_t unused;\n"</span>);
 <a href=#180 id=180 data-nosnippet>180</a>        }
-<a href=#181 id=181 data-nosnippet>181</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nint32_t {drop_name}({c_name} *error);\n"</span>));
+<a href=#181 id=181 data-nosnippet>181</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"</span>));
 <a href=#182 id=182 data-nosnippet>182</a>        <span class="kw">let </span>wires = error.plan.layout.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span><span class="kw-2">mut </span>comments = describe_groups(<span class="kw-2">&amp;</span>error.plan.layout, <span class="kw-2">&amp;</span>wires, <span class="bool-val">true</span>, <span class="kw-2">&amp;mut </span><span class="number">0</span>, <span class="string">"error"</span>);
 <a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..wires.len()).rev() {
@@ -198,8 +198,8 @@
 <a href=#198 id=198 data-nosnippet>198</a>                #prepare
 <a href=#199 id=199 data-nosnippet>199</a>            }
 <a href=#200 id=200 data-nosnippet>200</a>            <span class="attr">#[doc=<span class="string">"# Safety\nThe pointer must be null or writable storage containing a live error produced by this library."</span>]
-<a href=#201 id=201 data-nosnippet>201</a>            #[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#drop_name(error:<span class="kw-2">*mut </span>#rust_name)-&gt;i32 {
-<a href=#202 id=202 data-nosnippet>202</a>                <span class="kw">match </span>::prebindgen_runtime::boundary(|| {<span class="kw">if </span>!error.is_null(){#drops}<span class="prelude-val">Ok</span>(())}) {<span class="prelude-val">Ok</span>(())=&gt;{__pb_error(<span class="string">""</span>);<span class="number">0</span>},<span class="prelude-val">Err</span>(e)=&gt;{__pb_error(<span class="kw-2">&amp;</span>e);-<span class="number">1</span>}}
+<a href=#201 id=201 data-nosnippet>201</a>            #[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>#drop_name(error:<span class="kw-2">*mut </span>#rust_name) {
+<a href=#202 id=202 data-nosnippet>202</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(message)=::prebindgen_runtime::boundary(|| {<span class="kw">if </span>!error.is_null(){#drops}<span class="prelude-val">Ok</span>(())}) {<span class="macro">panic!</span>(<span class="string">"C error destructor failed: {}"</span>,message);}
 <a href=#203 id=203 data-nosnippet>203</a>            }
 <a href=#204 id=204 data-nosnippet>204</a>        });
 <a href=#205 id=205 data-nosnippet>205</a>    }
