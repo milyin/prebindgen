@@ -284,14 +284,19 @@ stores the adapter's description of that individual wire in `kind`. `Wire<W>` re
 `W: WireKind`, whose `rust_type()` returns a `syn::Type` for the boundary carrier.
 Both writers use this API to declare Rust parameters and result fields. A plain
 `syn::Type` implements `WireKind` when no additional metadata is needed.
-C uses `CWire` for scalars, buffers and typed pointers, with its remaining niche
-in `spare_niche`. JNI uses a single `JniWire` enum for scalars, handles, text,
-bytes and selectors. Scalar, enum and selector variants store `next_integer_niche`;
-handles, text and bytes store `null_niche_available`. Constructors
-`JniWire::{scalar, handle, text, bytes, selector}` initialize that state; `available_niche()`,
-checked `set_niche(...)` and `clear_niche()` read and update it. Used niche
-representations remain separate `JniNiche` values on optional parent metadata.
-JNI derives Rust/Kotlin carrier types and JVM parameter width from the variant.
+C and JNI each use a single wire enum: `CWire` for scalars, enums, buffers and
+pointers; `JniWire` for scalars, enums, handles, text, bytes and selectors.
+Scalar and enum variants store `next_integer_niche`, as do JNI selectors.
+C pointers and JNI handles, text and bytes store `null_niche_available`.
+`CWire::{scalar, enumeration, pointer}` and
+`JniWire::{scalar, handle, text, bytes, selector}` initialize that state;
+`CWire::Buffer` is constructed directly. `available_niche()` reads the stored
+state, `set_niche(...)` checks updates for variant compatibility, and
+`clear_niche()` disables availability. Callers must not restore a consumed niche.
+C buffers have no niche: a null data pointer with zero length is a valid empty
+value. Reserved representations remain separate `CNiche` or `JniNiche` values on
+optional parent metadata. Each adapter derives boundary types from its wire
+variant; JNI also derives Kotlin types and JVM parameter width.
 All leaf information is accessible through
 `wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
 carrier types.

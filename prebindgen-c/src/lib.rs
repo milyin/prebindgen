@@ -5,50 +5,8 @@ use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::{Flat, Primitive, Result, WireKind};
 
-/// The carrier of one C wire.
-///
-/// This adapter-specific type keeps C and JNI converters from being mixed in
-/// one model: their codecs use different carriers and allocation layouts.
-#[derive(Clone, Debug)]
-pub enum CCarrier {
-    /// Fieldless enum represented by checked `int32_t` values.
-    Enum {
-        /// Unprefixed C typedef name.
-        name: String,
-        /// Valid source variants and their integer representations.
-        mapping: Box<prebindgen_declarations::EnumMapping>,
-    },
-    /// A primitive in its C scalar type.
-    Scalar(Primitive),
-    /// Text or bytes as a pointer/length buffer.
-    Buffer,
-    /// A typed opaque pointer to a boxed source value.
-    Pointer(Box<CPointer>),
-}
-/// Description of one C wire, including the niche still available at this use.
-#[derive(Clone, Debug)]
-pub struct CWire {
-    /// FFI representation of this individual value.
-    pub carrier: CCarrier,
-    /// Unused representation available to an enclosing option, if any.
-    pub spare_niche: Option<CNiche>,
-}
-impl From<CCarrier> for CWire {
-    fn from(carrier: CCarrier) -> Self {
-        let niche = match &carrier {
-            CCarrier::Pointer(_) => Some(CNiche::Null),
-            CCarrier::Scalar(Primitive::Char) => Some(CNiche::Integer(0x110000)),
-            CCarrier::Enum { mapping, .. } => {
-                mapping.initial_niche().map(|n| CNiche::Integer(n.into()))
-            }
-            _ => None,
-        };
-        Self {
-            carrier,
-            spare_niche: niche,
-        }
-    }
-}
+mod wire;
+pub use wire::CWire;
 /// Pointee type and mutability of a C boundary pointer.
 #[derive(Clone, Debug)]
 pub struct CPointer {
@@ -155,53 +113,43 @@ impl Codec for CCodec {
         Ok(())
     }
     fn niche(&self, wire: &CWire) -> Option<CNiche> {
-        wire.spare_niche.clone()
+        wire.available_niche()
     }
     fn set_niche(&self, wire: &mut CWire, niche: Option<CNiche>) {
-        wire.spare_niche = niche;
+        wire.set_niche(niche)
+            .expect("C codec supplied an incompatible niche");
     }
-    fn is_present(&self, _: &CWire, niche: &CNiche, value: TokenStream) -> Result<TokenStream> {
+    fn is_present(&self, wire: &CWire, niche: &CNiche, value: TokenStream) -> Result<TokenStream> {
+        wire.validate_niche(niche)?;
         Ok(niche.present(value))
     }
     fn remaining_niche(&self, wire: &CWire, niche: &CNiche) -> Option<CNiche> {
-        match niche {
-            CNiche::Integer(n) if matches!(&wire.carrier, CCarrier::Enum { .. }) => {
-                let CCarrier::Enum { mapping, .. } = &wire.carrier else {
-                    unreachable!()
-                };
-                if !mapping.is_niche(*n) {
-                    return None;
-                }
-                i32::try_from(*n)
-                    .ok()?
-                    .checked_sub(1)
-                    .and_then(|n| mapping.unused_at_or_below(n))
-                    .map(|n| CNiche::Integer(n.into()))
-            }
-            CNiche::Integer(n)
-                if matches!(&wire.carrier, CCarrier::Scalar(Primitive::Char))
-                    && *n < u32::MAX as i64 =>
-            {
-                Some(CNiche::Integer(n + 1))
-            }
-            _ => None,
-        }
+        wire.remaining_niche(niche)
     }
     fn absent_value(&self, wire: &CWire, niche: Option<&CNiche>, _: bool) -> Result<TokenStream> {
+        if let Some(niche) = niche {
+            wire.validate_niche(niche)?;
+        }
         let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
-        Ok(match &wire.carrier {
-            CCarrier::Pointer(_) => quote!(std::ptr::null_mut()),
-            CCarrier::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
-            CCarrier::Scalar(Primitive::I128 | Primitive::U128) => quote!(#wide {hi:0,lo:0}),
-            CCarrier::Scalar(Primitive::F32 | Primitive::F64) => quote!(0.0),
-            CCarrier::Scalar(_) | CCarrier::Enum { .. } => niche
+        Ok(match wire {
+            CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
+            CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::Scalar {
+                primitive: Primitive::I128 | Primitive::U128,
+                ..
+            } => quote!(#wide {hi:0,lo:0}),
+            CWire::Scalar {
+                primitive: Primitive::F32 | Primitive::F64,
+                ..
+            } => quote!(0.0),
+            CWire::Scalar { .. } | CWire::Enum { .. } => niche
                 .map(|n| n.integer_value())
                 .unwrap_or_else(|| quote!(0)),
         })
     }
     fn selector(&self, _: &()) -> CWire {
-        CCarrier::Scalar(Primitive::I32).into()
+        CWire::scalar(Primitive::I32)
     }
     fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
@@ -230,13 +178,13 @@ impl Codec for CCodec {
         }
         let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
-            Some(Value::Scalar(p)) => (decode_scalar(p, &w), CCarrier::Scalar(p)),
+            Some(Value::Scalar(p)) => (decode_scalar(p, &w), CWire::scalar(p)),
             // Text and bytes borrow the caller's buffer; owned targets copy it.
             Some(Value::Text) => (
                 quote!(std::str::from_utf8(unsafe {#read_buffer(#w)?}).map_err(|_|"invalid UTF-8")?),
-                CCarrier::Buffer,
+                CWire::Buffer,
             ),
-            Some(Value::Bytes) => (quote!(unsafe {#read_buffer(#w)?}), CCarrier::Buffer),
+            Some(Value::Bytes) => (quote!(unsafe {#read_buffer(#w)?}), CWire::Buffer),
             None => {
                 return prebindgen_conversions::boxed::input(
                     &prebindgen_conversions::boxed::Storage::Direct,
@@ -244,11 +192,11 @@ impl Codec for CCodec {
                     w,
                     v,
                     &active.rust(),
-                    |b| CCarrier::Pointer(Box::new(b.into())).into(),
+                    |b| CWire::pointer(b.into()),
                 )
             }
         };
-        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind.into())
+        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
     }
     fn output_leaf(
         &self,
@@ -313,7 +261,7 @@ impl Codec for CCodec {
                 v,
                 borrowed,
                 |v| encode_scalar(p, v),
-                CCarrier::Scalar(p).into(),
+                CWire::scalar(p),
             ),
             Some(_) => {
                 // The buffer stays owned by Rust until every output is delivered.
@@ -323,7 +271,7 @@ impl Codec for CCodec {
                     v,
                     borrowed,
                     |v| quote!(::core::convert::Into::<Vec<u8>>::into(#v).into_boxed_slice()),
-                    CCarrier::Buffer.into(),
+                    CWire::Buffer,
                 )?;
                 let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
                 out.values = vec![quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()})];
@@ -336,7 +284,7 @@ impl Codec for CCodec {
                 w,
                 v,
                 borrowed,
-                |b| CCarrier::Pointer(Box::new(b.into())).into(),
+                |b| CWire::pointer(b.into()),
             ),
         }
     }
@@ -596,32 +544,10 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-impl WireKind for CWire {
-    fn rust_type(&self) -> syn::Type {
-        match &self.carrier {
-            CCarrier::Enum { .. } => syn::parse_quote!(i32),
-            CCarrier::Scalar(p) => match p {
-                Primitive::Bool => syn::parse_quote!(u8),
-                Primitive::Char => syn::parse_quote!(u32),
-                Primitive::I128 | Primitive::U128 => syn::parse_quote!(__Pb128),
-                p => p.rust_type(),
-            },
-            CCarrier::Pointer(p) => {
-                let ty = &p.ty;
-                if !p.mutable {
-                    syn::parse_quote!(*const #ty)
-                } else {
-                    syn::parse_quote!(*mut #ty)
-                }
-            }
-            CCarrier::Buffer => syn::parse_quote!(__PbBuffer),
-        }
-    }
-}
 fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
-    match &wire.kind.carrier {
-        CCarrier::Enum { name, .. } => format!("{prefix}_{name}"),
-        CCarrier::Scalar(p) => match p {
+    match &wire.kind {
+        CWire::Enum { name, .. } => format!("{prefix}_{name}"),
+        CWire::Scalar { primitive: p, .. } => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
             Primitive::Char | Primitive::U32 => "uint32_t".into(),
             Primitive::I8 => "int8_t".into(),
@@ -636,7 +562,7 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
             Primitive::F64 => "double".into(),
             Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
         },
-        CCarrier::Pointer(p) => {
+        CWire::Pointer { pointer: p, .. } => {
             let (name, _) = pointers
                 .iter()
                 .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
@@ -644,7 +570,7 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
             let qualifier = if !p.mutable { "const " } else { "" };
             format!("{qualifier}{prefix}_{name} *")
         }
-        CCarrier::Buffer => format!("{prefix}_buffer"),
+        CWire::Buffer => format!("{prefix}_buffer"),
     }
 }
 fn generate<
@@ -732,7 +658,7 @@ fn generate<
             .inputs()?
             .chain(f.outputs(&context, &source)?.map(|output| output.wire))
         {
-            if let CCarrier::Enum { name, mapping } = &wire.kind.carrier {
+            if let CWire::Enum { name, mapping, .. } = &wire.kind {
                 if !enums.iter().any(|(declared, m)| {
                     declared == name
                         && prebindgen_flat::same_type(&m.ty, &mapping.ty)
@@ -744,7 +670,7 @@ fn generate<
                     return Err("declare a matching C enum type for this wire".into());
                 }
             }
-            if let CCarrier::Pointer(pointer) = &wire.kind.carrier {
+            if let CWire::Pointer { pointer, .. } = &wire.kind {
                 if !pointers
                     .iter()
                     .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
@@ -1012,7 +938,7 @@ mod generation_tests {
 
     #[test]
     fn character_niches_exhaust_at_the_carrier_limit() {
-        let wire: CWire = CCarrier::Scalar(Primitive::Char).into();
+        let wire: CWire = CWire::scalar(Primitive::Char);
         assert!(CCodec
             .remaining_niche(&wire, &CNiche::Integer(u32::MAX as i64))
             .is_none());
@@ -1043,8 +969,11 @@ mod generation_tests {
             // Check suppression before an outer option can clear the arm niches.
             for wire in plan.layout.iter().skip(1) {
                 assert!(matches!(
-                    wire.kind.carrier,
-                    CCarrier::Scalar(Primitive::Char)
+                    wire.kind,
+                    CWire::Scalar {
+                        primitive: Primitive::Char,
+                        ..
+                    }
                 ));
                 assert!(CCodec.niche(&wire.kind).is_none());
             }
@@ -1148,7 +1077,7 @@ mod generation_tests {
 }
 
 /// A wire value excluded from the representation of a present value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CNiche {
     /// Null address (pointer or integer-encoded handle).
     Null,
