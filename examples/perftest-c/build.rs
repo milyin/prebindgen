@@ -7,8 +7,27 @@ fn main() {
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .error_mapper(syn::parse_quote!(ResultFailure), fun!(result_error_message))
-        .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .error("result_error", pq!(CResultError))
+        .error("panic_error", pq!(CPanicError))
+        .error("rich_error", pq!(CRichError))
+        .error("drop_error", pq!(CDropError))
+        .expand(expand_return!(CPanicOutput).field(fun!(c_panic_output_value)))
+        .function(fun!(c_result_drop_panic))
+        .function(fun!(c_result_error_drop))
+        .function(fun!(c_result_panic_error))
+        .function(fun!(c_result_rich_error))
+        .function(fun!(c_result_optional_handle))
+        .error("resource_error", pq!(CResourceError))
+        .function(fun!(c_result_structured))
+        .function(fun!(c_result_bool))
+        .function(
+            fun!(c_result_late_niche).expand_return(
+                expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)),
+            ),
+        )
+        .function(fun!(c_result_resource_error))
         .function(fun!(result_scalar))
         .function(fun!(result_unit))
         .function(fun!(result_optional))

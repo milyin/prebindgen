@@ -102,14 +102,16 @@ impl Input {
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output {
-    /// Deliver `Ok` through its recipe and map an owned `Err` to a message.
-    /// The mapper must be a source function taking exactly `E` or `&E` and returning `String`.
+    /// Deliver `Ok` through its recipe and route an owned `Err` through the codec.
+    /// An optional mapper takes exactly `E` or `&E` and returns `String`.
+    /// Without one, the codec must explicitly support preserving the error value.
     /// The codec selects how that message reaches the destination's error channel.
     Result {
         /// Conversion of the owned success value.
         ok: Box<Output>,
-        /// Unqualified source error-message function name.
-        error: String,
+        /// Optional unqualified source message mapper. Without one, the codec
+        /// must explicitly support the source error value itself.
+        error: Option<String>,
     },
     /// Convert an optional payload without preparing absent values.
     Optional(Box<Output>),
@@ -397,13 +399,32 @@ pub trait Codec {
             projection.mode == ProjectionMode::Borrowed,
         )
     }
-    /// Adapt a source-error message to this language's error channel.
-    ///
-    /// `message` evaluates to an owned `String`; the returned expression must also
-    /// produce a `String`. It may first report an adapter-specific error, such as
-    /// throwing a JVM exception. The compiler then returns `Err` from the active
-    /// fallible call before success-output preparation or ownership commit.
-    /// The default rejects Result error routing rather than guessing a policy.
+    /// Route the owned source error value. `message`, when present, is an
+    /// explicitly declared mapper expression returning String. Return a String
+    /// expression for the active fallible boundary; an adapter may first deliver
+    /// a structured error or throw an exception. The default requires a mapper
+    /// and delegates to `result_error`.
+    fn result_error_value(
+        &self,
+        ty: &Type,
+        _value: TokenStream,
+        message: Option<TokenStream>,
+        extra: &Self::Extra,
+    ) -> Result<TokenStream> {
+        self.result_error(
+            ty,
+            message.ok_or_else(|| {
+                format!(
+                    "Result error `{}` requires an explicit error_mapper or on_error mapper",
+                    type_key(ty)
+                )
+            })?,
+            extra,
+        )
+    }
+    /// Report a mapped String in the adapter-specific error channel.
+    /// The returned expression must produce String. The compiler returns Err
+    /// before preparing success outputs. The default rejects unsupported routing.
     fn result_error(
         &self,
         _ty: &Type,
@@ -793,28 +814,33 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             let (success_ty, error_ty) =
                 result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
-            let mapper = self.flat.function(error)?;
-            let mapper_arg = mapper.params.first().map(|p| &p.ty.ty);
-            let shared = matches!(mapper_arg, Some(Type::Reference(r)) if r.mutability.is_none() && same_type(&r.elem, error_ty));
-            if mapper.params.len() != 1
-                || !(mapper_arg.is_some_and(|ty| same_type(ty, error_ty)) || shared)
-                || type_key(&mapper.ret.ty) != "String"
-            {
-                return Err(
-                    "Result error mapper must take exactly E or &E and return String".into(),
-                );
-            }
             let payload = self.name();
             let failure = self.name();
-            let path = &mapper.path;
-            let argument = if shared {
-                quote!(&#failure)
+            let mapped = if let Some(error) = error {
+                let mapper = self.flat.function(error)?;
+                let mapper_arg = mapper.params.first().map(|p| &p.ty.ty);
+                let shared = matches!(mapper_arg, Some(Type::Reference(r)) if r.mutability.is_none() && same_type(&r.elem, error_ty));
+                if mapper.params.len() != 1
+                    || !(mapper_arg.is_some_and(|ty| same_type(ty, error_ty)) || shared)
+                    || type_key(&mapper.ret.ty) != "String"
+                {
+                    return Err(
+                        "Result error mapper must take exactly E or &E and return String".into(),
+                    );
+                }
+                let path = &mapper.path;
+                let argument = if shared {
+                    quote!(&#failure)
+                } else {
+                    quote!(#failure)
+                };
+                Some(quote!(#path(#argument)))
             } else {
-                quote!(#failure)
+                None
             };
-            let message = self
-                .codec
-                .result_error(error_ty, quote!(#path(#argument)), extra)?;
+            let message =
+                self.codec
+                    .result_error_value(error_ty, quote!(#failure), mapped, extra)?;
             let mut child = self.output(success_ty, ok, extra, quote!(#payload), false)?;
             let prepare = child.statements;
             child.statements = quote! {

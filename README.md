@@ -431,8 +431,8 @@ Declare how to render source errors explicitly. A mapper takes exactly `E` or
 `error_message(error: &Error) -> String`:
 
 ```rust,ignore
-// C builder: the mapper is a default for all returns with this error type.
-.error_mapper(syn::parse_quote!(Error), fun!(error_message))
+// C builder: return a caller-owned message through char **error.
+.opaque_error(syn::parse_quote!(Error), fun!(error_message))
 .function(fun!(open_session))
 
 // JNI builder: also choose a JVM exception class for the error type.
@@ -449,9 +449,44 @@ the same conversions as an ordinary return. `Err` skips all success-output
 preparation and delivery. Source errors and unpublished success values are
 released through ordinary Rust ownership.
 
-C reports the mapped message through its thread-local `last_error`, with the
-ownership statuses described above. Success-output storage stays unchanged on
-failure. JNI throws the configured class and emits `@Throws` so Java callers can
+C follows the explicit error-output convention. `.opaque_error(type, mapper)`
+(or `.error_mapper(type, mapper)`) delivers an allocated C string through
+`char **error`; release it with `<prefix>_free_error`. Alternatively,
+`.error("error_name", type)` declares a record error, whose fields use ordinary
+output declarations. C receives `<prefix>_error_name *error`; release its owned
+fields with `<prefix>_drop_error_name`. Structured source errors preserve their
+fields, and binding failures construct the same error type through `From<String>`.
+If converting a source error fails before delivery, C reports that failure through
+`From<String>`. If constructing or converting this replacement also fails, C
+initializes the error record to zero, with no owned allocations, so its generated
+destructor remains safe. An error output can be NULL to discard details.
+Success leaves error storage unchanged; release any prior error before reusing
+that storage.
+
+For Result calls, a success wire with an unused niche is returned directly, with
+that niche indicating failure (for example NULL for a handle). If no success
+wire has a niche, the function returns `bool` and writes success values through
+output parameters. Those outputs remain unchanged on failure. For example:
+
+```c
+int64_t value;
+char *error = NULL;
+if (!demo_read(&value, &error)) {
+    fprintf(stderr, "%s\n", error);
+    demo_free_error(error);
+}
+```
+
+Calls that consume handles additionally require `bool *ownership`: false means
+validation failed before transfer; true means the active handles were consumed,
+including when the source function or a later conversion fails. All success,
+ownership and error output storage must be pairwise disjoint. This explicit
+flag replaces the ownership distinction that non-Result calls still encode in
+`-1`/`-2`. Non-Result calls retain their status/out-struct and thread-local error
+API. Result calls deliver errors through their explicit output and do not change
+that thread-local message.
+
+JNI throws the configured class and emits `@Throws` so Java callers can
 catch checked exceptions. The exception class must be on the Kotlin compile
 classpath, extend `Throwable`, and have a public `String` constructor at runtime.
 Use JVM binary names for nested classes, such as `example.Errors$Rejected`.
@@ -462,8 +497,8 @@ allocation failures. A mapper panic is a binding failure rather than a mapped
 source error. Consumed Kotlin handles are marked consumed even when a source
 error or panic interrupts the call.
 
-`Result<(), E>` uses the existing zero-value success convention: a dummy output
-struct in C and Kotlin `Unit`. Error routing supports only an outermost owned
+`Result<(), E>` returns a C boolean without a dummy success output and Kotlin
+`Unit`. Error routing supports only an outermost owned
 `Result<T, E>` return. Result inputs, Result-valued fields, borrowed Results,
 nested Results inside the success value, and fallible helpers used as expansion constructors or getters are
 not yet supported. Spell both generic arguments explicitly using `Result`,
@@ -471,10 +506,11 @@ not yet supported. Spell both generic arguments explicitly using `Result`,
 `io::Result<T>` are not resolved. Named opaque aliases remain opaque.
 
 Adapter authors can use the shared `Output::Result` recipe through `bind_output`.
-The declaration compiler validates the mapper and unwraps the result before
-preparing the success conversion. `Codec::result_error` selects how the mapped
-message enters the adapter's error channel; its default rejects unsupported
-routing. No Result-specific wire type, niche, or group metadata is introduced.
+The declaration compiler validates any selected mapper and unwraps the result
+before preparing the success conversion. `Codec::result_error_value` receives
+the owned error and an optional mapper expression; its default requires a mapper
+and delegates to `Codec::result_error`. C can preserve declared error fields;
+JNI reports the mapped message through its configured exception class. No Result-specific wire type, niche, or group metadata is introduced.
 
 ## Fieldless enums
 

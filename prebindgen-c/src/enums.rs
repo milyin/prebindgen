@@ -3,6 +3,7 @@ use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
 pub(crate) struct EnumCodec {
+    pub(crate) errors: std::collections::BTreeMap<String, String>,
     pub(crate) enums: std::collections::BTreeMap<String, (String, EnumMapping)>,
 }
 impl EnumCodec {
@@ -42,6 +43,27 @@ impl Codec for EnumCodec {
     }
     fn finish_output(&self, p: &mut OutputPlan<CWire>, e: &()) -> Result<()> {
         CCodec.finish_output(p, e)
+    }
+    fn result_error_value(
+        &self,
+        ty: &syn::Type,
+        value: TokenStream,
+        message: Option<TokenStream>,
+        extra: &(),
+    ) -> Result<TokenStream> {
+        if let Some(name) = self.errors.get(&prebindgen_flat::type_key(ty)) {
+            if message.is_some() {
+                return Err("structured C errors cannot also select a message mapper".into());
+            }
+            let helper = errors::helper(name);
+            let pointer = prebindgen_conversions::template_parameter("error_pointer");
+            let reported = prebindgen_conversions::template_parameter("error_reported");
+            Ok(
+                quote!({unsafe {#helper(#value,#pointer,&mut #reported)}?;#reported=true;String::new()}),
+            )
+        } else {
+            CCodec.result_error_value(ty, value, message, extra)
+        }
     }
     fn result_error(
         &self,
@@ -223,6 +245,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let codec = EnumCodec {
+            errors: Default::default(),
             enums: std::collections::BTreeMap::from([(
                 "crate :: E".into(),
                 ("code".into(), mapping.clone()),

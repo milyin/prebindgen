@@ -24,6 +24,7 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     }
 }
 mod enums;
+mod errors;
 mod group;
 use group::validate_layout;
 pub use group::{CGroup, COptional};
@@ -101,6 +102,10 @@ impl Codec for CCodec {
     }
     fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.layout)?;
+        plan.commit
+            .extend(prebindgen_conversions::template_parameter(
+                "output_committed",
+            ));
         let mut values: Vec<_> = plan
             .values
             .iter()
@@ -122,7 +127,11 @@ impl Codec for CCodec {
         Ok(())
     }
     fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
-        Ok(message)
+        let pointer = prebindgen_conversions::template_parameter("error_pointer");
+        let reported = prebindgen_conversions::template_parameter("error_reported");
+        Ok(
+            quote!({if !#pointer.is_null(){unsafe {__pb_report_message(#message,#pointer)};}#reported=true;String::new()}),
+        )
     }
     fn niche(&self, wire: &CWire) -> Option<CNiche> {
         wire.available_niche()
@@ -348,14 +357,19 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
-/// Generated calls return a status and write results through an output pointer;
+/// Non-Result calls return a status and write results through an output pointer;
 /// `0` means success. On failure, `-1` means ownership has not been accepted;
 /// `-2` means active owned inputs have been consumed. Both set a thread-local
 /// last-error message and leave success-output storage unchanged.
 /// Owned pointer inputs transfer ownership after all active inputs validate;
 /// later source failures do not restore ownership. References borrow for the
 /// call and require the caller to obey Rust aliasing and lifetime rules.
-/// Returned pointers and buffers must be freed with their generated destructors.
+/// Result calls use an optional explicit error output, with owned messages or a
+/// declared error record. A success wire with an available niche is returned
+/// directly; otherwise the return is bool and success values use output pointers.
+/// Unit success needs no output pointer. Consuming Result calls additionally
+/// require a bool ownership output, indicating transfer even on failure.
+/// Returned pointers, buffers and errors require their matching destructors.
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -364,6 +378,7 @@ pub struct Cbindgen {
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
     enums: Vec<(String, syn::Type)>,
+    errors: Vec<(String, syn::Type)>,
 }
 impl Cbindgen {
     /// Create an unconfigured builder with the symbol prefix `pb`.
@@ -376,6 +391,7 @@ impl Cbindgen {
             prefix: "pb".into(),
             pointers: Vec::new(),
             enums: Vec::new(),
+            errors: Vec::new(),
         }
     }
     /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
@@ -398,7 +414,8 @@ impl Cbindgen {
         self.expansions.push(decl.into());
         self
     }
-    /// Select a default source error-message mapper for Result returns using `ty`.
+    /// Select caller-owned C-string errors (`char **error`) for Result returns
+    /// using `ty`, with a default source error-message mapper.
     /// The helper takes exactly E or &E and returns String. A function's
     /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
     pub fn error_mapper(
@@ -409,6 +426,23 @@ impl Cbindgen {
         self.expansions
             .push(prebindgen_declarations::ErrorDecl::new(ty, mapper).into());
         self
+    }
+
+    /// Deliver this declared record error by value through an optional C
+    /// error output pointer. Its fields use ordinary output declarations. The
+    /// source type must implement `From<String>` for binding failures.
+    pub fn error(mut self, name: &str, ty: syn::Type) -> Self {
+        self.errors.push((name.into(), ty));
+        self
+    }
+    /// Deliver an opaque source error as a caller-owned C string through
+    /// `char **error`. The mapper takes E or &E and returns String.
+    pub fn opaque_error(
+        self,
+        ty: syn::Type,
+        mapper: prebindgen_declarations::FunctionDecl,
+    ) -> Self {
+        self.error_mapper(ty, mapper)
     }
 
     /// Export a function and build its occurrence converters from declarations.
@@ -439,6 +473,7 @@ impl Cbindgen {
             prefix: "pb".into(),
             pointers: Vec::new(),
             enums: Vec::new(),
+            errors: Vec::new(),
         }
     }
     /// Set the prefix for exported functions, C types and destructors.
@@ -489,6 +524,7 @@ impl Cbindgen {
                     .pointers
                     .iter()
                     .chain(&self.enums)
+                    .chain(&self.errors)
                     .map(|(_, ty)| ty.clone())
                     .chain(self.expansions.iter().filter_map(|d| match d {
                         prebindgen_declarations::ExpandDecl::Error(d) => Some(d.ty.clone()),
@@ -523,8 +559,36 @@ impl Cbindgen {
                 return Err("duplicate C enum source type".into());
             }
         }
-        let codec = enums::EnumCodec { enums: enum_map };
+        let mut error_map = std::collections::BTreeMap::new();
+        let mut error_names = std::collections::BTreeSet::new();
+        for (name, ty) in &self.errors {
+            prebindgen_declarations::ident(name)?;
+            if !error_names.insert(name.clone())
+                || error_map
+                    .insert(
+                        prebindgen_flat::type_key(&flat.resolve_type(ty)?),
+                        name.clone(),
+                    )
+                    .is_some()
+            {
+                return Err("duplicate C error declaration".into());
+            }
+        }
+        for expansion in &self.expansions {
+            if let prebindgen_declarations::ExpandDecl::Error(error) = expansion {
+                if error_map
+                    .contains_key(&prebindgen_flat::type_key(&flat.resolve_type(&error.ty)?))
+                {
+                    return Err("structured C errors cannot also select a message mapper".into());
+                }
+            }
+        }
+        let codec = enums::EnumCodec {
+            enums: enum_map,
+            errors: error_map,
+        };
         let declarations = prebindgen_declarations::Declarations::new(&flat, self.expansions)?;
+        let errors = errors::prepare(&mut flat, &codec, &declarations, self.errors)?;
         let mut names = std::collections::BTreeSet::new();
         for decl in self.functions {
             if !names.insert(decl.name.clone()) {
@@ -549,6 +613,7 @@ impl Cbindgen {
             &self.prefix,
             pointers,
             codec.enums.into_values().collect(),
+            errors,
         )
     }
 }
@@ -604,6 +669,37 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
         CWire::Buffer => format!("{prefix}_buffer"),
     }
 }
+fn validate_wire_declaration(
+    wire: &Wire,
+    pointers: &[(String, syn::Type)],
+    enums: &[(String, prebindgen_declarations::EnumMapping)],
+) -> Result<()> {
+    if let CWire::Enum { name, mapping, .. } = &wire.kind {
+        if !enums.iter().any(|(declared, m)| {
+            declared == name
+                && prebindgen_flat::same_type(&m.ty, &mapping.ty)
+                && m.variants
+                    .iter()
+                    .map(|(n, v)| (n.to_string(), v))
+                    .eq(mapping.variants.iter().map(|(n, v)| (n.to_string(), v)))
+        }) {
+            return Err("declare a matching C enum type for this wire".into());
+        }
+    }
+    if let CWire::Pointer { pointer, .. } = &wire.kind {
+        if !pointers
+            .iter()
+            .any(|(_, ty)| prebindgen_flat::same_type(ty, &pointer.ty))
+        {
+            return Err(format!(
+                "declare a C opaque pointer for `{}`",
+                prebindgen_flat::type_key(&pointer.ty)
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn generate<
     I: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
@@ -621,13 +717,16 @@ fn generate<
     prefix: &str,
     pointers: Vec<(String, syn::Type)>,
     enums: Vec<(String, prebindgen_declarations::EnumMapping)>,
+    errors: Vec<errors::ErrorBinding>,
 ) -> Result<Generation> {
     let mut calls = Vec::new();
     let error = format_ident!("{prefix}_last_error");
     let free = format_ident!("{prefix}_free_buffer");
+    let free_error = format_ident!("{prefix}_free_error");
     let mut symbols = std::collections::BTreeSet::from([
         error.to_string(),
         free.to_string(),
+        free_error.to_string(),
         format!("{prefix}_buffer"),
         format!("{prefix}_int128"),
         format!("{prefix}_H"),
@@ -672,6 +771,13 @@ fn generate<
             acknowledgement: format_ident!("ownership_accepted"),
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
+            error_pointer: format_ident!("error"),
+            error_reported: format_ident!("error_reported"),
+            output_committed: if prebindgen_declarations::result_parts(&f.ret.ty).is_some() {
+                quote!(success_committed = true;)
+            } else {
+                TokenStream::new()
+            },
             buffer_type: syn::parse_quote!(__PbBuffer),
             wide_integer_type: syn::parse_quote!(__Pb128),
             read_buffer: syn::parse_quote!(__pb_read),
@@ -690,29 +796,7 @@ fn generate<
             .inputs()?
             .chain(f.outputs(&context, &source)?.map(|output| output.wire))
         {
-            if let CWire::Enum { name, mapping, .. } = &wire.kind {
-                if !enums.iter().any(|(declared, m)| {
-                    declared == name
-                        && prebindgen_flat::same_type(&m.ty, &mapping.ty)
-                        && m.variants
-                            .iter()
-                            .map(|(n, v)| (n.to_string(), v))
-                            .eq(mapping.variants.iter().map(|(n, v)| (n.to_string(), v)))
-                }) {
-                    return Err("declare a matching C enum type for this wire".into());
-                }
-            }
-            if let CWire::Pointer { pointer, .. } = &wire.kind {
-                if !pointers
-                    .iter()
-                    .any(|(_, declared)| prebindgen_flat::same_type(declared, &pointer.ty))
-                {
-                    return Err(format!(
-                        "declare a C opaque pointer for `{}`",
-                        prebindgen_flat::type_key(&pointer.ty)
-                    ));
-                }
-            }
+            validate_wire_declaration(wire, &pointers, &enums)?;
         }
         calls.push((f, body, context, source));
     }
@@ -722,6 +806,11 @@ fn generate<
        std::thread_local! {static __PB_ERROR:std::cell::RefCell<Option<std::ffi::CString>>=const {std::cell::RefCell::new(None)};}
        fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=if e.is_empty(){None}else{Some(std::ffi::CString::new(e.replace('\0',"?")).unwrap())});}
        #[no_mangle] pub extern "C" fn #error()->*const std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ref().map_or(c"".as_ptr(),|e| e.as_ptr()))}
+       unsafe fn __pb_report_message(message:String,error:*mut *mut std::ffi::c_char){
+           if !error.is_null(){std::ptr::write(error,std::ffi::CString::new(message.replace('\0',"?")).unwrap().into_raw());}
+       }
+       #[doc="# Safety\nThe pointer must be null or an unfreed error string returned by this library."]
+       #[no_mangle]pub unsafe extern "C" fn #free_error(error:*mut std::ffi::c_char){if !error.is_null(){drop(std::ffi::CString::from_raw(error));}}
        // Input pointers are borrowed only during the call; output buffers are owned.
        unsafe fn __pb_read<'a>(b:__PbBuffer)->Result<&'a [u8],String>{
         if b.len==0{return Ok(&[]);}
@@ -732,7 +821,7 @@ fn generate<
     The buffer must have been returned by this library and not already freed."]
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
-    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\n");
+    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
     for (name, mapping) in &enums {
         header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
         for (variant, value) in &mapping.variants {
@@ -760,7 +849,21 @@ The pointer must be null or a live allocation of the declared type returned by t
         });
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
-    header.push_str("/* Exported source-function status: 0 = success; -1 = failure before ownership acceptance; -2 = failure after ownership acceptance.\n * On -1 all owned inputs remain valid; on -2 active owned inputs have been consumed.\n * Failure leaves success-output storage unchanged. Read the error message before another library call. */\n");
+    for error in &errors {
+        validate_layout(&error.plan.layout)?;
+        for wire in &error.plan.layout {
+            validate_wire_declaration(wire, &pointers, &enums)?;
+        }
+    }
+    errors::emit(
+        &errors,
+        prefix,
+        &pointers,
+        &mut symbols,
+        &mut tokens,
+        &mut header,
+    )?;
+    header.push_str("/* Non-Result source-function status: 0 = success; -1 = failure before ownership acceptance; -2 = failure after ownership acceptance.\n * On -1 all owned inputs remain valid; on -2 active owned inputs have been consumed.\n * Failure leaves success-output storage unchanged. Read the error message before another library call. */\n");
     for (f, body, context, source) in calls {
         let out = &context.output_pointer;
         let accepted = &context.acknowledgement;
@@ -783,14 +886,16 @@ The pointer must be null or a live allocation of the declared type returned by t
                 ));
             }
         }
-        if let Some(slot) = &f.ret.slot {
-            header.push_str(&describe_groups(
-                slot.layout(),
-                &outputs,
-                true,
-                &mut next_option_label,
-                "return",
-            ));
+        if prebindgen_declarations::result_parts(&f.ret.ty).is_none() {
+            if let Some(slot) = &f.ret.slot {
+                header.push_str(&describe_groups(
+                    slot.layout(),
+                    &outputs,
+                    true,
+                    &mut next_option_label,
+                    "return",
+                ));
+            }
         }
         let mut params = Vec::new();
         let mut cparams = Vec::new();
@@ -799,6 +904,48 @@ The pointer must be null or a live allocation of the declared type returned by t
             let ty = w.kind.rust_type();
             params.push(quote!(#n:#ty));
             cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
+        }
+        if let Some((_, error_ty)) = prebindgen_declarations::result_parts(&f.ret.ty) {
+            let fields = outputs
+                .iter()
+                .enumerate()
+                .map(|(i, wire)| {
+                    let field = format_ident!("v{i}");
+                    let ty = wire.rust_type();
+                    quote!(pub #field:#ty)
+                })
+                .collect::<Vec<_>>();
+            let fields = if fields.is_empty() {
+                vec![quote!(pub unused:u8)]
+            } else {
+                fields
+            };
+            tokens.extend(quote!(#[repr(C)]pub struct #result {#(#fields),*}));
+            let comments = describe_groups(
+                f.ret.slot.as_ref().unwrap().layout(),
+                &outputs,
+                true,
+                &mut next_option_label,
+                "return",
+            );
+            let consumes=f.params.iter().filter_map(|p|p.ty.slot.as_ref()).any(|slot| !matches!(slot.code_fragment_slot(prebindgen_conversions::InputFragment::Acknowledge {context:&context},&syn::parse_quote!(())),Ok(code) if code.to_string()==quote!(()).to_string()));
+            errors::result_function(
+                &f.name,
+                error_ty,
+                &outputs,
+                params,
+                cparams,
+                &body,
+                &context,
+                prefix,
+                &pointers,
+                &errors,
+                consumes,
+                &comments,
+                &mut tokens,
+                &mut header,
+            )?;
+            continue;
         }
         let mut fields = Vec::new();
         header.push_str("typedef struct {\n");
@@ -926,6 +1073,101 @@ fn describe_groups(
 #[cfg(test)]
 mod generation_tests {
     use super::*;
+
+    fn error_model(source: &str) -> Bindings {
+        let source = syn::parse_file(source).unwrap();
+        Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn structured_error_registration_is_explicit_and_conflicts_are_rejected() {
+        use prebindgen_declarations::fun;
+        let source="pub struct Error {pub code:i64} pub fn message(error:&Error)->String{} pub fn f()->Result<i64,Error>{}";
+        assert!(Cbindgen::new(error_model(source))
+            .function(fun!(f))
+            .build()
+            .err()
+            .unwrap()
+            .contains("explicit error_mapper"));
+        assert!(Cbindgen::new(error_model(source))
+            .error("error", syn::parse_quote!(Error))
+            .error("other", syn::parse_quote!(Error))
+            .function(fun!(f))
+            .build()
+            .is_err());
+        assert!(Cbindgen::new(error_model(source))
+            .error("error", syn::parse_quote!(Error))
+            .error_mapper(syn::parse_quote!(Error), fun!(message))
+            .function(fun!(f))
+            .build()
+            .err()
+            .unwrap()
+            .contains("cannot also select"));
+        let generated = Cbindgen::new(error_model(source))
+            .error("error", syn::parse_quote!(Error))
+            .function(fun!(f))
+            .build()
+            .unwrap();
+        assert!(generated
+            .header
+            .contains("bool pb_f(int64_t *out0, pb_error *error)"));
+        assert!(!generated.header.contains("pb_f_result *"));
+        assert!(generated.header.contains("int64_t code;"));
+    }
+    #[test]
+    fn error_field_names_follow_wire_subtrees_and_avoid_c_keywords() {
+        use prebindgen_declarations::fun;
+        let generated = Cbindgen::new(error_model(
+            "pub struct Error {pub empty:(),pub value:Option<i64>} pub fn f()->Result<(),Error>{}",
+        ))
+        .error("error", syn::parse_quote!(Error))
+        .function(fun!(f))
+        .build()
+        .unwrap();
+        assert!(generated
+            .header
+            .contains("Field error.empty: no boundary values"));
+        assert!(generated
+            .header
+            .contains("Field error.value: error->v0, error->v1"));
+        let generated = Cbindgen::new(error_model(
+            "pub struct Error {pub char:String,pub v0:i64} pub fn f()->Result<(),Error>{}",
+        ))
+        .error("error", syn::parse_quote!(Error))
+        .function(fun!(f))
+        .build()
+        .unwrap();
+        assert!(generated.header.contains("pb_buffer v0;"));
+        assert!(generated.header.contains("int64_t v1;"));
+        assert!(!generated.header.contains("pb_buffer char;"));
+    }
+
+    #[test]
+    fn unit_and_optional_handle_results_use_the_expected_explicit_outputs() {
+        use prebindgen_declarations::fun;
+        let source="pub type Handle=String; pub struct Error {pub code:i64} pub fn unit()->Result<(),Error>{} pub fn make()->Result<Handle,Error>{} pub fn maybe()->Result<Option<Handle>,Error>{}";
+        let generated = Cbindgen::new(error_model(source))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .error("error", syn::parse_quote!(Error))
+            .function(fun!(unit))
+            .function(fun!(make))
+            .function(fun!(maybe))
+            .build()
+            .unwrap();
+        assert!(generated.header.contains("bool pb_unit(pb_error *error)"));
+        assert!(generated
+            .header
+            .contains("pb_handle * pb_make(pb_error *error)"));
+        assert!(generated
+            .header
+            .contains("bool pb_maybe(pb_handle * *out0, pb_error *error)"));
+        assert!(generated.header.contains("NULL means failure"));
+    }
 
     #[test]
     fn option_comment_labels_are_unique_across_parameters_and_result() {
@@ -1105,7 +1347,7 @@ mod generation_tests {
         .unwrap();
         flat.function_mut("noop").unwrap().ret.slot =
             Some(CountedOutput(count.clone(), Default::default()));
-        let output = generate(flat, "test", vec![], vec![]).unwrap();
+        let output = generate(flat, "test", vec![], vec![], vec![]).unwrap();
         assert!(output.header.contains("test_noop("));
         assert_eq!(count.get(), 1);
     }
