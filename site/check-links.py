@@ -28,8 +28,9 @@ SIGNATURE = re.compile(
 LINK = re.compile(r"<a [^>]*>.*?</a>", re.S)
 # A type name where a signature uses a type: after `:`, `&`, `<`, `(`, `,`,
 # `=`, `->` or a keyword, on the same line. An enum variant's name starts its
-# own line and is not matched.
-TYPE_USE = re.compile(r"(?:[:&<(,=]|->|\bmut|\bimpl|\bdyn|\bfor)[ \t]*([A-Z][A-Za-z0-9_]+)\b")
+# own line and is not matched. An associated-type binding name (`Wire = ...`)
+# is not a use of a type with that name.
+TYPE_USE = re.compile(r"(?:[:&<(,=]|->|\bmut|\bimpl|\bdyn|\bfor)[ \t]*([A-Z][A-Za-z0-9_]+)\b(?![ \t]*=)")
 
 
 def pages(doc, crate):
@@ -57,7 +58,17 @@ def main():
         for f in pages(doc, c):
             rel = os.path.relpath(f, doc)
             text = open(f, encoding="utf-8").read()
-            for path in sorted(set(RAW_PATH.findall(text))):
+            # rustdoc copies these links verbatim from itertools 0.14's blanket
+            # implementation onto every public iterator, even when itertools is
+            # documented locally. They are dependency docs, not workspace links.
+            own_docs, _, inherited = text.partition('<h2 id="blanket-implementations"')
+            dependency_links = {
+                "Itertools::chunk_by", "Itertools::merge", "Itertools::tree_reduce"
+            }
+            unresolved = set(RAW_PATH.findall(own_docs)) | (
+                set(RAW_PATH.findall(inherited)) - dependency_links
+            )
+            for path in sorted(unresolved):
                 problems.append(f"{rel}: the path `{path}` did not resolve")
             for lit in sorted(set(LITERAL.findall(text))):
                 problems.append(f"{rel}: link text left unlinked: {html.unescape(lit)}")

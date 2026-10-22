@@ -1,5 +1,5 @@
 [package]
-name = "prebindgen-tools"
+name = "prebindgen-declarations"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,4 +10,7 @@ prebindgen-flat.workspace = true
 syn.workspace = true
 quote.workspace = true
 proc-macro2.workspace = true
-prettyplease.workspace = true
+prebindgen-conversions.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

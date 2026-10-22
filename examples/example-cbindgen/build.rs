@@ -1,5 +1,5 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_registry::fun;
+use prebindgen_declarations::fun;
 use syn::parse_quote as pq;
 
 fn main() {
@@ -76,9 +76,9 @@ fn main() {
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.convert(
-            prebindgen_registry::convert!(Millis)
-                .input(prebindgen_registry::fun!(millis_from_raw))
-                .output(prebindgen_registry::fun!(millis_to_raw)),
+            prebindgen_declarations::convert!(Millis)
+                .input(prebindgen_declarations::fun!(millis_from_raw))
+                .output(prebindgen_declarations::fun!(millis_to_raw)),
         );
     */
     /* Unsupported: this declaration requires unsupported conversions or builder options.
@@ -144,7 +144,7 @@ fn main() {
         // Unsupported signature: pq!(note_new_after),
         // Unsupported signature: pq!(note_new_flagged),
     ] {
-        cbindgen = cbindgen.function(function);
+        cbindgen = cbindgen.function(function).panic();
     }
     /* Unsupported: these signatures require unsupported conversions.
     if unstable {
@@ -194,8 +194,11 @@ fn main() {
     cbindgen = cbindgen
         .opaque_ptr("local_counter", pq!(LocalCounter))
         .function(fun!(local_counter_new))
+        .panic()
         .function(fun!(local_counter_value))
+        .panic()
         .function(fun!(local_counter_label))
+        .panic()
         .opaque_ptr("caption", pq!(Caption))
         .opaque_ptr("foo", pq!(Foo));
 

@@ -1,9 +1,11 @@
 //! Leaf conversions for values the adapter copies across the boundary.
-//! [`Value::of`](crate::value::Value::of) classifies a source type;
-//! [`input`](crate::value::input) and [`output`](crate::value::output) build
+//! [`Value::of`] classifies a source type;
+//! [`input`] and [`output`] build
 //! the conversion around the adapter's own decode and encode expressions.
-use crate::{Condition, InputConversion, OutputConversion, Wire};
 use prebindgen_flat::{type_key, Primitive, Result};
+
+use crate::{InputPlan, OutputPlan};
+use prebindgen_flat::Wire;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Type;
@@ -22,7 +24,7 @@ impl Value {
     /// Classify `ty`; `None` means it is not a value type, including `&mut` views.
     ///
     /// ```
-    /// use prebindgen_tools::value::Value;
+    /// use prebindgen_conversions::value::Value;
     /// assert_eq!(Value::of(&syn::parse_quote!(&str)), Some(Value::Text));
     /// assert_eq!(Value::of(&syn::parse_quote!(&mut String)), None);
     /// ```
@@ -55,63 +57,67 @@ impl Value {
 /// * `ty` — the source parameter type; it must satisfy [`Value::of`].
 /// * `wire` — identifier of the boundary parameter `decode` reads.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — the selector arms under which this input is used, as given to
-///   [`Codec::input_leaf`](crate::Codec::input_leaf). `decode` runs only when
-///   they are selected.
+/// * `active` — an emitted Rust boolean expression. `decode` runs
+///   only when they are selected.
 /// * `decode` — Rust expression that reads `wire` and yields the owned value or,
 ///   for text and bytes, a view (`&str`, `&[u8]`). It runs during validation and
 ///   may return a `String` error with `?`.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
 ///
+/// The returned plan conservatively has `fallible = true` because `decode`
+/// is supplied by the adapter. Clear it only when decoding cannot return an error.
+///
 /// ```
-/// use prebindgen_tools::{value, Condition};
-/// let input = value::input(
+/// use prebindgen_conversions::value;
+/// use quote::quote;
+/// let input = value::input::<syn::Type, (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
-///     &Condition::default(), quote::quote!(read(raw)?), "buffer",
+///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
-/// assert_eq!(input.wires[0].kind, "buffer");
+/// assert_eq!(prebindgen_flat::type_key(&input.layout[0].rust_type()), "& str");
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W>(
+pub fn input<W: prebindgen_flat::WireKind, C, G>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
-    active: &Condition,
+    active: &TokenStream,
     decode: TokenStream,
     kind: W,
-) -> Result<InputConversion<W>> {
+) -> Result<InputPlan<W, C, G>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
-    let condition = active.rust();
-    let taken = quote!(#var.expect("active value"));
-    let (statements, argument) = match ty {
+    let condition = active.clone();
+    let (decode, statements, argument) = match ty {
         Type::Reference(r) if matches!(type_key(&r.elem).as_str(), "str" | "[u8]") => {
             let target = &r.elem;
             (
-                quote!(let #var = #taken;),
-                quote!(::core::convert::AsRef::<#target>::as_ref(&#var)),
+                decode,
+                quote!(),
+                quote!(::core::convert::AsRef::<#target>::as_ref(#var.as_ref().expect("active value"))),
             )
         }
         Type::Reference(r) => {
             let owned = &r.elem;
             (
-                quote!(let #var: #owned = ::core::convert::Into::into(#taken);),
-                quote!(&#var),
+                quote!(::core::convert::Into::<#owned>::into(#decode)),
+                quote!(),
+                quote!(#var.as_ref().expect("active value")),
             )
         }
         _ => (
-            quote!(let #var: #ty = ::core::convert::Into::into(#taken);),
+            decode,
+            quote!(let #var: #ty = ::core::convert::Into::into(#var.expect("active value"));),
             quote!(#var),
         ),
     };
-    Ok(InputConversion {
-        wires: vec![Wire {
-            name: wire,
-            kind,
-            active: active.clone(),
-        }],
+    Ok(InputPlan {
+        fallible: true,
+        context: Default::default(),
+        acknowledgement: None,
+        layout: vec![Wire { name: wire, kind }].into(),
         validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
         acquire: quote!(),
         resources: vec![],
@@ -124,7 +130,8 @@ pub fn input<W>(
 /// dereference, text and bytes by `Clone`.
 ///
 /// The adapter may adjust the result, for example to defer an allocation's
-/// transfer to `commit`.
+/// transfer to `commit`. The returned plan conservatively sets `fallible = true`
+/// for the adapter-supplied encoding; clear it when that encoding is infallible.
 ///
 /// # Arguments
 ///
@@ -136,14 +143,14 @@ pub fn input<W>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W>(
+pub fn output<W: prebindgen_flat::WireKind, C, G>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputConversion<W>> {
+) -> Result<OutputPlan<W, C, G>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };
@@ -159,12 +166,15 @@ pub fn output<W>(
     };
     let expr = encode(value);
     statements.extend(quote!(let #wire = #expr;));
-    Ok(OutputConversion {
-        wires: vec![Wire {
+    Ok(OutputPlan {
+        fallible: true,
+        context: Default::default(),
+        delivery: Default::default(),
+        layout: vec![Wire {
             name: wire.clone(),
             kind,
-            active: Condition::default(),
-        }],
+        }]
+        .into(),
         statements,
         values: vec![quote!(#wire)],
         commit: quote!(),

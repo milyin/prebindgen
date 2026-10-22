@@ -43,3 +43,17 @@ for name in ["covertest-kotlin", "perftest-kotlin"]:
     jar = build / (name + ".jar")
     subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
     subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-jar", str(jar)], check=True)
+
+# Java callers can recover through the same typed domain-error callback.
+java_test = build / "ResultJava.java"
+java_test.write_text("""public class ResultJava {
+    public static void main(String[] args) {
+        long recovered = io.prebindgen.covertest.results.FunctionsKt.resultScalar(
+            -7L, message -> { throw new AssertionError(message); }, code -> -code);
+        if (recovered != 7L) throw new AssertionError(recovered);
+    }
+}
+""")
+classpath = str(build / "covertest-kotlin.jar")
+subprocess.run(["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(build), str(java_test)], check=True)
+subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-cp", classpath + os.pathsep + str(build), "ResultJava"], check=True)

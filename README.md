@@ -2,32 +2,35 @@
 
 prebindgen generates C and JNI/Kotlin bindings from annotated Rust source.
 The flat model describes source signatures and types. Build-script declarations
-configure conversions for each parameter and result; shared tools build the
+configure conversions for each parameter and result; the declaration compiler builds the
 conversions, and language adapters emit wrappers and foreign declarations.
 
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
 Flat with empty conversion slots
-        ↓ prebindgen-tools builds and attaches converters
-Bindings<W> = Flat<Option<InputConversion<W>>, Option<OutputConversion<W>>>
+        ↓ prebindgen-declarations builds and attaches converters
+Flat<I: Conversion, O: Conversion>
+        (parameter slots: Option<I>; result slots: Option<O>)
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<I, O>` attaches consumer-defined `I` data
-to parameters and `O` data to results. Record declarations contain only names and
-source types; their fields have no conversion slots. Flat also preserves source
-names, locations and guards. Wrapper writers use conversion slots; recursive
-conversion decisions belong to tools.
+can have different input recipes. `Flat<I, O>` stores the two payload types in
+optional slots. Both can implement `Conversion` with distinct wire kinds and request enums; the model itself does
+not require that trait. Record declarations preserve Rust
+source structure. Named representation schemas describe logical components,
+source-field associations and adapter-specific type data `R`; wires refer to
+components by stable paths. Flat also preserves source names, locations and guards.
+Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
 
 ## Examples migrated from main
 
 This branch replaces the generator engine while preserving source capture and
 source-reading support. The supported JniGen `build.rs` declarations keep their
-existing syntax and import paths. `prebindgen-registry` re-exports declaration
-types and macros from `prebindgen-tools`.
+existing syntax. Import shared declaration types and macros directly from
+`prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
 been removed. All eight Rust example crates from `main` are in the workspace.
@@ -42,7 +45,7 @@ work. The retained records demonstrate the supported shapes of the real examples
 | [perftest-flat](examples/perftest-flat) | Payload scalar fields, Stamp, Summary, Unsigned, BlobValue and Report projections |
 | [perftest-c](examples/perftest-c/build.rs) | Storage, strings, BlobValue transfer, Report constructor selectors and label/pointer outputs |
 | [perftest-kotlin](examples/perftest-kotlin/build.rs) | Payload construction/projection and Storage creation/release through JNI |
-| [covertest-kotlin](examples/covertest-kotlin/build.rs) | The same BlobValue/Report conversions, strings, Storage, subpackages and the SummaryValue class rename |
+| [covertest-kotlin](examples/covertest-kotlin/build.rs) | Data-class round trips, Report projections, strings, Storage, selectors, subpackages and class renames |
 | [covertest-helpers](examples/covertest-helpers) | Unsupported helper functions and multi-source bindings are commented out |
 | [emitcheck](examples/emitcheck/build.rs) | Plain string/byte-vector fields compile; callback entry points remain commented, so it currently emits no API wrappers |
 
@@ -50,7 +53,7 @@ Source selection happens before subset validation. Automatic dependency discover
 follows unqualified declared type names. Types referenced only through qualified
 paths need explicit selection by their unqualified declaration name, for example
 with `ptr_class!(Foo)` or `.opaque_ptr("foo", syn::parse_quote!(Foo))`; an already
-parsed `Flat` model can also include them. Unbound enums, callbacks,
+parsed `Flat` model can also include them. Unbound data-carrying enums, callbacks,
 collections and functions can stay in the source crate; selecting one still
 produces a generation error when its shape is unsupported. Both annotated flat
 examples also have tests that parse the entire captured surface, ensuring no
@@ -70,82 +73,245 @@ fields give it zero size.
 
 ## Supported generator API
 
-JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `fun!`,
+JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_class!`, `enum_class!`, `fun!`,
 `.name()`, package prefix and native initialization. `build()` returns `JniGen`;
 `write_rust` resolves relative paths under `OUT_DIR` and returns the written path;
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
-The tools layer also supports `expand_param!` constructor/identity variants,
+The declaration layer also supports `expand_param!` constructor/identity variants,
 `expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
 output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
 Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
-BlobValue and Unsigned use handle classes; data-class generation stays disabled.
+Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
+Supported fields are scalars, `String`, `Vec<u8>`, other declared data classes,
+and declared opaque handles. Records without handle fields support owned inputs
+and outputs as ordinary Kotlin values, without `close()`. Nested classes
+may be declared in any order and in different packages; `.name(...)` changes the
+Kotlin class name. Byte-array properties use content-based equality, hashing,
+and display. Arrays remain mutable, and Kotlin's generated `copy()` is shallow.
+
+```rust,ignore
+.package(package!("model")
+    .class(data_class!(Stamp))
+    .class(data_class!(BlobValue))
+    .fun(fun!(blob_value_echo)))
+```
+
+Explicit input/output expansions still override the default representation.
+A data-class leaf inside an expansion remains one Kotlin value; an explicit
+`.fields(...)` projection still delivers separate field outputs. The covertest
+uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test records, including nested values,
+selector alternatives, combined outputs, and package/class renaming.
+
+Data classes currently require owned occurrences and at least one field.
+Records containing handles, including nested ones, support returns only. Declare
+member handle types with `ptr_class!`. Kotlin callers close each handle member;
+the data class has no collective `close()`, and `copy()` shares handle objects.
+
+Output ownership is explicit in the existing expansion hierarchy:
+
+- `.field_self_ref()` borrows the value and all nested fields. Handle fields are
+  cloned into independent owning handles and require Rust `Clone`.
+- `.field_self_into()` moves the value and all nested fields without cloning.
+- `.project_self(Projection::owned().field("details", Projection::borrowed()))`
+  moves fields except the explicitly borrowed `details` subtree. Overrides can nest.
+
+The same declaration works as a type-wide default or a per-function replacement:
+
+```rust,ignore
+.expand(expand_return!(ResourceBundle).field_self_into())
+.package(package!("resources").fun(fun!(resource_bundle_new).expand_return(
+    expand_return!(ResourceBundle).project_self(
+        Projection::owned().field("details", Projection::borrowed())))))
+```
+
+`Projection` is available from `prebindgen_declarations` and `prebindgen_jni`.
+Modes propagate recursively unless explicitly overridden; they never depend on
+record contents. Legacy `field_self()` and unexpanded data-class outputs retain
+a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
+Type-wide expansions of field types do not rewrite a data class's properties.
+
+For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
+`.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
+and moves its returned record fields. Both support existing per-field expansion
+overrides through `.field("name", expand_return!(FieldType)...)` on `FieldsDecl`.
+These fields use their type-wide defaults when not overridden.
+`fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
+
+A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
+and duplicate consuming views are rejected. Observing getters run before consuming
+views regardless of declaration order. Rust checks `Clone` requirements and rejects
+field moves from records implementing `Drop`. Native conversion or delivery failure
+drops unpublished resources; Kotlin delivery failure closes transferred handles,
+including nested members. Handle-containing records remain unsupported as inputs.
+
+Reference fields, data-class aliases, recursive records and invalid Kotlin field
+names are rejected with generation errors. Methods and direct
+`jobject` input are not part of this increment. Field layouts use their declared
+value types; type-wide expansions apply to boundary occurrences, not to the
+properties inside a data class. Borrowed projections clone strings and byte
+vectors; owned projections move them. The shared helpers `record_output` and
+`record_output_owned` implement the respective access modes. `Option` fields are
+supported; fixed-size arrays remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
+as handles. Using it in `configure()` for a type declared only as a data class
+therefore fails with a missing handle-class error unless an explicit expansion
+replaces that slot. Use data-class declarations for automatic value-record conversion.
 
 C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
 `.prefix(...)` and `.opaque_ptr(name, type)`. Opaque declarations generate distinct
 C pointer types and typed destructors. Its old naming and cbindgen postprocessing
 settings remain commented out in the example manifests.
 
-Manual conversion binding remains available for generator development, but none
-of the migrated binding examples requires it. `Bindings<W>` has separate optional
-`InputConversion<W>` and `OutputConversion<W>` slots. Each stores only wires,
-conversion code and resource/ownership steps needed for wrapper emission.
-`bind_input` and `bind_output` compile a recipe directly into one named occurrence.
-`Declarations::fill` resolves defaults and overrides and compiles every needed
-conversion before updating a function. A failed construction leaves its slots
-unchanged. Existing converters survive default filling; explicit overrides replace
-them using the codec input data supplied to that call.
+## Preparation and generation APIs
 
-`Input` and `Output` recipes and `Codec::Extra` are construction inputs. Neither is
-stored in Flat, and there is no whole-model recipe-to-prepared transition or source
-model clone. Nested fields, constructors, selectors, getters and combined outputs
-use the enclosing call's extra data. Referenced helpers supply source signatures,
-and record declarations supply field names and types. This subset does not provide
-separate adapter data per nested recipe node. C and JNI use `()` for `Extra`.
+`prebindgen-flat` provides the source model and minimal conversion interfaces:
 
-Direction is enforced by the slot types. `validate_bindings` checks completeness
-before emission: entirely unbound functions remain source-only helpers; partially
-bound functions are rejected. Recipe/type compatibility is checked when attaching
-a converter. Flat itself knows nothing about recipes, conversions or processing
-stages. Names are scoped to parameter positions and the result, so independent
-binding calls and overrides cannot collide with other occurrences in a wrapper.
+- `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
+  Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
+- `Conversion` exposes its authoritative `layout()` tree,
+  `code_fragment_slot(mode, expected_type)` and
+  `code_fragment_wire(pos, mode, expected_type)`.
+- Import `ConversionExt` to use `wires()` (an iterator borrowing the tree's leaves)
+  and `wire(pos)` (checked lookup). Both derive their order from `layout()`;
+  converters cannot override them. Walk leaves depth first, left to right,
+  including inactive alternatives. `pos` uses that order; invalid positions are
+  errors. Finish structural edits before emission, which borrows the slot immutably.
+- Each generator defines its slot and wire request enums. Variants carry only the
+  data that operation needs. Associated request types have a lifetime parameter
+  so they can borrow names, contexts or other configuration without cloning it.
+  There is no mandatory context type or universal set of conversion phases.
+- Successful requests return a Rust expression, including `()` for a no-op and
+  block expressions for operations with statements. `expected_type` is the
+  caller's expectation; implementations may use it to configure or validate the
+  request. Only compiling the generated Rust establishes type correctness.
+- `bind_fragment(target, expected_type, expression)` validates expression syntax
+  and emits a typed `let` binding. It rejects empty or statement-only fragments.
+- `WireKind` supplies each carrier's Rust type. The generator defines its carrier
+  enum and request semantics, including activity or access questions when needed.
+  Flat does not interpret resource identities, access modes or activity.
 
-The manual tools API now uses `Bindings`, `bind_input`/`bind_output` and
-`Declarations::fill(flat, codec, declaration, extra)` instead of `Configured`,
-`Slot` and `prepare`. C exposes `Bindings` and `CCodec`, and JNI exposes `Bindings`
-and `JniCodec`; their manual model/callback APIs accept final conversion slots.
-The supported declarative `build.rs` APIs retain their syntax.
+`prebindgen-conversions` provides optional `InputPlan<W, C>` / `OutputPlan<W, C>`
+storage, template rendering, and a staged request protocol used by C and JNI.
+The staged protocol is one implementation of the minimal traits, not a requirement
+on other generators. Its requests cover validation, acquisition, construction and
+output delivery. Requests introducing locals accept a continuation expression so
+borrowed storage and acquired owners stay alive through the call.
+
+The C and JNI adapters opt into `staged::emit_call`, which orders those requests,
+checks allocation aliases and shared acknowledgement, and returns a fallible
+expression. The protocol and its assembly helper live outside Flat; generators
+with different requirements can compose their own request enums directly.
+`StagedFunction::outputs()` requests each output wire's value with its carrier type.
+
+Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
+binding supplied by the generator, and `source_result_expr()` marks the source
+return-value binding carried by output requests. Custom converters need neither
+stored plans nor template support.
+
+`prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
+`Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
+type for the prepared slots; it defaults to `()` in the alias for
+conversions that need no generator-specific settings. `bind_input` and `bind_output` compile one
+occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
+function. `Codec::finish_input` and `finish_output` attach glue after recursive
+composition, during preparation only; the latter also runs for unit results.
+Failed compilation preserves existing slots. Existing converters survive
+default filling; explicit overrides replace them. Recipes and `Codec::Extra` are
+construction inputs, never stored in Flat. Nested recipes use the enclosing
+occurrence's extra data.
+
+`prebindgen-conversions` owns reusable leaf implementations: `value`, `boxed`,
+`boxed::Storage` and `boxed::BoxedWire`. It depends on flat and does not depend
+on declarations. Adapters use its builders during preparation and its metadata
+during generation. Declarations uses conversions only in tests and examples;
+its production compiler accepts adapter-supplied codecs.
+
+`prebindgen-runtime` remains the execution-time support library. It acquires no
+`syn` or code-generation dependencies from this separation.
+
+### Preparation declarations and resolved field mapping
+
+Representation choices belong to `prebindgen-declarations`. Its optional
+`Representations<R>` registry holds shape declarations, nested references and
+canonical defaults. Preparation clients validate these with `validate(&flat)`
+and can check an occurrence's wires with `validate_mapping`. They copy any
+selected adapter metadata into their own slot implementations. The standard
+recipe compiler resolves fields, constructors, selectors, getters and combined
+outputs directly, without creating a registry.
+
+`Flat<I, O>` contains no representation registry, and conversion traits contain
+no representation IDs. Generation never looks up declarations or defaults.
+A `Wire` exposes only a binding name and carrier description. It does not expose
+fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`
+and `Condition` belong to declarations. A codec can retain logical mappings in
+its private preparation metadata through `prefix_component`; `validate_mapping`
+accepts explicit name/path pairs. The final converter emits the corresponding
+projections or constructions itself. Wrapper writers never interpret these paths.
+`Function::input_conversions()` preserves slot grouping; the optional staged
+protocol pairs output carriers with requested expressions.
+
+The optional staged plans describe allocation participation using emitted Rust
+boolean expressions. Their assembly helper checks allocation aliases. JNI slots
+also emit Kotlin conversion, conditional locking, ownership updates and output
+rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
+writer routes carriers and orders these operations without inspecting their meaning.
+
+The preparation registry can be changed or dropped after slots are filled without
+affecting generation. C/JNI public wrapper surfaces remain the same.
+
+Unconfigured helpers may retain empty slots. Selected exported functions must have
+all slots filled, including unit results. The current adapters additionally use
+`validate_bindings` to reject partially configured functions.
 
 A leaf is a source type the adapter converts itself rather than composing it
 from parts. Recipes mark where the leaves are (`Input::Leaf`, `Output::Leaf`);
-the codec chooses each leaf's conversion from its type. `Codec` has four
-methods: `input_leaf`, `output_leaf`, `consumes` and `selector`. Tools offer two
+the codec chooses each leaf's conversion from its type. Its leaf methods are `input_leaf`, `output_leaf`, `consumes` and `selector`. `prebindgen-conversions` provides two
 helpers for leaves:
 
-- `prebindgen_tools::value` copies values across the boundary. `Value::of`
+- `prebindgen_conversions::value` copies values across the boundary. `Value::of`
   classifies primitives, text (`String`, `&String`, `&str`) and bytes
   (`Vec<u8>`, `&Vec<u8>`, `&[u8]`). The adapter supplies only the decode and
   encode expressions; the helper adapts them to owned and borrowed targets, so a
   `&str` target can borrow the caller's buffer without copying.
-- `prebindgen_tools::boxed` keeps objects in Rust-owned allocations.
+- `prebindgen_conversions::boxed` keeps objects in Rust-owned allocations.
 
 Both adapters treat values as copies and every other leaf type as a boxed object,
 so a type alias such as `type Key = String` crosses as an object.
 
 A wire is one generated boundary parameter or result component. `Wire<W>`
-stores the adapter's description of its carrier in `kind`. C uses `CWire`
-(scalar, buffer, pointer or selector) and JNI uses `JniWire` (scalar, string,
-byte array, handle or selector); C passes text and bytes in the same buffer type.
-These are distinct types: Rust rejects attaching a C converter to JNI bindings
-or passing a JNI model to the C generator.
-`Bindings<W>` retains these wires. Tools compose leaves, fields, constructors,
+stores the adapter's description of that individual wire in `kind`. `Wire<W>` requires
+`W: WireKind`, whose `rust_type()` returns a `syn::Type` for the boundary carrier.
+Both writers use this API to declare Rust parameters and result fields. A plain
+`syn::Type` implements `WireKind` when no additional metadata is needed.
+C and JNI each use a single wire enum: `CWire` for scalars, enums, buffers and
+pointers; `JniWire` for scalars, enums, handles, text, bytes and selectors.
+Scalar and enum variants store `next_integer_niche`, as do JNI selectors.
+C pointers and JNI handles, text and bytes store `null_niche_available`.
+`CWire::{scalar, enumeration, pointer}` and
+`JniWire::{scalar, handle, text, bytes, selector}` initialize that state;
+`CWire::Buffer` is constructed directly. `available_niche()` reads the stored
+state, `set_niche(...)` checks updates for variant compatibility, and
+`clear_niche()` disables availability. Callers must not restore a consumed niche.
+C buffers have no niche: a null data pointer with zero length is a valid empty
+value. Reserved representations remain separate `CNiche` or `JniNiche` values on
+optional parent metadata. Each adapter derives boundary types from its wire
+variant; JNI also derives Kotlin types and JVM parameter width.
+All leaf information is accessible through
+`wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
+carrier types.
+
+`Codec::Input` and `Codec::Output` select the final slot implementations. After
+composition and finalization, preparation converts its plans into these types;
+JNI keeps one plan in `JniInput`/`JniOutput`; Rust and Kotlin emission read the
+same tree.
+Simple codecs may use `InputPlan`/`OutputPlan` directly. Declarations compose leaves, fields, constructors,
 input selectors and combined outputs. The composition model requires neither
 handles nor boxed storage. It has no object registry or universal `Send`
 requirement.
 
 The adapter declares whether a leaf output consumes its value; values do not.
-Tools run observations before that move and reject double consumption. For
+Declarations run observations before that move and reject double consumption. For
 pointer/handle output from borrowed record fields, these adapters make
 independent owned copies using Rust `Clone`. A standalone owned text/byte result
 moves its buffer; an observed field is copied.
@@ -213,17 +379,23 @@ Consumed pointers become invalid. Destruction accepts null, but destroying a
 non-null pointer twice or using a consumed pointer is undefined behavior, as
 with ordinary owned C pointers. There is no runtime type/liveness registry.
 C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
-Both current adapters opt into `prebindgen_tools::boxed`, which shares pointer
+Both current adapters opt into `prebindgen_conversions::boxed`, which shares pointer
 validation, borrow/move acquisition, cloned observations and output commit.
 C stores objects directly in `Box<T>`; its header exposes typed opaque pointers.
 Other adapters can choose different storage in their leaf conversions; there is
 no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
-C wrappers still return status and write output structs only on success. Text
-and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow that
-memory, while owned inputs copy it. Callers free returned buffers exactly once.
-`last_error` is thread-local; clearing it on success allocates nothing.
+C functions without `Result` return their first boundary value directly; any
+additional values use output pointers. Unit functions and destructors return
+`void`. Text and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow
+that memory, while owned inputs copy it. Callers free returned buffers exactly once.
+
+A non-Result function with a fallible binding conversion must be explicitly
+declared with `.function(fun!(name)).panic()`. Without that declaration, generation
+fails. Invalid inputs or conversion failures then abort at the C boundary; source
+and destructor panics also abort. Use `Result<T, E>` when the caller needs to
+recover from an error. Error messages use the explicit Result error output.
 
 **JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
@@ -246,23 +418,314 @@ not safe native inputs.
 Rust panics are caught when unwinding is enabled. JNI still boxes outputs into
 an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
-C status/out-struct and JNI object-array ABI optimization remain separate work.
+Further JNI object-array ABI optimization remains separate work.
 
-Callbacks, enums, options, general collections, borrowed pointer/handle outputs,
-mutable text/byte views, methods, data classes, `convert!`, consuming record
-decomposition, field renaming, local function declarations, domain errors, split
+Callbacks, data-carrying enums, general collections, mutable text/byte views, methods,
+`convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
+
+## Result returns
+
+Declare how to project source errors explicitly, using typed output expansions
+or a message mapper. A mapper takes exactly `E` or `&E` and returns `String`;
+ownership follows that signature. No error fields or `Display` implementation
+are inferred. For example, for a source function
+`open_session(...) -> Result<Session, Error>` and helper
+`error_message(error: &Error) -> String`:
+
+```rust,ignore
+// C builder: return a caller-owned message through char **error.
+.opaque_error(syn::parse_quote!(Error), fun!(error_message))
+.function(fun!(open_session))
+
+// JNI builder: project typed error fields, just as for ordinary outputs.
+.expand(expand_return!(Error).fields_into(fields!(error_into_parts)))
+.package(package!().fun(fun!(open_session)))
+```
+
+A function's `.on_error(fun!(another_message))` overrides the type-wide mapper.
+Mapper helpers are captured automatically but are not exported unless separately
+declared. Return expansions and their defaults apply to `T`, the success type.
+The success value can be an optional value, enum, record, or owned handle, using
+the same conversions as an ordinary return. `Err` skips all success-output
+preparation and delivery. Source errors and unpublished success values are
+released through ordinary Rust ownership.
+
+C follows the explicit error-output convention. `.opaque_error(type, mapper)`
+(or `.error_mapper(type, mapper)`) delivers an allocated C string through
+`char **error`; release it with `<prefix>_free_error`. Alternatively,
+`.error("error_name", type)` declares a record error, whose fields use ordinary
+output declarations. C receives `<prefix>_error_name *error`; release its owned
+fields with `<prefix>_drop_error_name`. Structured source errors preserve their
+fields, and binding failures construct the same error type through `From<String>`.
+If converting a source error fails before delivery, C reports that failure through
+`From<String>`. If constructing or converting this replacement also fails, C
+initializes the error record to zero, with no owned allocations, so its generated
+destructor remains safe. An error output can be NULL to discard details.
+Success leaves error storage unchanged; release any prior error before reusing
+that storage.
+
+For Result calls, a success wire with an unused niche is returned directly, with
+that niche indicating failure (for example NULL for a handle). If no success
+wire has a niche, the function returns `bool` and writes success values through
+output parameters. Those outputs remain unchanged on failure. For example:
+
+```c
+int64_t value;
+char *error = NULL;
+if (!demo_read(&value, &error)) {
+    fprintf(stderr, "%s\n", error);
+    demo_free_error(error);
+}
+```
+
+Calls that consume handles additionally require `bool *ownership`: false means
+validation failed before transfer; true means the active handles were consumed,
+including when the source function or a later conversion fails. All success,
+ownership and error output storage must be pairwise disjoint. This explicit
+flag reports whether Rust accepted ownership before returning a Result failure.
+Non-Result calls need no ownership flag because failures abort the process.
+
+JNI follows the production adapter's callback model. `Err(E)` is converted
+through the ordinary output declarations for `E`, including `expand_return!`,
+data/enum classes and explicit borrowed/owned projections. The generated
+`<Error>Handler<R>.run(...)` receives these typed values. A message mapper is an
+explicit alternative that generates `<Error>MessageHandler<R>` with one String
+parameter. Neither representation is selected from the error's field contents.
+
+A fallible Kotlin function takes `onError` for domain errors and
+`onBindingError: JniErrorHandler<ReturnType>` for conversion failures, closed
+handles and caught Rust panics. An infallible function has just the binding
+callback, named `onError`. A handler may return a fallback value of the function's
+return type or throw. Both handlers execute after the native call returns and
+after handle locks are released. Owned handles passed to a domain handler are
+closed after it finishes, including when it throws; use `handle.take()` to retain
+an owning handle beyond the callback. Native input ownership acknowledgements
+are applied before invoking a handler.
+
+Binding handlers default to throwing `IllegalArgumentException` in Kotlin.
+Domain handlers are required unless `.error_class(E, "java.io.IOException")`
+explicitly supplies a throwing default for a message-mapped error. That convenience
+also emits `@Throws` for Java callers; it does not throw the source exception
+inside JNI. Callers can replace either default with their own callback. Existing
+pending JVM exceptions, such as allocation failures, propagate unchanged.
+An error projection or mapper that fails is a binding failure.
+
+`Result<(), E>` returns a C boolean without a dummy success output and Kotlin
+`Unit`. Error routing supports only an outermost owned
+`Result<T, E>` return. Result inputs, Result-valued fields, borrowed Results,
+nested Results inside the success value, and fallible helpers used as expansion constructors or getters are
+not yet supported. Spell both generic arguments explicitly using `Result`,
+`std::result::Result`, or `core::result::Result`; one-argument aliases such as
+`io::Result<T>` are not resolved. Named opaque aliases remain opaque.
+
+Adapter authors can use the shared `Output::Result` recipe through `bind_output`.
+The declaration compiler validates any selected mapper and unwraps the result
+before preparing the success conversion. `Codec::result_error_value` receives
+the owned error and an optional mapper expression; its default requires a mapper
+and delegates to `Codec::result_error`. C can preserve declared error fields;
+JNI preserves typed outputs or explicitly mapped messages for its domain callback. No Result-specific wire type, niche, or group metadata is introduced.
+
+## Fieldless enums
+
+Declare an enum explicitly in each adapter:
+
+```rust,ignore
+// JNI/Kotlin
+.package(package!("model").class(enum_class!(Priority)))
+// C
+.enum_type("priority", syn::parse_quote!(Priority))
+```
+
+Both adapters currently use a signed 32-bit integer representation. They preserve
+Rust discriminants, including negative values, gaps and implicit successors.
+Kotlin emits an `enum class` with a `wireValue` property and checked `fromWire`
+factory; ordinal positions never define the binding. Infrastructure members are
+renamed with leading underscores if a source variant uses the same name.
+Kotlin's built-in entry names `name`, `ordinal`, `entries`, and the generated
+code's package reference `kotlin` require an explicit
+override, for example `enum_class!(Code).variant_name("name", "Name")`.
+Unknown overrides, duplicate overrides and duplicate foreign entry names fail
+at generation time. Source variants are never renamed implicitly.
+C emits an `int32_t` typedef and named constants, for example
+`pb_priority_High`. The C compiler's native enum layout is not part of the ABI.
+
+`prebindgen-flat` retains variant names and source discriminant expressions.
+`prebindgen-declarations::EnumMapping` resolves the integer mapping and generates
+exhaustive output matches and checked input matches for both adapters. Generated
+Rust assertions compare the mapping with the actual source discriminants. No
+integer is transmuted into an enum. Rust `repr` attributes do not determine the
+foreign carrier. No `Copy` or `Clone` implementation is required, and shared
+references are converted by value. Mutable enum references are unsupported.
+
+Enums work as parameters, results, fields of Kotlin data classes, and fields in
+explicit C constructor/projection expansions. `Option<Enum>` and nested options
+reserve unused integer representations, starting below zero and skipping actual
+variant values. For an enum with variants `-2`, `-1` and `0`, the first two
+absence representations are `-3` and `-4`. Unknown active inputs are rejected;
+reserved values are accepted only by the corresponding optional layers.
+
+This increment supports exhaustive, nongeneric enums with unconditional
+fieldless variants. Discriminants must be integer literals (optionally negative
+or parenthesized) or implicit successors, all within `i32`; expressions involving
+constants or arithmetic are diagnosed during generation. Enums with payloads,
+`cfg`/`cfg_attr`-decorated enums or variants and `#[non_exhaustive]` remain unsupported. The existing
+nonzero-size rule still applies; a single-variant enum can use `#[repr(i32)]`.
+Enums implementing `Drop` are unsupported: Rust rejects the generated source
+checks that cast variant discriminants to integers.
+
+## Optional values and niches
+
+Both adapters compose `Option<T>` around the existing conversions for `T`,
+including type-wide expansions and explicit borrowed/owned output projections.
+Occurrence overrides may name either the whole `Option<T>` or its payload `T`;
+payload overrides are lifted through the optional layers.
+Absent inputs skip payload validation, resource checks, acquisition and construction.
+Absent outputs skip payload conversion. Prepared output allocations remain owned
+by Rust until delivery succeeds, and Kotlin rollback closes only present handles.
+Borrowed text, byte slices and handle inputs are supported inside `Option`;
+shared-reference outputs copy values or clone handles into independently owned outputs.
+
+A **niche** is a wire representation unavailable to a present payload. The shared
+compiler uses an eligible niche instead of adding a presence wire:
+
+| Payload | C absence | JNI absence |
+|---|---|---|
+| Opaque pointer / handle | Null pointer | Zero handle |
+| `char` | `0x110000` | `-1` |
+| Fieldless enum | Unused integer | Unused integer |
+| `u8`, `u16`, `u32` | Separate presence flag | `-1` in the wider signed carrier |
+| Text, bytes | Separate presence flag | Null Java reference |
+| Selector tag | Separate presence flag | `-1` (valid arm indices are nonnegative) |
+| Other scalars | Separate presence flag | Separate presence flag |
+
+A presence flag is an `i32` with exactly `0` (absent) or `1` (present). Other
+active flags are errors. C callers supply the documented sentinel for absence;
+Kotlin callers supply `null`, and scalar sentinel values supplied as non-null
+arguments are rejected. C buffers have no null niche: a null pointer with zero
+length is a valid empty buffer. JNI strings and byte arrays use null for absence;
+empty strings and arrays remain non-null present values. No valid scalar value
+is reserved as a sentinel.
+
+Only unconditional payload wires can donate a niche. Selector-arm wires cannot
+supply niches. Optional plans can retain unused representations for outer layers:
+C encodes `Option<Option<char>>` in one `uint32_t` (`0x110001` for outer `None`,
+`0x110000` for `Some(None)`). JNI uses `-2` and `-1` for nested optional chars and
+widened unsigned scalars. Once a domain is exhausted, additional layers use flags.
+A JNI handle, string or byte array offers null once. Once an inner option uses
+it, an enclosing option adds a flag. JNI selector tags and newly added presence
+flags offer negative values in sequence, so further enclosing options can reuse
+the tag instead of adding more flags. For example, `Option<Option<Option<String>>>`
+uses one string reference and one tag: tag `-1` means outer `None`, tag `0` means
+`Some(None)`, and tag `1` allows the reference to distinguish `Some(Some(None))`
+from `Some(Some(Some(text)))`. Selector-arm payload wires remain ineligible;
+the selector tag itself is unconditional. Other wires in an optional payload
+cannot supply another niche, because an absent payload fills them with defaults.
+C headers document the exact discriminator argument or result field for each
+optional group, including enclosing optional groups.
+
+Adapters define `Codec::Niche: Clone`; the shared compiler never interprets its
+representation. `niche` selects an excluded representation, `is_present` emits a
+total, side-effect-free presence predicate, and `absent_value` emits its absent
+value. `remaining_niche` reports the next unused representation after consuming
+one niche, or `None` when exhausted. The shared compiler suppresses niches on
+other payload wires and on inactive selector arms. Both input and output
+composition use this protocol.
+
+Every `Wire` describes one complete FFI value. Each conversion owns a
+`WireLayout<W, G>` tree: leaves contain `Wire<W>`, and parent nodes contain `G`
+metadata plus their children. The tree is the source of both wire order and
+grouping. For example, a JNI optional record can use this tree (wire names are
+illustrative):
+
+```text
+JniGroup::Optional           inspect the "present" flag
+├── present: jint            wire position 0
+└── JniGroup::Fields(Some)    construct Kotlin Point
+    ├── JniGroup::Field("x")
+    │   └── x_value: jdouble  wire position 1
+    └── JniGroup::Field("y")
+        └── y_value: jdouble  wire position 2
+```
+
+`wires()` yields the three leaf wires, including their `W` information.
+`layout().nodes()` exposes adapter metadata and nesting. Each physical
+wire appears once. Multiple ancestors may inspect that same leaf: nested optional
+chars, for example, use different absent values on one wire.
+
+The shared compiler builds conversion code from recipes and stores parent metadata
+in the adapter's `Codec::Group` type. It never interprets that stored metadata.
+Three codec hooks supply it while the compiler constructs the tree:
+
+- `optional_group(presence, discriminator, niche)` describes the presence binding,
+  the descendant wire to inspect, and the representation reserved for absence.
+- `field_group(name)` describes one source field and its subtree, which can have
+  zero, one or several wires.
+- `fields_group()` describes the ordered collection of field subtrees, including
+  an empty record or unit value.
+
+Adapters choose the return values freely. A codec that needs no group metadata
+can use `type Group = ()` and return `()` from all three hooks. The tree still
+preserves field boundaries and wire order. Codecs can also use their own enum,
+a string, or another metadata representation without a common wrapper.
+
+C stores `CGroup::{Optional, Fields, Field}` to generate header comments for
+presence rules, source field paths and their boundary values. JNI stores
+`JniGroup::{Optional, Fields, Field}`. Its `Fields` variant can contain Kotlin
+class and binding information; field names and order remain in the child nodes.
+Both adapters render expanded fields, and JNI can construct a data class from
+those same field subtrees. The diagram above illustrates JNI metadata; these
+variant names are adapter choices.
+
+For an option, the compiler chooses the discriminator and absent representation
+before calling the hook. The hook receives the normalized presence binding used
+by the prepared payload conditions; it can be a computed local rather than a
+physical wire. The leaf's `W` records the niche still available to an enclosing
+option. After C reserves `0x110000` for `None` in `Option<char>`, that leaf can
+offer `0x110001` to the next option. `Codec::set_niche` updates this state;
+`Codec::niche` reads it. `None` means no niche remains.
+
+Record helpers check source field-name uniqueness while constructing input and
+borrowed/owned output conversions. Shared finalization checks physical wire
+names and output expression counts. Each adapter validates the metadata it
+stores, including optional references, field grouping and Kotlin binding names.
+
+Custom converters implement `Conversion::layout` and declare `Conversion::Group`;
+use `()` when no grouping information is needed. Custom codecs return
+`CodecInput<Self>`/`CodecOutput<Self>`, implement the three group hooks, and
+implement the paired `niche` and `set_niche` methods. `Bindings<W, C, G>`,
+`InputPlan<W, C, G>` and `OutputPlan<W, C, G>` use `G` directly as parent metadata,
+defaulting to `()`. Shared value and boxed helpers create leaf-only trees with
+that group type. Information about each individual wire belongs in `W`.
+
+Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
+or structured predicates. A custom float domain may explicitly exclude a NaN
+payload (test raw bits) or all NaNs (test `is_nan`); unrestricted `f32`/`f64` retain
+all valid values and use flags. The C and JNI adapters currently advertise only
+the representations in the table above. Foreign-language predicate rendering and
+transport stability remain adapter responsibilities.
+
+Kotlin exposes a single converted value as `T?`, including nullable data classes
+and their optional fields. Expanded payloads with multiple parameters retain an
+explicit Boolean presence parameter; nested options and unit similarly retain
+explicit presence where Kotlin nullability alone would lose states. Multiple
+output views use the existing builder lambda, with nullable payload values and
+an outer Boolean for nested options. For example, `Option<Option<i64>>` returns
+`(present: Boolean, value: Long?)`: `(false, null)`, `(true, null)` and `(true, n)`
+are distinct. Data-class declarations reject directly nested options; expose
+those through explicit field expansions instead. Recursive records and
+handle-containing data-class inputs remain unsupported. The C ABI exposes all selected wires directly.
 
 ## API documentation
 
 Run `cargo doc --workspace --no-deps --open` to browse the API. Start with
-`prebindgen_flat::Flat` for occurrence slots, `prebindgen_tools::Declarations`
-for build-script expansions, and `prebindgen_tools::Codec` for adapter authors.
-The codec and conversion-slot contracts explain validation, ownership acquisition
-and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
+`prebindgen_flat::Flat` for occurrence slots, `prebindgen_declarations::Declarations`
+for build-script expansions, and `prebindgen_declarations::Codec` for adapter authors.
+The Flat traits describe expression requests; the optional staged protocol in
+`prebindgen-conversions` explains validation, ownership acquisition and output delivery; `Cbindgen` and `JniGen` document configuration and writing files.
 
 Runnable rustdoc examples cover occurrence configuration, selector/combined-output
-declarations, a codec with `()` as its wire data, C and JNI generation, boxed borrows,
+declarations, a codec with Rust types as its wire data, C and JNI generation, boxed borrows,
 and JNI allocation release. `cargo test --workspace --doc` builds and runs them.
 The existing C and Kotlin smoke clients exercise the generated foreign boundaries.
 New pipeline crates enable `missing_docs` warnings so the warnings-as-errors

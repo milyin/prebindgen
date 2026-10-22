@@ -1,5 +1,9 @@
 use super::*;
-fn parse(text: &str) -> Result<Flat<(), ()>> {
+#[derive(Clone, Debug, PartialEq)]
+struct TestInput(u8);
+#[derive(Clone, Debug, PartialEq)]
+struct TestOutput(u32);
+fn parse(text: &str) -> Result<Flat<TestInput, TestOutput>> {
     let items = syn::parse_file(text).unwrap().items;
     Flat::parse(items.into_iter().map(|i| {
         (
@@ -14,14 +18,19 @@ fn parse(text: &str) -> Result<Flat<(), ()>> {
 #[test]
 fn qualifies_names_without_merging_occurrences() {
     let flat = parse("pub type Key = crate::Inner; pub fn f(x:Key,y:Key)->Key{}").unwrap();
-    let mut flat = flat.map_slots(|_, ()| Ok(0u8), |_, ()| Ok(0u8)).unwrap();
+    let mut flat = flat
+        .map_slots(
+            |_, _| Ok(Some(TestInput(0))),
+            |_, _| Ok(Some(TestOutput(0))),
+        )
+        .unwrap();
     let f = flat.function_mut("f").unwrap();
-    f.params[0].ty.slot = 1;
-    f.params[1].ty.slot = 2;
-    f.ret.slot = 3;
-    assert_eq!(f.params[0].ty.slot, 1);
-    assert_eq!(f.params[1].ty.slot, 2);
-    assert_eq!(f.ret.slot, 3);
+    f.params[0].ty.slot = Some(TestInput(1));
+    f.params[1].ty.slot = Some(TestInput(2));
+    f.ret.slot = Some(TestOutput(3));
+    assert_eq!(f.params[0].ty.slot, Some(TestInput(1)));
+    assert_eq!(f.params[1].ty.slot, Some(TestInput(2)));
+    assert_eq!(f.ret.slot, Some(TestOutput(3)));
     assert_eq!(type_key(&f.ret.ty), "source_crate :: Key");
     assert_eq!(f.path.to_token_stream().to_string(), "source_crate :: f");
 }
@@ -35,10 +44,10 @@ fn refuses_unsupported_syntax_without_dropping_it() {
     for source in [
         "pub async fn f(){}",
         "pub fn f<T>(x:T){}",
-        "pub fn f(x:Option<String>){}",
+        "pub fn f(x:Option<Unknown>){}",
         "pub struct X{field:String}",
         "fn f(){}",
-        "pub enum E{A}",
+        "pub enum E{A(i32)}",
     ] {
         assert!(parse(source).is_err(), "{source}");
     }
@@ -52,13 +61,13 @@ fn mapping_visits_only_boundary_slots_and_preserves_source_structure() {
     let mut outputs = Vec::new();
     let mapped = flat
         .map_slots(
-            |ty, ()| {
+            |ty, _| {
                 inputs.push(type_key(ty));
-                Ok(String::from("input"))
+                Ok(Some(TestInput(7)))
             },
-            |ty, ()| {
+            |ty, _| {
                 outputs.push(type_key(ty));
-                Ok(42u32)
+                Ok(Some(TestOutput(42)))
             },
         )
         .unwrap();
@@ -68,15 +77,15 @@ fn mapping_visits_only_boundary_slots_and_preserves_source_structure() {
     assert_eq!(field.name, "data");
     assert_eq!(type_key(&field.ty), "Vec < u8 >");
     let f = mapped.function("f").unwrap();
-    assert_eq!(f.params[0].ty.slot, "input");
-    assert_eq!(f.ret.slot, 42);
+    assert_eq!(f.params[0].ty.slot, Some(TestInput(7)));
+    assert_eq!(f.ret.slot, Some(TestOutput(42)));
     assert_eq!(f.location.crate_name.as_deref(), Some("source-crate"));
     assert_eq!(mapped.guards, guards);
 }
 
 #[test]
 fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
-    let source = "pub type Handle = hidden::Private; pub enum Unsupported { A } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
+    let source = "pub type Handle = hidden::Private; pub enum Unsupported { A(i32) } pub fn make() -> Handle {} pub fn bad(x: Unsupported) {}";
     let items = || {
         syn::parse_file(source)
             .unwrap()
@@ -84,21 +93,22 @@ fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
             .into_iter()
             .map(|i| (i, Default::default()))
     };
-    let flat = Flat::<(), ()>::parse_selected(items(), &["make".into()], &[]).unwrap();
+    let flat =
+        Flat::<TestInput, TestOutput>::parse_selected(items(), &["make".into()], &[]).unwrap();
     assert_eq!(flat.functions.len(), 1);
     assert!(flat.types.contains_key("Handle"));
     assert!(!flat.types.contains_key("Unsupported"));
     assert!(
-        Flat::<(), ()>::parse_selected(items(), &["bad".into()], &[])
+        Flat::<TestInput, TestOutput>::parse_selected(items(), &["bad".into()], &[])
             .unwrap_err()
-            .contains("unsupported flat item")
+            .contains("fieldless enum")
     );
 }
 
 #[test]
 fn selected_record_fields_retain_transitive_source_types() {
     let items = syn::parse_file("pub type Key = hidden::Key; pub struct Record { pub key: Key } pub fn read(r: &Record) -> String {} pub fn unrelated(x: Option<u64>) {}").unwrap().items;
-    let flat = Flat::<(), ()>::parse_selected(
+    let flat = Flat::<TestInput, TestOutput>::parse_selected(
         items.into_iter().map(|i| (i, Default::default())),
         &["read".into()],
         &[],
@@ -140,7 +150,7 @@ fn named_object_size_is_checked_by_rust_layout() {
         ("pub fn no_result() {}", true),
     ] {
         let items = syn::parse_file(source).unwrap().items;
-        let flat = Flat::<(), ()>::parse(items.into_iter().filter_map(|i| {
+        let flat = Flat::<TestInput, TestOutput>::parse(items.into_iter().filter_map(|i| {
             (!matches!(i, syn::Item::Mod(_))).then_some((
                 i,
                 SourceLocation {
@@ -150,7 +160,7 @@ fn named_object_size_is_checked_by_rust_layout() {
             ))
         }))
         .unwrap()
-        .map_slots(|_, ()| Ok(()), |_, ()| Ok(()))
+        .map_slots(|_, slot| Ok(slot), |_, slot| Ok(slot))
         .unwrap();
         let guards = flat.guards.iter().map(ToTokens::to_token_stream);
         let file = dir.path().join("size_check.rs");
@@ -182,4 +192,84 @@ fn named_object_size_is_checked_by_rust_layout() {
             );
         }
     }
+}
+
+#[test]
+fn options_preserve_payload_types_and_reject_malformed_arguments() {
+    let flat=parse("pub struct Item {pub value:i64} pub fn f(x:Option<&Item>)->core::option::Option<std::option::Option<Item>> {}").unwrap();
+    let f = flat.function("f").unwrap();
+    assert!(type_key(option_inner(&f.params[0].ty.ty).unwrap()).contains("Item"));
+    assert!(option_inner(option_inner(&f.ret.ty).unwrap()).is_some());
+    for source in [
+        "pub fn f(x:Option<i64,i64>){}",
+        "pub fn f(x:Option<3>){}",
+        "pub fn f(x:Something::Option<i64>){}",
+    ] {
+        assert!(parse(source).is_err());
+    }
+}
+
+#[test]
+fn fieldless_enum_source_metadata_survives_selection_and_slot_mapping() {
+    let flat = parse("pub enum Code { A = -3, B, C = 8 } pub struct Record { pub code: Option<Code> } pub fn echo(x: Record) -> Record {}").unwrap();
+    let source = &flat.enums["source_crate :: Code"];
+    assert_eq!(
+        source
+            .variants
+            .iter()
+            .map(|v| v.name.to_string())
+            .collect::<Vec<_>>(),
+        ["A", "B", "C"]
+    );
+    assert!(source.variants[1].discriminant.is_none());
+    let mapped = flat
+        .map_slots(
+            |_, _| Ok(Some(TestInput(0))),
+            |_, _| Ok(Some(TestOutput(0))),
+        )
+        .unwrap();
+    assert_eq!(mapped.enums.len(), 1);
+    assert_eq!(mapped.enums["source_crate :: Code"].variants.len(), 3);
+    for bad in [
+        "enum E { A }",
+        "pub enum E<T> { A }",
+        "pub enum E {}",
+        "pub enum E { A {} }",
+        "pub enum E { #[cfg(test)] A, B }",
+        "#[non_exhaustive] pub enum E { A, B }",
+        "#[cfg(test)] pub enum E { A, B }",
+        "#[cfg_attr(test, non_exhaustive)] pub enum E { A, B }",
+    ] {
+        assert!(parse(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn result_types_are_qualified_recursively_and_standard_spellings_normalize() {
+    let flat = parse("pub type Error = String; pub type Value = String; pub fn a()->Result<Option<Value>,Error>{} pub fn b()->::std::result::Result<Option<Value>,Error>{} pub fn c()->core::result::Result<Option<Value>,Error>{}").unwrap();
+    let ty = &flat.function("a").unwrap().ret.ty;
+    assert!(same_type(ty, &flat.function("b").unwrap().ret.ty));
+    assert!(same_type(ty, &flat.function("c").unwrap().ret.ty));
+    let (ok, err) = result_parts(ty).unwrap();
+    assert_eq!(type_key(err), "source_crate :: Error");
+    assert_eq!(type_key(option_inner(ok).unwrap()), "source_crate :: Value");
+    for source in [
+        "pub fn f()->Result<i32,Unknown>{}",
+        "pub fn f()->Result<i32>{}",
+        "pub fn f()->custom::Result<i32,String>{}",
+        "pub fn f()->Result<i32,Box<dyn Error>>{}",
+    ] {
+        assert!(parse(source).is_err(), "{source}");
+    }
+    assert!(result_parts(&syn::parse_quote!(custom::Result<i32,String>)).is_none());
+    assert!(result_parts(&syn::parse_quote!(Result<i32, 3>)).is_none());
+}
+
+#[test]
+fn declared_opaque_type_named_result_keeps_its_existing_meaning() {
+    let flat = parse("pub type Result=String;pub fn f(value:Result)->Result{}").unwrap();
+    let f = flat.function("f").unwrap();
+    assert_eq!(type_key(&f.ret.ty), "source_crate :: Result");
+    assert!(same_type(&f.params[0].ty.ty, &f.ret.ty));
+    assert!(result_parts(&f.ret.ty).is_none());
 }

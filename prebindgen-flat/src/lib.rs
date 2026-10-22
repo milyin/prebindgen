@@ -1,5 +1,5 @@
-//! Source types in Rust syntax, with separate data slots for inputs and outputs.
-//! Slot data is chosen by the consumer; record declarations contain only source structure.
+//! Source types, occurrence slots, and generator-defined conversion interfaces.
+//! Preparation fills slots; language generators interpret their request protocols.
 //! Named objects must have nonzero Rust size, including opaque aliases. Their
 //! layout is checked by the emitted compile-time guards, independently of the
 //! slot data types. Unit remains available for absence of a value.
@@ -8,6 +8,9 @@ use prebindgen::SourceLocation;
 use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::{visit_mut::VisitMut, Type};
+
+mod conversion;
+pub use conversion::*;
 
 mod primitive;
 pub use primitive::Primitive;
@@ -41,9 +44,9 @@ pub struct Function<I, O> {
     /// Qualified path used to call the source function from generated Rust.
     pub path: syn::Path,
     /// Parameters in call order.
-    pub params: Vec<Param<I>>,
+    pub params: Vec<Param<Option<I>>>,
     /// Result occurrence; an omitted Rust return type becomes `()`.
-    pub ret: TypeUse<O>,
+    pub ret: TypeUse<Option<O>>,
     /// Origin recorded by source capture, for diagnostics and qualification.
     pub location: SourceLocation,
 }
@@ -63,30 +66,50 @@ pub struct Field {
     /// Qualified source type.
     pub ty: Type,
 }
-/// Source structure with independent consumer-defined input and output slot types.
+/// A fieldless Rust enum, retaining source discriminant expressions.
+#[derive(Clone, Debug)]
+pub struct FieldlessEnum {
+    /// Qualified source enum type.
+    pub ty: Type,
+    /// Variants in source order, without an imposed foreign representation.
+    pub variants: Vec<EnumVariant>,
+}
+/// A variant with no payload fields.
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    /// Source variant name.
+    pub name: syn::Ident,
+    /// Explicit source discriminant, or an implicit successor when absent.
+    pub discriminant: Option<syn::Expr>,
+}
+
+/// Source structure with independently configured input and output conversions.
 ///
-/// Every parameter carries `I`; every result carries `O`. Record fields have no
-/// slots. Flat does not interpret either data type.
+/// Every parameter carries `Option<I>`; every result carries `Option<O>`.
+/// Record fields describe source structure. Slot payloads belong to the consumer;
+/// generators may use [`Conversion`] for expression
+/// emission. Source-only inspection uses `Flat<(), ()>` with empty slots.
 ///
 /// Use [`Flat::parse`] or [`Flat::parse_selected`] to validate source syntax and
 /// qualify declared names. Aliases stay opaque. Named types must have nonzero
 /// Rust size; generated code must emit [`Self::guards`] to enforce that rule.
 ///
 /// ```
-/// use prebindgen_flat::{Flat, type_key};
+/// use prebindgen_flat::Flat;
 /// let items = syn::parse_file("pub fn add(x: i64, y: i64) -> i64 { x + y }")?.items;
-/// let flat = Flat::<(), ()>::parse(items.into_iter().map(|item| (item, Default::default())))?;
-/// let mut flat = flat.map_slots(|ty, ()| Ok(type_key(ty)), |_, ()| Ok(0usize))?;
-/// flat.function_mut("add")?.params[0].ty.slot = "first input".into();
-/// assert_eq!(flat.function("add")?.params[1].ty.slot, "i64");
+/// let flat = Flat::<(), ()>::parse(
+///     items.into_iter().map(|item| (item, Default::default())))?;
+/// assert!(flat.function("add")?.params[0].ty.slot.is_none());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone, Debug)]
-pub struct Flat<I, O> {
+pub struct Flat<I = (), O = ()> {
     /// Free functions indexed by unqualified source name.
     pub functions: BTreeMap<String, Function<I, O>>,
     /// Records indexed by `type_key` of their qualified type.
     pub records: BTreeMap<String, Record>,
+    /// Fieldless enums indexed by qualified source type.
+    pub enums: BTreeMap<String, FieldlessEnum>,
     /// Declared type names mapped to qualified Rust types, including opaque aliases.
     pub types: BTreeMap<String, Type>,
     /// Constants every adapter must emit: captured feature guards and generated
@@ -94,7 +117,7 @@ pub struct Flat<I, O> {
     pub guards: Vec<syn::ItemConst>,
 }
 
-impl<I: Default, O: Default> Flat<I, O> {
+impl<I, O> Flat<I, O> {
     /// Select the source declarations needed by this binding before validating
     /// the supported flat subset. Items outside the selection are skipped without validation.
     ///
@@ -165,11 +188,12 @@ impl<I: Default, O: Default> Flat<I, O> {
         }))
     }
 
-    /// Read captured items; only free functions, named records and opaque aliases
-    /// belong to this subset. Rejects duplicate names, non-public declarations,
-    /// unsupported signatures and types, and inaccessible record fields.
+    /// Read captured free functions, named records, fieldless enums and opaque aliases.
+    /// Only exhaustive enums with unconditional fieldless variants belong to this
+    /// subset. Rejects duplicate names, non-public declarations, unsupported
+    /// signatures and types, and inaccessible record fields.
     ///
-    /// Input slots start at `I::default()` and output slots at `O::default()`.
+    /// Input and output slots start at `None`; no default conversion is required.
     /// Unqualified declared types and callable paths are qualified with the captured
     /// crate name (or `crate` if absent).
     /// Opaque alias implementations are not inspected. Rust layout and trait
@@ -185,6 +209,7 @@ impl<I: Default, O: Default> Flat<I, O> {
             let visibility = match item {
                 syn::Item::Fn(f) => Some(&f.vis),
                 syn::Item::Struct(s) => Some(&s.vis),
+                syn::Item::Enum(e) => Some(&e.vis),
                 syn::Item::Type(t) => Some(&t.vis),
                 _ => None,
             };
@@ -194,6 +219,7 @@ impl<I: Default, O: Default> Flat<I, O> {
             let id = match item {
                 syn::Item::Fn(f) => &f.sig.ident,
                 syn::Item::Struct(s) => &s.ident,
+                syn::Item::Enum(e) => &e.ident,
                 syn::Item::Type(t) => &t.ident,
                 syn::Item::Const(c) if c.ident == "_" => continue,
                 _ => return Err(format!("unsupported flat item: {}", item.to_token_stream())),
@@ -215,6 +241,7 @@ impl<I: Default, O: Default> Flat<I, O> {
         let mut flat = Self {
             functions: BTreeMap::new(),
             records: BTreeMap::new(),
+            enums: BTreeMap::new(),
             types,
             guards: Vec::new(),
         };
@@ -257,7 +284,7 @@ impl<I: Default, O: Default> Flat<I, O> {
                             name: id.ident,
                             ty: TypeUse {
                                 ty: flat.resolve_type(&p.ty)?,
-                                slot: I::default(),
+                                slot: None,
                             },
                         });
                     }
@@ -267,7 +294,7 @@ impl<I: Default, O: Default> Flat<I, O> {
                     };
                     let ret = TypeUse {
                         ty: flat.resolve_type(&ret)?,
-                        slot: O::default(),
+                        slot: None,
                     };
                     flat.functions.insert(
                         name.to_string(),
@@ -303,6 +330,54 @@ impl<I: Default, O: Default> Flat<I, O> {
                     }
                     flat.records
                         .insert(type_key(&ty), Record { ty, fields: out });
+                }
+                syn::Item::Enum(e) => {
+                    if e.attrs.iter().any(|a| {
+                        a.path().is_ident("non_exhaustive")
+                            || a.path().is_ident("cfg")
+                            || a.path().is_ident("cfg_attr")
+                    }) {
+                        return Err("conditional or non-exhaustive enums are unsupported".into());
+                    }
+                    if !e.generics.params.is_empty() || e.generics.where_clause.is_some() {
+                        return Err("generic enums are unsupported".into());
+                    }
+                    if e.variants.is_empty() {
+                        return Err("fieldless enums require at least one variant".into());
+                    }
+                    let ty = flat.types[&e.ident.to_string()].clone();
+                    let mut variants = Vec::new();
+                    let mut names = BTreeSet::new();
+                    for variant in e.variants {
+                        if !matches!(variant.fields, syn::Fields::Unit) {
+                            return Err("only fieldless enum variants are supported".into());
+                        }
+                        if variant.attrs.iter().any(|a| {
+                            a.path().is_ident("cfg")
+                                || a.path().is_ident("cfg_attr")
+                                || a.path().is_ident("non_exhaustive")
+                        }) {
+                            return Err(
+                                "conditional or non-exhaustive enum variants are unsupported"
+                                    .into(),
+                            );
+                        }
+                        if !names.insert(
+                            variant
+                                .ident
+                                .to_string()
+                                .trim_start_matches("r#")
+                                .to_string(),
+                        ) {
+                            return Err("duplicate enum variant".into());
+                        }
+                        variants.push(EnumVariant {
+                            name: variant.ident,
+                            discriminant: variant.discriminant.map(|(_, e)| e),
+                        });
+                    }
+                    flat.enums
+                        .insert(type_key(&ty), FieldlessEnum { ty, variants });
                 }
                 syn::Item::Type(t) => {
                     if !t.generics.params.is_empty() || t.generics.where_clause.is_some() {
@@ -356,7 +431,7 @@ impl<I, O> Flat<I, O> {
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
-    /// references without explicit lifetimes. A successful result does not mean
+    /// `Option<T>` and `Result<T, E>` recursively, and references without explicit lifetimes. A successful result does not mean
     /// a consumer can use the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
@@ -375,6 +450,14 @@ impl<I, O> Flat<I, O> {
                     }
                 }
                 syn::visit_mut::visit_type_mut(self, ty);
+                if let Some((ok, err)) = result_parts(ty) {
+                    let (ok, err) = (ok.clone(), err.clone());
+                    *ty = syn::parse_quote!(::core::result::Result<#ok, #err>);
+                }
+                if let Some(inner) = option_inner(ty) {
+                    let inner = inner.clone();
+                    *ty = syn::parse_quote!(Option<#inner>);
+                }
             }
         }
         Names(&self.types).visit_type_mut(&mut ty);
@@ -384,6 +467,17 @@ impl<I, O> Flat<I, O> {
     fn validate_type(&self, ty: &Type) -> Result<()> {
         if Primitive::from_type(ty).is_some() || self.types.values().any(|t| same_type(t, ty)) {
             return Ok(());
+        }
+        if let Some(inner) = option_inner(ty) {
+            return self.validate_type(inner);
+        }
+        if let Some((ok, err)) = result_parts(ty) {
+            self.validate_type(ok)?;
+            return self.validate_type(err);
+        }
+        if matches!(ty, Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "Result"))
+        {
+            return Err("spell Result<T, E> with both arguments, optionally qualified by std::result or core::result".into());
         }
         match ty {
             Type::Tuple(t) if t.elems.is_empty() => Ok(()),
@@ -414,8 +508,8 @@ impl<I, O> Flat<I, O> {
     ///   slot; returns the new slot.
     pub fn map_slots<I2, O2>(
         self,
-        mut input: impl FnMut(&Type, I) -> Result<I2>,
-        mut output: impl FnMut(&Type, O) -> Result<O2>,
+        mut input: impl FnMut(&Type, Option<I>) -> Result<Option<I2>>,
+        mut output: impl FnMut(&Type, Option<O>) -> Result<Option<O2>>,
     ) -> Result<Flat<I2, O2>> {
         let mut functions = BTreeMap::new();
         for (name, fun) in self.functions {
@@ -448,6 +542,7 @@ impl<I, O> Flat<I, O> {
         Ok(Flat {
             functions,
             records: self.records,
+            enums: self.enums,
             types: self.types,
             guards: self.guards,
         })
@@ -468,3 +563,82 @@ pub fn same_type(a: &Type, b: &Type) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod request_tests;
+
+/// Extract the payload type of a standard `Option<T>` spelling.
+pub fn option_inner(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    if p.qself.is_some() {
+        return None;
+    }
+    let names = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    if !matches!(
+        names.as_str(),
+        "Option" | "std::option::Option" | "core::option::Option"
+    ) {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(a) = &p.path.segments.last()?.arguments else {
+        return None;
+    };
+    if a.args.len() != 1 {
+        return None;
+    }
+    match a.args.first()? {
+        syn::GenericArgument::Type(t) => Some(t),
+        _ => None,
+    }
+}
+
+/// Extract success and error types from a standard `Result<T, E>` spelling.
+/// Custom aliases and similarly named types in other modules remain opaque.
+pub fn result_parts(ty: &Type) -> Option<(&Type, &Type)> {
+    let Type::Path(p) = ty else { return None };
+    if p.qself.is_some() {
+        return None;
+    }
+    let names = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    if !matches!(
+        names.as_str(),
+        "Result" | "std::result::Result" | "core::result::Result"
+    ) {
+        return None;
+    }
+    // Generic arguments are permitted only on the final Result segment.
+    if p.path
+        .segments
+        .iter()
+        .take(p.path.segments.len() - 1)
+        .any(|s| !matches!(s.arguments, syn::PathArguments::None))
+    {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &p.path.segments.last()?.arguments else {
+        return None;
+    };
+    if args.args.len() != 2 {
+        return None;
+    }
+    let mut args = args.args.iter();
+    match (args.next()?, args.next()?) {
+        (syn::GenericArgument::Type(ok), syn::GenericArgument::Type(err)) => Some((ok, err)),
+        _ => None,
+    }
+}
+
+mod layout;
+pub use layout::{WireLayout, WireNode, Wires, WiresMut};

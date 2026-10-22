@@ -1,9 +1,9 @@
 //! Build-script declarations for input alternatives and output views.
 //! [`Declarations`] builds converters directly in boundary occurrence slots.
 
-use crate::{Bindings, Codec, Compiler, Condition, Input, Output};
+use crate::{option_inner, result_parts};
+use crate::{Codec, Compiler, Condition, Input, Output, Projection};
 use prebindgen_flat::{type_key, Flat, Result};
-use quote::quote;
 use std::collections::BTreeMap;
 
 /// An ordered list of input representations for one source type.
@@ -52,6 +52,8 @@ pub struct ExpandReturnDecl {
 #[derive(Clone)]
 enum ReturnField {
     Identity,
+    Projected(Projection),
+    IntoFields(FieldsDecl),
     Getter(Box<FunctionDecl>),
     Fields(FieldsDecl),
 }
@@ -98,6 +100,33 @@ impl ExpandReturnDecl {
         self.fields.push(ReturnField::Fields(decl));
         self
     }
+    /// Consume the source accessor's receiver, then move its returned record fields.
+    /// The accessor must take `T`, not `&T`. Per-field expansions still override
+    /// type defaults. Nested data classes retain their borrowed default unless an
+    /// explicit field expansion or type default selects owned projection.
+    /// Observing sibling views run before this consuming view.
+    pub fn fields_into(mut self, decl: FieldsDecl) -> Self {
+        self.fields.push(ReturnField::IntoFields(decl));
+        self
+    }
+    /// Deprecated alias for [`Self::fields_into`].
+    #[deprecated(note = "use fields_into instead")]
+    pub fn fields_self_into(self, decl: FieldsDecl) -> Self {
+        self.fields_into(decl)
+    }
+    /// Append a leaf converted with explicit ownership and optional field policies.
+    pub fn project_self(mut self, projection: Projection) -> Self {
+        self.fields.push(ReturnField::Projected(projection));
+        self
+    }
+    /// Append a shared-reference view; record fields inherit this policy.
+    pub fn field_self_ref(self) -> Self {
+        self.project_self(Projection::borrowed())
+    }
+    /// Append an owned view; record fields inherit this policy.
+    pub fn field_self_into(self) -> Self {
+        self.project_self(Projection::owned())
+    }
     /// Start an output expansion with no views. Add at least one before use.
     pub fn new(ty: syn::Type) -> Self {
         Self {
@@ -114,14 +143,35 @@ impl ExpandReturnDecl {
     }
     /// Append the value itself as a leaf, converted by the adapter's codec.
     ///
-    /// For an owning adapter this consumes the value, after observing other views.
+    /// Ownership follows the adapter default: JniGen data classes borrow, while
+    /// owning leaf conversions consume after observing other views.
     pub fn field_self(mut self) -> Self {
         self.fields.push(ReturnField::Identity);
         self
     }
 }
-/// A generator-wide input or output expansion, registered by source type.
+/// Explicit default error-message mapper for one source error type.
+pub struct ErrorDecl {
+    /// Source error type, resolved against the flat model.
+    pub ty: syn::Type,
+    /// Source helper taking E or &E and returning String.
+    pub mapper: FunctionDecl,
+}
+impl ErrorDecl {
+    /// Declare a type-wide mapper; per-function `on_error` takes precedence.
+    pub fn new(ty: syn::Type, mapper: FunctionDecl) -> Self {
+        Self { ty, mapper }
+    }
+}
+impl From<ErrorDecl> for ExpandDecl {
+    fn from(value: ErrorDecl) -> Self {
+        Self::Error(Box::new(value))
+    }
+}
+/// A generator-wide conversion or error-mapping default, registered by source type.
 pub enum ExpandDecl {
+    /// Default error-message mapper for Result returns with this error type.
+    Error(Box<ErrorDecl>),
     /// Default input alternatives.
     Param(ExpandParamDecl),
     /// Default simultaneous output views.
@@ -161,6 +211,7 @@ macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate:
 pub struct Declarations {
     inputs: BTreeMap<String, ExpandParamDecl>,
     outputs: BTreeMap<String, ExpandReturnDecl>,
+    errors: BTreeMap<String, FunctionDecl>,
 }
 impl Declarations {
     /// Index expansions by resolved source type.
@@ -172,20 +223,44 @@ impl Declarations {
     ///
     /// * `flat` — the model in which each declaration's type is resolved.
     /// * `decls` — type-wide defaults, at most one per type and direction.
-    pub fn new<I, O>(flat: &Flat<I, O>, decls: Vec<ExpandDecl>) -> Result<Self> {
+    pub fn new<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+        flat: &Flat<I, O>,
+        decls: Vec<ExpandDecl>,
+    ) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
+            errors: BTreeMap::new(),
         };
         for d in decls {
             match d {
+                ExpandDecl::Error(d) => {
+                    let key = type_key(&flat.resolve_type(&d.ty)?);
+                    let f = &d.mapper;
+                    if !f.params.is_empty()
+                        || f.ret.is_some()
+                        || f.foreign.is_some()
+                        || f.error.is_some()
+                    {
+                        return Err("error mapper references only support their source name".into());
+                    }
+                    if out.errors.insert(key, d.mapper).is_some() {
+                        return Err("duplicate error mapper for source type".into());
+                    }
+                }
                 ExpandDecl::Param(d) => {
+                    if crate::contains_result(&d.ty) {
+                        return Err("Result expansions are unsupported; configure the success type and an error mapper".into());
+                    }
                     let key = type_key(&flat.resolve_type(&d.ty)?);
                     if out.inputs.insert(key, d).is_some() {
                         return Err("duplicate input expansion".into());
                     }
                 }
                 ExpandDecl::Return(d) => {
+                    if crate::contains_result(&d.ty) {
+                        return Err("Result expansions are unsupported; configure the success type and an error mapper".into());
+                    }
                     let key = type_key(&flat.resolve_type(&d.ty)?);
                     if out.outputs.insert(key, d).is_some() {
                         return Err("duplicate output expansion".into());
@@ -215,7 +290,7 @@ impl Declarations {
     /// * `extra` — occurrence data passed to every codec call made by this fill.
     pub fn fill<C: Codec>(
         &self,
-        flat: &mut Bindings<C::Wire>,
+        flat: &mut prebindgen_flat::Flat<C::Input, C::Output>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,
@@ -241,30 +316,60 @@ impl Declarations {
                 None
             });
         }
-        let output = if decl.ret.is_some() || source.ret.slot.is_none() {
-            let recipe = self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?;
-            Some(Compiler::new(flat, codec, "ret".into()).output(
+        if decl.error.is_some() && result_parts(&source.ret.ty).is_none() {
+            return Err("on_error requires a top-level Result<T, E> return".into());
+        }
+        let mut output = if decl.ret.is_some() || decl.error.is_some() || source.ret.slot.is_none()
+        {
+            let recipe = if let Some((ok, error_ty)) = result_parts(&source.ret.ty) {
+                let mapper = self.error_mapper_for(decl, error_ty);
+                if mapper.is_some_and(|mapper| {
+                    !mapper.params.is_empty()
+                        || mapper.ret.is_some()
+                        || mapper.foreign.is_some()
+                        || mapper.error.is_some()
+                }) {
+                    return Err("error mapper references only support their source name".into());
+                }
+                Output::Result {
+                    ok: Box::new(self.output(flat, ok, decl.ret.as_ref(), &mut Vec::new())?),
+                    error: mapper.map(|mapper| mapper.name.clone()),
+                }
+            } else {
+                self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?
+            };
+            Some(Compiler::new(flat, codec, "ret".into()).output_root(
                 &source.ret.ty,
                 &recipe,
                 extra,
-                quote!(__result),
+                prebindgen_conversions::source_result_expr(),
                 false,
             )?)
         } else {
             None
         };
+        for input in inputs.iter_mut().flatten() {
+            codec.finish_input(input, extra)?;
+            input.layout.validate()?;
+        }
+        if let Some(output) = &mut output {
+            codec.finish_output(output, extra)?;
+            output.validate_value_count()?;
+            output.layout.validate()?;
+        }
+        // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
-                p.ty.slot = Some(input);
+                p.ty.slot = Some(input.into());
             }
         }
         if let Some(output) = output {
-            dest.ret.slot = Some(output);
+            dest.ret.slot = Some(output.into());
         }
         Ok(())
     }
-    fn input<I, O>(
+    fn input<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
         &self,
         flat: &Flat<I, O>,
         ty: &syn::Type,
@@ -272,6 +377,13 @@ impl Declarations {
         stack: &mut Vec<String>,
     ) -> Result<Input> {
         let key = type_key(ty);
+        if let (Some(inner), Some(decl)) = (option_inner(ty), explicit) {
+            if type_key(&flat.resolve_type(&decl.ty)?) != key {
+                return Ok(Input::Optional(Box::new(
+                    self.input(flat, inner, explicit, stack)?,
+                )));
+            }
+        }
         let d = explicit.or_else(|| self.inputs.get(&key));
         if let Some(d) = d {
             if type_key(&flat.resolve_type(&d.ty)?) != key {
@@ -286,7 +398,7 @@ impl Declarations {
                 arms.push(match variant {
                     None => Input::Leaf,
                     Some(f) => {
-                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
+                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() || f.error.is_some() {
                             return Err("constructor references only support their source name in this subset".into());
                         }
                         let func = flat.function(&f.name)?;
@@ -304,6 +416,11 @@ impl Declarations {
                 _ => Ok(Input::selector(arms)),
             };
         }
+        if let Some(inner) = option_inner(ty) {
+            return Ok(Input::Optional(Box::new(
+                self.input(flat, inner, None, stack)?,
+            )));
+        }
         let key = match ty {
             syn::Type::Reference(r) => type_key(&r.elem),
             _ => key,
@@ -314,7 +431,43 @@ impl Declarations {
             Input::Leaf
         })
     }
-    fn output<I, O>(
+    /// Build a consuming projection of a declared record's fields, applying
+    /// the normal output declarations independently to every field.
+    pub fn owned_record_output<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+        &self,
+        flat: &Flat<I, O>,
+        ty: &syn::Type,
+    ) -> Result<Output> {
+        let record = flat.record(ty)?;
+        Ok(Output::OwnedFields(
+            record
+                .fields
+                .iter()
+                .map(|field| self.output(flat, &field.ty, None, &mut Vec::new()))
+                .collect::<Result<Vec<_>>>()?,
+        ))
+    }
+    /// Resolve the declared output representation for an owned value, including
+    /// type-wide expansions. Adapters can reuse it for alternate output channels.
+    pub fn output_recipe<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+        &self,
+        flat: &Flat<I, O>,
+        ty: &syn::Type,
+    ) -> Result<Output> {
+        self.output(flat, ty, None, &mut Vec::new())
+    }
+    /// Select the explicit message mapper for this function's Result error.
+    pub fn error_mapper_for<'a>(
+        &'a self,
+        declaration: &'a FunctionDecl,
+        ty: &syn::Type,
+    ) -> Option<&'a FunctionDecl> {
+        declaration
+            .error
+            .as_deref()
+            .or_else(|| self.errors.get(&type_key(ty)))
+    }
+    fn output<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
         &self,
         flat: &Flat<I, O>,
         ty: &syn::Type,
@@ -322,6 +475,13 @@ impl Declarations {
         stack: &mut Vec<String>,
     ) -> Result<Output> {
         let key = type_key(ty);
+        if let (Some(inner), Some(decl)) = (option_inner(ty), explicit) {
+            if type_key(&flat.resolve_type(&decl.ty)?) != key {
+                return Ok(Output::Optional(Box::new(
+                    self.output(flat, inner, explicit, stack)?,
+                )));
+            }
+        }
         let d = explicit.or_else(|| self.outputs.get(&key));
         if let Some(d) = d {
             if type_key(&flat.resolve_type(&d.ty)?) != key {
@@ -335,8 +495,13 @@ impl Declarations {
             for field in &d.fields {
                 parts.push(match field {
                     ReturnField::Identity => Output::Leaf,
+                    ReturnField::Projected(p) => Output::Projected(p.clone()),
                     ReturnField::Getter(f) => {
-                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() {
+                        if !f.params.is_empty()
+                            || f.ret.is_some()
+                            || f.foreign.is_some()
+                            || f.error.is_some()
+                        {
                             return Err(
                                 "getter references only support their source name in this subset"
                                     .into(),
@@ -345,7 +510,7 @@ impl Declarations {
                         let func = flat.function(&f.name)?;
                         Output::getter(&f.name, self.output(flat, &func.ret.ty, None, stack)?)
                     }
-                    ReturnField::Fields(d) => {
+                    ReturnField::Fields(d) | ReturnField::IntoFields(d) => {
                         let f = flat.function(&d.function)?;
                         let record = flat.record(&f.ret.ty)?;
                         for name in d.overrides.keys() {
@@ -365,7 +530,14 @@ impl Declarations {
                                 )
                             })
                             .collect::<Result<Vec<_>>>()?;
-                        Output::getter(&d.function, Output::fields(children))
+                        if matches!(field, ReturnField::IntoFields(_)) {
+                            Output::Into {
+                                function: d.function.clone(),
+                                output: Box::new(Output::OwnedFields(children)),
+                            }
+                        } else {
+                            Output::getter(&d.function, Output::fields(children))
+                        }
                     }
                 });
             }
@@ -375,6 +547,11 @@ impl Declarations {
                 1 => Ok(parts.remove(0)),
                 _ => Ok(Output::combine(parts)),
             };
+        }
+        if let Some(inner) = option_inner(ty) {
+            return Ok(Output::Optional(Box::new(
+                self.output(flat, inner, None, stack)?,
+            )));
         }
         Ok(if key == "()" {
             Output::fields([])
@@ -422,6 +599,8 @@ pub struct FunctionDecl {
     pub params: BTreeMap<String, ExpandParamDecl>,
     /// Result expansion override, replacing the type default.
     pub ret: Option<ExpandReturnDecl>,
+    /// Source mapper for a top-level Result error; it takes E or &E and returns String.
+    pub error: Option<Box<FunctionDecl>>,
 }
 impl FunctionDecl {
     /// Reference a source function without overriding names or conversions.
@@ -433,7 +612,18 @@ impl FunctionDecl {
             foreign: None,
             params: BTreeMap::new(),
             ret: None,
+            error: None,
         }
+    }
+    /// Map the error of a top-level `Result<T, E>` return with a source function.
+    ///
+    /// The helper must take exactly `E` or `&E` and return `String`. Only its
+    /// source name is accepted; it is selected for capture but is not exported.
+    /// The success value uses normal return defaults and `expand_return` overrides.
+    /// Replaces any previously selected mapper. Non-Result returns reject this option.
+    pub fn on_error(mut self, mapper: FunctionDecl) -> Self {
+        self.error = Some(Box::new(mapper));
+        self
     }
     /// Set a literal destination name, subject to adapter validation.
     ///
@@ -474,7 +664,7 @@ impl FunctionDecl {
 ///
 /// # Arguments
 ///
-/// * `expansions` — type-wide defaults; their constructors and getters are collected.
+/// * `expansions` — type-wide defaults; constructors, getters and error mappers are collected.
 /// * `functions` — exported functions; their names and those referenced by their
 ///   overrides are collected.
 pub fn source_functions<'a>(
@@ -489,9 +679,9 @@ pub fn source_functions<'a>(
     fn output(d: &ExpandReturnDecl, names: &mut Vec<String>) {
         for field in &d.fields {
             match field {
-                ReturnField::Identity => {}
+                ReturnField::Identity | ReturnField::Projected(_) => {}
                 ReturnField::Getter(f) => function(f, names),
-                ReturnField::Fields(d) => {
+                ReturnField::Fields(d) | ReturnField::IntoFields(d) => {
                     names.push(d.function.clone());
                     for d in d.overrides.values() {
                         output(d, names);
@@ -502,6 +692,9 @@ pub fn source_functions<'a>(
     }
     fn function(f: &FunctionDecl, names: &mut Vec<String>) {
         names.push(f.name.clone());
+        if let Some(mapper) = &f.error {
+            function(mapper, names);
+        }
         for d in f.params.values() {
             input(d, names);
         }
@@ -515,6 +708,7 @@ pub fn source_functions<'a>(
     }
     for d in expansions {
         match d {
+            ExpandDecl::Error(d) => function(&d.mapper, &mut names),
             ExpandDecl::Param(d) => input(d, &mut names),
             ExpandDecl::Return(d) => output(d, &mut names),
         }

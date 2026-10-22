@@ -39,7 +39,7 @@
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
-//! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
+//! | `expand_return!` `.fields_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
@@ -52,7 +52,7 @@
 //! | `constant!(N).with(ty!, path!)`       | `val COVER_VERSION` from binding-local `crate::cover_version()` |
 //! | `constant!(N).expr(ty!, expr!)`       | `COVER_BANNER` = binding-defined `format!` expression |
 //! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
-//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
@@ -107,7 +107,7 @@
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
 };
-use prebindgen_registry::{
+use prebindgen_declarations::{
     convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
 };
 
@@ -127,11 +127,75 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 
 */
-use prebindgen_jni::{package, ptr_class, JniGen};
-use prebindgen_registry::{expand_param, expand_return, fields, fun};
+use prebindgen_declarations::{expand_param, expand_return, fields, fun};
+use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .expand(expand_return!(ResultFailure).field(fun!(result_error_code)))
+        .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .error_class(syn::parse_quote!(StorageError), "java.lang.IllegalStateException")
+        .expand(expand_return!(CDropError).fields_into(fields!(result_drop_error_into)))
+        .expand(expand_return!(CPanicOutput).field(fun!(c_panic_output_value)))
+        .expand(expand_return!(CResultError).fields_into(fields!(result_pair_error_into)))
+        .expand(expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)))
+        .expand(expand_return!(CResourceError).fields_into(fields!(result_resource_error_into)))
+        .expand(expand_return!(CRichError).fields_into(fields!(result_rich_error_into)))
+        .package(package!("results")
+            .fun(fun!(c_result_error_drop))
+            .fun(fun!(c_result_late_niche))
+            .fun(fun!(c_result_resource_error))
+            .fun(fun!(c_result_rich_error))
+            .fun(fun!(result_scalar))
+            .fun(fun!(result_unit))
+            .fun(fun!(result_optional))
+            .fun(fun!(result_text))
+            .fun(fun!(result_record))
+            .fun(fun!(result_owned))
+            .fun(fun!(result_other).on_error(fun!(result_string_message)).expand_return(expand_return!(i64).field_self()))
+            .fun(fun!(storage_try_with_label))
+            .fun(fun!(result_error_drops)))
+        .package(package!("enums")
+            .fun(fun!(enum_boundary_probe)).class(enum_class!(Priority))
+            .class(ptr_class!(Payload).name("EnumPayload"))
+            .fun(fun!(enum_payload_new).expand_return(expand_return!(Payload).field_self_into()))
+            .fun(fun!(payload_priority)).class(enum_class!(SparseCode).name("Code"))
+            .class(enum_class!(EnumNames).variant_name("name","Name").variant_name("ordinal","Ordinal").variant_name("entries","Entries").variant_name("kotlin","Kotlin")).class(data_class!(EnumRecord))
+            .fun(fun!(priority_weight)).fun(fun!(priority_or))
+            .fun(fun!(sparse_echo)).fun(fun!(sparse_optional)).fun(fun!(sparse_nested))
+            .fun(fun!(sparse_ref)).fun(fun!(sparse_borrowed)).fun(fun!(enum_record_echo)).fun(fun!(enum_names_echo)))
+        .expand(expand_param!(TextNicheInput).variant(fun!(text_niche_input_new)))
+        .expand(expand_param!(BytesNicheInput).variant(fun!(bytes_niche_input_new)))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .expand(expand_param!(NicheChoiceHandle).variant(fun!(niche_choice_new)).variant_self())
+        .expand(expand_param!(OptionCtor).variant(fun!(option_ctor_new)).variant_self())
+        .expand(expand_param!(OptionChoice).variant(fun!(option_choice_new)).variant_self())
+        .package(package!("options")
+            .class(ptr_class!(NicheChoiceHandle)).fun(fun!(niche_choice_new)).fun(fun!(niche_choice_id))
+            .fun(fun!(option_nested_u32))
+            .fun(fun!(option_triple_text)).fun(fun!(option_triple_bytes))
+            .fun(fun!(option_triple_i64)).fun(fun!(option_triple_unit))
+            .fun(fun!(optional_text_input_len)).fun(fun!(optional_bytes_input_len))
+            .fun(fun!(nested_niche_choice_id))
+            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .class(ptr_class!(OptionChoice))
+            .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
+            .fun(fun!(option_choice_id))
+            .fun(fun!(option_str_echo)).fun(fun!(option_slice_echo)).fun(fun!(option_str_len)).fun(fun!(option_slice_len)).fun(fun!(option_string_len)).fun(fun!(option_i64_ref))
+            .fun(fun!(option_resource_pair)).fun(fun!(resource_choice_id))
+            .fun(fun!(optional_pair_new).expand_return(expand_return!(OptionalPair).fields_into(fields!(optional_pair_into).field("present",expand_return!(OwnedResource).field_self_into()))))
+            .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .class(data_class!(OptionalFields))
+            .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
+            .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref))
+            .class(data_class!(OptionalResource))
+            .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
+            .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
+            .fun(fun!(option_nested)).fun(fun!(option_nested_char))
+            .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
+            .fun(fun!(optional_fields_echo))
+            .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
+            .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.
 .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
@@ -276,7 +340,7 @@ fn main() {
                 // generated interface on an ENUM with a per-decl name, and the
                 // hand-written `Ranked` (which extends `PriorityKind`) is
                 // attached via `.implements` (#54).
-                /* Unsupported: this class kind or its binding is not available yet.
+                /* Unsupported: enum interface/implements customization.
 .class(
                     enum_class!(Priority)
                         .interface_name("PriorityKind")
@@ -408,10 +472,7 @@ fn main() {
 */
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
-                /* Unsupported: this class kind or its binding is not available yet.
-.class(data_class!(Unsigned))
-*/
-                .class(ptr_class!(Unsigned))
+                .class(data_class!(Unsigned))
                 // `Stamp` is a small `Copy` struct of two scalars, so it crosses
                 // as its FIELDS — no array, no raw-memory image. Its readers stay
                 // instance methods (`secs()` / `nanos()`) whose receiver crosses
@@ -427,11 +488,12 @@ fn main() {
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested data class. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                /* Unsupported: data classes are not available yet.
+                /* Unsupported: direct jobject input is not available yet.
 .class(data_class!(BlobValue).jobject_input())
 */
-                // The reduced byte-vector record can already travel as a handle.
-                .class(ptr_class!(BlobValue))
+                // Value records cross as fields and are reconstructed automatically.
+                .class(data_class!(BlobValue))
+                .class(data_class!(Stamp))
                 // Fixed-size arrays of every JNI-primitive element.
                 /* Unsupported: this class kind or its binding is not available yet.
 .class(data_class!(Arrays))
@@ -499,8 +561,7 @@ fn main() {
                 // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-                // Disabled: the reduced Archive is zero-sized.
-                // .class(ptr_class!(Archive).name("SummaryVault"))
+                .class(ptr_class!(Archive).name("SummaryVault"))
                 .class(ptr_class!(Summary).name("SummaryValue")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
@@ -531,7 +592,7 @@ fn main() {
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
         /* Unsupported: this expansion needs unsupported conversions.
-.expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+.expand(expand_return!(Report).fields_into(fields!(report_into_struct)))
 */
         // #142: `Span`'s value form is two bounded leaves; `SpanHolder` reaches
         // it through an `Option`, so both become nullable. `delay` keeps its own
@@ -658,19 +719,10 @@ fn main() {
 */,
         )
         // ── Free functions, grouped by subpackage ───────────────────────────
-        // model: enum return/param/option + value-class return + Vec<value> +
-        //        Option<scalar>.
+        // model: value-class return, Vec<value> and Option<scalar>.
+        // Enum entry points are bound in the `enums` package above.
         .package(
             package!("model")
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(payload_priority))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(priority_weight))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(priority_or))
-*/
                 .fun(fun!(stamp_new))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(stamp_series))
@@ -801,9 +853,7 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(boxed_note_echo))
 */
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(plain_note_echo))
-*/
+                .fun(fun!(plain_note_echo))
                 // Transparent wrappers on the INPUT side (#292 item 3), one per
                 // specialized lowering. These rebuild their parameter rather
                 // than decoding it, so the erased wrapper has to go back on
@@ -882,10 +932,8 @@ fn main() {
 .fun(fun!(object_boundary_value))
 */
                 .fun(fun!(unsigned_round_trip))
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(unsigned_optional))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
+                .fun(fun!(unsigned_optional))
+                /* Unsupported: borrowed data-class inputs.
 .fun(fun!(unsigned_data_maybe))
 */
                 /* Unsupported: the signature or function options need unsupported conversions.
@@ -1026,7 +1074,7 @@ fn main() {
                 // the dual-arm type default — the selector also encodes absence
                 // (`-1` = `None`); the borrow-identity arm clones, so the
                 // caller's handle survives the call.
-                /* Unsupported: the signature or function options need unsupported conversions.
+                /* Unsupported: helper source requires multiple source streams.
 .fun(fun!(summary_total_opt))
 */
                 // Record-built generic folds (#105): `Vec<Summary>` and
@@ -1041,17 +1089,14 @@ fn main() {
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(summary_series_opt))
 */
-                // The borrowed-accessor trio. `archive_latest` suppresses the default
-                // Summary return-field default so the BORROWED handle path (clone into a
-                // fresh owned handle, null when absent) is what crosses.
-                // Disabled: the reduced Archive is zero-sized.
-                // .fun(fun!(archive_new))
+                // The borrowed accessor returns a fresh cloned handle when present.
+                // The owned Summary expansion does not apply to &Summary.
+                .fun(fun!(archive_new))
+                .fun(fun!(archive_store))
+                .fun(fun!(archive_latest))
                 // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(archive_store).split_on_param("s"))
-*/
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self()))
 */,
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
@@ -1059,9 +1104,7 @@ fn main() {
         .package(
             package!("storage")
                 .fun(fun!(storage_new))
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_get))
-*/
+                .fun(fun!(storage_get))
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(storage_put_by_take))
 */
@@ -1116,9 +1159,7 @@ fn main() {
 .fun(fun!(storage_labels))
 */
                 // Option<data-class> input.
-                /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_put_opt))
-*/
+                .fun(fun!(storage_put_opt))
                 // `.name(...)`: per-function Kotlin rename override. The default name
                 // would be `millisAdd`; force it to `addMillis` to exercise the
                 // override path (the Rust symbol/extern is unaffected).
@@ -1147,7 +1188,7 @@ fn main() {
         )
         // Report projects its supported Summary, Stamp and label fields.
         // Project those fields before handing ownership of the Report to Kotlin.
-        .expand(expand_return!(Report).fields(fields!(report_to_struct)).field_self())
+        .expand(expand_return!(Report).fields(fields!(report_to_struct).field("origin", expand_return!(Stamp).field_self())).field_self())
         .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
         .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
         .expand(expand_return!(Stamp).field(fun!(stamp_secs)).field(fun!(stamp_nanos)))
@@ -1180,6 +1221,46 @@ fn main() {
             .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
             .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
             .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
+        .expand(expand_return!(ProjectionPair).field_self_ref())
+        .package(package!("resources")
+            .class(data_class!(ProjectionPair)).class(ptr_class!(ProjectionHandle))
+            .fun(fun!(projection_pair_borrowed))
+            .fun(fun!(projection_pair_owned).expand_return(expand_return!(ProjectionPair).field_self_into()))
+            .fun(fun!(projection_pair_mixed).expand_return(expand_return!(ProjectionPair).project_self(
+                prebindgen_jni::Projection::owned().field("first", prebindgen_jni::Projection::borrowed()))))
+            .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_ref()))
+            .fun(fun!(projection_clones)).fun(fun!(projection_drops)))
+        .expand(expand_return!(ResourceBundle).field_self_into())
+        .package(package!("resources")
+            .class(data_class!(ResourceBundle))
+            .class(data_class!(ResourcePair))
+            .class(ptr_class!(OwnedResource))
+            .fun(fun!(resource_bundle_new).expand_return(expand_return!(ResourceBundle).project_self(
+                prebindgen_jni::Projection::owned().field("details", prebindgen_jni::Projection::borrowed()))))
+            .fun(fun!(resource_bundle_default))
+            .fun(fun!(resource_bundle_fields).expand_return(expand_return!(ResourceBundle).fields_into(
+                fields!(resource_bundle_into)
+                    .field("pair", expand_return!(ResourcePair).field_self_into())
+                    .field("details", expand_return!(DataFloats).field_self_ref()))))
+            .fun(fun!(owned_resource_id))
+            .fun(fun!(owned_resource_drops)))
+        .package(package!("resourceViews")
+            .fun(fun!(resource_bundle_views).expand_return(
+                expand_return!(ResourceBundle).field_self_into().field(fun!(resource_bundle_label)))))
+        .package(package!("values")
+            .class(data_class!(DataEnvelope).name("Envelope"))
+            .class(data_class!(DataFloats))
+                .class(data_class!(DataPrimitives))
+                .fun(fun!(data_primitives_echo).expand_param("value", expand_param!(DataPrimitives).variant_self().variant(fun!(data_primitives_zero))))
+                .fun(fun!(data_primitives_zero))
+            .fun(fun!(data_envelope_echo))
+                .fun(fun!(data_with_storage))
+                .fun(fun!(data_envelope_constructed).expand_param("value", expand_param!(DataEnvelope).variant(fun!(data_envelope_from_blob))))
+            .fun(fun!(data_floats_echo))
+            .fun(fun!(blob_value_selected).expand_param("value",
+                expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
+            .fun(fun!(blob_value_views).expand_return(
+                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

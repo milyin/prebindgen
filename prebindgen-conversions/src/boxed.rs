@@ -1,11 +1,13 @@
 //! Foreign conversion helpers for adapters using boxed allocations.
-//! Adapters select a [`Storage`](crate::boxed::Storage) policy and map
-//! [`BoxedWire`](crate::boxed::BoxedWire) data into their own wire kind.
-use crate::{Access, Condition, InputConversion, OutputConversion, Resource, Wire};
-use prebindgen_flat::Result;
+//! Adapters select a [`Storage`] policy and map
+//! [`BoxedWire`] data into their own wire kind.
+use crate::{Access, InputPlan, OutputPlan, Resource};
+use prebindgen_flat::{Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 /// Source type and access mode for a wire carrying a boxed allocation address.
+/// This is generation metadata used by adapters to declare pointer/handle types;
+/// allocation and conversion construction remain preparation responsibilities.
 #[derive(Clone, Debug)]
 pub struct BoxedWire {
     /// Source value type inside the allocation, without the input reference or storage wrapper.
@@ -13,6 +15,7 @@ pub struct BoxedWire {
     /// Whether the call moves, shares or exclusively borrows the stored value.
     pub access: Access,
 }
+
 /// Storage chosen by the adapter. A wrapper must expose a `value` field and
 /// allow construction as `Wrapper { value }`.
 pub enum Storage {
@@ -46,7 +49,7 @@ impl Storage {
 /// `T` transfers ownership; references borrow the allocation for the call.
 /// Validation checks only nonnull/aligned encoding. The caller must guarantee
 /// allocation provenance, type, liveness and synchronization. The wrapper must
-/// run call-wide resource validation before acquisition (see [`InputConversion`]).
+/// run call-wide resource validation before acquisition (see [`InputPlan`]).
 /// The returned resource records the allocation address and required access.
 /// Generated code uses `prebindgen_runtime`.
 ///
@@ -60,30 +63,35 @@ impl Storage {
 ///   is the adapter's choice, an integer or a pointer, as long as `wire as *mut _`
 ///   converts it to the allocation pointer.
 /// * `var` — identifier of the Rust local that holds the argument.
-/// * `active` — the selector arms under which this input is used, as given to
-///   [`Codec::input_leaf`](crate::Codec::input_leaf).
+/// * `active` — an emitted Rust boolean expression guarding validation and
+///   ownership acquisition. Its meaning is private to the converter.
 /// * `wire_kind` — builds [`Wire::kind`] from the pointee type and access mode.
 ///
 /// ```
-/// use prebindgen_tools::{boxed, Access, Condition};
-/// let input = boxed::input(
+/// use prebindgen_conversions::boxed;
+/// use prebindgen_conversions::Access;
+/// let input = boxed::input::<syn::Type, (), ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
-///     &Condition::default(), |boxed| boxed.access,
+///     &quote::quote!(true), |boxed| {
+///         let ty = boxed.ty;
+///         syn::parse_quote!(*const #ty)
+///     },
 /// )?;
-/// assert_eq!(input.wires[0].kind, Access::Shared);
+/// assert_eq!(input.resources[0].access, Access::Shared);
+/// assert_eq!(prebindgen_flat::type_key(&input.layout[0].rust_type()), "* const Counter");
 /// assert!(input.acquire.is_empty());
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W>(
+pub fn input<W: prebindgen_flat::WireKind, C, G>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
-    active: &Condition,
+    active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputConversion<W>> {
+) -> Result<InputPlan<W, C, G>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -95,7 +103,7 @@ pub fn input<W>(
         ),
         _ => (ty, Access::Move),
     };
-    let condition = active.rust();
+    let condition = active.clone();
     let allocation = storage.ty(target);
     let field = storage.field();
     let pointer = format_ident!("{wire}_pointer");
@@ -121,23 +129,26 @@ pub fn input<W>(
             quote!(let #var: #ty = unsafe { &mut (*#pointer)#field };),
         ),
     };
-    Ok(InputConversion {
-        wires: vec![Wire {
+    Ok(InputPlan {
+        fallible: true,
+        context: Default::default(),
+        acknowledgement: None,
+        layout: vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
                 access,
             }),
-            active: active.clone(),
-        }],
+        }]
+        .into(),
         validation,
         acquire,
         statements,
         argument: quote!(#var),
         resources: vec![Resource {
             identity: quote!(#pointer.addr()),
-            access,
             active: active.clone(),
+            access,
         }],
     })
 }
@@ -158,14 +169,14 @@ pub fn input<W>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W>(
+pub fn output<W: prebindgen_flat::WireKind, C, G>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputConversion<W>> {
+) -> Result<OutputPlan<W, C, G>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -176,15 +187,18 @@ pub fn output<W>(
     };
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
-    Ok(OutputConversion {
-        wires: vec![Wire {
+    Ok(OutputPlan {
+        fallible: false,
+        context: Default::default(),
+        delivery: Default::default(),
+        layout: vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: ty.clone(),
                 access: Access::Move,
             }),
-            active: Condition::default(),
-        }],
+        }]
+        .into(),
         statements: quote!(let mut #wire = Box::new(#value);),
         values: vec![quote!((&mut *#wire) as *mut #allocation)],
         commit: quote!(let _ = Box::into_raw(#wire);),
