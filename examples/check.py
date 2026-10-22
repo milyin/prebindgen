@@ -43,3 +43,21 @@ for name in ["covertest-kotlin", "perftest-kotlin"]:
     jar = build / (name + ".jar")
     subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
     subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-jar", str(jar)], check=True)
+
+# Java callers must be able to catch the checked exception declared on a
+# generated Kotlin Result wrapper. Compiling this fails without @Throws.
+java_test = build / "ResultJava.java"
+java_test.write_text("""public class ResultJava {
+    public static void main(String[] args) {
+        try { io.prebindgen.covertest.results.FunctionsKt.resultScalar(-7L); }
+        catch (java.io.IOException e) {
+            if (!"failure -7 世界".equals(e.getMessage())) throw new AssertionError(e);
+            return;
+        }
+        throw new AssertionError("expected source exception");
+    }
+}
+""")
+classpath = str(build / "covertest-kotlin.jar")
+subprocess.run(["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(build), str(java_test)], check=True)
+subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-cp", classpath + os.pathsep + str(build), "ResultJava"], check=True)

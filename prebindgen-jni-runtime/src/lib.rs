@@ -73,6 +73,19 @@ pub fn fail(env: &mut JNIEnv<'_>, message: &str) {
     }
 }
 
+/// Raise the explicitly configured source-error exception and return its message.
+///
+/// `class` is a JVM binary class name using slashes. The class must extend
+/// Throwable and expose a String constructor. Existing pending exceptions are
+/// preserved, including lookup/allocation failures. Generated wrappers then
+/// return without delivering success outputs; `fail` preserves this exception.
+pub fn domain_error(env: &mut JNIEnv<'_>, class: &str, message: String) -> Result<String> {
+    if !env.exception_check().map_err(|e| e.to_string())? {
+        env.throw_new(class, &message).map_err(|e| e.to_string())?;
+    }
+    Ok(message)
+}
+
 /// Decode `value`, the bytes of `BigInteger.toByteArray()` (big-endian two's
 /// complement), into an `i128` without narrowing.
 pub fn signed128(env: &mut JNIEnv<'_>, value: &JByteArray<'_>) -> Result<i128> {

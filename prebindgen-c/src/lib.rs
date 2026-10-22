@@ -88,7 +88,16 @@ impl Codec for CCodec {
     type Input = InputPlan<CWire>;
     type Output = OutputPlan<CWire>;
     fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
-        validate_layout(&plan.layout)
+        validate_layout(&plan.layout)?;
+        if plan
+            .resources
+            .iter()
+            .any(|r| r.access == prebindgen_conversions::Access::Move)
+        {
+            let accepted = prebindgen_conversions::template_parameter("acknowledgement");
+            plan.acknowledgement = Some(quote!(#accepted = true;));
+        }
+        Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.layout)?;
@@ -111,6 +120,9 @@ impl Codec for CCodec {
             result: quote!(()),
         };
         Ok(())
+    }
+    fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
+        Ok(message)
     }
     fn niche(&self, wire: &CWire) -> Option<CNiche> {
         wire.available_niche()
@@ -337,7 +349,9 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// ```
 ///
 /// Generated calls return a status and write results through an output pointer;
-/// `0` means success, `-1` means failure, with a thread-local last-error message.
+/// `0` means success. On failure, `-1` means ownership has not been accepted;
+/// `-2` means active owned inputs have been consumed. Both set a thread-local
+/// last-error message and leave success-output storage unchanged.
 /// Owned pointer inputs transfer ownership after all active inputs validate;
 /// later source failures do not restore ownership. References borrow for the
 /// call and require the caller to obey Rust aliasing and lifetime rules.
@@ -384,6 +398,19 @@ impl Cbindgen {
         self.expansions.push(decl.into());
         self
     }
+    /// Select a default source error-message mapper for Result returns using `ty`.
+    /// The helper takes exactly E or &E and returns String. A function's
+    /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
+    pub fn error_mapper(
+        mut self,
+        ty: syn::Type,
+        mapper: prebindgen_declarations::FunctionDecl,
+    ) -> Self {
+        self.expansions
+            .push(prebindgen_declarations::ErrorDecl::new(ty, mapper).into());
+        self
+    }
+
     /// Export a function and build its occurrence converters from declarations.
     ///
     /// `decl` names the function, normally with `fun!`, and carries its overrides.
@@ -463,6 +490,10 @@ impl Cbindgen {
                     .iter()
                     .chain(&self.enums)
                     .map(|(_, ty)| ty.clone())
+                    .chain(self.expansions.iter().filter_map(|d| match d {
+                        prebindgen_declarations::ExpandDecl::Error(d) => Some(d.ty.clone()),
+                        _ => None,
+                    }))
                     .collect::<Vec<_>>(),
             )?,
             _ => return Err("supply exactly one source or flat model".into()),
@@ -638,6 +669,7 @@ fn generate<
             return Err("duplicate C result type symbol".into());
         }
         let context = CContext {
+            acknowledgement: format_ident!("ownership_accepted"),
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
             buffer_type: syn::parse_quote!(__PbBuffer),
@@ -728,8 +760,10 @@ The pointer must be null or a live allocation of the declared type returned by t
         });
         header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
     }
+    header.push_str("/* Exported source-function status: 0 = success; -1 = failure before ownership acceptance; -2 = failure after ownership acceptance.\n * On -1 all owned inputs remain valid; on -2 active owned inputs have been consumed.\n * Failure leaves success-output storage unchanged. Read the error message before another library call. */\n");
     for (f, body, context, source) in calls {
         let out = &context.output_pointer;
+        let accepted = &context.acknowledgement;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
         let inputs = f.inputs()?.collect::<Vec<_>>();
@@ -789,9 +823,10 @@ The output pointer must be writable. Active input buffers must be readable for t
    #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)* #out:*mut #result)->i32{
           if #out.is_null(){__pb_error("null result pointer");return -1;}
+          #[allow(unused_mut)] let mut #accepted = false;
           match ::prebindgen_runtime::boundary(||{
            #body
-          }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
+          }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);if #accepted {-2} else {-1}}}
          }
         });
     }

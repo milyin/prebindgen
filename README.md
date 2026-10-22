@@ -390,6 +390,10 @@ C wrappers still return status and write output structs only on success. Text
 and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow that
 memory, while owned inputs copy it. Callers free returned buffers exactly once.
 `last_error` is thread-local; clearing it on success allocates nothing.
+An exported source function returns `-1` if it fails before ownership acceptance: its owned inputs
+remain valid. It returns `-2` if it fails after acceptance: active owned inputs
+have been consumed. This distinction also covers source and output-conversion
+panics; a failure never restores transferred ownership.
 
 **JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
@@ -415,8 +419,62 @@ locks; a throwing builder closes output handles, including escaped references.
 C status/out-struct and JNI object-array ABI optimization remain separate work.
 
 Callbacks, data-carrying enums, general collections, mutable text/byte views, methods,
-`convert!`, field renaming, local function declarations, domain errors, split
+`convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
+
+## Result returns
+
+Declare how to render source errors explicitly. A mapper takes exactly `E` or
+`&E` and returns `String`; ownership follows that signature. No error fields or
+`Display` implementation are inferred. For example, for a source function
+`open_session(...) -> Result<Session, Error>` and helper
+`error_message(error: &Error) -> String`:
+
+```rust,ignore
+// C builder: the mapper is a default for all returns with this error type.
+.error_mapper(syn::parse_quote!(Error), fun!(error_message))
+.function(fun!(open_session))
+
+// JNI builder: also choose a JVM exception class for the error type.
+.error_mapper(syn::parse_quote!(Error), fun!(error_message))
+.error_class(syn::parse_quote!(Error), "java.io.IOException")
+.package(package!().fun(fun!(open_session)))
+```
+
+A function's `.on_error(fun!(another_message))` overrides the type-wide mapper.
+Mapper helpers are captured automatically but are not exported unless separately
+declared. Return expansions and their defaults apply to `T`, the success type.
+The success value can be an optional value, enum, record, or owned handle, using
+the same conversions as an ordinary return. `Err` skips all success-output
+preparation and delivery. Source errors and unpublished success values are
+released through ordinary Rust ownership.
+
+C reports the mapped message through its thread-local `last_error`, with the
+ownership statuses described above. Success-output storage stays unchanged on
+failure. JNI throws the configured class and emits `@Throws` so Java callers can
+catch checked exceptions. The exception class must be on the Kotlin compile
+classpath, extend `Throwable`, and have a public `String` constructor at runtime.
+Use JVM binary names for nested classes, such as `example.Errors$Rejected`.
+Binding failures and caught Rust panics still use `IllegalArgumentException`;
+choose a different class when callers need to distinguish source errors. JNI
+preserves an existing pending exception, including exception-class lookup and
+allocation failures. A mapper panic is a binding failure rather than a mapped
+source error. Consumed Kotlin handles are marked consumed even when a source
+error or panic interrupts the call.
+
+`Result<(), E>` uses the existing zero-value success convention: a dummy output
+struct in C and Kotlin `Unit`. Error routing supports only an outermost owned
+`Result<T, E>` return. Result inputs, Result-valued fields, borrowed Results,
+nested Results inside the success value, and fallible helpers used as expansion constructors or getters are
+not yet supported. Spell both generic arguments explicitly using `Result`,
+`std::result::Result`, or `core::result::Result`; one-argument aliases such as
+`io::Result<T>` are not resolved. Named opaque aliases remain opaque.
+
+Adapter authors can use the shared `Output::Result` recipe through `bind_output`.
+The declaration compiler validates the mapper and unwraps the result before
+preparing the success conversion. `Codec::result_error` selects how the mapped
+message enters the adapter's error channel; its default rejects unsupported
+routing. No Result-specific wire type, niche, or group metadata is introduced.
 
 ## Fieldless enums
 

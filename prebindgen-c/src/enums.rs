@@ -43,6 +43,14 @@ impl Codec for EnumCodec {
     fn finish_output(&self, p: &mut OutputPlan<CWire>, e: &()) -> Result<()> {
         CCodec.finish_output(p, e)
     }
+    fn result_error(
+        &self,
+        ty: &syn::Type,
+        message: TokenStream,
+        extra: &(),
+    ) -> Result<TokenStream> {
+        CCodec.result_error(ty, message, extra)
+    }
     fn niche(&self, w: &CWire) -> Option<CNiche> {
         CCodec.niche(w)
     }

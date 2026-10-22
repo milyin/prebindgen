@@ -7,6 +7,8 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct CContext {
+    /// Wrapper-local flag recording acceptance of owned input allocations.
+    pub acknowledgement: syn::Ident,
     /// Wrapper parameter receiving the result structure.
     pub output_pointer: syn::Ident,
     /// Concrete result structure constructor.
@@ -21,6 +23,7 @@ pub struct CContext {
 impl TemplateContext for CContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         render_template(code, &|name| match name {
+            "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),
             "output_pointer" => Ok(self.output_pointer.to_token_stream()),
             "output_type" => Ok(self.output_type.to_token_stream()),
             "buffer_type" => Ok(self.buffer_type.to_token_stream()),

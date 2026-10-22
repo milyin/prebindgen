@@ -529,3 +529,48 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         .skip(1)
         .all(|w| w.kind.available_niche().is_none()));
 }
+
+#[test]
+fn result_exception_policy_is_explicit_and_checked_exceptions_are_declared() {
+    let source = "pub type E=String; pub fn message(e:&E)->String{} pub fn read()->Result<i64,E>{}";
+    let builder = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(read)))
+            .error_mapper(syn::parse_quote!(E), fun!(message))
+    };
+    assert!(fail(builder()).contains("error_class"));
+    for class in ["", "bad/name", "bad.Errors$", "bad.Errors$$Nested"] {
+        assert!(builder()
+            .error_class(syn::parse_quote!(E), class)
+            .build()
+            .is_err());
+    }
+    assert!(builder()
+        .error_class(syn::parse_quote!(E), "java.io.IOException")
+        .error_class(syn::parse_quote!(E), "java.lang.Exception")
+        .build()
+        .is_err());
+    assert!(builder()
+        .error_class(syn::parse_quote!(E), "java.lang.IllegalArgumentException")
+        .build()
+        .is_ok());
+    let nested = builder()
+        .error_class(syn::parse_quote!(E), "test.Errors$Nested")
+        .build()
+        .unwrap();
+    assert!(nested.rust.contains("test/Errors$Nested"));
+    assert!(nested
+        .kotlin
+        .values()
+        .any(|s| s.contains("test.Errors.Nested::class")));
+    let output = builder()
+        .error_class(syn::parse_quote!(E), "java.io.IOException")
+        .build()
+        .unwrap();
+    let kotlin = output.kotlin.values().cloned().collect::<String>();
+    assert!(kotlin.contains("@kotlin.jvm.Throws(java.io.IOException::class)"));
+    assert!(output.rust.contains("java/io/IOException"));
+    syn::parse_file(&output.rust).unwrap();
+}

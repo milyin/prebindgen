@@ -202,6 +202,7 @@ pub struct JniGenBuilder {
     prefix: String,
     init: String,
     packages: Vec<PackageDecl>,
+    error_classes: Vec<(syn::Type, String)>,
 }
 impl JniGenBuilder {
     /// Create an empty builder; equivalent to [`JniGen::builder`].
@@ -274,6 +275,19 @@ impl JniGenBuilder {
         self.expansions.push(decl.into());
         self
     }
+    /// Select a default source error-message mapper for Result returns using `ty`.
+    /// The helper takes exactly E or &E and returns String. A function's
+    /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
+    pub fn error_mapper(
+        mut self,
+        ty: syn::Type,
+        mapper: prebindgen_declarations::FunctionDecl,
+    ) -> Self {
+        self.expansions
+            .push(prebindgen_declarations::ErrorDecl::new(ty, mapper).into());
+        self
+    }
+
     /// Supply an already parsed model with input and output conversion slots.
     ///
     /// Bound functions still need a Kotlin package declaration. Mutually
@@ -295,6 +309,19 @@ impl JniGenBuilder {
     /// The text is emitted verbatim and checked by the Kotlin compiler.
     pub fn set_jni_native_init(mut self, init: impl Into<String>) -> Self {
         self.init = init.into();
+        self
+    }
+    /// Route a source Result error type to a JVM exception class.
+    ///
+    /// `class` is a fully qualified dotted JVM binary name; use `$` between
+    /// nested classes (for example `example.Errors$Rejected`). The class must exist at
+    /// runtime, extend Throwable, and provide a public String constructor.
+    /// Result-returning functions also require `error_mapper` or
+    /// `FunctionDecl::on_error` to select their message mapper. Binding failures
+    /// continue to use IllegalArgumentException.
+    /// Duplicate registrations for the same resolved source type are rejected.
+    pub fn error_class(mut self, ty: syn::Type, class: impl Into<String>) -> Self {
+        self.error_classes.push((ty, class.into()));
         self
     }
     /// Append a package's class and function declarations.
@@ -319,6 +346,11 @@ impl JniGenBuilder {
             .packages
             .iter()
             .flat_map(|p| p.classes.iter().map(|c| c.ty().clone()))
+            .chain(self.error_classes.iter().map(|(ty, _)| ty.clone()))
+            .chain(self.expansions.iter().filter_map(|d| match d {
+                prebindgen_declarations::ExpandDecl::Error(d) => Some(d.ty.clone()),
+                _ => None,
+            }))
             .collect();
         let mut flat = match (self.flat, self.source, self.items) {
             (Some(flat), None, None) => flat,
@@ -397,7 +429,22 @@ impl JniGenBuilder {
                 functions.push((f.name, pkg.clone(), name));
             }
         }
-        let codec = data::DataCodec::new(&flat, &classes)?;
+        let mut codec = data::DataCodec::new(&flat, &classes)?;
+        for (ty, class) in self.error_classes {
+            let mut parts = class.split('$');
+            validate_package(parts.next().unwrap())?;
+            for nested in parts {
+                validate_name(nested)?;
+            }
+            let ty = flat.resolve_type(&ty)?;
+            if codec
+                .error_classes
+                .insert(type_key(&ty), class.replace('.', "/"))
+                .is_some()
+            {
+                return Err("duplicate exception class for source error type".into());
+            }
+        }
         for enumeration in codec.enums.values() {
             flat.guards.extend(enumeration.mapping.guards());
         }
@@ -433,6 +480,7 @@ impl JniGenBuilder {
             classes,
             functions,
             data_files,
+            &codec.error_classes,
         )
     }
 }
@@ -825,6 +873,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
     mut files: BTreeMap<String, String>,
+    error_classes: &BTreeMap<String, String>,
 ) -> Result<JniGen> {
     let mut rust = TokenStream::new();
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
@@ -861,6 +910,17 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         .collect();
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
+        let throws = if let Some((_, error)) = prebindgen_flat::result_parts(&f.ret.ty) {
+            let class = error_classes
+                .get(&type_key(error))
+                .ok_or("Result return requires an explicit error_class")?;
+            format!(
+                "@kotlin.jvm.Throws({}::class)\n",
+                class.replace(['/', '$'], ".")
+            )
+        } else {
+            String::new()
+        };
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
         let context = JniContext {
@@ -990,7 +1050,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         };
         let text = packages.entry(pkg).or_default();
         text.push_str(&format!(
-            "public fun {generic}`{name}`({}): {ret} = run {{\n    {native_call}\n}}\n\n",
+            "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {native_call}\n}}\n\n",
             kt_params.join(", ")
         ));
     }

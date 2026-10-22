@@ -7,6 +7,21 @@ fn main() {
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .error_mapper(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .function(fun!(result_scalar))
+        .function(fun!(result_unit))
+        .function(fun!(result_optional))
+        .function(fun!(result_text))
+        .function(fun!(result_record))
+        .function(fun!(result_owned))
+        .function(
+            fun!(result_other)
+                .on_error(fun!(result_string_message))
+                .expand_return(expand_return!(i64).field_self()),
+        )
+        .function(fun!(storage_try_with_label))
+        .function(fun!(result_error_drops))
         .enum_type("priority", pq!(Priority))
         .opaque_ptr("enum_payload", pq!(Payload))
         .function(fun!(enum_payload_new).expand_return(expand_return!(Payload).field_self_into()))

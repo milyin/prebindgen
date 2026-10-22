@@ -14,7 +14,7 @@
 // * [`Priority`] — a `#[repr(i32)]` enum (→ Kotlin `enum class`).
 // * [`Stamp`] — a small `Copy` value crossing as its scalar fields (→ Kotlin
 //   `data class`); `Vec<Stamp>` surfaces as `List<Stamp>`.
-// * [`StorageError`] — the `E` of a fallible `Result` (→ the `onError` channel).
+// * [`StorageError`] — the `E` of a fallible `Result` (explicit message mapping).
 // * [`Summary`] — an opaque handle whose fields decompose at the boundary
 //   (→ flatten-input / flatten-output).
 // * [`Millis`] — a newtype crossing as a plain `Long` via a custom
@@ -96,12 +96,10 @@ mod handles {
     //         pub(super) value: i64,
     //     }
 
-    // Disabled: unsupported by the current binding subset
-    // #[derive(Debug)]
-    //
-    //     pub struct StorageError {
-    //         pub(super) message: String,
-    //     }
+    #[derive(Debug)]
+    pub struct StorageError {
+        pub(super) message: String,
+    }
 
     // Disabled: unsupported by the current binding subset
     // pub struct StorageHandler(pub(super) Box<dyn Fn(Storage) + Send + Sync>);
@@ -581,44 +579,38 @@ pub fn stamp_nanos(s: &Stamp) -> i64 {
 // }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// StorageError — the `E` of a fallible `Result` (→ the `onError` channel).
+// StorageError — the `E` of a fallible `Result` (explicit message mapping).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Failure value for the fallible storage constructor. Never crosses as a
-// /// value: the binding peels the `Result`, renders the message through
-// /// [`storage_error_message`], and delivers it to the caller's `onError`.
-// #[prebindgen]
-// pub type StorageError = handles::StorageError;
+/// Failure value for the fallible storage constructor. Never crosses as a
+/// value: the binding routes it through the explicitly selected message mapper.
+#[prebindgen]
+pub type StorageError = handles::StorageError;
 
-// Disabled: unsupported by the current binding subset
-// /// Render a [`StorageError`] as its message (the error's flatten-output
-// /// **accessor**, fed to `onError`).
-// #[prebindgen]
-// pub fn storage_error_message(e: &StorageError) -> String {
-//     e.message.clone()
-// }
+/// Borrow a source error to produce its destination error message.
+#[prebindgen]
+pub fn storage_error_message(e: &StorageError) -> String {
+    e.message.clone()
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Build a storage seeded with a single labelled payload, **failing** on an
-// /// empty label (`Result<T, E>` routing + a `&str` input).
-// #[prebindgen]
-// pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
-//     if label.is_empty() {
-//         return Err(StorageError {
-//             message: "label must not be empty".to_string(),
-//         });
-//     }
-//     Ok(Storage {
-//         payloads: vec![Payload {
-//             id: 0,
-//             seq: 0,
-//             value: 0.0,
-//             flag: false,
-//             label: Some(Box::new(label.to_string())),
-//         }],
-//     })
-// }
+/// Validate a label and build storage with one payload, **failing** on an
+/// empty label (`Result<T, E>` routing + a `&str` input).
+#[prebindgen]
+pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
+    if label.is_empty() {
+        return Err(StorageError {
+            message: "label must not be empty".to_string(),
+        });
+    }
+    Ok(Storage {
+        payloads: vec![Payload {
+            id: 0,
+            seq: 0,
+            value: 0.0,
+            flag: false,
+        }],
+    })
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Build a storage stamped with `s`, **failing** on a non-positive `secs` (a
@@ -3062,5 +3054,96 @@ pub fn enum_payload_new(value: f64) -> Payload {
         seq: 0,
         value,
         flag: false,
+    }
+}
+
+// Result errors are source values, never inferred from their fields.
+static RESULT_ERROR_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub struct ResultFailureImpl {
+    code: i64,
+}
+impl Drop for ResultFailureImpl {
+    fn drop(&mut self) {
+        RESULT_ERROR_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type ResultFailure = ResultFailureImpl;
+#[prebindgen]
+pub fn result_error_message(error: ResultFailure) -> String {
+    assert_ne!(error.code, 99, "error mapper panic");
+    format!("failure {} 世界", error.code)
+}
+#[prebindgen]
+pub fn result_error_drops() -> usize {
+    RESULT_ERROR_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn result_scalar(value: i64) -> Result<i64, ResultFailure> {
+    if value < 0 {
+        Err(ResultFailureImpl { code: value })
+    } else {
+        Ok(value)
+    }
+}
+#[prebindgen]
+pub fn result_unit(succeed: bool) -> Result<(), ResultFailure> {
+    if succeed {
+        Ok(())
+    } else {
+        Err(ResultFailureImpl { code: 1 })
+    }
+}
+#[prebindgen]
+pub fn result_optional(mode: i32) -> Result<Option<SparseCode>, ResultFailure> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(SparseCode::Seven)),
+        _ => Err(ResultFailureImpl { code: 2 }),
+    }
+}
+#[prebindgen]
+pub fn result_text(succeed: bool) -> Result<String, ResultFailure> {
+    if succeed {
+        Ok("héllo 世界".into())
+    } else {
+        Err(ResultFailureImpl { code: 3 })
+    }
+}
+#[prebindgen]
+pub fn result_record(succeed: bool) -> Result<EnumRecord, ResultFailure> {
+    if succeed {
+        Ok(EnumRecord {
+            priority: Priority::High,
+            code: Some(SparseCode::MinusOne),
+        })
+    } else {
+        Err(ResultFailureImpl { code: 4 })
+    }
+}
+#[prebindgen]
+pub fn result_owned(
+    value: OwnedResource,
+    mode: i32,
+    valid: char,
+) -> Result<OwnedResource, ResultFailure> {
+    let _ = valid;
+    match mode {
+        0 => Ok(value),
+        2 => panic!("source Result function panic"),
+        3 => Err(ResultFailureImpl { code: 99 }),
+        _ => Err(ResultFailureImpl { code: 5 }),
+    }
+}
+#[prebindgen]
+pub fn result_string_message(error: String) -> String {
+    error
+}
+#[prebindgen]
+pub fn result_other(succeed: bool) -> Result<i64, String> {
+    if succeed {
+        Ok(42)
+    } else {
+        Err("other error".into())
     }
 }

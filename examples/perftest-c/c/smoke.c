@@ -137,7 +137,66 @@ static void check_options(void) {
     assert(perftest_resource_choice_id(resource.v0, 7, &resource_choice) == 0 && resource_choice.v0 == 84);
     assert(perftest_owned_resource_drops(&drops) == 0 && drops.v0 == start + 3);
 }
+static void check_results(void) {
+    perftest_result_error_drops_result errors = {0};
+    assert(perftest_result_error_drops(&errors) == 0); size_t error_start = errors.v0;
+    perftest_result_scalar_result scalar = {12345};
+    assert(perftest_result_scalar(42, &scalar) == 0 && scalar.v0 == 42);
+    scalar.v0 = 12345;
+    assert(perftest_result_scalar(-7, &scalar) == -1 && scalar.v0 == 12345);
+    assert(strcmp(perftest_last_error(), "failure -7 世界") == 0);
+    assert(perftest_result_scalar(1, &scalar) == 0 && strlen(perftest_last_error()) == 0);
+    perftest_result_unit_result unit = {99};
+    assert(perftest_result_unit(0, &unit) == -1 && unit.unused == 99);
+    assert(strcmp(perftest_last_error(), "failure 1 世界") == 0);
+    assert(perftest_result_unit(1, &unit) == 0 && unit.unused == 0);
+    perftest_result_optional_result optional = {12345};
+    assert(perftest_result_optional(2, &optional) == -1 && optional.v0 == 12345);
+    assert(perftest_result_optional(0, &optional) == 0 && optional.v0 == -3);
+    assert(perftest_result_optional(1, &optional) == 0 && optional.v0 == perftest_code_Seven);
+    perftest_result_text_result text = {{NULL, 99}};
+    assert(perftest_result_text(0, &text) == -1 && text.v0.len == 99);
+    assert(perftest_result_text(1, &text) == 0);
+    assert(text.v0.len == strlen("héllo 世界") && memcmp(text.v0.data, "héllo 世界", text.v0.len) == 0);
+    perftest_free_buffer(text.v0);
+    perftest_result_record_result record = {12345, 12345};
+    assert(perftest_result_record(0, &record) == -1 && record.v0 == 12345 && record.v1 == 12345);
+    assert(perftest_result_record(1, &record) == 0 && record.v0 == perftest_priority_High && record.v1 == perftest_code_MinusOne);
+    perftest_result_other_result other = {12345};
+    assert(perftest_result_other(0, &other) == -1 && other.v0 == 12345);
+    assert(strcmp(perftest_last_error(), "other error") == 0);
+    assert(perftest_result_other(1, &other) == 0 && other.v0 == 42);
+    perftest_storage_try_with_label_result storage = {NULL};
+    assert(perftest_storage_try_with_label((perftest_buffer){NULL, 0}, &storage) == -1 && storage.v0 == NULL);
+    assert(strcmp(perftest_last_error(), "label must not be empty") == 0);
+    assert(perftest_storage_try_with_label((perftest_buffer){NULL, 1}, &storage) == -1);
+    assert(strcmp(perftest_last_error(), "invalid buffer") == 0);
+    assert(perftest_storage_try_with_label((perftest_buffer){(const uint8_t *)"label", 5}, &storage) == 0);
+    assert(perftest_drop_storage(storage.v0) == 0);
+    perftest_owned_resource_drops_result drops = {0};
+    assert(perftest_owned_resource_drops(&drops) == 0); size_t start = drops.v0;
+    for (int32_t mode = 0; mode <= 3; ++mode) {
+        perftest_option_resource_new_result resource = {NULL};
+        assert(perftest_option_resource_new(1, &resource) == 0);
+        perftest_result_owned_result moved = {NULL};
+        assert(perftest_result_owned(resource.v0, mode, 65, NULL) == -1);
+        assert(perftest_result_owned(resource.v0, mode, 0xd800, &moved) == -1 && moved.v0 == NULL);
+        perftest_option_resource_id_result id = {0};
+        assert(perftest_option_resource_id(resource.v0, &id) == 0 && id.v0 == 77);
+        int32_t status = perftest_result_owned(resource.v0, mode, 65, &moved);
+        if (mode == 0) {
+            assert(status == 0 && moved.v0 != NULL);
+            assert(perftest_drop_owned_resource(moved.v0) == 0);
+        } else {
+            assert(status == -2 && moved.v0 == NULL);
+            assert(strcmp(perftest_last_error(), mode == 1 ? "failure 5 世界" : "Rust operation panicked") == 0);
+        }
+    }
+    assert(perftest_owned_resource_drops(&drops) == 0 && drops.v0 == start + 4);
+    assert(perftest_result_error_drops(&errors) == 0 && errors.v0 == error_start + 7);
+}
 int main(void) {
+    check_results();
     check_options();
     check_enums();
     perftest_storage_new_result storage = {0};

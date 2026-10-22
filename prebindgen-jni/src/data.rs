@@ -153,6 +153,7 @@ pub struct DataGroup {
 }
 
 pub(crate) struct DataCodec {
+    pub(crate) error_classes: BTreeMap<String, String>,
     records: BTreeMap<String, Rc<RecordShape>>,
     pub(crate) enums: BTreeMap<String, JniEnum>,
 }
@@ -267,7 +268,11 @@ impl DataCodec {
         for (key, class) in classes.iter().filter(|(_, c)| c.enumeration) {
             enums.insert(key.clone(), JniEnum::from_class(flat, class)?);
         }
-        Ok(Self { records, enums })
+        Ok(Self {
+            records,
+            enums,
+            error_classes: BTreeMap::new(),
+        })
     }
     fn enum_type(&self, ty: &syn::Type) -> Option<&JniEnum> {
         let ty = if let syn::Type::Reference(r) = ty {
@@ -507,6 +512,16 @@ impl Codec for DataCodec {
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
+    fn result_error(&self, ty: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
+        let class = self.error_classes.get(&type_key(ty)).ok_or_else(|| {
+            format!(
+                "register an explicit error_class for Result error `{}`",
+                type_key(ty)
+            )
+        })?;
+        let env = prebindgen_conversions::template_parameter("environment");
+        Ok(quote!(::prebindgen_jni_runtime::domain_error(&mut #env, #class, #message)?))
+    }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()
     }
