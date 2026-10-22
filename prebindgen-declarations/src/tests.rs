@@ -107,6 +107,7 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
+            fallible: false,
             context: Default::default(),
             acknowledgement: None,
             layout: vec![Wire {
@@ -138,6 +139,7 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
+            fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             layout: vec![Wire {
@@ -1085,6 +1087,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
                 layout: Default::default(),
@@ -1205,6 +1208,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
                 layout: vec![].into(),

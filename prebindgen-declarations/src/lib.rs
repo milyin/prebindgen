@@ -667,6 +667,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         }
         let var = self.name();
         let mut wires = WireLayout::default();
+        let mut fallible = false;
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
         let mut resources = Vec::new();
@@ -688,6 +689,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     wires.enclose(self.codec.fields_group());
                     return Ok(InputPlan {
+                        fallible: false,
                         context: Default::default(),
                         acknowledgement,
                         layout: wires,
@@ -738,6 +740,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         &mut p.layout,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
+                    fallible |= p.fallible;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -750,6 +753,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 statements.extend(quote!(let #var:#ty=#path(#(#call_args),*);));
             }
             Input::Selector(arms) => {
+                fallible = true;
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
@@ -776,6 +780,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     for wire in p.layout.iter_mut() {
                         self.codec.set_niche(&mut wire.kind, None);
                     }
+                    fallible |= p.fallible;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -790,6 +795,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
         }
         Ok(InputPlan {
+            fallible,
             context: Default::default(),
             acknowledgement,
             layout: wires,
@@ -866,6 +872,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
         }
         let mut out = OutputPlan {
+            fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
@@ -1018,6 +1025,7 @@ fn append<W: prebindgen_flat::WireKind, C, M>(
     {
         return Err("composed output delivery must be installed by Codec::finish_output".into());
     }
+    to.fallible |= from.fallible;
     to.commit.extend(from.commit);
     to.layout.extend(from.layout);
     to.statements.extend(from.statements);

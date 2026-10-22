@@ -565,6 +565,7 @@ impl Codec for JniCodec {
         Ok(())
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
+        plan.fallible = true;
         group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let count = plan.layout.len() + 1;

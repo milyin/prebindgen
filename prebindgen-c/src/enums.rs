@@ -178,6 +178,7 @@ mod tests {
         ))
         .enum_type("code", syn::parse_quote!(E))
         .function(prebindgen_declarations::fun!(echo))
+        .panic()
         .build()
         .unwrap();
         assert!(output.header.contains("typedef int32_t pb_code;"));
@@ -194,6 +195,7 @@ mod tests {
         assert!(Cbindgen::new(flat(source))
             .enum_type("code", syn::parse_quote!(E))
             .function(prebindgen_declarations::fun!(code))
+            .panic()
             .build()
             .err()
             .unwrap()
@@ -221,7 +223,7 @@ mod tests {
     }
     #[test]
     fn enum_symbols_cannot_shadow_runtime_or_generated_result_types() {
-        for name in ["buffer", "int128", "H", "last_error", "free_buffer"] {
+        for name in ["buffer", "int128", "H", "free_buffer"] {
             assert!(
                 Cbindgen::new(flat("pub enum E { A, B }"))
                     .enum_type(name, syn::parse_quote!(E))
@@ -234,6 +236,7 @@ mod tests {
             Cbindgen::new(flat("pub enum E { A, B } pub fn echo(x:E)->E{}"))
                 .enum_type("echo_result", syn::parse_quote!(E))
                 .function(prebindgen_declarations::fun!(echo))
+                .panic()
                 .build()
                 .err()
                 .unwrap()

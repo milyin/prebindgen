@@ -3330,3 +3330,14 @@ pub fn c_result_error_drop() -> Result<(), CDropError> {
         resource: CPanicOutputImpl { _marker: 1 },
     })
 }
+
+/// Exercises a void destructor whose source Drop panics.
+#[prebindgen]
+pub fn c_panic_output_new() -> CPanicOutput {
+    CPanicOutputImpl { _marker: 1 }
+}
+/// Source panics abort even when ordinary binding conversions are infallible.
+#[prebindgen]
+pub fn c_plain_panic() -> i64 {
+    panic!("non-Result source panic")
+}

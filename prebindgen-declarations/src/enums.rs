@@ -141,6 +141,7 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
     let decode = mapping.decode(quote!(#wire));
     let active = active.rust();
     Ok(InputPlan {
+        fallible: true,
         context: Default::default(),
         acknowledgement: None,
         layout: vec![Wire { name: wire, kind }].into(),
@@ -168,6 +169,7 @@ pub fn enum_output<W: prebindgen_flat::WireKind, C, G>(
 ) -> OutputPlan<W, C, G> {
     let encoded = mapping.encode(quote!(&(#value)));
     OutputPlan {
+        fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         layout: vec![Wire {

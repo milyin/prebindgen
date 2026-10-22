@@ -386,14 +386,16 @@ Other adapters can choose different storage in their leaf conversions; there is
 no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
-C wrappers still return status and write output structs only on success. Text
-and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow that
-memory, while owned inputs copy it. Callers free returned buffers exactly once.
-`last_error` is thread-local; clearing it on success allocates nothing.
-An exported source function returns `-1` if it fails before ownership acceptance: its owned inputs
-remain valid. It returns `-2` if it fails after acceptance: active owned inputs
-have been consumed. This distinction also covers source and output-conversion
-panics; a failure never restores transferred ownership.
+C functions without `Result` return their first boundary value directly; any
+additional values use output pointers. Unit functions and destructors return
+`void`. Text and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow
+that memory, while owned inputs copy it. Callers free returned buffers exactly once.
+
+A non-Result function with a fallible binding conversion must be explicitly
+declared with `.function(fun!(name)).panic()`. Without that declaration, generation
+fails. Invalid inputs or conversion failures then abort at the C boundary; source
+and destructor panics also abort. Use `Result<T, E>` when the caller needs to
+recover from an error. Error messages use the explicit Result error output.
 
 **JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
@@ -416,7 +418,7 @@ not safe native inputs.
 Rust panics are caught when unwinding is enabled. JNI still boxes outputs into
 an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
-C status/out-struct and JNI object-array ABI optimization remain separate work.
+Further JNI object-array ABI optimization remains separate work.
 
 Callbacks, data-carrying enums, general collections, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, split
@@ -481,10 +483,8 @@ Calls that consume handles additionally require `bool *ownership`: false means
 validation failed before transfer; true means the active handles were consumed,
 including when the source function or a later conversion fails. All success,
 ownership and error output storage must be pairwise disjoint. This explicit
-flag replaces the ownership distinction that non-Result calls still encode in
-`-1`/`-2`. Non-Result calls retain their status/out-struct and thread-local error
-API. Result calls deliver errors through their explicit output and do not change
-that thread-local message.
+flag reports whether Rust accepted ownership before returning a Result failure.
+Non-Result calls need no ownership flag because failures abort the process.
 
 JNI follows the production adapter's callback model. `Err(E)` is converted
 through the ordinary output declarations for `E`, including `expand_return!`,

@@ -133,6 +133,7 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
             quote!(true)
         };
         return InputPlan {
+            fallible: false,
             context: Default::default(),
             layout: wires.into(),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
@@ -178,6 +179,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             values.insert(0, quote!(123i32));
         }
         return OutputPlan {
+            fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             layout: wires.into(),

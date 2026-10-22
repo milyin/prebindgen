@@ -217,7 +217,10 @@ impl Codec for CCodec {
                 )
             }
         };
-        prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)
+        let mut plan =
+            prebindgen_conversions::value::input(ty, w, v, &active.rust(), decode, kind)?;
+        plan.fallible = !matches!(Value::of(ty), Some(Value::Scalar(p)) if p != Primitive::Char);
+        Ok(plan)
     }
     fn output_leaf(
         &self,
@@ -276,14 +279,18 @@ impl Codec for CCodec {
             );
         }
         match Value::of(ty) {
-            Some(Value::Scalar(p)) => prebindgen_conversions::value::output(
-                ty,
-                w,
-                v,
-                borrowed,
-                |v| encode_scalar(p, v),
-                CWire::scalar(p),
-            ),
+            Some(Value::Scalar(p)) => {
+                let mut plan = prebindgen_conversions::value::output(
+                    ty,
+                    w,
+                    v,
+                    borrowed,
+                    |v| encode_scalar(p, v),
+                    CWire::scalar(p),
+                )?;
+                plan.fallible = false;
+                Ok(plan)
+            }
             Some(_) => {
                 // The buffer stays owned by Rust until every output is delivered.
                 let mut out = prebindgen_conversions::value::output(
@@ -294,6 +301,7 @@ impl Codec for CCodec {
                     |v| quote!(::core::convert::Into::<Vec<u8>>::into(#v).into_boxed_slice()),
                     CWire::Buffer,
                 )?;
+                out.fallible = false;
                 let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
                 out.values = vec![quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()})];
                 out.commit = quote!(let _ = Box::into_raw(#w););
@@ -357,10 +365,11 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
-/// Non-Result calls return a status and write results through an output pointer;
-/// `0` means success. On failure, `-1` means ownership has not been accepted;
-/// `-2` means active owned inputs have been consumed. Both set a thread-local
-/// last-error message and leave success-output storage unchanged.
+/// Non-Result calls return their first boundary value directly and write any
+/// additional values through output pointers. Unit returns void. Fallible
+/// conversions require explicit [`Self::panic`] and abort on failure; source
+/// panics also abort. Destructors return void. Result calls report failures
+/// through their explicit error output.
 /// Owned pointer inputs transfer ownership after all active inputs validate;
 /// later source failures do not restore ownership. References borrow for the
 /// call and require the caller to obey Rust aliasing and lifetime rules.
@@ -379,6 +388,7 @@ pub struct Cbindgen {
     pointers: Vec<(String, syn::Type)>,
     enums: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
+    panics: std::collections::BTreeSet<String>,
 }
 impl Cbindgen {
     /// Create an unconfigured builder with the symbol prefix `pb`.
@@ -392,6 +402,7 @@ impl Cbindgen {
             pointers: Vec::new(),
             enums: Vec::new(),
             errors: Vec::new(),
+            panics: Default::default(),
         }
     }
     /// Read captures from a source crate's `PREBINDGEN_OUT_DIR`, passed as `path`.
@@ -456,6 +467,24 @@ impl Cbindgen {
         self
     }
 
+    /// Allow binding conversion errors to abort the last declared non-Result
+    /// function. Required for fallible conversions without a Result error channel.
+    /// Result functions continue to report errors through their explicit output.
+    /// Source panics always abort non-Result calls at the C boundary.
+    ///
+    /// # Panics
+    /// Panics if no function has been declared.
+    pub fn panic(mut self) -> Self {
+        let name = self
+            .functions
+            .last()
+            .expect("panic() must follow function(...)")
+            .name
+            .clone();
+        self.panics.insert(name);
+        self
+    }
+
     /// Start from a flat model with input and output conversion slots and prefix `pb`.
     ///
     /// `flat` is the parsed source, with any converters already attached.
@@ -474,6 +503,7 @@ impl Cbindgen {
             pointers: Vec::new(),
             enums: Vec::new(),
             errors: Vec::new(),
+            panics: Default::default(),
         }
     }
     /// Set the prefix for exported functions, C types and destructors.
@@ -608,6 +638,20 @@ impl Cbindgen {
             })
             .collect::<Result<Vec<_>>>()?;
         prebindgen_flat::validate_bindings(&flat)?;
+        for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
+            let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
+            if !is_result
+                && !self.panics.contains(&f.name.to_string())
+                && (f
+                    .params
+                    .iter()
+                    .filter_map(|p| p.ty.slot.as_ref())
+                    .any(|p| p.fallible || !p.resources.is_empty())
+                    || f.ret.slot.as_ref().is_some_and(|p| p.fallible))
+            {
+                return Err(format!("C function `{}` has a fallible binding conversion without Result; declare .panic() after .function(...) to allow aborting", f.name));
+            }
+        }
         generate(
             flat,
             &self.prefix,
@@ -720,11 +764,9 @@ fn generate<
     errors: Vec<errors::ErrorBinding>,
 ) -> Result<Generation> {
     let mut calls = Vec::new();
-    let error = format_ident!("{prefix}_last_error");
     let free = format_ident!("{prefix}_free_buffer");
     let free_error = format_ident!("{prefix}_free_error");
     let mut symbols = std::collections::BTreeSet::from([
-        error.to_string(),
         free.to_string(),
         free_error.to_string(),
         format!("{prefix}_buffer"),
@@ -767,8 +809,13 @@ fn generate<
         if !symbols.insert(result_type.to_string()) {
             return Err("duplicate C result type symbol".into());
         }
+        let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
         let context = CContext {
-            acknowledgement: format_ident!("ownership_accepted"),
+            acknowledgement: if is_result {
+                format_ident!("ownership_accepted")
+            } else {
+                format_ident!("_ownership_accepted")
+            },
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
             error_pointer: format_ident!("error"),
@@ -803,9 +850,6 @@ fn generate<
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
-       std::thread_local! {static __PB_ERROR:std::cell::RefCell<Option<std::ffi::CString>>=const {std::cell::RefCell::new(None)};}
-       fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=if e.is_empty(){None}else{Some(std::ffi::CString::new(e.replace('\0',"?")).unwrap())});}
-       #[no_mangle] pub extern "C" fn #error()->*const std::ffi::c_char {__PB_ERROR.with(|s|s.borrow().as_ref().map_or(c"".as_ptr(),|e| e.as_ptr()))}
        unsafe fn __pb_report_message(message:String,error:*mut *mut std::ffi::c_char){
            if !error.is_null(){std::ptr::write(error,std::ffi::CString::new(message.replace('\0',"?")).unwrap().into_raw());}
        }
@@ -821,7 +865,7 @@ fn generate<
     The buffer must have been returned by this library and not already freed."]
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
-    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nconst char *{error}(void);\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
+    let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
     for (name, mapping) in &enums {
         header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
         for (variant, value) in &mapping.variants {
@@ -843,11 +887,13 @@ fn generate<
         tokens.extend(quote!{
             #[doc = "# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call."]
-            #[no_mangle] pub unsafe extern "C" fn #drop(ptr:*mut #ty)->i32{
-                match ::prebindgen_runtime::boundary(||{if !ptr.is_null(){drop(Box::from_raw(ptr));}Ok(())}){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
+            #[no_mangle] pub unsafe extern "C" fn #drop(ptr:*mut #ty){
+                if let Err(error) = ::prebindgen_runtime::boundary(||{if !ptr.is_null(){drop(Box::from_raw(ptr));}Ok(())}) { panic!("C destructor failed: {}", error); }
             }
         });
-        header.push_str(&format!("typedef struct {prefix}_{name} {prefix}_{name};\nint32_t {drop}({prefix}_{name} *ptr);\n"));
+        header.push_str(&format!(
+            "typedef struct {prefix}_{name} {prefix}_{name};\nvoid {drop}({prefix}_{name} *ptr);\n"
+        ));
     }
     for error in &errors {
         validate_layout(&error.plan.layout)?;
@@ -863,7 +909,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         &mut tokens,
         &mut header,
     )?;
-    header.push_str("/* Non-Result source-function status: 0 = success; -1 = failure before ownership acceptance; -2 = failure after ownership acceptance.\n * On -1 all owned inputs remain valid; on -2 active owned inputs have been consumed.\n * Failure leaves success-output storage unchanged. Read the error message before another library call. */\n");
+    header.push_str("/* Non-Result calls return their first value directly; additional values use output pointers.\n * Binding failures require explicit .panic() and abort. Destructors return void. */\n");
     for (f, body, context, source) in calls {
         let out = &context.output_pointer;
         let accepted = &context.acknowledgement;
@@ -888,13 +934,24 @@ The pointer must be null or a live allocation of the declared type returned by t
         }
         if prebindgen_declarations::result_parts(&f.ret.ty).is_none() {
             if let Some(slot) = &f.ret.slot {
-                header.push_str(&describe_groups(
+                let mut comments = describe_groups(
                     slot.layout(),
                     &outputs,
                     true,
                     &mut next_option_label,
                     "return",
-                ));
+                );
+                for i in (0..outputs.len()).rev() {
+                    comments = comments.replace(
+                        &format!("output->v{i}"),
+                        &if i == 0 {
+                            "return value".to_owned()
+                        } else {
+                            format!("*out{i}")
+                        },
+                    );
+                }
+                header.push_str(&comments);
             }
         }
         let mut params = Vec::new();
@@ -948,32 +1005,61 @@ The pointer must be null or a live allocation of the declared type returned by t
             continue;
         }
         let mut fields = Vec::new();
-        header.push_str("typedef struct {\n");
-        for (i, output) in f.outputs(&context, &source)?.enumerate() {
-            let w = output.wire;
+        let mut writes = TokenStream::new();
+        let mut validate_outputs = TokenStream::new();
+        for (i, wire) in outputs.iter().enumerate() {
             let field = format_ident!("v{i}");
-            let ty = w.kind.rust_type();
+            let ty = wire.rust_type();
             fields.push(quote!(pub #field:#ty));
-            header.push_str(&format!("    {} v{i};\n", c_ty(w, prefix, &pointers)));
+            if i > 0 {
+                let pointer = format_ident!("out{i}");
+                params.push(quote!(#pointer:*mut #ty));
+                cparams.push(format!("{} *{pointer}", c_ty(wire, prefix, &pointers)));
+                validate_outputs.extend(
+                    quote!(if #pointer.is_null(){return Err("null success output".into());}),
+                );
+                writes.extend(quote!(std::ptr::write(#pointer, value.#field);));
+            }
         }
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));
-            header.push_str("    uint8_t unused;\n");
         }
-        header.push_str(&format!("}} {result};\n"));
-        cparams.push(format!("{result} *{out}"));
-        header.push_str(&format!("int32_t {name}({});\n", cparams.join(", ")));
+        let (return_type, c_return, returned) = match outputs.first() {
+            Some(wire) => {
+                let ty = wire.rust_type();
+                (
+                    quote!(->#ty),
+                    c_ty(wire, prefix, &pointers),
+                    quote!(value.v0),
+                )
+            }
+            None => (quote!(), "void".into(), quote!()),
+        };
+        let value = if outputs.is_empty() {
+            quote!()
+        } else {
+            quote!(let value=storage.assume_init();)
+        };
+        header.push_str(&format!(
+            "{c_return} {name}({});\n",
+            if cparams.is_empty() {
+                "void".into()
+            } else {
+                cparams.join(", ")
+            }
+        ));
         tokens.extend(quote! {
          #[repr(C)] pub struct #result {#(#fields),*}
-         #[doc = "# Safety
-The output pointer must be writable. Active input buffers must be readable for their stated lengths. Opaque pointers must be live allocations of the declared type from this library. Consuming inputs become invalid at ownership transfer; borrows remain valid and must obey Rust aliasing rules for the duration of the call."]
-   #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-   #[no_mangle] pub unsafe extern "C" fn #name(#(#params,)* #out:*mut #result)->i32{
-          if #out.is_null(){__pb_error("null result pointer");return -1;}
-          #[allow(unused_mut)] let mut #accepted = false;
-          match ::prebindgen_runtime::boundary(||{
-           #body
-          }){Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);if #accepted {-2} else {-1}}}
+         #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
+         #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
+         #[no_mangle] pub unsafe extern "C" fn #name(#(#params),*) #return_type {
+            #[allow(unused_mut)] let mut #accepted=false;
+            let mut storage=std::mem::MaybeUninit::<#result>::uninit();
+            let #out=storage.as_mut_ptr();
+            if let Err(error)=::prebindgen_runtime::boundary(||{#validate_outputs #body}) {panic!("C binding failed: {}",error);}
+            #value
+            #writes
+            #returned
          }
         });
     }
@@ -1181,7 +1267,12 @@ mod generation_tests {
         }
         let output = Output::Optional(Box::new(Output::Optional(Box::new(Output::Leaf))));
         bind_output(&mut flat, &CCodec, "echo", &output, &()).unwrap();
-        let header = Cbindgen::new(flat).build().unwrap().header;
+        let header = Cbindgen::new(flat)
+            .function(prebindgen_declarations::fun!(echo))
+            .panic()
+            .build()
+            .unwrap()
+            .header;
         for i in 0..6 {
             assert_eq!(
                 header.matches(&format!("Option group option{i}:")).count(),
@@ -1207,10 +1298,10 @@ mod generation_tests {
         bind_output(&mut flat, &CCodec, "make", &recipe, &()).unwrap();
         let header = Cbindgen::new(flat).build().unwrap().header;
         assert!(header.contains("Field return.empty: no boundary values."));
-        assert!(header.contains("Field return.pair: output->v0, output->v1."));
-        assert!(header.contains("Field return.pair.x: output->v0."));
-        assert!(header.contains("Field return.pair.y: output->v1."));
-        assert!(header.contains("Field return.maybe: output->v2, output->v3."));
+        assert!(header.contains("Field return.pair: return value, *out1."));
+        assert!(header.contains("Field return.pair.x: return value."));
+        assert!(header.contains("Field return.pair.y: *out1."));
+        assert!(header.contains("Field return.maybe: *out2, *out3."));
     }
 
     #[test]
@@ -1378,5 +1469,97 @@ impl CNiche {
             Self::Null => quote!(0),
             Self::Integer(n) => syn::parse_str::<TokenStream>(&n.to_string()).unwrap(),
         }
+    }
+}
+
+#[cfg(test)]
+mod abort_policy_tests {
+    use super::*;
+    use prebindgen_declarations::{expand_param, fun};
+    fn model(source: &str) -> Bindings {
+        Bindings::parse(
+            syn::parse_file(source)
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn direct_values_and_void_do_not_need_an_error_policy() {
+        let generated = Cbindgen::new(model("pub fn identity(x:i64)->i64{} pub fn unit(){}"))
+            .function(fun!(identity))
+            .function(fun!(unit))
+            .build()
+            .unwrap();
+        assert!(generated.header.contains("int64_t pb_identity(int64_t"));
+        assert!(generated.header.contains("void pb_unit(void)"));
+        assert!(!generated.header.contains("_result"));
+        assert!(!generated.header.contains("last_error"));
+        assert!(!generated.rust.contains("thread_local"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+    #[test]
+    fn fallible_leaves_and_option_flags_require_explicit_abort_policy() {
+        for ty in ["char", "&str", "&[u8]", "Option<i64>"] {
+            let source = format!("pub fn f(value:{ty}){{}}");
+            let error = Cbindgen::new(model(&source))
+                .function(fun!(f))
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains(".panic()"), "{error}");
+            Cbindgen::new(model(&source))
+                .function(fun!(f))
+                .panic()
+                .build()
+                .unwrap();
+        }
+    }
+    #[test]
+    fn constructor_alternatives_retain_their_own_validation_policy() {
+        let source="pub struct Number {pub value:i64} pub fn new(value:i64)->Number{} pub fn other(value:i64)->Number{} pub fn consume(value:Number){}";
+        let bind = || {
+            Cbindgen::new(model(source)).function(
+                fun!(consume).expand_param(
+                    "value",
+                    expand_param!(Number)
+                        .variant(fun!(new))
+                        .variant(fun!(other)),
+                ),
+            )
+        };
+        assert!(bind().build().err().unwrap().contains(".panic()"));
+        bind().panic().build().unwrap();
+    }
+    #[test]
+    fn manually_bound_fallible_output_requires_the_same_policy() {
+        let mut flat = model("pub fn f()->i64{}");
+        prebindgen_declarations::bind_output(
+            &mut flat,
+            &CCodec,
+            "f",
+            &prebindgen_declarations::Output::Leaf,
+            &(),
+        )
+        .unwrap();
+        flat.function_mut("f")
+            .unwrap()
+            .ret
+            .slot
+            .as_mut()
+            .unwrap()
+            .fallible = true;
+        assert!(Cbindgen::new(flat.clone())
+            .build()
+            .err()
+            .unwrap()
+            .contains(".panic()"));
+        Cbindgen::new(flat)
+            .function(fun!(f))
+            .panic()
+            .build()
+            .unwrap();
     }
 }

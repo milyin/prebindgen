@@ -178,7 +178,7 @@ pub(crate) fn emit(
             fields.push(quote!(pub unused:u8));
             header.push_str("    uint8_t unused;\n");
         }
-        header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nint32_t {drop_name}({c_name} *error);\n"));
+        header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
         let wires = error.plan.layout.iter().collect::<Vec<_>>();
         let mut comments = describe_groups(&error.plan.layout, &wires, true, &mut 0, "error");
         for i in (0..wires.len()).rev() {
@@ -198,8 +198,8 @@ pub(crate) fn emit(
                 #prepare
             }
             #[doc="# Safety\nThe pointer must be null or writable storage containing a live error produced by this library."]
-            #[no_mangle]pub unsafe extern "C" fn #drop_name(error:*mut #rust_name)->i32 {
-                match ::prebindgen_runtime::boundary(|| {if !error.is_null(){#drops}Ok(())}) {Ok(())=>{__pb_error("");0},Err(e)=>{__pb_error(&e);-1}}
+            #[no_mangle]pub unsafe extern "C" fn #drop_name(error:*mut #rust_name) {
+                if let Err(message)=::prebindgen_runtime::boundary(|| {if !error.is_null(){#drops}Ok(())}) {panic!("C error destructor failed: {}",message);}
             }
         });
     }

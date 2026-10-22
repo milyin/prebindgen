@@ -64,6 +64,9 @@ impl Value {
 ///   may return a `String` error with `?`.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
 ///
+/// The returned plan conservatively has `fallible = true` because `decode`
+/// is supplied by the adapter. Clear it only when decoding cannot return an error.
+///
 /// ```
 /// use prebindgen_conversions::value;
 /// use quote::quote;
@@ -111,6 +114,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         ),
     };
     Ok(InputPlan {
+        fallible: true,
         context: Default::default(),
         acknowledgement: None,
         layout: vec![Wire { name: wire, kind }].into(),
@@ -126,7 +130,8 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
 /// dereference, text and bytes by `Clone`.
 ///
 /// The adapter may adjust the result, for example to defer an allocation's
-/// transfer to `commit`.
+/// transfer to `commit`. The returned plan conservatively sets `fallible = true`
+/// for the adapter-supplied encoding; clear it when that encoding is infallible.
 ///
 /// # Arguments
 ///
@@ -162,6 +167,7 @@ pub fn output<W: prebindgen_flat::WireKind, C, G>(
     let expr = encode(value);
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
+        fallible: true,
         context: Default::default(),
         delivery: Default::default(),
         layout: vec![Wire {

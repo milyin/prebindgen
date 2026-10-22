@@ -130,6 +130,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         ),
     };
     Ok(InputPlan {
+        fallible: true,
         context: Default::default(),
         acknowledgement: None,
         layout: vec![Wire {
@@ -187,6 +188,7 @@ pub fn output<W: prebindgen_flat::WireKind, C, G>(
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
     Ok(OutputPlan {
+        fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         layout: vec![Wire {
