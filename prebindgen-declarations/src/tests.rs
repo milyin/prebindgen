@@ -973,7 +973,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         child.acquire = quote!(acquire(#index););
         child.acknowledgement = Some(ack);
         child.resources.push(Resource {
-            identity: quote!(#index),
+            identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#index)),
             access: Access::Move,
             active: quote!(selected),
         });

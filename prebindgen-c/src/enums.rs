@@ -43,6 +43,28 @@ impl Codec for EnumCodec {
     fn finish_output(&self, p: &mut OutputPlan<CWire>, e: &()) -> Result<()> {
         CCodec.finish_output(p, e)
     }
+    fn sequence_input(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
+        CCodec.sequence_input(e, w, n, i, element, active)
+    }
+    fn sequence_output(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        values: &[TokenStream],
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
+        CCodec.sequence_output(e, w, n, i, element, values)
+    }
     fn result_error(
         &self,
         ty: &syn::Type,

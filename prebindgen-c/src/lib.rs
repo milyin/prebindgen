@@ -25,6 +25,7 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
 }
 mod enums;
 mod group;
+mod sequence;
 use group::validate_layout;
 pub use group::{CGroup, COptional};
 use prebindgen_declarations::Codec;
@@ -121,6 +122,28 @@ impl Codec for CCodec {
         };
         Ok(())
     }
+    fn sequence_input(
+        &self,
+        _: &(),
+        wire: syn::Ident,
+        length: syn::Ident,
+        index: syn::Ident,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        _: &prebindgen_declarations::Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
+        sequence::input(wire, length, index, element)
+    }
+    fn sequence_output(
+        &self,
+        _: &(),
+        wire: syn::Ident,
+        length: syn::Ident,
+        _: syn::Ident,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        values: &[TokenStream],
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
+        sequence::output(wire, length, element, values)
+    }
     fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
         Ok(message)
     }
@@ -147,6 +170,10 @@ impl Codec for CCodec {
         Ok(match wire {
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
             CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::Rows => quote!(__PbRows {
+                data: std::ptr::null(),
+                len: 0
+            }),
             CWire::Scalar {
                 primitive: Primitive::I128 | Primitive::U128,
                 ..
@@ -177,6 +204,9 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
+        }
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             let tag = quote::format_ident!("{w}_present");
             let child = self.input_leaf(
@@ -218,6 +248,9 @@ impl Codec for CCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<CWire>> {
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
+        }
         if let syn::Type::Reference(reference) = ty {
             if reference.mutability.is_some() {
                 return Err("mutable-reference outputs are unsupported".into());
@@ -575,7 +608,7 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
+fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)], context: &CContext) -> String {
     match &wire.kind {
         CWire::Enum { name, .. } => format!("{prefix}_{name}"),
         CWire::Scalar { primitive: p, .. } => match p {
@@ -602,6 +635,12 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)]) -> String {
             format!("{qualifier}{prefix}_{name} *")
         }
         CWire::Buffer => format!("{prefix}_buffer"),
+        CWire::Rows => format!(
+            "{prefix}_{}_rows",
+            context.row_types[&wire.name.to_string()]
+                .to_string()
+                .trim_start_matches("__PbRow_")
+        ),
     }
 }
 fn generate<
@@ -670,6 +709,22 @@ fn generate<
         }
         let context = CContext {
             acknowledgement: format_ident!("ownership_accepted"),
+            row_types: {
+                let mut schemas = Vec::new();
+                for slot in f.input_conversions()? {
+                    sequence::schemas(slot.layout(), &mut schemas);
+                }
+                sequence::schemas(f.output_conversion()?.layout(), &mut schemas);
+                schemas
+                    .into_iter()
+                    .map(|(wire, _)| {
+                        (
+                            wire.name.to_string(),
+                            format_ident!("__PbRow_{}_{}", f.name, wire.name),
+                        )
+                    })
+                    .collect()
+            },
             output_pointer: format_ident!("output"),
             output_type: syn::parse_quote!(#result_type),
             buffer_type: syn::parse_quote!(__PbBuffer),
@@ -686,10 +741,19 @@ fn generate<
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
-        for wire in f
+        let mut all_wires = f
             .inputs()?
-            .chain(f.outputs(&context, &source)?.map(|output| output.wire))
-        {
+            .chain(f.outputs(&context, &source)?.map(|o| o.wire))
+            .collect::<Vec<_>>();
+        let mut schemas = Vec::new();
+        for slot in f.input_conversions()? {
+            sequence::schemas(slot.layout(), &mut schemas);
+        }
+        sequence::schemas(f.output_conversion()?.layout(), &mut schemas);
+        for (_, element) in schemas {
+            all_wires.extend(element.iter());
+        }
+        for wire in all_wires {
             if let CWire::Enum { name, mapping, .. } = &wire.kind {
                 if !enums.iter().any(|(declared, m)| {
                     declared == name
@@ -718,6 +782,7 @@ fn generate<
     }
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
+       #[repr(C)] #[derive(Clone,Copy)] pub struct __PbRows {pub data:*const ::core::ffi::c_void,pub len:usize}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
        std::thread_local! {static __PB_ERROR:std::cell::RefCell<Option<std::ffi::CString>>=const {std::cell::RefCell::new(None)};}
        fn __pb_error(e:&str){__PB_ERROR.with(|s|*s.borrow_mut()=if e.is_empty(){None}else{Some(std::ffi::CString::new(e.replace('\0',"?")).unwrap())});}
@@ -762,6 +827,62 @@ The pointer must be null or a live allocation of the declared type returned by t
     }
     header.push_str("/* Exported source-function status: 0 = success; -1 = failure before ownership acceptance; -2 = failure after ownership acceptance.\n * On -1 all owned inputs remain valid; on -2 active owned inputs have been consumed.\n * Failure leaves success-output storage unchanged. Read the error message before another library call. */\n");
     for (f, body, context, source) in calls {
+        let mut schemas = Vec::new();
+        for slot in f.input_conversions()? {
+            sequence::schemas(slot.layout(), &mut schemas);
+        }
+        let mut output_schemas = Vec::new();
+        sequence::schemas(f.output_conversion()?.layout(), &mut output_schemas);
+        let output_carriers = output_schemas
+            .iter()
+            .map(|(wire, _)| wire.name.to_string())
+            .collect::<std::collections::BTreeSet<_>>();
+        schemas.extend(output_schemas);
+        for (carrier, element) in schemas {
+            let row = &context.row_types[&carrier.name.to_string()];
+            let base = row.to_string();
+            let base = base.trim_start_matches("__PbRow_");
+            let c_row = format!("{prefix}_{base}_row");
+            let c_rows = format!("{prefix}_{base}_rows");
+            let free_rows = format_ident!("{prefix}_{base}_rows_free");
+            let is_output = output_carriers.contains(&carrier.name.to_string());
+            let mut row_symbols = vec![c_row.clone(), c_rows.clone()];
+            if is_output {
+                row_symbols.push(free_rows.to_string());
+            }
+            for symbol in row_symbols {
+                if !symbols.insert(symbol) {
+                    return Err("duplicate C collection symbol".into());
+                }
+            }
+            let fields = element
+                .iter()
+                .enumerate()
+                .map(|(i, w)| {
+                    let name = format_ident!("v{i}");
+                    let ty = w.rust_type();
+                    quote!(pub #name:#ty)
+                })
+                .collect::<Vec<_>>();
+            tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
+            header.push_str("typedef struct {\n");
+            for (i, w) in element.iter().enumerate() {
+                header.push_str(&format!(
+                    "    {} v{i};\n",
+                    c_ty(w, prefix, &pointers, &context)
+                ));
+            }
+            header.push_str(&format!(
+                "}} {c_row};\ntypedef struct {{ {c_row} *data; size_t len; }} {c_rows};\n"
+            ));
+            if is_output {
+                header.push_str(&format!("/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */\nvoid {free_rows}({c_rows} rows);\n"));
+                tokens.extend(quote! {
+                    #[doc="# Safety\nThe rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields."]
+                    #[no_mangle]pub unsafe extern "C" fn #free_rows(rows:__PbRows){if rows.len!=0{drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(rows.data as *mut #row,rows.len)));}}
+                });
+            }
+        }
         let out = &context.output_pointer;
         let accepted = &context.acknowledgement;
         let name = format_ident!("{prefix}_{}", f.name);
@@ -798,7 +919,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             let n = &w.name;
             let ty = w.kind.rust_type();
             params.push(quote!(#n:#ty));
-            cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers)));
+            cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers, &context)));
         }
         let mut fields = Vec::new();
         header.push_str("typedef struct {\n");
@@ -807,7 +928,10 @@ The pointer must be null or a live allocation of the declared type returned by t
             let field = format_ident!("v{i}");
             let ty = w.kind.rust_type();
             fields.push(quote!(pub #field:#ty));
-            header.push_str(&format!("    {} v{i};\n", c_ty(w, prefix, &pointers)));
+            header.push_str(&format!(
+                "    {} v{i};\n",
+                c_ty(w, prefix, &pointers, &context)
+            ));
         }
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));
@@ -855,6 +979,23 @@ fn describe_groups(
         field_path: &mut Vec<String>,
     ) {
         for node in layout.nodes() {
+            if let prebindgen_flat::WireNode::Sequence { carrier, element } = node {
+                let path = field_path.join(".");
+                out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,element.len()));
+                let row_names = element
+                    .iter()
+                    .enumerate()
+                    .map(|(i, w)| (w.name.to_string(), format!("row.v{i}")))
+                    .collect();
+                let original = field_path.last().cloned();
+                if let Some(last) = field_path.last_mut() {
+                    last.push_str("[]");
+                }
+                visit(element, &row_names, parents, out, next_label, field_path);
+                if let (Some(last), Some(original)) = (field_path.last_mut(), original) {
+                    *last = original;
+                }
+            }
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
                 if let CGroup::Optional(g) = metadata {
                     let label = format!("option{}", *next_label);
@@ -926,6 +1067,39 @@ fn describe_groups(
 #[cfg(test)]
 mod generation_tests {
     use super::*;
+
+    #[test]
+    fn multiple_collection_observations_follow_the_actual_borrow() {
+        use prebindgen_declarations::{bind_output, Output};
+        let seq = || Output::Sequence {
+            element: Box::new(Output::Leaf),
+            mode: None,
+        };
+        for (source, recipe) in [
+            ("pub fn f()->&Vec<i64> {}", Output::combine([seq(), seq()])),
+            (
+                "pub struct Record { pub values: Vec<i64> } pub fn f()->Record {}",
+                Output::fields([Output::combine([seq(), seq()])]),
+            ),
+        ] {
+            let source = syn::parse_file(source).unwrap();
+            let mut flat =
+                Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+            bind_output(&mut flat, &CCodec, "f", &recipe, &()).unwrap();
+            assert_eq!(
+                flat.function("f")
+                    .unwrap()
+                    .ret
+                    .slot
+                    .as_ref()
+                    .unwrap()
+                    .layout
+                    .len(),
+                2
+            );
+            Cbindgen::new(flat).build().unwrap();
+        }
+    }
 
     #[test]
     fn option_comment_labels_are_unique_across_parameters_and_result() {

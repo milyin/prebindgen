@@ -10,6 +10,7 @@ mod data;
 mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
 mod optional;
+mod sequence;
 pub use optional::JniNiche;
 mod group;
 mod scalar;
@@ -28,8 +29,8 @@ type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup>;
 mod kotlin;
 pub use kotlin::{
-    JniInput, JniOutput, KotlinClass, KotlinContext, KotlinInput, KotlinInputConversion,
-    KotlinOutput, KotlinOutputConversion,
+    JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinInput,
+    KotlinInputConversion, KotlinOutput, KotlinOutputConversion,
 };
 /// Flat source model with JNI conversion data for wrapper emission.
 ///
@@ -548,35 +549,34 @@ impl Codec for JniCodec {
         group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let count = plan.layout.len();
-        let mut encode = TokenStream::new();
-        for (i, (wire, value)) in plan.layout.iter().zip(&plan.values).enumerate() {
-            let expr = match &wire.kind {
-                JniWire::Scalar { primitive: p, .. } => scalar::output_java(*p, value),
-                JniWire::Handle { .. } => {
-                    quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
-                }
-                JniWire::Text { .. } => {
-                    quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::text_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
-                }
-                JniWire::Bytes { .. } => {
-                    quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::bytes_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
-                }
-                JniWire::Selector { .. } | JniWire::Enum { .. } => {
-                    scalar::output_java(Primitive::I32, value)
-                }
-            };
-            let i = i as i32;
-            encode.extend(quote! {
-                let object = #expr;
-                #env.set_object_array_element(&result, #i, &object).map_err(|e|e.to_string())?;
-                #env.delete_local_ref(object).map_err(|e|e.to_string())?;
-            });
-        }
+        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result))?;
         plan.delivery = prebindgen_conversions::Delivery {
             statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode),
             result: quote!(result.into_raw()),
         };
         Ok(())
+    }
+    fn sequence_input(
+        &self,
+        _: &(),
+        wire: syn::Ident,
+        length: syn::Ident,
+        index: syn::Ident,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
+        sequence::input(wire, length, index, element, active)
+    }
+    fn sequence_output(
+        &self,
+        _: &(),
+        wire: syn::Ident,
+        length: syn::Ident,
+        index: syn::Ident,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        values: &[TokenStream],
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
+        sequence::output(wire, length, index, element, values)
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()
@@ -621,6 +621,9 @@ impl Codec for JniCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<JniWire>> {
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
+        }
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             let tag = format_ident!("{w}_present");
             let child = self.input_leaf(
@@ -664,6 +667,9 @@ impl Codec for JniCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<JniWire>> {
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
+        }
         if let syn::Type::Reference(reference) = ty {
             if reference.mutability.is_some() {
                 return Err("mutable-reference outputs are unsupported".into());
@@ -735,6 +741,42 @@ impl Codec for JniCodec {
         };
         prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
     }
+}
+pub(crate) fn encode_array(
+    layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+    values: &[TokenStream],
+    array: &syn::Ident,
+) -> Result<TokenStream> {
+    let env = prebindgen_conversions::template_parameter("environment");
+    let mut encode = TokenStream::new();
+    for (i, (wire, value)) in layout.iter().zip(values).enumerate() {
+        let expr = match &wire.kind {
+            JniWire::Scalar { primitive: p, .. } => scalar::output_java(*p, value),
+            JniWire::Handle { .. } => {
+                quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
+            }
+            JniWire::Rows { .. } => {
+                quote!(match (#value).as_ref() {Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
+            }
+            JniWire::Text { .. } => {
+                quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::text_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
+            }
+            JniWire::Bytes { .. } => {
+                quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::bytes_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
+            }
+            JniWire::Selector { .. } | JniWire::Enum { .. } => {
+                scalar::output_java(Primitive::I32, value)
+            }
+        };
+        let i = i as i32;
+        encode.extend(quote! {
+            let object = #expr;
+            #env.set_object_array_element(&#array, #i, &object).map_err(|e|e.to_string())?;
+            #env.delete_local_ref(object).map_err(|e|e.to_string())?;
+        });
+    }
+
+    Ok(encode)
 }
 fn storage() -> prebindgen_conversions::boxed::Storage {
     prebindgen_conversions::boxed::Storage::Wrapped(syn::parse_quote!(
@@ -889,7 +931,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let method = format!("drop{index}");
         let sym = symbol(prefix, &method);
         let ty = &c.ty;
-        rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]
+        rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
         let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name);
@@ -941,6 +983,8 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let mut kt_params = Vec::new();
         let mut kt_args = Vec::new();
         let mut locks = Vec::new();
+        let mut lock_groups = Vec::new();
+        let mut setup = String::new();
         let mut consumed = Vec::new();
         for w in f.inputs()? {
             let n = &w.name;
@@ -956,6 +1000,10 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             kt_params.extend(code.parameters);
             kt_args.extend(code.arguments);
             locks.extend(code.locks);
+            lock_groups.extend(code.lock_groups);
+            for binding in code.setup {
+                setup.push_str(&format!("val {} = {}\n", binding.name, binding.expression));
+            }
             consumed.extend(code.consumed);
         }
         let has_consumes = !consumed.is_empty();
@@ -1006,8 +1054,8 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             return Err("Kotlin output expression/type count differs".into());
         }
         rust.extend(quote!{
-   #[allow(clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-   #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their object monitors held and live pointers of the declared types."]
+   #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+   #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
     match ::prebindgen_runtime::boundary(||{
      #body
@@ -1043,14 +1091,22 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         } else {
             call
         };
-        let native_call = if locks.is_empty() {
+        let native_call = if locks.is_empty() && lock_groups.is_empty() {
             format!("val {result} = {call}\n        {end}")
         } else {
-            format!("val {result} = {prefix}.withHandleLocks(listOfNotNull({})) {{\n        {call}\n    }}\n{end}", locks.join(", "))
+            let mut all_locks = if locks.is_empty() {
+                "kotlin.collections.emptyList<Nothing>()".to_string()
+            } else {
+                format!("listOfNotNull({})", locks.join(", "))
+            };
+            for group in lock_groups {
+                all_locks = format!("({all_locks} + ({group}))");
+            }
+            format!("val {result} = {prefix}.withHandleLocks({all_locks}) {{\n        {call}\n    }}\n{end}")
         };
         let text = packages.entry(pkg).or_default();
         text.push_str(&format!(
-            "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {native_call}\n}}\n\n",
+            "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
             kt_params.join(", ")
         ));
     }

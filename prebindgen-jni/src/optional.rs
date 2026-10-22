@@ -3,7 +3,10 @@ use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
     // Prepared reference outputs are Option<String>/Option<Vec<u8>>. None
     // becomes a Java null at delivery; Some(empty) stays a non-null object.
-    if matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. }) {
+    if matches!(
+        w,
+        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+    ) {
         return Ok(if input {
             quote!(Default::default())
         } else {
@@ -36,7 +39,10 @@ pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Resu
 }
 pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
     if matches!(niche, Some(JniNiche::Null))
-        && matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. })
+        && matches!(
+            w,
+            JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+        )
     {
         return "null".into();
     }
@@ -70,7 +76,7 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
         | JniWire::Scalar { primitive: Primitive::U32 | Primitive::I64 | Primitive::U64 | Primitive::Isize | Primitive::Usize, .. } => "0L",
         JniWire::Scalar { primitive: Primitive::F32, .. } => "0.0f",
         JniWire::Scalar { primitive: Primitive::F64, .. } => "0.0",
-        JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
+        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
             "null"
         }
         _ => "0",
@@ -119,6 +125,8 @@ pub(crate) fn input_kotlin(
             .iter_mut()
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
+            .chain(c.lock_groups.iter_mut())
+            .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             *a = a
                 .replace(&format!("{name}?.raw ?: 0L"), &format!("{name}.raw"))
@@ -138,6 +146,8 @@ pub(crate) fn input_kotlin(
         .iter_mut()
         .chain(c.locks.iter_mut())
         .chain(c.consumed.iter_mut())
+        .chain(c.lock_groups.iter_mut())
+        .chain(c.setup.iter_mut().map(|b| &mut b.expression))
     {
         // Every payload expression below runs only in the present branch.
         *a = a.replace(&format!("{} == 1", root), "true");
@@ -154,7 +164,7 @@ pub(crate) fn input_kotlin(
         let default = default_kt(&inner[j].kind, niche);
         let a = match niche {
             Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
-            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }) => {
                 // An explicit presence parameter must not silently become None
                 // when a nullable raw reference is passed for its discriminator.
                 format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
@@ -164,6 +174,15 @@ pub(crate) fn input_kotlin(
         out.arguments
             .push(format!("if ({presence}) {a} else {default}"));
     }
+    out.setup.extend(c.setup.into_iter().map(|mut b| {
+        b.expression = format!("if ({presence}) ({}) else ({})", b.expression, b.absent);
+        b
+    }));
+    out.lock_groups.extend(
+        c.lock_groups
+            .into_iter()
+            .map(|s| format!("if ({presence}) ({s}) else kotlin.collections.emptyList()")),
+    );
     out.locks.extend(
         c.locks
             .into_iter()
@@ -231,7 +250,12 @@ impl JniNiche {
     /// Expression recognizing the present case without decoding the payload.
     pub(crate) fn present(&self, wire: &JniWire, value: TokenStream) -> TokenStream {
         match self {
-            Self::Null if matches!(wire, JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+            Self::Null
+                if matches!(
+                    wire,
+                    JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+                ) =>
+            {
                 quote!(!#value.is_null())
             }
             Self::Null => quote!((#value as usize) != 0),

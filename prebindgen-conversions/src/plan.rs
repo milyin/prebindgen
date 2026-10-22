@@ -35,7 +35,8 @@ pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
-    /// Authoritative result tree; each leaf corresponds to one entry in `values`.
+    /// Authoritative result tree; each outer wire (including a sequence carrier)
+    /// corresponds to one entry in `values`. Element fields have separate positions.
     pub layout: WireLayout<W, G>,
     /// Transfer ownership only after all foreign delivery operations succeed.
     pub commit: TokenStream,
@@ -54,12 +55,20 @@ pub enum Access {
     /// Ownership transfer; conflicts with every other active use of the resource.
     Move,
 }
+/// One allocation address, or a runtime-sized set of addresses with the same access mode.
+#[derive(Clone, Debug)]
+pub enum ResourceIdentity {
+    /// Expression evaluating to one allocation address.
+    Single(TokenStream),
+    /// Expression implementing IntoIterator<Item = usize>.
+    Many(TokenStream),
+}
 /// The adapter supplies identity; flat enforces call-wide access conflicts.
 #[derive(Clone, Debug)]
 pub struct Resource {
     /// Side-effect-free Rust expression identifying a live resource, such as an address.
     /// All identities compared within a call must share an equality-compatible domain.
-    pub identity: TokenStream,
+    pub identity: ResourceIdentity,
     /// Borrow or ownership requirement imposed by this input conversion.
     pub access: Access,
     /// Side-effect-free Rust boolean expression; false resources do not conflict.

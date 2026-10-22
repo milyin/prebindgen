@@ -7,6 +7,8 @@ use quote::ToTokens;
 /// Concrete wrapper bindings used by this language generator.
 #[derive(Clone, Debug)]
 pub struct CContext {
+    /// Generated ABI row types keyed by sequence carrier name in this function.
+    pub row_types: std::collections::BTreeMap<String, syn::Ident>,
     /// Wrapper-local flag recording acceptance of owned input allocations.
     pub acknowledgement: syn::Ident,
     /// Wrapper parameter receiving the result structure.
@@ -29,6 +31,11 @@ impl TemplateContext for CContext {
             "buffer_type" => Ok(self.buffer_type.to_token_stream()),
             "wide_integer_type" => Ok(self.wide_integer_type.to_token_stream()),
             "read_buffer" => Ok(self.read_buffer.to_token_stream()),
+            _ if name.starts_with("row_") => self
+                .row_types
+                .get(&name[4..])
+                .map(ToTokens::to_token_stream)
+                .ok_or_else(|| format!("unknown collection row `{name}`")),
             _ => Err(format!("unknown emission parameter `{name}`")),
         })
     }

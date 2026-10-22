@@ -37,6 +37,17 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
         reserved: &mut BTreeMap<String, Vec<JniNiche>>,
     ) -> Result<()> {
         for node in layout.nodes() {
+            if let WireNode::Sequence { carrier, element } = node {
+                if !matches!(carrier.kind, JniWire::Rows { .. }) || element.is_empty() {
+                    return Err(
+                        "sequence requires an array carrier and nonempty element layout".into(),
+                    );
+                }
+                validate_layout(element)?;
+            }
+            if matches!(node,WireNode::Wire(w) if matches!(w.kind,JniWire::Rows {..})) {
+                return Err("array carrier requires a sequence node".into());
+            }
             if let WireNode::Group { metadata, children } = node {
                 if let JniGroup::Optional(o) = metadata {
                     if !bindings.insert(o.presence.to_string()) {

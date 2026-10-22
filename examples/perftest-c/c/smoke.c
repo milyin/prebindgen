@@ -4,6 +4,118 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+static void check_collections(void) {
+    perftest_collection_numbers_result observed = {0};
+    assert(perftest_collection_numbers(&observed) == 0 && observed.v1 == 42 && observed.v0.len == 2 && observed.v0.data[1].v0 == 9);
+    perftest_collection_numbers_ret_w2_rows_free(observed.v0);
+    perftest_collection_i64_p0_w1_row values[] = {{INT64_MIN}, {0}, {INT64_MAX}};
+    perftest_collection_i64_result result = {0};
+    assert(perftest_collection_i64((perftest_collection_i64_p0_w1_rows){values, 3}, &result) == 0);
+    assert(result.v0.len == 3 && result.v0.data[0].v0 == INT64_MIN && result.v0.data[2].v0 == INT64_MAX);
+    perftest_collection_i64_ret_w0_rows_free(result.v0);
+    assert(perftest_collection_i64((perftest_collection_i64_p0_w1_rows){NULL, 0}, &result) == 0 && result.v0.len == 0);
+    perftest_collection_i64_ret_w0_rows_free(result.v0);
+    assert(perftest_collection_i64((perftest_collection_i64_p0_w1_rows){NULL, 1}, &result) == -1);
+    assert(perftest_collection_i64((perftest_collection_i64_p0_w1_rows){(void *)1, 1}, &result) == -1);
+    assert(perftest_collection_i64((perftest_collection_i64_p0_w1_rows){values, SIZE_MAX}, &result) == -1);
+    perftest_collection_text_p0_w1_row texts[] = {{{(const uint8_t *)"hello", 5}}, {{NULL, 0}}};
+    perftest_collection_text_result text = {0};
+    assert(perftest_collection_text((perftest_collection_text_p0_w1_rows){texts, 2}, &text) == 0);
+    assert(text.v0.len == 2 && text.v0.data[0].v0.len == 5 && memcmp(text.v0.data[0].v0.data, "hello", 5) == 0);
+    for (size_t i = 0; i < text.v0.len; ++i) perftest_free_buffer(text.v0.data[i].v0);
+    perftest_collection_text_ret_w0_rows_free(text.v0);
+    const uint8_t bad[] = {0xff}; texts[1].v0 = (perftest_buffer){bad, 1};
+    assert(perftest_collection_text((perftest_collection_text_p0_w1_rows){texts, 2}, &text) == -1);
+    perftest_collection_nested_p0_w5_row inner[] = {{7}, {9}};
+    perftest_collection_nested_p0_w1_row outer[] = {{{inner, 2}}, {{NULL, 0}}};
+    perftest_collection_nested_result nested = {0};
+    assert(perftest_collection_nested((perftest_collection_nested_p0_w1_rows){outer, 2}, &nested) == 0);
+    assert(nested.v0.len == 2 && nested.v0.data[0].v0.len == 2 && nested.v0.data[0].v0.data[1].v0 == 9 && nested.v0.data[1].v0.len == 0);
+    for (size_t i = 0; i < nested.v0.len; ++i) perftest_collection_nested_ret_w4_rows_free(nested.v0.data[i].v0);
+    perftest_collection_nested_ret_w0_rows_free(nested.v0);
+    perftest_collection_options_p0_w1_row opts[] = {{0, INT64_MAX}, {1, INT64_MIN}};
+    perftest_collection_options_result options = {0};
+    assert(perftest_collection_options((perftest_collection_options_p0_w1_rows){opts, 2}, 0, &options) == 0);
+    assert(options.v0.data[0].v0 == 0 && options.v0.data[1].v0 == 1 && options.v0.data[1].v1 == INT64_MIN);
+    perftest_collection_options_ret_w0_rows_free(options.v0);
+    opts[1].v0 = 2;
+    assert(perftest_collection_options((perftest_collection_options_p0_w1_rows){opts, 2}, 0, &options) == -1);
+    perftest_collection_optional_result optional = {0};
+    assert(perftest_collection_optional(0, (perftest_collection_optional_p0_w3_rows){(void *)1, SIZE_MAX}, &optional) == 0 && optional.v0 == 0);
+    assert(perftest_collection_optional(1, (perftest_collection_optional_p0_w3_rows){NULL, 0}, &optional) == 0 && optional.v0 == 1 && optional.v1.len == 0);
+    perftest_collection_optional_ret_w2_rows_free(optional.v1);
+    perftest_collection_resource_new_result a = {0}, b = {0};
+    perftest_owned_resource_drops_result drops = {0};
+    assert(perftest_owned_resource_drops(&drops) == 0); size_t start = drops.v0;
+    assert(perftest_collection_resource_new(1, &a) == 0 && perftest_collection_resource_new(2, &b) == 0);
+    perftest_collection_handles_p0_w1_row handles[] = {{a.v0}, {b.v0}};
+    perftest_collection_handles_result moved = {0};
+    assert(perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 0xd800, 0, &moved) == -1);
+    handles[1].v0 = a.v0;
+    assert(perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, 0, &moved) == -1);
+    handles[1].v0 = b.v0;
+    perftest_collection_alias_p0_w1_row aliases[] = {{a.v0}};
+    perftest_collection_alias_result alias = {0};
+    assert(perftest_collection_alias((perftest_collection_alias_p0_w1_rows){aliases, 1}, a.v0, &alias) == -1);
+    perftest_collection_resource_ids_p0_w1_row shared[] = {{a.v0}, {a.v0}};
+    perftest_collection_resource_ids_result ids = {0};
+    assert(perftest_collection_resource_ids((perftest_collection_resource_ids_p0_w1_rows){shared, 2}, &ids) == 0);
+    assert(ids.v0.len == 2 && ids.v0.data[0].v0 == 1 && ids.v0.data[1].v0 == 1);
+    perftest_collection_resource_ids_ret_w0_rows_free(ids.v0);
+    assert(perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, 0, &moved) == 0);
+    assert(moved.v0.len == 2);
+    for (size_t i = 0; i < moved.v0.len; ++i) assert(perftest_drop_owned_resource(moved.v0.data[i].v0) == 0);
+    perftest_collection_handles_ret_w2_rows_free(moved.v0);
+    for (int mode = 1; mode <= 2; ++mode) {
+        assert(perftest_collection_resource_new(3, &a) == 0 && perftest_collection_resource_new(4, &b) == 0);
+        handles[0].v0 = a.v0; handles[1].v0 = b.v0;
+        assert(perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, mode, &moved) == -2);
+    }
+    assert(perftest_owned_resource_drops(&drops) == 0 && drops.v0 == start + 8);
+    perftest_collection_construct_all_p0_w1_row pending[3];
+    for (size_t i = 0; i < 3; ++i) {
+        assert(perftest_collection_resource_new((int64_t)i + 1, &a) == 0);
+        pending[i].v0 = a.v0;
+    }
+    perftest_collection_construct_all_result constructed = {12345};
+    assert(perftest_collection_construct_all((perftest_collection_construct_all_p0_w1_rows){pending, 3}, &constructed) == -2 && constructed.v0 == 12345);
+    assert(perftest_owned_resource_drops(&drops) == 0 && drops.v0 == start + 11);
+    perftest_collection_make_items_result projected = {0};
+    projected.v0.len = 12345;
+    assert(perftest_collection_make_items(&projected) == -1 && projected.v0.len == 12345);
+    assert(perftest_owned_resource_drops(&drops) == 0 && drops.v0 == start + 14);
+    perftest_collection_optional_handles_result maybe_handles = {0};
+    assert(perftest_collection_optional_handles(0, (perftest_collection_optional_handles_p0_w3_rows){NULL, 0}, &maybe_handles) == 0 && maybe_handles.v0 == 0);
+    assert(perftest_collection_resource_new(5, &a) == 0);
+    perftest_collection_optional_handles_p0_w3_row maybe_input[] = {{a.v0}};
+    assert(perftest_collection_optional_handles(1, (perftest_collection_optional_handles_p0_w3_rows){maybe_input, 1}, &maybe_handles) == 0 && maybe_handles.v0 == 1 && maybe_handles.v1.len == 1);
+    assert(perftest_drop_owned_resource(maybe_handles.v1.data[0].v0) == 0);
+    perftest_collection_optional_handles_ret_w2_rows_free(maybe_handles.v1);
+    assert(perftest_collection_resource_new(6, &a) == 0);
+    perftest_collection_nested_handles_p0_w5_row nested_input[] = {{a.v0}};
+    perftest_collection_nested_handles_p0_w1_row nested_rows[] = {{{NULL, 0}}, {{nested_input, 1}}};
+    perftest_collection_nested_handles_result nested_handles = {0};
+    assert(perftest_collection_nested_handles((perftest_collection_nested_handles_p0_w1_rows){nested_rows, 2}, &nested_handles) == 0);
+    assert(nested_handles.v0.len == 2 && nested_handles.v0.data[0].v0.len == 0 && nested_handles.v0.data[1].v0.len == 1);
+    assert(perftest_drop_owned_resource(nested_handles.v0.data[1].v0.data[0].v0) == 0);
+    for (size_t i = 0; i < 2; ++i) perftest_collection_nested_handles_ret_w4_rows_free(nested_handles.v0.data[i].v0);
+    perftest_collection_nested_handles_ret_w0_rows_free(nested_handles.v0);
+    perftest_collection_bundle_result bundle = {0};
+    assert(perftest_collection_bundle(&bundle) == 0 && bundle.v0.len == 3 && bundle.v1 == 42);
+    for (size_t i = 0; i < 3; ++i) assert(perftest_drop_owned_resource(bundle.v0.data[i].v0) == 0);
+    perftest_collection_bundle_ret_w2_rows_free(bundle.v0);
+    assert(perftest_owned_resource_drops(&drops) == 0 && drops.v0 == start + 19);
+    perftest_storage_new_result storage = {0};
+    assert(perftest_storage_new(&storage) == 0);
+    perftest_storage_get_vec_result stored = {0};
+    assert(perftest_storage_get_vec(storage.v0, &stored) == 0 && stored.v0 == 0);
+    perftest_storage_put_slice_p1_w1_row payloads[] = {{5, 2, 1.5, 1}, {9, -1, -2.0, 0}};
+    perftest_storage_put_slice_result put = {0};
+    assert(perftest_storage_put_slice(storage.v0, (perftest_storage_put_slice_p1_w1_rows){payloads, 2}, &put) == 0);
+    assert(perftest_storage_get_vec(storage.v0, &stored) == 0 && stored.v0 == 1 && stored.v1.len == 2 && stored.v1.data[0].v0 == 5 && stored.v1.data[1].v2 == -2.0);
+    perftest_storage_get_vec_ret_w2_rows_free(stored.v1);
+    assert(perftest_drop_storage(storage.v0) == 0);
+}
 static void check_enums(void) {
     perftest_enum_payload_new_result payload = {0};
     perftest_payload_priority_result classified = {0};
@@ -196,6 +308,7 @@ static void check_results(void) {
     assert(perftest_result_error_drops(&errors) == 0 && errors.v0 == error_start + 7);
 }
 int main(void) {
+    check_collections();
     check_results();
     check_options();
     check_enums();

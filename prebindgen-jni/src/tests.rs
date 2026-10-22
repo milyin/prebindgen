@@ -574,3 +574,37 @@ fn result_exception_policy_is_explicit_and_checked_exceptions_are_declared() {
     assert!(output.rust.contains("java/io/IOException"));
     syn::parse_file(&output.rust).unwrap();
 }
+
+#[test]
+fn collections_reject_unsupported_element_and_view_contracts() {
+    for source in [
+        "pub fn f(x:&mut Vec<i64>) {}",
+        "pub fn f(x:Vec<&i64>) {}",
+        "pub fn f(x:Vec<()>) {}",
+        "pub fn f(x:Vec<Result<i64,i64>>) {}",
+        "pub fn f()->Vec<Result<i64,i64>> {}",
+        "pub fn f()->Vec<()> {}",
+    ] {
+        let b = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(f)));
+        assert!(!fail(b).is_empty());
+    }
+    let borrowed = JniGen::builder()
+        .flat(flat("pub type Handle=String; pub fn f(x:&[Handle]) {}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(f)));
+    assert!(fail(borrowed).contains("cannot consume elements"));
+}
+
+#[test]
+fn explicit_collection_projection_cannot_move_borrowed_values() {
+    let b = JniGen::builder()
+        .flat(flat("pub fn f()->&Vec<i64> {}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(fun!(f).expand_return(expand_return!(&Vec<i64>).field_self_into())),
+        );
+    assert!(fail(b).contains("cannot consume a borrowed collection"));
+}

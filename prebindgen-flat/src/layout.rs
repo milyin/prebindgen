@@ -5,7 +5,8 @@ use crate::{Result, Wire, WireKind};
 ///
 /// Leaves are visited depth first, from left to right. This is the order used by
 /// `ConversionExt::wires()` and position-based code requests, including wires for
-/// inactive alternatives. Group metadata never adds an ABI parameter by itself.
+/// inactive alternatives. Sequence nodes yield only their carrier; element layouts
+/// have their own row positions. Group metadata never adds an ABI parameter by itself.
 /// Empty groups are allowed, for example for an enum variant with no payload.
 ///
 /// Build or edit the tree before emitting code. Positions refer to the current
@@ -22,6 +23,14 @@ pub struct WireLayout<W: WireKind, G = ()> {
 pub enum WireNode<W: WireKind, G> {
     /// One physical FFI value. All metadata about this wire belongs in `W`.
     Wire(Wire<W>),
+    /// One array carrier, plus the separate layout of each transported element.
+    /// Element leaves describe row fields, not this slot's ABI parameter positions.
+    Sequence {
+        /// The single self-sufficient FFI value transporting the rows.
+        carrier: Wire<W>,
+        /// Element field scope, retained in the authoritative tree.
+        element: WireLayout<W, G>,
+    },
     /// A record, option, variant or other value described by the slot's group type.
     Group {
         /// Information about the relationship between the child values.
@@ -59,7 +68,7 @@ impl<W: WireKind, G> WireLayout<W, G> {
             .iter()
             .map(|node| {
                 count += match node {
-                    WireNode::Wire(_) => 1,
+                    WireNode::Wire(_) | WireNode::Sequence { .. } => 1,
                     WireNode::Group { children, .. } => children.len(),
                 };
                 count
@@ -127,7 +136,7 @@ impl<W: WireKind, G> WireLayout<W, G> {
     pub fn get(&self, pos: usize) -> Option<&Wire<W>> {
         let index = self.ends.partition_point(|end| *end <= pos);
         match self.nodes.get(index)? {
-            WireNode::Wire(wire) => Some(wire),
+            WireNode::Wire(wire) | WireNode::Sequence { carrier: wire, .. } => Some(wire),
             WireNode::Group { children, .. } => {
                 children.get(pos - if index == 0 { 0 } else { self.ends[index - 1] })
             }
@@ -136,13 +145,26 @@ impl<W: WireKind, G> WireLayout<W, G> {
     /// Check that each physical wire has a unique name within this slot.
     /// Group-specific rules are checked by the code interpreting `G`.
     pub fn validate(&self) -> Result<()> {
-        let mut names = std::collections::BTreeSet::new();
-        for wire in self.iter() {
-            if !names.insert(wire.name.to_string()) {
-                return Err(format!("duplicate wire identifier `{}`", wire.name));
+        fn walk<W: WireKind, G>(
+            layout: &WireLayout<W, G>,
+            names: &mut std::collections::BTreeSet<String>,
+        ) -> Result<()> {
+            for node in layout.nodes() {
+                match node {
+                    WireNode::Wire(wire) | WireNode::Sequence { carrier: wire, .. } => {
+                        if !names.insert(wire.name.to_string()) {
+                            return Err(format!("duplicate wire identifier `{}`", wire.name));
+                        }
+                    }
+                    WireNode::Group { children, .. } => walk(children, names)?,
+                }
+                if let WireNode::Sequence { element, .. } = node {
+                    walk(element, names)?;
+                }
             }
+            Ok(())
         }
-        Ok(())
+        walk(self, &mut std::collections::BTreeSet::new())
     }
 }
 impl<W: WireKind, G> std::ops::Index<usize> for WireLayout<W, G> {
@@ -168,7 +190,7 @@ impl<'a, W: WireKind, G> Iterator for Wires<'a, W, G> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.stack.last_mut()?.next() {
-                Some(WireNode::Wire(w)) => {
+                Some(WireNode::Wire(w) | WireNode::Sequence { carrier: w, .. }) => {
                     self.remaining -= 1;
                     return Some(w);
                 }
@@ -194,7 +216,7 @@ impl<'a, W: WireKind, G> Iterator for WiresMut<'a, W, G> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.stack.last_mut()?.next() {
-                Some(WireNode::Wire(w)) => return Some(w),
+                Some(WireNode::Wire(w) | WireNode::Sequence { carrier: w, .. }) => return Some(w),
                 Some(WireNode::Group { children, .. }) => {
                     self.stack.push(children.nodes.iter_mut())
                 }
@@ -223,7 +245,7 @@ impl<'a, W: WireKind, G> IntoIterator for &'a mut WireLayout<W, G> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[derive(Debug, PartialEq)]
+    #[derive(Clone, Debug, PartialEq)]
     enum Meaning {
         Record,
         Choice,
@@ -234,6 +256,46 @@ mod tests {
             name: syn::parse_str(name).unwrap(),
             kind: syn::parse_quote!(i32),
         }
+    }
+    #[test]
+    fn sequence_is_one_outer_position_with_an_independent_element_schema() {
+        let mut rows: WireLayout<_, Meaning> = vec![leaf("x"), leaf("y")].into();
+        rows.enclose(Meaning::Record);
+        let mut layout = WireLayout::from_nodes(vec![
+            WireNode::Wire(leaf("before")),
+            WireNode::Sequence {
+                carrier: leaf("rows"),
+                element: rows,
+            },
+            WireNode::Wire(leaf("after")),
+        ]);
+        layout.validate().unwrap();
+        assert_eq!(layout.len(), 3);
+        assert_eq!(
+            layout
+                .iter()
+                .map(|w| w.name.to_string())
+                .collect::<Vec<_>>(),
+            ["before", "rows", "after"]
+        );
+        for (i, wire) in layout.iter().enumerate() {
+            assert!(std::ptr::eq(wire, &layout[i]));
+        }
+        layout.iter_mut().nth(1).unwrap().kind = syn::parse_quote!(*const u8);
+        let WireNode::Sequence { carrier, element } = &layout.nodes()[1] else {
+            panic!()
+        };
+        assert_eq!(crate::type_key(&carrier.kind), "* const u8");
+        assert_eq!(element.len(), 2);
+        let WireNode::Group { metadata, .. } = &element.nodes()[0] else {
+            panic!()
+        };
+        assert_eq!(metadata, &Meaning::Record);
+        let duplicate = WireLayout::from_nodes(vec![WireNode::Sequence {
+            carrier: leaf("x"),
+            element: element.clone(),
+        }]);
+        assert!(duplicate.validate().unwrap_err().contains("duplicate wire"));
     }
     #[test]
     fn variants_empty_groups_and_records_have_one_physical_leaf_order() {

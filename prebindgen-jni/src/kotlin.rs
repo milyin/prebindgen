@@ -41,9 +41,23 @@ impl KotlinContext<'_> {
         Ok(format!("{}({value})", class.drop_function))
     }
 }
+/// A prepared local binding, evaluated before collecting handle locks.
+#[derive(Clone, Debug)]
+pub struct KotlinBinding {
+    /// Generated local name.
+    pub name: String,
+    /// Expression evaluated once to snapshot input collection structure.
+    pub expression: String,
+    /// Inactive expression when an enclosing optional/alternative suppresses it.
+    pub absent: String,
+}
 /// Prepared Kotlin input code; the writer orders these operations across slots.
 #[derive(Default)]
 pub struct KotlinInput {
+    /// Input snapshots evaluated once before locking; handle addresses stay deferred.
+    pub setup: Vec<KotlinBinding>,
+    /// Lists of handles to combine with individual locks.
+    pub lock_groups: Vec<String>,
     /// Public parameter declarations.
     pub parameters: Vec<String>,
     /// Expressions passed to native wires, in wire order.
@@ -189,6 +203,7 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
                     format!("{n}?.raw ?: 0L"),
                 )
             }
+            JniWire::Rows { .. } => return Err("array carrier requires a sequence node".into()),
             _ => (w.kind.kotlin_type().into(), n.to_string()),
         };
         kt_params.push(format!("{n}: {kt}"));
@@ -197,6 +212,8 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
     Ok(KotlinInput {
         parameters: kt_params,
         arguments: kt_args,
+        setup: Vec::new(),
+        lock_groups: Vec::new(),
         locks,
         consumed,
     })
@@ -222,6 +239,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
             }
             JniWire::Text { .. } => ("String".into(), format!("{result}[{i}] as String")),
             JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
+            JniWire::Rows { .. } => return Err("array carrier requires a sequence node".into()),
             JniWire::Selector { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
             JniWire::Enum { enum_type, .. } => (
                 enum_type.class_name.clone(),
@@ -245,7 +263,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
             materialize.push_str(&format!("            {output}{i} = {}\n", delivered[i]));
             delivered[i] = format!("requireNotNull({output}{i})");
             let drop = context.drop_handle(&handle.ty, &format!("{result}[{i}] as Long"))?;
-            cleanup.push_str(&format!("            try {{ if ({output}{i} != null) {output}{i}.close() else {drop} }} catch (cleanup: Throwable) {{ {failure}.addSuppressed(cleanup) }}\n"));
+            cleanup.push_str(&format!("            try {{ val owner = {output}{i}; if (owner != null) owner.close() else {drop} }} catch (cleanup: Throwable) {{ {failure}.addSuppressed(cleanup) }}\n"));
         }
     }
     Ok(KotlinOutput {
@@ -262,7 +280,7 @@ pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
     let mut out = Vec::new();
     for node in nodes {
         match node {
-            JniNode::Wire(w) => out.push(w),
+            JniNode::Wire(w) | JniNode::Sequence { carrier: w, .. } => out.push(w),
             JniNode::Group { children, .. } => out.extend(children.iter()),
         }
     }
@@ -270,7 +288,7 @@ pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
 }
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
     nodes.iter().any(|node| match node {
-        JniNode::Wire(_) => false,
+        JniNode::Wire(_) | JniNode::Sequence { .. } => false,
         JniNode::Group { metadata, children } => match metadata {
             JniGroup::Optional(_) => true,
             JniGroup::Fields(Some(_)) => false,
@@ -283,6 +301,9 @@ pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Re
     for node in nodes {
         let c = match node {
             JniNode::Wire(w) => input_leaves(&[w], context)?,
+            JniNode::Sequence { carrier, element } => {
+                crate::sequence::input_list(carrier, element, context)?
+            }
             JniNode::Group { metadata, children } => match metadata {
                 JniGroup::Optional(o) => optional::input_kotlin(children.nodes(), o, context)?,
                 JniGroup::Fields(Some(d)) => data::input_kotlin(children.nodes(), d, context)?,
@@ -293,6 +314,8 @@ pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Re
         };
         out.parameters.extend(c.parameters);
         out.arguments.extend(c.arguments);
+        out.setup.extend(c.setup);
+        out.lock_groups.extend(c.lock_groups);
         out.locks.extend(c.locks);
         out.consumed.extend(c.consumed);
     }
@@ -337,6 +360,7 @@ pub(crate) fn output_kotlin(
         };
         let (mut c, count) = match node {
             JniNode::Wire(w) => (output_leaves(&[w], &ctx)?, 1),
+            JniNode::Sequence { element, .. } => (crate::sequence::output_list(element, &ctx)?, 1),
             JniNode::Group { metadata, children } => {
                 let c = match metadata {
                     JniGroup::Optional(o) => optional::output_kotlin(children.nodes(), o, &ctx)?,

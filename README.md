@@ -402,7 +402,7 @@ that bit. Native objects require `Send` because Kotlin can transfer them between
 threads; this restriction belongs to JNI.
 Generated wrappers lock all active handle objects in a stable address order,
 including handles nested in selected constructor arguments. Close uses the same
-object monitor. Repeated close and close after consumption are harmless.
+handle lock. Repeated close and close after consumption are harmless.
 
 For calls with consuming inputs, a one-element boolean array acknowledges when
 native validation has succeeded and ownership transfers. Kotlin marks the
@@ -418,9 +418,58 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 C status/out-struct and JNI object-array ABI optimization remain separate work.
 
-Callbacks, data-carrying enums, general collections, mutable text/byte views, methods,
+Callbacks, data-carrying enums, maps/sets, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
+
+## Collections
+
+`Vec<T>`, `&Vec<T>` and `&[T]` use the element type's ordinary input and
+output declarations. They can contain scalars, strings, byte arrays, fieldless
+enums, options, records and owned handles; owned vectors can be nested. Options
+around a collection distinguish absence from an empty collection, and
+`Result<Vec<T>, E>` uses the declared error mapper. `Vec<u8>` and byte slices
+keep their existing byte-buffer transport.
+
+Ownership remains explicit. An owned vector return moves its elements; a
+borrowed vector or slice return uses borrowed element projections. An explicit
+`expand_param!(Element)` or `expand_return!(Element)` on a collection occurrence
+configures each element using the same constructor/getter rules as a scalar
+occurrence. Borrowed collection inputs cannot consume handles: declare a
+constructor taking borrowed inputs when the source elements need cloning.
+Reference elements, mutable collection views, zero-wire elements, boxed slices,
+maps, sets and nested `Result` values are rejected.
+
+C receives one typed `{ data, len }` carrier. Each row contains the element's
+ordinary boundary fields, with generated row definitions and option/field
+comments in the header. Input storage remains caller-owned and must be readable
+for the call. Output row storage belongs to the caller after success. The
+matching `..._rows_free` releases **only the row allocation**: first free or
+transfer owned handles, text buffers and nested row buffers using their matching
+destructors. Do not pass stack storage or a different row schema to that function.
+This permits moving element handles back into Rust before freeing their old row
+storage. Failed output preparation reclaims unpublished elements automatically.
+
+JNI exposes `List<T>` and transports rows through object arrays. Each element
+must expose exactly one Kotlin input/output value; declare a data class to wrap
+multiple fields. General collection fields inside data classes are not yet
+supported. Inputs snapshot list structure once before choosing locks, then read
+handle addresses while all active handles are locked. Handle locking uses an
+iterative acquisition loop so list length does not add JVM stack frames. JNI
+validates row shapes and active field types, using local reference frames per
+row. Native failure before ownership acknowledgement leaves input handles live;
+after acknowledgement Kotlin marks every selected handle consumed. Prepared
+outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
+correctness-oriented transport, with no zero-copy or throughput claim.
+
+The shared `WireNode::Sequence` stores one complete array carrier and a separate
+schema for one element. `wires()`, `len()` and position-based requests see the
+carrier once. Access the element schema through the sequence node; its positions
+refer to fields inside each row, rather than additional function arguments. The
+wire kind still describes a self-sufficient FFI value. Collection structure lives
+in the tree, without a recursive wire enum or a second schema hidden in metadata.
+Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
+shared validation, acquisition, construction and output-ownership phases.
 
 ## Result returns
 

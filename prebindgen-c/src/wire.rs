@@ -8,6 +8,9 @@ use super::*;
 /// restore a consumed niche. Use [`Self::set_niche`] to check updates.
 #[derive(Clone, Debug)]
 pub enum CWire {
+    /// One pointer/length carrier of generated ABI rows. Its element layout lives
+    /// in the enclosing WireNode::Sequence; empty rows may use a null pointer.
+    Rows,
     /// A fieldless Rust enum represented by checked `int32_t` values.
     Enum {
         /// Unprefixed C typedef name.
@@ -123,7 +126,7 @@ impl CWire {
                 null_niche_available,
                 ..
             } => *null_niche_available = false,
-            Self::Buffer => {}
+            Self::Buffer | Self::Rows => {}
         }
     }
     // A reserved sentinel remains valid even after availability advances or clears.
@@ -191,6 +194,7 @@ impl WireKind for CWire {
                 }
             }
             CWire::Buffer => syn::parse_quote!(__PbBuffer),
+            CWire::Rows => syn::parse_quote!(__PbRows),
         }
     }
 }

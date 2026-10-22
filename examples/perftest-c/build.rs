@@ -9,6 +9,41 @@ fn main() {
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .error_mapper(syn::parse_quote!(ResultFailure), fun!(result_error_message))
         .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .function(fun!(collection_construct_all).expand_param(
+            "values",
+            expand_param!(CollectionItem).variant(fun!(collection_construct)),
+        ))
+        .function(fun!(collection_make_items).expand_return(
+            expand_return!(CollectionItem).fields_into(fields!(collection_item_into)),
+        ))
+        .function(fun!(collection_bundle).expand_return(
+            expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into)),
+        ))
+        .function(fun!(collection_optional_handles))
+        .function(fun!(collection_nested_handles))
+        .function(fun!(collection_numbers).expand_return(
+            expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view)),
+        ))
+        .function(fun!(collection_resource_ids).expand_param(
+            "values",
+            expand_param!(OwnedResource).variant(fun!(collection_resource_clone)),
+        ))
+        .function(fun!(collection_i64))
+        .function(fun!(collection_text))
+        .function(fun!(collection_bytes))
+        .function(fun!(collection_nested))
+        .function(fun!(collection_options))
+        .function(fun!(collection_optional))
+        .function(fun!(collection_enum))
+        .function(fun!(collection_probe))
+        .function(fun!(collection_borrow))
+        .function(fun!(collection_slice))
+        .function(fun!(collection_resource_new))
+        .function(fun!(collection_handles))
+        .function(fun!(collection_alias))
+        .function(fun!(collection_result))
+        .function(fun!(storage_put_slice))
+        .function(fun!(storage_get_vec))
         .function(fun!(result_scalar))
         .function(fun!(result_unit))
         .function(fun!(result_optional))
@@ -23,8 +58,10 @@ fn main() {
         .function(fun!(storage_try_with_label))
         .function(fun!(result_error_drops))
         .enum_type("priority", pq!(Priority))
-        .opaque_ptr("enum_payload", pq!(Payload))
-        .function(fun!(enum_payload_new).expand_return(expand_return!(Payload).field_self_into()))
+        .opaque_ptr("enum_payload", pq!(PayloadHandle))
+        .function(
+            fun!(enum_payload_new).expand_return(expand_return!(PayloadHandle).field_self_into()),
+        )
         .function(fun!(payload_priority))
         .enum_type("code", pq!(SparseCode))
         .enum_type("enum_names", pq!(EnumNames))

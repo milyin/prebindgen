@@ -512,6 +512,28 @@ impl Codec for DataCodec {
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
+    fn sequence_input(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
+        JniCodec.sequence_input(e, w, n, i, element, active)
+    }
+    fn sequence_output(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        values: &[TokenStream],
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
+        JniCodec.sequence_output(e, w, n, i, element, values)
+    }
     fn result_error(&self, ty: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
         let class = self.error_classes.get(&type_key(ty)).ok_or_else(|| {
             format!(
@@ -798,6 +820,8 @@ pub(crate) fn input_kotlin(
             .iter_mut()
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
+            .chain(c.lock_groups.iter_mut())
+            .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             if matches!(children.nodes(), [kotlin::JniNode::Wire(w)] if matches!(w.kind, JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. }))
             {
@@ -822,6 +846,8 @@ pub(crate) fn input_kotlin(
     }
     out.locks.extend(c.locks);
     out.consumed.extend(c.consumed);
+    out.setup.extend(c.setup);
+    out.lock_groups.extend(c.lock_groups);
     Ok(out)
 }
 pub(crate) fn output_kotlin(

@@ -9,6 +9,13 @@ use super::*;
 /// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
+    /// One array of raw element rows. WireNode::Sequence owns the element layout.
+    Rows {
+        /// Kotlin expression selecting this array's active input alternative.
+        condition: String,
+        /// Whether a null array remains available to an enclosing option.
+        null_niche_available: bool,
+    },
     /// A fieldless Rust enum carried as a checked JVM `int`.
     Enum {
         /// Valid source variants and generated Kotlin class information.
@@ -95,6 +102,10 @@ impl JniWire {
                 null_niche_available: true,
                 ..
             }
+            | Self::Rows {
+                null_niche_available: true,
+                ..
+            }
             | Self::Text {
                 null_niche_available: true,
             }
@@ -122,6 +133,10 @@ impl JniWire {
             ) if is_integer_niche(*primitive, n) => *next_integer_niche = Some(n),
             (
                 Self::Handle {
+                    null_niche_available,
+                    ..
+                }
+                | Self::Rows {
                     null_niche_available,
                     ..
                 }
@@ -166,6 +181,10 @@ impl JniWire {
                 null_niche_available,
                 ..
             }
+            | Self::Rows {
+                null_niche_available,
+                ..
+            }
             | Self::Text {
                 null_niche_available,
             }
@@ -187,9 +206,10 @@ impl JniWire {
             {
                 Ok(())
             }
-            (Self::Handle { .. } | Self::Text { .. } | Self::Bytes { .. }, JniNiche::Null) => {
-                Ok(())
-            }
+            (
+                Self::Handle { .. } | Self::Rows { .. } | Self::Text { .. } | Self::Bytes { .. },
+                JniNiche::Null,
+            ) => Ok(()),
             (Self::Enum { enum_type, .. }, JniNiche::Integer(n))
                 if enum_type.mapping.is_niche(*n) =>
             {
@@ -218,6 +238,7 @@ impl JniWire {
             Self::Scalar { primitive, .. } => scalar::raw_kotlin(*primitive),
             Self::Handle { .. } => "Long",
             Self::Selector { .. } | Self::Enum { .. } => "Int",
+            Self::Rows { .. } => "Array<Any?>?",
             Self::Text { .. } => "String?",
             Self::Bytes { .. } => "ByteArray?",
         }
@@ -237,6 +258,9 @@ impl WireKind for JniWire {
             Self::Scalar { primitive, .. } => scalar::rust_type(*primitive),
             Self::Handle { .. } => syn::parse_quote!(i64),
             Self::Selector { .. } | Self::Enum { .. } => syn::parse_quote!(i32),
+            Self::Rows { .. } => {
+                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>)
+            }
             Self::Text { .. } => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
             }

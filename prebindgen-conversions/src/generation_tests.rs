@@ -504,12 +504,14 @@ fn emission_markers_do_not_rewrite_identifiers_or_literals_and_require_bindings(
 fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() {
     let code = validate_resources(&[
         Resource {
-            identity: quote!(left),
+            identity: crate::ResourceIdentity::Single(quote!(left)),
             access: Access::Move,
             active: quote!(enabled && count > 0),
         },
         Resource {
-            identity: quote!(right.expect("inactive identity must not be evaluated")),
+            identity: crate::ResourceIdentity::Single(quote!(
+                right.expect("inactive identity must not be evaluated")
+            )),
             access: Access::Shared,
             active: quote!(count % 2 == 0),
         },
@@ -527,12 +529,12 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
             let name = quote::format_ident!("pair_{i}_{j}");
             let pair = validate_resources(&[
                 Resource {
-                    identity: quote!(left),
+                    identity: crate::ResourceIdentity::Single(quote!(left)),
                     access: first,
                     active: quote!(true),
                 },
                 Resource {
-                    identity: quote!(right),
+                    identity: crate::ResourceIdentity::Single(quote!(right)),
                     access: second,
                     active: quote!(true),
                 },
@@ -569,6 +571,7 @@ fn alias_checks_accept_opaque_predicates_and_short_circuit_inactive_resources() 
     let executable = dir.path().join("predicates");
     std::fs::write(&file, source.to_string()).unwrap();
     let compiled = std::process::Command::new("rustc")
+        .arg("--edition=2021")
         .arg(&file)
         .arg("-o")
         .arg(&executable)
@@ -654,6 +657,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     let executable = dir.path().join("targets");
     std::fs::write(&file, code.to_string()).unwrap();
     let compiled = std::process::Command::new("rustc")
+        .arg("--edition=2021")
         .arg(&file)
         .arg("-o")
         .arg(&executable)

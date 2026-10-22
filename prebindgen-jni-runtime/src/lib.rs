@@ -11,6 +11,9 @@ use jni::{
 };
 use prebindgen_runtime::Result;
 
+mod sequence;
+pub use sequence::*;
+
 /// Copy the Java string `value` into an owned Rust string. JNI failures become messages.
 pub fn text(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Result<String> {
     env.get_string(value)

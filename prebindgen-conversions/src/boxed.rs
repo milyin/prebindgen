@@ -112,7 +112,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         Storage::Wrapped(_) => quote!(#var.expect("active allocation").value),
     };
     let validation = quote!(
-        let #pointer = #wire as *mut #allocation;
+        let #pointer = if #condition { #wire as *mut #allocation } else { ::core::ptr::null_mut() };
         if #condition {::prebindgen_runtime::validate_pointer(#pointer)?;}
     );
     let (acquire, statements) = match access {
@@ -145,7 +145,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         statements,
         argument: quote!(#var),
         resources: vec![Resource {
-            identity: quote!(#pointer.addr()),
+            identity: crate::ResourceIdentity::Single(quote!(#pointer.addr())),
             active: active.clone(),
             access,
         }],

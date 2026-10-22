@@ -127,7 +127,7 @@ pub enum Priority {
 
 /// Classify a payload by magnitude of its `value` (enum **return**).
 #[prebindgen]
-pub fn payload_priority(p: &Payload) -> Priority {
+pub fn payload_priority(p: &PayloadHandle) -> Priority {
     let v = p.value.abs();
     if v < 10.0 {
         Priority::Low
@@ -3047,8 +3047,11 @@ pub fn enum_boundary_probe(
     value
 }
 
+/// Explicit handle surface for Payload, alongside its collection data-class surface.
 #[prebindgen]
-pub fn enum_payload_new(value: f64) -> Payload {
+pub type PayloadHandle = Payload;
+#[prebindgen]
+pub fn enum_payload_new(value: f64) -> PayloadHandle {
     Payload {
         id: 0,
         seq: 0,
@@ -3146,4 +3149,161 @@ pub fn result_other(succeed: bool) -> Result<i64, String> {
     } else {
         Err("other error".into())
     }
+}
+
+// Runtime-sized collections exercise the same element recipes as scalar calls.
+#[prebindgen]
+pub fn collection_i64(values: Vec<i64>) -> Vec<i64> {
+    values
+}
+#[prebindgen]
+pub fn collection_text(values: Vec<String>) -> Vec<String> {
+    values
+}
+#[prebindgen]
+pub fn collection_bytes(values: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    values
+}
+#[prebindgen]
+pub fn collection_nested(values: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
+    values
+}
+#[prebindgen]
+pub fn collection_options(values: Vec<Option<i64>>, tag: i16) -> Vec<Option<i64>> {
+    let _ = tag;
+    values
+}
+#[prebindgen]
+pub fn collection_optional(values: Option<Vec<i64>>) -> Option<Vec<i64>> {
+    values
+}
+#[prebindgen]
+pub fn collection_enum(values: Vec<SparseCode>) -> Vec<SparseCode> {
+    values
+}
+#[prebindgen]
+pub fn collection_probe(values: Vec<char>, tag: &str) -> Vec<char> {
+    let _ = tag;
+    values
+}
+#[prebindgen]
+pub fn collection_borrow(values: &Vec<i64>) -> &[i64] {
+    values.as_slice()
+}
+#[prebindgen]
+pub fn collection_slice(values: &[i64]) -> Vec<i64> {
+    values.to_vec()
+}
+#[prebindgen]
+pub fn collection_resource_new(id: i64) -> OwnedResource {
+    OwnedResourceImpl { id }
+}
+#[prebindgen]
+pub fn collection_handles(
+    values: Vec<OwnedResource>,
+    valid: char,
+    mode: i32,
+) -> Result<Vec<OwnedResource>, ResultFailure> {
+    let _ = valid;
+    match mode {
+        0 => Ok(values),
+        1 => Err(ResultFailureImpl { code: 6 }),
+        _ => panic!("collection source panic"),
+    }
+}
+#[prebindgen]
+pub fn collection_alias(values: Vec<OwnedResource>, other: &OwnedResource) -> i64 {
+    values.iter().map(|v| v.id).sum::<i64>() + other.id
+}
+#[prebindgen]
+pub fn collection_result(values: Vec<i64>, succeed: bool) -> Result<Vec<i64>, ResultFailure> {
+    if succeed {
+        Ok(values)
+    } else {
+        Err(ResultFailureImpl { code: 7 })
+    }
+}
+
+#[prebindgen]
+pub struct CollectionItem {
+    pub resource: OwnedResource,
+}
+#[prebindgen]
+pub fn collection_construct(resource: OwnedResource) -> CollectionItem {
+    assert_ne!(resource.id, 2, "collection constructor panic");
+    CollectionItem { resource }
+}
+#[prebindgen]
+pub fn collection_construct_all(values: Vec<CollectionItem>) -> i64 {
+    values.iter().map(|v| v.resource.id).sum()
+}
+#[prebindgen]
+pub fn collection_make_items() -> Vec<CollectionItem> {
+    (1..=3)
+        .map(|id| CollectionItem {
+            resource: OwnedResourceImpl { id },
+        })
+        .collect()
+}
+#[prebindgen]
+pub fn collection_item_into(value: CollectionItem) -> CollectionItem {
+    assert_ne!(value.resource.id, 2, "collection projection panic");
+    value
+}
+
+#[prebindgen]
+pub struct CollectionBundle {
+    pub values: Vec<OwnedResource>,
+    pub tag: i64,
+}
+#[prebindgen]
+pub fn collection_bundle() -> CollectionBundle {
+    CollectionBundle {
+        values: (1..=3).map(|id| OwnedResourceImpl { id }).collect(),
+        tag: 42,
+    }
+}
+#[prebindgen]
+pub fn collection_bundle_into(value: CollectionBundle) -> CollectionBundle {
+    value
+}
+
+#[prebindgen]
+pub fn collection_optional_handles(
+    values: Option<Vec<OwnedResource>>,
+) -> Option<Vec<OwnedResource>> {
+    values
+}
+#[prebindgen]
+pub fn collection_nested_handles(values: Vec<Vec<OwnedResource>>) -> Vec<Vec<OwnedResource>> {
+    values
+}
+
+#[prebindgen]
+pub struct CollectionNumbers {
+    pub values: Vec<i64>,
+    pub tag: i64,
+}
+#[prebindgen]
+pub fn collection_numbers() -> CollectionNumbers {
+    CollectionNumbers {
+        values: vec![7, 9],
+        tag: 42,
+    }
+}
+#[prebindgen]
+pub fn collection_numbers_view(value: &CollectionNumbers) -> CollectionNumbers {
+    CollectionNumbers {
+        values: value.values.clone(),
+        tag: value.tag,
+    }
+}
+
+#[prebindgen]
+pub fn collection_resource_clone(value: &OwnedResource) -> OwnedResource {
+    OwnedResourceImpl { id: value.id }
+}
+#[prebindgen]
+pub fn collection_resource_ids(values: &[OwnedResource]) -> Vec<i64> {
+    values.iter().map(|v| v.id).collect()
 }

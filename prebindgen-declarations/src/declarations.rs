@@ -1,7 +1,7 @@
 //! Build-script declarations for input alternatives and output views.
 //! [`Declarations`] builds converters directly in boundary occurrence slots.
 
-use crate::{option_inner, result_parts};
+use crate::{option_inner, result_parts, sequence_parts};
 use crate::{Codec, Compiler, Condition, Input, Output, Projection};
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
@@ -384,6 +384,13 @@ impl Declarations {
                 )));
             }
         }
+        if let (Some((element, _)), Some(decl)) = (sequence_parts(ty), explicit) {
+            if type_key(&flat.resolve_type(&decl.ty)?) != key {
+                return Ok(Input::Sequence(Box::new(
+                    self.input(flat, element, explicit, stack)?,
+                )));
+            }
+        }
         let d = explicit.or_else(|| self.inputs.get(&key));
         if let Some(d) = d {
             if type_key(&flat.resolve_type(&d.ty)?) != key {
@@ -396,7 +403,9 @@ impl Declarations {
             let mut arms = Vec::new();
             for variant in &d.variants {
                 arms.push(match variant {
-                    None => Input::Leaf,
+                    None => if let Some((element,_))=sequence_parts(ty) {
+                        Input::Sequence(Box::new(self.input(flat,element,None,stack)?))
+                    } else { Input::Leaf },
                     Some(f) => {
                         if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() || f.error.is_some() {
                             return Err("constructor references only support their source name in this subset".into());
@@ -419,6 +428,11 @@ impl Declarations {
         if let Some(inner) = option_inner(ty) {
             return Ok(Input::Optional(Box::new(
                 self.input(flat, inner, None, stack)?,
+            )));
+        }
+        if let Some((element, _)) = sequence_parts(ty) {
+            return Ok(Input::Sequence(Box::new(
+                self.input(flat, element, None, stack)?,
             )));
         }
         let key = match ty {
@@ -446,6 +460,14 @@ impl Declarations {
                 )));
             }
         }
+        if let (Some((element, _view)), Some(decl)) = (sequence_parts(ty), explicit) {
+            if type_key(&flat.resolve_type(&decl.ty)?) != key {
+                return Ok(Output::Sequence {
+                    element: Box::new(self.output(flat, element, explicit, stack)?),
+                    mode: None,
+                });
+            }
+        }
         let d = explicit.or_else(|| self.outputs.get(&key));
         if let Some(d) = d {
             if type_key(&flat.resolve_type(&d.ty)?) != key {
@@ -458,8 +480,32 @@ impl Declarations {
             let mut parts = Vec::new();
             for field in &d.fields {
                 parts.push(match field {
-                    ReturnField::Identity => Output::Leaf,
-                    ReturnField::Projected(p) => Output::Projected(p.clone()),
+                    ReturnField::Identity => {
+                        if let Some((element, _view)) = sequence_parts(ty) {
+                            Output::Sequence {
+                                element: Box::new(self.output(flat, element, None, stack)?),
+                                mode: None,
+                            }
+                        } else {
+                            Output::Leaf
+                        }
+                    }
+                    ReturnField::Projected(p) => {
+                        if let Some((element, _)) = sequence_parts(ty) {
+                            if !p.fields.is_empty() {
+                                return Err(
+                                    "collection field projections belong on the element type"
+                                        .into(),
+                                );
+                            }
+                            Output::Sequence {
+                                element: Box::new(self.output(flat, element, None, stack)?),
+                                mode: Some(p.mode),
+                            }
+                        } else {
+                            Output::Projected(p.clone())
+                        }
+                    }
                     ReturnField::Getter(f) => {
                         if !f.params.is_empty()
                             || f.ret.is_some()
@@ -516,6 +562,12 @@ impl Declarations {
             return Ok(Output::Optional(Box::new(
                 self.output(flat, inner, None, stack)?,
             )));
+        }
+        if let Some((element, _view)) = sequence_parts(ty) {
+            return Ok(Output::Sequence {
+                element: Box::new(self.output(flat, element, None, stack)?),
+                mode: None,
+            });
         }
         Ok(if key == "()" {
             Output::fields([])
