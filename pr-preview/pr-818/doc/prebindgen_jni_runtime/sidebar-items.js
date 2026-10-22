@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["array","bytes","bytes_object","domain_error","drop_pointer","fail","handle_object","row","row_bool","row_bytes","row_f32","row_f64","row_i16","row_i32","row_i64","row_i8","row_rows","row_text","signed128","text","text_object","unsigned128"],"struct":["Allocation","LocalFrame"]};
