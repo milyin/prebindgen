@@ -46,6 +46,9 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
     }
 }
 impl Codec for TestCodec {
+    fn result_error(&self, _: &Type, message: TokenStream, _: &Extra) -> Result<TokenStream> {
+        Ok(message)
+    }
     fn niche(&self, _: &TestWire) -> Option<()> {
         None
     }
@@ -104,6 +107,7 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
+            fallible: false,
             context: Default::default(),
             acknowledgement: None,
             layout: vec![Wire {
@@ -135,6 +139,7 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
+            fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             layout: vec![Wire {
@@ -1082,6 +1087,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
                 layout: Default::default(),
@@ -1202,6 +1208,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
                 layout: vec![].into(),
@@ -1375,4 +1382,131 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
         };
         assert!(result.unwrap_err().contains("duplicate field"));
     }
+}
+
+#[test]
+fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
+    let mut flat = parse("pub type E=String; pub fn message(e:&E)->String{} pub fn other(e:E)->String{} pub fn echo(x:i64)->Result<Option<i64>,E>{}");
+    let defaults = Declarations::new(
+        &flat,
+        vec![ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()],
+    )
+    .unwrap();
+    defaults
+        .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
+        .unwrap();
+    let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
+    assert_eq!(output.layout.len(), 2);
+    let code = output.statements.to_string();
+    assert!(code.contains(":: core :: result :: Result :: Ok"));
+    assert!(code.contains("message (&"));
+    assert!(code.find("match").unwrap() < code.find("message").unwrap());
+    defaults
+        .fill(
+            &mut flat,
+            &TEST_CODEC,
+            &fun!(echo).on_error(fun!(other)),
+            &Extra::default(),
+        )
+        .unwrap();
+    let code = flat
+        .function("echo")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .statements
+        .to_string();
+    assert!(code.contains("other (") && !code.contains("message"));
+}
+
+#[test]
+fn invalid_result_policies_leave_all_function_slots_unchanged() {
+    for mapper in [
+        None,
+        Some(fun!(wrong)),
+        Some(fun!(message).name("renamed")),
+        Some(fun!(message).on_error(fun!(message))),
+    ] {
+        let mut flat = parse("pub type E=String; pub fn message(e:E)->String{} pub fn wrong(e:&mut E)->String{} pub fn f(x:i64)->Result<i64,E>{}");
+        let mut decl = fun!(f);
+        if let Some(mapper) = mapper {
+            decl = decl.on_error(mapper);
+        }
+        assert!(fill(&mut flat, &decl).is_err());
+        let f = flat.function("f").unwrap();
+        assert!(f.ret.slot.is_none() && f.params[0].ty.slot.is_none());
+    }
+    for source in [
+        "pub type E=String;pub fn message(e:E)->i64{}pub fn f()->Result<i64,E>{}",
+        "pub type E=String;pub fn message()->String{}pub fn f()->Result<i64,E>{}",
+        "pub type E=String;pub fn message(e:E,x:i64)->String{}pub fn f()->Result<i64,E>{}",
+        "pub type E=String;pub fn message(e:String)->String{}pub fn f()->Result<i64,E>{}",
+        "pub type E=String;pub fn message(e:E)->String{}pub fn f()->i64{}",
+    ] {
+        let mut flat = parse(source);
+        assert!(
+            fill(&mut flat, &fun!(f).on_error(fun!(message))).is_err(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn result_routing_rejects_nested_and_borrowed_data_occurrences() {
+    for source in [
+        "pub fn f(x:Result<i64,String>){}",
+        "pub fn f(x:Option<&Result<i64,String>>){}",
+    ] {
+        let mut flat = parse(source);
+        assert!(fill(&mut flat, &fun!(f))
+            .unwrap_err()
+            .contains("output-only"));
+    }
+    for (source, recipe) in [
+        (
+            "pub fn f()->Option<Result<i64,String>>{}",
+            Output::Optional(Box::new(Output::Leaf)),
+        ),
+        ("pub fn f()->&Result<i64,String>{}", Output::Leaf),
+        (
+            "pub struct R{pub value:Result<i64,String>}pub fn f()->R{}",
+            Output::Fields(vec![Output::Leaf]),
+        ),
+    ] {
+        let mut flat = parse(source);
+        assert!(
+            bind_output(&mut flat, &TEST_CODEC, "f", &recipe, &Extra::default())
+                .unwrap_err()
+                .contains("outermost")
+        );
+    }
+    let mut flat =
+        parse("pub fn message(e:String)->String{}pub fn f()->Result<Result<i64,String>,String>{}");
+    assert!(fill(&mut flat, &fun!(f).on_error(fun!(message)))
+        .unwrap_err()
+        .contains("outermost"));
+    for decl in [
+        expand_return!(Result<i64,String>).field_self().into(),
+        expand_param!(Result<i64,String>).variant_self().into(),
+    ] {
+        assert!(Declarations::new(&flat, vec![decl]).is_err());
+    }
+}
+
+#[test]
+fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
+    let flat = parse("pub type E=String;pub fn message(e:E)->String{}pub fn f()->Result<i64,E>{}");
+    assert!(Declarations::new(
+        &flat,
+        vec![
+            ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into(),
+            ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()
+        ]
+    )
+    .is_err());
+    let expansions = vec![ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()];
+    let names = declarations::source_functions(&expansions, [&fun!(f).on_error(fun!(message))]);
+    assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
 }

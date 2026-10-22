@@ -153,6 +153,8 @@ pub struct DataGroup {
 }
 
 pub(crate) struct DataCodec {
+    pub(crate) error_classes: BTreeMap<String, String>,
+    pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
     records: BTreeMap<String, Rc<RecordShape>>,
     pub(crate) enums: BTreeMap<String, JniEnum>,
 }
@@ -267,7 +269,12 @@ impl DataCodec {
         for (key, class) in classes.iter().filter(|(_, c)| c.enumeration) {
             enums.insert(key.clone(), JniEnum::from_class(flat, class)?);
         }
-        Ok(Self { records, enums })
+        Ok(Self {
+            records,
+            enums,
+            error_classes: BTreeMap::new(),
+            error_helpers: BTreeMap::new(),
+        })
     }
     fn enum_type(&self, ty: &syn::Type) -> Option<&JniEnum> {
         let ty = if let syn::Type::Reference(r) = ty {
@@ -507,6 +514,22 @@ impl Codec for DataCodec {
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
+    fn result_error_value(
+        &self,
+        ty: &syn::Type,
+        value: TokenStream,
+        message: Option<TokenStream>,
+        _: &(),
+    ) -> Result<TokenStream> {
+        let helper = self
+            .error_helpers
+            .get(&(type_key(ty), message.is_some()))
+            .ok_or("missing declared JNI error output")?;
+        let env = prebindgen_conversions::template_parameter("environment");
+        let reported = prebindgen_conversions::template_parameter("domain_output");
+        let value = message.unwrap_or(value);
+        Ok(quote!({#helper(&mut #env, #value, &mut #reported)?; String::new()}))
+    }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()
     }
@@ -880,6 +903,7 @@ mod group_tests {
             classes: &classes,
             result: "result",
             failure: "failure",
+            cleanup_failure: None,
             output_prefix: "output",
         };
         let input = kotlin::input_kotlin(field.nodes(), &context).unwrap();

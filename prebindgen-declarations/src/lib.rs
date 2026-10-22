@@ -17,7 +17,12 @@ mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
 pub use optional::{optional_input, optional_output};
-pub use prebindgen_flat::option_inner;
+pub use prebindgen_flat::{option_inner, result_parts};
+fn contains_result(ty: &Type) -> bool {
+    result_parts(ty).is_some()
+        || option_inner(ty).is_some_and(contains_result)
+        || matches!(ty, Type::Reference(r) if contains_result(&r.elem))
+}
 mod projection;
 pub use projection::{Projection, ProjectionMode};
 mod record;
@@ -97,6 +102,17 @@ impl Input {
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output {
+    /// Deliver `Ok` through its recipe and route an owned `Err` through the codec.
+    /// An optional mapper takes exactly `E` or `&E` and returns `String`.
+    /// Without one, the codec must explicitly support preserving the error value.
+    /// The codec selects how that message reaches the destination's error channel.
+    Result {
+        /// Conversion of the owned success value.
+        ok: Box<Output>,
+        /// Optional unqualified source message mapper. Without one, the codec
+        /// must explicitly support the source error value itself.
+        error: Option<String>,
+    },
     /// Convert an optional payload without preparing absent values.
     Optional(Box<Output>),
     /// Convert the occurrence type itself with [`Codec::output_leaf`].
@@ -160,7 +176,7 @@ impl Output {
             Self::Optional(child) => child.consumes(option_inner(ty).unwrap_or(ty), extra, codec),
             Self::Leaf => codec.consumes(ty, extra),
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
-            Self::OwnedFields(_) | Self::Into { .. } => true,
+            Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
             Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec)),
             _ => false,
         }
@@ -383,6 +399,40 @@ pub trait Codec {
             projection.mode == ProjectionMode::Borrowed,
         )
     }
+    /// Route the owned source error value. `message`, when present, is an
+    /// explicitly declared mapper expression returning String. Return a String
+    /// expression for the active fallible boundary; an adapter may first deliver
+    /// a structured error or throw an exception. The default requires a mapper
+    /// and delegates to `result_error`.
+    fn result_error_value(
+        &self,
+        ty: &Type,
+        _value: TokenStream,
+        message: Option<TokenStream>,
+        extra: &Self::Extra,
+    ) -> Result<TokenStream> {
+        self.result_error(
+            ty,
+            message.ok_or_else(|| {
+                format!(
+                    "Result error `{}` requires an explicit error_mapper or on_error mapper",
+                    type_key(ty)
+                )
+            })?,
+            extra,
+        )
+    }
+    /// Report a mapped String in the adapter-specific error channel.
+    /// The returned expression must produce String. The compiler returns Err
+    /// before preparing success outputs. The default rejects unsupported routing.
+    fn result_error(
+        &self,
+        _ty: &Type,
+        _message: TokenStream,
+        _extra: &Self::Extra,
+    ) -> Result<TokenStream> {
+        Err("Result error routing is unsupported by this codec".into())
+    }
     /// The unused representation currently available on this wire.
     /// Initialize it when creating the wire and return the state last written by
     /// `set_niche`. Never offer a representation already used by an inner option
@@ -565,7 +615,7 @@ pub fn bind_output<C: Codec>(
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<()> {
-    let mut conversion = Compiler::new(flat, codec, "ret".into()).output(
+    let mut conversion = Compiler::new(flat, codec, "ret".into()).output_root(
         &flat.function(function)?.ret.ty,
         recipe,
         extra,
@@ -612,8 +662,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         active: &Condition,
     ) -> Result<CodecInput<C>> {
+        if contains_result(ty) {
+            return Err("Result inputs require an explicit data representation; error routing is output-only".into());
+        }
         let var = self.name();
         let mut wires = WireLayout::default();
+        let mut fallible = false;
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
         let mut resources = Vec::new();
@@ -635,6 +689,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     wires.enclose(self.codec.fields_group());
                     return Ok(InputPlan {
+                        fallible: false,
                         context: Default::default(),
                         acknowledgement,
                         layout: wires,
@@ -685,6 +740,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         &mut p.layout,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
+                    fallible |= p.fallible;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -697,6 +753,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 statements.extend(quote!(let #var:#ty=#path(#(#call_args),*);));
             }
             Input::Selector(arms) => {
+                fallible = true;
                 if arms.is_empty() {
                     return Err("an input selector needs at least one alternative".into());
                 }
@@ -723,6 +780,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     for wire in p.layout.iter_mut() {
                         self.codec.set_niche(&mut wire.kind, None);
                     }
+                    fallible |= p.fallible;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
                     resources.extend(p.resources);
@@ -737,6 +795,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
         }
         Ok(InputPlan {
+            fallible,
             context: Default::default(),
             acknowledgement,
             layout: wires,
@@ -747,6 +806,60 @@ impl<'a, C: Codec> Compiler<'a, C> {
             argument,
         })
     }
+    fn output_root(
+        &self,
+        ty: &Type,
+        recipe: &Output,
+        extra: &C::Extra,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<CodecOutput<C>> {
+        if let Output::Result { ok, error } = recipe {
+            if borrowed {
+                return Err("Result error routing requires an owned Result occurrence".into());
+            }
+            let (success_ty, error_ty) =
+                result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
+            let payload = self.name();
+            let failure = self.name();
+            let mapped = if let Some(error) = error {
+                let mapper = self.flat.function(error)?;
+                let mapper_arg = mapper.params.first().map(|p| &p.ty.ty);
+                let shared = matches!(mapper_arg, Some(Type::Reference(r)) if r.mutability.is_none() && same_type(&r.elem, error_ty));
+                if mapper.params.len() != 1
+                    || !(mapper_arg.is_some_and(|ty| same_type(ty, error_ty)) || shared)
+                    || type_key(&mapper.ret.ty) != "String"
+                {
+                    return Err(
+                        "Result error mapper must take exactly E or &E and return String".into(),
+                    );
+                }
+                let path = &mapper.path;
+                let argument = if shared {
+                    quote!(&#failure)
+                } else {
+                    quote!(#failure)
+                };
+                Some(quote!(#path(#argument)))
+            } else {
+                None
+            };
+            let message =
+                self.codec
+                    .result_error_value(error_ty, quote!(#failure), mapped, extra)?;
+            let mut child = self.output(success_ty, ok, extra, quote!(#payload), false)?;
+            let prepare = child.statements;
+            child.statements = quote! {
+                let #payload = match #value {
+                    ::core::result::Result::Ok(value) => value,
+                    ::core::result::Result::Err(#failure) => return Err(#message),
+                };
+                #prepare
+            };
+            return Ok(child);
+        }
+        self.output(ty, recipe, extra, value, borrowed)
+    }
     fn output(
         &self,
         ty: &Type,
@@ -755,7 +868,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<CodecOutput<C>> {
+        if contains_result(ty) {
+            return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
+        }
         let mut out = OutputPlan {
+            fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
@@ -764,6 +881,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Result { .. } => {
+                return Err("Result error routing is supported only at the outermost return".into())
+            }
             Output::Optional(inner) => {
                 let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 let tag = self.name();
@@ -905,6 +1025,7 @@ fn append<W: prebindgen_flat::WireKind, C, M>(
     {
         return Err("composed output delivery must be installed by Codec::finish_output".into());
     }
+    to.fallible |= from.fallible;
     to.commit.extend(from.commit);
     to.layout.extend(from.layout);
     to.statements.extend(from.statements);
@@ -917,7 +1038,8 @@ mod tests;
 
 pub mod declarations;
 pub use declarations::{
-    Declarations, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl,
+    Declarations, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
+    FunctionDecl,
 };
 
 /// Parse one Rust identifier used by a declaration.

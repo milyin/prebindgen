@@ -431,7 +431,7 @@ impl<I, O> Flat<I, O> {
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
-    /// `Option<T>` recursively, and references without explicit lifetimes. A successful result does not mean
+    /// `Option<T>` and `Result<T, E>` recursively, and references without explicit lifetimes. A successful result does not mean
     /// a consumer can use the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
@@ -450,6 +450,10 @@ impl<I, O> Flat<I, O> {
                     }
                 }
                 syn::visit_mut::visit_type_mut(self, ty);
+                if let Some((ok, err)) = result_parts(ty) {
+                    let (ok, err) = (ok.clone(), err.clone());
+                    *ty = syn::parse_quote!(::core::result::Result<#ok, #err>);
+                }
                 if let Some(inner) = option_inner(ty) {
                     let inner = inner.clone();
                     *ty = syn::parse_quote!(Option<#inner>);
@@ -466,6 +470,14 @@ impl<I, O> Flat<I, O> {
         }
         if let Some(inner) = option_inner(ty) {
             return self.validate_type(inner);
+        }
+        if let Some((ok, err)) = result_parts(ty) {
+            self.validate_type(ok)?;
+            return self.validate_type(err);
+        }
+        if matches!(ty, Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "Result"))
+        {
+            return Err("spell Result<T, E> with both arguments, optionally qualified by std::result or core::result".into());
         }
         match ty {
             Type::Tuple(t) if t.elems.is_empty() => Ok(()),
@@ -582,6 +594,48 @@ pub fn option_inner(ty: &Type) -> Option<&Type> {
     }
     match a.args.first()? {
         syn::GenericArgument::Type(t) => Some(t),
+        _ => None,
+    }
+}
+
+/// Extract success and error types from a standard `Result<T, E>` spelling.
+/// Custom aliases and similarly named types in other modules remain opaque.
+pub fn result_parts(ty: &Type) -> Option<(&Type, &Type)> {
+    let Type::Path(p) = ty else { return None };
+    if p.qself.is_some() {
+        return None;
+    }
+    let names = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    if !matches!(
+        names.as_str(),
+        "Result" | "std::result::Result" | "core::result::Result"
+    ) {
+        return None;
+    }
+    // Generic arguments are permitted only on the final Result segment.
+    if p.path
+        .segments
+        .iter()
+        .take(p.path.segments.len() - 1)
+        .any(|s| !matches!(s.arguments, syn::PathArguments::None))
+    {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &p.path.segments.last()?.arguments else {
+        return None;
+    };
+    if args.args.len() != 2 {
+        return None;
+    }
+    let mut args = args.args.iter();
+    match (args.next()?, args.next()?) {
+        (syn::GenericArgument::Type(ok), syn::GenericArgument::Type(err)) => Some((ok, err)),
         _ => None,
     }
 }

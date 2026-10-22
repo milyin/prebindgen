@@ -243,3 +243,33 @@ fn fieldless_enum_source_metadata_survives_selection_and_slot_mapping() {
         assert!(parse(bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn result_types_are_qualified_recursively_and_standard_spellings_normalize() {
+    let flat = parse("pub type Error = String; pub type Value = String; pub fn a()->Result<Option<Value>,Error>{} pub fn b()->::std::result::Result<Option<Value>,Error>{} pub fn c()->core::result::Result<Option<Value>,Error>{}").unwrap();
+    let ty = &flat.function("a").unwrap().ret.ty;
+    assert!(same_type(ty, &flat.function("b").unwrap().ret.ty));
+    assert!(same_type(ty, &flat.function("c").unwrap().ret.ty));
+    let (ok, err) = result_parts(ty).unwrap();
+    assert_eq!(type_key(err), "source_crate :: Error");
+    assert_eq!(type_key(option_inner(ok).unwrap()), "source_crate :: Value");
+    for source in [
+        "pub fn f()->Result<i32,Unknown>{}",
+        "pub fn f()->Result<i32>{}",
+        "pub fn f()->custom::Result<i32,String>{}",
+        "pub fn f()->Result<i32,Box<dyn Error>>{}",
+    ] {
+        assert!(parse(source).is_err(), "{source}");
+    }
+    assert!(result_parts(&syn::parse_quote!(custom::Result<i32,String>)).is_none());
+    assert!(result_parts(&syn::parse_quote!(Result<i32, 3>)).is_none());
+}
+
+#[test]
+fn declared_opaque_type_named_result_keeps_its_existing_meaning() {
+    let flat = parse("pub type Result=String;pub fn f(value:Result)->Result{}").unwrap();
+    let f = flat.function("f").unwrap();
+    assert_eq!(type_key(&f.ret.ty), "source_crate :: Result");
+    assert!(same_type(&f.params[0].ty.ty, &f.ret.ty));
+    assert!(result_parts(&f.ret.ty).is_none());
+}

@@ -11,6 +11,7 @@ prebindgen-jni-runtime.workspace = true
 konst.workspace = true
 perftest-flat = {path = "../perftest-flat"}
 [build-dependencies]
+syn.workspace = true
 prebindgen-jni.workspace = true
 prebindgen-declarations.workspace = true
 perftest-flat = {path = "../perftest-flat"}

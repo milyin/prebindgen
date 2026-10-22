@@ -33,6 +33,7 @@ pub fn optional_input<C: Codec>(
         let present = codec.is_present(&child.layout[*i].kind, niche, quote!(#w))?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
     } else {
+        child.fallible = true;
         let bad = active.and(quote!(#tag != 0 && #tag != 1));
         validation.extend(quote!(if #bad {return Err("invalid option presence".into());}));
     }
