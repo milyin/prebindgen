@@ -23,10 +23,11 @@ pub struct WireLayout<W: WireKind, G = ()> {
 pub enum WireNode<W: WireKind, G> {
     /// One physical FFI value. All metadata about this wire belongs in `W`.
     Wire(Wire<W>),
-    /// One array carrier, plus the separate layout of each transported element.
+    /// One sequence transport value, plus the separate layout of each element.
     /// Element leaves describe row fields, not this slot's ABI parameter positions.
     Sequence {
-        /// The single self-sufficient FFI value transporting the rows.
+        /// A complete FFI value: an array carrier, or a delivery result such as an
+        /// element count when the adapter passes rows through callbacks.
         carrier: Wire<W>,
         /// Element field scope, retained in the authoritative tree.
         element: WireLayout<W, G>,

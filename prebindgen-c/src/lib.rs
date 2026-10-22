@@ -573,7 +573,7 @@ impl Cbindgen {
     /// Does not write files. Returns an error for conflicting sources, invalid or
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
-    pub fn build(self) -> Result<Generation> {
+    pub fn build(mut self) -> Result<Generation> {
         prebindgen_declarations::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
@@ -646,12 +646,14 @@ impl Cbindgen {
                 }
             }
         }
-        let codec = enums::EnumCodec {
+        let mut codec = enums::EnumCodec {
+            callback_wire: None,
             enums: enum_map,
             errors: error_map,
         };
         let declarations = prebindgen_declarations::Declarations::new(&flat, self.expansions)?;
         let errors = errors::prepare(&mut flat, &codec, &declarations, self.errors)?;
+        let mut callbacks = std::collections::BTreeSet::new();
         let mut names = std::collections::BTreeSet::new();
         for decl in self.functions {
             if !names.insert(decl.name.clone()) {
@@ -661,6 +663,29 @@ impl Cbindgen {
                 return Err("C function renaming is outside this subset".into());
             }
             declarations.fill(&mut flat, &codec, &decl, &())?;
+            if decl.callback_return.is_some() {
+                let name = format!("{}_each", decl.name);
+                let (variant, wire) = declarations.callback_variant(&mut flat, &decl, &name)?;
+                codec.callback_wire = Some(wire);
+                declarations.fill(&mut flat, &codec, &variant, &())?;
+                codec.callback_wire = None;
+                if !sequence::callback_shape(
+                    &flat.function(&name)?.ret.slot.as_ref().unwrap().layout,
+                ) {
+                    return Err("callback_return cannot discard additional return values".into());
+                }
+                if self.panics.contains(&decl.name) {
+                    self.panics.insert(name.clone());
+                }
+                callbacks.insert(name);
+                if decl.callback_return == Some(prebindgen_declarations::CallbackReturn::Only) {
+                    let original = flat.functions.get_mut(&decl.name).unwrap();
+                    original.ret.slot = None;
+                    for param in &mut original.params {
+                        param.ty.slot = None;
+                    }
+                }
+            }
         }
         let pointers = self
             .pointers
@@ -682,7 +707,13 @@ impl Cbindgen {
                     .any(|p| p.fallible || !p.resources.is_empty())
                     || f.ret.slot.as_ref().is_some_and(|p| p.fallible))
             {
-                return Err(format!("C function `{}` has a fallible binding conversion without Result; declare .panic() after .function(...) to allow aborting", f.name));
+                let name = f.name.to_string();
+                let declaration = if callbacks.contains(&name) {
+                    name.strip_suffix("_each").unwrap()
+                } else {
+                    name.as_str()
+                };
+                return Err(format!("C function `{}` has a fallible binding conversion without Result; declare .panic() after .function(fun!({declaration})) to allow aborting", f.name));
             }
         }
         generate(
@@ -691,6 +722,7 @@ impl Cbindgen {
             pointers,
             codec.enums.into_values().collect(),
             errors,
+            callbacks,
         )
     }
 }
@@ -801,6 +833,7 @@ fn generate<
     pointers: Vec<(String, syn::Type)>,
     enums: Vec<(String, prebindgen_declarations::EnumMapping)>,
     errors: Vec<errors::ErrorBinding>,
+    callbacks: std::collections::BTreeSet<String>,
 ) -> Result<Generation> {
     let mut calls = Vec::new();
     let free = format_ident!("{prefix}_free_buffer");
@@ -1055,6 +1088,30 @@ The pointer must be null or a live allocation of the declared type returned by t
             params.push(quote!(#n:#ty));
             cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers, &context)));
         }
+        let body = if callbacks.contains(&f.name.to_string()) {
+            let (_, element) =
+                prebindgen_declarations::sequence_return(f.output_conversion()?.layout())
+                    .ok_or("missing callback element schema")?;
+            let types = element
+                .iter()
+                .map(|wire| wire.rust_type())
+                .collect::<Vec<_>>();
+            params.push(quote!(__pb_callback:Option<unsafe extern "C" fn(*mut ::core::ffi::c_void,#(#types),*)>));
+            params.push(quote!(__pb_callback_context:*mut ::core::ffi::c_void));
+            let mut fields = vec!["void *context".to_string()];
+            fields.extend(
+                element
+                    .iter()
+                    .enumerate()
+                    .map(|(i, wire)| format!("{} v{i}", c_ty(wire, prefix, &pointers, &context))),
+            );
+            cparams.push(format!("void (*callback)({})", fields.join(", ")));
+            cparams.push("void *context".into());
+            header.push_str("/* Each callback invocation transfers ownership of its element fields. Earlier deliveries remain caller-owned on later failure. Moved inputs already belong to Rust during callbacks; the ownership output is written on return. Borrowed inputs must stay live throughout callbacks; callbacks must not unwind or longjmp. */\n");
+            quote!(if __pb_callback.is_none(){return Err("null sequence callback".into());}#body)
+        } else {
+            body
+        };
         if let Some((_, error_ty)) = prebindgen_declarations::result_parts(&f.ret.ty) {
             let fields = outputs
                 .iter()
@@ -1187,7 +1244,11 @@ fn describe_groups(
         for node in layout.nodes() {
             if let prebindgen_flat::WireNode::Sequence { carrier, element } = node {
                 let path = field_path.join(".");
-                out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,element.len()));
+                if matches!(carrier.kind, CWire::Rows) {
+                    out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,element.len()));
+                } else {
+                    out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,element.len()));
+                }
                 let row_names = element
                     .iter()
                     .enumerate()
@@ -1284,6 +1345,55 @@ mod generation_tests {
         )
         .unwrap()
     }
+    #[test]
+    fn callback_return_rejects_unrelated_output_values() {
+        use prebindgen_declarations::{expand_return, fun};
+        let source=syn::parse_file("pub fn values()->Option<Vec<i64>>{} pub fn number(v:&Option<Vec<i64>>)->i64{} pub fn view(v:&Option<Vec<i64>>)->Vec<i64>{}").unwrap();
+        let flat = Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let result = Cbindgen::new(flat)
+            .function(
+                fun!(values).callback_return().expand_return(
+                    expand_return!(Option<Vec<i64>>)
+                        .field(fun!(number))
+                        .field(fun!(view)),
+                ),
+            )
+            .panic()
+            .build();
+        assert!(result.err().unwrap().contains("additional return"));
+    }
+
+    #[test]
+    fn callback_returns_preserve_buffers_and_require_explicit_abort_policy() {
+        let flat = || {
+            let source = syn::parse_file("pub fn values()->Vec<i64>{}").unwrap();
+            Bindings::parse(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .unwrap()
+        };
+        let builder = || {
+            Cbindgen::new(flat()).function(prebindgen_declarations::fun!(values).callback_return())
+        };
+        assert!(builder().build().err().unwrap().contains(".panic()"));
+        let output = builder().panic().build().unwrap();
+        assert!(output.header.contains("test_values") || output.header.contains("pb_values("));
+        assert!(output.header.contains("pb_values_each("));
+        assert!(output
+            .header
+            .contains("void (*callback)(void *context, int64_t v0)"));
+        syn::parse_file(&output.rust).unwrap();
+    }
+
     #[test]
     fn structured_error_registration_is_explicit_and_conflicts_are_rejected() {
         use prebindgen_declarations::fun;
@@ -1585,7 +1695,7 @@ mod generation_tests {
         .unwrap();
         flat.function_mut("noop").unwrap().ret.slot =
             Some(CountedOutput(count.clone(), Default::default()));
-        let output = generate(flat, "test", vec![], vec![], vec![]).unwrap();
+        let output = generate(flat, "test", vec![], vec![], vec![], Default::default()).unwrap();
         assert!(output.header.contains("test_noop("));
         assert_eq!(count.get(), 1);
     }

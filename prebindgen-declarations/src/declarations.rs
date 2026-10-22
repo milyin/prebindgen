@@ -241,6 +241,7 @@ impl Declarations {
                         || f.ret.is_some()
                         || f.foreign.is_some()
                         || f.error.is_some()
+                        || f.callback_return.is_some()
                     {
                         return Err("error mapper references only support their source name".into());
                     }
@@ -270,6 +271,65 @@ impl Declarations {
         }
         Ok(out)
     }
+    /// Clone a declared sequence function for an additional delivery protocol.
+    ///
+    /// The original path, source types and input slots are preserved. The new
+    /// return slot is empty, so the adapter can fill it using its callback
+    /// transport while retaining the same expansion declarations. The returned
+    /// identifier selects the outer sequence carrier, never a nested collection.
+    pub fn callback_variant<I, O>(
+        &self,
+        flat: &mut Flat<I, O>,
+        decl: &FunctionDecl,
+        name: &str,
+    ) -> Result<(FunctionDecl, syn::Ident)>
+    where
+        I: prebindgen_flat::Conversion + Clone,
+        O: prebindgen_flat::Conversion + Clone,
+    {
+        let source = flat.function(&decl.name)?;
+        let (carrier, _) = crate::sequence_return(
+            source
+                .ret
+                .slot
+                .as_ref()
+                .ok_or("unbound sequence return")?
+                .layout(),
+        )
+        .ok_or("callback_return requires a sequence output recipe")?;
+        let layout = source.ret.slot.as_ref().unwrap().layout();
+        fn count<W: prebindgen_flat::WireKind, G>(
+            layout: &prebindgen_flat::WireLayout<W, G>,
+        ) -> usize {
+            layout
+                .nodes()
+                .iter()
+                .map(|node| match node {
+                    prebindgen_flat::WireNode::Sequence { .. } => 1,
+                    prebindgen_flat::WireNode::Group { children, .. } => count(children),
+                    _ => 0,
+                })
+                .sum()
+        }
+        if count(layout) != 1 || layout.len() > 2 {
+            return Err(
+                "callback_return permits only one sequence and its optional presence flag".into(),
+            );
+        }
+        let carrier = carrier.name.clone();
+        let mut function = source.clone();
+        function.name = crate::ident(name)?;
+        function.ret.slot = None;
+        if flat.functions.contains_key(name) {
+            return Err("callback return function name collision".into());
+        }
+        flat.functions.insert(name.into(), function);
+        let mut variant = decl.clone();
+        variant.name = name.into();
+        variant.foreign = None;
+        variant.callback_return = None;
+        Ok((variant, carrier))
+    }
     /// Build one function's input and output converters from its declarations.
     ///
     /// Existing converters are retained unless explicitly overridden. `extra` is
@@ -296,6 +356,14 @@ impl Declarations {
         extra: &C::Extra,
     ) -> Result<()> {
         let source = flat.function(&decl.name)?;
+        if decl.callback_return.is_some()
+            && source.ret.slot.is_some()
+            && decl.ret.is_none()
+            && decl.error.is_none()
+        {
+            return Err("callback_return cannot reconstruct a prebound output slot; supply an explicit expand_return override".into());
+        }
+
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
                 return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
@@ -328,6 +396,7 @@ impl Declarations {
                         || mapper.ret.is_some()
                         || mapper.foreign.is_some()
                         || mapper.error.is_some()
+                        || mapper.callback_return.is_some()
                 }) {
                     return Err("error mapper references only support their source name".into());
                 }
@@ -407,7 +476,7 @@ impl Declarations {
                         Input::Sequence(Box::new(self.input(flat,element,None,stack)?))
                     } else { Input::Leaf },
                     Some(f) => {
-                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() || f.error.is_some() {
+                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() || f.error.is_some() || f.callback_return.is_some() {
                             return Err("constructor references only support their source name in this subset".into());
                         }
                         let func = flat.function(&f.name)?;
@@ -547,6 +616,7 @@ impl Declarations {
                             || f.ret.is_some()
                             || f.foreign.is_some()
                             || f.error.is_some()
+                            || f.callback_return.is_some()
                         {
                             return Err(
                                 "getter references only support their source name in this subset"
@@ -640,9 +710,21 @@ macro_rules! fields {
     };
 }
 
+/// Which sequence return variants an adapter should expose.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallbackReturn {
+    /// Keep the ordinary return and add a callback variant.
+    Additional,
+    /// Expose only the callback variant, including multi-value Kotlin elements
+    /// that have no ordinary List representation.
+    Only,
+}
+
 /// A source callable to export, with optional destination name and occurrence overrides.
 #[derive(Clone)]
 pub struct FunctionDecl {
+    /// Also emit an explicit callback-delivery variant for a sequence return.
+    pub callback_return: Option<CallbackReturn>,
     /// Unqualified source function name in the flat namespace.
     pub name: String,
     /// Explicit destination name; supported by JNI, currently rejected by C.
@@ -660,12 +742,34 @@ impl FunctionDecl {
     /// `name` is the function's unqualified source name.
     pub fn new(name: syn::Ident) -> Self {
         Self {
+            callback_return: None,
             name: name.to_string(),
             foreign: None,
             params: BTreeMap::new(),
             ret: None,
             error: None,
         }
+    }
+    /// Add callback delivery alongside the ordinary sequence return.
+    ///
+    /// C emits `<function>_each`, whose visitor receives each element's converted
+    /// fields. Kotlin emits `<function>Fold(initial, ..., fold)`, whose folder
+    /// receives an accumulator and each element's converted Kotlin values.
+    /// Supports one projected sequence, optionally inside Option and an outer Result.
+    /// Existing buffer/list returns are preserved. Adapter builders validate the
+    /// return shape and generated-name collisions.
+    pub fn callback_return(mut self) -> Self {
+        self.callback_return = Some(CallbackReturn::Additional);
+        self
+    }
+    /// Expose only callback delivery, without generating an ordinary return.
+    ///
+    /// This explicitly permits decomposed multi-value Kotlin elements without
+    /// requiring a Kotlin data class. Generated names are the same as for
+    /// `callback_return`: C `_each` and Kotlin `Fold`.
+    pub fn callback_return_only(mut self) -> Self {
+        self.callback_return = Some(CallbackReturn::Only);
+        self
     }
     /// Map the error of a top-level `Result<T, E>` return with a source function.
     ///

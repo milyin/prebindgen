@@ -44,7 +44,9 @@ pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     /// Authoritative result tree; each outer wire (including a sequence carrier)
     /// corresponds to one entry in `values`. Element fields have separate positions.
     pub layout: WireLayout<W, G>,
-    /// Transfer ownership only after all foreign delivery operations succeed.
+    /// Complete transfers for the selected protocol. Buffered outputs commit after
+    /// foreign delivery succeeds; explicit visitor protocols can commit each
+    /// element at callback entry during preparation.
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
     pub statements: TokenStream,

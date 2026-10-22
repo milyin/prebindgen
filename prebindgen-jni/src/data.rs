@@ -153,6 +153,7 @@ pub struct DataGroup {
 }
 
 pub(crate) struct DataCodec {
+    pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) error_classes: BTreeMap<String, String>,
     pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
     records: BTreeMap<String, Rc<RecordShape>>,
@@ -272,6 +273,7 @@ impl DataCodec {
         Ok(Self {
             records,
             enums,
+            callback_wire: None,
             error_classes: BTreeMap::new(),
             error_helpers: BTreeMap::new(),
         })
@@ -534,7 +536,11 @@ impl Codec for DataCodec {
         element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         values: &[TokenStream],
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
-        JniCodec.sequence_output(e, w, n, i, element, values)
+        if self.callback_wire.as_ref() == Some(&w) {
+            crate::sequence_callback::transport(w, element, values)
+        } else {
+            JniCodec.sequence_output(e, w, n, i, element, values)
+        }
     }
     fn result_error_value(
         &self,
@@ -592,7 +598,12 @@ impl Codec for DataCodec {
         JniCodec.finish_input(plan, extra)
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
-        JniCodec.finish_output(plan, extra)
+        JniCodec.finish_output(plan, extra)?;
+        if self.callback_wire.is_some() {
+            let env = prebindgen_conversions::template_parameter("environment");
+            plan.delivery.statements.extend(quote!(#env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;));
+        }
+        Ok(())
     }
     fn input_leaf(
         &self,

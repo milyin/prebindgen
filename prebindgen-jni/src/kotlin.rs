@@ -71,7 +71,7 @@ pub struct KotlinInput {
     pub consumed: Vec<String>,
 }
 /// Kotlin result conversion and rollback code owned by the result slot.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct KotlinOutput {
     /// Expressions delivered to the caller, in result order.
     pub delivered: Vec<String>,

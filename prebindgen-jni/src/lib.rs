@@ -11,6 +11,7 @@ mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
 mod optional;
 mod sequence;
+mod sequence_callback;
 pub use optional::JniNiche;
 mod group;
 mod scalar;
@@ -18,7 +19,7 @@ pub use data::{ClassDecl, DataClassDecl, DataGroup};
 pub use group::{JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
-use prebindgen_flat::{ConversionExt, Primitive};
+use prebindgen_flat::{Conversion, ConversionExt, Primitive};
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
@@ -456,7 +457,7 @@ impl JniGenBuilder {
         for enumeration in codec.enums.values() {
             flat.guards.extend(enumeration.mapping.guards());
         }
-        let errors = errors::prepare(
+        let mut errors = errors::prepare(
             &mut flat,
             &mut codec,
             &defaults,
@@ -465,8 +466,62 @@ impl JniGenBuilder {
             &self.prefix,
             &mut seen,
         )?;
+        let mut callbacks = BTreeMap::new();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
+            if declaration.callback_return.is_some() {
+                let variant_name = format!("{}_fold", declaration.name);
+                let (variant, wire) =
+                    defaults.callback_variant(&mut flat, &declaration, &variant_name)?;
+                codec.callback_wire = Some(wire);
+                defaults.fill(&mut flat, &codec, &variant, &())?;
+                codec.callback_wire = None;
+                if flat
+                    .function(&variant_name)?
+                    .ret
+                    .slot
+                    .as_ref()
+                    .unwrap()
+                    .layout()
+                    .len()
+                    != 1
+                {
+                    return Err("callback_return cannot discard additional return values".into());
+                }
+                if let Some(error) = errors.get(&declaration.name).cloned() {
+                    errors.insert(variant_name.clone(), error);
+                }
+                let (_, pkg, name) = functions
+                    .iter()
+                    .find(|(source, _, _)| source == &declaration.name)
+                    .unwrap();
+                let (pkg, name) = (pkg.clone(), format!("{name}Fold"));
+                if !seen.insert(format!("{pkg}.{name}")) {
+                    return Err("callback return foreign name collision".into());
+                }
+                functions.push((variant_name.clone(), pkg, name));
+                bound.insert(variant_name.clone());
+                callbacks.insert(
+                    variant_name.clone(),
+                    flat.function(&variant_name)?
+                        .ret
+                        .slot
+                        .as_ref()
+                        .unwrap()
+                        .layout()
+                        .clone(),
+                );
+                if declaration.callback_return
+                    == Some(prebindgen_declarations::CallbackReturn::Only)
+                {
+                    functions.retain(|(source, _, _)| source != &declaration.name);
+                    let original = flat.functions.get_mut(&declaration.name).unwrap();
+                    original.ret.slot = None;
+                    for param in &mut original.params {
+                        param.ty.slot = None;
+                    }
+                }
+            }
         }
         prebindgen_flat::validate_bindings(&flat)?;
         for (name, f) in &flat.functions {
@@ -497,7 +552,7 @@ impl JniGenBuilder {
             classes,
             functions,
             data_files,
-            errors,
+            OutputBindings { errors, callbacks },
         )
     }
 }
@@ -932,6 +987,11 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
     )
 }
 
+struct OutputBindings {
+    errors: BTreeMap<String, errors::ErrorBinding>,
+    callbacks: BTreeMap<String, prebindgen_flat::WireLayout<JniWire, JniGroup>>,
+}
+
 fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     flat: Flat<I, O>,
     prefix: &str,
@@ -939,8 +999,9 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
     mut files: BTreeMap<String, String>,
-    errors: BTreeMap<String, errors::ErrorBinding>,
+    outputs: OutputBindings,
 ) -> Result<JniGen> {
+    let OutputBindings { errors, callbacks } = outputs;
     let mut rust = errors::emit(&errors)?;
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
     errors::interfaces(prefix, &mut files)?;
@@ -988,6 +1049,8 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     )?;
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
+        let callback_layout = callbacks.get(&source);
+        let callback = callback_layout.is_some();
         let error = errors.get(&source);
         let throws = error.map_or_else(String::new, |error| error.throws());
         let env = format_ident!("jni_environment");
@@ -1061,7 +1124,36 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             raw_params.push("ownership: BooleanArray".into());
             kt_args.push("ownership".into());
         }
+        if callback {
+            let (_, element) =
+                prebindgen_declarations::sequence_return(f.output_conversion()?.layout())
+                    .ok_or("missing callback sequence")?;
+            let fields = element
+                .iter()
+                .enumerate()
+                .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
+                .collect::<Vec<_>>();
+            native.push_str(&format!(
+                "    internal fun interface SequenceSink{index} {{ fun run({}) }}\n",
+                fields.join(", ")
+            ));
+            params.push(
+                quote!(__pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>),
+            );
+            raw_params.push(format!("callback: SequenceSink{index}"));
+            let names = (0..fields.len())
+                .map(|i| format!("v{i}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            setup.push_str(&format!("val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()\nval __pb_sink = {prefix}.JNINative.SequenceSink{index} {{ {names} -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>({names})); kotlin.Unit }}\n"));
+            kt_args.push("__pb_sink".into());
+            params.push(quote!(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>));
+            raw_params.push("outputAccepted: BooleanArray".into());
+            setup.push_str("val __pb_outputAccepted = BooleanArray(1)\n");
+            kt_args.push("__pb_outputAccepted".into());
+        }
         let slots: usize = usize::from(has_consumes)
+            + 2 * usize::from(callback)
             + f.inputs()?.map(|w| w.kind.parameter_slots()).sum::<usize>();
         if slots > 255 {
             return Err(format!(
@@ -1074,7 +1166,26 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             &source,
             &syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
         )?;
-        let mut kotlin_output = f.output_conversion()?.kotlin(&kotlin_context)?;
+        let body = if callback {
+            quote!(if #env.get_array_length(&__pb_output_accepted).map_err(|e|e.to_string())? != 1 {return Err("invalid sequence output acknowledgement".into());} if __pb_callback.is_null(){return Err("null sequence callback".into());} #body)
+        } else {
+            body
+        };
+        let fold = if callback {
+            Some(sequence_callback::fold(
+                callback_layout.unwrap(),
+                &kotlin_context,
+            )?)
+        } else {
+            None
+        };
+        if let Some(fold) = &fold {
+            setup.push_str(&fold.discard);
+        }
+        let mut kotlin_output = match &fold {
+            Some(fold) => fold.output.clone(),
+            None => f.output_conversion()?.kotlin(&kotlin_context)?,
+        };
         kotlin::remap_output(
             &mut kotlin_output,
             kotlin_context.result,
@@ -1114,7 +1225,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             "    @JvmStatic external fun {method}({}): Array<Any?>\n",
             raw_params.join(", ")
         ));
-        let (generic, ret, end) = match delivered.len() {
+        let (mut generic, ret, end) = match delivered.len() {
             0 => ("", "Unit".into(), "Unit".into()),
             1 => ("", result_types[0].clone(), delivered[0].clone()),
             _ => {
@@ -1126,6 +1237,10 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 )
             }
         };
+        if fold.is_some() {
+            generic = "<A> ";
+            kt_params.push("initial: A".into());
+        }
         let failure = kotlin_context.failure;
         let result = kotlin_context.result;
         let end = if cleanup.is_empty() {
@@ -1162,6 +1277,9 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         if let Some(build) = build {
             kt_params.push(build);
         }
+        if let Some(fold) = &fold {
+            kt_params.push(fold.parameter.clone());
+        }
         let call = if locks.is_empty() && lock_groups.is_empty() {
             call
         } else {
@@ -1175,6 +1293,11 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             }
             format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
         };
+        let call = if callback {
+            format!("try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}")
+        } else {
+            call
+        };
         // Catch local handle validation separately from the native invocation: pending JVM
         // exceptions and exceptions from user callbacks must retain their original identity.
         let call = format!("try {{ {call} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}");
@@ -1184,7 +1307,12 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         } else {
             String::new()
         };
-        let native_call = format!("val {result} = {call}\n    when ({result}[0]) {{\n        null -> {{ {end} }}\n        {domain}\n        is String -> {binding_name}.run({result}[0] as String)\n        else -> error(\"invalid native result channel\")\n    }}");
+        let callback_failure = if callback {
+            format!("if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException({result}[0] as String)); ")
+        } else {
+            String::new()
+        };
+        let native_call = format!("val {result} = {call}\n    when ({result}[0]) {{\n        null -> {{ {end} }}\n        {domain}\n        is String -> {{ {callback_failure}{binding_name}.run({result}[0] as String) }}\n        else -> error(\"invalid native result channel\")\n    }}");
         let text = packages.entry(pkg).or_default();
         text.push_str(&format!(
             "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",

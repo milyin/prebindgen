@@ -6,6 +6,118 @@
 #include <math.h>
 #include <limits.h>
 
+struct sequence_acc { size_t calls; int64_t total; };
+static void sequence_number(void *context, int64_t value) {
+    struct sequence_acc *acc = context;
+    acc->calls++; acc->total += value;
+}
+static void sequence_text(void *context, perftest_buffer value) {
+    struct sequence_acc *acc = context;
+    acc->calls++; acc->total += (int64_t)value.len;
+    perftest_free_buffer(value);
+}
+static void sequence_nested(void *context, perftest_collection_nested_each_ret_w4_rows rows) {
+    struct sequence_acc *acc = context;
+    acc->calls++;
+    for (size_t i=0; i<rows.len; ++i) acc->total += rows.data[i].v0;
+    perftest_collection_nested_each_ret_w4_rows_free(rows);
+}
+static void sequence_part(void *context, int64_t number, perftest_buffer text, perftest_owned_resource *resource) {
+    struct sequence_acc *acc = context;
+    assert(number == perftest_option_resource_id(resource));
+    assert(text.len > 6 && memcmp(text.data, "part ", 5) == 0);
+    perftest_free_buffer(text);
+    perftest_drop_owned_resource(resource);
+    acc->calls++; acc->total += number;
+}
+static void sequence_resource(void *context, perftest_owned_resource *resource) {
+    struct sequence_acc *acc = context;
+    acc->calls++; acc->total += perftest_option_resource_id(resource);
+    perftest_drop_owned_resource(resource);
+}
+static void sequence_scalar(void *context, uint8_t flag, int8_t byte, int16_t small, int32_t number, int64_t large, float single, double real, perftest_int128 wide, int32_t present, perftest_buffer text) {
+    struct sequence_acc *acc = context;
+    if (acc->calls++ == 0) {
+        assert(flag == 1 && byte == -7 && small == -1234 && number == -123456);
+        assert(large == INT64_MIN && single == 1.25f && real == -2.5);
+        assert(wide.hi == UINT64_C(0x8000000000000000) && wide.lo == 0 && present == 1 && text.len == 6);
+    } else {
+        assert(flag == 0 && byte == 7 && small == 1234 && number == 123456);
+        assert(large == INT64_MAX && single == -1.25f && real == 2.5);
+        assert(wide.hi == UINT64_C(0x7fffffffffffffff) && wide.lo == UINT64_MAX && present == 0);
+    }
+    perftest_free_buffer(text);
+}
+static void check_sequence_delivery(void) {
+    struct sequence_acc acc = {0};
+    assert(perftest_sequence_scalars_each(sequence_scalar, &acc) == 2 && acc.calls == 2);
+    acc = (struct sequence_acc){0};
+    perftest_collection_i64_each_p0_w1_row values[] = {{1},{2},{3}};
+    assert(perftest_collection_i64_each((perftest_collection_i64_each_p0_w1_rows){values,3}, sequence_number, &acc) == 3);
+    assert(acc.calls == 3 && acc.total == 6);
+    assert(perftest_collection_i64_each((perftest_collection_i64_each_p0_w1_rows){NULL,0}, sequence_number, &acc) == 0);
+    assert(acc.calls == 3);
+    EXPECT_ABORT(perftest_collection_i64_each(((perftest_collection_i64_each_p0_w1_rows){values,3}), NULL, &acc));
+    perftest_collection_text_each_p0_w1_row text[] = {{{(const uint8_t *)"hello",5}},{{NULL,0}}};
+    acc = (struct sequence_acc){0};
+    assert(perftest_collection_text_each((perftest_collection_text_each_p0_w1_rows){text,2}, sequence_text, &acc) == 2);
+    assert(acc.calls == 2 && acc.total == 5);
+    perftest_collection_nested_each_p0_w5_row inner[] = {{7},{9}};
+    perftest_collection_nested_each_p0_w1_row outer[] = {{{inner,2}},{{NULL,0}}};
+    acc = (struct sequence_acc){0};
+    assert(perftest_collection_nested_each((perftest_collection_nested_each_p0_w1_rows){outer,2}, sequence_nested, &acc) == 2);
+    assert(acc.calls == 2 && acc.total == 16);
+    uintptr_t count = 12345;
+    acc = (struct sequence_acc){0};
+    assert(perftest_collection_optional_each(0,(perftest_collection_optional_each_p0_w3_rows){NULL,0},sequence_number,&acc,&count) == 0);
+    assert(count == 0 && acc.calls == 0);
+    assert(perftest_collection_optional_each(1,(perftest_collection_optional_each_p0_w3_rows){NULL,0},sequence_number,&acc,&count) == 1);
+    assert(count == 0 && acc.calls == 0);
+
+    size_t start = perftest_owned_resource_drops();
+    char *error = NULL;
+    assert(perftest_sequence_parts_each(0,sequence_part,&acc,&count,&error));
+    assert(count == 3 && acc.calls == 3 && acc.total == 6 && error == NULL);
+    assert(perftest_owned_resource_drops() == start + 3);
+    acc = (struct sequence_acc){0}; count = 12345;
+    assert(!perftest_sequence_parts_each(1,sequence_part,&acc,&count,&error));
+    assert(count == 12345 && acc.calls == 0 && error != NULL);
+    perftest_free_error(error); error = NULL;
+    assert(!perftest_sequence_parts_each(2,sequence_part,&acc,&count,&error));
+    assert(count == 12345 && acc.calls == 1 && acc.total == 1 && error != NULL);
+    perftest_free_error(error); error = NULL;
+    assert(perftest_owned_resource_drops() == start + 6);
+    perftest_collection_handles_each_p0_w1_row owned[] = {{perftest_collection_resource_new(42)}};
+    bool accepted = true;
+    assert(!perftest_collection_handles_each((perftest_collection_handles_each_p0_w1_rows){owned,1},65,0,NULL,&acc,&count,&accepted,&error));
+    assert(!accepted && count == 12345 && error != NULL);
+    perftest_free_error(error); error = NULL;
+    acc = (struct sequence_acc){0};
+    assert(perftest_collection_handles_each((perftest_collection_handles_each_p0_w1_rows){owned,1},65,0,sequence_resource,&acc,&count,&accepted,&error));
+    assert(accepted && count == 1 && acc.total == 42 && error == NULL);
+    assert(perftest_owned_resource_drops() == start + 7);
+    acc = (struct sequence_acc){0}; count = 12345;
+    assert(!perftest_sequence_late_drop_each(sequence_resource,&acc,&count,&error));
+    assert(acc.calls == 2 && acc.total == 163 && count == 12345 && error != NULL);
+    perftest_free_error(error);
+    assert(perftest_owned_resource_drops() == start + 9);
+    for (int mode=0; mode<3; ++mode) {
+        perftest_collection_result_optional_each_p0_w1_row inputs[]={{perftest_collection_resource_new(101)},{perftest_collection_resource_new(102)}};
+        acc=(struct sequence_acc){0}; count=12345; int32_t present=12345; accepted=false; error=NULL;
+        bool ok=perftest_collection_result_optional_each((perftest_collection_result_optional_each_p0_w1_rows){inputs,2},mode,sequence_resource,&acc,&present,&count,&accepted,&error);
+        assert(accepted);
+        if (mode==2) {
+            assert(!ok && present==12345 && count==12345 && error!=NULL && acc.calls==0);
+            perftest_free_error(error);
+        } else {
+            assert(ok && error==NULL && present==mode && count==(mode==1 ? 2 : 0));
+            assert(acc.calls==count);
+        }
+    }
+    assert(perftest_owned_resource_drops() == start + 15);
+
+}
+
 static void check_collections(void) {
     int64_t tag = 0;
     perftest_collection_numbers_ret_w2_rows observed = perftest_collection_numbers(&tag);
@@ -422,6 +534,7 @@ static void check_results(void) {
 }
 int main(void) {
     check_collections();
+    check_sequence_delivery();
     EXPECT_ABORT(perftest_c_plain_panic());
     EXPECT_ABORT(perftest_drop_panic_output(perftest_c_panic_output_new()));
     EXPECT_ABORT(perftest_summary_new(0, 0.0, NULL));

@@ -44,6 +44,7 @@ pub(crate) fn output(
         quote!(#field:#value)
     });
     Ok(SequenceOutput {
+        commit_each: false,
         fallible: false,
         carrier: CWire::Rows,
         begin: quote!(let mut #wire:Vec<#row>=Vec::with_capacity(#length);),
@@ -82,6 +83,9 @@ pub(crate) fn emit_schemas(
     header: &mut String,
 ) -> Result<()> {
     for (carrier, element) in schemas {
+        if !matches!(carrier.kind, CWire::Rows) {
+            continue;
+        }
         let row = &context.row_types[&carrier.name.to_string()];
         let base = row.to_string();
         let base = base.trim_start_matches("__PbRow_");
@@ -161,4 +165,53 @@ pub(crate) fn release(
         }
     }
     code
+}
+
+pub(crate) fn callback_output(values: &[TokenStream], length: syn::Ident) -> SequenceOutput<CWire> {
+    let names = (0..values.len())
+        .map(|i| format_ident!("__pb_callback_value_{i}"))
+        .collect::<Vec<_>>();
+    let prepare = names
+        .iter()
+        .zip(values)
+        .map(|(name, value)| quote!(let #name=#value;));
+    let commit = prebindgen_conversions::template_parameter("commit_element");
+    SequenceOutput {
+        commit_each: true,
+        fallible: true, // A callback pointer must be provided; checked before source invocation.
+        carrier: CWire::scalar(Primitive::Usize),
+        begin: quote!(),
+        enter: quote!(),
+        store: quote!(#(#prepare)* #commit unsafe { __pb_callback.expect("validated callback")(__pb_callback_context, #(#names),*); }),
+        finish: quote!(),
+        value: quote!(#length),
+        commit: quote!(),
+    }
+}
+
+/// A visitor may replace exactly one collection, optionally with its presence flag.
+pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
+    fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
+        match nodes {
+            [WireNode::Sequence { carrier, .. }] => matches!(
+                carrier.kind,
+                CWire::Scalar {
+                    primitive: Primitive::Usize,
+                    ..
+                }
+            ),
+            [WireNode::Group {
+                metadata: CGroup::Optional(optional),
+                children,
+            }] if optional.niche.is_none() => match children.nodes().split_first() {
+                Some((WireNode::Wire(flag), rest)) if flag.name == optional.discriminator => {
+                    one(rest)
+                }
+                _ => false,
+            },
+            [WireNode::Group { children, .. }] => one(children.nodes()),
+            _ => false,
+        }
+    }
+    one(layout.nodes())
 }

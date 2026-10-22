@@ -46,9 +46,9 @@ fn main() {
             expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into)),
         ))
         .panic()
-        .function(fun!(collection_optional_handles))
+        .function(fun!(collection_optional_handles).callback_return())
         .panic()
-        .function(fun!(collection_nested_handles))
+        .function(fun!(collection_nested_handles).callback_return())
         .panic()
         .function(fun!(collection_numbers).expand_return(
             expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view)),
@@ -59,32 +59,32 @@ fn main() {
             expand_param!(OwnedResource).variant(fun!(collection_resource_clone)),
         ))
         .panic()
-        .function(fun!(collection_i64))
+        .function(fun!(collection_i64).callback_return())
         .panic()
-        .function(fun!(collection_text))
+        .function(fun!(collection_text).callback_return())
         .panic()
-        .function(fun!(collection_bytes))
+        .function(fun!(collection_bytes).callback_return())
         .panic()
-        .function(fun!(collection_nested))
+        .function(fun!(collection_nested).callback_return())
         .panic()
-        .function(fun!(collection_options))
+        .function(fun!(collection_options).callback_return())
         .panic()
-        .function(fun!(collection_optional))
+        .function(fun!(collection_optional).callback_return())
         .panic()
-        .function(fun!(collection_enum))
+        .function(fun!(collection_enum).callback_return())
         .panic()
         .function(fun!(collection_probe))
         .panic()
-        .function(fun!(collection_borrow))
+        .function(fun!(collection_borrow).callback_return())
         .panic()
-        .function(fun!(collection_slice))
+        .function(fun!(collection_slice).callback_return())
         .panic()
         .function(fun!(collection_resource_new))
         .panic()
-        .function(fun!(collection_handles))
+        .function(fun!(collection_handles).callback_return())
         .function(fun!(collection_alias))
         .panic()
-        .function(fun!(collection_result))
+        .function(fun!(collection_result).callback_return())
         .function(fun!(collection_try_construct_all).expand_param(
             "values",
             expand_param!(CollectionItem).variant(fun!(collection_construct)),
@@ -94,13 +94,28 @@ fn main() {
         ))
         .error("collection_error", pq!(CollectionError))
         .function(fun!(collection_fail))
+        .function(fun!(collection_result_optional).callback_return())
+        .function(
+            fun!(sequence_late_drop)
+                .callback_return_only()
+                .expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))),
+        )
+        .function(fun!(sequence_scalars).callback_return_only().expand_return(
+            expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)),
+        ))
+        .panic()
+        .function(
+            fun!(sequence_parts).callback_return_only().expand_return(
+                expand_return!(SequencePart).fields_into(fields!(sequence_part_into)),
+            ),
+        )
         .function(
             fun!(collection_late_drop)
                 .expand_return(expand_return!(CPanicOutput).field(fun!(collection_late_values))),
         )
         .function(fun!(storage_put_slice))
         .panic()
-        .function(fun!(storage_get_vec))
+        .function(fun!(storage_get_vec).callback_return())
         .panic()
         .function(fun!(result_scalar))
         .function(fun!(result_unit))

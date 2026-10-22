@@ -3,6 +3,7 @@ use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
 pub(crate) struct EnumCodec {
+    pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) errors: std::collections::BTreeMap<String, String>,
     pub(crate) enums: std::collections::BTreeMap<String, (String, EnumMapping)>,
 }
@@ -64,7 +65,11 @@ impl Codec for EnumCodec {
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         values: &[TokenStream],
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
-        CCodec.sequence_output(e, w, n, i, element, values)
+        if self.callback_wire.as_ref() == Some(&w) {
+            Ok(sequence::callback_output(values, n))
+        } else {
+            CCodec.sequence_output(e, w, n, i, element, values)
+        }
     }
     fn result_error_value(
         &self,
@@ -270,6 +275,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let codec = EnumCodec {
+            callback_wire: None,
             errors: Default::default(),
             enums: std::collections::BTreeMap::from([(
                 "crate :: E".into(),

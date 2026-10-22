@@ -420,7 +420,7 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 Further JNI object-array ABI optimization remains separate work.
 
-Callbacks, data-carrying enums, maps/sets, mutable text/byte views, methods,
+Source callback parameters, data-carrying enums, maps/sets, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
 
@@ -467,14 +467,81 @@ after acknowledgement Kotlin marks every selected handle consumed. Prepared
 outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.
 
-The shared `WireNode::Sequence` stores one complete array carrier and a separate
-schema for one element. `wires()`, `len()` and position-based requests see the
+The shared `WireNode::Sequence` stores one complete FFI transport value and a
+separate schema for one element. The value is an array carrier, a delivered count
+for a C visitor, or a presence marker for JNI callback delivery. `wires()`, `len()` and position-based requests see the
 carrier once. Access the element schema through the sequence node; its positions
 refer to fields inside each row, rather than additional function arguments. The
 wire kind still describes a self-sufficient FFI value. Collection structure lives
 in the tree, without a recursive wire enum or a second schema hidden in metadata.
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
+
+### Callback delivery of sequence returns
+
+Select `.callback_return()` on a function to keep its ordinary return and add
+callback delivery. C emits `<function>_each`; Kotlin emits `<name>Fold`.
+Use `.callback_return_only()` to expose only the callback variant. That explicit
+choice also supports decomposed Kotlin elements with several values, without
+requiring a data class. Both variants use the same declared element projections, including getters that
+project a sequence from another source type. Presence follows the output tree. Callback variants are
+compiled from declarations: a manually prebound output slot needs an explicit
+`expand_return` override. Return projections that also expose unrelated values
+outside the sequence are rejected.
+
+```rust
+// C: a null visitor is a binding error, so a non-Result function needs .panic().
+.function(fun!(numbers).callback_return()).panic()
+// JNI package declaration:
+.fun(fun!(numbers).callback_return())
+```
+
+For `fn numbers() -> Vec<i64>`, C receives:
+
+```c
+uintptr_t pb_numbers_each(void (*callback)(void *context, int64_t v0), void *context);
+```
+
+The visitor runs once per element; the return value is the delivered count.
+Each invocation transfers its owned element fields to the visitor. Free or
+retain those fields explicitly. Earlier deliveries remain caller-owned if a
+later conversion fails. Result functions still use explicit error outputs and
+leave success-output storage unchanged on failure; consuming inputs retain their
+ownership acknowledgement. During a C visitor, that acknowledgement output has
+not yet been written: moved inputs already belong to Rust and must not be used.
+A null visitor is rejected before source invocation
+or input ownership transfer. Borrowed inputs must remain live throughout the
+call, and C visitors must not unwind or longjmp.
+
+Kotlin can fold into any accumulator:
+
+```kotlin
+val sum = numbersFold(0L) { acc, number -> acc + number }
+```
+
+Rust calls a generated JNI bridge once per element, passing primitive fields as
+JVM primitives and object fields as references. The method is resolved once per
+native invocation. The bridge retains raw rows in Kotlin; Rust keeps element
+owners until the complete native delivery succeeds. It does not allocate a
+JNI array containing all element rows or box primitive callback arguments in Rust. User folders run
+after JNI returns, input ownership is acknowledged and handle locks are released.
+This prevents user re-entry while Rust borrows are live. It deliberately buffers
+the result before running user code; it does not provide constant-memory streaming
+or early termination. The existing list-return variant remains available.
+
+A folder receives the accumulator followed by each element's projected Kotlin
+values. It owns handles from successfully completed steps. If a folder throws,
+the current element and all remaining undelivered elements are cleaned up, and
+the same exception is rethrown. Handles retained from earlier successful steps
+remain caller-owned; `take()` can retain a handle from the failing step.
+`Option<Vec<T>>` returns null without invoking the folder for None; Some(empty)
+returns the initial accumulator. With a nullable accumulator type, a null final
+accumulator and None both return null. Result errors use callbacks returning the same
+accumulator type, and do not invoke the folder.
+
+Sequence-valued arguments of source callbacks remain part of future general
+callback support. Byte-buffer returns keep their existing transport and are not
+selected as element-wise sequences by these declarations.
 
 ## Result returns
 

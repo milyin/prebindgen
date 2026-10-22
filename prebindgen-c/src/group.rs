@@ -37,9 +37,18 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
     ) -> Result<()> {
         for node in layout.nodes() {
             if let WireNode::Sequence { carrier, element } = node {
-                if !matches!(carrier.kind, CWire::Rows) || element.is_empty() {
+                if !matches!(
+                    carrier.kind,
+                    CWire::Rows
+                        | CWire::Scalar {
+                            primitive: Primitive::Usize,
+                            ..
+                        }
+                ) || element.is_empty()
+                {
                     return Err(
-                        "sequence requires an array carrier and nonempty element layout".into(),
+                        "sequence requires rows or an element count, and a nonempty element layout"
+                            .into(),
                     );
                 }
                 validate_layout(element)?;

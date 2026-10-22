@@ -3547,3 +3547,93 @@ pub fn collection_late_values(_value: &CPanicOutput) -> Vec<Vec<OwnedResource>> 
 pub fn collection_late_drop() -> Result<CPanicOutput, CResultError> {
     Ok(CPanicOutputImpl { _marker: 1 })
 }
+
+#[prebindgen]
+pub struct SequencePart {
+    pub number: i64,
+    pub text: String,
+    pub resource: OwnedResource,
+}
+#[prebindgen]
+pub fn sequence_part_into(value: SequencePart) -> SequencePart {
+    assert_ne!(value.number, -2, "sequence element projection panic");
+    value
+}
+#[prebindgen]
+pub fn sequence_parts(mode: i32) -> Result<Vec<SequencePart>, ResultFailure> {
+    if mode == 1 {
+        return Err(ResultFailureImpl { code: 7 });
+    }
+    Ok((1..=3)
+        .map(|id| SequencePart {
+            number: if mode == 2 && id == 2 { -2 } else { id },
+            text: format!("part {id} 世界"),
+            resource: OwnedResourceImpl { id },
+        })
+        .collect())
+}
+
+#[prebindgen]
+pub struct SequenceScalars {
+    pub flag: bool,
+    pub byte: i8,
+    pub short: i16,
+    pub number: i32,
+    pub long: i64,
+    pub float: f32,
+    pub double: f64,
+    pub wide: i128,
+    pub text: Option<String>,
+}
+#[prebindgen]
+pub fn sequence_scalars_into(value: SequenceScalars) -> SequenceScalars {
+    value
+}
+#[prebindgen]
+pub fn sequence_scalars() -> Vec<SequenceScalars> {
+    vec![
+        SequenceScalars {
+            flag: true,
+            byte: -7,
+            short: -1234,
+            number: -123456,
+            long: i64::MIN,
+            float: 1.25,
+            double: -2.5,
+            wide: i128::MIN,
+            text: Some("世界".into()),
+        },
+        SequenceScalars {
+            flag: false,
+            byte: 7,
+            short: 1234,
+            number: 123456,
+            long: i64::MAX,
+            float: -1.25,
+            double: 2.5,
+            wide: i128::MAX,
+            text: None,
+        },
+    ]
+}
+
+#[prebindgen]
+pub fn sequence_late_drop() -> Result<Vec<CPanicOutput>, ResultFailure> {
+    Ok(vec![CPanicOutputImpl { _marker: 1 }])
+}
+#[prebindgen]
+pub fn sequence_late_view(_source: &Vec<CPanicOutput>) -> Vec<OwnedResource> {
+    vec![OwnedResourceImpl { id: 81 }, OwnedResourceImpl { id: 82 }]
+}
+
+#[prebindgen]
+pub fn collection_result_optional(
+    values: Vec<OwnedResource>,
+    mode: i32,
+) -> Result<Option<Vec<OwnedResource>>, ResultFailure> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(values)),
+        _ => Err(ResultFailureImpl { code: 7 }),
+    }
+}

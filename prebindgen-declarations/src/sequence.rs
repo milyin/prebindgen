@@ -23,22 +23,28 @@ pub struct SequenceInput<W> {
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
 pub struct SequenceOutput<W> {
+    /// Commit each element inside `store`, after capturing its prepared wire values
+    /// and before invoking a foreign visitor. `store` must contain exactly one
+    /// `template_parameter("commit_element")` marker when true. When false, all
+    /// element owners remain in Rust until the outer slot commits.
+    pub commit_each: bool,
     /// Whether preparing or delivering the array transport can return a binding
     /// error, in addition to failures from converting its elements.
     pub fallible: bool,
-    /// One self-sufficient carrier for the array.
+    /// One self-sufficient FFI value for the delivery result: an array carrier,
+    /// delivered count, or presence marker selected by the adapter.
     pub carrier: W,
-    /// Initialize the raw array builder, with the supplied element count available.
+    /// Initialize delivery state, with the supplied element count available.
     pub begin: TokenStream,
     /// Per-row setup before element conversion.
     pub enter: TokenStream,
-    /// Store one prepared element's wire values in the array.
+    /// Store or deliver one prepared element's wire values.
     pub store: TokenStream,
-    /// Finish preparing the carrier after every element has been stored.
+    /// Finish preparing the result after every element has been delivered.
     pub finish: TokenStream,
     /// Expression for the prepared array carrier.
     pub value: TokenStream,
-    /// Commit the outer array's allocation after successful foreign delivery.
+    /// Complete ownership transfer of the outer carrier, such as a row allocation.
     pub commit: TokenStream,
 }
 
@@ -300,6 +306,7 @@ pub(crate) fn output<C: Codec>(
     let prepare = child.statements;
     let child_commit = child.commit;
     let SequenceOutput {
+        commit_each,
         fallible,
         carrier,
         begin,
@@ -309,6 +316,33 @@ pub(crate) fn output<C: Codec>(
         value,
         commit,
     } = transport;
+    let store = if commit_each {
+        let count = std::cell::Cell::new(0);
+        let store = prebindgen_conversions::render_template(&store, &|name| {
+            if name == "commit_element" {
+                count.set(count.get() + 1);
+                Ok(child_commit.clone())
+            } else {
+                Ok(prebindgen_conversions::template_parameter(name))
+            }
+        })?;
+        if count.get() != 1 {
+            return Err("per-element delivery requires exactly one commit_element marker".into());
+        }
+        store
+    } else {
+        quote!(#store #commits.push(move || {#child_commit});)
+    };
+    let declarations = if commit_each {
+        quote!()
+    } else {
+        quote!(let mut #commits=Vec::with_capacity(#length);)
+    };
+    let commit_elements = if commit_each {
+        quote!()
+    } else {
+        quote!(for commit in #commits {commit();})
+    };
     Ok(OutputPlan {
         fallible: child.fallible || fallible,
         context: Default::default(),
@@ -321,13 +355,24 @@ pub(crate) fn output<C: Codec>(
             element: child.layout,
         }]),
         statements: quote! {
-            let #owner=#binding; let #length=#owner.len(); let mut #commits=Vec::with_capacity(#length);
+            let #owner=#binding; let #length=#owner.len(); #declarations
             #begin
-            for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store #commits.push(move || {#child_commit}); }
+            for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store }
             #finish
         },
         values: vec![value],
-        commit: quote!(#commit for commit in #commits {commit();}),
+        commit: quote!(#commit #commit_elements),
+    })
+}
+
+/// Find the outer sequence in a return layout, without descending into its elements.
+pub fn sequence_return<W: prebindgen_flat::WireKind, G>(
+    layout: &WireLayout<W, G>,
+) -> Option<(&Wire<W>, &WireLayout<W, G>)> {
+    layout.nodes().iter().find_map(|node| match node {
+        WireNode::Sequence { carrier, element } => Some((carrier, element)),
+        WireNode::Group { children, .. } => sequence_return(children),
+        WireNode::Wire(_) => None,
     })
 }
 

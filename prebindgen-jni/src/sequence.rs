@@ -90,6 +90,7 @@ pub(crate) fn output(
     let encode = encode_array(element, values, &row, 0)?;
     let frame = format_ident!("{wire}_frame");
     Ok(SequenceOutput {
+        commit_each: false,
         fallible: true,
         carrier: JniWire::Rows {
             condition: "true".into(),

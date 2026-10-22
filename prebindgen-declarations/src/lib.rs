@@ -19,7 +19,7 @@ mod optional;
 pub use optional::{optional_input, optional_output};
 pub use prebindgen_flat::{option_inner, result_parts, sequence_parts, SequenceView};
 mod sequence;
-pub use sequence::{SequenceInput, SequenceOutput};
+pub use sequence::{sequence_return, SequenceInput, SequenceOutput};
 fn contains_result(ty: &Type) -> bool {
     result_parts(ty).is_some()
         || option_inner(ty).is_some_and(contains_result)
@@ -217,7 +217,9 @@ impl Output {
 /// value needs an ordinary Rust owner so later failures drop it. `statements`
 /// can construct arguments from those owners. Every input wire must retain
 /// the supplied activation condition. Output leaves keep ownership in Rust
-/// locals until their infallible `commit` runs after successful delivery.
+/// locals until their infallible `commit` runs at the selected protocol's
+/// transfer point. Buffered delivery commits after all foreign delivery succeeds;
+/// an explicit visitor protocol can transfer each prepared element at callback entry.
 ///
 /// # Implementing a codec
 ///
@@ -1124,8 +1126,8 @@ mod tests;
 
 pub mod declarations;
 pub use declarations::{
-    Declarations, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-    FunctionDecl,
+    CallbackReturn, Declarations, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+    FieldsDecl, FunctionDecl,
 };
 
 /// Parse one Rust identifier used by a declaration.
