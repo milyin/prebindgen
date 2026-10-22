@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["array","binding_packet","bytes","bytes_object","drop_pointer","fail","handle_object","mark_domain_packet","signed128","text","text_object","unsigned128"],"struct":["Allocation"]};

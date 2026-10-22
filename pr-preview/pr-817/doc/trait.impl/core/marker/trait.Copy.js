@@ -1,9 +1,0 @@
-(function() {
-    const implementors = Object.fromEntries([["prebindgen",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen/enum.RustEdition.html\" title=\"enum prebindgen::RustEdition\">RustEdition</a>",0]]],["prebindgen_conversions",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_conversions/enum.Access.html\" title=\"enum prebindgen_conversions::Access\">Access</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_conversions/value/enum.Value.html\" title=\"enum prebindgen_conversions::value::Value\">Value</a>",0]]],["prebindgen_declarations",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_declarations/enum.ProjectionMode.html\" title=\"enum prebindgen_declarations::ProjectionMode\">ProjectionMode</a>",0]]],["prebindgen_flat",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.99.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_flat/enum.Primitive.html\" title=\"enum prebindgen_flat::Primitive\">Primitive</a>",0]]]]);
-    if (window.register_implementors) {
-        window.register_implementors(implementors);
-    } else {
-        window.pending_implementors = implementors;
-    }
-})()
-//{"start":59,"fragment_lengths":[279,583,328,289]}
