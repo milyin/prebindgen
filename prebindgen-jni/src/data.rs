@@ -139,7 +139,7 @@ impl Shape {
     }
     fn slots(&self) -> usize {
         match self {
-            Self::Value(Value::Scalar(p)) => scalar::parameter_slots(*p),
+            Self::Value(Value::Scalar(p)) => JniWire::scalar(*p).parameter_slots(),
             _ => 1,
         }
     }

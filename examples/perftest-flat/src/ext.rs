@@ -3590,6 +3590,14 @@ pub fn sequence_scalars_into(value: SequenceScalars) -> SequenceScalars {
     value
 }
 #[prebindgen]
+pub fn collection_scalars(values: Vec<SequenceScalars>, _tag: f64) -> Vec<SequenceScalars> {
+    values
+}
+#[prebindgen]
+pub fn collection_u128(values: Vec<u128>) -> Vec<u128> {
+    values
+}
+#[prebindgen]
 pub fn sequence_scalars() -> Vec<SequenceScalars> {
     vec![
         SequenceScalars {

@@ -12,6 +12,20 @@ private fun collectionInvalid(action: () -> Unit) {
 }
 
 fun checkCollections() {
+    // Every boxed JVM primitive and the wide-integer/reference paths use the
+    // same per-wire operations for input rows, ordinary output and upcalls.
+    val wideMin = java.math.BigInteger.ONE.shiftLeft(127).negate()
+    val rawRows = listOf(
+        SequenceScalars(true, Byte.MIN_VALUE, Short.MIN_VALUE, Int.MIN_VALUE,
+            Long.MIN_VALUE, Float.NEGATIVE_INFINITY, -0.0, wideMin, "x\u0000世界"),
+        SequenceScalars(false, Byte.MAX_VALUE, Short.MAX_VALUE, Int.MAX_VALUE,
+            Long.MAX_VALUE, Float.NaN, Double.POSITIVE_INFINITY,
+            wideMin.negate().subtract(java.math.BigInteger.ONE), null))
+    check(collectionScalars(rawRows, 0.0) == rawRows)
+    check(collectionScalarsFold(rawRows, 0.0, emptyList<SequenceScalars>()) { a, v -> a + v } == rawRows)
+    val unsigned = listOf(java.math.BigInteger.ZERO, java.math.BigInteger.ONE.shiftLeft(128).subtract(java.math.BigInteger.ONE))
+    check(collectionU128(unsigned) == unsigned)
+    check(collectionU128Fold(unsigned, emptyList<java.math.BigInteger>()) { a, v -> a + v } == unsigned)
     collectionNumbers { values, tag -> check(values == listOf(7L, 9L) && tag == 42L) }
     val throwResult = ResultFailureHandler<Nothing> { code -> throw java.io.IOException("failure $code 世界") }
     val numbers = listOf(Long.MIN_VALUE, 0L, Long.MAX_VALUE)
@@ -155,6 +169,26 @@ fun checkCollections() {
 
     // Exercise raw JNI validation, including an invalid but inactive payload.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
+    val rawScalars = native.declaredMethods.single {
+        it.parameterTypes.toList() == listOf(Array<Any?>::class.java, Double::class.javaPrimitiveType)
+    }.also { it.isAccessible = true }
+    val validRow = arrayOf<Any?>(true, 1.toByte(), 2.toShort(), 3, 4L, 5.0f, 6.0,
+        byteArrayOf(7), "text")
+    for (row in listOf(validRow, validRow.copyOf().also { it[8] = null })) {
+        val packet = rawScalars.invoke(null, arrayOf<Any?>(row), 0.0) as Array<*>
+        check(packet[0] == null && (packet[1] as Array<*>).size == 1)
+    }
+    // Reject every wrong boxed class, and null for each non-reference field.
+    // Reference nulls are checked later against the Rust domain: wide is
+    // required, whereas the optional text null must remain valid.
+    for (index in validRow.indices) {
+        for (bad in listOf<Any?>(Any(), null)) {
+            if (index == 8 && bad == null) continue
+            val row = validRow.copyOf().also { it[index] = bad }
+            val packet = rawScalars.invoke(null, arrayOf<Any?>(row), 0.0) as Array<*>
+            check(packet[0] is String) { "invalid raw field $index was accepted" }
+        }
+    }
     fun method(second: Class<*>) = native.declaredMethods.single {
         it.parameterTypes.toList() == listOf(Array<Any?>::class.java, second)
     }.also { it.isAccessible = true }

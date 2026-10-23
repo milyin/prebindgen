@@ -23,7 +23,7 @@ use prebindgen_flat::{Conversion, ConversionExt, Primitive};
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
-pub use wire::JniWire;
+pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 pub use emission::JniContext;
@@ -621,7 +621,7 @@ impl Codec for JniCodec {
         group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let count = plan.layout.len() + 1;
-        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result), 1)?;
+        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result), 1);
         let mark = prebindgen_conversions::template_parameter("mark_output");
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
@@ -825,28 +825,11 @@ pub(crate) fn encode_array(
     values: &[TokenStream],
     array: &syn::Ident,
     offset: usize,
-) -> Result<TokenStream> {
+) -> TokenStream {
     let env = prebindgen_conversions::template_parameter("environment");
     let mut encode = TokenStream::new();
     for (i, (wire, value)) in layout.iter().zip(values).enumerate() {
-        let expr = match &wire.kind {
-            JniWire::Scalar { primitive: p, .. } => scalar::output_java(*p, value),
-            JniWire::Handle { .. } => {
-                quote!(::prebindgen_jni_runtime::handle_object(&mut #env,(#value) as u64)?)
-            }
-            JniWire::Rows { .. } => {
-                quote!(match (#value).as_ref() {Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
-            }
-            JniWire::Text { .. } => {
-                quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::text_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
-            }
-            JniWire::Bytes { .. } => {
-                quote!(match (#value).as_ref() { Some(value) => ::prebindgen_jni_runtime::bytes_object(&mut #env,value)?, None => ::prebindgen_jni_runtime::jni::objects::JObject::null() })
-            }
-            JniWire::Selector { .. } | JniWire::Enum { .. } => {
-                scalar::output_java(Primitive::I32, value)
-            }
-        };
+        let expr = wire.kind.output_object(value);
         let i = (i + offset) as i32;
         encode.extend(quote! {
             let object = #expr;
@@ -855,7 +838,7 @@ pub(crate) fn encode_array(
         });
     }
 
-    Ok(encode)
+    encode
 }
 fn storage() -> prebindgen_conversions::boxed::Storage {
     prebindgen_conversions::boxed::Storage::Wrapped(syn::parse_quote!(

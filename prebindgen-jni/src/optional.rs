@@ -51,37 +51,9 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
             JniNiche::Null => 0,
             JniNiche::Integer(n) => *n,
         };
-        return if matches!(
-            w,
-            JniWire::Handle { .. }
-                | JniWire::Scalar {
-                    primitive: Primitive::U32
-                        | Primitive::I64
-                        | Primitive::U64
-                        | Primitive::Isize
-                        | Primitive::Usize,
-                    ..
-                }
-        ) {
-            format!("{v}L")
-        } else {
-            v.to_string()
-        };
+        return w.kotlin_integer(v);
     }
-    match w {
-        JniWire::Scalar { primitive: Primitive::Bool, .. } => "false",
-        JniWire::Scalar { primitive: Primitive::I8, .. } => "0.toByte()",
-        JniWire::Scalar { primitive: Primitive::I16, .. } => "0.toShort()",
-        JniWire::Handle { .. }
-        | JniWire::Scalar { primitive: Primitive::U32 | Primitive::I64 | Primitive::U64 | Primitive::Isize | Primitive::Usize, .. } => "0L",
-        JniWire::Scalar { primitive: Primitive::F32, .. } => "0.0f",
-        JniWire::Scalar { primitive: Primitive::F64, .. } => "0.0",
-        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
-            "null"
-        }
-        _ => "0",
-    }
-    .into()
+    w.kotlin_default().into()
 }
 // Replace generated identifiers only, not substrings of other generated names.
 pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
