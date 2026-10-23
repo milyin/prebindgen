@@ -68,17 +68,17 @@
 <a href=#68 id=68 data-nosnippet>68</a>/// is supplied by the adapter. Clear it only when decoding cannot return an error.
 <a href=#69 id=69 data-nosnippet>69</a>///
 <a href=#70 id=70 data-nosnippet>70</a>/// ```
-<a href=#71 id=71 data-nosnippet>71</a>/// use prebindgen_conversions::value;
+<a href=#71 id=71 data-nosnippet>71</a>/// use prebindgen_conversions::{value, NativeLayoutExt};
 <a href=#72 id=72 data-nosnippet>72</a>/// use quote::quote;
 <a href=#73 id=73 data-nosnippet>73</a>/// let input = value::input::&lt;syn::Type, (), ()&gt;(
 <a href=#74 id=74 data-nosnippet>74</a>///     &amp;syn::parse_quote!(&amp;str), syn::parse_quote!(raw), syn::parse_quote!(text),
 <a href=#75 id=75 data-nosnippet>75</a>///     &amp;quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&amp;str),
 <a href=#76 id=76 data-nosnippet>76</a>/// )?;
-<a href=#77 id=77 data-nosnippet>77</a>/// assert_eq!(prebindgen_flat::type_key(&amp;input.transport[0].rust_type()), "&amp; str");
+<a href=#77 id=77 data-nosnippet>77</a>/// assert_eq!(prebindgen_flat::type_key(&amp;input.layout.native_get(0).unwrap().rust_type()), "&amp; str");
 <a href=#78 id=78 data-nosnippet>78</a>/// assert!(input.acquire.is_empty() &amp;&amp; input.resources.is_empty());
 <a href=#79 id=79 data-nosnippet>79</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#80 id=80 data-nosnippet>80</a>/// ```
-<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind + Clone, C, G: Clone&gt;(
+<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C, G&gt;(
 <a href=#82 id=82 data-nosnippet>82</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#83 id=83 data-nosnippet>83</a>    wire: syn::Ident,
 <a href=#84 id=84 data-nosnippet>84</a>    var: syn::Ident,
@@ -114,74 +114,70 @@
 <a href=#114 id=114 data-nosnippet>114</a>        ),
 <a href=#115 id=115 data-nosnippet>115</a>    };
 <a href=#116 id=116 data-nosnippet>116</a>    <span class="prelude-val">Ok</span>(InputPlan {
-<a href=#117 id=117 data-nosnippet>117</a>        logical: Default::default(),
-<a href=#118 id=118 data-nosnippet>118</a>        fallible: <span class="bool-val">true</span>,
-<a href=#119 id=119 data-nosnippet>119</a>        context: Default::default(),
-<a href=#120 id=120 data-nosnippet>120</a>        acknowledgement: <span class="prelude-val">None</span>,
-<a href=#121 id=121 data-nosnippet>121</a>        transport: <span class="macro">vec!</span>[Wire { name: wire, kind }].into(),
-<a href=#122 id=122 data-nosnippet>122</a>        validation: <span class="macro">quote!</span>(<span class="kw">let </span>#var = <span class="kw">if </span>#condition {<span class="prelude-val">Some</span>(#decode)} <span class="kw">else </span>{<span class="prelude-val">None</span>};),
-<a href=#123 id=123 data-nosnippet>123</a>        acquire: <span class="macro">quote!</span>(),
-<a href=#124 id=124 data-nosnippet>124</a>        resources: <span class="macro">vec!</span>[],
-<a href=#125 id=125 data-nosnippet>125</a>        statements,
-<a href=#126 id=126 data-nosnippet>126</a>        argument,
-<a href=#127 id=127 data-nosnippet>127</a>    }
-<a href=#128 id=128 data-nosnippet>128</a>    .with_logical())
-<a href=#129 id=129 data-nosnippet>129</a>}
-<a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a><span class="doccomment">/// Deliver an owned value type. A borrowed `value` is copied first: scalars by
-<a href=#132 id=132 data-nosnippet>132</a>/// dereference, text and bytes by `Clone`.
-<a href=#133 id=133 data-nosnippet>133</a>///
-<a href=#134 id=134 data-nosnippet>134</a>/// The adapter may adjust the result, for example to defer an allocation's
-<a href=#135 id=135 data-nosnippet>135</a>/// transfer to `commit`. The returned plan conservatively sets `fallible = true`
-<a href=#136 id=136 data-nosnippet>136</a>/// for the adapter-supplied encoding; clear it when that encoding is infallible.
+<a href=#117 id=117 data-nosnippet>117</a>        fallible: <span class="bool-val">true</span>,
+<a href=#118 id=118 data-nosnippet>118</a>        context: Default::default(),
+<a href=#119 id=119 data-nosnippet>119</a>        acknowledgement: <span class="prelude-val">None</span>,
+<a href=#120 id=120 data-nosnippet>120</a>        layout: <span class="macro">vec!</span>[Wire { name: wire, kind }].into(),
+<a href=#121 id=121 data-nosnippet>121</a>        validation: <span class="macro">quote!</span>(<span class="kw">let </span>#var = <span class="kw">if </span>#condition {<span class="prelude-val">Some</span>(#decode)} <span class="kw">else </span>{<span class="prelude-val">None</span>};),
+<a href=#122 id=122 data-nosnippet>122</a>        acquire: <span class="macro">quote!</span>(),
+<a href=#123 id=123 data-nosnippet>123</a>        resources: <span class="macro">vec!</span>[],
+<a href=#124 id=124 data-nosnippet>124</a>        statements,
+<a href=#125 id=125 data-nosnippet>125</a>        argument,
+<a href=#126 id=126 data-nosnippet>126</a>    })
+<a href=#127 id=127 data-nosnippet>127</a>}
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a><span class="doccomment">/// Deliver an owned value type. A borrowed `value` is copied first: scalars by
+<a href=#130 id=130 data-nosnippet>130</a>/// dereference, text and bytes by `Clone`.
+<a href=#131 id=131 data-nosnippet>131</a>///
+<a href=#132 id=132 data-nosnippet>132</a>/// The adapter may adjust the result, for example to defer an allocation's
+<a href=#133 id=133 data-nosnippet>133</a>/// transfer to `commit`. The returned plan conservatively sets `fallible = true`
+<a href=#134 id=134 data-nosnippet>134</a>/// for the adapter-supplied encoding; clear it when that encoding is infallible.
+<a href=#135 id=135 data-nosnippet>135</a>///
+<a href=#136 id=136 data-nosnippet>136</a>/// # Arguments
 <a href=#137 id=137 data-nosnippet>137</a>///
-<a href=#138 id=138 data-nosnippet>138</a>/// # Arguments
-<a href=#139 id=139 data-nosnippet>139</a>///
-<a href=#140 id=140 data-nosnippet>140</a>/// * `ty` — the owned source type; it must satisfy [`Value::of`].
-<a href=#141 id=141 data-nosnippet>141</a>/// * `wire` — identifier of the delivered wire, also used for the local holding it.
-<a href=#142 id=142 data-nosnippet>142</a>/// * `value` — Rust expression producing the value.
-<a href=#143 id=143 data-nosnippet>143</a>/// * `borrowed` — `true` when `value` is a shared reference to `ty`, `false` when
-<a href=#144 id=144 data-nosnippet>144</a>///   it is owned.
-<a href=#145 id=145 data-nosnippet>145</a>/// * `encode` — maps a Rust expression of the owned value to the expression
-<a href=#146 id=146 data-nosnippet>146</a>///   delivered on the wire.
-<a href=#147 id=147 data-nosnippet>147</a>/// * `kind` — the adapter's [`Wire::kind`] for the wire.
-<a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind + Clone, C, G: Clone&gt;(
-<a href=#149 id=149 data-nosnippet>149</a>    ty: <span class="kw-2">&amp;</span>Type,
-<a href=#150 id=150 data-nosnippet>150</a>    wire: syn::Ident,
-<a href=#151 id=151 data-nosnippet>151</a>    value: TokenStream,
-<a href=#152 id=152 data-nosnippet>152</a>    borrowed: bool,
-<a href=#153 id=153 data-nosnippet>153</a>    encode: <span class="kw">impl </span>FnOnce(TokenStream) -&gt; TokenStream,
-<a href=#154 id=154 data-nosnippet>154</a>    kind: W,
-<a href=#155 id=155 data-nosnippet>155</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, G&gt;&gt; {
-<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(class) = Value::of(ty).filter(|<span class="kw">_</span>| !<span class="macro">matches!</span>(ty, Type::Reference(<span class="kw">_</span>))) <span class="kw">else </span>{
-<a href=#157 id=157 data-nosnippet>157</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}` is not an owned value type"</span>, type_key(ty)));
-<a href=#158 id=158 data-nosnippet>158</a>    };
-<a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">let </span><span class="kw-2">mut </span>statements = TokenStream::new();
-<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">let </span>value = <span class="kw">match </span>(borrowed, class) {
-<a href=#161 id=161 data-nosnippet>161</a>        (<span class="bool-val">false</span>, <span class="kw">_</span>) =&gt; value,
-<a href=#162 id=162 data-nosnippet>162</a>        <span class="comment">// Bound first: dereferencing `&amp;place` in place is `clippy::deref_addrof`.
-<a href=#163 id=163 data-nosnippet>163</a>        </span>(<span class="bool-val">true</span>, Value::Scalar(<span class="kw">_</span>)) =&gt; {
-<a href=#164 id=164 data-nosnippet>164</a>            statements.extend(<span class="macro">quote!</span>(<span class="kw">let </span>#wire: <span class="kw-2">&amp;</span>#ty = #value;));
-<a href=#165 id=165 data-nosnippet>165</a>            <span class="macro">quote!</span>(<span class="kw-2">*</span>#wire)
-<a href=#166 id=166 data-nosnippet>166</a>        }
-<a href=#167 id=167 data-nosnippet>167</a>        (<span class="bool-val">true</span>, <span class="kw">_</span>) =&gt; <span class="macro">quote!</span>(::core::clone::Clone::clone(#value)),
-<a href=#168 id=168 data-nosnippet>168</a>    };
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">let </span>expr = encode(value);
-<a href=#170 id=170 data-nosnippet>170</a>    statements.extend(<span class="macro">quote!</span>(<span class="kw">let </span>#wire = #expr;));
-<a href=#171 id=171 data-nosnippet>171</a>    <span class="prelude-val">Ok</span>(OutputPlan {
-<a href=#172 id=172 data-nosnippet>172</a>        logical: Default::default(),
-<a href=#173 id=173 data-nosnippet>173</a>        fallible: <span class="bool-val">true</span>,
-<a href=#174 id=174 data-nosnippet>174</a>        context: Default::default(),
-<a href=#175 id=175 data-nosnippet>175</a>        delivery: Default::default(),
-<a href=#176 id=176 data-nosnippet>176</a>        transport: <span class="macro">vec!</span>[Wire {
-<a href=#177 id=177 data-nosnippet>177</a>            name: wire.clone(),
-<a href=#178 id=178 data-nosnippet>178</a>            kind,
-<a href=#179 id=179 data-nosnippet>179</a>        }]
-<a href=#180 id=180 data-nosnippet>180</a>        .into(),
-<a href=#181 id=181 data-nosnippet>181</a>        statements,
-<a href=#182 id=182 data-nosnippet>182</a>        values: <span class="macro">vec!</span>[<span class="macro">quote!</span>(#wire)],
-<a href=#183 id=183 data-nosnippet>183</a>        commit: <span class="macro">quote!</span>(),
-<a href=#184 id=184 data-nosnippet>184</a>    }
-<a href=#185 id=185 data-nosnippet>185</a>    .with_logical())
-<a href=#186 id=186 data-nosnippet>186</a>}
+<a href=#138 id=138 data-nosnippet>138</a>/// * `ty` — the owned source type; it must satisfy [`Value::of`].
+<a href=#139 id=139 data-nosnippet>139</a>/// * `wire` — identifier of the delivered wire, also used for the local holding it.
+<a href=#140 id=140 data-nosnippet>140</a>/// * `value` — Rust expression producing the value.
+<a href=#141 id=141 data-nosnippet>141</a>/// * `borrowed` — `true` when `value` is a shared reference to `ty`, `false` when
+<a href=#142 id=142 data-nosnippet>142</a>///   it is owned.
+<a href=#143 id=143 data-nosnippet>143</a>/// * `encode` — maps a Rust expression of the owned value to the expression
+<a href=#144 id=144 data-nosnippet>144</a>///   delivered on the wire.
+<a href=#145 id=145 data-nosnippet>145</a>/// * `kind` — the adapter's [`Wire::kind`] for the wire.
+<a href=#146 id=146 data-nosnippet>146</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, G&gt;(
+<a href=#147 id=147 data-nosnippet>147</a>    ty: <span class="kw-2">&amp;</span>Type,
+<a href=#148 id=148 data-nosnippet>148</a>    wire: syn::Ident,
+<a href=#149 id=149 data-nosnippet>149</a>    value: TokenStream,
+<a href=#150 id=150 data-nosnippet>150</a>    borrowed: bool,
+<a href=#151 id=151 data-nosnippet>151</a>    encode: <span class="kw">impl </span>FnOnce(TokenStream) -&gt; TokenStream,
+<a href=#152 id=152 data-nosnippet>152</a>    kind: W,
+<a href=#153 id=153 data-nosnippet>153</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, G&gt;&gt; {
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(class) = Value::of(ty).filter(|<span class="kw">_</span>| !<span class="macro">matches!</span>(ty, Type::Reference(<span class="kw">_</span>))) <span class="kw">else </span>{
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}` is not an owned value type"</span>, type_key(ty)));
+<a href=#156 id=156 data-nosnippet>156</a>    };
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">let </span><span class="kw-2">mut </span>statements = TokenStream::new();
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">let </span>value = <span class="kw">match </span>(borrowed, class) {
+<a href=#159 id=159 data-nosnippet>159</a>        (<span class="bool-val">false</span>, <span class="kw">_</span>) =&gt; value,
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="comment">// Bound first: dereferencing `&amp;place` in place is `clippy::deref_addrof`.
+<a href=#161 id=161 data-nosnippet>161</a>        </span>(<span class="bool-val">true</span>, Value::Scalar(<span class="kw">_</span>)) =&gt; {
+<a href=#162 id=162 data-nosnippet>162</a>            statements.extend(<span class="macro">quote!</span>(<span class="kw">let </span>#wire: <span class="kw-2">&amp;</span>#ty = #value;));
+<a href=#163 id=163 data-nosnippet>163</a>            <span class="macro">quote!</span>(<span class="kw-2">*</span>#wire)
+<a href=#164 id=164 data-nosnippet>164</a>        }
+<a href=#165 id=165 data-nosnippet>165</a>        (<span class="bool-val">true</span>, <span class="kw">_</span>) =&gt; <span class="macro">quote!</span>(::core::clone::Clone::clone(#value)),
+<a href=#166 id=166 data-nosnippet>166</a>    };
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">let </span>expr = encode(value);
+<a href=#168 id=168 data-nosnippet>168</a>    statements.extend(<span class="macro">quote!</span>(<span class="kw">let </span>#wire = #expr;));
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="prelude-val">Ok</span>(OutputPlan {
+<a href=#170 id=170 data-nosnippet>170</a>        fallible: <span class="bool-val">true</span>,
+<a href=#171 id=171 data-nosnippet>171</a>        context: Default::default(),
+<a href=#172 id=172 data-nosnippet>172</a>        delivery: Default::default(),
+<a href=#173 id=173 data-nosnippet>173</a>        layout: <span class="macro">vec!</span>[Wire {
+<a href=#174 id=174 data-nosnippet>174</a>            name: wire.clone(),
+<a href=#175 id=175 data-nosnippet>175</a>            kind,
+<a href=#176 id=176 data-nosnippet>176</a>        }]
+<a href=#177 id=177 data-nosnippet>177</a>        .into(),
+<a href=#178 id=178 data-nosnippet>178</a>        statements,
+<a href=#179 id=179 data-nosnippet>179</a>        values: <span class="macro">vec!</span>[<span class="macro">quote!</span>(#wire)],
+<a href=#180 id=180 data-nosnippet>180</a>        commit: <span class="macro">quote!</span>(),
+<a href=#181 id=181 data-nosnippet>181</a>    })
+<a href=#182 id=182 data-nosnippet>182</a>}
 </code></pre></div></section></main></body></html>
