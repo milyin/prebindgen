@@ -1,8 +1,6 @@
 //! JNI slot converters own Kotlin conversion, locking and rollback behavior.
 use super::*;
 use crate::group::validate_layout;
-#[cfg(test)]
-use prebindgen_conversions::NativeReader;
 use prebindgen_flat::{Conversion, Wire};
 
 /// Configured names for a generated handle class and its native destructor.
@@ -88,8 +86,9 @@ pub struct KotlinOutput {
 }
 /// Input conversion with opaque Kotlin-side emission.
 pub trait KotlinInputConversion:
-    for<'a> NativeConversion<
+    for<'a> Conversion<
     Wire = JniWire,
+    Group = JniGroup,
     SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>,
 >
 {
@@ -98,10 +97,10 @@ pub trait KotlinInputConversion:
 }
 /// Output conversion with opaque Kotlin-side emission.
 pub trait KotlinOutputConversion:
-    for<'a> NativeConversion<
+    for<'a> Conversion<
     Wire = JniWire,
+    Group = JniGroup,
     SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>,
-    WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>,
 >
 {
     /// Emit destination-side output conversion and rollback for this slot.
@@ -143,18 +142,6 @@ impl Conversion for JniInput {
         self.rust.code_fragment_slot(mode, expected)
     }
 }
-impl prebindgen_conversions::NativeConversion for JniInput {
-    type Reader = JniCodec;
-    type WireFragment<'a> = prebindgen_conversions::InputWireFragment;
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: Self::WireFragment<'_>,
-        expected: &syn::Type,
-    ) -> Result<TokenStream> {
-        self.rust.code_fragment_wire(pos, mode, expected)
-    }
-}
 
 impl Conversion for JniOutput {
     type Wire = JniWire;
@@ -170,18 +157,6 @@ impl Conversion for JniOutput {
         expected: &syn::Type,
     ) -> Result<TokenStream> {
         self.rust.code_fragment_slot(mode, expected)
-    }
-}
-impl prebindgen_conversions::NativeConversion for JniOutput {
-    type Reader = JniCodec;
-    type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>;
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: Self::WireFragment<'_>,
-        expected: &syn::Type,
-    ) -> Result<TokenStream> {
-        self.rust.code_fragment_wire(pos, mode, expected)
     }
 }
 
@@ -299,7 +274,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
 
 pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, JniGroup>;
 pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
-    JniCodec::wires(nodes).collect()
+    crate::group::kotlin_result_fields(nodes).collect()
 }
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
     nodes.iter().any(|node| match node {
@@ -321,7 +296,7 @@ pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Re
         let c = match node {
             JniNode::Wire(w) => input_leaves(&[w], context)?,
             JniNode::Outcomes { .. } => {
-                return Err("outcomes are output-only in this reader".into())
+                return Err("outcomes are output-only in the JNI adapter".into())
             }
             JniNode::Alternatives {
                 metadata,
@@ -416,12 +391,12 @@ pub(crate) fn output_kotlin(
             output_prefix: &prefix,
             ..*context
         };
-        let count = JniCodec::wires(std::slice::from_ref(node)).len();
+        let count = crate::group::kotlin_result_fields(std::slice::from_ref(node)).len();
         let mut c = match node {
             JniNode::Wire(w) => output_leaves(&[w], &ctx)?,
             JniNode::Outcomes { .. } => return Err("outcomes must be the sole root node".into()),
             JniNode::Alternatives { .. } => {
-                return Err("native alternatives are input-only in this reader".into())
+                return Err("native alternatives are input-only in the JNI adapter".into())
             }
             JniNode::Sequence(c) => crate::sequence::output_list(&c.element, &ctx)?,
             JniNode::Optional(c) => {
@@ -449,6 +424,15 @@ pub(crate) fn output_kotlin(
         offset += count;
     }
     Ok(out)
+}
+
+impl JniOutput {
+    /// Fields stored in the successful JNI result array, excluding status/error
+    /// framing. Sequence rows and visitor arguments have their own schemas.
+    pub fn result_packet_fields(&self) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
+        validate_layout(&self.rust.layout)?;
+        Ok(crate::group::result_packet_fields(&self.rust.layout))
+    }
 }
 
 #[cfg(test)]
@@ -481,11 +465,7 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        let JniWire::Handle { condition, .. } = &mut JniCodec::wires_mut(plan.layout.nodes_mut())
-            .next()
-            .unwrap()
-            .kind
-        else {
+        let JniWire::Handle { condition, .. } = &mut plan.layout[0].kind else {
             panic!()
         };
         *condition = "isEnabled() && count > 3".into();
@@ -494,21 +474,11 @@ mod tests {
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::scalar(Primitive::I64);
         assert_eq!(
-            prebindgen_flat::type_key(
-                &JniCodec::wires(input.layout().nodes())
-                    .next()
-                    .unwrap()
-                    .kind
-                    .rust_type()
-            ),
+            prebindgen_flat::type_key(&input.layout().iter().next().unwrap().kind.rust_type()),
             prebindgen_flat::type_key(&scalar.rust_type())
         );
         assert_eq!(
-            JniCodec::wires(input.layout().nodes())
-                .next()
-                .unwrap()
-                .kind
-                .kotlin_type(),
+            input.layout().iter().next().unwrap().kind.kotlin_type(),
             scalar.kotlin_type()
         );
         let emitted = input.kotlin(&context).unwrap();

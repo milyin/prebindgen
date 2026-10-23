@@ -1,4 +1,4 @@
-//! Logical values exchanged by a conversion; transport belongs to its reader.
+//! Logical values exchanged by a conversion; transport belongs to its generator.
 use crate::{Result, Wire, WireKind};
 
 /// One payload/element schema. Its leaves may occur zero, one or many times.
@@ -31,7 +31,7 @@ pub struct WireOutcome<W: WireKind, G> {
 /// adapters may retain explicit encoding decisions in their opaque metadata.
 #[derive(Clone, Debug)]
 pub enum WireNode<W: WireKind, G> {
-    /// Definition of one typed value, wherever the reader chooses to pass it.
+    /// Definition of one typed value, wherever the generator chooses to pass it.
     Wire(Wire<W>),
     /// Zero or one occurrence of the element schema.
     Optional(WireContainer<W, G>),
@@ -44,7 +44,7 @@ pub enum WireNode<W: WireKind, G> {
         /// Logical child definitions in declared order.
         children: WireLayout<W, G>,
     },
-    /// Exactly one alternative is selected; selector tags belong to the reader.
+    /// Exactly one alternative is selected; selector tags belong to the generator.
     /// Empty alternatives represent choices carrying no values.
     Alternatives {
         /// Adapter-specific selection information, without common placement rules.
@@ -59,7 +59,7 @@ pub enum WireNode<W: WireKind, G> {
         alternatives: Vec<WireOutcome<W, G>>,
     },
 }
-/// Logical input/output specification. A reader chooses physical signatures and
+/// Logical input/output specification. A generator chooses physical signatures and
 /// how values are packed, repeated, selected or delivered.
 ///
 /// Iteration visits each leaf definition once, including every sequence element
@@ -313,7 +313,7 @@ impl<W: WireKind, G> WireLayout<W, G> {
     }
 }
 /// Address of a definition, not a runtime instance or an ABI position. Rebuild
-/// paths after structural edits; a reader supplies any element/branch context.
+/// paths after structural edits; a generator supplies any element/branch context.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WirePath(pub Vec<usize>);
 /// A logical value definition paired with its structural context.

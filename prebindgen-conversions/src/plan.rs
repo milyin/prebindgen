@@ -7,16 +7,14 @@ use quote::quote;
 ///
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
-pub struct InputPlan<W: WireKind, C = (), G = (), R = ()> {
+pub struct InputPlan<W: WireKind, C = (), G = ()> {
     /// Whether validation or construction can return a binding error. This
     /// excludes panics and allocation aborts. Composition preserves child flags.
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Adapter selected to read this tree's native boundary scopes.
-    pub reader: std::marker::PhantomData<fn() -> R>,
     /// Authoritative value tree. Adapter metadata records native encoding choices;
-    /// physical parameters are derived from this tree when the reader needs them.
+    /// physical parameters are derived from this tree when the generator emits its signature.
     pub layout: WireLayout<W, G>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
@@ -35,14 +33,12 @@ pub struct InputPlan<W: WireKind, C = (), G = (), R = ()> {
 ///
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
-pub struct OutputPlan<W: WireKind, C = (), G = (), R = ()> {
+pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     /// Whether preparation or delivery can return a binding error, excluding
     /// panics and allocation aborts. Adapters must mark custom fallible code.
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Adapter selected to read this tree's native boundary scopes.
-    pub reader: std::marker::PhantomData<fn() -> R>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
@@ -54,9 +50,9 @@ pub struct OutputPlan<W: WireKind, C = (), G = (), R = ()> {
     pub commit: TokenStream,
     /// Code producing owned output temporaries and evaluating observations before moves.
     pub statements: TokenStream,
-    /// Expressions in native transport order, valid until commit. These describe
-    /// this reader's success delivery, not a flat list of logical output values.
-    pub values: Vec<TokenStream>,
+    /// Prepared success expressions keyed by their destination binding names.
+    /// Adapters choose packet/row order from the tree and match these by name.
+    pub values: Vec<(syn::Ident, TokenStream)>,
 }
 /// Access to one foreign resource during an exported call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,21 +109,19 @@ pub fn source_result_expr() -> TokenStream {
 
 macro_rules! plan_traits {
     ($plan:ident; $($field:ident),* $(,)?) => {
-        impl<W: WireKind + Clone, C, G: Clone, R> Clone for $plan<W, C, G, R> {
+        impl<W: WireKind + Clone, C, G: Clone> Clone for $plan<W, C, G> {
             fn clone(&self) -> Self {
                 Self {
                     context: self.context,
-                    reader: self.reader,
                     $($field: self.$field.clone(),)*
                 }
             }
         }
-        impl<W: WireKind + std::fmt::Debug, C, G: std::fmt::Debug, R> std::fmt::Debug
-            for $plan<W, C, G, R>
+        impl<W: WireKind + std::fmt::Debug, C, G: std::fmt::Debug> std::fmt::Debug
+            for $plan<W, C, G>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct(stringify!($plan))
-                    .field("reader", &std::any::type_name::<R>())
                     $(.field(stringify!($field), &self.$field))*
                     .finish()
             }
@@ -136,3 +130,40 @@ macro_rules! plan_traits {
 }
 plan_traits!(InputPlan; fallible, layout, acknowledgement, validation, acquire, resources, statements, argument);
 plan_traits!(OutputPlan; fallible, layout, delivery, commit, statements, values);
+
+/// Match prepared expressions to the fields of a concrete result packet or row.
+/// The caller supplies destination fields in ABI order. Names, rather than the
+/// expression list's order, establish correspondence; missing/extra names fail.
+pub fn match_output_fields<'a, W: WireKind + 'a>(
+    fields: impl IntoIterator<Item = &'a prebindgen_flat::Wire<W>>,
+    bindings: &'a [(syn::Ident, TokenStream)],
+) -> prebindgen_flat::Result<Vec<(&'a prebindgen_flat::Wire<W>, &'a TokenStream)>> {
+    validate_value_bindings(bindings)?;
+    let mut remaining = bindings
+        .iter()
+        .map(|(name, value)| (name.to_string(), value))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut out = vec![];
+    for field in fields {
+        let value = remaining
+            .remove(&field.name.to_string())
+            .ok_or_else(|| format!("missing output binding `{}`", field.name))?;
+        out.push((field, value));
+    }
+    if let Some(name) = remaining.keys().next() {
+        return Err(format!("unexpected output binding `{name}`"));
+    }
+    Ok(out)
+}
+/// Check that each prepared output name is defined once.
+pub fn validate_value_bindings(
+    bindings: &[(syn::Ident, TokenStream)],
+) -> prebindgen_flat::Result<()> {
+    let mut names = std::collections::BTreeSet::new();
+    for (name, _) in bindings {
+        if !names.insert(name.to_string()) {
+            return Err(format!("duplicate output binding `{name}`"));
+        }
+    }
+    Ok(())
+}

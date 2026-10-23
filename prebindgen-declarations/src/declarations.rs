@@ -3,7 +3,6 @@
 
 use crate::{option_inner, result_parts, sequence_parts};
 use crate::{Codec, Compiler, Condition, Input, Output, Projection};
-use prebindgen_conversions::NativeReader;
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
 
@@ -393,14 +392,13 @@ impl Declarations {
         for input in inputs.iter_mut().flatten() {
             codec.finish_input(input, extra)?;
             input.layout.validate()?;
-            C::Reader::validate(&input.layout)?;
+            codec.validate_input(input)?;
         }
         if let Some(output) = &mut output {
             crate::finalize_output_schema(codec, output, extra)?;
             codec.finish_output(output, extra)?;
             output.layout.validate()?;
-            output.validate_value_count()?;
-            C::Reader::validate(&output.layout)?;
+            codec.validate_output(output)?;
         }
         // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;

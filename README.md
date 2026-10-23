@@ -207,41 +207,39 @@ Payloads occur only in its leaves and children. Adapter metadata retains explici
 native decisions and owns any additional values, such as presence flags,
 selectors or sequence parameters. Metadata contains no copy of the child tree.
 
-The adapter implements `NativeReader::wires` and `wires_mut` to supply borrowed
-values for the requested node slice. The adapter handles the nodes directly,
-choosing order, packing and scope boundaries. Shared compilation consumes those
-lists; it has no classification of native representations or generic ABI walker.
-The reader's `validate` method checks its own boundary rules. `validate_wire_names`
-is a shared utility for a namespace explicitly selected by the reader.
+Each adapter has operations for actual ABI tasks: building a function's
+parameters, laying out a successful result packet, defining one sequence row,
+and choosing a visitor callback's arguments. Those operations inspect the tree
+and their adapter's metadata. They can share private traversal code; the common
+API imposes no physical parameter list or flattening policy.
 
-C/JNI readers expose a sequence's single outer buffer/count/presence value and
-read its element fields separately. Another reader may expose separate pointer
-and length values, or pack a Group into native values described by its metadata.
-Neither choice requires changing the common tree. C/JNI select Success when
-reading an Outcomes root; that selection belongs to those readers. Error payloads
-remain accessible through `outcome(SourceError)` and `outcome(BindingFailure)`.
+`OutputPlan::values` holds `(binding_name, expression)` pairs. The adapter reads
+its destination fields in ABI order and looks up each expression by name.
+`match_output_fields` checks those assignments and rejects missing, extra or
+duplicate bindings. Expression-list order therefore cannot silently change an
+output packet or sequence row. The tree remains the source of field types and
+placement; the expressions contain no second layout.
 
-The shared recipe helpers implement particular conversions: optional values use
-controls followed by the prepared payload, alternatives use a selector followed
-by the prepared arms, and record groups keep their child values in order. These
-helpers reject metadata that changes those views. Other representations, such as
-a packed record, need adapter-defined preparation code; the tree and reader API
-do not impose those helper-specific restrictions.
+Sequence input hooks similarly provide named validation and deferred reads for
+one element. Shared composition substitutes those names directly, without
+flattening the element tree. Output hooks provide metadata and named outer
+expressions, allowing one buffer value or separate pointer and length values.
+The adapter validates each prepared child before embedding it in a sequence.
 
-Native plans carry the reader as a type parameter `R`, selected by `Codec::Reader`.
-The reader is not instantiated or cloned. `NativeConversion::Reader` identifies
-it for generic staged helpers and per-physical-value code requests.
-`NativeFunction::native_inputs()` and `StagedFunction::outputs()` use that reader;
-`OutputPlan::values` matches the resulting native value list, not the logical leaf
-count. Sequence hooks return their complete metadata and a list of outer output
-expressions, so shared composition makes no single-parameter assumption.
+Option composition asks the codec to select a `NicheReservation`, test presence,
+prepare named absent outputs, and retire niches from inactive payload values.
+The reservation identifies a payload binding and its excluded representation.
+The adapter chooses its candidates, including metadata-owned controls, while
+shared composition handles conditional validation, preparation and ownership.
+`prefix_layout` lets a codec attach source paths without exposing its physical
+values to the common compiler. `validate_input` and `validate_output` check the
+finished conversion before installation.
 
-Finish hooks see the complete tree. Edits to nodes or metadata are reflected in
-the next borrowed view without cloning payloads or refreshing another layout.
-Rust and C/Kotlin generation use the same tree and reader. Callback/context
-parameters, acknowledgements and error packet/status details remain adapter
-choices. The common `Conversion` trait requires neither `NativeReader` nor
-`NativeConversion`.
+C/JNI select Success when building normal result packets. SourceError and
+BindingFailure remain accessible through their explicit outcome schemas.
+Callback/context parameters, acknowledgements and error packet/status details
+belong to the adapters. The base `Conversion` trait requires only the logical
+tree and the generator's slot requests.
 
 Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
 binding supplied by the generator, and `source_result_expr()` marks the source
@@ -284,11 +282,10 @@ no representation IDs. Generation never looks up declarations or defaults.
 A `Wire` exposes only a binding name and carrier description. It does not expose
 fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`
 and `Condition` belong to declarations. A codec can retain logical mappings in
-its private preparation metadata through `prefix_component`; `validate_mapping`
+its private preparation metadata through `prefix_layout`; `validate_mapping`
 accepts explicit name/path pairs. The final converter emits the corresponding
 projections or constructions itself. Wrapper writers never interpret these paths.
-`Function::input_conversions()` preserves slot grouping; the optional staged
-protocol pairs output carriers with requested expressions.
+`Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional staged plans describe allocation participation using emitted Rust
 boolean expressions. Their assembly helper checks allocation aliases. JNI slots
@@ -531,8 +528,8 @@ Optional
 ```
 
 `wires()` visits the integer definition once. It describes neither a concrete
-runtime collection nor a native parameter list. A C reader can choose a row buffer
-and presence controls; another reader can deliver each integer through callback
+runtime collection nor a native parameter list. The C adapter can choose a row buffer
+and presence controls; another adapter can deliver each integer through callback
 arguments. The same logical structure supports either choice. Fields nested in
 sequences have structural paths, rather than positions assigned to an enclosing
 function signature.
@@ -541,7 +538,7 @@ C/JNI store their selected encoding in metadata on these same nodes. A sequence
 node owns its element schema; its adapter metadata owns the row buffer or callback
 completion carrier. An optional node similarly owns presence/niche metadata and
 any extra flag. Native parameter lists and row/callback field lists are borrowed
-views of that tree, with explicit scope boundaries chosen by the reader. These
+views of that tree, with explicit scope boundaries chosen by the adapter. These
 adapters retain their existing ABI and conversion behavior.
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
@@ -845,7 +842,7 @@ Outcomes — exactly one channel is selected
 explicit mapper; string-valued fields retain their ordinary conversions.
 `BindingFailure` is a separate conversion/invocation failure channel. C and JNI
 declare their diagnostic payload through `Codec::binding_failure_layout`.
-Readers choose how to deliver each channel: native outputs/status, typed error
+Adapters choose how to deliver each channel: native outputs/status, typed error
 callbacks, or another policy. JNI always uses a binding-error callback and requires
 that channel in manually supplied schemas. C requires it for recoverable `Result`
 wrappers; other C functions abort on binding failures and may omit the channel
@@ -858,7 +855,7 @@ schema just like the success schema. `layout().entries()` visits each definition
 once and supplies a path identifying its element and outcome. Equal wire names
 in different alternatives are allowed; a path distinguishes them. Actual
 runtime elements and the selected outcome are emission context supplied by the
-reader, rather than flat wire positions imposed by the trait. Outcomes require a
+adapter, rather than flat wire positions imposed by the trait. Outcomes require a
 Success channel and may appear only as the sole root node. Outcome paths encode
 channel identity, so adding a SourceError does not change a BindingFailure path;
 rebuild paths after other structural edits.
@@ -957,21 +954,20 @@ optional-field and callback APIs. Its driver reports that limitation.
 
 Adapter API migration for the logical schema:
 
-- `Conversion` provides `layout()` and generator-defined slot requests. Physical
-  `WireFragment`/`code_fragment_wire` now belong to opt-in `NativeConversion`.
-- `ConversionExt::wires()` enumerates definitions, not native parameters. Use
-  `entries()`/`WirePath` for structural context. A selected reader supplies
-  native boundary lists through `NativeReader::wires` instead.
-- Stored plans expose one `layout` tree and a reader type parameter `R`, selected
-  by `Codec::Reader`. Metadata is opaque to shared native compilation.
-- Implement `NativeReader` in the adapter to supply boundary lists and validation.
-  Metadata has no required native interface. Native expression counts use the
-  selected reader's view. No parallel layout or refresh API exists.
-- `SequenceInput`/`SequenceOutput` return complete node metadata;
-  `SequenceOutput::values` lists every outer output expression. Callback variant
-  eligibility and native sequence discovery belong to the adapters.
-- Value/boxed helpers and native views support non-Clone metadata; payload
-  descriptions are stored once.
-- Codecs describe source-error projections through `source_error_layout` and
-  binding-failure diagnostics through `binding_failure_layout`. Existing
-  C/JNI output signatures, typed error handlers and ownership rules are retained.
+- `Conversion` provides `layout()` and generator-defined slot requests.
+  Generators derive function parameters, result packets, rows and callback
+  signatures through their own operations.
+- `ConversionExt::wires()` enumerates logical definitions. Use `entries()` and
+  `WirePath` for structural context.
+- Stored plans expose one `layout` tree. `OutputPlan::values` and sequence-hook
+  reads are keyed by binding name. `match_output_fields` matches prepared output
+  expressions to explicitly selected destination fields.
+- Codecs implement option niche reservation/presence, absent-output preparation,
+  niche retirement, path prefixing and conversion validation as needed.
+- `SequenceInput`/`SequenceOutput` retain complete node metadata. Callback variant
+  eligibility and sequence callback signatures belong to the adapters.
+- `staged::emit_call` receives the generated function's parameter names for
+  reserving locals; it never derives a parameter list from the logical tree.
+- Codecs describe source errors through `source_error_layout` and binding
+  failures through `binding_failure_layout`. C/JNI output signatures, typed
+  error handlers and ownership rules are retained.

@@ -123,14 +123,14 @@ impl EnumMapping {
 
 /// Prepare checked enum decoding with the supplied boundary carrier.
 /// References borrow the decoded local; mutable references are unsupported.
-pub fn enum_input<W: prebindgen_flat::WireKind, C, G, R>(
+pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
     mapping: &EnumMapping,
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &Condition,
     kind: W,
-) -> Result<InputPlan<W, C, G, R>> {
+) -> Result<InputPlan<W, C, G>> {
     let borrowed = match ty {
         Type::Reference(r) if r.mutability.is_some() => {
             return Err("mutable enum inputs are unsupported".into())
@@ -143,9 +143,12 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, G, R>(
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
-        reader: Default::default(),
         acknowledgement: None,
-        layout: vec![Wire { name: wire, kind }].into(),
+        layout: vec![Wire {
+            name: wire.clone(),
+            kind,
+        }]
+        .into(),
         validation: quote!(let #var = if #active { Some(#decode) } else { None };),
         acquire: quote!(),
         resources: vec![],
@@ -162,17 +165,16 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, G, R>(
     })
 }
 /// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
-pub fn enum_output<W: prebindgen_flat::WireKind, C, G, R>(
+pub fn enum_output<W: prebindgen_flat::WireKind, C, G>(
     mapping: &EnumMapping,
     wire: syn::Ident,
     value: TokenStream,
     kind: W,
-) -> OutputPlan<W, C, G, R> {
+) -> OutputPlan<W, C, G> {
     let encoded = mapping.encode(quote!(&(#value)));
     OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         delivery: Default::default(),
         layout: vec![Wire {
             name: wire.clone(),
@@ -180,7 +182,7 @@ pub fn enum_output<W: prebindgen_flat::WireKind, C, G, R>(
         }]
         .into(),
         statements: quote!(let #wire: i32 = #encoded;),
-        values: vec![quote!(#wire)],
+        values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     }
 }

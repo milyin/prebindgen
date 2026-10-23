@@ -28,7 +28,7 @@ impl Codec for EnumCodec {
     type Wire = CWire;
     type Niche = CNiche;
     type Group = CGroup;
-    type Reader = CCodec;
+
     type Extra = ();
     type Context = CContext;
     type Input = InputPlan<CWire>;
@@ -92,10 +92,10 @@ impl Codec for EnumCodec {
         n: syn::Ident,
         i: syn::Ident,
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
-        values: &[TokenStream],
+        values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_declarations::SequenceOutput<CGroup>> {
         if self.callback_wire.as_ref() == Some(&w) {
-            Ok(sequence::callback_output(w, values, n))
+            sequence::callback_output(w, values, element, n)
         } else {
             CCodec.sequence_output(e, w, n, i, element, values)
         }
@@ -211,6 +211,40 @@ impl Codec for EnumCodec {
             ));
         }
         CCodec.output_leaf(ty, e, w, v, borrowed)
+    }
+
+    fn optional_niche(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
+        CCodec.optional_niche(payload)
+    }
+    fn optional_presence(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        CCodec.optional_presence(payload, reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        CCodec.absent_output_values(payload, reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        CCodec.retire_niches(payload, reservation)
+    }
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        CCodec.validate_input(plan)
+    }
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        CCodec.validate_output(plan)
     }
 }
 
@@ -333,10 +367,10 @@ mod tests {
             let output = codec
                 .output_leaf(&ty, &(), syn::parse_quote!(wire), quote!(value), false)
                 .unwrap();
-            assert_eq!(CCodec::wires(input.layout.nodes()).len(), 1);
-            assert_eq!(CCodec::wires(output.layout.nodes()).len(), 1);
+            assert_eq!(input.layout.len(), 1);
+            assert_eq!(crate::group::result_packet_fields(&output.layout).len(), 1);
             assert!(
-                matches!(CCodec::wires(input.layout.nodes()).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(input.layout.iter().next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
             super::super::group::validate_layout(&input.layout).unwrap();
             super::super::group::validate_layout(&output.layout).unwrap();

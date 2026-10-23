@@ -1,6 +1,5 @@
 //! Shared record composition for declaration recipes and adapter-defined leaves.
 use super::*;
-use prebindgen_conversions::NativeReader;
 
 /// Construct a named Rust record from field conversion plans in declaration order.
 /// Group hooks describe the collection and each named field in adapter metadata,
@@ -22,7 +21,6 @@ pub fn record_input<C: Codec>(
     let mut out: CodecInput<C> = InputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         acknowledgement: None,
         layout: Default::default(),
         validation: TokenStream::new(),
@@ -36,23 +34,21 @@ pub fn record_input<C: Codec>(
     for field in fields {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        for wire in C::Reader::wires_mut(child.layout.nodes_mut()) {
-            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
-        }
+        codec.prefix_layout(&mut child.layout, ComponentSegment::Field(name.to_string()));
         out.fallible |= child.fallible;
         out.validation.extend(child.validation);
         out.acquire.extend(child.acquire);
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        enclose::<C>(&mut child.layout, codec.field_group(name.clone()))?;
+        child.layout.enclose(codec.field_group(name.clone()));
         out.layout.extend(child.layout);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-    enclose::<C>(&mut out.layout, codec.fields_group())?;
+    out.layout.enclose(codec.fields_group());
 
     Ok(out)
 }
@@ -83,7 +79,6 @@ pub fn record_output<C: Codec>(
     let mut out = OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
         layout: Default::default(),
@@ -94,13 +89,11 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        for wire in C::Reader::wires_mut(child.layout.nodes_mut()) {
-            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
-        }
-        enclose::<C>(&mut child.layout, codec.field_group(name))?;
+        codec.prefix_layout(&mut child.layout, ComponentSegment::Field(name.to_string()));
+        child.layout.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    enclose::<C>(&mut out.layout, codec.fields_group())?;
+    out.layout.enclose(codec.fields_group());
 
     Ok(out)
 }
@@ -130,7 +123,6 @@ pub fn record_output_owned<C: Codec>(
     let mut out = OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
         layout: Default::default(),
@@ -141,13 +133,11 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        for wire in C::Reader::wires_mut(child.layout.nodes_mut()) {
-            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
-        }
-        enclose::<C>(&mut child.layout, codec.field_group(name))?;
+        codec.prefix_layout(&mut child.layout, ComponentSegment::Field(name.to_string()));
+        child.layout.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    enclose::<C>(&mut out.layout, codec.fields_group())?;
+    out.layout.enclose(codec.fields_group());
 
     Ok(out)
 }
@@ -157,19 +147,5 @@ fn check_field(names: &mut std::collections::BTreeSet<String>, name: &syn::Ident
     if !names.insert(name.unraw().to_string()) {
         return Err(format!("duplicate field `{name}`"));
     }
-    Ok(())
-}
-
-// Shared record assembly concatenates the prepared child values. Metadata hooks
-// may annotate those values, but packing needs an adapter's own conversion code.
-fn enclose<C: Codec>(layout: &mut WireLayout<C::Wire, C::Group>, metadata: C::Group) -> Result<()> {
-    let expected = C::Reader::wires(layout.nodes())
-        .map(wire_signature)
-        .collect::<Vec<_>>();
-    let node = WireNode::Group {
-        metadata,
-        children: std::mem::take(layout),
-    };
-    *layout = WireLayout::from_nodes(vec![checked_scope::<C>(node, &expected)?]);
     Ok(())
 }

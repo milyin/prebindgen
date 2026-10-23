@@ -68,9 +68,9 @@ impl Storage {
 /// * `wire_kind` — builds [`Wire::kind`] from the pointee type and access mode.
 ///
 /// ```
-/// use prebindgen_conversions::{boxed, NativeReader};
+/// use prebindgen_conversions::{boxed};
 /// use prebindgen_conversions::Access;
-/// let input = boxed::input::<syn::Type, (), (), ()>(
+/// let input = boxed::input::<syn::Type, (), ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     &quote::quote!(true), |boxed| {
@@ -79,19 +79,19 @@ impl Storage {
 ///     },
 /// )?;
 /// assert_eq!(input.resources[0].access, Access::Shared);
-/// assert_eq!(prebindgen_flat::type_key(&<()>::wires(input.layout.nodes()).next().unwrap().rust_type()), "* const Counter");
+/// assert_eq!(prebindgen_flat::type_key(&input.layout.iter().next().unwrap().rust_type()), "* const Counter");
 /// assert!(input.acquire.is_empty());
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C, G, R>(
+pub fn input<W: prebindgen_flat::WireKind, C, G>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputPlan<W, C, G, R>> {
+) -> Result<InputPlan<W, C, G>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -132,7 +132,6 @@ pub fn input<W: prebindgen_flat::WireKind, C, G, R>(
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
-        reader: Default::default(),
         acknowledgement: None,
         layout: vec![Wire {
             name: wire.clone(),
@@ -170,14 +169,14 @@ pub fn input<W: prebindgen_flat::WireKind, C, G, R>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W: prebindgen_flat::WireKind, C, G, R>(
+pub fn output<W: prebindgen_flat::WireKind, C, G>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputPlan<W, C, G, R>> {
+) -> Result<OutputPlan<W, C, G>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -191,7 +190,6 @@ pub fn output<W: prebindgen_flat::WireKind, C, G, R>(
     Ok(OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         delivery: Default::default(),
         layout: vec![Wire {
             name: wire.clone(),
@@ -202,7 +200,7 @@ pub fn output<W: prebindgen_flat::WireKind, C, G, R>(
         }]
         .into(),
         statements: quote!(let mut #wire = Box::new(#value);),
-        values: vec![quote!((&mut *#wire) as *mut #allocation)],
+        values: vec![(wire.clone(), quote!((&mut *#wire) as *mut #allocation))],
         commit: quote!(let _ = Box::into_raw(#wire);),
     })
 }

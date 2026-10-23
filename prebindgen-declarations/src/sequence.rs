@@ -1,6 +1,5 @@
 //! Lift one element recipe into a runtime-sized collection without changing phases.
 use super::*;
-use prebindgen_conversions::NativeReader;
 
 use prebindgen_conversions::{Resource, ResourceIdentity};
 use prebindgen_flat::SequenceView;
@@ -9,20 +8,20 @@ use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
 pub struct SequenceInput<G> {
-    /// Adapter-owned description of every outer input value. The selected reader
-    /// determines their scope and order; element fields remain in the child tree.
+    /// Adapter-owned description of every outer input value. The adapter
+    /// chooses their actual function parameters or row fields; element fields remain in the child tree.
     pub metadata: G,
     /// Validate the outer input values and make the supplied length identifier
     /// available, either as a boundary parameter or a local binding.
     pub open: TokenStream,
     /// Per-row setup, including any locals used by `validation_values`.
     pub bind: TokenStream,
-    /// Raw element-wire expressions, in element layout order, used in validation.
-    pub validation_values: Vec<TokenStream>,
+    /// Raw element expressions keyed by binding name, used during validation.
+    pub validation_values: Vec<(syn::Ident, TokenStream)>,
     /// Reads valid after `release`, used by acquisition/construction and identities.
     /// `None` forbids reading that raw wire after validation (for example a JNI
     /// reference deleted with its row frame). The compiler rejects such reads.
-    pub prepared_values: Vec<Option<TokenStream>>,
+    pub prepared_values: Vec<(syn::Ident, Option<TokenStream>)>,
     /// Per-row cleanup after validation, before deferred closures are retained.
     pub release: TokenStream,
 }
@@ -47,26 +46,20 @@ pub struct SequenceOutput<G> {
     pub store: TokenStream,
     /// Finish preparing the result after every element has been delivered.
     pub finish: TokenStream,
-    /// Expressions for all outer values, in this reader's boundary order.
-    pub values: Vec<TokenStream>,
+    /// Named expressions for every outer value. The adapter determines ABI order.
+    pub values: Vec<(syn::Ident, TokenStream)>,
     /// Complete ownership transfer of the outer carrier, such as a row allocation.
     pub commit: TokenStream,
 }
 
-fn replace<W: prebindgen_flat::WireKind, G, R: NativeReader<W, G>>(
-    code: &TokenStream,
-    layout: &WireLayout<W, G>,
-    values: &[TokenStream],
-) -> Result<TokenStream> {
-    if R::wires(layout.nodes()).len() != values.len() {
-        return Err("collection wire/read count differs".into());
-    }
-    let replacements = R::wires(layout.nodes())
-        .zip(values)
-        .map(|(w, v)| {
+fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<TokenStream> {
+    prebindgen_conversions::validate_value_bindings(values)?;
+    let replacements = values
+        .iter()
+        .map(|(name, value)| {
             Ok((
-                w.name.to_string(),
-                syn::parse2::<syn::Expr>(quote!((#v))).map_err(|e| e.to_string())?,
+                name.to_string(),
+                syn::parse2::<syn::Expr>(quote!((#value))).map_err(|e| e.to_string())?,
             ))
         })
         .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
@@ -116,14 +109,10 @@ fn replace<W: prebindgen_flat::WireKind, G, R: NativeReader<W, G>>(
         .collect())
 }
 
-fn prepared<W: prebindgen_flat::WireKind, G, R: NativeReader<W, G>>(
+fn prepared(
     code: &TokenStream,
-    layout: &WireLayout<W, G>,
-    values: &[Option<TokenStream>],
+    values: &[(syn::Ident, Option<TokenStream>)],
 ) -> Result<TokenStream> {
-    if values.len() != R::wires(layout.nodes()).len() {
-        return Err("collection prepared read count differs".into());
-    }
     fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
         code.into_iter().any(|token| match token {
             proc_macro2::TokenTree::Ident(id) => id == *name,
@@ -132,17 +121,16 @@ fn prepared<W: prebindgen_flat::WireKind, G, R: NativeReader<W, G>>(
         })
     }
     let mut reads = Vec::new();
-    for (wire, value) in R::wires(layout.nodes()).zip(values) {
-        if value.is_none() && mentions(code.clone(), &wire.name) {
+    for (name, value) in values {
+        if value.is_none() && mentions(code.clone(), name) {
             return Err(format!(
                 "collection wire `{}` cannot be read after row validation",
-                wire.name
+                name
             ));
         }
-        let name = &wire.name;
-        reads.push(value.clone().unwrap_or_else(|| quote!(#name)));
+        reads.push((name.clone(), value.clone().unwrap_or_else(|| quote!(#name))));
     }
-    replace::<W, G, R>(code, layout, &reads)
+    replace(code, &reads)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -165,9 +153,7 @@ pub(crate) fn input<C: Codec>(
     if matches!(element, Type::Reference(_)) {
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
-    if C::Reader::wires(child.layout.nodes()).len() == 0 {
-        return Err("collection elements must have at least one wire".into());
-    }
+    codec.validate_input(&child)?;
     if view != SequenceView::Owned
         && child
             .resources
@@ -187,20 +173,30 @@ pub(crate) fn input<C: Codec>(
         &child.layout,
         active,
     )?;
-    let validation = replace::<_, _, C::Reader>(
-        &child.validation,
-        &child.layout,
-        &transport.validation_values,
-    )?;
-    let acquire =
-        prepared::<_, _, C::Reader>(&child.acquire, &child.layout, &transport.prepared_values)?;
-    let statements =
-        prepared::<_, _, C::Reader>(&child.statements, &child.layout, &transport.prepared_values)?;
+    if transport.validation_values.is_empty() {
+        return Err("collection elements must have at least one input binding".into());
+    }
+    prebindgen_conversions::validate_value_bindings(&transport.validation_values)?;
+    let names = transport
+        .validation_values
+        .iter()
+        .map(|(n, _)| n.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    let prepared_names = transport
+        .prepared_values
+        .iter()
+        .map(|(n, _)| n.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    if names != prepared_names || prepared_names.len() != transport.prepared_values.len() {
+        return Err("collection prepared input names differ from validation bindings".into());
+    }
+    let validation = replace(&child.validation, &transport.validation_values)?;
+    let acquire = prepared(&child.acquire, &transport.prepared_values)?;
+    let statements = prepared(&child.statements, &transport.prepared_values)?;
     // Wrap expressions as a local initializer so the syntax visitor can replace paths.
     let child_argument = &child.argument;
-    let argument = prepared::<_, _, C::Reader>(
+    let argument = prepared(
         &quote!(let #var = #child_argument;),
-        &child.layout,
         &transport.prepared_values,
     )?;
     let mut resources = Vec::new();
@@ -214,9 +210,8 @@ pub(crate) fn input<C: Codec>(
             ResourceIdentity::Single(code) => quote!(#ids.push((#code) as usize);),
             ResourceIdentity::Many(code) => quote!(#ids.extend(#code);),
         };
-        collect.extend(prepared::<_, _, C::Reader>(
+        collect.extend(prepared(
             &quote!(if #condition {#identity}),
-            &child.layout,
             &transport.prepared_values,
         )?);
         resources.push(Resource {
@@ -240,7 +235,6 @@ pub(crate) fn input<C: Codec>(
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
-        reader: Default::default(),
         acknowledgement: None,
         layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
             element: child.layout,
@@ -286,8 +280,8 @@ pub(crate) fn output<C: Codec>(
     if mode == ProjectionMode::Owned && (borrowed || view != SequenceView::Owned) {
         return Err("owned collection projection cannot consume a borrowed collection".into());
     }
-    child.validate_value_count()?;
-    if C::Reader::wires(child.layout.nodes()).len() == 0 {
+    codec.validate_output(&child)?;
+    if child.values.is_empty() {
         return Err("collection elements must have at least one wire".into());
     }
     if !child.delivery.statements.is_empty() {
@@ -351,7 +345,6 @@ pub(crate) fn output<C: Codec>(
     let out: CodecOutput<C> = OutputPlan {
         fallible: child.fallible || fallible,
         context: Default::default(),
-        reader: Default::default(),
         delivery: Default::default(),
         layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
             element: child.layout,
@@ -366,7 +359,7 @@ pub(crate) fn output<C: Codec>(
         values,
         commit: quote!(#commit #commit_elements),
     };
-    out.validate_value_count()?;
+    codec.validate_output(&out)?;
     Ok(out)
 }
 
@@ -430,15 +423,9 @@ mod tests {
     }
     #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
-        let layout: WireLayout<syn::Type> = vec![Wire {
-            name: syn::parse_quote!(raw),
-            kind: syn::parse_quote!(i64),
-        }]
-        .into();
-        let code = replace::<_, _, ()>(
+        let code = replace(
             &quote!(let value = unsafe { &(*pointer) }; consume(raw, value);),
-            &layout,
-            &[quote!(cached)],
+            &[(syn::parse_quote!(raw), quote!(cached))],
         )
         .unwrap();
         assert!(code.to_string().contains(&quote!(&(*pointer)).to_string()));
@@ -446,19 +433,20 @@ mod tests {
     }
     #[test]
     fn deleted_row_references_cannot_escape_into_deferred_phases() {
-        let layout: WireLayout<syn::Type> = vec![Wire {
-            name: syn::parse_quote!(raw),
-            kind: syn::parse_quote!(*const u8),
-        }]
-        .into();
         assert!(
-            prepared::<_, _, ()>(&quote!(decode(raw);), &layout, &[None])
+            prepared(&quote!(decode(raw);), &[(syn::parse_quote!(raw), None)])
                 .unwrap_err()
                 .contains("after row validation")
         );
-        assert!(prepared::<_, _, ()>(&quote!(decode_macro!(raw);), &layout, &[None]).is_err());
-        assert!(
-            prepared::<_, _, ()>(&quote!(decode(already_validated);), &layout, &[None]).is_ok()
-        );
+        assert!(prepared(
+            &quote!(decode_macro!(raw);),
+            &[(syn::parse_quote!(raw), None)]
+        )
+        .is_err());
+        assert!(prepared(
+            &quote!(decode(already_validated);),
+            &[(syn::parse_quote!(raw), None)]
+        )
+        .is_ok());
     }
 }

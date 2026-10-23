@@ -1,7 +1,6 @@
 //! Execution tests for the optional staged protocol, without declarations.
 use super::*;
-use crate::staged::{emit_call, StagedFunction};
-use crate::NativeReader;
+use crate::staged::emit_call;
 use prebindgen_flat::Result;
 use prebindgen_flat::{Conversion, Wire, WireKind};
 type Flat<I = InputPlan<syn::Type>, O = OutputPlan<syn::Type>> = prebindgen_flat::Flat<I, O>;
@@ -19,7 +18,6 @@ impl Input {
         InputPlan {
             fallible: false,
             context: Default::default(),
-            reader: Default::default(),
             acknowledgement: Some(
                 quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
             ),
@@ -38,7 +36,6 @@ impl Output {
         OutputPlan {
             fallible: false,
             context: Default::default(),
-            reader: Default::default(),
             delivery: Delivery {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
@@ -49,7 +46,7 @@ impl Output {
             }]
             .into(),
             statements: quote!(log("prepare");),
-            values: vec![source_result_expr()],
+            values: vec![(syn::parse_quote!(out), source_result_expr())],
             commit: quote!(log("commit");),
         }
     }
@@ -71,7 +68,14 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
     let call = flat.function("add").unwrap();
-    let body = emit_call(call, &(), &source_binding(), &syn::parse_quote!(_)).unwrap();
+    let body = emit_call(
+        call,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(call),
+    )
+    .unwrap();
     let code = quote! {
         use std::sync::Mutex;
         static LOG: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
@@ -127,7 +131,6 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         delivery: Default::default(),
         // Slot code owns field projection; callers only see ordered carriers and values.
         layout: ["y", "x"]
@@ -138,7 +141,10 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
             })
             .collect(),
         statements: TokenStream::new(),
-        values: vec![quote!(#result.y), quote!(#result.x)],
+        values: vec![
+            (syn::parse_quote!(wire_y), quote!(#result.y)),
+            (syn::parse_quote!(wire_x), quote!(#result.x)),
+        ],
         commit: TokenStream::new(),
     });
     flat
@@ -148,16 +154,14 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
 fn output_expressions_need_no_field_mapping() {
     let flat = record_model();
     let call = flat.function("point").unwrap();
-    let values: Vec<_> = call
-        .outputs(&(), &source_binding())
+    let values: Vec<_> = test_return_packet(call, &(), &source_binding())
         .unwrap()
         .map(|out| out.value.to_string())
         .collect();
     assert_eq!(values, ["__result . y", "__result . x"]);
     // The same prepared slot and context work with a caller-selected binding.
     let source = syn::parse_quote!(another_result);
-    let values: Vec<_> = call
-        .outputs(&(), &source)
+    let values: Vec<_> = test_return_packet(call, &(), &source)
         .unwrap()
         .map(|out| out.value.to_string())
         .collect();
@@ -175,15 +179,11 @@ fn generation_rejects_inconsistent_output_arity() {
         .unwrap()
         .values
         .pop();
-    assert!(emit_call(
-        flat.function("point").unwrap(),
-        &(),
-        &source_binding(),
-        &syn::parse_quote!(_)
-    )
-    .err()
-    .unwrap()
-    .contains("count differs"));
+    assert!(
+        test_return_packet(flat.function("point").unwrap(), &(), &source_binding())
+            .unwrap_err()
+            .contains("missing output binding")
+    );
 }
 
 #[test]
@@ -196,12 +196,10 @@ fn partial_projection_is_self_contained() {
         .slot
         .as_mut()
         .unwrap();
-    output.layout = vec![<()>::wires(output.layout.nodes()).next().unwrap().clone()].into();
+    output.layout = vec![output.layout.iter().next().unwrap().clone()].into();
     output.values.pop();
     assert_eq!(
-        flat.function("point")
-            .unwrap()
-            .outputs(&(), &source_binding())
+        test_return_packet(flat.function("point").unwrap(), &(), &source_binding())
             .unwrap()
             .len(),
         1
@@ -218,14 +216,14 @@ fn several_physical_wires_may_supply_one_component() {
         .slot
         .as_mut()
         .unwrap();
-    let mut extra = <()>::wires(output.layout.nodes()).next().unwrap().clone();
+    let mut extra = output.layout.iter().next().unwrap().clone();
     extra.name = syn::parse_quote!(additional_wire);
     output.layout.push(extra);
-    output.values.push(quote!(0));
+    output
+        .values
+        .push((syn::parse_quote!(additional_wire), quote!(0)));
     assert_eq!(
-        flat.function("point")
-            .unwrap()
-            .outputs(&(), &source_binding())
+        test_return_packet(flat.function("point").unwrap(), &(), &source_binding())
             .unwrap()
             .len(),
         3
@@ -243,27 +241,51 @@ fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     f.params[0].ty.slot = Some(Input(0).plan());
     f.params[1].ty.slot = Some(Input(1).plan());
     f.ret.slot = Some(Output.plan());
-    let both = emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
-        .unwrap()
-        .to_string();
+    let both = emit_call(
+        f,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(f),
+    )
+    .unwrap()
+    .to_string();
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = None;
     assert_eq!(
-        emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
-            .unwrap()
-            .to_string(),
+        emit_call(
+            f,
+            &(),
+            &source_binding(),
+            &syn::parse_quote!(_),
+            &test_parameter_names(f)
+        )
+        .unwrap()
+        .to_string(),
         both
     );
     f.params[0].ty.slot.as_mut().unwrap().acknowledgement = Some(quote!(different_ack()));
-    assert!(emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
-        .unwrap_err()
-        .contains("conflicting input acknowledgements"));
+    assert!(emit_call(
+        f,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(f)
+    )
+    .unwrap_err()
+    .contains("conflicting input acknowledgements"));
     for param in &mut f.params {
         param.ty.slot.as_mut().unwrap().acknowledgement = None;
     }
-    assert!(!emit_call(f, &(), &source_binding(), &syn::parse_quote!(_))
-        .unwrap()
-        .to_string()
-        .contains("acknowledge"));
+    assert!(!emit_call(
+        f,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(f)
+    )
+    .unwrap()
+    .to_string()
+    .contains("acknowledge"));
 }
 
 #[test]
@@ -290,7 +312,6 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![wire()].into(),
         acknowledgement: None,
         validation: quote!(),
@@ -302,10 +323,9 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![wire()].into(),
         statements: quote!(),
-        values: vec![source_result_expr()],
+        values: vec![(wire().name, source_result_expr())],
         commit: quote!(),
         delivery: Delivery {
             statements: quote!(),
@@ -319,20 +339,26 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         &f.params[0].ty.slot.as_ref().unwrap().layout[0]
     ));
     assert!(std::ptr::eq(
-        call.native_inputs().unwrap().next().unwrap(),
+        test_parameters(call).unwrap().next().unwrap(),
         &f.params[0].ty.slot.as_ref().unwrap().layout[0]
     ));
     assert!(std::ptr::eq(
-        call.outputs(&(), &source_binding())
+        test_return_packet(call, &(), &source_binding())
             .unwrap()
             .next()
             .unwrap()
             .wire,
         &f.ret.slot.as_ref().unwrap().layout[0]
     ));
-    let body = emit_call(call, &(), &source_binding(), &syn::parse_quote!(_))
-        .unwrap()
-        .to_string();
+    let body = emit_call(
+        call,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(call),
+    )
+    .unwrap()
+    .to_string();
     assert!(body.contains(&quote!(let __prebindgen_argument_0 = x;).to_string()));
     assert!(
         body.contains(&quote!(let __result = crate::echo(__prebindgen_argument_0);).to_string())
@@ -348,17 +374,25 @@ fn emit_call_rejects_missing_input_and_result_slots() {
     )
     .unwrap();
     let function = flat.function_mut("echo").unwrap();
-    assert!(
-        emit_call(function, &(), &source_binding(), &syn::parse_quote!(_))
-            .unwrap_err()
-            .contains("parameter `x` has no conversion")
-    );
+    assert!(emit_call(
+        function,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(function)
+    )
+    .unwrap_err()
+    .contains("parameter `x` has no conversion"));
     function.params[0].ty.slot = Some(Input(0).plan());
-    assert!(
-        emit_call(function, &(), &source_binding(), &syn::parse_quote!(_))
-            .unwrap_err()
-            .contains("result has no conversion")
-    );
+    assert!(emit_call(
+        function,
+        &(),
+        &source_binding(),
+        &syn::parse_quote!(_),
+        &test_parameter_names(function)
+    )
+    .unwrap_err()
+    .contains("result has no conversion"));
 }
 
 fn source_binding() -> syn::Ident {
@@ -409,7 +443,6 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![wire()].into(),
         acknowledgement: Some(quote!(*#ack = true;)),
         validation: quote!(if #env < 0 { return Err("environment".into()); }),
@@ -421,10 +454,9 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![wire()].into(),
         statements: quote!(),
-        values: vec![value.clone()],
+        values: vec![(wire().name, value.clone())],
         commit: quote!(),
         delivery: Delivery {
             statements: quote!(unsafe { #out.write(#ty { value: #value }); }),
@@ -445,7 +477,14 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
             accepted: acknowledgement.clone(),
         };
         let source = format_ident!("computed_{suffix}");
-        let body = emit_call(function, &context, &source, &syn::parse_quote!(_)).unwrap();
+        let body = emit_call(
+            function,
+            &context,
+            &source,
+            &syn::parse_quote!(_),
+            &test_parameter_names(function),
+        )
+        .unwrap();
         assert!(!body.to_string().contains("__prebindgen_emit"));
         wrappers.extend(quote! {
             struct #output_type { value: i32 }
@@ -621,7 +660,6 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![Wire {
             name: syn::parse_quote!(__prebindgen_argument_0),
             kind: syn::parse_quote!(usize),
@@ -638,7 +676,6 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![].into(),
         values: vec![],
         statements: quote!(),
@@ -650,7 +687,14 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     });
     let context = ();
     let source = syn::parse_quote!(__prebindgen_argument_0__);
-    let body = emit_call(function, &context, &source, &syn::parse_quote!(_)).unwrap();
+    let body = emit_call(
+        function,
+        &context,
+        &source,
+        &syn::parse_quote!(_),
+        &test_parameter_names(function),
+    )
+    .unwrap();
     let target: syn::Ident = syn::parse_quote!(chosen_by_caller);
     let standalone = function.params[0]
         .ty
@@ -701,7 +745,6 @@ fn validate_resources(resources: &[Resource]) -> TokenStream {
     let plan = InputPlan::<syn::Type> {
         fallible: false,
         context: Default::default(),
-        reader: Default::default(),
         layout: vec![].into(),
         acknowledgement: None,
         validation: quote!(),
@@ -721,4 +764,79 @@ fn validate_resources(resources: &[Resource]) -> TokenStream {
         )
         .unwrap();
     quote!(let mut #seen: Vec<(usize, bool)> = Vec::new(); #check;)
+}
+
+#[derive(Debug)]
+struct TestPacketValue<'a, W: prebindgen_flat::WireKind> {
+    wire: &'a Wire<W>,
+    value: TokenStream,
+}
+fn test_return_packet<
+    'a,
+    W: prebindgen_flat::WireKind,
+    I: prebindgen_flat::Conversion,
+    C: crate::TemplateContext + 'static,
+>(
+    f: &'a prebindgen_flat::Function<I, OutputPlan<W, C>>,
+    context: &C,
+    source: &syn::Ident,
+) -> prebindgen_flat::Result<std::vec::IntoIter<TestPacketValue<'a, W>>> {
+    let plan = f.output_conversion()?;
+    crate::match_output_fields(plan.layout.iter(), &plan.values)?
+        .into_iter()
+        .map(|(wire, value)| {
+            Ok(TestPacketValue {
+                wire,
+                value: crate::emission::render_output(context, value, source)?,
+            })
+        })
+        .collect::<prebindgen_flat::Result<Vec<_>>>()
+        .map(Vec::into_iter)
+}
+fn test_parameters<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+    f: &prebindgen_flat::Function<I, O>,
+) -> prebindgen_flat::Result<std::vec::IntoIter<&Wire<I::Wire>>> {
+    Ok(f.input_conversions()?
+        .into_iter()
+        .flat_map(|p| p.layout().iter())
+        .collect::<Vec<_>>()
+        .into_iter())
+}
+fn test_parameter_names<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+    f: &prebindgen_flat::Function<I, O>,
+) -> Vec<syn::Ident> {
+    test_parameters(f)
+        .map(|wires| wires.map(|w| w.name.clone()).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn result_fields_match_named_expressions_independently_of_binding_order() {
+    let flat = record_model();
+    let mut plan = flat
+        .function("point")
+        .unwrap()
+        .output_conversion()
+        .unwrap()
+        .clone();
+    plan.values.reverse();
+    let matched = crate::match_output_fields(plan.layout.iter(), &plan.values).unwrap();
+    assert_eq!(matched[0].0.name, "wire_y");
+    assert_eq!(matched[0].1.to_string(), plan.values[1].1.to_string());
+    assert_eq!(matched[1].0.name, "wire_x");
+    let mut broken = plan.values.clone();
+    broken.pop();
+    assert!(crate::match_output_fields(plan.layout.iter(), &broken)
+        .unwrap_err()
+        .contains("missing"));
+    broken = plan.values.clone();
+    broken.push((syn::parse_quote!(unknown), quote!(0)));
+    assert!(crate::match_output_fields(plan.layout.iter(), &broken)
+        .unwrap_err()
+        .contains("unexpected"));
+    broken = plan.values.clone();
+    broken.push(broken[0].clone());
+    assert!(crate::match_output_fields(plan.layout.iter(), &broken)
+        .unwrap_err()
+        .contains("duplicate"));
 }

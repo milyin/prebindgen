@@ -1,13 +1,12 @@
 //! Per-element native delivery and Kotlin folds, without invoking user code under JNI locks.
 use super::*;
-use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::SequenceOutput;
 use prebindgen_flat::{Wire, WireLayout};
 
 pub(crate) fn transport(
     wire: syn::Ident,
     element: &WireLayout<JniWire, JniGroup>,
-    values: &[TokenStream],
+    values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
@@ -16,13 +15,19 @@ pub(crate) fn transport(
     let mut descriptor = String::from("(");
     let mut encode = TokenStream::new();
     let mut args = Vec::new();
-    let slots: usize = JniCodec::wires(element.nodes())
+    let slots: usize = crate::group::callback_parameters(element)
         .map(|w| w.kind.parameter_slots())
         .sum();
     if slots > 254 {
         return Err("sequence callback exceeds JVM parameter limit".into());
     }
-    for (i, (field, value)) in JniCodec::wires(element.nodes()).zip(values).enumerate() {
+    for (i, (field, value)) in prebindgen_conversions::match_output_fields(
+        crate::group::callback_parameters(element),
+        values,
+    )?
+    .into_iter()
+    .enumerate()
+    {
         descriptor.push_str(field.kind.jvm_descriptor());
         let local = format_ident!("{wire}_callback_object_{i}");
         let argument = field.kind.output_argument(value, &local);
@@ -30,7 +35,7 @@ pub(crate) fn transport(
         args.push(argument.value);
     }
     descriptor.push_str(")V");
-    let capacity = i32::try_from(JniCodec::wires(element.nodes()).len() + 8)
+    let capacity = i32::try_from(crate::group::callback_parameters(element).len() + 8)
         .map_err(|_| "too many callback fields")?;
     Ok(SequenceOutput {
         commit_each: false,
@@ -57,7 +62,7 @@ pub(crate) fn transport(
         },
         // Only a presence marker crosses back; row payloads crossed through run.
         finish: quote!(let #wire=Some(::prebindgen_jni_runtime::array(&mut #env,0)?);),
-        values: vec![quote!(#wire)],
+        values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     })
 }
@@ -84,7 +89,7 @@ pub(crate) fn fold(
     let optional = optional(success.nodes());
     let (carrier, element) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
-    let position = JniCodec::wires(layout.nodes())
+    let position = crate::group::result_packet_fields(layout)
         .position(|w| w.name == carrier.name)
         .unwrap();
     let row = "__pb_fold_row";

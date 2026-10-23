@@ -377,11 +377,13 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .unwrap();
         let f = flat.function(name).unwrap();
         assert_eq!(
-            JniCodec::wires(f.params[0].ty.slot.as_ref().unwrap().layout().nodes()).len(),
+            crate::group::argument_parameters(f.params[0].ty.slot.as_ref().unwrap().layout())
+                .unwrap()
+                .len(),
             count
         );
         assert_eq!(
-            JniCodec::wires(f.ret.slot.as_ref().unwrap().layout().nodes()).len(),
+            crate::group::result_packet_fields(f.ret.slot.as_ref().unwrap().layout()).len(),
             count
         );
     }
@@ -491,12 +493,14 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 2
             };
             assert_eq!(
-                JniCodec::wires(input.layout().nodes()).len(),
+                crate::group::argument_parameters(input.layout())
+                    .unwrap()
+                    .len(),
                 count,
                 "input {ty}"
             );
             assert_eq!(
-                JniCodec::wires(output.layout().nodes()).len(),
+                crate::group::result_packet_fields(output.layout()).len(),
                 count,
                 "output {ty}"
             );
@@ -541,16 +545,23 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         .slot
         .as_ref()
         .unwrap();
-    assert_eq!(JniCodec::wires(input.layout().nodes()).len(), 3); // one tag + two arm payloads, no option flags
     assert_eq!(
-        JniCodec::wires(input.layout().nodes())
+        crate::group::argument_parameters(input.layout())
+            .unwrap()
+            .len(),
+        3
+    ); // one tag + two arm payloads, no option flags
+    assert_eq!(
+        crate::group::argument_parameters(input.layout())
+            .unwrap()
             .next()
             .unwrap()
             .kind
             .available_niche(),
         Some(JniNiche::Integer(-3))
     );
-    assert!(JniCodec::wires(input.layout().nodes())
+    assert!(crate::group::argument_parameters(input.layout())
+        .unwrap()
         .skip(1)
         .all(|w| w.kind.available_niche().is_none()));
 }
@@ -816,7 +827,10 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         1
     );
     assert_eq!(output.wires().count(), 4);
-    assert_eq!(JniCodec::wires(output.layout().nodes()).count(), 1);
+    assert_eq!(
+        crate::group::result_packet_fields(output.layout()).count(),
+        1
+    );
     let shape = |layout: &WireLayout<JniWire, JniGroup>| {
         layout
             .entries()
@@ -883,7 +897,10 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         let input = function.input_conversions()?[0];
         assert!(std::ptr::eq(
             input.layout().get(0).unwrap(),
-            JniCodec::wires(input.layout().nodes()).next().unwrap()
+            crate::group::argument_parameters(input.layout())
+                .unwrap()
+                .next()
+                .unwrap()
         ));
         let output = function.output_conversion()?;
         assert!(std::ptr::eq(
@@ -893,7 +910,9 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
                 .unwrap()
                 .get(0)
                 .unwrap(),
-            JniCodec::wires(output.layout().nodes()).next().unwrap()
+            crate::group::result_packet_fields(output.layout())
+                .next()
+                .unwrap()
         ));
         assert_eq!(
             function.input_conversions()?[0].layout()[0].name,
@@ -909,7 +928,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             "native_output"
         );
         assert_eq!(
-            JniCodec::wires((function.output_conversion()?.layout()).nodes())
+            crate::group::result_packet_fields(function.output_conversion()?.layout())
                 .next()
                 .unwrap()
                 .name,

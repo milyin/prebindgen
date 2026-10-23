@@ -1,8 +1,7 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-use prebindgen_conversions::NativeReader;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainReader>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainReader>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -39,8 +38,8 @@ impl std::ops::Deref for DomainGroup {
         &self.description
     }
 }
-struct DomainReader;
-impl NativeReader<Domain, DomainGroup> for DomainReader {
+struct DomainAbi;
+impl DomainAbi {
     fn wires(nodes: &[WireNode<Domain, DomainGroup>]) -> std::vec::IntoIter<&Wire<Domain>> {
         fn visit<'a>(nodes: &'a [WireNode<Domain, DomainGroup>], out: &mut Vec<&'a Wire<Domain>>) {
             for node in nodes {
@@ -95,7 +94,45 @@ struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
     type Group = DomainGroup;
-    type Reader = DomainReader;
+    fn optional_niche(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+    ) -> Option<NicheReservation<Self::Niche>> {
+        select_optional_niche(self, DomainAbi::wires(payload.nodes()))
+    }
+    fn optional_presence(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+        reservation: &NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        optional_presence(self, DomainAbi::wires(payload.nodes()), reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        absent_output_values(self, DomainAbi::wires(payload.nodes()), reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        retire_optional_niches(self, DomainAbi::wires_mut(payload.nodes_mut()), reservation)
+    }
+    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+        DomainAbi::validate(&plan.layout)
+    }
+    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+        DomainAbi::validate(&plan.layout)?;
+        prebindgen_conversions::match_output_fields(
+            DomainAbi::wires(plan.layout.nodes()),
+            &plan.values,
+        )?;
+        Ok(())
+    }
+
     fn optional_metadata(
         &self,
         presence: syn::Ident,
@@ -216,7 +253,6 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
         return InputPlan {
             fallible: false,
             context: Default::default(),
-            reader: Default::default(),
             layout: wires.into(),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
             acquire: quote!(),
@@ -249,7 +285,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             name: format_ident!("raw"),
             kind: domain.clone(),
         }];
-        let mut values = vec![quote!(raw)];
+        let mut values = vec![(format_ident!("raw"), quote!(raw))];
         if domain.prefix {
             wires.insert(
                 0,
@@ -258,12 +294,11 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
                     kind: DomainCodec.selector(&()),
                 },
             );
-            values.insert(0, quote!(123i32));
+            values.insert(0, (format_ident!("prefix"), quote!(123i32)));
         }
         return OutputPlan {
             fallible: false,
             context: Default::default(),
-            reader: Default::default(),
             delivery: Default::default(),
             layout: wires.into(),
             statements: quote!(let raw = #source; if !(#valid) #(|| #invalid)* { return Err("invalid payload"); }),
@@ -376,29 +411,29 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                 let inp = input(&domain, depth, Condition::default());
                 let out = output(&domain, depth, quote!(source));
                 let expected = 1 + usize::from(prefix) + depth.saturating_sub(domain.unused.len());
-                assert_eq!(DomainReader::wires(inp.layout.nodes()).len(), expected);
-                assert_eq!(DomainReader::wires(out.layout.nodes()).len(), expected);
+                assert_eq!(DomainAbi::wires(inp.layout.nodes()).len(), expected);
+                assert_eq!(DomainAbi::wires(out.layout.nodes()).len(), expected);
                 let decode = format_ident!("decode{case}_{depth}_{suffix}");
                 let encode = format_ident!("encode{case}_{depth}_{suffix}");
                 let mut source_ty = ty.clone();
                 for _ in 0..depth {
                     source_ty = syn::parse_quote!(Option<#source_ty>);
                 }
-                let params = DomainReader::wires(inp.layout.nodes()).map(|w| {
+                let params = DomainAbi::wires(inp.layout.nodes()).map(|w| {
                     let n = &w.name;
                     let t = w.kind.rust_type();
                     quote!(#n:#t)
                 });
-                let names = DomainReader::wires(inp.layout.nodes())
+                let names = DomainAbi::wires(inp.layout.nodes())
                     .map(|w| &w.name)
                     .collect::<Vec<_>>();
-                let types = DomainReader::wires(out.layout.nodes()).map(|w| w.kind.rust_type());
+                let types = DomainAbi::wires(out.layout.nodes()).map(|w| w.kind.rust_type());
                 let validation = inp.validation;
                 let construct = inp.statements;
                 let argument = inp.argument;
                 let prepare = out.statements;
                 let commit = out.commit;
-                let results = out.values;
+                let results = out.values.into_iter().map(|(_, v)| v).collect::<Vec<_>>();
                 functions.extend(quote!{
                 fn #decode(#(#params),*) -> Result<#source_ty,&'static str> {#validation #construct Ok(#argument)}
                 fn #encode(source:#source_ty)->Result<(#(#types,)*), &'static str> {#prepare let result=(#(#results,)*);#commit Ok(result)}
@@ -487,7 +522,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         name: format_ident!("second"),
         kind: domain.clone(),
     });
-    child.values.push(quote!(raw));
+    child.values.push((format_ident!("second"), quote!(raw)));
     let mut plan = optional_output(
         &DomainCodec,
         &(),
@@ -500,27 +535,17 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     .unwrap();
     assert_eq!(
         DomainCodec
-            .niche(
-                &DomainReader::wires(plan.layout.nodes())
-                    .next()
-                    .unwrap()
-                    .kind
-            )
+            .niche(&DomainAbi::wires(plan.layout.nodes()).next().unwrap().kind)
             .unwrap()
             .value
             .to_string(),
         "4u8"
     );
     assert!(DomainCodec
-        .niche(
-            &DomainReader::wires(plan.layout.nodes())
-                .nth(1)
-                .unwrap()
-                .kind
-        )
+        .niche(&DomainAbi::wires(plan.layout.nodes()).nth(1).unwrap().kind)
         .is_none());
     assert_eq!(
-        DomainReader::wires(plan.layout.nodes())
+        DomainAbi::wires(plan.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -529,7 +554,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         2
     ); // Wire's base domain is unchanged.
     assert_eq!(
-        DomainReader::wires(plan.layout.nodes())
+        DomainAbi::wires(plan.layout.nodes())
             .nth(1)
             .unwrap()
             .kind
@@ -547,7 +572,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(DomainReader::wires(plan.layout.nodes()).len(), 2);
+    assert_eq!(DomainAbi::wires(plan.layout.nodes()).len(), 2);
     assert!(plan
         .layout
         .iter()
@@ -562,12 +587,9 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(DomainReader::wires(plan.layout.nodes()).len(), 3); // Exhaustion adds a flag, not a wire wrapper.
+    assert_eq!(DomainAbi::wires(plan.layout.nodes()).len(), 3); // Exhaustion adds a flag, not a wire wrapper.
     assert_eq!(
-        DomainReader::wires(plan.layout.nodes())
-            .next()
-            .unwrap()
-            .name,
+        DomainAbi::wires(plan.layout.nodes()).next().unwrap().name,
         "tag3"
     );
     plan.layout.validate().unwrap();
@@ -589,12 +611,12 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         .unwrap()
         .starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
-    for w in DomainReader::wires_mut(independent.layout.nodes_mut()) {
+    for w in DomainAbi::wires_mut(independent.layout.nodes_mut()) {
         DomainCodec.set_niche(&mut w.kind, None);
     }
     assert!(DomainCodec
         .niche(
-            &DomainReader::wires(independent.layout.nodes())
+            &DomainAbi::wires(independent.layout.nodes())
                 .next()
                 .unwrap()
                 .kind

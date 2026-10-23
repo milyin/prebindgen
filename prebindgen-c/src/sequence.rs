@@ -1,6 +1,5 @@
 //! Array rows retain their element schema in WireNode::Sequence, not in CWire.
 use super::*;
-use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::{SequenceInput, SequenceOutput};
 
 use prebindgen_flat::{WireLayout, WireNode};
@@ -14,13 +13,13 @@ pub(crate) fn input(
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
-    for (position, field) in CCodec::wires(element.nodes()).enumerate() {
+    for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
         bind.extend(
             quote!(let #name=unsafe {(*((#wire.data as *const #row).add(#index))).#member};),
         );
-        values.push(quote!(#name));
+        values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
         metadata: CGroup::Sequence(Wire {
@@ -30,7 +29,7 @@ pub(crate) fn input(
         open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?;),
         bind,
         validation_values: values.clone(),
-        prepared_values: values.into_iter().map(Some).collect(),
+        prepared_values: values.into_iter().map(|(n, v)| (n, Some(v))).collect(),
         release: quote!(),
     })
 }
@@ -38,16 +37,16 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     element: &WireLayout<CWire, CGroup>,
-    values: &[TokenStream],
+    values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<CGroup>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
-    if CCodec::wires(element.nodes()).len() != values.len() {
-        return Err("collection row/value count differs".into());
-    }
-    let fields = values.iter().enumerate().map(|(i, value)| {
-        let field = format_ident!("v{i}");
-        quote!(#field:#value)
-    });
+    let fields = crate::group::row_values(element, values)?
+        .into_iter()
+        .enumerate()
+        .map(|(i, (_, value))| {
+            let field = format_ident!("v{i}");
+            quote!(#field:#value)
+        });
     Ok(SequenceOutput {
         commit_each: false,
         fallible: false,
@@ -59,9 +58,10 @@ pub(crate) fn output(
         enter: quote!(),
         store: quote!(#wire.push(#row {#(#fields),*});),
         finish: quote!(let #wire=#wire.into_boxed_slice();),
-        values: vec![
+        values: vec![(
+            wire.clone(),
             quote!(__PbRows {data:if #wire.is_empty(){::core::ptr::null()}else{#wire.as_ptr().cast()},len:#wire.len()}),
-        ],
+        )],
         commit: quote!(let _=Box::into_raw(#wire);),
     })
 }
@@ -128,7 +128,7 @@ pub(crate) fn emit_schemas(
                 return Err("duplicate C collection symbol".into());
             }
         }
-        let fields = CCodec::wires(element.nodes())
+        let fields = crate::group::row_fields(element)
             .enumerate()
             .map(|(i, w)| {
                 let name = format_ident!("v{i}");
@@ -138,7 +138,7 @@ pub(crate) fn emit_schemas(
             .collect::<Vec<_>>();
         tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
         header.push_str("typedef struct {\n");
-        for (i, w) in CCodec::wires(element.nodes()).enumerate() {
+        for (i, w) in crate::group::row_fields(element).enumerate() {
             header.push_str(&format!(
                 "    {} v{i};\n",
                 c_ty(w, prefix, pointers, context)
@@ -161,14 +161,14 @@ pub(crate) fn emit_schemas(
 /// Reclaim a committed output that will not reach its caller, including nested rows.
 pub(crate) fn release(
     layout: &WireLayout<CWire, CGroup>,
-    values: &[TokenStream],
+    fields: &[(&Wire, TokenStream)],
     context: &CContext,
     catch_panics: bool,
 ) -> TokenStream {
     let mut schemas = Vec::new();
     self::schemas(layout, &mut schemas);
     let mut code = TokenStream::new();
-    for (wire, value) in CCodec::wires(layout.nodes()).zip(values) {
+    for (wire, value) in fields {
         match &wire.kind {
             CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
             CWire::Pointer { pointer, .. } => {
@@ -182,7 +182,7 @@ pub(crate) fn release(
             CWire::Rows => {
                 let row=&context.row_types[&wire.name.to_string()];
                 let element=schemas.iter().find(|(carrier,_)|carrier.name==wire.name).unwrap().1;
-                let fields=CCodec::wires(element.nodes()).enumerate().map(|(i,_)|{let field=format_ident!("v{i}");quote!(row.#field)}).collect::<Vec<_>>();
+                let fields=crate::group::row_fields(element).enumerate().map(|(i,wire)|{let field=format_ident!("v{i}");(wire,quote!(row.#field))}).collect::<Vec<_>>();
                 let child=release(element,&fields,context,catch_panics);
                 code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
             }
@@ -194,18 +194,23 @@ pub(crate) fn release(
 
 pub(crate) fn callback_output(
     wire: syn::Ident,
-    values: &[TokenStream],
+    values: &[(syn::Ident, TokenStream)],
+    element: &WireLayout<CWire, CGroup>,
     length: syn::Ident,
-) -> SequenceOutput<CGroup> {
+) -> Result<SequenceOutput<CGroup>> {
+    let values = prebindgen_conversions::match_output_fields(
+        crate::group::callback_parameters(element),
+        values,
+    )?;
     let names = (0..values.len())
         .map(|i| format_ident!("__pb_callback_value_{i}"))
         .collect::<Vec<_>>();
     let prepare = names
         .iter()
         .zip(values)
-        .map(|(name, value)| quote!(let #name=#value;));
+        .map(|(name, (_, value))| quote!(let #name=#value;));
     let commit = prebindgen_conversions::template_parameter("commit_element");
-    SequenceOutput {
+    Ok(SequenceOutput {
         commit_each: true,
         fallible: true, // A callback pointer must be provided; checked before source invocation.
         metadata: CGroup::Sequence(Wire {
@@ -216,9 +221,9 @@ pub(crate) fn callback_output(
         enter: quote!(),
         store: quote!(#(#prepare)* #commit unsafe { __pb_callback.expect("validated callback")(__pb_callback_context, #(#names),*); }),
         finish: quote!(),
-        values: vec![quote!(#length)],
+        values: vec![(wire.clone(), quote!(#length))],
         commit: quote!(),
-    }
+    })
 }
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
@@ -273,7 +278,7 @@ pub(crate) fn callback_target(layout: &WireLayout<CWire, CGroup>) -> Result<syn:
         .outcome(prebindgen_flat::OutcomeKind::Success)
         .ok_or("missing Success outcome")?;
     if prebindgen_declarations::outer_sequences(success).len() != 1
-        || CCodec::wires(layout.nodes()).len() > 2
+        || crate::group::result_packet_fields(layout).len() > 2
     {
         return Err(
             "callback_return permits only one sequence and its optional presence flag".into(),

@@ -1,6 +1,6 @@
 //! A backend whose sequence boundary has separate pointer and length values.
 use super::*;
-use prebindgen_conversions::{validate_wire_names, value, NativeReader};
+use prebindgen_conversions::{validate_wire_names, value};
 use prebindgen_flat::{Conversion, OutcomeKind};
 
 #[derive(Clone, Debug)]
@@ -9,10 +9,25 @@ enum Metadata {
     Fields,
     Field,
 }
-// Reader instances are never stored, cloned or formatted by a plan.
-struct PointerLen;
-impl NativeReader<Type, Metadata> for PointerLen {
-    fn wires(nodes: &[WireNode<Type, Metadata>]) -> std::vec::IntoIter<&Wire<Type>> {
+// A test adapter using separate pointer and length parameters.
+struct PointerLenAbi;
+impl PointerLenAbi {
+    fn parameters(layout: &WireLayout<Type, Metadata>) -> std::vec::IntoIter<&Wire<Type>> {
+        Self::values(layout.nodes())
+    }
+    fn row_fields(element: &WireLayout<Type, Metadata>) -> std::vec::IntoIter<&Wire<Type>> {
+        Self::values(element.nodes())
+    }
+    fn result_fields(layout: &WireLayout<Type, Metadata>) -> std::vec::IntoIter<&Wire<Type>> {
+        Self::values(layout.outcome(OutcomeKind::Success).unwrap().nodes())
+    }
+    fn result_packet<'a>(
+        layout: &'a WireLayout<Type, Metadata>,
+        bindings: &'a [(syn::Ident, TokenStream)],
+    ) -> Result<Vec<(&'a Wire<Type>, &'a TokenStream)>> {
+        prebindgen_conversions::match_output_fields(Self::result_fields(layout), bindings)
+    }
+    fn values(nodes: &[WireNode<Type, Metadata>]) -> std::vec::IntoIter<&Wire<Type>> {
         fn visit<'a>(nodes: &'a [WireNode<Type, Metadata>], out: &mut Vec<&'a Wire<Type>>) {
             for node in nodes {
                 match node {
@@ -58,7 +73,7 @@ impl NativeReader<Type, Metadata> for PointerLen {
         visit(nodes, &mut out);
         out.into_iter()
     }
-    fn wires_mut(nodes: &mut [WireNode<Type, Metadata>]) -> std::vec::IntoIter<&mut Wire<Type>> {
+    fn values_mut(nodes: &mut [WireNode<Type, Metadata>]) -> std::vec::IntoIter<&mut Wire<Type>> {
         fn visit<'a>(nodes: &'a mut [WireNode<Type, Metadata>], out: &mut Vec<&'a mut Wire<Type>>) {
             for node in nodes {
                 match node {
@@ -113,16 +128,16 @@ impl NativeReader<Type, Metadata> for PointerLen {
             }
             return Ok(());
         }
-        validate_wire_names(Self::wires(layout.nodes()))?;
+        validate_wire_names(Self::values(layout.nodes()))?;
         fn visit(nodes: &[WireNode<Type, Metadata>]) -> Result<()> {
             for node in nodes {
                 match node {
-                    WireNode::Sequence(c) => PointerLen::validate(&c.element)?,
+                    WireNode::Sequence(c) => PointerLenAbi::validate(&c.element)?,
                     WireNode::Optional(c) => visit(c.element.nodes())?,
                     WireNode::Group {
                         metadata: Metadata::Values(_),
                         children,
-                    } => PointerLen::validate(children)?,
+                    } => PointerLenAbi::validate(children)?,
                     WireNode::Group { children, .. } => visit(children.nodes())?,
                     _ => {}
                 }
@@ -135,12 +150,52 @@ impl NativeReader<Type, Metadata> for PointerLen {
 #[derive(Default)]
 struct CodecImpl {
     bad_sequence: bool,
-    packed_fields: bool,
+    reverse_values: bool,
+    unknown_prepared_read: bool,
 }
 impl Codec for CodecImpl {
     type Wire = Type;
     type Group = Metadata;
-    type Reader = PointerLen;
+    fn optional_niche(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+    ) -> Option<NicheReservation<Self::Niche>> {
+        select_optional_niche(self, PointerLenAbi::values(payload.nodes()))
+    }
+    fn optional_presence(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+        reservation: &NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        optional_presence(self, PointerLenAbi::values(payload.nodes()), reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        absent_output_values(self, PointerLenAbi::values(payload.nodes()), reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        retire_optional_niches(
+            self,
+            PointerLenAbi::values_mut(payload.nodes_mut()),
+            reservation,
+        )
+    }
+    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+        PointerLenAbi::validate(&plan.layout)
+    }
+    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+        PointerLenAbi::validate(&plan.layout)?;
+        PointerLenAbi::result_packet(&plan.layout, &plan.values)?;
+        Ok(())
+    }
+
     type Niche = ();
     type Context = ();
     type Extra = ();
@@ -159,9 +214,6 @@ impl Codec for CodecImpl {
         Metadata::Values(vec![selector])
     }
     fn field_group(&self, _: syn::Ident) -> Metadata {
-        if self.packed_fields {
-            return Metadata::Values(vec![]);
-        }
         Metadata::Field
     }
     fn fields_group(&self) -> Metadata {
@@ -213,7 +265,7 @@ impl Codec for CodecImpl {
         element: &WireLayout<Type, Metadata>,
         _: &Condition,
     ) -> Result<SequenceInput<Metadata>> {
-        let field = PointerLen::wires(element.nodes())
+        let field = PointerLenAbi::row_fields(element)
             .next()
             .unwrap()
             .name
@@ -231,8 +283,15 @@ impl Codec for CodecImpl {
             ]),
             open: quote!(if #length>0 && #wire.is_null(){return Err("null sequence".into());}),
             bind: quote!(let #field=unsafe{*#wire.add(#index)};),
-            validation_values: vec![quote!(#field)],
-            prepared_values: vec![Some(quote!(#field))],
+            validation_values: vec![(field.clone(), quote!(#field))],
+            prepared_values: vec![(
+                if self.unknown_prepared_read {
+                    syn::parse_quote!(unknown)
+                } else {
+                    field.clone()
+                },
+                Some(quote!(#field)),
+            )],
             release: quote!(),
         })
     }
@@ -243,14 +302,18 @@ impl Codec for CodecImpl {
         length: syn::Ident,
         _: syn::Ident,
         element: &WireLayout<Type, Metadata>,
-        values: &[TokenStream],
+        values: &[(syn::Ident, TokenStream)],
     ) -> Result<SequenceOutput<Metadata>> {
         assert_eq!(
-            PointerLen::wires(element.nodes()).len(),
+            PointerLenAbi::row_fields(element).len(),
             values.len(),
             "shared composition must validate child values before invoking a hook"
         );
-        let value = &values[0];
+        let values = prebindgen_conversions::match_output_fields(
+            PointerLenAbi::row_fields(element),
+            values,
+        )?;
+        let value = values[0].1;
         Ok(SequenceOutput {
             metadata: Metadata::Values(vec![
                 Wire {
@@ -269,20 +332,27 @@ impl Codec for CodecImpl {
             store: quote!(#wire.push(#value);),
             finish: quote!(let #wire=#wire.into_boxed_slice();),
             values: if self.bad_sequence {
-                vec![quote!(#wire.as_ptr())]
+                vec![(wire.clone(), quote!(#wire.as_ptr()))]
             } else {
-                vec![quote!(#wire.as_ptr()), quote!(#wire.len())]
+                let mut bindings = vec![
+                    (wire.clone(), quote!(#wire.as_ptr())),
+                    (length.clone(), quote!(#wire.len())),
+                ];
+                if self.reverse_values {
+                    bindings.reverse();
+                }
+                bindings
             },
             commit: quote!(let _=Box::into_raw(#wire);),
         })
     }
     fn finish_output(&self, plan: &mut CodecOutput<Self>, _: &()) -> Result<()> {
-        let values = &plan.values;
-        // The native reader exposes presence, data and length; preparation owns
+        let values = PointerLenAbi::result_packet(&plan.layout, &plan.values)?;
+        // The result packet contains presence, data and length; preparation owns
         // the buffer until these expressions have been saved for delivery.
-        let flag = &values[0];
-        let data = &values[1];
-        let len = &values[2];
+        let flag = values[0].1;
+        let data = values[1].1;
+        let len = values[2].1;
         plan.delivery = prebindgen_conversions::Delivery {
             statements: quote!(let delivered=Returned{present:#flag,data:#data,len:#len};),
             result: quote!(delivered),
@@ -293,7 +363,12 @@ impl Codec for CodecImpl {
 
 #[test]
 fn optional_sequences_with_two_outer_values_compile_and_execute() {
-    use prebindgen_conversions::{staged::emit_call, NativeFunction};
+    for reverse in [false, true] {
+        pointer_length_round_trip(reverse);
+    }
+}
+fn pointer_length_round_trip(reverse: bool) {
+    use prebindgen_conversions::staged::emit_call;
     let source =
         syn::parse_file("pub fn echo(values:Option<Vec<i32>>)->Option<Vec<i32>>{} ").unwrap();
     let mut flat = Flat::<CodecInput<CodecImpl>, CodecOutput<CodecImpl>>::parse(
@@ -302,19 +377,25 @@ fn optional_sequences_with_two_outer_values_compile_and_execute() {
     .unwrap();
     let defaults = Declarations::new(&flat, vec![]).unwrap();
     defaults
-        .fill(&mut flat, &CodecImpl::default(), &fun!(echo), &())
+        .fill(
+            &mut flat,
+            &CodecImpl {
+                reverse_values: reverse,
+                ..Default::default()
+            },
+            &fun!(echo),
+            &(),
+        )
         .unwrap();
     let f = flat.function("echo").unwrap();
     assert_eq!(f.input_conversions().unwrap()[0].layout().len(), 1);
     let input = f.input_conversions().unwrap()[0];
     let output = f.output_conversion().unwrap();
-    assert_eq!(PointerLen::wires(input.layout().nodes()).len(), 3);
+    assert_eq!(PointerLenAbi::parameters(input.layout()).len(), 3);
     assert_eq!(output.values.len(), 3);
-    let cloned: CodecOutput<CodecImpl> = output.clone(); // PointerLen has no Clone implementation.
+    let cloned: CodecOutput<CodecImpl> = output.clone();
     assert_eq!(cloned.values.len(), 3);
-    let parameters = f
-        .native_inputs()
-        .unwrap()
+    let parameters = PointerLenAbi::parameters(&input.layout)
         .map(|w| {
             let name = &w.name;
             let ty = w.rust_type();
@@ -326,6 +407,9 @@ fn optional_sequences_with_two_outer_values_compile_and_execute() {
         &(),
         &syn::parse_quote!(result),
         &syn::parse_quote!(Returned),
+        &PointerLenAbi::parameters(&input.layout)
+            .map(|w| w.name.clone())
+            .collect::<Vec<_>>(),
     )
     .unwrap();
     let program = quote! {
@@ -343,8 +427,8 @@ fn optional_sequences_with_two_outer_values_compile_and_execute() {
         }
     };
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("reader.rs");
-    let exe = dir.path().join("reader");
+    let file = dir.path().join("packet.rs");
+    let exe = dir.path().join("packet");
     std::fs::write(&file, program.to_string()).unwrap();
     let built = std::process::Command::new("rustc")
         .arg("--edition=2021")
@@ -362,179 +446,41 @@ fn optional_sequences_with_two_outer_values_compile_and_execute() {
 }
 
 #[test]
-fn a_reader_can_pack_a_group_without_erasing_its_logical_fields() {
-    let wire = |name: &str, ty: Type| Wire {
-        name: syn::parse_str(name).unwrap(),
-        kind: ty,
-    };
-    let mut layout: WireLayout<Type, Metadata> = vec![
-        wire("first", syn::parse_quote!(i32)),
-        wire("second", syn::parse_quote!(i32)),
-    ]
-    .into();
-    layout.enclose(Metadata::Values(vec![
-        wire("packed", syn::parse_quote!(*const i32)),
-        wire("size", syn::parse_quote!(usize)),
-    ]));
-    PointerLen::validate(&layout).unwrap();
-    assert_eq!(layout.len(), 2);
-    assert_eq!(
-        PointerLen::wires(layout.nodes())
-            .map(|w| w.name.to_string())
-            .collect::<Vec<_>>(),
-        ["packed", "size"]
-    );
-    PointerLen::wires_mut(layout.nodes_mut())
-        .next()
-        .unwrap()
-        .name = syn::parse_quote!(address);
-    assert_eq!(
-        PointerLen::wires(layout.nodes()).next().unwrap().name,
-        "address"
-    );
-    assert_eq!(layout[0].name, "first");
-}
-
-#[test]
-fn reader_selection_changes_the_view_without_changing_metadata() {
-    struct FieldReader;
-    impl NativeReader<Type, Metadata> for FieldReader {
-        fn wires(nodes: &[WireNode<Type, Metadata>]) -> std::vec::IntoIter<&Wire<Type>> {
-            let mut out = vec![];
-            for node in nodes {
-                match node {
-                    WireNode::Group { children, .. } => out.extend(Self::wires(children.nodes())),
-                    _ => out.extend(PointerLen::wires(std::slice::from_ref(node))),
-                }
-            }
-            out.into_iter()
-        }
-        fn wires_mut(
-            nodes: &mut [WireNode<Type, Metadata>],
-        ) -> std::vec::IntoIter<&mut Wire<Type>> {
-            let mut out = vec![];
-            for node in nodes {
-                match node {
-                    WireNode::Group { children, .. } => {
-                        out.extend(Self::wires_mut(children.nodes_mut()))
-                    }
-                    _ => out.extend(PointerLen::wires_mut(std::slice::from_mut(node))),
-                }
-            }
-            out.into_iter()
-        }
-        fn validate(layout: &WireLayout<Type, Metadata>) -> Result<()> {
-            layout.validate()?;
-            validate_wire_names(Self::wires(layout.nodes()))
-        }
-    }
-    let wire = |name: &str, kind: Type| Wire {
-        name: syn::parse_str(name).unwrap(),
-        kind,
-    };
-    let mut layout: WireLayout<Type, Metadata> = vec![
-        wire("first", syn::parse_quote!(i32)),
-        wire("second", syn::parse_quote!(i32)),
-    ]
-    .into();
-    layout.enclose(Metadata::Values(vec![
-        wire("pointer", syn::parse_quote!(*const i32)),
-        wire("length", syn::parse_quote!(usize)),
-    ]));
-    PointerLen::validate(&layout).unwrap();
-    FieldReader::validate(&layout).unwrap();
-    assert_eq!(
-        PointerLen::wires(layout.nodes())
-            .map(|w| w.name.to_string())
-            .collect::<Vec<_>>(),
-        ["pointer", "length"]
-    );
-    assert_eq!(
-        FieldReader::wires(layout.nodes())
-            .map(|w| w.name.to_string())
-            .collect::<Vec<_>>(),
-        ["first", "second"]
-    );
-    assert!(std::ptr::eq(
-        FieldReader::wires(layout.nodes()).next().unwrap(),
-        layout.get(0).unwrap()
-    ));
-    FieldReader::wires_mut(layout.nodes_mut())
-        .next()
-        .unwrap()
-        .name = syn::parse_quote!(renamed_field);
-    assert_eq!(layout.get(0).unwrap().name, "renamed_field");
-    assert_eq!(
-        PointerLen::wires(layout.nodes()).next().unwrap().name,
-        "pointer"
-    );
-    let WireNode::Group {
-        metadata: Metadata::Values(wires),
-        ..
-    } = &mut layout.nodes_mut()[0]
-    else {
-        panic!()
-    };
-    wires.push(wire("extra", syn::parse_quote!(usize)));
-    assert_eq!(PointerLen::wires(layout.nodes()).len(), 3);
-    assert_eq!(FieldReader::wires(layout.nodes()).len(), 2);
-    assert_eq!(layout.len(), 2);
-}
-
-#[test]
-fn malformed_sequence_counts_and_packed_record_hooks_are_rejected() {
-    let mut source = syn::parse_file("pub struct Record { pub x:i32 } pub fn sequence()->Vec<Vec<i32>>{} pub fn record(x:Record)->Record{}").unwrap();
+fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
+    let source =
+        syn::parse_file("pub fn output()->Vec<Vec<i32>>{} pub fn input(values:Vec<i32>){}")
+            .unwrap();
     let mut flat = Flat::<CodecInput<CodecImpl>, CodecOutput<CodecImpl>>::parse(
-        source.items.drain(..).map(|i| (i, Default::default())),
+        source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let bad_sequence = CodecImpl {
+    let bad = CodecImpl {
         bad_sequence: true,
         ..Default::default()
     };
-    let error = bind_output(
-        &mut flat,
-        &bad_sequence,
-        "sequence",
-        &Output::Sequence {
-            element: Box::new(Output::Sequence {
-                element: Box::new(Output::Leaf),
-                mode: None,
-            }),
+    let recipe = Output::Sequence {
+        element: Box::new(Output::Sequence {
+            element: Box::new(Output::Leaf),
             mode: None,
-        },
-        &(),
-    )
-    .unwrap_err();
-    assert!(error.contains("wire/value count"), "{error}");
-    assert!(flat.function("sequence").unwrap().ret.slot.is_none());
-    let packed_fields = CodecImpl {
-        packed_fields: true,
+        }),
+        mode: None,
+    };
+    let error = bind_output(&mut flat, &bad, "output", &recipe, &()).unwrap_err();
+    assert!(error.contains("missing output binding"), "{error}");
+    assert!(flat.function("output").unwrap().ret.slot.is_none());
+    let bad = CodecImpl {
+        unknown_prepared_read: true,
         ..Default::default()
     };
     let error = bind_input(
         &mut flat,
-        &packed_fields,
-        "record",
-        "x",
-        &Input::fields([Input::Leaf]),
+        &bad,
+        "input",
+        "values",
+        &Input::Sequence(Box::new(Input::Leaf)),
         &(),
     )
     .unwrap_err();
-    assert!(
-        error.contains("retain the prepared boundary values"),
-        "{error}"
-    );
-    assert!(flat.function("record").unwrap().params[0].ty.slot.is_none());
-    for recipe in [
-        Output::fields([Output::Leaf]),
-        Output::OwnedFields(vec![Output::Leaf]),
-    ] {
-        let error = bind_output(&mut flat, &packed_fields, "record", &recipe, &()).unwrap_err();
-        assert!(
-            error.contains("retain the prepared boundary values"),
-            "{error}"
-        );
-        assert!(flat.function("record").unwrap().ret.slot.is_none());
-    }
+    assert!(error.contains("prepared input names differ"), "{error}");
+    assert!(flat.function("input").unwrap().params[0].ty.slot.is_none());
 }

@@ -1,13 +1,12 @@
 use super::*;
-use prebindgen_conversions::NativeReader;
 #[derive(Clone, Debug)]
 enum TestGroup {
     Maybe(Vec<Wire<TestWire>>),
     Record,
     Member(syn::Ident),
 }
-struct TestReader;
-impl NativeReader<TestWire, TestGroup> for TestReader {
+struct TestAbi;
+impl TestAbi {
     fn wires(nodes: &[WireNode<TestWire, TestGroup>]) -> std::vec::IntoIter<&Wire<TestWire>> {
         let mut out = vec![];
         test_read(nodes, &mut out, false);
@@ -112,10 +111,9 @@ fn test_read<'a>(
         }
     }
 }
-type Bindings<W> = super::Bindings<W, (), TestGroup, TestReader>;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestReader>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestReader>;
-use prebindgen_conversions::staged::StagedFunction;
+type Bindings<W> = super::Bindings<W, (), TestGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup>;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
 struct TestCodec;
@@ -162,7 +160,53 @@ impl Codec for TestCodec {
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
     type Group = TestGroup;
-    type Reader = TestReader;
+    fn optional_niche(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+    ) -> Option<NicheReservation<Self::Niche>> {
+        select_optional_niche(self, TestAbi::wires(payload.nodes()))
+    }
+    fn optional_presence(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+        reservation: &NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        optional_presence(self, TestAbi::wires(payload.nodes()), reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        absent_output_values(self, TestAbi::wires(payload.nodes()), reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        retire_optional_niches(self, TestAbi::wires_mut(payload.nodes_mut()), reservation)
+    }
+    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+        TestAbi::validate(&plan.layout)
+    }
+    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+        TestAbi::validate(&plan.layout)?;
+        prebindgen_conversions::match_output_fields(
+            TestAbi::wires(plan.layout.nodes()),
+            &plan.values,
+        )?;
+        Ok(())
+    }
+    fn prefix_layout(
+        &self,
+        layout: &mut WireLayout<Self::Wire, Self::Group>,
+        segment: ComponentSegment,
+    ) {
+        for w in TestAbi::wires_mut(layout.nodes_mut()) {
+            w.kind.component.prepend(segment.clone());
+        }
+    }
     fn optional_metadata(
         &self,
         _: syn::Ident,
@@ -187,9 +231,7 @@ impl Codec for TestCodec {
     type Context = ();
     type Input = InputPlan<TestWire>;
     type Output = OutputPlan<TestWire>;
-    fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
-        wire.component.prepend(segment);
-    }
+
     fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
         Ok(quote!(Default::default()))
     }
@@ -227,7 +269,6 @@ impl Codec for TestCodec {
         Ok(InputPlan {
             fallible: false,
             context: Default::default(),
-            reader: Default::default(),
             acknowledgement: None,
             layout: vec![Wire {
                 name: w.clone(),
@@ -260,7 +301,6 @@ impl Codec for TestCodec {
         Ok(OutputPlan {
             fallible: false,
             context: Default::default(),
-            reader: Default::default(),
             delivery: Default::default(),
             layout: vec![Wire {
                 name: w.clone(),
@@ -268,7 +308,7 @@ impl Codec for TestCodec {
             }]
             .into(),
             statements: quote!(let #w=send_token(#v);),
-            values: vec![quote!(#w)],
+            values: vec![(w.clone(), quote!(#w))],
             commit: quote!(),
         })
     }
@@ -325,15 +365,11 @@ fn different_occurrences_have_different_converters() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(TestReader::wires(x.layout.nodes()).len(), 3);
-    assert_eq!(TestReader::wires(y.layout.nodes()).len(), 1);
-    assert!(TestReader::wires(x.layout.nodes()).all(|w| w.kind.name == "x"));
+    assert_eq!(TestAbi::wires(x.layout.nodes()).len(), 3);
+    assert_eq!(TestAbi::wires(y.layout.nodes()).len(), 1);
+    assert!(TestAbi::wires(x.layout.nodes()).all(|w| w.kind.name == "x"));
     assert_eq!(
-        TestReader::wires(y.layout.nodes())
-            .next()
-            .unwrap()
-            .kind
-            .name,
+        TestAbi::wires(y.layout.nodes()).next().unwrap().kind.name,
         "y"
     );
 }
@@ -433,14 +469,7 @@ fn observations_precede_move_but_wires_keep_order() {
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(
-        TestReader::wires(o.layout.nodes())
-            .next()
-            .unwrap()
-            .kind
-            .kind
-            == Kind::Token
-    );
+    assert!(TestAbi::wires(o.layout.nodes()).next().unwrap().kind.kind == Kind::Token);
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -500,7 +529,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .fill(&mut flat, &TEST_CODEC, &fun!(foo), &extra("defaults"))
         .unwrap();
     assert_eq!(
-        TestReader::wires(
+        TestAbi::wires(
             (flat.function("foo").unwrap().params[1]
                 .ty
                 .slot
@@ -523,23 +552,12 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(TestReader::wires(x.layout.nodes()).len(), 3);
-    assert!(
-        TestReader::wires(x.layout.nodes())
-            .nth(2)
-            .unwrap()
-            .kind
-            .kind
-            == Kind::Token
-    );
-    assert!(TestReader::wires(x.layout.nodes()).all(|w| w.kind.name == "x"));
-    assert_eq!(TestReader::wires(y.layout.nodes()).len(), 1);
+    assert_eq!(TestAbi::wires(x.layout.nodes()).len(), 3);
+    assert!(TestAbi::wires(x.layout.nodes()).nth(2).unwrap().kind.kind == Kind::Token);
+    assert!(TestAbi::wires(x.layout.nodes()).all(|w| w.kind.name == "x"));
+    assert_eq!(TestAbi::wires(y.layout.nodes()).len(), 1);
     assert_eq!(
-        TestReader::wires(y.layout.nodes())
-            .next()
-            .unwrap()
-            .kind
-            .name,
+        TestAbi::wires(y.layout.nodes()).next().unwrap().kind.name,
         "override"
     );
     assert_eq!(f.ret.slot.as_ref().unwrap().layout[0].kind.name, "result");
@@ -618,7 +636,7 @@ fn field_defaults_follow_type_expansions() {
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
     assert!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -626,7 +644,7 @@ fn field_defaults_follow_type_expansions() {
             == Kind::Value(Value::Text)
     );
     assert!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .nth(1)
             .unwrap()
             .kind
@@ -634,7 +652,7 @@ fn field_defaults_follow_type_expansions() {
             == Kind::Value(Value::Bytes)
     );
     assert_eq!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -642,7 +660,7 @@ fn field_defaults_follow_type_expansions() {
         "String"
     );
     assert_eq!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .nth(1)
             .unwrap()
             .kind
@@ -669,7 +687,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let output = f.ret.slot.as_ref().unwrap();
     let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
     assert_eq!(
-        TestReader::wires(input.layout.nodes())
+        TestAbi::wires(input.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -677,7 +695,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         scalar
     );
     assert_eq!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -685,7 +703,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         scalar
     );
     assert_eq!(
-        TestReader::wires(input.layout.nodes())
+        TestAbi::wires(input.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -693,15 +711,11 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         "scalar"
     );
     assert_eq!(
-        TestReader::wires(input.layout.nodes())
-            .next()
-            .unwrap()
-            .kind
-            .ty,
+        TestAbi::wires(input.layout.nodes()).next().unwrap().kind.ty,
         "i64"
     );
     assert_eq!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -709,7 +723,7 @@ fn explicit_scalar_identity_is_a_value_conversion() {
         "scalar"
     );
     assert_eq!(
-        TestReader::wires(output.layout.nodes())
+        TestAbi::wires(output.layout.nodes())
             .next()
             .unwrap()
             .kind
@@ -837,7 +851,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
     .unwrap();
     let call = flat.function("point").unwrap();
     assert_eq!(
-        call.outputs(&(), &source_binding())
+        test_return_packet(call, &(), &source_binding())
             .unwrap()
             .map(|out| out.wire.kind.component.clone())
             .collect::<Vec<_>>(),
@@ -855,7 +869,53 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
         type Group = TestGroup;
-        type Reader = TestReader;
+        fn optional_niche(
+            &self,
+            payload: &WireLayout<Self::Wire, Self::Group>,
+        ) -> Option<NicheReservation<Self::Niche>> {
+            select_optional_niche(self, TestAbi::wires(payload.nodes()))
+        }
+        fn optional_presence(
+            &self,
+            payload: &WireLayout<Self::Wire, Self::Group>,
+            reservation: &NicheReservation<Self::Niche>,
+        ) -> Result<TokenStream> {
+            optional_presence(self, TestAbi::wires(payload.nodes()), reservation)
+        }
+        fn absent_output_values(
+            &self,
+            payload: &WireLayout<Self::Wire, Self::Group>,
+            reservation: Option<&NicheReservation<Self::Niche>>,
+        ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+            absent_output_values(self, TestAbi::wires(payload.nodes()), reservation)
+        }
+        fn retire_niches(
+            &self,
+            payload: &mut WireLayout<Self::Wire, Self::Group>,
+            reservation: Option<&NicheReservation<Self::Niche>>,
+        ) -> Result<()> {
+            retire_optional_niches(self, TestAbi::wires_mut(payload.nodes_mut()), reservation)
+        }
+        fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+            TestAbi::validate(&plan.layout)
+        }
+        fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+            TestAbi::validate(&plan.layout)?;
+            prebindgen_conversions::match_output_fields(
+                TestAbi::wires(plan.layout.nodes()),
+                &plan.values,
+            )?;
+            Ok(())
+        }
+        fn prefix_layout(
+            &self,
+            layout: &mut WireLayout<Self::Wire, Self::Group>,
+            segment: ComponentSegment,
+        ) {
+            for w in TestAbi::wires_mut(layout.nodes_mut()) {
+                w.kind.component.prepend(segment.clone());
+            }
+        }
         fn optional_metadata(
             &self,
             _: syn::Ident,
@@ -880,9 +940,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         type Context = ();
         type Input = InputPlan<TestWire>;
         type Output = OutputPlan<TestWire>;
-        fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
-            wire.component.prepend(segment);
-        }
+
         fn selector(&self, extra: &Extra) -> TestWire {
             TEST_CODEC.selector(extra)
         }
@@ -920,7 +978,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 plan.acknowledgement.as_ref().unwrap().to_string(),
                 quote!(ack();).to_string()
             );
-            assert_eq!(TestReader::wires(plan.layout.nodes()).len(), 2);
+            assert_eq!(TestAbi::wires(plan.layout.nodes()).len(), 2);
             assert_eq!(plan.layout.len(), 2);
             plan.layout.enclose(TestGroup::Record);
             Ok(())
@@ -930,7 +988,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 return Err("finalization failed".into());
             }
             assert!(plan.delivery.statements.is_empty());
-            assert!(TestReader::wires(plan.layout.nodes()).len() == 0);
+            assert!(TestAbi::wires(plan.layout.nodes()).len() == 0);
             assert!(matches!(
                 plan.layout.nodes(),
                 [prebindgen_flat::WireNode::Group { .. }]
@@ -1019,7 +1077,8 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             flat.function("take").unwrap(),
             &(),
             &source_binding(),
-            &syn::parse_quote!(_)
+            &syn::parse_quote!(_),
+            &test_parameter_names(flat.function("take").unwrap())
         )
         .unwrap()
         .to_string(),
@@ -1027,7 +1086,8 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             direct.function("take").unwrap(),
             &(),
             &source_binding(),
-            &syn::parse_quote!(_)
+            &syn::parse_quote!(_),
+            &test_parameter_names(direct.function("take").unwrap())
         )
         .unwrap()
         .to_string()
@@ -1157,6 +1217,7 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &(),
         &source_binding(),
         &syn::parse_quote!(_),
+        &test_parameter_names(flat.function("point").unwrap()),
     )
     .unwrap()
     .to_string();
@@ -1179,20 +1240,26 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     drop(shapes);
     flat.records.clear();
     let call = flat.function("point").unwrap();
-    assert_eq!(call.outputs(&(), &source_binding()).unwrap().len(), 2);
+    assert_eq!(
+        test_return_packet(call, &(), &source_binding())
+            .unwrap()
+            .len(),
+        2
+    );
     assert_eq!(
         prebindgen_conversions::staged::emit_call(
             call,
             &(),
             &source_binding(),
-            &syn::parse_quote!(_)
+            &syn::parse_quote!(_),
+            &test_parameter_names(call)
         )
         .unwrap()
         .to_string(),
         before
     );
     assert_eq!(
-        call.outputs(&(), &source_binding())
+        test_return_packet(call, &(), &source_binding())
             .unwrap()
             .next()
             .unwrap()
@@ -1257,7 +1324,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         quote!(ack()).to_string()
     );
     assert_eq!(
-        TestReader::wires(plan.layout.nodes())
+        TestAbi::wires(plan.layout.nodes())
             .nth(1)
             .unwrap()
             .kind
@@ -1309,7 +1376,7 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
     );
     assert_eq!(plan.values.len(), 2);
     assert_eq!(
-        TestReader::wires(plan.layout.nodes())
+        TestAbi::wires(plan.layout.nodes())
             .nth(1)
             .unwrap()
             .kind
@@ -1333,7 +1400,7 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
         plan.statements.to_string(),
         quote!(let _ = &(next_record());).to_string()
     );
-    assert!(TestReader::wires(plan.layout.nodes()).len() == 0);
+    assert!(TestAbi::wires(plan.layout.nodes()).len() == 0);
 }
 
 #[test]
@@ -1348,7 +1415,6 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
             Ok(OutputPlan {
                 fallible: false,
                 context: Default::default(),
-                reader: Default::default(),
                 delivery: Default::default(),
                 layout: Default::default(),
                 values: Vec::new(),
@@ -1470,7 +1536,6 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
             Ok(OutputPlan {
                 fallible: false,
                 context: Default::default(),
-                reader: Default::default(),
                 delivery: Default::default(),
                 layout: vec![].into(),
                 values: vec![],
@@ -1544,7 +1609,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     fn check(layout: &WireLayout<TestWire, TestGroup>) {
         layout.validate().unwrap();
         assert_eq!(layout.len(), 3);
-        assert_eq!(TestReader::wires(layout.nodes()).len(), 4);
+        assert_eq!(TestAbi::wires(layout.nodes()).len(), 4);
         let [WireNode::Group { metadata, children }] = layout.nodes() else {
             panic!()
         };
@@ -1559,7 +1624,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
                 panic!()
             };
             names.push(name.to_string());
-            widths.push(TestReader::wires(children.nodes()).len());
+            widths.push(TestAbi::wires(children.nodes()).len());
         }
         assert_eq!(names, ["maybe", "empty", "pair"]);
         assert_eq!(widths, [2, 0, 2]);
@@ -1658,7 +1723,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
         .unwrap();
     let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-    assert_eq!(TestReader::wires(output.layout.nodes()).len(), 2);
+    assert_eq!(TestAbi::wires(output.layout.nodes()).len(), 2);
     let code = output.statements.to_string();
     assert!(code.contains(":: core :: result :: Result :: Ok"));
     assert!(code.contains("message (&"));
@@ -1796,98 +1861,32 @@ fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
     assert!(alternatives[0].is_empty());
     assert_eq!(alternatives[1].len(), 1);
     assert_eq!(input.layout().len(), 1);
-    assert_eq!(TestReader::wires(input.layout.nodes()).len(), 2);
-    assert!(TestReader::wires(input.layout.nodes()).next().unwrap().name != input.layout()[0].name);
+    assert_eq!(TestAbi::wires(input.layout.nodes()).len(), 2);
+    assert!(TestAbi::wires(input.layout.nodes()).next().unwrap().name != input.layout()[0].name);
 }
 
-#[test]
-fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
-    struct BadMetadata;
-    impl Codec for BadMetadata {
-        type Niche = ();
-        type Group = TestGroup;
-        type Reader = TestReader;
-        type Extra = Extra;
-        type Context = ();
-        type Wire = TestWire;
-        type Input = InputPlan<TestWire>;
-        type Output = OutputPlan<TestWire>;
-        fn optional_metadata(
-            &self,
-            _: syn::Ident,
-            _: syn::Ident,
-            _: Option<()>,
-            _: Vec<Wire<TestWire>>,
-        ) -> TestGroup {
-            TestGroup::Maybe(vec![])
-        }
-        fn alternatives_metadata(&self, mut selector: Wire<TestWire>) -> TestGroup {
-            selector.name = syn::parse_quote!(wrong_selector);
-            TestGroup::Maybe(vec![selector])
-        }
-
-        fn field_group(&self, name: syn::Ident) -> TestGroup {
-            TEST_CODEC.field_group(name)
-        }
-        fn fields_group(&self) -> TestGroup {
-            TEST_CODEC.fields_group()
-        }
-        fn selector(&self, extra: &Extra) -> TestWire {
-            TEST_CODEC.selector(extra)
-        }
-        fn niche(&self, _: &TestWire) -> Option<()> {
-            None
-        }
-        fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
-        fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
-            TEST_CODEC.consumes(ty, extra)
-        }
-        fn input_leaf(
-            &self,
-            ty: &Type,
-            extra: &Extra,
-            w: syn::Ident,
-            v: syn::Ident,
-            active: &Condition,
-        ) -> Result<InputPlan<TestWire>> {
-            TEST_CODEC.input_leaf(ty, extra, w, v, active)
-        }
-        fn output_leaf(
-            &self,
-            ty: &Type,
-            extra: &Extra,
-            w: syn::Ident,
-            v: TokenStream,
-            borrowed: bool,
-        ) -> Result<OutputPlan<TestWire>> {
-            TEST_CODEC.output_leaf(ty, extra, w, v, borrowed)
-        }
-    }
-    let mut model =
-        parse("pub fn take(v:Option<i32>){} pub fn choice(v:i32){} pub fn values()->Vec<i32>{}");
-    let error = bind_input(
-        &mut model,
-        &BadMetadata,
-        "take",
-        "v",
-        &Input::Optional(Box::new(Input::Leaf)),
-        &Extra::default(),
-    )
-    .unwrap_err();
-    assert!(error.contains("retain the prepared boundary values"));
-    assert!(model.function("take").unwrap().params[0].ty.slot.is_none());
-    let error = bind_input(
-        &mut model,
-        &BadMetadata,
-        "choice",
-        "v",
-        &Input::selector([Input::Leaf, Input::Leaf]),
-        &Extra::default(),
-    )
-    .unwrap_err();
-    assert!(error.contains("retain the prepared boundary values"));
-    assert!(model.function("choice").unwrap().params[0]
-        .ty
-        .slot
-        .is_none());
+struct TestPacketValue<'a> {
+    wire: &'a Wire<TestWire>,
+}
+fn test_return_packet<'a>(
+    f: &'a prebindgen_flat::Function<InputPlan<TestWire>, OutputPlan<TestWire>>,
+    _context: &(),
+    _source: &syn::Ident,
+) -> Result<std::vec::IntoIter<TestPacketValue<'a>>> {
+    let plan = f.output_conversion()?;
+    prebindgen_conversions::match_output_fields(TestAbi::wires(plan.layout.nodes()), &plan.values)?
+        .into_iter()
+        .map(|(wire, _)| Ok(TestPacketValue { wire }))
+        .collect::<Result<Vec<_>>>()
+        .map(Vec::into_iter)
+}
+fn test_parameter_names(
+    f: &prebindgen_flat::Function<InputPlan<TestWire>, OutputPlan<TestWire>>,
+) -> Vec<syn::Ident> {
+    f.input_conversions()
+        .unwrap()
+        .into_iter()
+        .flat_map(|p| TestAbi::wires(p.layout.nodes()))
+        .map(|w| w.name.clone())
+        .collect()
 }

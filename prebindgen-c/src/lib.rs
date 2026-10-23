@@ -1,9 +1,6 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
-use prebindgen_conversions::NativeFunction;
-use prebindgen_conversions::NativeReader;
 
-use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::{Conversion, Flat, Primitive, Result, WireKind};
 
@@ -35,8 +32,8 @@ use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, CGroup, CCodec>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, CGroup, CCodec>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, CGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, CGroup>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -68,7 +65,7 @@ pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
     type Group = CGroup;
-    type Reader = CCodec;
+
     fn binding_failure_layout(
         &self,
         _: &(),
@@ -127,11 +124,10 @@ impl Codec for CCodec {
             .extend(prebindgen_conversions::template_parameter(
                 "output_committed",
             ));
-        let mut values: Vec<_> = plan
-            .values
-            .iter()
+        let mut values: Vec<_> = crate::group::result_packet(&plan.layout, &plan.values)?
+            .into_iter()
             .enumerate()
-            .map(|(i, value)| {
+            .map(|(i, (_, value))| {
                 let field = format_ident!("v{i}");
                 quote!(#field: #value)
             })
@@ -165,7 +161,7 @@ impl Codec for CCodec {
         length: syn::Ident,
         _: syn::Ident,
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
-        values: &[TokenStream],
+        values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_declarations::SequenceOutput<CGroup>> {
         sequence::output(wire, length, element, values)
     }
@@ -356,7 +352,10 @@ impl Codec for CCodec {
                 )?;
                 out.fallible = false;
                 let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
-                out.values = vec![quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()})];
+                out.values = vec![(
+                    w.clone(),
+                    quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()}),
+                )];
                 out.commit = quote!(let _ = Box::into_raw(#w););
                 Ok(out)
             }
@@ -369,6 +368,42 @@ impl Codec for CCodec {
                 |b| CWire::pointer(b.into()),
             ),
         }
+    }
+
+    fn optional_niche(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
+        crate::group::optional_niche(payload)
+    }
+    fn optional_presence(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        crate::group::optional_presence(payload, reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        crate::group::absent_output_values(payload, reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        crate::group::retire_niches(payload, reservation)
+    }
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        crate::group::validate_layout(&plan.layout)
+    }
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        crate::group::validate_layout(&plan.layout)?;
+        crate::group::result_packet(&plan.layout, &plan.values)?;
+        Ok(())
     }
 }
 fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
@@ -854,18 +889,15 @@ fn validate_wire_declaration(
 }
 
 fn generate<
-    I: for<'a> prebindgen_conversions::NativeConversion<
+    I: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
         Group = CGroup,
-        Reader = CCodec,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
-    O: for<'a> prebindgen_conversions::NativeConversion<
+    O: for<'a> prebindgen_flat::Conversion<
         Wire = CWire,
         Group = CGroup,
-        Reader = CCodec,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
-        WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
     >,
 >(
     flat: Flat<I, O>,
@@ -984,13 +1016,17 @@ fn generate<
             &context,
             &source,
             &syn::parse_quote!(()),
+            &crate::group::function_parameters(f)?
+                .map(|w| w.name.clone())
+                .collect::<Vec<_>>(),
         )?;
         if !symbols.insert(format!("{prefix}_{}", f.name)) {
             return Err("duplicate C export".into());
         }
-        let mut all_wires = f
-            .native_inputs()?
-            .chain(f.outputs(&context, &source)?.map(|o| o.wire))
+        let mut all_wires = crate::group::function_parameters(f)?
+            .chain(crate::group::result_packet_fields(
+                f.output_conversion()?.layout(),
+            ))
             .collect::<Vec<_>>();
         let mut schemas = Vec::new();
         for slot in f.input_conversions()? {
@@ -998,12 +1034,12 @@ fn generate<
         }
         sequence::schemas(f.output_conversion()?.layout(), &mut schemas);
         for (_, element) in schemas {
-            all_wires.extend(CCodec::wires(element.nodes()));
+            all_wires.extend(crate::group::row_fields(element));
         }
         for wire in all_wires {
             validate_wire_declaration(wire, &pointers, &enums)?;
         }
-        calls.push((f, body, context, source));
+        calls.push((f, body, context));
     }
     let mut tokens = quote! {
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
@@ -1058,10 +1094,10 @@ The pointer must be null or a live allocation of the declared type returned by t
         validate_layout(&error.plan.layout)?;
         let mut schemas = Vec::new();
         sequence::schemas(&error.plan.layout, &mut schemas);
-        for wire in CCodec::wires(error.plan.layout.nodes()).chain(
+        for wire in crate::group::result_packet_fields(&error.plan.layout).chain(
             schemas
                 .iter()
-                .flat_map(|(_, element)| CCodec::wires(element.nodes())),
+                .flat_map(|(_, element)| crate::group::row_fields(element)),
         ) {
             validate_wire_declaration(wire, &pointers, &enums)?;
         }
@@ -1075,7 +1111,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         &mut header,
     )?;
     header.push_str("/* Non-Result calls return their first value directly; additional values use output pointers.\n * Binding failures require explicit .panic() and abort. Destructors return void. */\n");
-    for (f, body, context, source) in calls {
+    for (f, body, context) in calls {
         let mut schemas = Vec::new();
         for slot in f.input_conversions()? {
             sequence::schemas(slot.layout(), &mut schemas);
@@ -1101,11 +1137,9 @@ The pointer must be null or a live allocation of the declared type returned by t
         let accepted = &context.acknowledgement;
         let name = format_ident!("{prefix}_{}", f.name);
         let result = format_ident!("{name}_result");
-        let inputs = f.native_inputs()?.collect::<Vec<_>>();
-        let outputs = f
-            .outputs(&context, &source)?
-            .map(|o| o.wire)
-            .collect::<Vec<_>>();
+        let inputs = crate::group::function_parameters(f)?.collect::<Vec<_>>();
+        let outputs =
+            crate::group::result_packet_fields(f.output_conversion()?.layout()).collect::<Vec<_>>();
         let mut next_option_label = 0;
         for param in &f.params {
             if let Some(slot) = &param.ty.slot {
@@ -1142,7 +1176,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         }
         let mut params = Vec::new();
         let mut cparams = Vec::new();
-        for w in f.native_inputs()? {
+        for w in crate::group::function_parameters(f)? {
             let n = &w.name;
             let ty = w.kind.rust_type();
             params.push(quote!(#n:#ty));
@@ -1151,14 +1185,14 @@ The pointer must be null or a live allocation of the declared type returned by t
         let body = if callbacks.contains(&f.name.to_string()) {
             let (_, element) = sequence::return_sequence(f.output_conversion()?.layout())
                 .ok_or("missing callback element schema")?;
-            let types = CCodec::wires(element.nodes())
+            let types = crate::group::callback_parameters(element)
                 .map(|wire| wire.rust_type())
                 .collect::<Vec<_>>();
             params.push(quote!(__pb_callback:Option<unsafe extern "C" fn(*mut ::core::ffi::c_void,#(#types),*)>));
             params.push(quote!(__pb_callback_context:*mut ::core::ffi::c_void));
             let mut fields = vec!["void *context".to_string()];
             fields.extend(
-                CCodec::wires(element.nodes())
+                crate::group::callback_parameters(element)
                     .enumerate()
                     .map(|(i, wire)| format!("{} v{i}", c_ty(wire, prefix, &pointers, &context))),
             );
@@ -1313,11 +1347,11 @@ fn describe_groups(
                 let element = &c.element;
                 let path = field_path.join(".");
                 if matches!(carrier.kind, CWire::Rows) {
-                    out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,CCodec::wires(element.nodes()).len()));
+                    out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,crate::group::row_fields(element).len()));
                 } else {
-                    out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,CCodec::wires(element.nodes()).len()));
+                    out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,crate::group::row_fields(element).len()));
                 }
-                let row_names = CCodec::wires(element.nodes())
+                let row_names = crate::group::row_fields(element)
                     .enumerate()
                     .map(|(i, w)| (w.name.to_string(), format!("row.v{i}")))
                     .collect();
@@ -1362,7 +1396,7 @@ fn describe_groups(
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
                 if let CGroup::Field(name) = metadata {
                     field_path.push(name.to_string().trim_start_matches("r#").into());
-                    let values = CCodec::wires(children.nodes())
+                    let values = crate::group::record_fields(children)
                         .map(|w| names[&w.name.to_string()].clone())
                         .collect::<Vec<_>>();
                     let values = if values.is_empty() {
@@ -1424,7 +1458,6 @@ mod generation_tests {
     }
     #[test]
     fn logical_outcomes_and_sequence_fields_are_independent_of_c_transport() {
-        use prebindgen_conversions::NativeFunction;
         use prebindgen_declarations::{fun, Declarations};
         use prebindgen_flat::{Conversion, ConversionExt, OutcomeKind, WireLayout};
         let mut flat=error_model("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
@@ -1459,7 +1492,10 @@ mod generation_tests {
         declarations.fill(&mut flat, &codec, &decl, &()).unwrap();
         let normal = flat.function("f").unwrap();
         assert_eq!(normal.inputs().unwrap().count(), 1);
-        assert_eq!(normal.native_inputs().unwrap().count(), 2);
+        assert_eq!(
+            crate::group::function_parameters(normal).unwrap().count(),
+            2
+        );
         let output = normal.output_conversion().unwrap();
         assert_eq!(
             output.layout().outcome(OutcomeKind::Success).unwrap().len(),
@@ -1467,7 +1503,10 @@ mod generation_tests {
         );
         let errors = output.layout().outcome(OutcomeKind::SourceError).unwrap();
         assert_eq!(errors.len(), 2);
-        assert_eq!(CCodec::wires(bindings[0].plan.layout.nodes()).count(), 3);
+        assert_eq!(
+            crate::group::result_packet_fields(&bindings[0].plan.layout).count(),
+            3
+        );
         assert_eq!(
             output
                 .layout()
@@ -1517,7 +1556,7 @@ mod generation_tests {
             .unwrap();
         assert_eq!(shape(callback.layout()), expected);
         assert!(matches!(
-            CCodec::wires(callback.layout().nodes())
+            crate::group::result_packet_fields(callback.layout())
                 .nth(1)
                 .unwrap()
                 .kind,
@@ -1680,16 +1719,15 @@ mod generation_tests {
                 Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
             bind_output(&mut flat, &CCodec, "f", &recipe, &()).unwrap();
             assert_eq!(
-                CCodec::wires(
-                    (flat
+                crate::group::result_packet_fields(
+                    &flat
                         .function("f")
                         .unwrap()
                         .ret
                         .slot
                         .as_ref()
                         .unwrap()
-                        .layout)
-                        .nodes()
+                        .layout
                 )
                 .len(),
                 2
@@ -1768,14 +1806,17 @@ mod generation_tests {
                 Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
             let selector = Input::Selector(vec![arm.clone(), arm.clone()]);
             bind_input(&mut flat, &CCodec, "echo", "value", &selector, &()).unwrap();
-            let plan = flat.function("echo").unwrap().params[0]
-                .ty
-                .slot
-                .as_ref()
-                .unwrap();
-            assert_eq!(CCodec::wires(plan.layout.nodes()).len(), 3);
+            assert_eq!(
+                crate::group::function_parameters(flat.function("echo").unwrap())
+                    .unwrap()
+                    .len(),
+                3
+            );
             // Check suppression before an outer option can clear the arm niches.
-            for wire in CCodec::wires(plan.layout.nodes()).skip(1) {
+            for wire in crate::group::function_parameters(flat.function("echo").unwrap())
+                .unwrap()
+                .skip(1)
+            {
                 assert!(matches!(
                     wire.kind,
                     CWire::Scalar {
@@ -1798,7 +1839,12 @@ mod generation_tests {
                 .unwrap();
             // Presence flag + selector + two char carriers. Even a remaining
             // niche of an optional arm cannot describe the outer option.
-            assert_eq!(CCodec::wires(plan.layout.nodes()).len(), 4);
+            assert_eq!(
+                crate::group::function_parameters(flat.function("echo").unwrap())
+                    .unwrap()
+                    .len(),
+                4
+            );
             let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
                 panic!()
             };
@@ -1808,7 +1854,11 @@ mod generation_tests {
             assert!(optional.niche.is_none());
             assert_eq!(
                 optional.discriminator,
-                CCodec::wires(plan.layout.nodes()).next().unwrap().name
+                crate::group::function_parameters(flat.function("echo").unwrap())
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .name
             );
         }
     }
@@ -1880,18 +1930,6 @@ mod generation_tests {
                     OutputFragment::Deliver { next, .. } => quote!({ #next }),
                     OutputFragment::Commit { .. } | OutputFragment::Result { .. } => quote!(()),
                 })
-            }
-        }
-        impl prebindgen_conversions::NativeConversion for CountedOutput {
-            type Reader = CCodec;
-            type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>;
-            fn code_fragment_wire(
-                &self,
-                pos: usize,
-                _: Self::WireFragment<'_>,
-                _: &syn::Type,
-            ) -> Result<TokenStream> {
-                Err(format!("invalid output wire position {pos}"))
             }
         }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));

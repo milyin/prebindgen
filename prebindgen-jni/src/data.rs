@@ -1,6 +1,5 @@
 //! Kotlin record declarations and their occurrence conversions.
 use super::*;
-use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::Condition;
 use std::rc::Rc;
 
@@ -478,9 +477,7 @@ impl RecordShape {
         root: String,
         condition: String,
     ) -> Result<()> {
-        for wire in JniCodec::wires_mut(layout.nodes_mut()) {
-            wire.kind.clear_niche();
-        }
+        JniCodec.retire_niches(layout, None)?;
         let mut nodes = std::mem::take(layout).into_nodes();
         let [prebindgen_flat::WireNode::Group { metadata, .. }] = nodes.as_mut_slice() else {
             return Err("record compiler must produce one field collection".into());
@@ -501,7 +498,7 @@ impl RecordShape {
 impl Codec for DataCodec {
     type Niche = crate::optional::JniNiche;
     type Group = JniGroup;
-    type Reader = JniCodec;
+
     fn optional_metadata(
         &self,
         presence: syn::Ident,
@@ -543,7 +540,7 @@ impl Codec for DataCodec {
         n: syn::Ident,
         i: syn::Ident,
         element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
-        values: &[TokenStream],
+        values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_declarations::SequenceOutput<JniGroup>> {
         if self.callback_wire.as_ref() == Some(&w) {
             crate::sequence_callback::transport(w, element, values)
@@ -734,6 +731,40 @@ impl Codec for DataCodec {
             return JniCodec.output_projected(ty, extra, wire, value, projection);
         };
         record.output(&wire, value, projection)
+    }
+
+    fn optional_niche(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
+        JniCodec.optional_niche(payload)
+    }
+    fn optional_presence(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        JniCodec.optional_presence(payload, reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        JniCodec.absent_output_values(payload, reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        JniCodec.retire_niches(payload, reservation)
+    }
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        JniCodec.validate_input(plan)
+    }
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        JniCodec.validate_output(plan)
     }
 }
 

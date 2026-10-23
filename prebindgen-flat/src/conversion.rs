@@ -3,7 +3,7 @@ use crate::Result;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-/// Type information for one logical value. A reader may pass it directly or
+/// Type information for one logical value. A generator may pass it directly or
 /// encode it as a packed field/callback argument.
 /// The returned type describes the boundary value, not the source value being converted.
 /// For example, a boolean conversion may use `u8` as its Rust carrier type.
@@ -60,7 +60,7 @@ pub struct Wire<W: WireKind> {
 
 impl<W: WireKind> Wire<W> {
     /// Rust carrier type supplied by this wire's [`WireKind`].
-    /// A reader can use this type directly or select a packed transport.
+    /// A generator can use this type directly or select a packed transport.
     pub fn rust_type(&self) -> syn::Type {
         self.kind.rust_type()
     }
@@ -224,7 +224,7 @@ pub trait Conversion {
     type Group;
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
-    /// Logical tree of values, repetition and outcomes. Its reader chooses ABI placement.
+    /// Logical tree of values, repetition and outcomes. Its generator chooses ABI placement.
     fn layout(&self) -> &crate::WireLayout<Self::Wire, Self::Group>;
     /// Emit an expression for the whole slot.
     fn code_fragment_slot(

@@ -3,7 +3,6 @@ use super::*;
 use crate::kotlin::{
     input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
 };
-use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 use prebindgen_flat::Wire;
 use prebindgen_flat::WireLayout;
@@ -17,13 +16,13 @@ pub(crate) fn input(
 ) -> Result<SequenceInput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = JniCodec::wires(element.nodes()).len();
+    let count = crate::group::row_fields(element).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection element fields")?;
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
     let mut prepared_values = Vec::new();
-    for (position, field) in JniCodec::wires(element.nodes()).enumerate() {
+    for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
         bind.extend(quote! {
@@ -31,12 +30,18 @@ pub(crate) fn input(
             if #name.is_err() && #env.exception_check().map_err(|e|e.to_string())? {return Err("JNI collection field decoding failed".into());}
         });
         let borrow = quote!(*);
-        validation_values.push(quote!(#borrow #name.as_ref().map_err(|e|e.clone())?));
-        prepared_values.push(if field.kind.is_reference() {
-            None
-        } else {
-            Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
-        });
+        validation_values.push((
+            field.name.clone(),
+            quote!(#borrow #name.as_ref().map_err(|e|e.clone())?),
+        ));
+        prepared_values.push((
+            field.name.clone(),
+            if field.kind.is_reference() {
+                None
+            } else {
+                Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
+            },
+        ));
     }
     Ok(SequenceInput {
         metadata: JniGroup::Sequence(Wire {
@@ -58,13 +63,13 @@ pub(crate) fn output(
     length: syn::Ident,
     index: syn::Ident,
     element: &WireLayout<JniWire, JniGroup>,
-    values: &[TokenStream],
+    values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = JniCodec::wires(element.nodes()).len();
+    let count = crate::group::row_fields(element).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
-    let encode = encode_array(element, values, &row, 0);
+    let encode = encode_array(crate::group::row_values(element, values)?, &row, 0);
     let frame = format_ident!("{wire}_frame");
     Ok(SequenceOutput {
         commit_each: false,
@@ -84,7 +89,7 @@ pub(crate) fn output(
             drop(#frame);
         },
         finish: quote!(let #wire=Some(#wire);),
-        values: vec![quote!(#wire)],
+        values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     })
 }
@@ -206,7 +211,7 @@ pub(crate) fn callback_target(layout: &WireLayout<JniWire, JniGroup>) -> Result<
         .outcome(prebindgen_flat::OutcomeKind::Success)
         .ok_or("missing Success outcome")?;
     if prebindgen_declarations::outer_sequences(success).len() != 1
-        || JniCodec::wires(layout.nodes()).len() > 2
+        || crate::group::result_packet_fields(layout).len() > 2
     {
         return Err(
             "callback_return permits only one sequence and its optional presence flag".into(),
