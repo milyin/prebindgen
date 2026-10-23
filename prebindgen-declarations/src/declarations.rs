@@ -3,7 +3,7 @@
 
 use crate::{option_inner, result_parts, sequence_parts};
 use crate::{Codec, Compiler, Condition, Input, Output, Projection};
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
 
@@ -276,37 +276,20 @@ impl Declarations {
     ///
     /// The original path, source types and input slots are preserved. The new
     /// return slot is empty, so the adapter can fill it using its callback
-    /// transport while retaining the same expansion declarations. The returned
-    /// identifier selects the outer sequence carrier, never a nested collection.
+    /// delivery while retaining the same expansion declarations. The adapter
+    /// checks eligibility and selects the appropriate node before calling this helper.
     pub fn callback_variant<I, O>(
         &self,
         flat: &mut Flat<I, O>,
         decl: &FunctionDecl,
         name: &str,
-    ) -> Result<(FunctionDecl, syn::Ident)>
+    ) -> Result<FunctionDecl>
     where
         I: prebindgen_flat::Conversion + Clone,
-        O: prebindgen_conversions::NativeConversion + Clone,
+        O: prebindgen_flat::Conversion + Clone,
     {
         let source = flat.function(&decl.name)?;
-        let layout = source
-            .ret
-            .slot
-            .as_ref()
-            .ok_or("unbound sequence return")?
-            .layout();
-        let sequences = crate::sequence::return_sequences(layout);
-        if sequences.len() != 1 || layout.native_len() > 2 {
-            return Err(
-                "callback_return permits only one sequence and its optional presence flag".into(),
-            );
-        }
-        let carrier = sequences[0]
-            .metadata
-            .as_ref()
-            .and_then(|m| prebindgen_conversions::NativeMetadata::encoding(m).carrier())
-            .ok_or("callback_return requires a carried sequence representation")?;
-        let carrier = carrier.name.clone();
+        source.output_conversion()?;
         let mut function = source.clone();
         function.name = crate::ident(name)?;
         function.ret.slot = None;
@@ -318,7 +301,7 @@ impl Declarations {
         variant.name = name.into();
         variant.foreign = None;
         variant.callback_return = None;
-        Ok((variant, carrier))
+        Ok(variant)
     }
     /// Build one function's input and output converters from its declarations.
     ///
@@ -409,13 +392,15 @@ impl Declarations {
         };
         for input in inputs.iter_mut().flatten() {
             codec.finish_input(input, extra)?;
-            input.layout.validate_native_names()?;
+            input.layout.validate()?;
+            C::Reader::validate(&input.layout)?;
         }
         if let Some(output) = &mut output {
             crate::finalize_output_schema(codec, output, extra)?;
             codec.finish_output(output, extra)?;
+            output.layout.validate()?;
             output.validate_value_count()?;
-            output.layout.validate_native_names()?;
+            C::Reader::validate(&output.layout)?;
         }
         // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;

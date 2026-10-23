@@ -123,14 +123,14 @@ impl EnumMapping {
 
 /// Prepare checked enum decoding with the supplied boundary carrier.
 /// References borrow the decoded local; mutable references are unsupported.
-pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
+pub fn enum_input<W: prebindgen_flat::WireKind, C, G, R>(
     mapping: &EnumMapping,
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &Condition,
     kind: W,
-) -> Result<InputPlan<W, C, G>> {
+) -> Result<InputPlan<W, C, G, R>> {
     let borrowed = match ty {
         Type::Reference(r) if r.mutability.is_some() => {
             return Err("mutable enum inputs are unsupported".into())
@@ -143,6 +143,7 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
+        reader: Default::default(),
         acknowledgement: None,
         layout: vec![Wire { name: wire, kind }].into(),
         validation: quote!(let #var = if #active { Some(#decode) } else { None };),
@@ -161,16 +162,17 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
     })
 }
 /// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
-pub fn enum_output<W: prebindgen_flat::WireKind, C, G>(
+pub fn enum_output<W: prebindgen_flat::WireKind, C, G, R>(
     mapping: &EnumMapping,
     wire: syn::Ident,
     value: TokenStream,
     kind: W,
-) -> OutputPlan<W, C, G> {
+) -> OutputPlan<W, C, G, R> {
     let encoded = mapping.encode(quote!(&(#value)));
     OutputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         delivery: Default::default(),
         layout: vec![Wire {
             name: wire.clone(),

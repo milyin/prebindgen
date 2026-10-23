@@ -1,6 +1,6 @@
 //! Explicit Result error outputs. Message buffers and structured errors are caller-owned.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_conversions::OutputFragment;
 use prebindgen_flat::Conversion;
 use prebindgen_flat::{Function, TypeUse};
@@ -74,8 +74,8 @@ fn field_names(layout: &prebindgen_flat::WireLayout<CWire, CGroup>) -> Vec<Strin
                 children,
             } = node
             {
-                for _ in children.native_wires() {
-                    names.push(if children.native_len() == 1 {
+                for _ in CCodec::wires(children.nodes()) {
+                    names.push(if CCodec::wires(children.nodes()).len() == 1 {
                         name.to_string().trim_start_matches("r#").to_owned()
                     } else {
                         format!("v{}", names.len())
@@ -86,14 +86,16 @@ fn field_names(layout: &prebindgen_flat::WireLayout<CWire, CGroup>) -> Vec<Strin
     }
     let keywords="auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Imaginary _Noreturn _Static_assert _Thread_local bool true false NULL";
     let mut unique = std::collections::BTreeSet::new();
-    if names.len() != layout.native_len()
+    if names.len() != CCodec::wires(layout.nodes()).len()
         || names.iter().any(|name| {
             !name.is_ascii()
                 || keywords.split_whitespace().any(|word| word == name)
                 || !unique.insert(name.clone())
         })
     {
-        return (0..layout.native_len()).map(|i| format!("v{i}")).collect();
+        return (0..CCodec::wires(layout.nodes()).len())
+            .map(|i| format!("v{i}"))
+            .collect();
     }
     names
 }
@@ -180,11 +182,11 @@ pub(crate) fn emit(
         let mut fields = Vec::new();
         let mut drops = TokenStream::new();
         header.push_str("typedef struct {\n");
-        for (i, wire) in error.plan.layout.native_wires().enumerate() {
+        for (i, wire) in CCodec::wires(error.plan.layout.nodes()).enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
             fields.push(quote!(pub #field:#ty));
-            let c_field = if error.fields.len() == error.plan.layout.native_len() {
+            let c_field = if error.fields.len() == CCodec::wires(error.plan.layout.nodes()).len() {
                 error.fields[i].trim_start_matches("r#").to_owned()
             } else {
                 format!("v{i}")
@@ -195,10 +197,7 @@ pub(crate) fn emit(
                 c_ty(wire, prefix, pointers, &context)
             ));
         }
-        let values = error
-            .plan
-            .layout
-            .native_wires()
+        let values = CCodec::wires(error.plan.layout.nodes())
             .enumerate()
             .map(|(i, wire)| {
                 let field = format_ident!("v{i}");
@@ -236,7 +235,7 @@ pub(crate) fn emit(
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
-        let wires = error.plan.layout.native_wires().collect::<Vec<_>>();
+        let wires = CCodec::wires(error.plan.layout.nodes()).collect::<Vec<_>>();
         let mut comments = describe_groups(&error.plan.layout, &wires, true, &mut 0, "error");
         for i in (0..wires.len()).rev() {
             let field = if error.fields.len() == wires.len() {

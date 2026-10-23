@@ -1,6 +1,6 @@
 //! Shared optional conversion composition and wire niches.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 
 /// Optional layout chosen from the inner conversion's available wire niches.
 #[derive(Clone, Debug)]
@@ -10,8 +10,7 @@ struct OptionalLayout<N> {
 }
 fn layout<C: Codec>(codec: &C, wires: &WireLayout<C::Wire, C::Group>) -> OptionalLayout<C::Niche> {
     OptionalLayout {
-        niche: wires
-            .native_wires()
+        niche: C::Reader::wires(wires.nodes())
             .enumerate()
             .find_map(|(i, w)| codec.niche(&w.kind).map(|n| (i, n))),
     }
@@ -30,12 +29,9 @@ pub fn optional_input<C: Codec>(
     let layout = layout(codec, &child.layout);
     let mut validation = TokenStream::new();
     if let Some((i, niche)) = &layout.niche {
-        let w = &child.layout.native_get(*i).unwrap().name;
-        let present = codec.is_present(
-            &child.layout.native_get(*i).unwrap().kind,
-            niche,
-            quote!(#w),
-        )?;
+        let wire = C::Reader::wires(child.layout.nodes()).nth(*i).unwrap();
+        let w = &wire.name;
+        let present = codec.is_present(&wire.kind, niche, quote!(#w))?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
     } else {
         child.fallible = true;
@@ -73,12 +69,12 @@ pub fn optional_output<C: Codec>(
     {
         return Err("optional child has delivery code".into());
     }
-    if child.layout.native_len() != child.values.len() {
+    if C::Reader::wires(child.layout.nodes()).len() != child.values.len() {
         return Err("optional output wire/value count mismatch".into());
     }
     let layout = layout(codec, &child.layout);
     let mut defaults = Vec::new();
-    for (i, w) in child.layout.native_wires().enumerate() {
+    for (i, w) in C::Reader::wires(child.layout.nodes()).enumerate() {
         defaults.push(
             codec.absent_value(
                 &w.kind,
@@ -91,7 +87,7 @@ pub fn optional_output<C: Codec>(
             )?,
         );
     }
-    let names = (0..child.layout.native_len())
+    let names = (0..C::Reader::wires(child.layout.nodes()).len())
         .map(|i| format_ident!("{tag}_value{i}"))
         .collect::<Vec<_>>();
     let presence_binding = if layout.niche.is_some() {
@@ -136,22 +132,22 @@ fn mark<C: Codec>(
     tag: syn::Ident,
     layout: OptionalLayout<C::Niche>,
 ) -> Result<()> {
-    let discriminator = layout
-        .niche
-        .as_ref()
-        .map(|(i, _)| tree.native_get(*i).unwrap().name.clone())
-        .unwrap_or(tag.clone());
-    let remaining = layout
-        .niche
-        .as_ref()
-        .and_then(|(i, n)| codec.remaining_niche(&tree.native_get(*i).unwrap().kind, n));
-    // Payload wires may be inactive. Preserve only the selected donor's
-    // remaining niche; a fresh control flag retains its constructor's availability.
-    for wire in tree.native_wires_mut() {
-        codec.set_niche(&mut wire.kind, None);
-    }
-    if let Some((i, _)) = &layout.niche {
-        codec.set_niche(&mut tree.native_get_mut(*i).unwrap().kind, remaining);
+    let (discriminator, remaining) = if let Some((i, niche)) = &layout.niche {
+        let wire = C::Reader::wires(tree.nodes()).nth(*i).unwrap();
+        (wire.name.clone(), codec.remaining_niche(&wire.kind, niche))
+    } else {
+        (tag.clone(), None)
+    };
+    // Inactive payloads cannot donate niches. Retain only the selected donor's
+    // remaining niche; a fresh control flag retains its own availability.
+    {
+        let mut wires = C::Reader::wires_mut(tree.nodes_mut()).collect::<Vec<_>>();
+        for wire in &mut wires {
+            codec.set_niche(&mut wire.kind, None);
+        }
+        if let Some((i, _)) = &layout.niche {
+            codec.set_niche(&mut wires[*i].kind, remaining);
+        }
     }
     let controls = if layout.niche.is_none() {
         vec![Wire {
@@ -161,11 +157,14 @@ fn mark<C: Codec>(
     } else {
         vec![]
     };
-    let expected = controls.iter().map(wire_signature).collect::<Vec<_>>();
-    let metadata = checked_inline(
-        codec.optional_metadata(tag, discriminator, layout.niche.map(|(_, n)| n), controls),
-        &expected,
-    )?;
-    tree.enclose_optional(Some(metadata));
+    let mut expected = controls.iter().map(wire_signature).collect::<Vec<_>>();
+    expected.extend(C::Reader::wires(tree.nodes()).map(wire_signature));
+    let metadata =
+        codec.optional_metadata(tag, discriminator, layout.niche.map(|(_, n)| n), controls);
+    let node = WireNode::Optional(prebindgen_flat::WireContainer {
+        element: std::mem::take(tree),
+        metadata: Some(metadata),
+    });
+    *tree = WireLayout::from_nodes(vec![checked_scope::<C>(node, &expected)?]);
     Ok(())
 }

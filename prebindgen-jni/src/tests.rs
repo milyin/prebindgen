@@ -377,18 +377,11 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .unwrap();
         let f = flat.function(name).unwrap();
         assert_eq!(
-            f.params[0]
-                .ty
-                .slot
-                .as_ref()
-                .unwrap()
-                .layout()
-                .native_wires()
-                .len(),
+            JniCodec::wires(f.params[0].ty.slot.as_ref().unwrap().layout().nodes()).len(),
             count
         );
         assert_eq!(
-            f.ret.slot.as_ref().unwrap().layout().native_wires().len(),
+            JniCodec::wires(f.ret.slot.as_ref().unwrap().layout().nodes()).len(),
             count
         );
     }
@@ -497,8 +490,16 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
             } else {
                 2
             };
-            assert_eq!(input.layout().native_wires().len(), count, "input {ty}");
-            assert_eq!(output.layout().native_wires().len(), count, "output {ty}");
+            assert_eq!(
+                JniCodec::wires(input.layout().nodes()).len(),
+                count,
+                "input {ty}"
+            );
+            assert_eq!(
+                JniCodec::wires(output.layout().nodes()).len(),
+                count,
+                "output {ty}"
+            );
             let mut expected = if reference {
                 vec![Some(JniNiche::Null)]
             } else {
@@ -540,20 +541,16 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         .slot
         .as_ref()
         .unwrap();
-    assert_eq!(input.layout().native_wires().len(), 3); // one tag + two arm payloads, no option flags
+    assert_eq!(JniCodec::wires(input.layout().nodes()).len(), 3); // one tag + two arm payloads, no option flags
     assert_eq!(
-        input
-            .layout()
-            .native_wires()
+        JniCodec::wires(input.layout().nodes())
             .next()
             .unwrap()
             .kind
             .available_niche(),
         Some(JniNiche::Integer(-3))
     );
-    assert!(input
-        .layout()
-        .native_wires()
+    assert!(JniCodec::wires(input.layout().nodes())
         .skip(1)
         .all(|w| w.kind.available_niche().is_none()));
 }
@@ -819,7 +816,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         1
     );
     assert_eq!(output.wires().count(), 4);
-    assert_eq!(output.layout().native_wires().count(), 1);
+    assert_eq!(JniCodec::wires(output.layout().nodes()).count(), 1);
     let shape = |layout: &WireLayout<JniWire, JniGroup>| {
         layout
             .entries()
@@ -827,7 +824,15 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
             .collect::<Vec<_>>()
     };
     let expected = shape(output.layout());
-    let (variant, wire) = defaults
+    let wire = sequence::callback_target(
+        flat.function("f")
+            .unwrap()
+            .output_conversion()
+            .unwrap()
+            .layout(),
+    )
+    .unwrap();
+    let variant = defaults
         .callback_variant(&mut flat, &decl, "f_fold")
         .unwrap();
     codec.callback_wire = Some(wire);
@@ -878,7 +883,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         let input = function.input_conversions()?[0];
         assert!(std::ptr::eq(
             input.layout().get(0).unwrap(),
-            input.layout().native_wires().next().unwrap()
+            JniCodec::wires(input.layout().nodes()).next().unwrap()
         ));
         let output = function.output_conversion()?;
         assert!(std::ptr::eq(
@@ -888,7 +893,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
                 .unwrap()
                 .get(0)
                 .unwrap(),
-            output.layout().native_wires().next().unwrap()
+            JniCodec::wires(output.layout().nodes()).next().unwrap()
         ));
         assert_eq!(
             function.input_conversions()?[0].layout()[0].name,
@@ -904,10 +909,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
             "native_output"
         );
         assert_eq!(
-            function
-                .output_conversion()?
-                .layout()
-                .native_wires()
+            JniCodec::wires((function.output_conversion()?.layout()).nodes())
                 .next()
                 .unwrap()
                 .name,

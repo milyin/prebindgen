@@ -3,7 +3,7 @@
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_conversions::{NativeConversion, NativeFunction};
 use prebindgen_flat::{type_key, Conversion, Flat, Result, WireKind};
 
@@ -29,8 +29,8 @@ pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 pub use emission::JniContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup, JniCodec>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup, JniCodec>;
 mod kotlin;
 pub use kotlin::{
     JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinInput,
@@ -473,19 +473,26 @@ impl JniGenBuilder {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
                 let variant_name = format!("{}_fold", declaration.name);
-                let (variant, wire) =
-                    defaults.callback_variant(&mut flat, &declaration, &variant_name)?;
+                let wire = sequence::callback_target(
+                    flat.function(&declaration.name)?
+                        .output_conversion()?
+                        .layout(),
+                )?;
+                let variant = defaults.callback_variant(&mut flat, &declaration, &variant_name)?;
                 codec.callback_wire = Some(wire);
                 defaults.fill(&mut flat, &codec, &variant, &())?;
                 codec.callback_wire = None;
-                if flat
-                    .function(&variant_name)?
-                    .ret
-                    .slot
-                    .as_ref()
-                    .unwrap()
-                    .layout()
-                    .native_len()
+                if JniCodec::wires(
+                    (flat
+                        .function(&variant_name)?
+                        .ret
+                        .slot
+                        .as_ref()
+                        .unwrap()
+                        .layout())
+                    .nodes(),
+                )
+                .len()
                     != 1
                 {
                     return Err("callback_return cannot discard additional return values".into());
@@ -572,6 +579,7 @@ pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
     type Group = JniGroup;
+    type Reader = JniCodec;
     fn binding_failure_layout(
         &self,
         _: &(),
@@ -597,9 +605,6 @@ impl Codec for JniCodec {
             discriminator,
             niche,
         })
-    }
-    fn sequence_metadata(&self, carrier: prebindgen_flat::Wire<JniWire>) -> JniGroup {
-        JniGroup::Sequence(carrier)
     }
     fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<JniWire>) -> JniGroup {
         JniGroup::Alternatives(selector)
@@ -633,7 +638,7 @@ impl Codec for JniCodec {
         plan.fallible = true;
         group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
-        let count = plan.layout.native_len() + 1;
+        let count = JniCodec::wires(plan.layout.nodes()).len() + 1;
         let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result), 1);
         let mark = prebindgen_conversions::template_parameter("mark_output");
         plan.commit
@@ -655,7 +660,7 @@ impl Codec for JniCodec {
         index: syn::Ident,
         element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniGroup>> {
         sequence::input(wire, length, index, element, active)
     }
     fn sequence_output(
@@ -666,7 +671,7 @@ impl Codec for JniCodec {
         index: syn::Ident,
         element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         values: &[TokenStream],
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniGroup>> {
         sequence::output(wire, length, index, element, values)
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
@@ -841,7 +846,7 @@ pub(crate) fn encode_array(
 ) -> TokenStream {
     let env = prebindgen_conversions::template_parameter("environment");
     let mut encode = TokenStream::new();
-    for (i, (wire, value)) in layout.native_wires().zip(values).enumerate() {
+    for (i, (wire, value)) in JniCodec::wires(layout.nodes()).zip(values).enumerate() {
         let expr = wire.kind.output_object(value);
         let i = (i + offset) as i32;
         encode.extend(quote! {
@@ -1101,7 +1106,7 @@ fn generate(
         }
         for input in f.input_conversions()? {
             let code = input.kotlin(&kotlin_context)?;
-            if code.arguments.len() != input.layout().native_wires().len() {
+            if code.arguments.len() != JniCodec::wires(input.layout().nodes()).len() {
                 return Err("Kotlin input argument/wire count differs".into());
             }
             kt_params.extend(code.parameters);
@@ -1138,11 +1143,9 @@ fn generate(
             kt_args.push("ownership".into());
         }
         if callback {
-            let (_, element) =
-                prebindgen_declarations::sequence_return(f.output_conversion()?.layout())
-                    .ok_or("missing callback sequence")?;
-            let fields = element
-                .native_wires()
+            let (_, element) = sequence::return_sequence(f.output_conversion()?.layout())
+                .ok_or("missing callback sequence")?;
+            let fields = JniCodec::wires(element.nodes())
                 .enumerate()
                 .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
                 .collect::<Vec<_>>();
@@ -1206,7 +1209,7 @@ fn generate(
             kotlin_context.result,
             kotlin_context.result,
             1,
-            f.output_conversion()?.layout().native_wires().len(),
+            JniCodec::wires((f.output_conversion()?.layout()).nodes()).len(),
         );
         let KotlinOutput {
             delivered,

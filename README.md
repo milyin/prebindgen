@@ -201,36 +201,47 @@ The C and JNI adapters opt into `staged::emit_call`, which orders those requests
 checks allocation aliases and shared acknowledgement, and returns a fallible
 expression. The protocol and its assembly helper live outside Flat; generators
 with different requirements can compose their own request enums directly.
-C/JNI select the optional staged native reader from `prebindgen-conversions`.
+C/JNI use the optional staged conversion protocol from `prebindgen-conversions`.
 `InputPlan::layout` and `OutputPlan::layout` store one authoritative `WireLayout`.
-Payloads occur only in its leaves and children. Extra physical values belong to
-adapter metadata on the corresponding node: an optional presence flag, an input
-selector, or a sequence carrier. Metadata contains no copy of the child tree.
+Payloads occur only in its leaves and children. Adapter metadata retains explicit
+native decisions and owns any additional values, such as presence flags,
+selectors or sequence parameters. Metadata contains no copy of the child tree.
 
-`NativeMetadata` exposes those additional values through borrowed
-`NativeEncoding::Inline(controls)` or `Carrier(value)` views. `Inline` places
-controls before the child values; a carrier occupies one position in the current
-scope and its child fields have a separate scope. These are rules of this optional
-reader, not requirements of the common `Conversion` trait. The C/JNI validators
-check that each logical node has its supported, explicit encoding metadata.
+The adapter implements `NativeReader::wires` and `wires_mut` to supply borrowed
+values for the requested node slice. The adapter handles the nodes directly,
+choosing order, packing and scope boundaries. Shared compilation consumes those
+lists; it has no classification of native representations or generic ABI walker.
+The reader's `validate` method checks its own boundary rules. `validate_wire_names`
+is a shared utility for a namespace explicitly selected by the reader.
 
-`NativeLayoutExt::native_wires()` traverses the same tree to borrow physical
-values from leaves and metadata. It does not construct another tree or clone wire
-descriptions. Edits to nodes or their encoding metadata immediately change the
-next native view; there is no refresh or synchronization step. At an `Outcomes`
-root, native enumeration selects Success. Readers access the other payloads
-explicitly through `outcome(SourceError)` and `outcome(BindingFailure)`.
+C/JNI readers expose a sequence's single outer buffer/count/presence value and
+read its element fields separately. Another reader may expose separate pointer
+and length values, or pack a Group into native values described by its metadata.
+Neither choice requires changing the common tree. C/JNI select Success when
+reading an Outcomes root; that selection belongs to those readers. Error payloads
+remain accessible through `outcome(SourceError)` and `outcome(BindingFailure)`.
 
-`NativeConversion` supplies per-physical-value code requests;
-`NativeLayoutExt::native_wires()`, `NativeFunction::native_inputs()` and
-`StagedFunction::outputs()` derive their order from the authoritative tree.
-`OutputPlan::values` matches this native Success view, not the count of logical
-leaf definitions. Finish hooks see the complete tree and can edit its metadata.
-Rust and C/Kotlin generation read that same tree. Callback/context parameters,
-acknowledgements and error packet/status details remain reader decisions.
+The shared recipe helpers implement particular conversions: optional values use
+controls followed by the prepared payload, alternatives use a selector followed
+by the prepared arms, and record groups keep their child values in order. These
+helpers reject metadata that changes those views. Other representations, such as
+a packed record, need adapter-defined preparation code; the tree and reader API
+do not impose those helper-specific restrictions.
 
-A custom `Conversion` can describe its schema and requests independently of these
-native plans and need not implement `NativeMetadata` or `NativeConversion`.
+Native plans carry the reader as a type parameter `R`, selected by `Codec::Reader`.
+The reader is not instantiated or cloned. `NativeConversion::Reader` identifies
+it for generic staged helpers and per-physical-value code requests.
+`NativeFunction::native_inputs()` and `StagedFunction::outputs()` use that reader;
+`OutputPlan::values` matches the resulting native value list, not the logical leaf
+count. Sequence hooks return their complete metadata and a list of outer output
+expressions, so shared composition makes no single-parameter assumption.
+
+Finish hooks see the complete tree. Edits to nodes or metadata are reflected in
+the next borrowed view without cloning payloads or refreshing another layout.
+Rust and C/Kotlin generation use the same tree and reader. Callback/context
+parameters, acknowledgements and error packet/status details remain adapter
+choices. The common `Conversion` trait requires neither `NativeReader` nor
+`NativeConversion`.
 
 Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
 binding supplied by the generator, and `source_result_expr()` marks the source
@@ -854,8 +865,9 @@ rebuild paths after other structural edits.
 
 Adapter metadata `G` can retain field names, record information or other semantic
 relationships. The native staged compiler additionally uses
-`Codec::optional_metadata`, `sequence_metadata` and `alternatives_metadata`
-to retain its selected encodings on logical nodes. `field_group` and `fields_group`
+`Codec::optional_metadata` and `alternatives_metadata`, together with the
+metadata returned by `sequence_input`/`sequence_output`, to retain native
+decisions on logical nodes. `field_group` and `fields_group`
 retain field/record information. Optional metadata describes a presence/niche
 rule and owns any additional flag; it adds no logical payload fields. The common tree does not
 interpret adapter metadata.
@@ -948,13 +960,16 @@ Adapter API migration for the logical schema:
 - `Conversion` provides `layout()` and generator-defined slot requests. Physical
   `WireFragment`/`code_fragment_wire` now belong to opt-in `NativeConversion`.
 - `ConversionExt::wires()` enumerates definitions, not native parameters. Use
-  `entries()`/`WirePath` for structural context and `native_wires()` only when
-  selecting the native staged protocol.
-- Stored plans expose one `layout` tree. Adapter metadata owns extra native
-  controls/carriers. Implement `NativeMetadata` when selecting the staged native
-  reader; the common `Conversion` trait remains independent of that protocol.
-- `NativeLayoutExt` derives borrowed physical views from the tree. Native
-  expression counts use its Success view. No parallel layout or refresh API exists.
+  `entries()`/`WirePath` for structural context. A selected reader supplies
+  native boundary lists through `NativeReader::wires` instead.
+- Stored plans expose one `layout` tree and a reader type parameter `R`, selected
+  by `Codec::Reader`. Metadata is opaque to shared native compilation.
+- Implement `NativeReader` in the adapter to supply boundary lists and validation.
+  Metadata has no required native interface. Native expression counts use the
+  selected reader's view. No parallel layout or refresh API exists.
+- `SequenceInput`/`SequenceOutput` return complete node metadata;
+  `SequenceOutput::values` lists every outer output expression. Callback variant
+  eligibility and native sequence discovery belong to the adapters.
 - Value/boxed helpers and native views support non-Clone metadata; payload
   descriptions are stored once.
 - Codecs describe source-error projections through `source_error_layout` and

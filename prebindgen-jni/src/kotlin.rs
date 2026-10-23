@@ -2,7 +2,7 @@
 use super::*;
 use crate::group::validate_layout;
 #[cfg(test)]
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_flat::{Conversion, Wire};
 
 /// Configured names for a generated handle class and its native destructor.
@@ -144,6 +144,7 @@ impl Conversion for JniInput {
     }
 }
 impl prebindgen_conversions::NativeConversion for JniInput {
+    type Reader = JniCodec;
     type WireFragment<'a> = prebindgen_conversions::InputWireFragment;
     fn code_fragment_wire(
         &self,
@@ -172,6 +173,7 @@ impl Conversion for JniOutput {
     }
 }
 impl prebindgen_conversions::NativeConversion for JniOutput {
+    type Reader = JniCodec;
     type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>;
     fn code_fragment_wire(
         &self,
@@ -297,7 +299,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
 
 pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, JniGroup>;
 pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
-    prebindgen_conversions::native_node_wires(nodes).collect()
+    JniCodec::wires(nodes).collect()
 }
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
     nodes.iter().any(|node| match node {
@@ -337,7 +339,7 @@ pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Re
             JniNode::Sequence(c) => crate::sequence::input_list(
                 c.metadata
                     .as_ref()
-                    .and_then(|m| prebindgen_conversions::NativeMetadata::encoding(m).carrier())
+                    .and_then(JniGroup::sequence_wire)
                     .ok_or("sequence requires a carrier")?,
                 &c.element,
                 context,
@@ -414,7 +416,7 @@ pub(crate) fn output_kotlin(
             output_prefix: &prefix,
             ..*context
         };
-        let count = prebindgen_conversions::native_node_wires(std::slice::from_ref(node)).len();
+        let count = JniCodec::wires(std::slice::from_ref(node)).len();
         let mut c = match node {
             JniNode::Wire(w) => output_leaves(&[w], &ctx)?,
             JniNode::Outcomes { .. } => return Err("outcomes must be the sole root node".into()),
@@ -479,7 +481,10 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        let JniWire::Handle { condition, .. } = &mut plan.layout.native_get_mut(0).unwrap().kind
+        let JniWire::Handle { condition, .. } = &mut JniCodec::wires_mut(plan.layout.nodes_mut())
+            .next()
+            .unwrap()
+            .kind
         else {
             panic!()
         };
@@ -489,11 +494,21 @@ mod tests {
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::scalar(Primitive::I64);
         assert_eq!(
-            prebindgen_flat::type_key(&input.layout().native_get(0).unwrap().kind.rust_type()),
+            prebindgen_flat::type_key(
+                &JniCodec::wires(input.layout().nodes())
+                    .next()
+                    .unwrap()
+                    .kind
+                    .rust_type()
+            ),
             prebindgen_flat::type_key(&scalar.rust_type())
         );
         assert_eq!(
-            input.layout().native_get(0).unwrap().kind.kotlin_type(),
+            JniCodec::wires(input.layout().nodes())
+                .next()
+                .unwrap()
+                .kind
+                .kotlin_type(),
             scalar.kotlin_type()
         );
         let emitted = input.kotlin(&context).unwrap();

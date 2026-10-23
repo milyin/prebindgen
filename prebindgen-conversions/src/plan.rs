@@ -7,13 +7,14 @@ use quote::quote;
 ///
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
-#[derive(Clone, Debug)]
-pub struct InputPlan<W: WireKind, C = (), G = ()> {
+pub struct InputPlan<W: WireKind, C = (), G = (), R = ()> {
     /// Whether validation or construction can return a binding error. This
     /// excludes panics and allocation aborts. Composition preserves child flags.
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
+    /// Adapter selected to read this tree's native boundary scopes.
+    pub reader: std::marker::PhantomData<fn() -> R>,
     /// Authoritative value tree. Adapter metadata records native encoding choices;
     /// physical parameters are derived from this tree when the reader needs them.
     pub layout: WireLayout<W, G>,
@@ -34,13 +35,14 @@ pub struct InputPlan<W: WireKind, C = (), G = ()> {
 ///
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
-#[derive(Clone, Debug)]
-pub struct OutputPlan<W: WireKind, C = (), G = ()> {
+pub struct OutputPlan<W: WireKind, C = (), G = (), R = ()> {
     /// Whether preparation or delivery can return a binding error, excluding
     /// panics and allocation aborts. Adapters must mark custom fallible code.
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
+    /// Adapter selected to read this tree's native boundary scopes.
+    pub reader: std::marker::PhantomData<fn() -> R>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
@@ -108,3 +110,29 @@ impl Default for Delivery {
 pub fn source_result_expr() -> TokenStream {
     template_parameter("source_result")
 }
+
+macro_rules! plan_traits {
+    ($plan:ident; $($field:ident),* $(,)?) => {
+        impl<W: WireKind + Clone, C, G: Clone, R> Clone for $plan<W, C, G, R> {
+            fn clone(&self) -> Self {
+                Self {
+                    context: self.context,
+                    reader: self.reader,
+                    $($field: self.$field.clone(),)*
+                }
+            }
+        }
+        impl<W: WireKind + std::fmt::Debug, C, G: std::fmt::Debug, R> std::fmt::Debug
+            for $plan<W, C, G, R>
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($plan))
+                    .field("reader", &std::any::type_name::<R>())
+                    $(.field(stringify!($field), &self.$field))*
+                    .finish()
+            }
+        }
+    }
+}
+plan_traits!(InputPlan; fallible, layout, acknowledgement, validation, acquire, resources, statements, argument);
+plan_traits!(OutputPlan; fallible, layout, delivery, commit, statements, values);

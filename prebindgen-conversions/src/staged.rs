@@ -1,7 +1,7 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
-use crate::NativeLayoutExt;
+use crate::NativeReader;
 use crate::{Access, InputPlan, NativeConversion, OutputPlan, TemplateContext};
 use prebindgen_flat::{Conversion, Function, Result, Wire, WireKind};
 use proc_macro2::TokenStream;
@@ -103,7 +103,7 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C, G> {
+impl<W: WireKind, C: TemplateContext + 'static, G, R> Conversion for InputPlan<W, C, G, R> {
     type Wire = W;
     type Group = G;
     type SlotFragment<'a> = InputFragment<'a, C>;
@@ -170,9 +170,10 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
         })
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, G: crate::NativeMetadata<W>> crate::NativeConversion
-    for InputPlan<W, C, G>
+impl<W: WireKind, C: TemplateContext + 'static, G, R: crate::NativeReader<W, G>>
+    crate::NativeConversion for InputPlan<W, C, G, R>
 {
+    type Reader = R;
     type WireFragment<'a> = InputWireFragment;
     fn code_fragment_wire(
         &self,
@@ -180,17 +181,16 @@ impl<W: WireKind, C: TemplateContext + 'static, G: crate::NativeMetadata<W>> cra
         _mode: InputWireFragment,
         _expected_type: &syn::Type,
     ) -> Result<TokenStream> {
-        let wire = self
-            .layout
-            .native_get(pos)
+        let wire = R::wires(self.layout.nodes())
+            .nth(pos)
             .ok_or_else(|| format!("invalid input wire position {pos}"))?;
         let name = &wire.name;
         Ok(quote!(#name))
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, G: crate::NativeMetadata<W>> Conversion
-    for OutputPlan<W, C, G>
+impl<W: WireKind, C: TemplateContext + 'static, G, R: crate::NativeReader<W, G>> Conversion
+    for OutputPlan<W, C, G, R>
 {
     type Wire = W;
     type Group = G;
@@ -233,9 +233,10 @@ impl<W: WireKind, C: TemplateContext + 'static, G: crate::NativeMetadata<W>> Con
         })
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, G: crate::NativeMetadata<W>> crate::NativeConversion
-    for OutputPlan<W, C, G>
+impl<W: WireKind, C: TemplateContext + 'static, G, R: crate::NativeReader<W, G>>
+    crate::NativeConversion for OutputPlan<W, C, G, R>
 {
+    type Reader = R;
     type WireFragment<'a> = OutputWireFragment<'a, C>;
     fn code_fragment_wire(
         &self,
@@ -253,13 +254,13 @@ impl<W: WireKind, C: TemplateContext + 'static, G: crate::NativeMetadata<W>> cra
     }
 }
 
-impl<W: WireKind, C, G: crate::NativeMetadata<W>> OutputPlan<W, C, G> {
+impl<W: WireKind, C, G, R: crate::NativeReader<W, G>> OutputPlan<W, C, G, R> {
     /// Check this native transport's expression count, independently of the logical schema.
     pub fn validate_value_count(&self) -> Result<()> {
         self.check_arity()
     }
     fn check_arity(&self) -> Result<()> {
-        if self.layout.native_len() != self.values.len() {
+        if R::wires(self.layout.nodes()).len() != self.values.len() {
             return Err("output wire/value count differs".into());
         }
         Ok(())
@@ -294,9 +295,7 @@ where
         source: &syn::Ident,
     ) -> Result<std::vec::IntoIter<OutputValue<'_, O::Wire>>> {
         let output = self.output_conversion()?;
-        output
-            .layout()
-            .native_wires()
+        O::Reader::wires(output.layout().nodes())
             .enumerate()
             .map(|(pos, wire)| {
                 let value = output.code_fragment_wire(
@@ -401,7 +400,7 @@ where
     let _ = function.outputs(context, source)?;
     let mut used = std::collections::BTreeSet::new();
     for input in &inputs {
-        for wire in input.layout().native_wires() {
+        for wire in I::Reader::wires(input.layout().nodes()) {
             used.insert(wire.name.to_string());
         }
     }

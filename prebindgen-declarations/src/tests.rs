@@ -1,33 +1,120 @@
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 #[derive(Clone, Debug)]
 enum TestGroup {
     Maybe(Vec<Wire<TestWire>>),
-    Carrier(Wire<TestWire>),
     Record,
     Member(syn::Ident),
 }
-impl prebindgen_conversions::NativeMetadata<TestWire> for TestGroup {
-    fn encoding(&self) -> prebindgen_conversions::NativeEncoding<'_, TestWire> {
-        use prebindgen_conversions::NativeEncoding;
-        match self {
-            Self::Maybe(ws) => NativeEncoding::Inline(ws),
-            Self::Carrier(w) => NativeEncoding::Carrier(w),
-            _ => NativeEncoding::Inline(&[]),
-        }
+struct TestReader;
+impl NativeReader<TestWire, TestGroup> for TestReader {
+    fn wires(nodes: &[WireNode<TestWire, TestGroup>]) -> std::vec::IntoIter<&Wire<TestWire>> {
+        let mut out = vec![];
+        test_read(nodes, &mut out, false);
+        out.into_iter()
     }
-    fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, TestWire> {
-        use prebindgen_conversions::NativeEncodingMut;
-        match self {
-            Self::Maybe(ws) => NativeEncodingMut::Inline(ws),
-            Self::Carrier(w) => NativeEncodingMut::Carrier(w),
-            _ => NativeEncodingMut::Inline(&mut []),
+    fn wires_mut(
+        nodes: &mut [WireNode<TestWire, TestGroup>],
+    ) -> std::vec::IntoIter<&mut Wire<TestWire>> {
+        fn visit<'a>(
+            nodes: &'a mut [WireNode<TestWire, TestGroup>],
+            out: &mut Vec<&'a mut Wire<TestWire>>,
+        ) {
+            for node in nodes {
+                match node {
+                    WireNode::Wire(w) => out.push(w),
+                    WireNode::Group { children, .. } => visit(children.nodes_mut(), out),
+                    WireNode::Optional(c) => {
+                        if let Some(TestGroup::Maybe(ws)) = &mut c.metadata {
+                            out.extend(ws);
+                        }
+                        visit(c.element.nodes_mut(), out);
+                    }
+                    WireNode::Sequence(_) => {}
+                    WireNode::Alternatives {
+                        metadata,
+                        alternatives,
+                    } => {
+                        if let Some(TestGroup::Maybe(ws)) = metadata {
+                            out.extend(ws);
+                        }
+                        for arm in alternatives {
+                            visit(arm.nodes_mut(), out);
+                        }
+                    }
+                    WireNode::Outcomes { alternatives } => {
+                        if let Some(o) = alternatives
+                            .iter_mut()
+                            .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
+                        {
+                            visit(o.layout.nodes_mut(), out);
+                        }
+                    }
+                }
+            }
+        }
+        let mut out = vec![];
+        visit(nodes, &mut out);
+        out.into_iter()
+    }
+    fn validate(layout: &WireLayout<TestWire, TestGroup>) -> Result<()> {
+        layout.validate()?;
+        if let [WireNode::Outcomes { alternatives }] = layout.nodes() {
+            for o in alternatives {
+                Self::validate(&o.layout)?;
+            }
+            return Ok(());
+        }
+        let mut wires = vec![];
+        test_read(layout.nodes(), &mut wires, true);
+        prebindgen_conversions::validate_wire_names(wires)
+    }
+}
+fn test_read<'a>(
+    nodes: &'a [WireNode<TestWire, TestGroup>],
+    out: &mut Vec<&'a Wire<TestWire>>,
+    elements: bool,
+) {
+    for node in nodes {
+        match node {
+            WireNode::Wire(w) => out.push(w),
+            WireNode::Group { children, .. } => test_read(children.nodes(), out, elements),
+            WireNode::Optional(c) => {
+                if let Some(TestGroup::Maybe(ws)) = &c.metadata {
+                    out.extend(ws);
+                }
+                test_read(c.element.nodes(), out, elements);
+            }
+            WireNode::Sequence(c) => {
+                if elements {
+                    test_read(c.element.nodes(), out, elements);
+                }
+            }
+            WireNode::Alternatives {
+                metadata,
+                alternatives,
+            } => {
+                if let Some(TestGroup::Maybe(ws)) = metadata {
+                    out.extend(ws);
+                }
+                for arm in alternatives {
+                    test_read(arm.nodes(), out, elements);
+                }
+            }
+            WireNode::Outcomes { alternatives } => {
+                if let Some(o) = alternatives
+                    .iter()
+                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
+                {
+                    test_read(o.layout.nodes(), out, elements);
+                }
+            }
         }
     }
 }
-type Bindings<W> = super::Bindings<W, (), TestGroup>;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup>;
+type Bindings<W> = super::Bindings<W, (), TestGroup, TestReader>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestReader>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestReader>;
 use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
@@ -75,6 +162,7 @@ impl Codec for TestCodec {
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
     type Group = TestGroup;
+    type Reader = TestReader;
     fn optional_metadata(
         &self,
         _: syn::Ident,
@@ -84,9 +172,7 @@ impl Codec for TestCodec {
     ) -> TestGroup {
         TestGroup::Maybe(controls)
     }
-    fn sequence_metadata(&self, carrier: Wire<TestWire>) -> TestGroup {
-        TestGroup::Carrier(carrier)
-    }
+
     fn alternatives_metadata(&self, selector: Wire<TestWire>) -> TestGroup {
         TestGroup::Maybe(vec![selector])
     }
@@ -141,6 +227,7 @@ impl Codec for TestCodec {
         Ok(InputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             acknowledgement: None,
             layout: vec![Wire {
                 name: w.clone(),
@@ -173,6 +260,7 @@ impl Codec for TestCodec {
         Ok(OutputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             delivery: Default::default(),
             layout: vec![Wire {
                 name: w.clone(),
@@ -237,10 +325,17 @@ fn different_occurrences_have_different_converters() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.layout.native_len(), 3);
-    assert_eq!(y.layout.native_len(), 1);
-    assert!(x.layout.native_wires().all(|w| w.kind.name == "x"));
-    assert_eq!(y.layout.native_get(0).unwrap().kind.name, "y");
+    assert_eq!(TestReader::wires(x.layout.nodes()).len(), 3);
+    assert_eq!(TestReader::wires(y.layout.nodes()).len(), 1);
+    assert!(TestReader::wires(x.layout.nodes()).all(|w| w.kind.name == "x"));
+    assert_eq!(
+        TestReader::wires(y.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .name,
+        "y"
+    );
 }
 #[test]
 fn rejects_incomplete_slots() {
@@ -338,7 +433,14 @@ fn observations_precede_move_but_wires_keep_order() {
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(o.layout.native_get(0).unwrap().kind.kind == Kind::Token);
+    assert!(
+        TestReader::wires(o.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Token
+    );
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -398,13 +500,16 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .fill(&mut flat, &TEST_CODEC, &fun!(foo), &extra("defaults"))
         .unwrap();
     assert_eq!(
-        flat.function("foo").unwrap().params[1]
-            .ty
-            .slot
-            .as_ref()
-            .unwrap()
-            .layout
-            .native_len(),
+        TestReader::wires(
+            (flat.function("foo").unwrap().params[1]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .layout)
+                .nodes()
+        )
+        .len(),
         3
     );
     declarations
@@ -418,11 +523,25 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.layout.native_len(), 3);
-    assert!(x.layout.native_get(2).unwrap().kind.kind == Kind::Token);
-    assert!(x.layout.native_wires().all(|w| w.kind.name == "x"));
-    assert_eq!(y.layout.native_len(), 1);
-    assert_eq!(y.layout.native_get(0).unwrap().kind.name, "override");
+    assert_eq!(TestReader::wires(x.layout.nodes()).len(), 3);
+    assert!(
+        TestReader::wires(x.layout.nodes())
+            .nth(2)
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Token
+    );
+    assert!(TestReader::wires(x.layout.nodes()).all(|w| w.kind.name == "x"));
+    assert_eq!(TestReader::wires(y.layout.nodes()).len(), 1);
+    assert_eq!(
+        TestReader::wires(y.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .name,
+        "override"
+    );
     assert_eq!(f.ret.slot.as_ref().unwrap().layout[0].kind.name, "result");
     assert!(x.validation.to_string().contains("\"x\""));
 }
@@ -498,10 +617,38 @@ fn field_defaults_follow_type_expansions() {
     )
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
-    assert!(output.layout.native_get(0).unwrap().kind.kind == Kind::Value(Value::Text));
-    assert!(output.layout.native_get(1).unwrap().kind.kind == Kind::Value(Value::Bytes));
-    assert_eq!(output.layout.native_get(0).unwrap().kind.ty, "String");
-    assert_eq!(output.layout.native_get(1).unwrap().kind.ty, "Vec < u8 >");
+    assert!(
+        TestReader::wires(output.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Value(Value::Text)
+    );
+    assert!(
+        TestReader::wires(output.layout.nodes())
+            .nth(1)
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Value(Value::Bytes)
+    );
+    assert_eq!(
+        TestReader::wires(output.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .ty,
+        "String"
+    );
+    assert_eq!(
+        TestReader::wires(output.layout.nodes())
+            .nth(1)
+            .unwrap()
+            .kind
+            .ty,
+        "Vec < u8 >"
+    );
 }
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
@@ -521,12 +668,54 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let input = f.params[0].ty.slot.as_ref().unwrap();
     let output = f.ret.slot.as_ref().unwrap();
     let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
-    assert_eq!(input.layout.native_get(0).unwrap().kind.kind, scalar);
-    assert_eq!(output.layout.native_get(0).unwrap().kind.kind, scalar);
-    assert_eq!(input.layout.native_get(0).unwrap().kind.name, "scalar");
-    assert_eq!(input.layout.native_get(0).unwrap().kind.ty, "i64");
-    assert_eq!(output.layout.native_get(0).unwrap().kind.name, "scalar");
-    assert_eq!(output.layout.native_get(0).unwrap().kind.ty, "i64");
+    assert_eq!(
+        TestReader::wires(input.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .kind,
+        scalar
+    );
+    assert_eq!(
+        TestReader::wires(output.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .kind,
+        scalar
+    );
+    assert_eq!(
+        TestReader::wires(input.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .name,
+        "scalar"
+    );
+    assert_eq!(
+        TestReader::wires(input.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .ty,
+        "i64"
+    );
+    assert_eq!(
+        TestReader::wires(output.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .name,
+        "scalar"
+    );
+    assert_eq!(
+        TestReader::wires(output.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .ty,
+        "i64"
+    );
     assert!(input.validation.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
@@ -666,6 +855,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
         type Group = TestGroup;
+        type Reader = TestReader;
         fn optional_metadata(
             &self,
             _: syn::Ident,
@@ -675,9 +865,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         ) -> TestGroup {
             TestGroup::Maybe(controls)
         }
-        fn sequence_metadata(&self, carrier: Wire<TestWire>) -> TestGroup {
-            TestGroup::Carrier(carrier)
-        }
+
         fn alternatives_metadata(&self, selector: Wire<TestWire>) -> TestGroup {
             TestGroup::Maybe(vec![selector])
         }
@@ -732,7 +920,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 plan.acknowledgement.as_ref().unwrap().to_string(),
                 quote!(ack();).to_string()
             );
-            assert_eq!(plan.layout.native_len(), 2);
+            assert_eq!(TestReader::wires(plan.layout.nodes()).len(), 2);
             assert_eq!(plan.layout.len(), 2);
             plan.layout.enclose(TestGroup::Record);
             Ok(())
@@ -742,7 +930,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 return Err("finalization failed".into());
             }
             assert!(plan.delivery.statements.is_empty());
-            assert!(plan.layout.native_is_empty());
+            assert!(TestReader::wires(plan.layout.nodes()).len() == 0);
             assert!(matches!(
                 plan.layout.nodes(),
                 [prebindgen_flat::WireNode::Group { .. }]
@@ -1069,7 +1257,11 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         quote!(ack()).to_string()
     );
     assert_eq!(
-        plan.layout.native_get(1).unwrap().kind.component,
+        TestReader::wires(plan.layout.nodes())
+            .nth(1)
+            .unwrap()
+            .kind
+            .component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
     assert!(record_input(
@@ -1117,7 +1309,11 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
     );
     assert_eq!(plan.values.len(), 2);
     assert_eq!(
-        plan.layout.native_get(1).unwrap().kind.component,
+        TestReader::wires(plan.layout.nodes())
+            .nth(1)
+            .unwrap()
+            .kind
+            .component,
         ComponentPath(vec![ComponentSegment::Field("y".into())])
     );
     assert!(make(true).unwrap_err().contains("finish_output"));
@@ -1137,7 +1333,7 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
         plan.statements.to_string(),
         quote!(let _ = &(next_record());).to_string()
     );
-    assert!(plan.layout.native_is_empty());
+    assert!(TestReader::wires(plan.layout.nodes()).len() == 0);
 }
 
 #[test]
@@ -1152,6 +1348,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
             Ok(OutputPlan {
                 fallible: false,
                 context: Default::default(),
+                reader: Default::default(),
                 delivery: Default::default(),
                 layout: Default::default(),
                 values: Vec::new(),
@@ -1273,6 +1470,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
             Ok(OutputPlan {
                 fallible: false,
                 context: Default::default(),
+                reader: Default::default(),
                 delivery: Default::default(),
                 layout: vec![].into(),
                 values: vec![],
@@ -1346,7 +1544,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
     fn check(layout: &WireLayout<TestWire, TestGroup>) {
         layout.validate().unwrap();
         assert_eq!(layout.len(), 3);
-        assert_eq!(layout.native_len(), 4);
+        assert_eq!(TestReader::wires(layout.nodes()).len(), 4);
         let [WireNode::Group { metadata, children }] = layout.nodes() else {
             panic!()
         };
@@ -1361,7 +1559,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
                 panic!()
             };
             names.push(name.to_string());
-            widths.push(children.native_len());
+            widths.push(TestReader::wires(children.nodes()).len());
         }
         assert_eq!(names, ["maybe", "empty", "pair"]);
         assert_eq!(widths, [2, 0, 2]);
@@ -1460,7 +1658,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
         .unwrap();
     let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-    assert_eq!(output.layout.native_len(), 2);
+    assert_eq!(TestReader::wires(output.layout.nodes()).len(), 2);
     let code = output.statements.to_string();
     assert!(code.contains(":: core :: result :: Result :: Ok"));
     assert!(code.contains("message (&"));
@@ -1598,8 +1796,8 @@ fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
     assert!(alternatives[0].is_empty());
     assert_eq!(alternatives[1].len(), 1);
     assert_eq!(input.layout().len(), 1);
-    assert_eq!(input.layout.native_len(), 2);
-    assert!(input.layout.native_get(0).unwrap().name != input.layout()[0].name);
+    assert_eq!(TestReader::wires(input.layout.nodes()).len(), 2);
+    assert!(TestReader::wires(input.layout.nodes()).next().unwrap().name != input.layout()[0].name);
 }
 
 #[test]
@@ -1608,6 +1806,7 @@ fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
     impl Codec for BadMetadata {
         type Niche = ();
         type Group = TestGroup;
+        type Reader = TestReader;
         type Extra = Extra;
         type Context = ();
         type Wire = TestWire;
@@ -1626,9 +1825,7 @@ fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
             selector.name = syn::parse_quote!(wrong_selector);
             TestGroup::Maybe(vec![selector])
         }
-        fn sequence_metadata(&self, carrier: Wire<TestWire>) -> TestGroup {
-            TestGroup::Maybe(vec![carrier])
-        }
+
         fn field_group(&self, name: syn::Ident) -> TestGroup {
             TEST_CODEC.field_group(name)
         }
@@ -1665,27 +1862,6 @@ fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
         ) -> Result<OutputPlan<TestWire>> {
             TEST_CODEC.output_leaf(ty, extra, w, v, borrowed)
         }
-        fn sequence_output(
-            &self,
-            extra: &Extra,
-            _: syn::Ident,
-            _: syn::Ident,
-            _: syn::Ident,
-            _: &WireLayout<TestWire, TestGroup>,
-            _: &[TokenStream],
-        ) -> Result<SequenceOutput<TestWire>> {
-            Ok(SequenceOutput {
-                commit_each: false,
-                fallible: false,
-                carrier: self.selector(extra),
-                begin: quote!(),
-                enter: quote!(),
-                store: quote!(),
-                finish: quote!(),
-                value: quote!(()),
-                commit: quote!(),
-            })
-        }
     }
     let mut model =
         parse("pub fn take(v:Option<i32>){} pub fn choice(v:i32){} pub fn values()->Vec<i32>{}");
@@ -1698,7 +1874,7 @@ fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
         &Extra::default(),
     )
     .unwrap_err();
-    assert!(error.contains("retain the supplied inline controls"));
+    assert!(error.contains("retain the prepared boundary values"));
     assert!(model.function("take").unwrap().params[0].ty.slot.is_none());
     let error = bind_input(
         &mut model,
@@ -1709,22 +1885,9 @@ fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
         &Extra::default(),
     )
     .unwrap_err();
-    assert!(error.contains("retain the supplied inline controls"));
+    assert!(error.contains("retain the prepared boundary values"));
     assert!(model.function("choice").unwrap().params[0]
         .ty
         .slot
         .is_none());
-    let error = bind_output(
-        &mut model,
-        &BadMetadata,
-        "values",
-        &Output::Sequence {
-            element: Box::new(Output::Leaf),
-            mode: None,
-        },
-        &Extra::default(),
-    )
-    .unwrap_err();
-    assert!(error.contains("retain the supplied carrier"));
-    assert!(model.function("values").unwrap().ret.slot.is_none());
 }

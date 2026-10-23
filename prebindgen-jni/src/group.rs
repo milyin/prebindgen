@@ -1,6 +1,6 @@
 //! JNI adapter-owned descriptions of the wire tree.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 
 use prebindgen_flat::{WireLayout, WireNode};
 use syn::ext::IdentExt;
@@ -33,29 +33,134 @@ pub struct JniOptional {
     pub niche: Option<JniNiche>,
 }
 
-impl prebindgen_conversions::NativeMetadata<JniWire> for JniGroup {
-    fn encoding(&self) -> prebindgen_conversions::NativeEncoding<'_, JniWire> {
-        use prebindgen_conversions::NativeEncoding;
-        match self {
-            Self::Optional(o) => NativeEncoding::Inline(&o.controls),
-            Self::Sequence(w) => NativeEncoding::Carrier(w),
-            Self::Alternatives(w) => NativeEncoding::Inline(std::slice::from_ref(w)),
-            _ => NativeEncoding::Inline(&[]),
+impl prebindgen_conversions::NativeReader<JniWire, JniGroup> for JniCodec {
+    fn wires(
+        nodes: &[WireNode<JniWire, JniGroup>],
+    ) -> std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>> {
+        let mut out = vec![];
+        read(nodes, &mut out, false);
+        out.into_iter()
+    }
+    fn wires_mut(
+        nodes: &mut [WireNode<JniWire, JniGroup>],
+    ) -> std::vec::IntoIter<&mut prebindgen_flat::Wire<JniWire>> {
+        fn visit<'a>(
+            nodes: &'a mut [WireNode<JniWire, JniGroup>],
+            out: &mut Vec<&'a mut prebindgen_flat::Wire<JniWire>>,
+        ) {
+            for node in nodes {
+                match node {
+                    WireNode::Wire(w) => out.push(w),
+                    WireNode::Group { children, .. } => visit(children.nodes_mut(), out),
+                    WireNode::Optional(c) => {
+                        if let Some(JniGroup::Optional(o)) = &mut c.metadata {
+                            out.extend(&mut o.controls);
+                        }
+                        visit(c.element.nodes_mut(), out);
+                    }
+                    WireNode::Sequence(c) => {
+                        if let Some(JniGroup::Sequence(w)) = &mut c.metadata {
+                            out.push(w);
+                        }
+                    }
+                    WireNode::Alternatives {
+                        metadata,
+                        alternatives,
+                    } => {
+                        if let Some(JniGroup::Alternatives(w)) = metadata {
+                            out.push(w);
+                        }
+                        for arm in alternatives {
+                            visit(arm.nodes_mut(), out);
+                        }
+                    }
+                    WireNode::Outcomes { alternatives } => {
+                        if let Some(o) = alternatives
+                            .iter_mut()
+                            .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
+                        {
+                            visit(o.layout.nodes_mut(), out);
+                        }
+                    }
+                }
+            }
+        }
+        let mut out = vec![];
+        visit(nodes, &mut out);
+        out.into_iter()
+    }
+    fn validate(layout: &WireLayout<JniWire, JniGroup>) -> Result<()> {
+        validate_layout(layout)
+    }
+}
+// C/JNI parameters and row fields have different scopes. Validation separately
+// reads all definitions to check the identifiers used by generated Rust code.
+fn read<'a>(
+    nodes: &'a [WireNode<JniWire, JniGroup>],
+    out: &mut Vec<&'a prebindgen_flat::Wire<JniWire>>,
+    elements: bool,
+) {
+    for node in nodes {
+        match node {
+            WireNode::Wire(w) => out.push(w),
+            WireNode::Group { children, .. } => read(children.nodes(), out, elements),
+            WireNode::Optional(c) => {
+                if let Some(JniGroup::Optional(o)) = &c.metadata {
+                    out.extend(&o.controls);
+                }
+                read(c.element.nodes(), out, elements);
+            }
+            WireNode::Sequence(c) => {
+                if let Some(JniGroup::Sequence(w)) = &c.metadata {
+                    out.push(w);
+                }
+                if elements {
+                    read(c.element.nodes(), out, elements);
+                }
+            }
+            WireNode::Alternatives {
+                metadata,
+                alternatives,
+            } => {
+                if let Some(JniGroup::Alternatives(w)) = metadata {
+                    out.push(w);
+                }
+                for arm in alternatives {
+                    read(arm.nodes(), out, elements);
+                }
+            }
+            WireNode::Outcomes { alternatives } => {
+                if let Some(o) = alternatives
+                    .iter()
+                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
+                {
+                    read(o.layout.nodes(), out, elements);
+                }
+            }
         }
     }
-    fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, JniWire> {
-        use prebindgen_conversions::NativeEncodingMut;
-        match self {
-            Self::Optional(o) => NativeEncodingMut::Inline(&mut o.controls),
-            Self::Sequence(w) => NativeEncodingMut::Carrier(w),
-            Self::Alternatives(w) => NativeEncodingMut::Inline(std::slice::from_mut(w)),
-            _ => NativeEncodingMut::Inline(&mut []),
+}
+impl JniGroup {
+    pub(crate) fn sequence_wire(&self) -> Option<&prebindgen_flat::Wire<JniWire>> {
+        if let Self::Sequence(w) = self {
+            Some(w)
+        } else {
+            None
         }
     }
 }
 pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<()> {
-    layout.validate_native_names()?;
-    for wire in layout.native_wires() {
+    layout.validate()?;
+    if let [WireNode::Outcomes { alternatives }] = layout.nodes() {
+        for arm in alternatives {
+            validate_layout(&arm.layout)?;
+        }
+        return Ok(());
+    }
+    let mut definitions = vec![];
+    read(layout.nodes(), &mut definitions, true);
+    prebindgen_conversions::validate_wire_names(definitions)?;
+    for wire in JniCodec::wires(layout.nodes()) {
         wire.kind.validate()?;
     }
     fn visit(
@@ -85,7 +190,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                         return Err("sequence requires a separate carrier".into());
                     };
                     if !(matches!(carrier.kind, JniWire::Rows { .. }))
-                        || c.element.native_is_empty()
+                        || JniCodec::wires(c.element.nodes()).len() == 0
                     {
                         return Err(
                             "sequence requires a supported carrier and nonempty element layout"
@@ -112,9 +217,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                         if !controls.is_empty() {
                             return Err("niche optional must not have control wires".into());
                         }
-                        let wire = c
-                            .element
-                            .native_wires()
+                        let wire = JniCodec::wires(c.element.nodes())
                             .find(|w| w.name == o.discriminator)
                             .ok_or("optional discriminator outside payload")?;
                         wire.kind.validate_niche(niche)?;
@@ -302,7 +405,7 @@ mod tests {
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         enclose_optional_metadata(&mut tree, optional("outer", "value", Some(-2)));
         validate_layout(&tree).unwrap();
-        assert_eq!(tree.native_len(), 1);
+        assert_eq!(JniCodec::wires(tree.nodes()).len(), 1);
         let mut bad = tree.clone();
         enclose_optional_metadata(&mut bad, optional("missing", "elsewhere", Some(-3)));
         assert!(validate_layout(&bad)
@@ -311,7 +414,7 @@ mod tests {
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
         let mut flag = WireLayout::from(vec![leaf("flag")]);
-        flag.native_get_mut(0).unwrap().kind = JniWire::selector();
+        JniCodec::wires_mut(flag.nodes_mut()).next().unwrap().kind = JniWire::selector();
         enclose_optional_metadata(&mut flag, optional("flag", "flag", None));
         validate_layout(&flag).unwrap();
         enclose_optional_metadata(&mut flag, optional("outer", "flag", None));
@@ -388,9 +491,10 @@ mod tests {
         }]);
         enclose_optional_metadata(&mut tree, optional("present", "value", Some(-1)));
         validate_layout(&tree).unwrap();
-        tree.native_get_mut(0).unwrap().kind = JniWire::scalar(Primitive::I64);
+        JniCodec::wires_mut(tree.nodes_mut()).next().unwrap().kind =
+            JniWire::scalar(Primitive::I64);
         assert!(validate_layout(&tree).unwrap_err().contains("incompatible"));
-        tree.native_get_mut(0).unwrap().kind = JniWire::Scalar {
+        JniCodec::wires_mut(tree.nodes_mut()).next().unwrap().kind = JniWire::Scalar {
             primitive: Primitive::Char,
             next_integer_niche: Some(0),
         };
@@ -407,7 +511,10 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        input.layout.native_get_mut(0).unwrap().kind = JniWire::Scalar {
+        JniCodec::wires_mut(input.layout.nodes_mut())
+            .next()
+            .unwrap()
+            .kind = JniWire::Scalar {
             primitive: Primitive::I64,
             next_integer_niche: Some(-1),
         };
@@ -424,8 +531,14 @@ mod tests {
                 false,
             )
             .unwrap();
-        output.layout.native_get_mut(0).unwrap().kind =
-            input.layout.native_get(0).unwrap().kind.clone();
+        JniCodec::wires_mut(output.layout.nodes_mut())
+            .next()
+            .unwrap()
+            .kind = JniCodec::wires(input.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .clone();
         assert!(JniCodec
             .finish_output(&mut output, &())
             .unwrap_err()

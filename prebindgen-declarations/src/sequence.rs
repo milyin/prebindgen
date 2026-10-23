@@ -1,17 +1,19 @@
 //! Lift one element recipe into a runtime-sized collection without changing phases.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
-use prebindgen_conversions::{NativeEncoding, NativeMetadata};
+use prebindgen_conversions::NativeReader;
+
 use prebindgen_conversions::{Resource, ResourceIdentity};
 use prebindgen_flat::SequenceView;
 use prebindgen_flat::{WireContainer, WireNode};
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
-pub struct SequenceInput<W> {
-    /// One self-sufficient carrier for the array.
-    pub carrier: W,
-    /// Validate the carrier and bind the supplied length identifier.
+pub struct SequenceInput<G> {
+    /// Adapter-owned description of every outer input value. The selected reader
+    /// determines their scope and order; element fields remain in the child tree.
+    pub metadata: G,
+    /// Validate the outer input values and make the supplied length identifier
+    /// available, either as a boundary parameter or a local binding.
     pub open: TokenStream,
     /// Per-row setup, including any locals used by `validation_values`.
     pub bind: TokenStream,
@@ -25,7 +27,7 @@ pub struct SequenceInput<W> {
     pub release: TokenStream,
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
-pub struct SequenceOutput<W> {
+pub struct SequenceOutput<G> {
     /// Commit each element inside `store`, after capturing its prepared wire values
     /// and before invoking a foreign visitor. `store` must contain exactly one
     /// `template_parameter("commit_element")` marker when true. When false, all
@@ -34,9 +36,9 @@ pub struct SequenceOutput<W> {
     /// Whether preparing or delivering the array transport can return a binding
     /// error, in addition to failures from converting its elements.
     pub fallible: bool,
-    /// One self-sufficient FFI value for the delivery result: an array carrier,
-    /// delivered count, or presence marker selected by the adapter.
-    pub carrier: W,
+    /// Adapter-owned description of the outer delivery values. There may be
+    /// several values, such as separate pointer and length parameters.
+    pub metadata: G,
     /// Initialize delivery state, with the supplied element count available.
     pub begin: TokenStream,
     /// Per-row setup before element conversion.
@@ -45,22 +47,21 @@ pub struct SequenceOutput<W> {
     pub store: TokenStream,
     /// Finish preparing the result after every element has been delivered.
     pub finish: TokenStream,
-    /// Expression for the prepared array carrier.
-    pub value: TokenStream,
+    /// Expressions for all outer values, in this reader's boundary order.
+    pub values: Vec<TokenStream>,
     /// Complete ownership transfer of the outer carrier, such as a row allocation.
     pub commit: TokenStream,
 }
 
-fn replace<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
+fn replace<W: prebindgen_flat::WireKind, G, R: NativeReader<W, G>>(
     code: &TokenStream,
     layout: &WireLayout<W, G>,
     values: &[TokenStream],
 ) -> Result<TokenStream> {
-    if layout.native_len() != values.len() {
+    if R::wires(layout.nodes()).len() != values.len() {
         return Err("collection wire/read count differs".into());
     }
-    let replacements = layout
-        .native_wires()
+    let replacements = R::wires(layout.nodes())
         .zip(values)
         .map(|(w, v)| {
             Ok((
@@ -115,12 +116,12 @@ fn replace<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
         .collect())
 }
 
-fn prepared<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
+fn prepared<W: prebindgen_flat::WireKind, G, R: NativeReader<W, G>>(
     code: &TokenStream,
     layout: &WireLayout<W, G>,
     values: &[Option<TokenStream>],
 ) -> Result<TokenStream> {
-    if values.len() != layout.native_len() {
+    if values.len() != R::wires(layout.nodes()).len() {
         return Err("collection prepared read count differs".into());
     }
     fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
@@ -131,7 +132,7 @@ fn prepared<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
         })
     }
     let mut reads = Vec::new();
-    for (wire, value) in layout.native_wires().zip(values) {
+    for (wire, value) in R::wires(layout.nodes()).zip(values) {
         if value.is_none() && mentions(code.clone(), &wire.name) {
             return Err(format!(
                 "collection wire `{}` cannot be read after row validation",
@@ -141,7 +142,7 @@ fn prepared<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
         let name = &wire.name;
         reads.push(value.clone().unwrap_or_else(|| quote!(#name)));
     }
-    replace(code, layout, &reads)
+    replace::<W, G, R>(code, layout, &reads)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -164,7 +165,7 @@ pub(crate) fn input<C: Codec>(
     if matches!(element, Type::Reference(_)) {
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
-    if child.layout.native_is_empty() {
+    if C::Reader::wires(child.layout.nodes()).len() == 0 {
         return Err("collection elements must have at least one wire".into());
     }
     if view != SequenceView::Owned
@@ -186,16 +187,18 @@ pub(crate) fn input<C: Codec>(
         &child.layout,
         active,
     )?;
-    let validation = replace(
+    let validation = replace::<_, _, C::Reader>(
         &child.validation,
         &child.layout,
         &transport.validation_values,
     )?;
-    let acquire = prepared(&child.acquire, &child.layout, &transport.prepared_values)?;
-    let statements = prepared(&child.statements, &child.layout, &transport.prepared_values)?;
+    let acquire =
+        prepared::<_, _, C::Reader>(&child.acquire, &child.layout, &transport.prepared_values)?;
+    let statements =
+        prepared::<_, _, C::Reader>(&child.statements, &child.layout, &transport.prepared_values)?;
     // Wrap expressions as a local initializer so the syntax visitor can replace paths.
     let child_argument = &child.argument;
-    let argument = prepared(
+    let argument = prepared::<_, _, C::Reader>(
         &quote!(let #var = #child_argument;),
         &child.layout,
         &transport.prepared_values,
@@ -211,7 +214,7 @@ pub(crate) fn input<C: Codec>(
             ResourceIdentity::Single(code) => quote!(#ids.push((#code) as usize);),
             ResourceIdentity::Many(code) => quote!(#ids.extend(#code);),
         };
-        collect.extend(prepared(
+        collect.extend(prepared::<_, _, C::Reader>(
             &quote!(if #condition {#identity}),
             &child.layout,
             &transport.prepared_values,
@@ -237,16 +240,11 @@ pub(crate) fn input<C: Codec>(
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
+        reader: Default::default(),
         acknowledgement: None,
         layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
             element: child.layout,
-            metadata: Some(super::sequence_metadata(
-                codec,
-                Wire {
-                    name: wire,
-                    kind: transport.carrier,
-                },
-            )?),
+            metadata: Some(transport.metadata),
         })]),
         validation: quote! {
             #declarations
@@ -288,7 +286,8 @@ pub(crate) fn output<C: Codec>(
     if mode == ProjectionMode::Owned && (borrowed || view != SequenceView::Owned) {
         return Err("owned collection projection cannot consume a borrowed collection".into());
     }
-    if child.layout.native_is_empty() {
+    child.validate_value_count()?;
+    if C::Reader::wires(child.layout.nodes()).len() == 0 {
         return Err("collection elements must have at least one wire".into());
     }
     if !child.delivery.statements.is_empty() {
@@ -314,12 +313,12 @@ pub(crate) fn output<C: Codec>(
     let SequenceOutput {
         commit_each,
         fallible,
-        carrier,
+        metadata,
         begin,
         enter,
         store,
         finish,
-        value,
+        values,
         commit,
     } = transport;
     let store = if commit_each {
@@ -349,19 +348,14 @@ pub(crate) fn output<C: Codec>(
     } else {
         quote!(for commit in #commits {commit();})
     };
-    Ok(OutputPlan {
+    let out: CodecOutput<C> = OutputPlan {
         fallible: child.fallible || fallible,
         context: Default::default(),
+        reader: Default::default(),
         delivery: Default::default(),
         layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
             element: child.layout,
-            metadata: Some(super::sequence_metadata(
-                codec,
-                Wire {
-                    name: wire,
-                    kind: carrier,
-                },
-            )?),
+            metadata: Some(metadata),
         })]),
         statements: quote! {
             let #owner=#binding; let #length=#owner.len(); #declarations
@@ -369,106 +363,70 @@ pub(crate) fn output<C: Codec>(
             for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store }
             #finish
         },
-        values: vec![value],
+        values,
         commit: quote!(#commit #commit_elements),
-    })
+    };
+    out.validate_value_count()?;
+    Ok(out)
 }
 
-/// Outer sequences in a return scope, without descending into sequence elements.
-pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
+/// Find outer logical sequence nodes, including through groups and options.
+/// This inspects structure only. The caller selects an outcome and decides which
+/// sequences belong to its emission scope; sequence elements are not traversed.
+pub fn outer_sequences<W: prebindgen_flat::WireKind, G>(
     layout: &WireLayout<W, G>,
 ) -> Vec<&WireContainer<W, G>> {
-    fn visit<'a, W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
-        layout: &'a WireLayout<W, G>,
+    fn visit<'a, W: prebindgen_flat::WireKind, G>(
+        nodes: &'a [WireNode<W, G>],
         out: &mut Vec<&'a WireContainer<W, G>>,
     ) {
-        for node in layout.nodes() {
+        for node in nodes {
             match node {
                 WireNode::Sequence(c) => out.push(c),
-                WireNode::Optional(c)
-                    if !matches!(
-                        c.metadata.as_ref().map(NativeMetadata::encoding),
-                        Some(NativeEncoding::Carrier(_))
-                    ) =>
-                {
-                    visit(&c.element, out)
-                }
-                WireNode::Group { children, .. } => visit(children, out),
-                WireNode::Outcomes { alternatives } => {
-                    if let Some(success) = alternatives
-                        .iter()
-                        .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                    {
-                        visit(&success.layout, out);
+                WireNode::Optional(c) => visit(c.element.nodes(), out),
+                WireNode::Group { children, .. } => visit(children.nodes(), out),
+                WireNode::Alternatives { alternatives, .. } => {
+                    for arm in alternatives {
+                        visit(arm.nodes(), out);
                     }
                 }
-                _ => {}
+                WireNode::Wire(_) | WireNode::Outcomes { .. } => {}
             }
         }
     }
     let mut out = vec![];
-    visit(layout, &mut out);
+    visit(layout.nodes(), &mut out);
     out
-}
-/// Find an outer carried sequence, without descending into sequence elements.
-pub fn sequence_return<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
-    layout: &WireLayout<W, G>,
-) -> Option<(&Wire<W>, &WireLayout<W, G>)> {
-    return_sequences(layout)
-        .into_iter()
-        .find_map(|c| match c.metadata.as_ref()?.encoding() {
-            NativeEncoding::Carrier(wire) => Some((wire, &c.element)),
-            _ => None,
-        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn return_sequence_discovery_respects_container_boundaries() {
-        let leaf = |name: &str| Wire {
-            name: syn::parse_str(name).unwrap(),
+    fn sequence_discovery_is_logical_and_outcome_selection_is_explicit() {
+        let mut layout: WireLayout<syn::Type> = vec![Wire {
+            name: syn::parse_quote!(value),
             kind: syn::parse_quote!(i64),
-        };
-        enum Encoding {
-            Inline(Vec<Wire<syn::Type>>),
-            Carrier(Box<Wire<syn::Type>>),
-        }
-        impl NativeMetadata<syn::Type> for Encoding {
-            fn encoding(&self) -> NativeEncoding<'_, syn::Type> {
-                match self {
-                    Self::Inline(ws) => NativeEncoding::Inline(ws),
-                    Self::Carrier(w) => NativeEncoding::Carrier(w),
-                }
-            }
-            fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, syn::Type> {
-                use prebindgen_conversions::NativeEncodingMut;
-                match self {
-                    Self::Inline(ws) => NativeEncodingMut::Inline(ws),
-                    Self::Carrier(w) => NativeEncodingMut::Carrier(w),
-                }
-            }
-        }
-        let mut carried: WireLayout<syn::Type, Encoding> = vec![leaf("value")].into();
-        carried.enclose_sequence(Some(Encoding::Carrier(leaf("rows").into())));
-        carried.enclose_optional(Some(Encoding::Inline(vec![leaf("present")])));
-        assert_eq!(return_sequences(&carried).len(), 1);
-        assert_eq!(sequence_return(&carried).unwrap().0.name, "rows");
-        carried.set_outcome(
+        }]
+        .into();
+        layout.enclose_sequence(None);
+        layout.enclose_optional(None);
+        layout.enclose(());
+        assert_eq!(outer_sequences(&layout).len(), 1);
+        layout.set_outcome(
             prebindgen_flat::OutcomeKind::BindingFailure,
             WireLayout::default(),
         );
-        assert_eq!(sequence_return(&carried).unwrap().0.name, "rows");
-        // A carried option owns a distinct scope; discovery cannot enter it.
-        let mut hidden: WireLayout<syn::Type, Encoding> = vec![leaf("value")].into();
-        hidden.enclose_sequence(Some(Encoding::Carrier(leaf("rows").into())));
-        hidden.enclose_optional(Some(Encoding::Carrier(leaf("optional_object").into())));
-        assert!(return_sequences(&hidden).is_empty());
-        let mut inline: WireLayout<syn::Type, Encoding> = vec![leaf("inline_value")].into();
-        inline.enclose_sequence(Some(Encoding::Inline(vec![])));
-        assert_eq!(return_sequences(&inline).len(), 1);
-        assert!(sequence_return(&inline).is_none());
+        assert!(outer_sequences(&layout).is_empty());
+        assert_eq!(
+            outer_sequences(
+                layout
+                    .outcome(prebindgen_flat::OutcomeKind::Success)
+                    .unwrap()
+            )
+            .len(),
+            1
+        );
     }
     #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
@@ -477,7 +435,7 @@ mod tests {
             kind: syn::parse_quote!(i64),
         }]
         .into();
-        let code = replace(
+        let code = replace::<_, _, ()>(
             &quote!(let value = unsafe { &(*pointer) }; consume(raw, value);),
             &layout,
             &[quote!(cached)],
@@ -493,10 +451,14 @@ mod tests {
             kind: syn::parse_quote!(*const u8),
         }]
         .into();
-        assert!(prepared(&quote!(decode(raw);), &layout, &[None])
-            .unwrap_err()
-            .contains("after row validation"));
-        assert!(prepared(&quote!(decode_macro!(raw);), &layout, &[None]).is_err());
-        assert!(prepared(&quote!(decode(already_validated);), &layout, &[None]).is_ok());
+        assert!(
+            prepared::<_, _, ()>(&quote!(decode(raw);), &layout, &[None])
+                .unwrap_err()
+                .contains("after row validation")
+        );
+        assert!(prepared::<_, _, ()>(&quote!(decode_macro!(raw);), &layout, &[None]).is_err());
+        assert!(
+            prepared::<_, _, ()>(&quote!(decode(already_validated);), &layout, &[None]).is_ok()
+        );
     }
 }

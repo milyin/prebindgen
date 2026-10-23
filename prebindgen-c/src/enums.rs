@@ -28,6 +28,7 @@ impl Codec for EnumCodec {
     type Wire = CWire;
     type Niche = CNiche;
     type Group = CGroup;
+    type Reader = CCodec;
     type Extra = ();
     type Context = CContext;
     type Input = InputPlan<CWire>;
@@ -58,9 +59,6 @@ impl Codec for EnumCodec {
     ) -> CGroup {
         CCodec.optional_metadata(p, d, n, controls)
     }
-    fn sequence_metadata(&self, carrier: prebindgen_flat::Wire<CWire>) -> CGroup {
-        CCodec.sequence_metadata(carrier)
-    }
     fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<CWire>) -> CGroup {
         CCodec.alternatives_metadata(selector)
     }
@@ -84,7 +82,7 @@ impl Codec for EnumCodec {
         i: syn::Ident,
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CGroup>> {
         CCodec.sequence_input(e, w, n, i, element, active)
     }
     fn sequence_output(
@@ -95,9 +93,9 @@ impl Codec for EnumCodec {
         i: syn::Ident,
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         values: &[TokenStream],
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<CGroup>> {
         if self.callback_wire.as_ref() == Some(&w) {
-            Ok(sequence::callback_output(values, n))
+            Ok(sequence::callback_output(w, values, n))
         } else {
             CCodec.sequence_output(e, w, n, i, element, values)
         }
@@ -335,10 +333,10 @@ mod tests {
             let output = codec
                 .output_leaf(&ty, &(), syn::parse_quote!(wire), quote!(value), false)
                 .unwrap();
-            assert_eq!(input.layout.native_len(), 1);
-            assert_eq!(output.layout.native_len(), 1);
+            assert_eq!(CCodec::wires(input.layout.nodes()).len(), 1);
+            assert_eq!(CCodec::wires(output.layout.nodes()).len(), 1);
             assert!(
-                matches!(input.layout.native_get(0).unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(CCodec::wires(input.layout.nodes()).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
             super::super::group::validate_layout(&input.layout).unwrap();
             super::super::group::validate_layout(&output.layout).unwrap();

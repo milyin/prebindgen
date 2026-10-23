@@ -1,8 +1,8 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup>;
+use prebindgen_conversions::NativeReader;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainReader>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainReader>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -39,18 +39,63 @@ impl std::ops::Deref for DomainGroup {
         &self.description
     }
 }
-impl prebindgen_conversions::NativeMetadata<Domain> for DomainGroup {
-    fn encoding(&self) -> prebindgen_conversions::NativeEncoding<'_, Domain> {
-        prebindgen_conversions::NativeEncoding::Inline(&self.controls)
+struct DomainReader;
+impl NativeReader<Domain, DomainGroup> for DomainReader {
+    fn wires(nodes: &[WireNode<Domain, DomainGroup>]) -> std::vec::IntoIter<&Wire<Domain>> {
+        fn visit<'a>(nodes: &'a [WireNode<Domain, DomainGroup>], out: &mut Vec<&'a Wire<Domain>>) {
+            for node in nodes {
+                match node {
+                    WireNode::Wire(w) => out.push(w),
+                    WireNode::Optional(c) => {
+                        if let Some(m) = &c.metadata {
+                            out.extend(&m.controls);
+                        }
+                        visit(c.element.nodes(), out);
+                    }
+                    WireNode::Group { children, .. } => visit(children.nodes(), out),
+                    _ => {}
+                }
+            }
+        }
+        let mut out = vec![];
+        visit(nodes, &mut out);
+        out.into_iter()
     }
-    fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, Domain> {
-        prebindgen_conversions::NativeEncodingMut::Inline(&mut self.controls)
+    fn wires_mut(
+        nodes: &mut [WireNode<Domain, DomainGroup>],
+    ) -> std::vec::IntoIter<&mut Wire<Domain>> {
+        fn visit<'a>(
+            nodes: &'a mut [WireNode<Domain, DomainGroup>],
+            out: &mut Vec<&'a mut Wire<Domain>>,
+        ) {
+            for node in nodes {
+                match node {
+                    WireNode::Wire(w) => out.push(w),
+                    WireNode::Optional(c) => {
+                        if let Some(m) = &mut c.metadata {
+                            out.extend(&mut m.controls);
+                        }
+                        visit(c.element.nodes_mut(), out);
+                    }
+                    WireNode::Group { children, .. } => visit(children.nodes_mut(), out),
+                    _ => {}
+                }
+            }
+        }
+        let mut out = vec![];
+        visit(nodes, &mut out);
+        out.into_iter()
+    }
+    fn validate(layout: &WireLayout<Domain, DomainGroup>) -> Result<()> {
+        layout.validate()?;
+        prebindgen_conversions::validate_wire_names(Self::wires(layout.nodes()))
     }
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
     type Group = DomainGroup;
+    type Reader = DomainReader;
     fn optional_metadata(
         &self,
         presence: syn::Ident,
@@ -62,9 +107,6 @@ impl Codec for DomainCodec {
             description: format!("optional:{presence}:{discriminator}:{niche:?}"),
             controls,
         }
-    }
-    fn sequence_metadata(&self, _: Wire<Domain>) -> DomainGroup {
-        unreachable!()
     }
     fn alternatives_metadata(&self, selector: Wire<Domain>) -> DomainGroup {
         DomainGroup {
@@ -174,6 +216,7 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
         return InputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             layout: wires.into(),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
             acquire: quote!(),
@@ -220,6 +263,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
         return OutputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             delivery: Default::default(),
             layout: wires.into(),
             statements: quote!(let raw = #source; if !(#valid) #(|| #invalid)* { return Err("invalid payload"); }),
@@ -332,25 +376,23 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                 let inp = input(&domain, depth, Condition::default());
                 let out = output(&domain, depth, quote!(source));
                 let expected = 1 + usize::from(prefix) + depth.saturating_sub(domain.unused.len());
-                assert_eq!(inp.layout.native_len(), expected);
-                assert_eq!(out.layout.native_len(), expected);
+                assert_eq!(DomainReader::wires(inp.layout.nodes()).len(), expected);
+                assert_eq!(DomainReader::wires(out.layout.nodes()).len(), expected);
                 let decode = format_ident!("decode{case}_{depth}_{suffix}");
                 let encode = format_ident!("encode{case}_{depth}_{suffix}");
                 let mut source_ty = ty.clone();
                 for _ in 0..depth {
                     source_ty = syn::parse_quote!(Option<#source_ty>);
                 }
-                let params = inp.layout.native_wires().map(|w| {
+                let params = DomainReader::wires(inp.layout.nodes()).map(|w| {
                     let n = &w.name;
                     let t = w.kind.rust_type();
                     quote!(#n:#t)
                 });
-                let names = inp
-                    .layout
-                    .native_wires()
+                let names = DomainReader::wires(inp.layout.nodes())
                     .map(|w| &w.name)
                     .collect::<Vec<_>>();
-                let types = out.layout.native_wires().map(|w| w.kind.rust_type());
+                let types = DomainReader::wires(out.layout.nodes()).map(|w| w.kind.rust_type());
                 let validation = inp.validation;
                 let construct = inp.statements;
                 let argument = inp.argument;
@@ -458,17 +500,43 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     .unwrap();
     assert_eq!(
         DomainCodec
-            .niche(&plan.layout.native_get(0).unwrap().kind)
+            .niche(
+                &DomainReader::wires(plan.layout.nodes())
+                    .next()
+                    .unwrap()
+                    .kind
+            )
             .unwrap()
             .value
             .to_string(),
         "4u8"
     );
     assert!(DomainCodec
-        .niche(&plan.layout.native_get(1).unwrap().kind)
+        .niche(
+            &DomainReader::wires(plan.layout.nodes())
+                .nth(1)
+                .unwrap()
+                .kind
+        )
         .is_none());
-    assert_eq!(plan.layout.native_get(0).unwrap().kind.unused.len(), 2); // Wire's base domain is unchanged.
-    assert_eq!(plan.layout.native_get(1).unwrap().kind.unused.len(), 2);
+    assert_eq!(
+        DomainReader::wires(plan.layout.nodes())
+            .next()
+            .unwrap()
+            .kind
+            .unused
+            .len(),
+        2
+    ); // Wire's base domain is unchanged.
+    assert_eq!(
+        DomainReader::wires(plan.layout.nodes())
+            .nth(1)
+            .unwrap()
+            .kind
+            .unused
+            .len(),
+        2
+    );
     plan = optional_output(
         &DomainCodec,
         &(),
@@ -479,7 +547,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.layout.native_len(), 2);
+    assert_eq!(DomainReader::wires(plan.layout.nodes()).len(), 2);
     assert!(plan
         .layout
         .iter()
@@ -494,8 +562,14 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.layout.native_len(), 3); // Exhaustion adds a flag, not a wire wrapper.
-    assert_eq!(plan.layout.native_get(0).unwrap().name, "tag3");
+    assert_eq!(DomainReader::wires(plan.layout.nodes()).len(), 3); // Exhaustion adds a flag, not a wire wrapper.
+    assert_eq!(
+        DomainReader::wires(plan.layout.nodes())
+            .next()
+            .unwrap()
+            .name,
+        "tag3"
+    );
     plan.layout.validate().unwrap();
     let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
         panic!()
@@ -515,10 +589,15 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         .unwrap()
         .starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
-    for w in independent.layout.native_wires_mut() {
+    for w in DomainReader::wires_mut(independent.layout.nodes_mut()) {
         DomainCodec.set_niche(&mut w.kind, None);
     }
     assert!(DomainCodec
-        .niche(&independent.layout.native_get(0).unwrap().kind)
+        .niche(
+            &DomainReader::wires(independent.layout.nodes())
+                .next()
+                .unwrap()
+                .kind
+        )
         .is_none());
 }

@@ -8,8 +8,8 @@
 //! Each [`Wire`] carries the adapter's own description in [`Wire::kind`].
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
+use prebindgen_conversions::NativeReader;
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_conversions::{NativeLayoutExt, NativeMetadata};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use prebindgen_flat::{WireLayout, WireNode};
 use proc_macro2::TokenStream;
@@ -21,7 +21,7 @@ mod optional;
 pub use optional::{optional_input, optional_output};
 pub use prebindgen_flat::{option_inner, result_parts, sequence_parts, SequenceView};
 mod sequence;
-pub use sequence::{sequence_return, SequenceInput, SequenceOutput};
+pub use sequence::{outer_sequences, SequenceInput, SequenceOutput};
 fn contains_result(ty: &Type) -> bool {
     result_parts(ty).is_some()
         || option_inner(ty).is_some_and(contains_result)
@@ -38,10 +38,15 @@ mod component;
 pub use component::{ComponentPath, ComponentSegment};
 
 /// Input preparation plan, including the codec's composition metadata.
-pub type CodecInput<C> = InputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Group>;
+pub type CodecInput<C> =
+    InputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Group, <C as Codec>::Reader>;
 /// Output preparation plan, including the codec's composition metadata.
-pub type CodecOutput<C> =
-    OutputPlan<<C as Codec>::Wire, <C as Codec>::Context, <C as Codec>::Group>;
+pub type CodecOutput<C> = OutputPlan<
+    <C as Codec>::Wire,
+    <C as Codec>::Context,
+    <C as Codec>::Group,
+    <C as Codec>::Reader,
+>;
 
 /// A recipe for converting boundary inputs into one source argument.
 ///
@@ -232,7 +237,7 @@ impl Output {
 ///
 /// ```
 /// use prebindgen_flat::{Result, Wire, validate_bindings};
-/// use prebindgen_conversions::{value, NativeLayoutExt};
+/// use prebindgen_conversions::{value, NativeReader};
 /// use prebindgen_declarations::{
 ///     Codec, CodecInput, CodecOutput, Declarations,
 ///     Bindings, fun, expand_param, expand_return, bind_input, Input,
@@ -252,18 +257,18 @@ impl Output {
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Niche = ();
-///     type Group = Vec<Wire<Type>>;
+///     type Group = ();
+///     type Reader = (); // Direct Rust values; this reader does not support containers.
 ///     type Extra = ();
 ///     type Context = ();
 ///     type Input = CodecInput<Self>;
 ///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
-///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, controls: Vec<Wire<Type>>) -> Self::Group { controls }
-///     fn sequence_metadata(&self, _: Wire<Type>) -> Self::Group { unreachable!() }
-///     fn alternatives_metadata(&self, selector: Wire<Type>) -> Self::Group { vec![selector] }
-///     fn field_group(&self, _: Ident) -> Self::Group { vec![] }
-///     fn fields_group(&self) -> Self::Group { vec![] }
+///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: Vec<Wire<Type>>) {}
+///     fn alternatives_metadata(&self, _: Wire<Type>) {}
+///     fn field_group(&self, _: Ident) {}
+///     fn fields_group(&self) {}
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
 ///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
 ///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
@@ -288,25 +293,25 @@ impl Output {
 ///     pub fn to_i32(value: &i64) -> i32 { *value as i32 }
 ///     pub fn echo(value: i64) -> i64 { value }
 /// "#)?;
-/// let mut flat = Bindings::<Type, (), Vec<Wire<Type>>>::parse(
+/// let mut flat = Bindings::<Type>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let defaults = Declarations::new(&flat, vec![
-///     expand_param!(i64).variant(fun!(from_i32)).variant_self().into(),
+///     expand_param!(i64).variant(fun!(from_i32)).into(),
 ///     expand_return!(i64).field(fun!(to_i32)).field_self().into(),
 /// ])?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// let function = flat.function("echo")?;
-/// // Input: selector, constructor argument, direct value. Output: two values.
-/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().layout.native_len(), 3);
-/// assert_eq!(function.ret.slot.as_ref().unwrap().layout.native_len(), 2);
+/// // Input: one constructor argument. Output: two projected values.
+/// assert_eq!(<()>::wires(function.params[0].ty.slot.as_ref().unwrap().layout.nodes()).len(), 1);
+/// assert_eq!(<()>::wires(function.ret.slot.as_ref().unwrap().layout.nodes()).len(), 2);
 /// // Replace just this parameter's converter; later default filling preserves it.
 /// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Leaf, &())?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
-/// assert_eq!(input.layout.native_len(), 1);
-/// assert_eq!(prebindgen_flat::type_key(&input.layout.native_get(0).unwrap().kind), "i64");
+/// assert_eq!(<()>::wires(input.layout.nodes()).len(), 1);
+/// assert_eq!(prebindgen_flat::type_key(&<()>::wires(input.layout.nodes()).next().unwrap().kind), "i64");
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -316,15 +321,19 @@ pub trait Codec {
     type Niche: Clone;
     /// Adapter-owned metadata for group and container nodes in the wire tree.
     /// The shared compiler creates it through the metadata hooks below and never
-    /// interprets its semantic fields. The staged native reader asks NativeMetadata
-    /// only for additional controls or a carrier. Use `()` for plain leaves.
-    type Group: Clone + prebindgen_conversions::NativeMetadata<Self::Wire>;
+    /// interprets its semantic fields. Only the selected Reader decides how nodes
+    /// and metadata participate in a native boundary. Use `()` for plain leaves.
+    type Group: Clone;
+    /// Adapter that chooses the native values in each tree scope.
+    type Reader: NativeReader<Self::Wire, Self::Group>;
     /// Describe an optional value in the adapter's own metadata format.
     /// `presence` is the normalized 0/1 binding used by payload conditions.
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
     /// representation, or `None` when a separate flag is an inline control wire.
     /// With a flag, `presence` and `discriminator` name that same wire. Retain the
     /// supplied controls unchanged; the compiler validates their names and types.
+    /// This helper requires the reader to expose controls followed by the child
+    /// values in their prepared order. Other representations need custom code.
     fn optional_metadata(
         &self,
         presence: syn::Ident,
@@ -332,14 +341,16 @@ pub trait Codec {
         niche: Option<Self::Niche>,
         controls: Vec<Wire<Self::Wire>>,
     ) -> Self::Group;
-    /// Record the supplied physical carrier unchanged on its logical sequence node.
-    fn sequence_metadata(&self, carrier: Wire<Self::Wire>) -> Self::Group;
     /// Record the supplied selector unchanged for mutually exclusive input alternatives.
+    /// The reader must expose the selector followed by each arm's prepared values.
     fn alternatives_metadata(&self, selector: Wire<Self::Wire>) -> Self::Group;
     /// Describe one named source field, whose subtree may contain any number of wires.
+    /// Shared record assembly requires this group to preserve the child view.
     fn field_group(&self, name: syn::Ident) -> Self::Group;
     /// Describe a record or unit value's ordered collection of field subtrees.
     /// The shared helpers check field-name uniqueness before calling this hook.
+    /// The reader must preserve the concatenated child views; packing a record
+    /// requires an adapter-defined conversion rather than these metadata hooks.
     fn fields_group(&self) -> Self::Group;
 
     /// Input data borrowed while building one occurrence's conversion; use `()` if unused.
@@ -435,8 +446,14 @@ pub trait Codec {
         )
     }
     /// Choose array input transport for one prepared element layout.
-    /// `open` must bind `length`; `bind` runs for each `index`. Raw wire reads
-    /// may defer validation errors until the corresponding active conversion.
+    /// `wire` is the unique binding stem for this occurrence, not a requirement
+    /// to use a single parameter. Metadata owns all outer values. `open` must
+    /// make `length` available as a parameter or local; `bind` runs for each
+    /// `index`. Raw reads may defer errors until the active conversion.
+    ///
+    /// Choose additional names fresh against the element and outer boundary
+    /// values. The shared helper reserves `{wire}_staged`, `{wire}_acquired` and
+    /// `{wire}_identities_N` (for each resource index N) for its own locals.
     fn sequence_input(
         &self,
         _extra: &Self::Extra,
@@ -445,11 +462,15 @@ pub trait Codec {
         _index: syn::Ident,
         _element: &WireLayout<Self::Wire, Self::Group>,
         _active: &Condition,
-    ) -> Result<SequenceInput<Self::Wire>> {
+    ) -> Result<SequenceInput<Self::Group>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Choose array output transport; store element values without publishing owners.
     /// `begin` sees `length`; `enter` and `store` see each `index`.
+    /// `wire` is a unique binding stem; metadata and `values` describe every
+    /// outer value in the reader's order. Choose any additional names fresh
+    /// against element and boundary values. `{wire}_source` and `{wire}_commits`
+    /// are reserved for shared preparation locals.
     fn sequence_output(
         &self,
         _extra: &Self::Extra,
@@ -458,7 +479,7 @@ pub trait Codec {
         _index: syn::Ident,
         _element: &WireLayout<Self::Wire, Self::Group>,
         _values: &[TokenStream],
-    ) -> Result<SequenceOutput<Self::Wire>> {
+    ) -> Result<SequenceOutput<Self::Group>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Route the owned source error value. `message`, when present, is an
@@ -627,7 +648,7 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W, C = (), G = ()> = Flat<InputPlan<W, C, G>, OutputPlan<W, C, G>>;
+pub type Bindings<W, C = (), G = (), R = ()> = Flat<InputPlan<W, C, G, R>, OutputPlan<W, C, G, R>>;
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -679,7 +700,8 @@ pub fn bind_input<C: Codec>(
     )?;
 
     codec.finish_input(&mut conversion, extra)?;
-    conversion.layout.validate_native_names()?;
+    conversion.layout.validate()?;
+    C::Reader::validate(&conversion.layout)?;
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
     Ok(())
 }
@@ -723,8 +745,9 @@ pub fn bind_output<C: Codec>(
     )?;
     finalize_output_schema(codec, &mut conversion, extra)?;
     codec.finish_output(&mut conversion, extra)?;
+    conversion.layout.validate()?;
     conversion.validate_value_count()?;
-    conversion.layout.validate_native_names()?;
+    C::Reader::validate(&conversion.layout)?;
     flat.function_mut(function)?.ret.slot = Some(conversion.into());
     Ok(())
 }
@@ -744,29 +767,17 @@ fn finalize_output_schema<C: Codec>(
 fn wire_signature<W: prebindgen_flat::WireKind>(wire: &Wire<W>) -> (syn::Ident, String) {
     (wire.name.clone(), type_key(&wire.rust_type()))
 }
-fn checked_inline<W: prebindgen_flat::WireKind, G: prebindgen_conversions::NativeMetadata<W>>(
-    metadata: G,
+fn checked_scope<C: Codec>(
+    node: WireNode<C::Wire, C::Group>,
     expected: &[(syn::Ident, String)],
-) -> Result<G> {
-    match metadata.encoding() {
-        prebindgen_conversions::NativeEncoding::Inline(controls)
-            if controls
-                .iter()
-                .map(wire_signature)
-                .eq(expected.iter().cloned()) =>
-        {
-            Ok(metadata)
-        }
-        _ => Err("codec metadata must retain the supplied inline controls".into()),
+) -> Result<WireNode<C::Wire, C::Group>> {
+    if !C::Reader::wires(std::slice::from_ref(&node))
+        .map(wire_signature)
+        .eq(expected.iter().cloned())
+    {
+        return Err("codec reader must retain the prepared boundary values".into());
     }
-}
-fn sequence_metadata<C: Codec>(codec: &C, carrier: Wire<C::Wire>) -> Result<C::Group> {
-    let expected = wire_signature(&carrier);
-    let metadata = codec.sequence_metadata(carrier);
-    if metadata.encoding().carrier().map(wire_signature) != Some(expected) {
-        return Err("codec sequence metadata must retain the supplied carrier".into());
-    }
-    Ok(metadata)
+    Ok(node)
 }
 
 struct Compiler<'a, C: Codec> {
@@ -791,7 +802,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         n
     }
     fn prefix(&self, wires: &mut WireLayout<C::Wire, C::Group>, segment: ComponentSegment) {
-        for wire in wires.native_wires_mut() {
+        for wire in C::Reader::wires_mut(wires.nodes_mut()) {
             self.codec.prefix_component(&mut wire.kind, segment.clone());
         }
     }
@@ -842,6 +853,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Ok(InputPlan {
                         fallible: false,
                         context: Default::default(),
+                        reader: Default::default(),
                         acknowledgement,
                         layout: wires,
                         validation,
@@ -929,7 +941,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
                     self.prefix(&mut p.layout, ComponentSegment::Alternative(i));
-                    for wire in p.layout.native_wires_mut() {
+                    for wire in C::Reader::wires_mut(p.layout.nodes_mut()) {
                         self.codec.set_niche(&mut wire.kind, None);
                     }
                     fallible |= p.fallible;
@@ -943,19 +955,22 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
-                let expected = vec![wire_signature(&selector)];
-                let metadata =
-                    checked_inline(self.codec.alternatives_metadata(selector), &expected)?;
-                wires = WireLayout::from_nodes(vec![WireNode::Alternatives {
-                    metadata: Some(metadata),
+                let mut expected = vec![wire_signature(&selector)];
+                for arm in &alternatives {
+                    expected.extend(C::Reader::wires(arm.nodes()).map(wire_signature));
+                }
+                let node = WireNode::Alternatives {
+                    metadata: Some(self.codec.alternatives_metadata(selector)),
                     alternatives,
-                }]);
+                };
+                wires = WireLayout::from_nodes(vec![checked_scope::<C>(node, &expected)?]);
                 statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
         Ok(InputPlan {
             fallible,
             context: Default::default(),
+            reader: Default::default(),
             acknowledgement,
             layout: wires,
             validation,
@@ -1040,6 +1055,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut out = OutputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
             layout: Default::default(),
@@ -1210,9 +1226,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
         Ok(out)
     }
 }
-fn append<W: prebindgen_flat::WireKind, C, M>(
-    to: &mut OutputPlan<W, C, M>,
-    from: OutputPlan<W, C, M>,
+fn append<W: prebindgen_flat::WireKind, C, M, R>(
+    to: &mut OutputPlan<W, C, M, R>,
+    from: OutputPlan<W, C, M, R>,
 ) -> Result<()> {
     if !from.delivery.statements.is_empty()
         || from.delivery.result.to_string() != quote!(()).to_string()
@@ -1227,6 +1243,8 @@ fn append<W: prebindgen_flat::WireKind, C, M>(
     Ok(())
 }
 
+#[cfg(test)]
+mod reader_tests;
 #[cfg(test)]
 mod tests;
 

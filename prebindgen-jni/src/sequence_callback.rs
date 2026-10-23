@@ -1,14 +1,14 @@
 //! Per-element native delivery and Kotlin folds, without invoking user code under JNI locks.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::SequenceOutput;
-use prebindgen_flat::WireLayout;
+use prebindgen_flat::{Wire, WireLayout};
 
 pub(crate) fn transport(
     wire: syn::Ident,
     element: &WireLayout<JniWire, JniGroup>,
     values: &[TokenStream],
-) -> Result<SequenceOutput<JniWire>> {
+) -> Result<SequenceOutput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
     let class = format_ident!("{wire}_callback_class");
@@ -16,14 +16,13 @@ pub(crate) fn transport(
     let mut descriptor = String::from("(");
     let mut encode = TokenStream::new();
     let mut args = Vec::new();
-    let slots: usize = element
-        .native_wires()
+    let slots: usize = JniCodec::wires(element.nodes())
         .map(|w| w.kind.parameter_slots())
         .sum();
     if slots > 254 {
         return Err("sequence callback exceeds JVM parameter limit".into());
     }
-    for (i, (field, value)) in element.native_wires().zip(values).enumerate() {
+    for (i, (field, value)) in JniCodec::wires(element.nodes()).zip(values).enumerate() {
         descriptor.push_str(field.kind.jvm_descriptor());
         let local = format_ident!("{wire}_callback_object_{i}");
         let argument = field.kind.output_argument(value, &local);
@@ -31,15 +30,18 @@ pub(crate) fn transport(
         args.push(argument.value);
     }
     descriptor.push_str(")V");
-    let capacity =
-        i32::try_from(element.native_len() + 8).map_err(|_| "too many callback fields")?;
+    let capacity = i32::try_from(JniCodec::wires(element.nodes()).len() + 8)
+        .map_err(|_| "too many callback fields")?;
     Ok(SequenceOutput {
         commit_each: false,
         fallible: true,
-        carrier: JniWire::Rows {
-            condition: "true".into(),
-            null_niche_available: true,
-        },
+        metadata: JniGroup::Sequence(Wire {
+            name: wire.clone(),
+            kind: JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
+        }),
         begin: quote! {
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
@@ -55,7 +57,7 @@ pub(crate) fn transport(
         },
         // Only a presence marker crosses back; row payloads crossed through run.
         finish: quote!(let #wire=Some(::prebindgen_jni_runtime::array(&mut #env,0)?);),
-        value: quote!(#wire),
+        values: vec![quote!(#wire)],
         commit: quote!(),
     })
 }
@@ -80,10 +82,9 @@ pub(crate) fn fold(
         .outcome(prebindgen_flat::OutcomeKind::Success)
         .ok_or("missing Success outcome")?;
     let optional = optional(success.nodes());
-    let (carrier, element) = prebindgen_declarations::sequence_return(layout)
-        .ok_or("missing sequence callback layout")?;
-    let position = layout
-        .native_wires()
+    let (carrier, element) =
+        crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
+    let position = JniCodec::wires(layout.nodes())
         .position(|w| w.name == carrier.name)
         .unwrap();
     let row = "__pb_fold_row";

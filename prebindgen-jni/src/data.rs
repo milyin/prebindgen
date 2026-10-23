@@ -1,6 +1,6 @@
 //! Kotlin record declarations and their occurrence conversions.
 use super::*;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::Condition;
 use std::rc::Rc;
 
@@ -478,7 +478,7 @@ impl RecordShape {
         root: String,
         condition: String,
     ) -> Result<()> {
-        for wire in layout.native_wires_mut() {
+        for wire in JniCodec::wires_mut(layout.nodes_mut()) {
             wire.kind.clear_niche();
         }
         let mut nodes = std::mem::take(layout).into_nodes();
@@ -501,6 +501,7 @@ impl RecordShape {
 impl Codec for DataCodec {
     type Niche = crate::optional::JniNiche;
     type Group = JniGroup;
+    type Reader = JniCodec;
     fn optional_metadata(
         &self,
         presence: syn::Ident,
@@ -509,9 +510,6 @@ impl Codec for DataCodec {
         controls: Vec<prebindgen_flat::Wire<JniWire>>,
     ) -> JniGroup {
         JniCodec.optional_metadata(presence, discriminator, niche, controls)
-    }
-    fn sequence_metadata(&self, carrier: prebindgen_flat::Wire<JniWire>) -> JniGroup {
-        JniCodec.sequence_metadata(carrier)
     }
     fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<JniWire>) -> JniGroup {
         JniCodec.alternatives_metadata(selector)
@@ -535,7 +533,7 @@ impl Codec for DataCodec {
         i: syn::Ident,
         element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniGroup>> {
         JniCodec.sequence_input(e, w, n, i, element, active)
     }
     fn sequence_output(
@@ -546,7 +544,7 @@ impl Codec for DataCodec {
         i: syn::Ident,
         element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         values: &[TokenStream],
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniGroup>> {
         if self.callback_wire.as_ref() == Some(&w) {
             crate::sequence_callback::transport(w, element, values)
         } else {

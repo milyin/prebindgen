@@ -3,7 +3,7 @@ use super::*;
 use crate::kotlin::{
     input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
 };
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 use prebindgen_flat::Wire;
 use prebindgen_flat::WireLayout;
@@ -14,16 +14,16 @@ pub(crate) fn input(
     index: syn::Ident,
     element: &WireLayout<JniWire, JniGroup>,
     active: &Condition,
-) -> Result<SequenceInput<JniWire>> {
+) -> Result<SequenceInput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = element.native_len();
+    let count = JniCodec::wires(element.nodes()).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection element fields")?;
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
     let mut prepared_values = Vec::new();
-    for (position, field) in element.native_wires().enumerate() {
+    for (position, field) in JniCodec::wires(element.nodes()).enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
         bind.extend(quote! {
@@ -39,10 +39,13 @@ pub(crate) fn input(
         });
     }
     Ok(SequenceInput {
-        carrier: JniWire::Rows {
-            condition: kotlin_condition(active),
-            null_niche_available: true,
-        },
+        metadata: JniGroup::Sequence(Wire {
+            name: wire.clone(),
+            kind: JniWire::Rows {
+                condition: kotlin_condition(active),
+                null_niche_available: true,
+            },
+        }),
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
@@ -56,20 +59,23 @@ pub(crate) fn output(
     index: syn::Ident,
     element: &WireLayout<JniWire, JniGroup>,
     values: &[TokenStream],
-) -> Result<SequenceOutput<JniWire>> {
+) -> Result<SequenceOutput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = element.native_len();
+    let count = JniCodec::wires(element.nodes()).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
     let encode = encode_array(element, values, &row, 0);
     let frame = format_ident!("{wire}_frame");
     Ok(SequenceOutput {
         commit_each: false,
         fallible: true,
-        carrier: JniWire::Rows {
-            condition: "true".into(),
-            null_niche_available: true,
-        },
+        metadata: JniGroup::Sequence(Wire {
+            name: wire.clone(),
+            kind: JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
+        }),
         begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
         enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
         store: quote! {
@@ -78,7 +84,7 @@ pub(crate) fn output(
             drop(#frame);
         },
         finish: quote!(let #wire=Some(#wire);),
-        value: quote!(#wire),
+        values: vec![quote!(#wire)],
         commit: quote!(),
     })
 }
@@ -179,4 +185,34 @@ pub(crate) fn output_list(
         materialize:format!("{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array<*>\n{}\n{actions}.add {{ {failure} -> {} }}\n{}\n{output}.add({value})\n}}\n",child.output_locals,child.cleanup,child.materialize),
         cleanup:format!("val {failure} = {failure_value}\n{actions}?.forEach {{ it({failure}) }}\nfor (index in ({actions}?.size ?: 0) until {raw}.size) {{\nval {row} = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}}\n{finish_cleanup}\n",child.output_locals,child.cleanup),
     })
+}
+
+/// The adapter selects its native scope before looking for a sequence.
+pub(crate) fn return_sequence(
+    layout: &WireLayout<JniWire, JniGroup>,
+) -> Option<(&Wire<JniWire>, &WireLayout<JniWire, JniGroup>)> {
+    let success = layout.outcome(prebindgen_flat::OutcomeKind::Success)?;
+    prebindgen_declarations::outer_sequences(success)
+        .into_iter()
+        .find_map(|c| {
+            c.metadata
+                .as_ref()
+                .and_then(JniGroup::sequence_wire)
+                .map(|w| (w, &c.element))
+        })
+}
+pub(crate) fn callback_target(layout: &WireLayout<JniWire, JniGroup>) -> Result<syn::Ident> {
+    let success = layout
+        .outcome(prebindgen_flat::OutcomeKind::Success)
+        .ok_or("missing Success outcome")?;
+    if prebindgen_declarations::outer_sequences(success).len() != 1
+        || JniCodec::wires(layout.nodes()).len() > 2
+    {
+        return Err(
+            "callback_return permits only one sequence and its optional presence flag".into(),
+        );
+    }
+    return_sequence(layout)
+        .map(|(wire, _)| wire.name.clone())
+        .ok_or_else(|| "callback_return requires a sequence boundary".into())
 }

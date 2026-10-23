@@ -1,11 +1,11 @@
 //! Generate Rust wrappers and C declarations from conversion slots.
 #![warn(missing_docs)]
 use prebindgen_conversions::NativeFunction;
-use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::NativeReader;
 
 use prebindgen_conversions::staged::StagedFunction;
 use prebindgen_conversions::value::Value;
-use prebindgen_flat::{Flat, Primitive, Result, WireKind};
+use prebindgen_flat::{Conversion, Flat, Primitive, Result, WireKind};
 
 mod wire;
 pub use wire::CWire;
@@ -35,8 +35,8 @@ use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, CGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, CGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, CGroup, CCodec>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, CGroup, CCodec>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -68,6 +68,7 @@ pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
     type Group = CGroup;
+    type Reader = CCodec;
     fn binding_failure_layout(
         &self,
         _: &(),
@@ -93,9 +94,6 @@ impl Codec for CCodec {
             discriminator,
             niche,
         })
-    }
-    fn sequence_metadata(&self, carrier: prebindgen_flat::Wire<CWire>) -> CGroup {
-        CGroup::Sequence(carrier)
     }
     fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<CWire>) -> CGroup {
         CGroup::Alternatives(selector)
@@ -157,7 +155,7 @@ impl Codec for CCodec {
         index: syn::Ident,
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         _: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CGroup>> {
         sequence::input(wire, length, index, element)
     }
     fn sequence_output(
@@ -168,7 +166,7 @@ impl Codec for CCodec {
         _: syn::Ident,
         element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         values: &[TokenStream],
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<CGroup>> {
         sequence::output(wire, length, element, values)
     }
     fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
@@ -702,7 +700,10 @@ impl Cbindgen {
                 .map_err(|e| format!("{}: {e}", decl.name))?;
             if decl.callback_return.is_some() {
                 let name = format!("{}_each", decl.name);
-                let (variant, wire) = declarations.callback_variant(&mut flat, &decl, &name)?;
+                let wire = sequence::callback_target(
+                    flat.function(&decl.name)?.output_conversion()?.layout(),
+                )?;
+                let variant = declarations.callback_variant(&mut flat, &decl, &name)?;
                 codec.callback_wire = Some(wire);
                 declarations.fill(&mut flat, &codec, &variant, &())?;
                 codec.callback_wire = None;
@@ -856,11 +857,13 @@ fn generate<
     I: for<'a> prebindgen_conversions::NativeConversion<
         Wire = CWire,
         Group = CGroup,
+        Reader = CCodec,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
     O: for<'a> prebindgen_conversions::NativeConversion<
         Wire = CWire,
         Group = CGroup,
+        Reader = CCodec,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
         WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>,
     >,
@@ -995,7 +998,7 @@ fn generate<
         }
         sequence::schemas(f.output_conversion()?.layout(), &mut schemas);
         for (_, element) in schemas {
-            all_wires.extend(element.native_wires());
+            all_wires.extend(CCodec::wires(element.nodes()));
         }
         for wire in all_wires {
             validate_wire_declaration(wire, &pointers, &enums)?;
@@ -1055,10 +1058,10 @@ The pointer must be null or a live allocation of the declared type returned by t
         validate_layout(&error.plan.layout)?;
         let mut schemas = Vec::new();
         sequence::schemas(&error.plan.layout, &mut schemas);
-        for wire in error.plan.layout.native_wires().chain(
+        for wire in CCodec::wires(error.plan.layout.nodes()).chain(
             schemas
                 .iter()
-                .flat_map(|(_, element)| element.native_wires()),
+                .flat_map(|(_, element)| CCodec::wires(element.nodes())),
         ) {
             validate_wire_declaration(wire, &pointers, &enums)?;
         }
@@ -1146,19 +1149,16 @@ The pointer must be null or a live allocation of the declared type returned by t
             cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers, &context)));
         }
         let body = if callbacks.contains(&f.name.to_string()) {
-            let (_, element) =
-                prebindgen_declarations::sequence_return(f.output_conversion()?.layout())
-                    .ok_or("missing callback element schema")?;
-            let types = element
-                .native_wires()
+            let (_, element) = sequence::return_sequence(f.output_conversion()?.layout())
+                .ok_or("missing callback element schema")?;
+            let types = CCodec::wires(element.nodes())
                 .map(|wire| wire.rust_type())
                 .collect::<Vec<_>>();
             params.push(quote!(__pb_callback:Option<unsafe extern "C" fn(*mut ::core::ffi::c_void,#(#types),*)>));
             params.push(quote!(__pb_callback_context:*mut ::core::ffi::c_void));
             let mut fields = vec!["void *context".to_string()];
             fields.extend(
-                element
-                    .native_wires()
+                CCodec::wires(element.nodes())
                     .enumerate()
                     .map(|(i, wire)| format!("{} v{i}", c_ty(wire, prefix, &pointers, &context))),
             );
@@ -1308,17 +1308,16 @@ fn describe_groups(
                 let carrier = c
                     .metadata
                     .as_ref()
-                    .and_then(|m| prebindgen_conversions::NativeMetadata::encoding(m).carrier())
+                    .and_then(CGroup::sequence_wire)
                     .expect("validated sequence carrier");
                 let element = &c.element;
                 let path = field_path.join(".");
                 if matches!(carrier.kind, CWire::Rows) {
-                    out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,element.native_len()));
+                    out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,CCodec::wires(element.nodes()).len()));
                 } else {
-                    out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,element.native_len()));
+                    out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,CCodec::wires(element.nodes()).len()));
                 }
-                let row_names = element
-                    .native_wires()
+                let row_names = CCodec::wires(element.nodes())
                     .enumerate()
                     .map(|(i, w)| (w.name.to_string(), format!("row.v{i}")))
                     .collect();
@@ -1363,8 +1362,7 @@ fn describe_groups(
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
                 if let CGroup::Field(name) = metadata {
                     field_path.push(name.to_string().trim_start_matches("r#").into());
-                    let values = children
-                        .native_wires()
+                    let values = CCodec::wires(children.nodes())
                         .map(|w| names[&w.name.to_string()].clone())
                         .collect::<Vec<_>>();
                     let values = if values.is_empty() {
@@ -1469,7 +1467,7 @@ mod generation_tests {
         );
         let errors = output.layout().outcome(OutcomeKind::SourceError).unwrap();
         assert_eq!(errors.len(), 2);
-        assert_eq!(bindings[0].plan.layout.native_wires().count(), 3);
+        assert_eq!(CCodec::wires(bindings[0].plan.layout.nodes()).count(), 3);
         assert_eq!(
             output
                 .layout()
@@ -1499,7 +1497,15 @@ mod generation_tests {
                 .collect::<Vec<_>>()
         };
         let expected = shape(output.layout());
-        let (variant, wire) = declarations
+        let wire = sequence::callback_target(
+            flat.function("f")
+                .unwrap()
+                .output_conversion()
+                .unwrap()
+                .layout(),
+        )
+        .unwrap();
+        let variant = declarations
             .callback_variant(&mut flat, &decl, "f_each")
             .unwrap();
         codec.callback_wire = Some(wire);
@@ -1511,7 +1517,10 @@ mod generation_tests {
             .unwrap();
         assert_eq!(shape(callback.layout()), expected);
         assert!(matches!(
-            callback.layout().native_wires().nth(1).unwrap().kind,
+            CCodec::wires(callback.layout().nodes())
+                .nth(1)
+                .unwrap()
+                .kind,
             CWire::Scalar {
                 primitive: Primitive::Usize,
                 ..
@@ -1671,14 +1680,18 @@ mod generation_tests {
                 Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
             bind_output(&mut flat, &CCodec, "f", &recipe, &()).unwrap();
             assert_eq!(
-                flat.function("f")
-                    .unwrap()
-                    .ret
-                    .slot
-                    .as_ref()
-                    .unwrap()
-                    .layout
-                    .native_len(),
+                CCodec::wires(
+                    (flat
+                        .function("f")
+                        .unwrap()
+                        .ret
+                        .slot
+                        .as_ref()
+                        .unwrap()
+                        .layout)
+                        .nodes()
+                )
+                .len(),
                 2
             );
             Cbindgen::new(flat).build().unwrap();
@@ -1760,9 +1773,9 @@ mod generation_tests {
                 .slot
                 .as_ref()
                 .unwrap();
-            assert_eq!(plan.layout.native_len(), 3);
+            assert_eq!(CCodec::wires(plan.layout.nodes()).len(), 3);
             // Check suppression before an outer option can clear the arm niches.
-            for wire in plan.layout.native_wires().skip(1) {
+            for wire in CCodec::wires(plan.layout.nodes()).skip(1) {
                 assert!(matches!(
                     wire.kind,
                     CWire::Scalar {
@@ -1785,7 +1798,7 @@ mod generation_tests {
                 .unwrap();
             // Presence flag + selector + two char carriers. Even a remaining
             // niche of an optional arm cannot describe the outer option.
-            assert_eq!(plan.layout.native_len(), 4);
+            assert_eq!(CCodec::wires(plan.layout.nodes()).len(), 4);
             let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
                 panic!()
             };
@@ -1795,7 +1808,7 @@ mod generation_tests {
             assert!(optional.niche.is_none());
             assert_eq!(
                 optional.discriminator,
-                plan.layout.native_get(0).unwrap().name
+                CCodec::wires(plan.layout.nodes()).next().unwrap().name
             );
         }
     }
@@ -1870,6 +1883,7 @@ mod generation_tests {
             }
         }
         impl prebindgen_conversions::NativeConversion for CountedOutput {
+            type Reader = CCodec;
             type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, CContext>;
             fn code_fragment_wire(
                 &self,

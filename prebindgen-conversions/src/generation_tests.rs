@@ -1,7 +1,7 @@
 //! Execution tests for the optional staged protocol, without declarations.
 use super::*;
 use crate::staged::{emit_call, StagedFunction};
-use crate::NativeLayoutExt;
+use crate::NativeReader;
 use prebindgen_flat::Result;
 use prebindgen_flat::{Conversion, Wire, WireKind};
 type Flat<I = InputPlan<syn::Type>, O = OutputPlan<syn::Type>> = prebindgen_flat::Flat<I, O>;
@@ -19,6 +19,7 @@ impl Input {
         InputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             acknowledgement: Some(
                 quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
             ),
@@ -37,6 +38,7 @@ impl Output {
         OutputPlan {
             fallible: false,
             context: Default::default(),
+            reader: Default::default(),
             delivery: Delivery {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
@@ -125,6 +127,7 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
     flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         delivery: Default::default(),
         // Slot code owns field projection; callers only see ordered carriers and values.
         layout: ["y", "x"]
@@ -193,7 +196,7 @@ fn partial_projection_is_self_contained() {
         .slot
         .as_mut()
         .unwrap();
-    output.layout = vec![output.layout.native_get(0).unwrap().clone()].into();
+    output.layout = vec![<()>::wires(output.layout.nodes()).next().unwrap().clone()].into();
     output.values.pop();
     assert_eq!(
         flat.function("point")
@@ -215,7 +218,7 @@ fn several_physical_wires_may_supply_one_component() {
         .slot
         .as_mut()
         .unwrap();
-    let mut extra = output.layout.native_get(0).unwrap().clone();
+    let mut extra = <()>::wires(output.layout.nodes()).next().unwrap().clone();
     extra.name = syn::parse_quote!(additional_wire);
     output.layout.push(extra);
     output.values.push(quote!(0));
@@ -287,6 +290,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![wire()].into(),
         acknowledgement: None,
         validation: quote!(),
@@ -298,6 +302,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![wire()].into(),
         statements: quote!(),
         values: vec![source_result_expr()],
@@ -404,6 +409,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![wire()].into(),
         acknowledgement: Some(quote!(*#ack = true;)),
         validation: quote!(if #env < 0 { return Err("environment".into()); }),
@@ -415,6 +421,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![wire()].into(),
         statements: quote!(),
         values: vec![value.clone()],
@@ -614,6 +621,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![Wire {
             name: syn::parse_quote!(__prebindgen_argument_0),
             kind: syn::parse_quote!(usize),
@@ -630,6 +638,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![].into(),
         values: vec![],
         statements: quote!(),
@@ -692,6 +701,7 @@ fn validate_resources(resources: &[Resource]) -> TokenStream {
     let plan = InputPlan::<syn::Type> {
         fallible: false,
         context: Default::default(),
+        reader: Default::default(),
         layout: vec![].into(),
         acknowledgement: None,
         validation: quote!(),

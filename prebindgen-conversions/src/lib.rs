@@ -15,10 +15,7 @@ pub mod value;
 mod emission;
 pub use emission::{render_template, template_parameter, TemplateContext};
 mod native;
-pub use native::{
-    native_node_wires, NativeConversion, NativeEncoding, NativeEncodingMut, NativeFunction,
-    NativeLayoutExt, NativeMetadata,
-};
+pub use native::{validate_wire_names, NativeConversion, NativeFunction, NativeReader};
 mod plan;
 pub use plan::*;
 pub mod staged;

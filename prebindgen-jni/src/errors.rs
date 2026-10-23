@@ -249,7 +249,7 @@ pub(crate) fn delivery(error: &ErrorBinding, context: &KotlinContext<'_>) -> Res
         context.result,
         context.result,
         1,
-        error.output.layout().native_wires().len(),
+        JniCodec::wires(error.output.layout().nodes()).len(),
     );
     let call = format!("onError.run({})", output.delivered.join(", "));
     if output.cleanup.is_empty() {
