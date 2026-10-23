@@ -143,26 +143,24 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
             InputFragment::CheckAliases { context, seen } => {
                 let mut checks = TokenStream::new();
                 for resource in &self.resources {
-                    let identity = context.render(&resource.identity)?;
                     let active = context.render(&resource.active)?;
                     let exclusive = resource.access != Access::Shared;
-                    let conflict = if exclusive {
-                        quote!(identity == other)
-                    } else {
-                        quote!(identity == other && exclusive)
-                    };
-                    let prior_access = if exclusive {
-                        quote!(_)
-                    } else {
-                        quote!(exclusive)
+                    let identities = match &resource.identity {
+                        crate::ResourceIdentity::Single(code) => {
+                            let code = context.render(code)?;
+                            quote!(::core::iter::once((#code) as usize))
+                        }
+                        crate::ResourceIdentity::Many(code) => context.render(code)?,
                     };
                     checks.extend(quote! {
-                        if #active {
-                            let identity = (#identity) as usize;
-                            if #seen.iter().any(|&(other, #prior_access)| #conflict) {
-                                return Err("conflicting input aliases".into());
-                            }
-                            #seen.push((identity, #exclusive));
+                        if #active { for identity in #identities { #seen.push((identity, #exclusive)); } }
+                    });
+                }
+                if !self.resources.is_empty() {
+                    checks.extend(quote! {
+                        #seen.sort_unstable_by_key(|entry| entry.0);
+                        if #seen.windows(2).any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)) {
+                            return Err("conflicting input aliases".into());
                         }
                     });
                 }

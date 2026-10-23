@@ -34,9 +34,48 @@ pub fn validate_pointer<T>(pointer: *const T) -> Result<()> {
     Ok(())
 }
 
+/// Validate array pointer encoding and addressable byte length without reading memory.
+/// Empty arrays accept null. Nonempty arrays require nonzero-sized elements,
+/// nonnull aligned storage and a byte range fitting isize and the address space.
+/// The caller must still guarantee the entire range is readable and has valid provenance.
+pub fn validate_slice<T>(pointer: *const T, length: usize) -> Result<()> {
+    if length == 0 {
+        return Ok(());
+    }
+    validate_pointer(pointer)?;
+    let size = std::mem::size_of::<T>();
+    if size == 0 {
+        return Err("zero-sized array element carrier".into());
+    }
+    let bytes = length
+        .checked_mul(size)
+        .filter(|bytes| *bytes <= isize::MAX as usize)
+        .ok_or("array byte length exceeds addressable range")?;
+    pointer
+        .addr()
+        .checked_add(bytes)
+        .ok_or("array address range overflow")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn slice_encoding_checks() {
+        let values = [1u64, 2];
+        assert!(validate_slice(values.as_ptr(), 2).is_ok());
+        assert!(validate_slice::<u64>(std::ptr::null(), 0).is_ok());
+        assert!(validate_slice::<u64>(std::ptr::null(), 1).is_err());
+        assert!(validate_slice(
+            std::ptr::NonNull::<u8>::dangling().as_ptr().cast::<u64>(),
+            1
+        )
+        .is_err());
+        assert!(validate_slice(values.as_ptr(), usize::MAX).is_err());
+        assert!(validate_slice((usize::MAX - 7) as *const u64, 1).is_err());
+        assert!(validate_slice(std::ptr::NonNull::<()>::dangling().as_ptr(), 1).is_err());
+    }
     #[test]
     fn panics_do_not_escape() {
         assert!(super::boundary::<()>(|| panic!("test")).is_err());

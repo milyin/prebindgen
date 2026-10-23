@@ -116,6 +116,19 @@ pub(crate) fn emit(
         let helper = helper(name);
         let input = format_ident!("source_error");
         let context = CContext {
+            row_types: {
+                let mut schemas = Vec::new();
+                sequence::schemas(&error.plan.layout, &mut schemas);
+                schemas
+                    .into_iter()
+                    .map(|(wire, _)| {
+                        (
+                            wire.name.to_string(),
+                            format_ident!("__PbRow_error_{}_{}", name, wire.name),
+                        )
+                    })
+                    .collect()
+            },
             acknowledgement: format_ident!("unused_acknowledgement"),
             output_pointer: format_ident!("error_output"),
             output_type: syn::parse_quote!(#rust_name),
@@ -126,6 +139,15 @@ pub(crate) fn emit(
             wide_integer_type: syn::parse_quote!(__Pb128),
             read_buffer: syn::parse_quote!(__pb_read),
         };
+        let mut schemas = Vec::new();
+        sequence::schemas(&error.plan.layout, &mut schemas);
+        let carriers = schemas
+            .iter()
+            .map(|(wire, _)| wire.name.to_string())
+            .collect();
+        sequence::emit_schemas(
+            schemas, &carriers, &context, prefix, pointers, symbols, tokens, header,
+        )?;
         let commit = error.plan.code_fragment_slot(
             OutputFragment::Commit {
                 context: &context,
@@ -166,14 +188,45 @@ pub(crate) fn emit(
             prebindgen_declarations::ident(&c_field)?;
             header.push_str(&format!(
                 "    {} {c_field};\n",
-                c_ty(wire, prefix, pointers)
+                c_ty(wire, prefix, pointers, &context)
             ));
-            match &wire.kind {
-                CWire::Buffer => drops.extend(quote! { let value=std::mem::replace(&mut (*error).#field,__PbBuffer {data:std::ptr::null(),len:0}); if !value.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(value.data as *mut u8,value.len)));} }),
-                CWire::Pointer {pointer,..} => {let ty=&pointer.ty; drops.extend(quote! {let value=std::mem::replace(&mut (*error).#field,std::ptr::null_mut());if !value.is_null(){drop(Box::from_raw(value as *mut #ty));}});}
-                _ => {}
-            }
         }
+        let values = error
+            .plan
+            .layout
+            .iter()
+            .enumerate()
+            .map(|(i, wire)| {
+                let field = format_ident!("v{i}");
+                if !matches!(
+                    wire.kind,
+                    CWire::Buffer | CWire::Pointer { .. } | CWire::Rows
+                ) {
+                    return quote!((*error).#field);
+                }
+                let empty = match wire.kind {
+                    CWire::Buffer => quote!(__PbBuffer {
+                        data: std::ptr::null(),
+                        len: 0
+                    }),
+                    CWire::Rows => quote!(__PbRows {
+                        data: std::ptr::null(),
+                        len: 0
+                    }),
+                    CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
+                    _ => unreachable!(),
+                };
+                let local = format_ident!("owned_{i}");
+                drops.extend(quote!(let #local=std::mem::replace(&mut (*error).#field,#empty);));
+                quote!(#local)
+            })
+            .collect::<Vec<_>>();
+        drops.extend(sequence::release(
+            &error.plan.layout,
+            &values,
+            &context,
+            false,
+        ));
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));
             header.push_str("    uint8_t unused;\n");
@@ -211,6 +264,7 @@ pub(crate) fn result_function(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
+    function_output_layout: &prebindgen_flat::WireLayout<CWire, CGroup>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,
@@ -266,7 +320,7 @@ pub(crate) fn result_function(
         let failure = CCodec.absent_value(&wire.kind, Some(niche), false)?;
         (
             quote!(#ty),
-            c_ty(wire, prefix, pointers),
+            c_ty(wire, prefix, pointers, context),
             failure,
             quote!(value.#field),
         )
@@ -285,7 +339,7 @@ pub(crate) fn result_function(
         let field = format_ident!("v{i}");
         let ty = wire.rust_type();
         params.push(quote!(#id:*mut #ty));
-        cparams.push(format!("{} *{id}", c_ty(wire, prefix, pointers)));
+        cparams.push(format!("{} *{id}", c_ty(wire, prefix, pointers, context)));
         checks.extend(quote!(if #id.is_null(){return Err("null success-output pointer".into());}));
         writes.extend(quote!(std::ptr::write(#id,value.#field);));
         display.push(format!("*{id}"));
@@ -327,15 +381,19 @@ pub(crate) fn result_function(
     }
     header.push_str("/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n");
     header.push_str(&format!("{c_return} {name}({});\n", cparams.join(", ")));
-    let mut rollback = TokenStream::new();
-    for (i, wire) in outputs.iter().enumerate() {
-        let field = format_ident!("v{i}");
-        match &wire.kind {
-            CWire::Buffer=>rollback.extend(quote!{if !value.#field.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(value.#field.data as *mut u8,value.#field.len)));}}),
-            CWire::Pointer {pointer,..}=>{let ty=&pointer.ty;rollback.extend(quote!{if !value.#field.is_null(){let _=::prebindgen_runtime::boundary(||{drop(Box::from_raw(value.#field as *mut #ty));Ok(())});}});},
-            _=>{}
-        }
-    }
+    let rollback = sequence::release(
+        function_output_layout,
+        &outputs
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let field = format_ident!("v{i}");
+                quote!(value.#field)
+            })
+            .collect::<Vec<_>>(),
+        context,
+        true,
+    );
     tokens.extend(quote! {
         #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."]
         #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]

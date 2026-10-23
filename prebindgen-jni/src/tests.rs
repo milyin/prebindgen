@@ -582,6 +582,41 @@ fn result_callbacks_support_explicit_message_mapping_and_optional_throwing_defau
 }
 
 #[test]
+fn collections_reject_unsupported_element_and_view_contracts() {
+    for source in [
+        "pub fn f(x:&mut Vec<i64>) {}",
+        "pub fn f(x:Vec<&i64>) {}",
+        "pub fn f(x:Vec<()>) {}",
+        "pub fn f(x:Vec<Result<i64,i64>>) {}",
+        "pub fn f()->Vec<Result<i64,i64>> {}",
+        "pub fn f()->Vec<()> {}",
+        "pub fn f()->Vec<&i64> {}",
+    ] {
+        let b = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(f)));
+        assert!(!fail(b).is_empty());
+    }
+    let borrowed = JniGen::builder()
+        .flat(flat("pub type Handle=String; pub fn f(x:&[Handle]) {}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(f)));
+    assert!(fail(borrowed).contains("cannot consume elements"));
+}
+
+#[test]
+fn explicit_collection_projection_cannot_move_borrowed_values() {
+    let b = JniGen::builder()
+        .flat(flat("pub fn f()->&Vec<i64> {}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(fun!(f).expand_return(expand_return!(&Vec<i64>).field_self_into())),
+        );
+    assert!(fail(b).contains("cannot consume a borrowed collection"));
+}
+
+#[test]
 fn result_errors_use_declared_typed_output_projections_without_a_mapper() {
     let generated = JniGen::builder()
         .flat(flat("pub struct E { pub code: i64, pub message: Option<String> } pub fn parts(e:E)->E{} pub fn read()->Result<i64,E>{} pub fn another()->Result<i64,E>{}"))
@@ -607,4 +642,106 @@ fn result_unit_error_has_a_zero_argument_domain_handler() {
         .unwrap();
     assert!(generated.kotlin["test/EmptyErrorHandler.kt"].contains("run(): R"));
     syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
+    let source="pub struct Item { pub n:i64, pub text:String } pub fn parts(v:Item)->Item{} pub fn values()->Vec<Item>{}";
+    let generated = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(
+                fun!(values)
+                    .callback_return_only()
+                    .expand_return(expand_return!(Item).fields_into(fields!(parts))),
+            ),
+        )
+        .build()
+        .unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains("valuesFold"));
+    assert!(kotlin.contains("fold: (A, Long, String) -> A"));
+    assert!(!kotlin.contains("`values`("));
+    assert!(generated.rust.contains("call_method_unchecked"));
+    assert!(generated.rust.contains("(JLjava/lang/String;)V"));
+    syn::parse_file(&generated.rust).unwrap();
+    let both = JniGen::builder()
+        .flat(flat("pub fn values()->Vec<i64>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(values).callback_return()))
+        .build()
+        .unwrap();
+    assert!(both.kotlin["test/Functions.kt"].contains("`values`("));
+    assert!(both.kotlin["test/Functions.kt"].contains("`valuesFold`("));
+    for source in [
+        "pub fn f()->i64{}",
+        "pub fn f()->Vec<i64>{} pub fn f_fold(){}",
+    ] {
+        assert!(JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(f).callback_return()))
+            .build()
+            .is_err());
+    }
+}
+
+#[test]
+fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
+    let mut model = flat("pub fn values()->Vec<i64>{}");
+    prebindgen_declarations::bind_output(
+        &mut model,
+        &JniCodec,
+        "values",
+        &prebindgen_declarations::Output::Sequence {
+            element: Box::new(prebindgen_declarations::Output::Leaf),
+            mode: None,
+        },
+        &(),
+    )
+    .unwrap();
+    assert!(fail(
+        JniGen::builder()
+            .flat(model)
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(values).callback_return()))
+    )
+    .contains("prebound"));
+    let source="pub fn values()->Option<Vec<i64>>{} pub fn number(v:&Option<Vec<i64>>)->i64{} pub fn view(v:&Option<Vec<i64>>)->Vec<i64>{}";
+    assert!(fail(
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(
+                package!().fun(
+                    fun!(values).callback_return().expand_return(
+                        expand_return!(Option<Vec<i64>>)
+                            .field(fun!(number))
+                            .field(fun!(view))
+                    )
+                )
+            )
+    )
+    .contains("additional return"));
+}
+
+#[test]
+fn callback_return_uses_projected_sequence_presence_from_the_tree() {
+    let source="pub struct Batch { pub values: Vec<i64> } pub fn read()->Batch{} pub fn view(v:&Batch)->Option<Vec<i64>>{}";
+    let generated = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(
+                fun!(read)
+                    .callback_return_only()
+                    .expand_return(expand_return!(Batch).field(fun!(view))),
+            ),
+        )
+        .build()
+        .unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains("`readFold`"));
+    assert!(kotlin.contains("fold: (A, Long) -> A): A?"));
 }

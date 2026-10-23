@@ -139,7 +139,7 @@ impl Shape {
     }
     fn slots(&self) -> usize {
         match self {
-            Self::Value(Value::Scalar(p)) => scalar::parameter_slots(*p),
+            Self::Value(Value::Scalar(p)) => JniWire::scalar(*p).parameter_slots(),
             _ => 1,
         }
     }
@@ -153,6 +153,7 @@ pub struct DataGroup {
 }
 
 pub(crate) struct DataCodec {
+    pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) error_classes: BTreeMap<String, String>,
     pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
     records: BTreeMap<String, Rc<RecordShape>>,
@@ -272,6 +273,7 @@ impl DataCodec {
         Ok(Self {
             records,
             enums,
+            callback_wire: None,
             error_classes: BTreeMap::new(),
             error_helpers: BTreeMap::new(),
         })
@@ -514,6 +516,32 @@ impl Codec for DataCodec {
     type Context = JniContext;
     type Input = JniInput;
     type Output = JniOutput;
+    fn sequence_input(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
+        JniCodec.sequence_input(e, w, n, i, element, active)
+    }
+    fn sequence_output(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        values: &[TokenStream],
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
+        if self.callback_wire.as_ref() == Some(&w) {
+            crate::sequence_callback::transport(w, element, values)
+        } else {
+            JniCodec.sequence_output(e, w, n, i, element, values)
+        }
+    }
     fn result_error_value(
         &self,
         ty: &syn::Type,
@@ -570,7 +598,12 @@ impl Codec for DataCodec {
         JniCodec.finish_input(plan, extra)
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
-        JniCodec.finish_output(plan, extra)
+        JniCodec.finish_output(plan, extra)?;
+        if self.callback_wire.is_some() {
+            let env = prebindgen_conversions::template_parameter("environment");
+            plan.delivery.statements.extend(quote!(#env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;));
+        }
+        Ok(())
     }
     fn input_leaf(
         &self,
@@ -806,6 +839,8 @@ pub(crate) fn input_kotlin(
             .iter_mut()
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
+            .chain(c.lock_groups.iter_mut())
+            .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             if matches!(children.nodes(), [kotlin::JniNode::Wire(w)] if matches!(w.kind, JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. }))
             {
@@ -830,6 +865,8 @@ pub(crate) fn input_kotlin(
     }
     out.locks.extend(c.locks);
     out.consumed.extend(c.consumed);
+    out.setup.extend(c.setup);
+    out.lock_groups.extend(c.lock_groups);
     Ok(out)
 }
 pub(crate) fn output_kotlin(

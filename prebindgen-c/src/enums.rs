@@ -3,6 +3,7 @@ use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
 pub(crate) struct EnumCodec {
+    pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) errors: std::collections::BTreeMap<String, String>,
     pub(crate) enums: std::collections::BTreeMap<String, (String, EnumMapping)>,
 }
@@ -43,6 +44,32 @@ impl Codec for EnumCodec {
     }
     fn finish_output(&self, p: &mut OutputPlan<CWire>, e: &()) -> Result<()> {
         CCodec.finish_output(p, e)
+    }
+    fn sequence_input(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
+        CCodec.sequence_input(e, w, n, i, element, active)
+    }
+    fn sequence_output(
+        &self,
+        e: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        values: &[TokenStream],
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
+        if self.callback_wire.as_ref() == Some(&w) {
+            Ok(sequence::callback_output(values, n))
+        } else {
+            CCodec.sequence_output(e, w, n, i, element, values)
+        }
     }
     fn result_error_value(
         &self,
@@ -248,6 +275,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let codec = EnumCodec {
+            callback_wire: None,
             errors: Default::default(),
             enums: std::collections::BTreeMap::from([(
                 "crate :: E".into(),

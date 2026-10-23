@@ -17,10 +17,13 @@ mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
 pub use optional::{optional_input, optional_output};
-pub use prebindgen_flat::{option_inner, result_parts};
+pub use prebindgen_flat::{option_inner, result_parts, sequence_parts, SequenceView};
+mod sequence;
+pub use sequence::{sequence_return, SequenceInput, SequenceOutput};
 fn contains_result(ty: &Type) -> bool {
     result_parts(ty).is_some()
         || option_inner(ty).is_some_and(contains_result)
+        || sequence_parts(ty).is_some_and(|(ty, _)| contains_result(ty))
         || matches!(ty, Type::Reference(r) if contains_result(&r.elem))
 }
 mod projection;
@@ -43,6 +46,8 @@ pub type CodecOutput<C> =
 /// Binding expands the recipe into wires and Rust conversion code.
 #[derive(Clone, Debug)]
 pub enum Input {
+    /// Construct a collection by applying one recipe to every element.
+    Sequence(Box<Input>),
     /// Convert an optional payload, gating every conversion phase.
     Optional(Box<Input>),
     /// Convert the occurrence type itself with [`Codec::input_leaf`].
@@ -102,6 +107,14 @@ impl Input {
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output {
+    /// Convert collection elements using ordinary or explicitly selected ownership.
+    Sequence {
+        /// Element conversion, interpreted independently for each item.
+        element: Box<Output>,
+        /// `None` follows the occurrence's ownership: move owned values and observe
+        /// borrowed values. `Some` explicitly selects and checks a projection policy.
+        mode: Option<ProjectionMode>,
+    },
     /// Deliver `Ok` through its recipe and route an owned `Err` through the codec.
     /// An optional mapper takes exactly `E` or `&E` and returns `String`.
     /// Without one, the codec must explicitly support preserving the error value.
@@ -171,13 +184,22 @@ impl Output {
     pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
-    fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C) -> bool {
+    fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C, borrowed: bool) -> bool {
         match self {
-            Self::Optional(child) => child.consumes(option_inner(ty).unwrap_or(ty), extra, codec),
+            Self::Sequence { mode, .. } => match mode {
+                Some(mode) => *mode == ProjectionMode::Owned,
+                None => {
+                    !borrowed
+                        && sequence_parts(ty).is_some_and(|(_, view)| view == SequenceView::Owned)
+                }
+            },
+            Self::Optional(child) => {
+                child.consumes(option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
+            }
             Self::Leaf => codec.consumes(ty, extra),
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
-            Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec)),
+            Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec, borrowed)),
             _ => false,
         }
     }
@@ -195,7 +217,9 @@ impl Output {
 /// value needs an ordinary Rust owner so later failures drop it. `statements`
 /// can construct arguments from those owners. Every input wire must retain
 /// the supplied activation condition. Output leaves keep ownership in Rust
-/// locals until their infallible `commit` runs after successful delivery.
+/// locals until their infallible `commit` runs at the selected protocol's
+/// transfer point. Buffered delivery commits after all foreign delivery succeeds;
+/// an explicit visitor protocol can transfer each prepared element at callback entry.
 ///
 /// # Implementing a codec
 ///
@@ -398,6 +422,33 @@ pub trait Codec {
             value,
             projection.mode == ProjectionMode::Borrowed,
         )
+    }
+    /// Choose array input transport for one prepared element layout.
+    /// `open` must bind `length`; `bind` runs for each `index`. Raw wire reads
+    /// may defer validation errors until the corresponding active conversion.
+    fn sequence_input(
+        &self,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _length: syn::Ident,
+        _index: syn::Ident,
+        _element: &WireLayout<Self::Wire, Self::Group>,
+        _active: &Condition,
+    ) -> Result<SequenceInput<Self::Wire>> {
+        Err("collections are unsupported by this codec".into())
+    }
+    /// Choose array output transport; store element values without publishing owners.
+    /// `begin` sees `length`; `enter` and `store` see each `index`.
+    fn sequence_output(
+        &self,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _length: syn::Ident,
+        _index: syn::Ident,
+        _element: &WireLayout<Self::Wire, Self::Group>,
+        _values: &[TokenStream],
+    ) -> Result<SequenceOutput<Self::Wire>> {
+        Err("collections are unsupported by this codec".into())
     }
     /// Route the owned source error value. `message`, when present, is an
     /// explicitly declared mapper expression returning String. Return a String
@@ -675,6 +726,17 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
+            Input::Sequence(element_recipe) => {
+                let (element, _) =
+                    sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
+                let wire = self.name();
+                let length = self.name();
+                let index = self.name();
+                let child = self.input(element, element_recipe, extra, &Condition::default())?;
+                return sequence::input(
+                    self.codec, ty, extra, wire, var, length, index, active, child,
+                );
+            }
             Input::Optional(inner) => {
                 let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
                 let tag = self.name();
@@ -881,6 +943,32 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Sequence { element, mode } => {
+                let (element_type, _) =
+                    sequence_parts(ty).ok_or("sequence output requires a collection")?;
+                let mode = mode.unwrap_or_else(|| {
+                    if borrowed || sequence_parts(ty).unwrap().1 != SequenceView::Owned {
+                        ProjectionMode::Borrowed
+                    } else {
+                        ProjectionMode::Owned
+                    }
+                });
+                let wire = self.name();
+                let payload = self.name();
+                let length = self.name();
+                let index = self.name();
+                let child = self.output(
+                    element_type,
+                    element,
+                    extra,
+                    quote!(#payload),
+                    mode == ProjectionMode::Borrowed,
+                )?;
+                return sequence::output(
+                    self.codec, ty, extra, wire, payload, length, index, value, borrowed, mode,
+                    child,
+                );
+            }
             Output::Result { .. } => {
                 return Err("Result error routing is supported only at the outermost return".into())
             }
@@ -987,7 +1075,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 if parts
                     .iter()
-                    .filter(|p| p.consumes(ty, extra, self.codec))
+                    .filter(|p| p.consumes(ty, extra, self.codec, borrowed))
                     .count()
                     > 1
                 {
@@ -995,7 +1083,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let mut bodies = Vec::new();
                 for (index, child) in parts.iter().enumerate() {
-                    let consuming = child.consumes(ty, extra, self.codec);
+                    let consuming = child.consumes(ty, extra, self.codec, borrowed);
                     let arg = if borrowed || consuming {
                         value.clone()
                     } else {
@@ -1038,8 +1126,8 @@ mod tests;
 
 pub mod declarations;
 pub use declarations::{
-    Declarations, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-    FunctionDecl,
+    CallbackReturn, Declarations, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+    FieldsDecl, FunctionDecl,
 };
 
 /// Parse one Rust identifier used by a declaration.

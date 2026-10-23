@@ -36,6 +36,26 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
         reserved: &mut std::collections::BTreeMap<String, Vec<CNiche>>,
     ) -> Result<()> {
         for node in layout.nodes() {
+            if let WireNode::Sequence { carrier, element } = node {
+                if !matches!(
+                    carrier.kind,
+                    CWire::Rows
+                        | CWire::Scalar {
+                            primitive: Primitive::Usize,
+                            ..
+                        }
+                ) || element.is_empty()
+                {
+                    return Err(
+                        "sequence requires rows or an element count, and a nonempty element layout"
+                            .into(),
+                    );
+                }
+                validate_layout(element)?;
+            }
+            if matches!(node,WireNode::Wire(w) if matches!(w.kind,CWire::Rows)) {
+                return Err("array carrier requires a sequence node".into());
+            }
             if let WireNode::Group { metadata, children } = node {
                 if let CGroup::Optional(o) = metadata {
                     if !bindings.insert(o.presence.to_string()) {
