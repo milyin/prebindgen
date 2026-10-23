@@ -20,53 +20,11 @@ pub(crate) fn transport(
         return Err("sequence callback exceeds JVM parameter limit".into());
     }
     for (i, (field, value)) in element.iter().zip(values).enumerate() {
-        let primitive = match field.kind.kotlin_type() {
-            "Boolean" => Some(("Z", "z")),
-            "Byte" => Some(("B", "b")),
-            "Short" => Some(("S", "s")),
-            "Int" => Some(("I", "i")),
-            "Long" => Some(("J", "j")),
-            "Float" => Some(("F", "f")),
-            "Double" => Some(("D", "d")),
-            _ => None,
-        };
-        if let Some((signature, member)) = primitive {
-            descriptor.push_str(signature);
-            let member = format_ident!("{member}");
-            let value = if matches!(field.kind, JniWire::Handle { .. }) {
-                quote!((#value) as i64)
-            } else {
-                value.clone()
-            };
-            args.push(quote!(::prebindgen_jni_runtime::jni::sys::jvalue {#member:#value}));
-        } else {
-            let object = format_ident!("{wire}_callback_object_{i}");
-            let (signature, expression) = match &field.kind {
-                JniWire::Text { .. } => (
-                    "Ljava/lang/String;",
-                    quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::text_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()}),
-                ),
-                JniWire::Bytes { .. } => (
-                    "[B",
-                    quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::bytes_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()}),
-                ),
-                JniWire::Rows { .. } => (
-                    "[Ljava/lang/Object;",
-                    quote!(match (#value).as_ref(){Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()}),
-                ),
-                JniWire::Scalar {
-                    primitive: Primitive::I128 | Primitive::U128,
-                    ..
-                } => (
-                    "[B",
-                    quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &#value)?),
-                ),
-                _ => return Err("unsupported sequence callback wire".into()),
-            };
-            descriptor.push_str(signature);
-            encode.extend(quote!(let #object=#expression;));
-            args.push(quote!(::prebindgen_jni_runtime::jni::sys::jvalue{l:#object.as_raw()}));
-        }
+        descriptor.push_str(field.kind.jvm_descriptor());
+        let local = format_ident!("{wire}_callback_object_{i}");
+        let argument = field.kind.output_argument(value, &local);
+        encode.extend(argument.statements);
+        args.push(argument.value);
     }
     descriptor.push_str(")V");
     let capacity = i32::try_from(element.len() + 8).map_err(|_| "too many callback fields")?;

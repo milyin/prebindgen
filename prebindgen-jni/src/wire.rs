@@ -1,5 +1,7 @@
 //! One JNI boundary value and its remaining niche availability.
 use super::*;
+mod transport;
+pub use transport::JniArgument;
 
 /// One self-sufficient JNI value and its conversion information.
 ///
@@ -230,43 +232,6 @@ impl JniWire {
         match self.available_niche() {
             Some(niche) => self.validate_niche(&niche),
             None => Ok(()),
-        }
-    }
-    /// Kotlin type used by the native declaration.
-    pub fn kotlin_type(&self) -> &'static str {
-        match self {
-            Self::Scalar { primitive, .. } => scalar::raw_kotlin(*primitive),
-            Self::Handle { .. } => "Long",
-            Self::Selector { .. } | Self::Enum { .. } => "Int",
-            Self::Rows { .. } => "Array<Any?>?",
-            Self::Text { .. } => "String?",
-            Self::Bytes { .. } => "ByteArray?",
-        }
-    }
-    /// JVM argument slots occupied by this value.
-    pub fn parameter_slots(&self) -> usize {
-        match self {
-            Self::Handle { .. } => 2,
-            Self::Scalar { primitive, .. } => scalar::parameter_slots(*primitive),
-            _ => 1,
-        }
-    }
-}
-impl WireKind for JniWire {
-    fn rust_type(&self) -> syn::Type {
-        match self {
-            Self::Scalar { primitive, .. } => scalar::rust_type(*primitive),
-            Self::Handle { .. } => syn::parse_quote!(i64),
-            Self::Selector { .. } | Self::Enum { .. } => syn::parse_quote!(i32),
-            Self::Rows { .. } => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>)
-            }
-            Self::Text { .. } => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
-            }
-            Self::Bytes { .. } => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
-            }
         }
     }
 }

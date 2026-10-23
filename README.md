@@ -297,6 +297,17 @@ C buffers have no niche: a null data pointer with zero length is a valid empty
 value. Reserved representations remain separate `CNiche` or `JniNiche` values on
 optional parent metadata. Each adapter derives boundary types from its wire
 variant; JNI also derives Kotlin types and JVM parameter width.
+`JniWire` also exposes `jvm_descriptor()`, `is_reference()` and
+`kotlin_default()` for its raw JVM representation. Its code-generation methods
+`read_array_element()`, `output_object()` and `output_argument()` let ordinary
+returns, collection rows and callback delivery share the same field conversion.
+Reads produce native input values; output methods take prepared
+`OutputPlan::values` (for example `Option<String>`, encoded wide-integer bytes,
+or an allocation pointer), rather than JNI input references. They use the
+`environment` template parameter and leave local-reference lifetimes and
+ownership commit to their caller. `output_argument()` returns `JniArgument`:
+emit its preparation statements before using its `jvalue` expression, in the
+same local-reference frame.
 All leaf information is accessible through
 `wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
 carrier types.

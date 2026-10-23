@@ -23,42 +23,14 @@ pub(crate) fn input(
     let mut prepared_values = Vec::new();
     for (position, field) in element.iter().enumerate() {
         let name = &field.name;
-        let (reader, reference, boolean) = match &field.kind {
-            JniWire::Scalar { primitive, .. } => match primitive {
-                Primitive::Bool => ("row_bool", false, true),
-                Primitive::I8 => ("row_i8", false, false),
-                Primitive::I16 => ("row_i16", false, false),
-                Primitive::U8 | Primitive::U16 | Primitive::I32 | Primitive::Char => {
-                    ("row_i32", false, false)
-                }
-                Primitive::U32
-                | Primitive::U64
-                | Primitive::I64
-                | Primitive::Usize
-                | Primitive::Isize => ("row_i64", false, false),
-                Primitive::F32 => ("row_f32", false, false),
-                Primitive::F64 => ("row_f64", false, false),
-                Primitive::I128 | Primitive::U128 => ("row_bytes", true, false),
-            },
-            JniWire::Text { .. } => ("row_text", true, false),
-            JniWire::Bytes { .. } => ("row_bytes", true, false),
-            JniWire::Rows { .. } => ("row_rows", true, false),
-            JniWire::Handle { .. } => ("row_i64", false, false),
-            JniWire::Enum { .. } | JniWire::Selector { .. } => ("row_i32", false, false),
-        };
-        let reader = format_ident!("{reader}");
-        let convert = if boolean {
-            quote!(.map(u8::from))
-        } else {
-            quote!()
-        };
+        let read = field.kind.read_array_element(&quote!(#row), position);
         bind.extend(quote! {
-            let #name=::prebindgen_jni_runtime::#reader(&mut #env,&#row,#position)#convert;
+            let #name=#read;
             if #name.is_err() && #env.exception_check().map_err(|e|e.to_string())? {return Err("JNI collection field decoding failed".into());}
         });
         let borrow = quote!(*);
         validation_values.push(quote!(#borrow #name.as_ref().map_err(|e|e.clone())?));
-        prepared_values.push(if reference {
+        prepared_values.push(if field.kind.is_reference() {
             None
         } else {
             Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
@@ -87,7 +59,7 @@ pub(crate) fn output(
     let row = format_ident!("{wire}_row");
     let count = element.len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
-    let encode = encode_array(element, values, &row, 0)?;
+    let encode = encode_array(element, values, &row, 0);
     let frame = format_ident!("{wire}_frame");
     Ok(SequenceOutput {
         commit_each: false,
