@@ -830,7 +830,8 @@ Outcomes — exactly one channel is selected
 ```
 
 `OutcomeKind::SourceError` contains the declared projection of `E` in
-`Result<T, E>`; it uses text only when a mapper was explicitly selected.
+`Result<T, E>`. Converting the error into a diagnostic message requires an
+explicit mapper; string-valued fields retain their ordinary conversions.
 `BindingFailure` is a separate conversion/invocation failure channel. C and JNI
 declare their diagnostic payload through `Codec::binding_failure_layout`.
 Readers choose how to deliver each channel: native outputs/status, typed error
