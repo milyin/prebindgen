@@ -288,7 +288,14 @@ pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
     let mut out = Vec::new();
     for node in nodes {
         match node {
-            JniNode::Wire(w) | JniNode::Sequence { carrier: w, .. } => out.push(w),
+            JniNode::Wire(w) => out.push(w),
+            JniNode::Optional(c) | JniNode::Sequence(c) => match &c.representation {
+                prebindgen_flat::WireRepresentation::Carrier(w) => out.push(w),
+                prebindgen_flat::WireRepresentation::Inline { controls } => {
+                    out.extend(controls);
+                    out.extend(c.element.iter());
+                }
+            },
             JniNode::Group { children, .. } => out.extend(children.iter()),
         }
     }
@@ -296,9 +303,10 @@ pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
 }
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
     nodes.iter().any(|node| match node {
-        JniNode::Wire(_) | JniNode::Sequence { .. } => false,
+        JniNode::Wire(_) | JniNode::Sequence(_) => false,
+        JniNode::Optional(_) => true,
         JniNode::Group { metadata, children } => match metadata {
-            JniGroup::Optional(_) => true,
+            JniGroup::Optional(_) => false,
             JniGroup::Fields(Some(_)) => false,
             _ => has_optional(children.nodes()),
         },
@@ -309,11 +317,21 @@ pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Re
     for node in nodes {
         let c = match node {
             JniNode::Wire(w) => input_leaves(&[w], context)?,
-            JniNode::Sequence { carrier, element } => {
-                crate::sequence::input_list(carrier, element, context)?
+            JniNode::Sequence(c) => crate::sequence::input_list(
+                c.carrier().ok_or("sequence requires a carrier")?,
+                &c.element,
+                context,
+            )?,
+            JniNode::Optional(c) => {
+                let Some(JniGroup::Optional(o)) = &c.metadata else {
+                    return Err("missing optional metadata".into());
+                };
+                optional::input_kotlin(c, o, context)?
             }
             JniNode::Group { metadata, children } => match metadata {
-                JniGroup::Optional(o) => optional::input_kotlin(children.nodes(), o, context)?,
+                JniGroup::Optional(_) => {
+                    return Err("optional metadata requires an Optional node".into())
+                }
                 JniGroup::Fields(Some(d)) => data::input_kotlin(children.nodes(), d, context)?,
                 JniGroup::Fields(None) | JniGroup::Field(_) => {
                     input_kotlin(children.nodes(), context)?
@@ -368,10 +386,21 @@ pub(crate) fn output_kotlin(
         };
         let (mut c, count) = match node {
             JniNode::Wire(w) => (output_leaves(&[w], &ctx)?, 1),
-            JniNode::Sequence { element, .. } => (crate::sequence::output_list(element, &ctx)?, 1),
+            JniNode::Sequence(c) => (
+                crate::sequence::output_list(&c.element, &ctx)?,
+                c.wire_count(),
+            ),
+            JniNode::Optional(c) => {
+                let Some(JniGroup::Optional(o)) = &c.metadata else {
+                    return Err("missing optional metadata".into());
+                };
+                (optional::output_kotlin(c, o, &ctx)?, c.wire_count())
+            }
             JniNode::Group { metadata, children } => {
                 let c = match metadata {
-                    JniGroup::Optional(o) => optional::output_kotlin(children.nodes(), o, &ctx)?,
+                    JniGroup::Optional(_) => {
+                        return Err("optional metadata requires an Optional node".into())
+                    }
                     JniGroup::Fields(Some(d)) => data::output_kotlin(children.nodes(), d, &ctx)?,
                     JniGroup::Fields(None) | JniGroup::Field(_) => {
                         output_kotlin(children.nodes(), &ctx)?

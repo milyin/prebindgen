@@ -66,10 +66,7 @@ pub(crate) fn fold(
 ) -> Result<Fold> {
     fn optional(nodes: &[prebindgen_flat::WireNode<JniWire, JniGroup>]) -> bool {
         nodes.iter().any(|node| match node {
-            prebindgen_flat::WireNode::Group {
-                metadata: JniGroup::Optional(_),
-                ..
-            } => true,
+            prebindgen_flat::WireNode::Optional(_) => true,
             prebindgen_flat::WireNode::Group { children, .. } => optional(children.nodes()),
             _ => false,
         })

@@ -30,8 +30,8 @@ impl Codec for EnumCodec {
     type Context = CContext;
     type Input = InputPlan<CWire>;
     type Output = OutputPlan<CWire>;
-    fn optional_group(&self, p: syn::Ident, d: syn::Ident, n: Option<CNiche>) -> CGroup {
-        CCodec.optional_group(p, d, n)
+    fn optional_metadata(&self, p: syn::Ident, d: syn::Ident, n: Option<CNiche>) -> CGroup {
+        CCodec.optional_metadata(p, d, n)
     }
     fn field_group(&self, n: syn::Ident) -> CGroup {
         CCodec.field_group(n)
@@ -329,13 +329,19 @@ mod tests {
                 niche: Some(CNiche::Integer(value)),
             })
         };
-        tree.enclose(group("inner", -2));
+        tree.enclose_optional(
+            prebindgen_flat::WireRepresentation::Inline { controls: vec![] },
+            Some(group("inner", -2)),
+        );
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
         tree[0].kind.clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree.enclose(group("outer", -2));
+        tree.enclose_optional(
+            prebindgen_flat::WireRepresentation::Inline { controls: vec![] },
+            Some(group("outer", -2)),
+        );
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("duplicate"));

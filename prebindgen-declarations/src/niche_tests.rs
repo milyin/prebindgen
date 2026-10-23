@@ -31,7 +31,7 @@ struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
     type Group = String;
-    fn optional_group(
+    fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
@@ -452,14 +452,25 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     assert_eq!(plan.layout.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
     assert_eq!(plan.layout[0].name, "tag3");
     plan.layout.validate().unwrap();
-    let prebindgen_flat::WireNode::Group { metadata, children } = &plan.layout.nodes()[0] else {
+    let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
         panic!()
     };
-    assert!(metadata.starts_with("optional:tag3:"));
-    let prebindgen_flat::WireNode::Group { metadata, .. } = &children.nodes()[1] else {
+    assert!(container
+        .metadata
+        .as_ref()
+        .unwrap()
+        .starts_with("optional:tag3:"));
+    assert!(
+        matches!(&container.representation,prebindgen_flat::WireRepresentation::Inline {controls} if controls.len()==1)
+    );
+    let prebindgen_flat::WireNode::Optional(inner) = &container.element.nodes()[0] else {
         panic!()
     };
-    assert!(metadata.starts_with("optional:tag2:"));
+    assert!(inner
+        .metadata
+        .as_ref()
+        .unwrap()
+        .starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
     for w in independent.layout.iter_mut() {
         DomainCodec.set_niche(&mut w.kind, None);

@@ -3,7 +3,7 @@ use super::*;
 
 /// One self-sufficient C value and its conversion information.
 ///
-/// Constructors initialize niche availability once. An enclosing optional group
+/// Constructors initialize niche availability once. An enclosing optional node
 /// reserves a sentinel and advances or clears that state; reading it must never
 /// restore a consumed niche. Use [`Self::set_niche`] to check updates.
 #[derive(Clone, Debug)]

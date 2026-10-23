@@ -257,7 +257,7 @@ impl Output {
 ///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
-///     fn optional_group(&self, _: Ident, _: Ident, _: Option<()>) {}
+///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>) {}
 ///     fn field_group(&self, _: Ident) {}
 ///     fn fields_group(&self) {}
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
@@ -310,16 +310,16 @@ pub trait Codec {
     /// Adapter-owned description of an absent wire representation. Use `()` if unused.
     /// The shared compiler never interprets this metadata.
     type Niche: Clone;
-    /// Complete adapter-owned metadata for a parent node in the wire tree.
-    /// The shared compiler creates it through the group hooks below and never
+    /// Adapter-owned metadata for group and container nodes in the wire tree.
+    /// The shared compiler creates it through the metadata hooks below and never
     /// interprets it. Use `()` when no group information is needed.
     type Group: Clone;
     /// Describe an optional value in the adapter's own metadata format.
     /// `presence` is the normalized 0/1 binding used by payload conditions.
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
-    /// representation, or `None` when a separate flag is the first child.
+    /// representation, or `None` when a separate flag is an inline control wire.
     /// With a flag, `presence` and `discriminator` name that same wire.
-    fn optional_group(
+    fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,

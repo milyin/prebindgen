@@ -288,34 +288,21 @@ impl Declarations {
         O: prebindgen_flat::Conversion + Clone,
     {
         let source = flat.function(&decl.name)?;
-        let (carrier, _) = crate::sequence_return(
-            source
-                .ret
-                .slot
-                .as_ref()
-                .ok_or("unbound sequence return")?
-                .layout(),
-        )
-        .ok_or("callback_return requires a sequence output recipe")?;
-        let layout = source.ret.slot.as_ref().unwrap().layout();
-        fn count<W: prebindgen_flat::WireKind, G>(
-            layout: &prebindgen_flat::WireLayout<W, G>,
-        ) -> usize {
-            layout
-                .nodes()
-                .iter()
-                .map(|node| match node {
-                    prebindgen_flat::WireNode::Sequence { .. } => 1,
-                    prebindgen_flat::WireNode::Group { children, .. } => count(children),
-                    _ => 0,
-                })
-                .sum()
-        }
-        if count(layout) != 1 || layout.len() > 2 {
+        let layout = source
+            .ret
+            .slot
+            .as_ref()
+            .ok_or("unbound sequence return")?
+            .layout();
+        let sequences = crate::sequence::return_sequences(layout);
+        if sequences.len() != 1 || layout.len() > 2 {
             return Err(
                 "callback_return permits only one sequence and its optional presence flag".into(),
             );
         }
+        let carrier = sequences[0]
+            .carrier()
+            .ok_or("callback_return requires a carried sequence representation")?;
         let carrier = carrier.name.clone();
         let mut function = source.clone();
         function.name = crate::ident(name)?;

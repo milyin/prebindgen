@@ -6,7 +6,7 @@ use syn::ext::IdentExt;
 /// Metadata interpreted by the JNI binding writer.
 #[derive(Clone, Debug)]
 pub enum JniGroup {
-    /// Presence rule for the optional payload subtree.
+    /// Metadata for `WireNode::Optional`, including its reserved absence value.
     Optional(JniOptional),
     /// An ordered collection of field subtrees.
     /// `Some` constructs a Kotlin data class; `None` exposes expanded values.
@@ -19,7 +19,7 @@ pub enum JniGroup {
 pub struct JniOptional {
     /// Normalized presence binding used by payload conditions.
     pub presence: syn::Ident,
-    /// Descendant wire inspected for presence.
+    /// Payload wire or inline control inspected for presence.
     pub discriminator: syn::Ident,
     /// Reserved absent representation; `None` means a separate 0/1 flag.
     pub niche: Option<JniNiche>,
@@ -34,82 +34,115 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
         layout: &WireLayout<JniWire, JniGroup>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
-        reserved: &mut BTreeMap<String, Vec<JniNiche>>,
+        reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
     ) -> Result<()> {
         for node in layout.nodes() {
-            if let WireNode::Sequence { carrier, element } = node {
-                if !matches!(carrier.kind, JniWire::Rows { .. }) || element.is_empty() {
-                    return Err(
-                        "sequence requires an array carrier and nonempty element layout".into(),
-                    );
-                }
-                validate_layout(element)?;
-            }
-            if matches!(node,WireNode::Wire(w) if matches!(w.kind,JniWire::Rows {..})) {
-                return Err("array carrier requires a sequence node".into());
-            }
-            if let WireNode::Group { metadata, children } = node {
-                if let JniGroup::Optional(o) = metadata {
-                    if !bindings.insert(o.presence.to_string()) {
-                        return Err(format!("duplicate Kotlin group binding `{}`", o.presence));
+            match node {
+                WireNode::Sequence(c) => {
+                    let carrier = c.carrier().ok_or("sequence requires a separate carrier")?;
+                    if !(matches!(carrier.kind, JniWire::Rows { .. })) || c.element.is_empty() {
+                        return Err(
+                            "sequence requires a supported carrier and nonempty element layout"
+                                .into(),
+                        );
                     }
-                    let wire = children
-                        .iter()
-                        .find(|w| w.name == o.discriminator)
-                        .ok_or("optional discriminator outside group")?;
+                    if c.metadata.is_some() {
+                        return Err("unsupported sequence metadata".into());
+                    }
+                    validate_layout(&c.element)?;
+                }
+                WireNode::Optional(c) => {
+                    let prebindgen_flat::WireRepresentation::Inline { controls } =
+                        &c.representation
+                    else {
+                        return Err(
+                            "this adapter requires an inline optional representation".into()
+                        );
+                    };
+                    let Some(JniGroup::Optional(o)) = &c.metadata else {
+                        return Err("optional node requires optional metadata".into());
+                    };
+                    if !bindings.insert(o.presence.to_string()) {
+                        return Err(format!(
+                            "duplicate optional presence binding `{}`",
+                            o.presence
+                        ));
+                    }
                     if let Some(niche) = &o.niche {
+                        if !controls.is_empty() {
+                            return Err("niche optional must not have control wires".into());
+                        }
+                        let wire = c
+                            .element
+                            .iter()
+                            .find(|w| w.name == o.discriminator)
+                            .ok_or("optional discriminator outside payload")?;
                         wire.kind.validate_niche(niche)?;
                         if wire.kind.available_niche().as_ref() == Some(niche) {
                             return Err(
-                                "available JNI niche is already reserved by an optional group"
+                                "available JNI niche is already reserved by an optional node"
                                     .into(),
                             );
                         }
-                        let niches = reserved.entry(o.discriminator.to_string()).or_default();
-                        if niches.contains(niche) {
+                        let values = reserved.entry(o.discriminator.to_string()).or_default();
+                        if values.contains(niche) {
                             return Err("duplicate JNI niche reservation on one wire".into());
                         }
-                        niches.push(niche.clone());
-                    }
-                    if o.niche.is_none()
-                        && !matches!(children.nodes().first(),Some(WireNode::Wire(w)) if w.name==o.discriminator)
+                        values.push(niche.clone());
+                    } else if !matches!(controls.as_slice(),[flag] if flag.name==o.discriminator && o.presence==o.discriminator && matches!(flag.kind,JniWire::Selector { .. }))
                     {
-                        return Err("optional flag must be the first child wire".into());
+                        return Err("optional flag must be its sole inline control wire".into());
                     }
+                    visit(&c.element, bindings, false, reserved)?;
                 }
-                if let JniGroup::Fields(Some(record)) = metadata {
-                    if !bindings.insert(record.root.clone()) {
-                        return Err(format!("duplicate Kotlin group binding `{}`", record.root));
-                    }
+                WireNode::Wire(w) if matches!(w.kind, JniWire::Rows { .. }) => {
+                    return Err("array carrier requires a container node".into())
                 }
-                match metadata {
-                    JniGroup::Field(_) if !in_fields => {
-                        return Err(
-                            "named field must be a direct child of a field collection".into()
-                        );
+                WireNode::Wire(_) => {}
+                WireNode::Group { metadata, children } => {
+                    if let JniGroup::Optional(_) = metadata {
+                        return Err("optional metadata requires an Optional node".into());
                     }
-                    JniGroup::Fields(_) => {
-                        let mut fields = std::collections::BTreeSet::new();
-                        for child in children.nodes() {
-                            let WireNode::Group { metadata, .. } = child else {
-                                return Err("field collection requires named field children".into());
-                            };
-                            let JniGroup::Field(name) = metadata else {
-                                return Err("field collection requires named field children".into());
-                            };
-                            if !fields.insert(name.unraw().to_string()) {
-                                return Err(format!("duplicate field `{name}`"));
-                            }
+                    if let JniGroup::Fields(Some(record)) = metadata {
+                        if !bindings.insert(record.root.clone()) {
+                            return Err(format!(
+                                "duplicate Kotlin group binding `{}`",
+                                record.root
+                            ));
                         }
                     }
-                    _ => {}
+                    match metadata {
+                        JniGroup::Field(_) if !in_fields => {
+                            return Err(
+                                "named field must be a direct child of a field collection".into()
+                            )
+                        }
+                        JniGroup::Fields(_) => {
+                            let mut fields = std::collections::BTreeSet::new();
+                            for child in children.nodes() {
+                                let WireNode::Group {
+                                    metadata: JniGroup::Field(name),
+                                    ..
+                                } = child
+                                else {
+                                    return Err(
+                                        "field collection requires named field children".into()
+                                    );
+                                };
+                                if !fields.insert(name.unraw().to_string()) {
+                                    return Err(format!("duplicate field `{name}`"));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    visit(
+                        children,
+                        bindings,
+                        matches!(metadata, JniGroup::Fields(_)),
+                        reserved,
+                    )?;
                 }
-                visit(
-                    children,
-                    bindings,
-                    matches!(metadata, JniGroup::Fields(_)),
-                    reserved,
-                )?;
             }
         }
         Ok(())
@@ -118,13 +151,32 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
         layout,
         &mut std::collections::BTreeSet::new(),
         false,
-        &mut BTreeMap::new(),
+        &mut std::collections::BTreeMap::new(),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn enclose_optional_metadata(tree: &mut WireLayout<JniWire, JniGroup>, metadata: JniGroup) {
+        let flag = matches!(&metadata,JniGroup::Optional(o) if o.niche.is_none());
+        let mut nodes = std::mem::take(tree).into_nodes();
+        // These fixtures describe an explicit flag as the first physical wire.
+        // Move it into the representation without changing its wire type.
+        let controls = if flag && matches!(nodes.first(), Some(WireNode::Wire(_))) {
+            let WireNode::Wire(wire) = nodes.remove(0) else {
+                unreachable!()
+            };
+            vec![wire]
+        } else {
+            vec![]
+        };
+        *tree = WireLayout::from_nodes(nodes);
+        tree.enclose_optional(
+            prebindgen_flat::WireRepresentation::Inline { controls },
+            Some(metadata),
+        );
+    }
     fn leaf(name: &str) -> prebindgen_flat::Wire<JniWire> {
         prebindgen_flat::Wire {
             name: syn::parse_str(name).unwrap(),
@@ -139,23 +191,75 @@ mod tests {
         })
     }
     #[test]
+    fn structural_nodes_require_supported_explicit_representations() {
+        use prebindgen_flat::WireRepresentation;
+        let metadata = || {
+            JniGroup::Optional(JniOptional {
+                presence: syn::parse_quote!(flag),
+                discriminator: syn::parse_quote!(flag),
+                niche: None,
+            })
+        };
+        let mut carried: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        carried.enclose_optional(
+            WireRepresentation::Carrier(leaf("carrier")),
+            Some(metadata()),
+        );
+        carried.validate().unwrap();
+        assert!(validate_layout(&carried)
+            .unwrap_err()
+            .contains("inline optional"));
+        let mut sequence: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        sequence.enclose_sequence(WireRepresentation::Inline { controls: vec![] }, None);
+        sequence.validate().unwrap();
+        assert!(validate_layout(&sequence)
+            .unwrap_err()
+            .contains("separate carrier"));
+        let mut missing: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        missing.enclose_optional(WireRepresentation::Inline { controls: vec![] }, None);
+        assert!(validate_layout(&missing)
+            .unwrap_err()
+            .contains("requires optional metadata"));
+        let mut wrong: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        wrong.enclose(metadata());
+        assert!(validate_layout(&wrong)
+            .unwrap_err()
+            .contains("requires an Optional node"));
+        let mut wrong_flag: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        // A char wire named flag is not the adapter's presence-flag type.
+        wrong_flag.enclose_optional(
+            WireRepresentation::Inline {
+                controls: vec![leaf("flag")],
+            },
+            Some(metadata()),
+        );
+        assert!(validate_layout(&wrong_flag)
+            .unwrap_err()
+            .contains("sole inline control"));
+    }
+    #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
         let mut tree = WireLayout::from(vec![leaf("value")]);
         tree[0].kind.set_niche(Some(JniNiche::Integer(-3))).unwrap();
-        tree.enclose(optional("inner", "value", Some(-1)));
-        tree.enclose(optional("outer", "value", Some(-2)));
+        enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
+        enclose_optional_metadata(&mut tree, optional("outer", "value", Some(-2)));
         validate_layout(&tree).unwrap();
         assert_eq!(tree.len(), 1);
         let mut bad = tree.clone();
-        bad.enclose(optional("missing", "elsewhere", Some(-3)));
-        assert!(validate_layout(&bad).unwrap_err().contains("outside group"));
-        tree.enclose(optional("inner", "value", Some(-1)));
+        enclose_optional_metadata(&mut bad, optional("missing", "elsewhere", Some(-3)));
+        assert!(validate_layout(&bad)
+            .unwrap_err()
+            .contains("outside payload"));
+        enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
         let mut flag = WireLayout::from(vec![leaf("flag")]);
-        flag.enclose(optional("flag", "flag", None));
+        flag[0].kind = JniWire::selector();
+        enclose_optional_metadata(&mut flag, optional("flag", "flag", None));
         validate_layout(&flag).unwrap();
-        flag.enclose(optional("outer", "flag", None));
-        assert!(validate_layout(&flag).unwrap_err().contains("first child"));
+        enclose_optional_metadata(&mut flag, optional("outer", "flag", None));
+        assert!(validate_layout(&flag)
+            .unwrap_err()
+            .contains("inline control"));
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
@@ -224,7 +328,7 @@ mod tests {
             name: syn::parse_quote!(value),
             kind: wire,
         }]);
-        tree.enclose(optional("present", "value", Some(-1)));
+        enclose_optional_metadata(&mut tree, optional("present", "value", Some(-1)));
         validate_layout(&tree).unwrap();
         tree[0].kind = JniWire::scalar(Primitive::I64);
         assert!(validate_layout(&tree).unwrap_err().contains("incompatible"));
@@ -271,13 +375,13 @@ mod tests {
     #[test]
     fn optional_reservations_cannot_overlap_each_other_or_available_state() {
         let mut tree = WireLayout::from(vec![leaf("value")]);
-        tree.enclose(optional("inner", "value", Some(-1)));
+        enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
         tree[0].kind.set_niche(Some(JniNiche::Integer(-2))).unwrap();
         validate_layout(&tree).unwrap();
-        tree.enclose(optional("outer", "value", Some(-1)));
+        enclose_optional_metadata(&mut tree, optional("outer", "value", Some(-1)));
         assert!(validate_layout(&tree)
             .unwrap_err()
             .contains("duplicate JNI niche"));

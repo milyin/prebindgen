@@ -6,7 +6,7 @@ use syn::ext::IdentExt;
 /// Metadata interpreted by the C binding writer.
 #[derive(Clone, Debug)]
 pub enum CGroup {
-    /// Presence rule for the optional payload subtree.
+    /// Metadata for `WireNode::Optional`, including its reserved absence value.
     Optional(COptional),
     /// An ordered collection of field subtrees.
     Fields,
@@ -18,7 +18,7 @@ pub enum CGroup {
 pub struct COptional {
     /// Normalized presence binding used by payload conditions.
     pub presence: syn::Ident,
-    /// Descendant wire inspected for presence.
+    /// Payload wire or inline control inspected for presence.
     pub discriminator: syn::Ident,
     /// Reserved absent representation; `None` means a separate 0/1 flag.
     pub niche: Option<CNiche>,
@@ -36,43 +36,58 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
         reserved: &mut std::collections::BTreeMap<String, Vec<CNiche>>,
     ) -> Result<()> {
         for node in layout.nodes() {
-            if let WireNode::Sequence { carrier, element } = node {
-                if !matches!(
-                    carrier.kind,
-                    CWire::Rows
-                        | CWire::Scalar {
-                            primitive: Primitive::Usize,
-                            ..
-                        }
-                ) || element.is_empty()
-                {
-                    return Err(
-                        "sequence requires rows or an element count, and a nonempty element layout"
-                            .into(),
-                    );
+            match node {
+                WireNode::Sequence(c) => {
+                    let carrier = c.carrier().ok_or("sequence requires a separate carrier")?;
+                    if !(matches!(
+                        carrier.kind,
+                        CWire::Rows
+                            | CWire::Scalar {
+                                primitive: Primitive::Usize,
+                                ..
+                            }
+                    )) || c.element.is_empty()
+                    {
+                        return Err(
+                            "sequence requires a supported carrier and nonempty element layout"
+                                .into(),
+                        );
+                    }
+                    if c.metadata.is_some() {
+                        return Err("unsupported sequence metadata".into());
+                    }
+                    validate_layout(&c.element)?;
                 }
-                validate_layout(element)?;
-            }
-            if matches!(node,WireNode::Wire(w) if matches!(w.kind,CWire::Rows)) {
-                return Err("array carrier requires a sequence node".into());
-            }
-            if let WireNode::Group { metadata, children } = node {
-                if let CGroup::Optional(o) = metadata {
+                WireNode::Optional(c) => {
+                    let prebindgen_flat::WireRepresentation::Inline { controls } =
+                        &c.representation
+                    else {
+                        return Err(
+                            "this adapter requires an inline optional representation".into()
+                        );
+                    };
+                    let Some(CGroup::Optional(o)) = &c.metadata else {
+                        return Err("optional node requires optional metadata".into());
+                    };
                     if !bindings.insert(o.presence.to_string()) {
                         return Err(format!(
                             "duplicate optional presence binding `{}`",
                             o.presence
                         ));
                     }
-                    let wire = children
-                        .iter()
-                        .find(|w| w.name == o.discriminator)
-                        .ok_or("optional discriminator outside group")?;
                     if let Some(niche) = &o.niche {
+                        if !controls.is_empty() {
+                            return Err("niche optional must not have control wires".into());
+                        }
+                        let wire = c
+                            .element
+                            .iter()
+                            .find(|w| w.name == o.discriminator)
+                            .ok_or("optional discriminator outside payload")?;
                         wire.kind.validate_niche(niche)?;
                         if wire.kind.available_niche().as_ref() == Some(niche) {
                             return Err(
-                                "available C niche is already reserved by an optional group".into(),
+                                "available C niche is already reserved by an optional node".into(),
                             );
                         }
                         let values = reserved.entry(o.discriminator.to_string()).or_default();
@@ -80,41 +95,52 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
                             return Err("duplicate C niche reservation on one wire".into());
                         }
                         values.push(niche.clone());
-                    }
-                    if o.niche.is_none()
-                        && !matches!(children.nodes().first(),Some(WireNode::Wire(w)) if w.name==o.discriminator)
+                    } else if !matches!(controls.as_slice(),[flag] if flag.name==o.discriminator && o.presence==o.discriminator && matches!(flag.kind,CWire::Scalar { primitive: Primitive::I32, .. }))
                     {
-                        return Err("optional flag must be the first child wire".into());
+                        return Err("optional flag must be its sole inline control wire".into());
                     }
+                    visit(&c.element, bindings, false, reserved)?;
                 }
-                match metadata {
-                    CGroup::Field(_) if !in_fields => {
-                        return Err(
-                            "named field must be a direct child of a field collection".into()
-                        );
+                WireNode::Wire(w) if matches!(w.kind, CWire::Rows) => {
+                    return Err("array carrier requires a container node".into())
+                }
+                WireNode::Wire(_) => {}
+                WireNode::Group { metadata, children } => {
+                    if let CGroup::Optional(_) = metadata {
+                        return Err("optional metadata requires an Optional node".into());
                     }
-                    CGroup::Fields => {
-                        let mut fields = std::collections::BTreeSet::new();
-                        for child in children.nodes() {
-                            let WireNode::Group { metadata, .. } = child else {
-                                return Err("field collection requires named field children".into());
-                            };
-                            let CGroup::Field(name) = metadata else {
-                                return Err("field collection requires named field children".into());
-                            };
-                            if !fields.insert(name.unraw().to_string()) {
-                                return Err(format!("duplicate field `{name}`"));
+                    match metadata {
+                        CGroup::Field(_) if !in_fields => {
+                            return Err(
+                                "named field must be a direct child of a field collection".into()
+                            )
+                        }
+                        CGroup::Fields => {
+                            let mut fields = std::collections::BTreeSet::new();
+                            for child in children.nodes() {
+                                let WireNode::Group {
+                                    metadata: CGroup::Field(name),
+                                    ..
+                                } = child
+                                else {
+                                    return Err(
+                                        "field collection requires named field children".into()
+                                    );
+                                };
+                                if !fields.insert(name.unraw().to_string()) {
+                                    return Err(format!("duplicate field `{name}`"));
+                                }
                             }
                         }
+                        _ => {}
                     }
-                    _ => {}
+                    visit(
+                        children,
+                        bindings,
+                        matches!(metadata, CGroup::Fields),
+                        reserved,
+                    )?;
                 }
-                visit(
-                    children,
-                    bindings,
-                    matches!(metadata, CGroup::Fields),
-                    reserved,
-                )?;
             }
         }
         Ok(())
@@ -130,6 +156,25 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn enclose_optional_metadata(tree: &mut WireLayout<CWire, CGroup>, metadata: CGroup) {
+        let flag = matches!(&metadata,CGroup::Optional(o) if o.niche.is_none());
+        let mut nodes = std::mem::take(tree).into_nodes();
+        // These fixtures describe an explicit flag as the first physical wire.
+        // Move it into the representation without changing its wire type.
+        let controls = if flag && matches!(nodes.first(), Some(WireNode::Wire(_))) {
+            let WireNode::Wire(wire) = nodes.remove(0) else {
+                unreachable!()
+            };
+            vec![wire]
+        } else {
+            vec![]
+        };
+        *tree = WireLayout::from_nodes(nodes);
+        tree.enclose_optional(
+            prebindgen_flat::WireRepresentation::Inline { controls },
+            Some(metadata),
+        );
+    }
     fn leaf(name: &str) -> prebindgen_flat::Wire<CWire> {
         prebindgen_flat::Wire {
             name: syn::parse_str(name).unwrap(),
@@ -144,31 +189,83 @@ mod tests {
         })
     }
     #[test]
+    fn structural_nodes_require_supported_explicit_representations() {
+        use prebindgen_flat::WireRepresentation;
+        let metadata = || {
+            CGroup::Optional(COptional {
+                presence: syn::parse_quote!(flag),
+                discriminator: syn::parse_quote!(flag),
+                niche: None,
+            })
+        };
+        let mut carried: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        carried.enclose_optional(
+            WireRepresentation::Carrier(leaf("carrier")),
+            Some(metadata()),
+        );
+        carried.validate().unwrap();
+        assert!(validate_layout(&carried)
+            .unwrap_err()
+            .contains("inline optional"));
+        let mut sequence: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        sequence.enclose_sequence(WireRepresentation::Inline { controls: vec![] }, None);
+        sequence.validate().unwrap();
+        assert!(validate_layout(&sequence)
+            .unwrap_err()
+            .contains("separate carrier"));
+        let mut missing: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        missing.enclose_optional(WireRepresentation::Inline { controls: vec![] }, None);
+        assert!(validate_layout(&missing)
+            .unwrap_err()
+            .contains("requires optional metadata"));
+        let mut wrong: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        wrong.enclose(metadata());
+        assert!(validate_layout(&wrong)
+            .unwrap_err()
+            .contains("requires an Optional node"));
+        let mut wrong_flag: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        // A char wire named flag is not the adapter's presence-flag type.
+        wrong_flag.enclose_optional(
+            WireRepresentation::Inline {
+                controls: vec![leaf("flag")],
+            },
+            Some(metadata()),
+        );
+        assert!(validate_layout(&wrong_flag)
+            .unwrap_err()
+            .contains("sole inline control"));
+    }
+    #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
         let mut tree = WireLayout::from(vec![leaf("value")]);
         tree[0]
             .kind
             .set_niche(Some(CNiche::Integer(0x110002)))
             .unwrap();
-        tree.enclose(optional("inner", "value", true));
+        enclose_optional_metadata(&mut tree, optional("inner", "value", true));
         let mut outer = optional("outer", "value", true);
         let CGroup::Optional(o) = &mut outer else {
             unreachable!()
         };
         o.niche = Some(CNiche::Integer(0x110001));
-        tree.enclose(outer);
+        enclose_optional_metadata(&mut tree, outer);
         validate_layout(&tree).unwrap();
         assert_eq!(tree.len(), 1);
         let mut bad = tree.clone();
-        bad.enclose(optional("missing", "elsewhere", true));
-        assert!(validate_layout(&bad).unwrap_err().contains("outside group"));
-        tree.enclose(optional("inner", "value", true));
+        enclose_optional_metadata(&mut bad, optional("missing", "elsewhere", true));
+        assert!(validate_layout(&bad)
+            .unwrap_err()
+            .contains("outside payload"));
+        enclose_optional_metadata(&mut tree, optional("inner", "value", true));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
         let mut flag = WireLayout::from(vec![leaf("flag")]);
-        flag.enclose(optional("flag", "flag", false));
+        flag[0].kind = CWire::scalar(Primitive::I32);
+        enclose_optional_metadata(&mut flag, optional("flag", "flag", false));
         validate_layout(&flag).unwrap();
-        flag.enclose(optional("outer", "flag", false));
-        assert!(validate_layout(&flag).unwrap_err().contains("first child"));
+        enclose_optional_metadata(&mut flag, optional("outer", "flag", false));
+        assert!(validate_layout(&flag)
+            .unwrap_err()
+            .contains("inline control"));
     }
     #[test]
     fn every_niche_reservation_is_checked_for_compatibility_and_reuse() {
@@ -193,13 +290,13 @@ mod tests {
                     niche: Some(niche),
                 })
             };
-            tree.enclose(group("inner", niche.clone()));
+            enclose_optional_metadata(&mut tree, group("inner", niche.clone()));
             assert!(validate_layout(&tree)
                 .unwrap_err()
                 .contains("already reserved"));
             tree[0].kind.clear_niche();
             validate_layout(&tree).unwrap();
-            tree.enclose(group("outer", niche));
+            enclose_optional_metadata(&mut tree, group("outer", niche));
             assert!(validate_layout(&tree)
                 .unwrap_err()
                 .contains("duplicate C niche"));
@@ -220,11 +317,14 @@ mod tests {
                 name: syn::parse_quote!(value),
                 kind,
             }]);
-            tree.enclose(CGroup::Optional(COptional {
-                presence: syn::parse_quote!(present),
-                discriminator: syn::parse_quote!(value),
-                niche: Some(niche),
-            }));
+            enclose_optional_metadata(
+                &mut tree,
+                CGroup::Optional(COptional {
+                    presence: syn::parse_quote!(present),
+                    discriminator: syn::parse_quote!(value),
+                    niche: Some(niche),
+                }),
+            );
             assert!(validate_layout(&tree).unwrap_err().contains("incompatible"));
         }
     }

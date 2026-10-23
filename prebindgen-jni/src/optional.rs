@@ -76,12 +76,17 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
     out
 }
 pub(crate) fn input_kotlin(
-    children: &[kotlin::JniNode],
+    container: &prebindgen_flat::WireContainer<JniWire, JniGroup>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let root = &o.presence.to_string();
-    let nodes = &children[usize::from(o.niche.is_none())..];
+    let nodes = container.element.nodes();
+    let prebindgen_flat::WireRepresentation::Inline { controls } = &container.representation else {
+        return Err("optional requires inline representation".into());
+    };
+    // The adapter validates exactly one selector for a flag, none for a niche.
+    debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
     let mut c = kotlin::input_kotlin(nodes, context)?;
@@ -125,7 +130,7 @@ pub(crate) fn input_kotlin(
         *a = a.replace(&format!("{} == 1", root), "true");
         *a = replace(a, root, "1");
     }
-    if o.niche.is_none() {
+    if !controls.is_empty() {
         out.arguments.push(tag);
     }
     for (j, a) in c.arguments.into_iter().enumerate() {
@@ -168,13 +173,18 @@ pub(crate) fn input_kotlin(
     Ok(out)
 }
 pub(crate) fn output_kotlin(
-    children: &[kotlin::JniNode],
+    container: &prebindgen_flat::WireContainer<JniWire, JniGroup>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    let wires = kotlin::leaf_wires(children);
-    let flag = usize::from(o.niche.is_none());
-    let nodes = &children[flag..];
+    let nodes = container.element.nodes();
+    let wires = kotlin::leaf_wires(nodes);
+    let prebindgen_flat::WireRepresentation::Inline { controls } = &container.representation else {
+        return Err("optional requires inline representation".into());
+    };
+    // The adapter validates exactly one selector for a flag, none for a niche.
+    debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
+    let flag = controls.len();
     let p = if let Some(n) = &o.niche {
         let i = wires
             .iter()
@@ -191,7 +201,7 @@ pub(crate) fn output_kotlin(
         ..*context
     };
     let mut c = kotlin::output_kotlin(nodes, &ctx)?;
-    kotlin::remap_output(&mut c, &local, context.result, flag, wires.len() - flag);
+    kotlin::remap_output(&mut c, &local, context.result, flag, wires.len());
     let mut out = KotlinOutput {
         output_locals: c.output_locals,
         ..Default::default()

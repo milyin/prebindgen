@@ -63,9 +63,12 @@ pub(crate) fn schemas<'a>(
         match node {
             WireNode::Wire(_) => {}
             WireNode::Group { children, .. } => schemas(children, out),
-            WireNode::Sequence { carrier, element } => {
-                schemas(element, out);
-                out.push((carrier, element));
+            WireNode::Optional(c) => schemas(&c.element, out),
+            WireNode::Sequence(c) => {
+                schemas(&c.element, out);
+                if let Some(carrier) = c.carrier() {
+                    out.push((carrier, &c.element));
+                }
             }
         }
     }
@@ -193,19 +196,22 @@ pub(crate) fn callback_output(values: &[TokenStream], length: syn::Ident) -> Seq
 pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
     fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
         match nodes {
-            [WireNode::Sequence { carrier, .. }] => matches!(
-                carrier.kind,
-                CWire::Scalar {
-                    primitive: Primitive::Usize,
-                    ..
-                }
-            ),
-            [WireNode::Group {
-                metadata: CGroup::Optional(optional),
-                children,
-            }] if optional.niche.is_none() => match children.nodes().split_first() {
-                Some((WireNode::Wire(flag), rest)) if flag.name == optional.discriminator => {
-                    one(rest)
+            [WireNode::Sequence(c)] => c.carrier().is_some_and(|carrier| {
+                matches!(
+                    carrier.kind,
+                    CWire::Scalar {
+                        primitive: Primitive::Usize,
+                        ..
+                    }
+                )
+            }),
+            [WireNode::Optional(c)] => match (&c.representation, &c.metadata) {
+                (
+                    prebindgen_flat::WireRepresentation::Inline { controls },
+                    Some(CGroup::Optional(o)),
+                ) if o.niche.is_none() => {
+                    matches!(controls.as_slice(),[flag] if flag.name==o.discriminator)
+                        && one(c.element.nodes())
                 }
                 _ => false,
             },

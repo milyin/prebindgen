@@ -449,11 +449,15 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         for node in layout.nodes() {
-            if let WireNode::Group { metadata, children } = node {
-                if let JniGroup::Optional(optional) = metadata {
-                    result.push(optional.niche.clone());
+            match node {
+                WireNode::Optional(c) => {
+                    if let Some(JniGroup::Optional(optional)) = &c.metadata {
+                        result.push(optional.niche.clone());
+                    }
+                    result.extend(reservations(&c.element));
                 }
-                result.extend(reservations(children));
+                WireNode::Group { children, .. } => result.extend(reservations(children)),
+                _ => {}
             }
         }
         result

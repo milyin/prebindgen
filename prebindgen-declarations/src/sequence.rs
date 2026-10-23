@@ -1,7 +1,7 @@
 //! Lift one element recipe into a runtime-sized collection without changing phases.
 use super::*;
 use prebindgen_conversions::{Resource, ResourceIdentity};
-use prebindgen_flat::{SequenceView, WireNode};
+use prebindgen_flat::{SequenceView, WireContainer, WireNode, WireRepresentation};
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
@@ -235,13 +235,14 @@ pub(crate) fn input<C: Codec>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence {
-            carrier: Wire {
+        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
+            representation: WireRepresentation::Carrier(Wire {
                 name: wire,
                 kind: transport.carrier,
-            },
+            }),
             element: child.layout,
-        }]),
+            metadata: None,
+        })]),
         validation: quote! {
             #declarations
             let mut #staged=Vec::new();
@@ -347,13 +348,14 @@ pub(crate) fn output<C: Codec>(
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence {
-            carrier: Wire {
+        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
+            representation: WireRepresentation::Carrier(Wire {
                 name: wire,
                 kind: carrier,
-            },
+            }),
             element: child.layout,
-        }]),
+            metadata: None,
+        })]),
         statements: quote! {
             let #owner=#binding; let #length=#owner.len(); #declarations
             #begin
@@ -365,20 +367,66 @@ pub(crate) fn output<C: Codec>(
     })
 }
 
-/// Find the outer sequence in a return layout, without descending into its elements.
+/// Outer sequences in a return scope, without descending into sequence elements.
+pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G>(
+    layout: &WireLayout<W, G>,
+) -> Vec<&WireContainer<W, G>> {
+    fn visit<'a, W: prebindgen_flat::WireKind, G>(
+        layout: &'a WireLayout<W, G>,
+        out: &mut Vec<&'a WireContainer<W, G>>,
+    ) {
+        for node in layout.nodes() {
+            match node {
+                WireNode::Sequence(c) => out.push(c),
+                WireNode::Optional(c)
+                    if matches!(c.representation, WireRepresentation::Inline { .. }) =>
+                {
+                    visit(&c.element, out)
+                }
+                WireNode::Group { children, .. } => visit(children, out),
+                _ => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    visit(layout, &mut out);
+    out
+}
+/// Find an outer carried sequence, without descending into sequence elements.
 pub fn sequence_return<W: prebindgen_flat::WireKind, G>(
     layout: &WireLayout<W, G>,
 ) -> Option<(&Wire<W>, &WireLayout<W, G>)> {
-    layout.nodes().iter().find_map(|node| match node {
-        WireNode::Sequence { carrier, element } => Some((carrier, element)),
-        WireNode::Group { children, .. } => sequence_return(children),
-        WireNode::Wire(_) => None,
-    })
+    return_sequences(layout)
+        .into_iter()
+        .find_map(|c| c.carrier().map(|wire| (wire, &c.element)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn return_sequence_discovery_respects_container_boundaries() {
+        let leaf = |name: &str| Wire {
+            name: syn::parse_str(name).unwrap(),
+            kind: syn::parse_quote!(i64),
+        };
+        let mut carried: WireLayout<syn::Type, ()> = vec![leaf("value")].into();
+        carried.enclose_sequence(WireRepresentation::Carrier(leaf("rows")), None);
+        carried.enclose_optional(
+            WireRepresentation::Inline {
+                controls: vec![leaf("present")],
+            },
+            None,
+        );
+        assert_eq!(return_sequences(&carried).len(), 1);
+        assert_eq!(sequence_return(&carried).unwrap().0.name, "rows");
+        carried.enclose_optional(WireRepresentation::Carrier(leaf("optional_object")), None);
+        assert!(return_sequences(&carried).is_empty());
+        let mut inline: WireLayout<syn::Type, ()> = vec![leaf("inline_value")].into();
+        inline.enclose_sequence(WireRepresentation::Inline { controls: vec![] }, None);
+        assert_eq!(return_sequences(&inline).len(), 1);
+        assert!(sequence_return(&inline).is_none());
+    }
     #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
         let layout: WireLayout<syn::Type> = vec![Wire {

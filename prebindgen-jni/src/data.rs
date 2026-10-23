@@ -497,13 +497,13 @@ impl RecordShape {
 impl Codec for DataCodec {
     type Niche = crate::optional::JniNiche;
     type Group = JniGroup;
-    fn optional_group(
+    fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
     ) -> JniGroup {
-        JniCodec.optional_group(presence, discriminator, niche)
+        JniCodec.optional_metadata(presence, discriminator, niche)
     }
     fn field_group(&self, name: syn::Ident) -> JniGroup {
         JniCodec.field_group(name)
@@ -900,15 +900,20 @@ mod group_tests {
     }
     #[test]
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
-        let mut optional = WireLayout::from(vec![Wire {
-            name: syn::parse_quote!(flag),
-            kind: JniWire::selector(),
-        }]);
-        optional.enclose(JniGroup::Optional(JniOptional {
-            presence: syn::parse_quote!(flag),
-            discriminator: syn::parse_quote!(flag),
-            niche: None,
-        }));
+        let mut optional: WireLayout<JniWire, JniGroup> = WireLayout::default();
+        optional.enclose_optional(
+            prebindgen_flat::WireRepresentation::Inline {
+                controls: vec![Wire {
+                    name: syn::parse_quote!(flag),
+                    kind: JniWire::selector(),
+                }],
+            },
+            Some(JniGroup::Optional(JniOptional {
+                presence: syn::parse_quote!(flag),
+                discriminator: syn::parse_quote!(flag),
+                niche: None,
+            })),
+        );
         optional.extend(WireLayout::from_nodes(vec![record("value")]));
         crate::group::validate_layout(&optional).unwrap();
         optional.extend(WireLayout::from_nodes(vec![record("flag")]));

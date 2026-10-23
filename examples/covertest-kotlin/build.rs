@@ -159,6 +159,7 @@ fn main() {
             .fun(fun!(collection_nested).callback_return())
             .fun(fun!(collection_options).callback_return())
             .fun(fun!(collection_optional).callback_return())
+            .fun(fun!(collection_optional_items).callback_return())
             .fun(fun!(collection_enum).callback_return())
             .fun(fun!(collection_probe))
             .fun(fun!(collection_borrow).callback_return())

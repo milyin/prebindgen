@@ -579,7 +579,7 @@ pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
     type Group = JniGroup;
-    fn optional_group(
+    fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,

@@ -44,13 +44,7 @@ pub fn optional_input<C: Codec>(
     let selected = active.arm(tag.clone(), 1).rust();
     child.statements = quote!(let #var = if #selected {#body Some(#arg)} else {None};);
     child.argument = quote!(#var);
-    if layout.niche.is_none() {
-        child.layout.prepend(Wire {
-            name: tag.clone(),
-            kind: codec.selector(extra),
-        });
-    }
-    mark(codec, &mut child.layout, tag, layout);
+    mark(codec, extra, &mut child.layout, tag, layout);
     Ok(child)
 }
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
@@ -122,18 +116,15 @@ pub fn optional_output<C: Codec>(
     child.commit = quote!(if let Some(#action_var) = #commit_var {#action_var();});
     child.values = names.iter().map(|n| quote!(#n)).collect();
     if layout.niche.is_none() {
-        child.layout.prepend(Wire {
-            name: tag.clone(),
-            kind: codec.selector(extra),
-        });
         child.values.insert(0, quote!(#tag));
     }
-    mark(codec, &mut child.layout, tag, layout);
+    mark(codec, extra, &mut child.layout, tag, layout);
     Ok(child)
 }
 
 fn mark<C: Codec>(
     codec: &C,
+    extra: &C::Extra,
     tree: &mut WireLayout<C::Wire, C::Group>,
     tag: syn::Ident,
     layout: OptionalLayout<C::Niche>,
@@ -147,20 +138,24 @@ fn mark<C: Codec>(
         .niche
         .as_ref()
         .and_then(|(i, n)| codec.remaining_niche(&tree[*i].kind, n));
-    // A new presence flag is always active, and its excluded representations
-    // remain available to enclosing options. Payload wires may be inactive.
-    let flag_niche = layout
-        .niche
-        .is_none()
-        .then(|| codec.niche(&tree[0].kind))
-        .flatten();
+    // Payload wires may be inactive. Preserve only the selected donor's
+    // remaining niche; a fresh control flag retains its constructor's availability.
     for wire in tree.iter_mut() {
         codec.set_niche(&mut wire.kind, None);
     }
     if let Some((i, _)) = &layout.niche {
         codec.set_niche(&mut tree[*i].kind, remaining);
-    } else {
-        codec.set_niche(&mut tree[0].kind, flag_niche);
     }
-    tree.enclose(codec.optional_group(tag, discriminator, layout.niche.map(|(_, n)| n)));
+    let controls = if layout.niche.is_none() {
+        vec![Wire {
+            name: tag.clone(),
+            kind: codec.selector(extra),
+        }]
+    } else {
+        vec![]
+    };
+    tree.enclose_optional(
+        prebindgen_flat::WireRepresentation::Inline { controls },
+        Some(codec.optional_metadata(tag, discriminator, layout.niche.map(|(_, n)| n))),
+    );
 }

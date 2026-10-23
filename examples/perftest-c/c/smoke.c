@@ -11,6 +11,12 @@ static void sequence_number(void *context, int64_t value) {
     struct sequence_acc *acc = context;
     acc->calls++; acc->total += value;
 }
+static void sequence_maybe_number(void *context, int32_t present, int64_t value) {
+    struct sequence_acc *acc = context;
+    assert(present == 0 || present == 1);
+    if (!present) assert(value == 0);
+    acc->calls++; acc->total += present ? value : 1;
+}
 static void sequence_text(void *context, perftest_buffer value) {
     struct sequence_acc *acc = context;
     acc->calls++; acc->total += (int64_t)value.len;
@@ -73,6 +79,35 @@ static void check_sequence_delivery(void) {
     assert(count == 0 && acc.calls == 0);
     assert(perftest_collection_optional_each(1,(perftest_collection_optional_each_p0_w3_rows){NULL,0},sequence_number,&acc,&count) == 1);
     assert(count == 0 && acc.calls == 0);
+
+    // Optional collection, repeated rows, and an optional payload per row.
+    perftest_collection_optional_items_ret_w2_rows mixed = {0};
+    assert(perftest_collection_optional_items(0,
+        (perftest_collection_optional_items_p0_w3_rows){(void *)1,SIZE_MAX},&mixed) == 0);
+    assert(perftest_collection_optional_items(1,
+        (perftest_collection_optional_items_p0_w3_rows){NULL,0},&mixed) == 1 && mixed.len == 0);
+    perftest_collection_optional_items_ret_w2_rows_free(mixed);
+    perftest_collection_optional_items_p0_w3_row mixed_input[] = {{0,99},{1,INT64_MIN},{1,INT64_MAX}};
+    assert(perftest_collection_optional_items(1,
+        (perftest_collection_optional_items_p0_w3_rows){mixed_input,3},&mixed) == 1);
+    assert(mixed.len == 3 && mixed.data[0].v0 == 0 && mixed.data[0].v1 == 0);
+    assert(mixed.data[1].v0 == 1 && mixed.data[1].v1 == INT64_MIN);
+    assert(mixed.data[2].v0 == 1 && mixed.data[2].v1 == INT64_MAX);
+    perftest_collection_optional_items_ret_w2_rows_free(mixed);
+    mixed_input[0].v0 = 2;
+    EXPECT_ABORT(perftest_collection_optional_items(1,
+        ((perftest_collection_optional_items_p0_w3_rows){mixed_input,3}),&mixed));
+    perftest_collection_optional_items_each_p0_w3_row mixed_each[] = {{0,99},{1,7},{1,-3}};
+    assert(perftest_collection_optional_items_each(0,
+        (perftest_collection_optional_items_each_p0_w3_rows){NULL,0},sequence_maybe_number,&acc,&count) == 0);
+    assert(count == 0 && acc.calls == 0);
+    assert(perftest_collection_optional_items_each(1,
+        (perftest_collection_optional_items_each_p0_w3_rows){NULL,0},sequence_maybe_number,&acc,&count) == 1);
+    assert(count == 0 && acc.calls == 0);
+    assert(perftest_collection_optional_items_each(1,
+        (perftest_collection_optional_items_each_p0_w3_rows){mixed_each,3},sequence_maybe_number,&acc,&count) == 1);
+    assert(count == 3 && acc.calls == 3 && acc.total == 5);
+    acc = (struct sequence_acc){0};
 
     size_t start = perftest_owned_resource_drops();
     char *error = NULL;

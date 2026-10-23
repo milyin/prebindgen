@@ -172,9 +172,9 @@ settings remain commented out in the example manifests.
 - `Conversion` exposes its authoritative `layout()` tree,
   `code_fragment_slot(mode, expected_type)` and
   `code_fragment_wire(pos, mode, expected_type)`.
-- Import `ConversionExt` to use `wires()` (an iterator borrowing the tree's leaves)
+- Import `ConversionExt` to use `wires()` (an iterator borrowing the tree's physical wires)
   and `wire(pos)` (checked lookup). Both derive their order from `layout()`;
-  converters cannot override them. Walk leaves depth first, left to right,
+  converters cannot override them. Walk physical wires depth first, left to right,
   including inactive alternatives. `pos` uses that order; invalid positions are
   errors. Finish structural edits before emission, which borrows the slot immutably.
 - Each generator defines its slot and wire request enums. Variants carry only the
@@ -295,7 +295,7 @@ state, `set_niche(...)` checks updates for variant compatibility, and
 `clear_niche()` disables availability. Callers must not restore a consumed niche.
 C buffers have no niche: a null data pointer with zero length is a valid empty
 value. Reserved representations remain separate `CNiche` or `JniNiche` values on
-optional parent metadata. Each adapter derives boundary types from its wire
+optional-node metadata. Each adapter derives boundary types from its wire
 variant; JNI also derives Kotlin types and JVM parameter width.
 `JniWire` also exposes `jvm_descriptor()`, `is_reference()` and
 `kotlin_default()` for its raw JVM representation. Its code-generation methods
@@ -478,13 +478,50 @@ after acknowledgement Kotlin marks every selected handle consumed. Prepared
 outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.
 
-The shared `WireNode::Sequence` stores one complete FFI transport value and a
-separate schema for one element. The value is an array carrier, a delivered count
-for a C visitor, or a presence marker for JNI callback delivery. `wires()`, `len()` and position-based requests see the
-carrier once. Access the element schema through the sequence node; its positions
-refer to fields inside each row, rather than additional function arguments. The
-wire kind still describes a self-sufficient FFI value. Collection structure lives
-in the tree, without a recursive wire enum or a second schema hidden in metadata.
+`WireNode::Optional` describes zero or one payload, and `WireNode::Sequence`
+describes zero or more elements. Both hold the same `WireContainer` structure:
+
+- `element` describes one payload/element.
+- `representation` determines which physical wires occupy the enclosing boundary.
+- `metadata` optionally holds adapter-specific information, such as a reserved
+  absent value. Code can recognize optionality without interpreting this metadata.
+
+`WireRepresentation::Inline { controls }` puts control wires followed by the
+payload wires in the enclosing boundary. For an optional value, the controls
+contain a presence flag, or are empty when a payload wire uses a niche.
+`WireRepresentation::Carrier(wire)` exposes only that one complete FFI value;
+the element fields have separate positions, such as fields inside array rows or
+arguments delivered to a visitor. That carrier can be an array, a C delivered
+count, or the existing JNI callback presence marker. Neither representation is
+chosen implicitly from the node's cardinality.
+
+For example, a flagged optional sequence of flagged optional elements has this
+structure (actual flags/niches depend on the adapter's declared conversion):
+
+```text
+Optional — Inline
+  controls: collection_present
+  element:
+    Sequence — Carrier(rows)
+      element:
+        Optional — Inline
+          controls: item_present
+          element: value
+```
+
+The outer `wires()` order is `collection_present, rows`. The sequence element's
+order is `item_present, value`. The innermost optional's payload contains just
+`value`; presence flags are never payload fields. `len()`, indexed requests and
+mutable iteration all follow the same representation rules. The tree owns every
+wire once; it has no second flattened wire list or schema hidden in metadata.
+
+The built-in C/JNI codecs currently emit inline optional values and carried
+sequences, preserving their existing ABI and conversion behavior. The common
+tree supports both representations for both node kinds; adapters reject
+representations they cannot generate. `Group` continues to hold adapter-defined
+relationships such as named fields and records. Adapter authors construct
+containers explicitly and supply optional-node metadata through
+`Codec::optional_metadata` (formerly `optional_group`).
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
 
@@ -752,7 +789,7 @@ from `Some(Some(Some(text)))`. Selector-arm payload wires remain ineligible;
 the selector tag itself is unconditional. Other wires in an optional payload
 cannot supply another niche, because an absent payload fills them with defaults.
 C headers document the exact discriminator argument or result field for each
-optional group, including enclosing optional groups.
+optional value, including enclosing optional values.
 
 Adapters define `Codec::Niche: Clone`; the shared compiler never interprets its
 representation. `niche` selects an excluded representation, `is_present` emits a
@@ -763,22 +800,24 @@ other payload wires and on inactive selector arms. Both input and output
 composition use this protocol.
 
 Every `Wire` describes one complete FFI value. Each conversion owns a
-`WireLayout<W, G>` tree: leaves contain `Wire<W>`, and parent nodes contain `G`
-metadata plus their children. The tree is the source of both wire order and
+`WireLayout<W, G>` tree. Physical wires are owned by wire nodes or container
+representations; containers hold element layouts and optional `G` metadata,
+while groups hold child layouts and `G` metadata. The tree is the source of both wire order and
 grouping. For example, a JNI optional record can use this tree (wire names are
 illustrative):
 
 ```text
-JniGroup::Optional           inspect the "present" flag
-├── present: jint            wire position 0
-└── JniGroup::Fields(Some)    construct Kotlin Point
-    ├── JniGroup::Field("x")
-    │   └── x_value: jdouble  wire position 1
-    └── JniGroup::Field("y")
-        └── y_value: jdouble  wire position 2
+WireNode::Optional — Inline, metadata = JniGroup::Optional
+├── controls: present: jint       wire position 0
+└── element:
+    └── Group: JniGroup::Fields(Some) — construct Kotlin Point
+        ├── Group: JniGroup::Field("x")
+        │   └── x_value: jdouble  wire position 1
+        └── Group: JniGroup::Field("y")
+            └── y_value: jdouble  wire position 2
 ```
 
-`wires()` yields the three leaf wires, including their `W` information.
+`wires()` yields the three physical wires, including their `W` information.
 `layout().nodes()` exposes adapter metadata and nesting. Each physical
 wire appears once. Multiple ancestors may inspect that same leaf: nested optional
 chars, for example, use different absent values on one wire.
@@ -787,8 +826,9 @@ The shared compiler builds conversion code from recipes and stores parent metada
 in the adapter's `Codec::Group` type. It never interprets that stored metadata.
 Three codec hooks supply it while the compiler constructs the tree:
 
-- `optional_group(presence, discriminator, niche)` describes the presence binding,
-  the descendant wire to inspect, and the representation reserved for absence.
+- `optional_metadata(presence, discriminator, niche)` describes an Optional
+  node's presence binding, the payload/control wire to inspect, and its reserved
+  absent representation.
 - `field_group(name)` describes one source field and its subtree, which can have
   zero, one or several wires.
 - `fields_group()` describes the ordered collection of field subtrees, including
@@ -797,7 +837,8 @@ Three codec hooks supply it while the compiler constructs the tree:
 Adapters choose the return values freely. A codec that needs no group metadata
 can use `type Group = ()` and return `()` from all three hooks. The tree still
 preserves field boundaries and wire order. Codecs can also use their own enum,
-a string, or another metadata representation without a common wrapper.
+a string, or another metadata representation without implementing a common
+semantic group enum.
 
 C stores `CGroup::{Optional, Fields, Field}` to generate header comments for
 presence rules, source field paths and their boundary values. JNI stores

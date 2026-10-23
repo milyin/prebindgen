@@ -13,7 +13,7 @@ pub struct InputPlan<W: WireKind, C = (), G = ()> {
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Authoritative wire tree; its leaves determine boundary parameter order.
+    /// Authoritative wire tree; its representation determines boundary parameter order.
     pub layout: WireLayout<W, G>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,

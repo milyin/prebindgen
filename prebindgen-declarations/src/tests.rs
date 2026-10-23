@@ -55,7 +55,7 @@ impl Codec for TestCodec {
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
     type Group = TestGroup;
-    fn optional_group(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
+    fn optional_metadata(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
         TestGroup::Maybe
     }
     fn field_group(&self, name: syn::Ident) -> TestGroup {
@@ -634,7 +634,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
         type Group = TestGroup;
-        fn optional_group(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
+        fn optional_metadata(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
             TestGroup::Maybe
         }
         fn field_group(&self, name: syn::Ident) -> TestGroup {

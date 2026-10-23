@@ -66,7 +66,7 @@ pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
     type Group = CGroup;
-    fn optional_group(
+    fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
@@ -1242,7 +1242,9 @@ fn describe_groups(
         field_path: &mut Vec<String>,
     ) {
         for node in layout.nodes() {
-            if let prebindgen_flat::WireNode::Sequence { carrier, element } = node {
+            if let prebindgen_flat::WireNode::Sequence(c) = node {
+                let carrier = c.carrier().expect("validated sequence carrier");
+                let element = &c.element;
                 let path = field_path.join(".");
                 if matches!(carrier.kind, CWire::Rows) {
                     out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,element.len()));
@@ -1263,8 +1265,8 @@ fn describe_groups(
                     *last = original;
                 }
             }
-            if let prebindgen_flat::WireNode::Group { metadata, children } = node {
-                if let CGroup::Optional(g) = metadata {
+            if let prebindgen_flat::WireNode::Optional(c) = node {
+                if let Some(CGroup::Optional(g)) = &c.metadata {
                     let label = format!("option{}", *next_label);
                     *next_label += 1;
                     let discriminator = &names[&g.discriminator.to_string()];
@@ -1278,11 +1280,14 @@ fn describe_groups(
                     } else {
                         format!("; only when {} is present", parents.join(" and "))
                     };
-                    out.push_str(&format!("/* Option group {}: {rule}{parent}. */\n", label));
+                    out.push_str(&format!("/* Option {}: {rule}{parent}. */\n", label));
                     parents.push(label);
-                    visit(children, names, parents, out, next_label, field_path);
+                    visit(&c.element, names, parents, out, next_label, field_path);
                     parents.pop();
-                } else if let CGroup::Field(name) = metadata {
+                }
+            }
+            if let prebindgen_flat::WireNode::Group { metadata, children } = node {
+                if let CGroup::Field(name) = metadata {
                     field_path.push(name.to_string().trim_start_matches("r#").into());
                     let values = children
                         .iter()
@@ -1531,10 +1536,7 @@ mod generation_tests {
             .unwrap()
             .header;
         for i in 0..6 {
-            assert_eq!(
-                header.matches(&format!("Option group option{i}:")).count(),
-                1
-            );
+            assert_eq!(header.matches(&format!("Option option{i}:")).count(), 1);
         }
         for parent in [0, 2, 4] {
             assert!(header.contains(&format!("only when option{parent} is present")));
@@ -1616,13 +1618,10 @@ mod generation_tests {
             // Presence flag + selector + two char carriers. Even a remaining
             // niche of an optional arm cannot describe the outer option.
             assert_eq!(plan.layout.len(), 4);
-            let prebindgen_flat::WireNode::Group {
-                metadata: group, ..
-            } = &plan.layout.nodes()[0]
-            else {
+            let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
                 panic!()
             };
-            let CGroup::Optional(optional) = group else {
+            let Some(CGroup::Optional(optional)) = &container.metadata else {
                 panic!()
             };
             assert!(optional.niche.is_none());
