@@ -1,5 +1,5 @@
 use super::*;
-use prebindgen_flat::ConversionExt;
+use prebindgen_conversions::NativeConversionExt;
 fn flat(source: &str) -> Bindings {
     Flat::parse(
         syn::parse_file(source)
@@ -377,8 +377,11 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         )
         .unwrap();
         let f = flat.function(name).unwrap();
-        assert_eq!(f.params[0].ty.slot.as_ref().unwrap().wires().len(), count);
-        assert_eq!(f.ret.slot.as_ref().unwrap().wires().len(), count);
+        assert_eq!(
+            f.params[0].ty.slot.as_ref().unwrap().native_wires().len(),
+            count
+        );
+        assert_eq!(f.ret.slot.as_ref().unwrap().native_wires().len(), count);
     }
 }
 
@@ -443,20 +446,20 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 
 #[test]
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
-    use prebindgen_flat::{Conversion, WireNode};
+    use prebindgen_conversions::TransportNode;
     fn reservations(
-        layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        layout: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         for node in layout.nodes() {
             match node {
-                WireNode::Optional(c) => {
+                TransportNode::Optional(c) => {
                     if let Some(JniGroup::Optional(optional)) = &c.metadata {
                         result.push(optional.niche.clone());
                     }
                     result.extend(reservations(&c.element));
                 }
-                WireNode::Group { children, .. } => result.extend(reservations(children)),
+                TransportNode::Group { children, .. } => result.extend(reservations(children)),
                 _ => {}
             }
         }
@@ -482,8 +485,8 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
             } else {
                 2
             };
-            assert_eq!(input.wires().len(), count, "input {ty}");
-            assert_eq!(output.wires().len(), count, "output {ty}");
+            assert_eq!(input.native_wires().len(), count, "input {ty}");
+            assert_eq!(output.native_wires().len(), count, "output {ty}");
             let mut expected = if reference {
                 vec![Some(JniNiche::Null)]
             } else {
@@ -497,8 +500,8 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 });
             }
             expected.reverse();
-            assert_eq!(reservations(input.layout()), expected, "input {ty}");
-            assert_eq!(reservations(output.layout()), expected, "output {ty}");
+            assert_eq!(reservations(input.transport()), expected, "input {ty}");
+            assert_eq!(reservations(output.transport()), expected, "output {ty}");
         }
     }
 }
@@ -506,7 +509,6 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
 #[test]
 fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
     use prebindgen_declarations::{bind_input, Input};
-    use prebindgen_flat::Conversion;
     let mut source = flat("pub fn echo(x:Option<Option<char>>)->char {} pub fn first(x:char)->char{} pub fn second(x:char)->char{}");
     let selector = Input::selector([
         Input::constructor("first", [Input::Leaf]),
@@ -526,13 +528,13 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         .slot
         .as_ref()
         .unwrap();
-    assert_eq!(input.wires().len(), 3); // one tag + two arm payloads, no option flags
+    assert_eq!(input.native_wires().len(), 3); // one tag + two arm payloads, no option flags
     assert_eq!(
-        input.layout()[0].kind.available_niche(),
+        input.transport()[0].kind.available_niche(),
         Some(JniNiche::Integer(-3))
     );
     assert!(input
-        .layout()
+        .transport()
         .iter()
         .skip(1)
         .all(|w| w.kind.available_niche().is_none()));
@@ -748,4 +750,156 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
     let kotlin = &generated.kotlin["test/Functions.kt"];
     assert!(kotlin.contains("`readFold`"));
     assert!(kotlin.contains("fold: (A, Long) -> A): A?"));
+}
+
+#[test]
+fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
+    use prebindgen_declarations::{expand_return, fields, fun, Declarations};
+    use prebindgen_flat::{Conversion, ConversionExt, OutcomeKind, WireLayout};
+    let mut flat=flat("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn parts(e:Failure)->Failure{} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
+    let defaults = Declarations::new(
+        &flat,
+        vec![expand_return!(Failure).fields_into(fields!(parts)).into()],
+    )
+    .unwrap();
+    let classes = BTreeMap::new();
+    let mut codec = data::DataCodec::new(&flat, &classes).unwrap();
+    let decl = fun!(f).callback_return();
+    let errors = errors::prepare(
+        &mut flat,
+        &mut codec,
+        &defaults,
+        std::slice::from_ref(&decl),
+        &classes,
+        "test",
+        &mut BTreeSet::new(),
+    )
+    .unwrap();
+    assert_eq!(errors.len(), 1);
+    defaults.fill(&mut flat, &codec, &decl, &()).unwrap();
+    let output = flat.function("f").unwrap().output_conversion().unwrap();
+    assert_eq!(
+        output.layout().outcome(OutcomeKind::Success).unwrap().len(),
+        1
+    );
+    let error = output.layout().outcome(OutcomeKind::SourceError).unwrap();
+    assert_eq!(error.len(), 2);
+    assert!(matches!(
+        error.get(0).unwrap().kind,
+        JniWire::Scalar {
+            primitive: Primitive::I64,
+            ..
+        }
+    ));
+    assert!(matches!(error.get(1).unwrap().kind, JniWire::Text { .. }));
+    assert_eq!(
+        output
+            .layout()
+            .outcome(OutcomeKind::BindingFailure)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(output.wires().count(), 4);
+    assert_eq!(output.native_wires().count(), 1);
+    let shape = |layout: &WireLayout<JniWire, JniGroup>| {
+        layout
+            .entries()
+            .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
+            .collect::<Vec<_>>()
+    };
+    let expected = shape(output.layout());
+    let (variant, wire) = defaults
+        .callback_variant(&mut flat, &decl, "f_fold")
+        .unwrap();
+    codec.callback_wire = Some(wire);
+    defaults.fill(&mut flat, &codec, &variant, &()).unwrap();
+    assert_eq!(
+        shape(
+            flat.function("f_fold")
+                .unwrap()
+                .output_conversion()
+                .unwrap()
+                .layout()
+        ),
+        expected
+    );
+}
+
+#[test]
+fn manual_jni_plans_preserve_logical_schemas_through_flat_and_configure() {
+    use prebindgen_flat::{Conversion, OutcomeKind};
+    fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
+        let mut input = JniCodec.input_leaf(
+            &syn::parse_quote!(i64),
+            &(),
+            syn::parse_quote!(native_input),
+            syn::parse_quote!(value),
+            &Default::default(),
+        )?;
+        JniCodec.finish_input(&mut input, &())?;
+        input.logical[0].name = syn::parse_quote!(logical_input);
+        let mut output = JniCodec.output_leaf(
+            &syn::parse_quote!(i64),
+            &(),
+            syn::parse_quote!(native_output),
+            prebindgen_conversions::source_result_expr(),
+            false,
+        )?;
+        JniCodec.finish_output(&mut output, &())?;
+        output.logical[0].name = syn::parse_quote!(logical_output);
+        if binding_failure {
+            output.logical.set_outcome(
+                OutcomeKind::BindingFailure,
+                JniCodec.binding_failure_layout(&())?.unwrap(),
+            );
+        }
+        let function = model.function_mut("echo")?;
+        function.params[0].ty.slot = Some(input.into());
+        function.ret.slot = Some(output.into());
+        assert_eq!(
+            function.input_conversions()?[0].layout()[0].name,
+            "logical_input"
+        );
+        assert_eq!(
+            function
+                .output_conversion()?
+                .layout()
+                .outcome(OutcomeKind::Success)
+                .unwrap()[0]
+                .name,
+            "logical_output"
+        );
+        assert_eq!(
+            function
+                .output_conversion()?
+                .native_wires()
+                .next()
+                .unwrap()
+                .name,
+            "native_output"
+        );
+        Ok(())
+    }
+    for configure in [false, true] {
+        let mut model = flat("pub fn echo(value:i64)->i64{}");
+        if !configure {
+            install(&mut model, true).unwrap();
+        }
+        let mut builder = JniGen::builder()
+            .flat(model)
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(echo)));
+        if configure {
+            builder = builder.configure(|flat| install(flat, true));
+        }
+        let generated = builder.build().unwrap();
+        assert!(generated.kotlin["test/Functions.kt"].contains("native_input: Long"));
+    }
+    let builder = JniGen::builder()
+        .flat(flat("pub fn echo(value:i64)->i64{}"))
+        .set_package_prefix("test")
+        .configure(|flat| install(flat, false))
+        .package(package!().fun(fun!(echo)));
+    assert!(fail(builder).contains("binding-failure schema"));
 }

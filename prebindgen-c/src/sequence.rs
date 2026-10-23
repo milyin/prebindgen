@@ -1,13 +1,14 @@
-//! Array rows retain their element schema in WireNode::Sequence, not in CWire.
+//! Array rows retain their element schema in TransportNode::Sequence, not in CWire.
 use super::*;
 use prebindgen_declarations::{SequenceInput, SequenceOutput};
-use prebindgen_flat::{WireLayout, WireNode};
+
+use prebindgen_conversions::{TransportLayout, TransportNode};
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<CWire, CGroup>,
+    element: &TransportLayout<CWire, CGroup>,
 ) -> Result<SequenceInput<CWire>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let mut bind = TokenStream::new();
@@ -32,7 +33,7 @@ pub(crate) fn input(
 pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &WireLayout<CWire, CGroup>,
+    element: &TransportLayout<CWire, CGroup>,
     values: &[TokenStream],
 ) -> Result<SequenceOutput<CWire>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
@@ -56,15 +57,20 @@ pub(crate) fn output(
     })
 }
 pub(crate) fn schemas<'a>(
-    layout: &'a WireLayout<CWire, CGroup>,
-    out: &mut Vec<(&'a Wire, &'a WireLayout<CWire, CGroup>)>,
+    layout: &'a TransportLayout<CWire, CGroup>,
+    out: &mut Vec<(&'a Wire, &'a TransportLayout<CWire, CGroup>)>,
 ) {
     for node in layout.nodes() {
         match node {
-            WireNode::Wire(_) => {}
-            WireNode::Group { children, .. } => schemas(children, out),
-            WireNode::Optional(c) => schemas(&c.element, out),
-            WireNode::Sequence(c) => {
+            TransportNode::Wire(_) => {}
+            TransportNode::Alternatives { alternatives, .. } => {
+                for arm in alternatives {
+                    schemas(arm, out);
+                }
+            }
+            TransportNode::Group { children, .. } => schemas(children, out),
+            TransportNode::Optional(c) => schemas(&c.element, out),
+            TransportNode::Sequence(c) => {
                 schemas(&c.element, out);
                 if let Some(carrier) = c.carrier() {
                     out.push((carrier, &c.element));
@@ -76,7 +82,7 @@ pub(crate) fn schemas<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_schemas(
-    schemas: Vec<(&Wire, &WireLayout<CWire, CGroup>)>,
+    schemas: Vec<(&Wire, &TransportLayout<CWire, CGroup>)>,
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
@@ -138,7 +144,7 @@ pub(crate) fn emit_schemas(
 
 /// Reclaim a committed output that will not reach its caller, including nested rows.
 pub(crate) fn release(
-    layout: &WireLayout<CWire, CGroup>,
+    layout: &TransportLayout<CWire, CGroup>,
     values: &[TokenStream],
     context: &CContext,
     catch_panics: bool,
@@ -193,10 +199,10 @@ pub(crate) fn callback_output(values: &[TokenStream], length: syn::Ident) -> Seq
 }
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
-pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
-    fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
+pub(crate) fn callback_shape(layout: &TransportLayout<CWire, CGroup>) -> bool {
+    fn one(nodes: &[TransportNode<CWire, CGroup>]) -> bool {
         match nodes {
-            [WireNode::Sequence(c)] => c.carrier().is_some_and(|carrier| {
+            [TransportNode::Sequence(c)] => c.carrier().is_some_and(|carrier| {
                 matches!(
                     carrier.kind,
                     CWire::Scalar {
@@ -205,9 +211,9 @@ pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
                     }
                 )
             }),
-            [WireNode::Optional(c)] => match (&c.representation, &c.metadata) {
+            [TransportNode::Optional(c)] => match (&c.representation, &c.metadata) {
                 (
-                    prebindgen_flat::WireRepresentation::Inline { controls },
+                    prebindgen_conversions::TransportRepresentation::Inline { controls },
                     Some(CGroup::Optional(o)),
                 ) if o.niche.is_none() => {
                     matches!(controls.as_slice(),[flag] if flag.name==o.discriminator)
@@ -215,7 +221,7 @@ pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
                 }
                 _ => false,
             },
-            [WireNode::Group { children, .. }] => one(children.nodes()),
+            [TransportNode::Group { children, .. }] => one(children.nodes()),
             _ => false,
         }
     }

@@ -713,4 +713,7 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
 }
 
 mod layout;
-pub use layout::{WireContainer, WireLayout, WireNode, WireRepresentation, Wires, WiresMut};
+pub use layout::{
+    OutcomeKind, WireContainer, WireEntry, WireLayout, WireNode, WireOutcome, WirePath, Wires,
+    WiresMut,
+};

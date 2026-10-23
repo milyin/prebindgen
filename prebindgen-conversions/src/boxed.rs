@@ -79,12 +79,12 @@ impl Storage {
 ///     },
 /// )?;
 /// assert_eq!(input.resources[0].access, Access::Shared);
-/// assert_eq!(prebindgen_flat::type_key(&input.layout[0].rust_type()), "* const Counter");
+/// assert_eq!(prebindgen_flat::type_key(&input.transport[0].rust_type()), "* const Counter");
 /// assert!(input.acquire.is_empty());
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C, G>(
+pub fn input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
@@ -130,10 +130,11 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         ),
     };
     Ok(InputPlan {
+        logical: Default::default(),
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: vec![Wire {
+        transport: vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
@@ -150,7 +151,8 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
             active: active.clone(),
             access,
         }],
-    })
+    }
+    .with_logical())
 }
 /// Prepare an owned boxed-address output with deferred ownership transfer.
 ///
@@ -169,7 +171,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W: prebindgen_flat::WireKind, C, G>(
+pub fn output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
@@ -188,10 +190,11 @@ pub fn output<W: prebindgen_flat::WireKind, C, G>(
     let value = storage.wrap(value);
     let allocation = storage.ty(ty);
     Ok(OutputPlan {
+        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        layout: vec![Wire {
+        transport: vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: ty.clone(),
@@ -202,5 +205,6 @@ pub fn output<W: prebindgen_flat::WireKind, C, G>(
         statements: quote!(let mut #wire = Box::new(#value);),
         values: vec![quote!((&mut *#wire) as *mut #allocation)],
         commit: quote!(let _ = Box::into_raw(#wire);),
-    })
+    }
+    .with_logical())
 }

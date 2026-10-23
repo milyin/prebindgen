@@ -1,99 +1,74 @@
-//! A slot's authoritative tree of physical wires and the values they represent.
+//! Logical values exchanged by a conversion; transport belongs to its reader.
 use crate::{Result, Wire, WireKind};
 
-/// Explicit boundary representation, independent of optional/sequence cardinality.
-/// Each physical wire is stored exactly once in the tree.
-#[derive(Clone, Debug)]
-pub enum WireRepresentation<W: WireKind> {
-    /// Control wires followed by the element's wires in the enclosing scope.
-    Inline {
-        /// Physical controls, such as a presence flag; empty when a niche is used.
-        controls: Vec<Wire<W>>,
-    },
-    /// One complete FFI value in the enclosing scope. Element fields have
-    /// independent positions, such as array row fields or callback arguments.
-    /// The carrier transports the elements or reports delivery/count/presence.
-    Carrier(Wire<W>),
-}
-
-/// Common structure for an optional value or a sequence.
+/// One payload/element schema. Its leaves may occur zero, one or many times.
 #[derive(Clone, Debug)]
 pub struct WireContainer<W: WireKind, G> {
-    /// Explicit boundary representation and wire scope.
-    pub representation: WireRepresentation<W>,
-    /// One present payload/sequence element. Control wires are kept separately.
+    /// Definition of one present payload or sequence element.
     pub element: WireLayout<W, G>,
-    /// Adapter-specific information; cardinality and scope are defined above it.
+    /// Optional adapter-specific information, without common placement rules.
     pub metadata: Option<G>,
 }
-impl<W: WireKind, G> WireContainer<W, G> {
-    /// Physical wires occupied in the enclosing scope.
-    pub fn wire_count(&self) -> usize {
-        match &self.representation {
-            WireRepresentation::Inline { controls } => controls.len() + self.element.len(),
-            WireRepresentation::Carrier(_) => 1,
-        }
-    }
-    /// Carrier when element fields have their own scope.
-    pub fn carrier(&self) -> Option<&Wire<W>> {
-        match &self.representation {
-            WireRepresentation::Carrier(wire) => Some(wire),
-            WireRepresentation::Inline { .. } => None,
-        }
-    }
+/// Mutually exclusive completion channels, independent of delivery mechanism.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OutcomeKind {
+    /// Normal return value, including a successful Result payload.
+    Success = 0,
+    /// The projected E of a source Result<T, E>.
+    SourceError = 1,
+    /// Failure of conversion or invocation, distinct from the source's Err(E).
+    BindingFailure = 2,
 }
-
-/// One FFI value, a container, or a relationship between child values.
+/// The logical payload of one completion channel.
+#[derive(Clone, Debug)]
+pub struct WireOutcome<W: WireKind, G> {
+    /// Which completion channel selects this payload.
+    pub kind: OutcomeKind,
+    /// Fields exchanged when this outcome is selected; may be empty.
+    pub layout: WireLayout<W, G>,
+}
+/// Logical structure, without ABI positions, carriers, flags or callback placement.
 #[derive(Clone, Debug)]
 pub enum WireNode<W: WireKind, G> {
-    /// One physical FFI value. Its metadata belongs in `W`.
+    /// Definition of one typed value, wherever the reader chooses to pass it.
     Wire(Wire<W>),
-    /// Zero or one occurrence of the element layout.
+    /// Zero or one occurrence of the element schema.
     Optional(WireContainer<W, G>),
-    /// Zero or more occurrences of the element layout.
+    /// Zero or more occurrences of the element schema.
     Sequence(WireContainer<W, G>),
-    /// Adapter-described relationships such as records and named fields.
-    /// Group metadata adds no physical wires by itself.
+    /// Adapter-described relationships, such as records and named fields.
     Group {
-        /// Information about the relationship between child values.
+        /// Adapter-specific information about the children.
         metadata: G,
-        /// Child values in ABI order.
+        /// Logical child definitions in declared order.
         children: WireLayout<W, G>,
     },
+    /// Exactly one alternative is selected; selector tags belong to the reader.
+    /// Empty alternatives represent choices carrying no values.
+    Alternatives {
+        /// Mutually exclusive payload schemas in declaration order.
+        alternatives: Vec<WireLayout<W, G>>,
+    },
+    /// Exactly one completion channel is selected. Empty payloads retain their
+    /// outcome identity; Result<(), E> is distinct from an ordinary unit return.
+    Outcomes {
+        /// Available channels and their payload schemas.
+        alternatives: Vec<WireOutcome<W, G>>,
+    },
 }
-impl<W: WireKind, G> WireNode<W, G> {
-    /// Physical wires occupied in the enclosing scope.
-    pub fn wire_count(&self) -> usize {
-        match self {
-            Self::Wire(_) => 1,
-            Self::Optional(c) | Self::Sequence(c) => c.wire_count(),
-            Self::Group { children, .. } => children.len(),
-        }
-    }
-}
-
-/// Authoritative wire order and structure for one conversion slot.
+/// Logical input/output specification. A reader chooses physical signatures and
+/// how values are packed, repeated, selected or delivered.
 ///
-/// Wires are visited depth first, left to right. Inline containers expose their
-/// control wires then their element wires. Carried containers expose only the
-/// carrier; their element layouts have independent positions. This order also
-/// defines `ConversionExt::wires()` and position-based code requests, including
-/// inactive alternatives. Empty groups and inline elements are allowed.
-///
-/// Build/edit the tree before emission; positions must not survive structural
-/// edits. Emission borrows it immutably so every request sees the same order.
+/// Iteration visits each leaf definition once, including every sequence element
+/// schema and every alternative. It does not count runtime values or establish
+/// native argument order. Use paths when branch/element context matters.
 #[derive(Clone, Debug)]
 pub struct WireLayout<W: WireKind, G = ()> {
     nodes: Vec<WireNode<W, G>>,
-    // Derived counts, not a second source of wires or metadata.
-    ends: Vec<usize>,
 }
 impl<W: WireKind, G> Default for WireLayout<W, G> {
     fn default() -> Self {
-        Self {
-            nodes: vec![],
-            ends: vec![],
-        }
+        Self { nodes: vec![] }
     }
 }
 impl<W: WireKind, G> From<Vec<Wire<W>>> for WireLayout<W, G> {
@@ -107,252 +82,315 @@ impl<W: WireKind, G> FromIterator<Wire<W>> for WireLayout<W, G> {
     }
 }
 impl<W: WireKind, G> WireLayout<W, G> {
-    /// Build a tree, deriving positions from its explicit representations.
+    /// Build an ordered logical schema.
     pub fn from_nodes(nodes: Vec<WireNode<W, G>>) -> Self {
-        let mut count = 0;
-        let ends = nodes
-            .iter()
-            .map(|node| {
-                count += node.wire_count();
-                count
-            })
-            .collect();
-        Self { nodes, ends }
+        Self { nodes }
     }
-    /// Consume the tree for structural editing; rebuild with `from_nodes`.
-    pub fn into_nodes(self) -> Vec<WireNode<W, G>> {
-        self.nodes
-    }
-    /// Immediate child nodes, including container structure and metadata.
+    /// Immediate logical nodes, including branch and element structure.
     pub fn nodes(&self) -> &[WireNode<W, G>] {
         &self.nodes
     }
-    /// Append one physical wire during preparation.
+    /// Consume the schema for structural editing.
+    pub fn into_nodes(self) -> Vec<WireNode<W, G>> {
+        self.nodes
+    }
+    /// Append a logical value definition.
     pub fn push(&mut self, wire: Wire<W>) {
-        self.ends.push(self.len() + 1);
         self.nodes.push(WireNode::Wire(wire));
     }
-    /// Put one physical wire before the current children.
+    /// Prepend a logical value definition; this chooses no ABI placement.
     pub fn prepend(&mut self, wire: Wire<W>) {
-        for end in &mut self.ends {
-            *end += 1;
-        }
-        self.ends.insert(0, 1);
         self.nodes.insert(0, WireNode::Wire(wire));
     }
-    /// Append another tree without discarding structure or metadata.
+    /// Append definitions, preserving their structure.
     pub fn extend(&mut self, other: Self) {
-        let offset = self.len();
-        self.ends
-            .extend(other.ends.into_iter().map(|end| end + offset));
         self.nodes.extend(other.nodes);
     }
-    /// Enclose the current tree in an adapter-described group.
+    /// Enclose definitions in an adapter-described relationship.
     pub fn enclose(&mut self, metadata: G) {
         let children = std::mem::take(self);
-        *self = Self::from_nodes(vec![WireNode::Group { metadata, children }]);
+        self.nodes.push(WireNode::Group { metadata, children });
     }
-    /// Make the current tree an optional payload with an explicit representation.
-    pub fn enclose_optional(&mut self, representation: WireRepresentation<W>, metadata: Option<G>) {
+    /// Make these definitions the payload of an optional value.
+    pub fn enclose_optional(&mut self, metadata: Option<G>) {
         let element = std::mem::take(self);
-        *self = Self::from_nodes(vec![WireNode::Optional(WireContainer {
-            representation,
-            element,
-            metadata,
-        })]);
+        self.nodes
+            .push(WireNode::Optional(WireContainer { element, metadata }));
     }
-    /// Make the current tree a sequence element with an explicit representation.
-    pub fn enclose_sequence(&mut self, representation: WireRepresentation<W>, metadata: Option<G>) {
+    /// Make these definitions the schema of one sequence element.
+    pub fn enclose_sequence(&mut self, metadata: Option<G>) {
         let element = std::mem::take(self);
-        *self = Self::from_nodes(vec![WireNode::Sequence(WireContainer {
-            representation,
-            element,
-            metadata,
-        })]);
+        self.nodes
+            .push(WireNode::Sequence(WireContainer { element, metadata }));
     }
-    /// Physical wire count in this scope, including inactive alternatives.
+    /// Add or replace a completion channel. A plain layout becomes Success.
+    pub fn set_outcome(&mut self, kind: OutcomeKind, layout: Self) {
+        if let [WireNode::Outcomes { alternatives }] = self.nodes.as_mut_slice() {
+            if let Some(existing) = alternatives.iter_mut().find(|o| o.kind == kind) {
+                existing.layout = layout;
+            } else {
+                alternatives.push(WireOutcome { kind, layout });
+                alternatives.sort_by_key(|o| o.kind);
+            }
+        } else {
+            let success = std::mem::take(self);
+            let mut alternatives = vec![WireOutcome {
+                kind: OutcomeKind::Success,
+                layout: success,
+            }];
+            if kind == OutcomeKind::Success {
+                alternatives[0].layout = layout;
+            } else {
+                alternatives.push(WireOutcome { kind, layout });
+            }
+            self.nodes.push(WireNode::Outcomes { alternatives });
+        }
+    }
+    /// Replace the success payload, retaining any declared error channels.
+    pub fn replace_success(&mut self, layout: Self) {
+        if matches!(self.nodes.as_slice(), [WireNode::Outcomes { .. }]) {
+            self.set_outcome(OutcomeKind::Success, layout);
+        } else {
+            *self = layout;
+        }
+    }
+    /// Payload of a declared outcome; an ordinary layout implicitly means Success.
+    pub fn outcome(&self, kind: OutcomeKind) -> Option<&Self> {
+        if let [WireNode::Outcomes { alternatives }] = self.nodes.as_slice() {
+            alternatives
+                .iter()
+                .find(|o| o.kind == kind)
+                .map(|o| &o.layout)
+        } else {
+            (kind == OutcomeKind::Success
+                && !self
+                    .nodes
+                    .iter()
+                    .any(|node| matches!(node, WireNode::Outcomes { .. })))
+            .then_some(self)
+        }
+    }
+    /// Number of leaf definitions, visiting each element/alternative once.
+    /// This is neither an ABI arity nor a runtime value count.
     pub fn len(&self) -> usize {
-        self.ends.last().copied().unwrap_or(0)
+        self.iter().count()
     }
-    /// Whether this scope has no physical wires; structure may still be present.
+    /// Whether the schema has no leaf definitions; structural nodes may remain.
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.iter().next().is_none()
     }
-    /// Physical wires in ABI order. Individual metadata is available in `kind`.
+    /// Visit all leaf definitions in structural order, without choosing transport.
     pub fn iter(&self) -> Wires<'_, W, G> {
         Wires {
-            stack: vec![Scope::Nodes(self.nodes.iter())],
-            remaining: self.len(),
+            stack: vec![self.nodes.iter()],
         }
     }
-    /// Edit physical wires without changing their order or structure.
+    /// Edit leaf descriptions without changing structure.
     pub fn iter_mut(&mut self) -> WiresMut<'_, W, G> {
         WiresMut {
-            stack: vec![ScopeMut::Nodes(self.nodes.iter_mut())],
+            stack: vec![self.nodes.iter_mut()],
         }
     }
-    /// Find one physical wire at its derived position in this scope.
-    pub fn get(&self, pos: usize) -> Option<&Wire<W>> {
-        let index = self.ends.partition_point(|end| *end <= pos);
-        let local = pos - if index == 0 { 0 } else { self.ends[index - 1] };
-        match self.nodes.get(index)? {
-            WireNode::Wire(wire) => Some(wire),
-            WireNode::Group { children, .. } => children.get(local),
-            WireNode::Optional(c) | WireNode::Sequence(c) => match &c.representation {
-                WireRepresentation::Carrier(wire) => Some(wire),
-                WireRepresentation::Inline { controls } => {
-                    if local < controls.len() {
-                        controls.get(local)
-                    } else {
-                        c.element.get(local - controls.len())
+    /// A leaf by structural traversal index, not by native argument position.
+    pub fn get(&self, index: usize) -> Option<&Wire<W>> {
+        self.iter().nth(index)
+    }
+    /// Definitions with their full structural addresses. A path includes child
+    /// node indices and an alternative index before its children. Outcomes use
+    /// stable channel codes: Success=0, SourceError=1, BindingFailure=2.
+    pub fn entries(&self) -> impl Iterator<Item = WireEntry<'_, W>> {
+        fn visit<'a, W: WireKind, G>(
+            layout: &'a WireLayout<W, G>,
+            prefix: &mut Vec<usize>,
+            out: &mut Vec<WireEntry<'a, W>>,
+        ) {
+            for (index, node) in layout.nodes.iter().enumerate() {
+                prefix.push(index);
+                match node {
+                    WireNode::Wire(wire) => out.push(WireEntry {
+                        path: WirePath(prefix.clone()),
+                        wire,
+                    }),
+                    WireNode::Optional(c) | WireNode::Sequence(c) => visit(&c.element, prefix, out),
+                    WireNode::Group { children, .. } => visit(children, prefix, out),
+                    WireNode::Alternatives { alternatives } => {
+                        for (arm, layout) in alternatives.iter().enumerate() {
+                            prefix.push(arm);
+                            visit(layout, prefix, out);
+                            prefix.pop();
+                        }
+                    }
+                    WireNode::Outcomes { alternatives } => {
+                        for o in alternatives {
+                            prefix.push(o.kind as usize);
+                            visit(&o.layout, prefix, out);
+                            prefix.pop();
+                        }
                     }
                 }
-            },
-        }
-    }
-    /// Check unique physical-wire names across all scopes of this slot.
-    /// Adapter-specific metadata rules are checked by the adapter.
-    pub fn validate(&self) -> Result<()> {
-        fn insert<W: WireKind>(
-            wire: &Wire<W>,
-            names: &mut std::collections::BTreeSet<String>,
-        ) -> Result<()> {
-            if !names.insert(wire.name.to_string()) {
-                return Err(format!("duplicate wire identifier `{}`", wire.name));
+                prefix.pop();
             }
-            Ok(())
         }
-        fn walk<W: WireKind, G>(
-            layout: &WireLayout<W, G>,
-            names: &mut std::collections::BTreeSet<String>,
-        ) -> Result<()> {
+        let mut out = vec![];
+        visit(self, &mut vec![], &mut out);
+        out.into_iter()
+    }
+    /// Resolve a structural leaf path, independently of its delivery mechanism.
+    pub fn get_path(&self, path: &WirePath) -> Option<&Wire<W>> {
+        fn get<'a, W: WireKind, G>(
+            layout: &'a WireLayout<W, G>,
+            path: &[usize],
+        ) -> Option<&'a Wire<W>> {
+            let (&index, rest) = path.split_first()?;
+            match layout.nodes.get(index)? {
+                WireNode::Wire(wire) => rest.is_empty().then_some(wire),
+                WireNode::Optional(c) | WireNode::Sequence(c) => get(&c.element, rest),
+                WireNode::Group { children, .. } => get(children, rest),
+                WireNode::Alternatives { alternatives } => {
+                    let (&arm, rest) = rest.split_first()?;
+                    get(alternatives.get(arm)?, rest)
+                }
+                WireNode::Outcomes { alternatives } => {
+                    let (&channel, rest) = rest.split_first()?;
+                    get(
+                        &alternatives
+                            .iter()
+                            .find(|o| o.kind as usize == channel)?
+                            .layout,
+                        rest,
+                    )
+                }
+            }
+        }
+        get(self, &path.0)
+    }
+    /// Check branch structure. Completion channels must form the sole root node,
+    /// include Success, and have unique kinds. Names may repeat across contexts.
+    pub fn validate(&self) -> Result<()> {
+        fn walk<W: WireKind, G>(layout: &WireLayout<W, G>, root: bool) -> Result<()> {
             for node in layout.nodes() {
                 match node {
-                    WireNode::Wire(wire) => insert(wire, names)?,
-                    WireNode::Group { children, .. } => walk(children, names)?,
-                    WireNode::Optional(c) | WireNode::Sequence(c) => {
-                        match &c.representation {
-                            WireRepresentation::Inline { controls } => {
-                                for wire in controls {
-                                    insert(wire, names)?;
-                                }
-                            }
-                            WireRepresentation::Carrier(wire) => insert(wire, names)?,
+                    WireNode::Wire(_) => {}
+                    WireNode::Optional(c) | WireNode::Sequence(c) => walk(&c.element, false)?,
+                    WireNode::Group { children, .. } => walk(children, false)?,
+                    WireNode::Alternatives { alternatives } => {
+                        if alternatives.is_empty() {
+                            return Err("selection has no alternatives".into());
                         }
-                        walk(&c.element, names)?;
+                        for arm in alternatives {
+                            walk(arm, false)?;
+                        }
+                    }
+                    WireNode::Outcomes { alternatives } => {
+                        if !root || layout.nodes.len() != 1 {
+                            return Err("outcomes must be the sole root node".into());
+                        }
+                        let mut kinds = std::collections::BTreeSet::new();
+                        for o in alternatives {
+                            if !kinds.insert(o.kind) {
+                                return Err("duplicate outcome kind".into());
+                            }
+                        }
+                        if !kinds.contains(&OutcomeKind::Success) {
+                            return Err("outcomes require a Success channel".into());
+                        }
+                        for o in alternatives {
+                            walk(&o.layout, false)?;
+                        }
                     }
                 }
             }
             Ok(())
         }
-        walk(self, &mut std::collections::BTreeSet::new())
+        walk(self, true)
     }
+}
+/// Address of a definition, not a runtime instance or an ABI position. Rebuild
+/// paths after structural edits; a reader supplies any element/branch context.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WirePath(pub Vec<usize>);
+/// A logical value definition paired with its structural context.
+pub struct WireEntry<'a, W: WireKind> {
+    /// Structural address, including element and outcome boundaries.
+    pub path: WirePath,
+    /// The leaf definition at that address.
+    pub wire: &'a Wire<W>,
 }
 impl<W: WireKind, G> std::ops::Index<usize> for WireLayout<W, G> {
     type Output = Wire<W>;
-    fn index(&self, pos: usize) -> &Self::Output {
-        self.get(pos).expect("wire position out of range")
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get(index).expect("logical wire index out of range")
     }
 }
 impl<W: WireKind, G> std::ops::IndexMut<usize> for WireLayout<W, G> {
-    fn index_mut(&mut self, pos: usize) -> &mut Self::Output {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.iter_mut()
-            .nth(pos)
-            .expect("wire position out of range")
+            .nth(index)
+            .expect("logical wire index out of range")
     }
 }
-enum Scope<'a, W: WireKind, G> {
-    Nodes(std::slice::Iter<'a, WireNode<W, G>>),
-    Wires(std::slice::Iter<'a, Wire<W>>),
-}
-/// Borrowed physical wires in the enclosing scope's ABI order.
+/// Structural leaf traversal; sequence schemas and alternatives are each visited once.
 pub struct Wires<'a, W: WireKind, G> {
-    stack: Vec<Scope<'a, W, G>>,
-    remaining: usize,
+    stack: Vec<std::slice::Iter<'a, WireNode<W, G>>>,
 }
 impl<'a, W: WireKind, G> Iterator for Wires<'a, W, G> {
     type Item = &'a Wire<W>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.stack.last_mut()? {
-                Scope::Wires(wires) => {
-                    if let Some(wire) = wires.next() {
-                        self.remaining -= 1;
-                        return Some(wire);
+            match self.stack.last_mut()?.next() {
+                Some(WireNode::Wire(wire)) => return Some(wire),
+                Some(WireNode::Optional(c) | WireNode::Sequence(c)) => {
+                    self.stack.push(c.element.nodes.iter())
+                }
+                Some(WireNode::Group { children, .. }) => self.stack.push(children.nodes.iter()),
+                Some(WireNode::Alternatives { alternatives }) => {
+                    for arm in alternatives.iter().rev() {
+                        self.stack.push(arm.nodes.iter());
                     }
                 }
-                Scope::Nodes(nodes) => match nodes.next() {
-                    Some(WireNode::Wire(wire)) => {
-                        self.remaining -= 1;
-                        return Some(wire);
+                Some(WireNode::Outcomes { alternatives }) => {
+                    for o in alternatives.iter().rev() {
+                        self.stack.push(o.layout.nodes.iter());
                     }
-                    Some(WireNode::Group { children, .. }) => {
-                        self.stack.push(Scope::Nodes(children.nodes.iter()));
-                        continue;
-                    }
-                    Some(WireNode::Optional(c) | WireNode::Sequence(c)) => {
-                        match &c.representation {
-                            WireRepresentation::Carrier(wire) => {
-                                self.remaining -= 1;
-                                return Some(wire);
-                            }
-                            WireRepresentation::Inline { controls } => {
-                                self.stack.push(Scope::Nodes(c.element.nodes.iter()));
-                                self.stack.push(Scope::Wires(controls.iter()));
-                            }
-                        }
-                        continue;
-                    }
-                    None => {}
-                },
+                }
+                None => {
+                    self.stack.pop();
+                }
             }
-            self.stack.pop();
         }
     }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
-    }
 }
-impl<W: WireKind, G> ExactSizeIterator for Wires<'_, W, G> {}
 impl<W: WireKind, G> std::iter::FusedIterator for Wires<'_, W, G> {}
-enum ScopeMut<'a, W: WireKind, G> {
-    Nodes(std::slice::IterMut<'a, WireNode<W, G>>),
-    Wires(std::slice::IterMut<'a, Wire<W>>),
-}
-/// Mutable physical wires in the enclosing scope; independent element scopes are excluded.
+/// Mutable structural leaf traversal, including element and outcome definitions.
 pub struct WiresMut<'a, W: WireKind, G> {
-    stack: Vec<ScopeMut<'a, W, G>>,
+    stack: Vec<std::slice::IterMut<'a, WireNode<W, G>>>,
 }
 impl<'a, W: WireKind, G> Iterator for WiresMut<'a, W, G> {
     type Item = &'a mut Wire<W>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.stack.last_mut()? {
-                ScopeMut::Wires(wires) => {
-                    if let Some(wire) = wires.next() {
-                        return Some(wire);
+            match self.stack.last_mut()?.next() {
+                Some(WireNode::Wire(wire)) => return Some(wire),
+                Some(WireNode::Optional(c) | WireNode::Sequence(c)) => {
+                    self.stack.push(c.element.nodes.iter_mut())
+                }
+                Some(WireNode::Group { children, .. }) => {
+                    self.stack.push(children.nodes.iter_mut())
+                }
+                Some(WireNode::Alternatives { alternatives }) => {
+                    for arm in alternatives.iter_mut().rev() {
+                        self.stack.push(arm.nodes.iter_mut());
                     }
                 }
-                ScopeMut::Nodes(nodes) => match nodes.next() {
-                    Some(WireNode::Wire(wire)) => return Some(wire),
-                    Some(WireNode::Group { children, .. }) => {
-                        self.stack.push(ScopeMut::Nodes(children.nodes.iter_mut()));
-                        continue;
+                Some(WireNode::Outcomes { alternatives }) => {
+                    for o in alternatives.iter_mut().rev() {
+                        self.stack.push(o.layout.nodes.iter_mut());
                     }
-                    Some(WireNode::Optional(c) | WireNode::Sequence(c)) => {
-                        match &mut c.representation {
-                            WireRepresentation::Carrier(wire) => return Some(wire),
-                            WireRepresentation::Inline { controls } => {
-                                self.stack.push(ScopeMut::Nodes(c.element.nodes.iter_mut()));
-                                self.stack.push(ScopeMut::Wires(controls.iter_mut()));
-                            }
-                        }
-                        continue;
-                    }
-                    None => {}
-                },
+                }
+                None => {
+                    self.stack.pop();
+                }
             }
-            self.stack.pop();
         }
     }
 }
@@ -374,272 +412,117 @@ impl<'a, W: WireKind, G> IntoIterator for &'a mut WireLayout<W, G> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[derive(Clone, Debug, PartialEq)]
-    enum Meaning {
-        Record,
-        Choice,
-        Variant(&'static str),
-    }
     fn leaf(name: &str) -> Wire<syn::Type> {
         Wire {
             name: syn::parse_str(name).unwrap(),
-            kind: syn::parse_quote!(i32),
+            kind: syn::parse_quote!(i64),
         }
     }
     #[test]
-    fn cardinality_does_not_choose_wire_scope() {
-        for optional in [true, false] {
-            for inline in [true, false] {
-                let mut payload: WireLayout<_, Meaning> = vec![leaf("x"), leaf("y")].into();
-                payload.enclose(Meaning::Record);
-                let representation = if inline {
-                    WireRepresentation::Inline {
-                        controls: vec![leaf("present")],
-                    }
-                } else {
-                    WireRepresentation::Carrier(leaf("array"))
-                };
-                if optional {
-                    payload.enclose_optional(representation, Some(Meaning::Choice));
-                } else {
-                    payload.enclose_sequence(representation, Some(Meaning::Choice));
-                }
-                let mut tree: WireLayout<_, Meaning> = vec![leaf("before")].into();
-                tree.extend(payload);
-                tree.push(leaf("after"));
-                tree.validate().unwrap();
-                let expected = if inline {
-                    vec!["before", "present", "x", "y", "after"]
-                } else {
-                    vec!["before", "array", "after"]
-                };
-                assert_eq!(
-                    tree.iter().map(|w| w.name.to_string()).collect::<Vec<_>>(),
-                    expected
-                );
-                assert_eq!(tree.len(), expected.len());
-                for (i, wire) in tree.iter().enumerate() {
-                    assert!(std::ptr::eq(wire, tree.get(i).unwrap()));
-                }
-                assert!(tree.get(expected.len()).is_none());
-                assert!(tree.get(usize::MAX).is_none());
-                let mut iter = tree.iter();
-                for remaining in (1..=expected.len()).rev() {
-                    assert_eq!(iter.len(), remaining);
-                    iter.next().unwrap();
-                }
-                assert_eq!(iter.len(), 0);
-                assert!(iter.next().is_none());
-                assert!(iter.next().is_none());
-                for wire in tree.iter_mut() {
-                    wire.kind = syn::parse_quote!(u64);
-                }
-                let (WireNode::Optional(c) | WireNode::Sequence(c)) = &tree.nodes()[1] else {
-                    panic!()
-                };
-                assert_eq!(c.metadata, Some(Meaning::Choice));
-                assert_eq!(c.element.len(), 2);
-                // Mutating outer wires never descends into an independent scope.
-                assert_eq!(
-                    crate::type_key(&c.element[0].kind),
-                    if inline { "u64" } else { "i32" }
-                );
-            }
+    fn repetitions_and_outcomes_are_definitions_with_distinct_paths() {
+        let mut payload: WireLayout<_, ()> = vec![leaf("value"), leaf("other")].into();
+        payload.enclose_optional(None);
+        payload.enclose_sequence(None);
+        payload.enclose_optional(None);
+        assert_eq!(payload.len(), 2);
+        payload.set_outcome(OutcomeKind::SourceError, vec![leaf("value")].into());
+        payload.set_outcome(OutcomeKind::BindingFailure, vec![leaf("message")].into());
+        payload.validate().unwrap();
+        assert_eq!(payload.len(), 4);
+        let entries: Vec<_> = payload.entries().collect();
+        assert_eq!(entries[0].wire.name, "value");
+        assert_eq!(entries[2].wire.name, "value");
+        assert_ne!(entries[0].path, entries[2].path);
+        for entry in &entries {
+            assert!(std::ptr::eq(
+                entry.wire,
+                payload.get_path(&entry.path).unwrap()
+            ));
         }
+        let paths: Vec<_> = entries.iter().map(|e| e.path.clone()).collect();
+        for wire in payload.iter_mut() {
+            wire.kind = syn::parse_quote!(u64);
+        }
+        for path in &paths {
+            assert_eq!(
+                crate::type_key(&payload.get_path(path).unwrap().kind),
+                "u64"
+            );
+        }
+        assert!(payload.get_path(&WirePath(vec![99])).is_none());
+        assert_eq!(payload.outcome(OutcomeKind::Success).unwrap().len(), 2);
+        assert_eq!(payload.outcome(OutcomeKind::SourceError).unwrap().len(), 1);
     }
     #[test]
-    fn nested_optional_sequences_keep_flags_outside_element_schemas() {
-        let mut element: WireLayout<_, ()> = vec![leaf("value")].into();
-        element.enclose_optional(
-            WireRepresentation::Inline {
-                controls: vec![leaf("item_present")],
-            },
-            None,
-        );
-        element.enclose_sequence(WireRepresentation::Carrier(leaf("rows")), None);
-        element.enclose_optional(
-            WireRepresentation::Inline {
-                controls: vec![leaf("list_present")],
-            },
-            None,
-        );
-        element.validate().unwrap();
-        assert_eq!(
-            element
-                .iter()
-                .map(|w| w.name.to_string())
-                .collect::<Vec<_>>(),
-            ["list_present", "rows"]
-        );
-        let WireNode::Optional(outer) = &element.nodes()[0] else {
-            panic!()
-        };
-        let WireNode::Sequence(sequence) = &outer.element.nodes()[0] else {
-            panic!()
-        };
-        assert_eq!(
-            sequence
-                .element
-                .iter()
-                .map(|w| w.name.to_string())
-                .collect::<Vec<_>>(),
-            ["item_present", "value"]
-        );
-        let WireNode::Optional(item) = &sequence.element.nodes()[0] else {
-            panic!()
-        };
-        assert_eq!(item.element.len(), 1);
-        assert_eq!(item.element[0].name, "value");
-        let duplicate: WireLayout<_, ()> =
-            WireLayout::from_nodes(vec![WireNode::Optional(WireContainer {
-                representation: WireRepresentation::Inline {
-                    controls: vec![leaf("value")],
+    fn empty_outcomes_and_optional_unit_keep_their_structure() {
+        let mut unit: WireLayout<syn::Type, ()> = WireLayout::default();
+        unit.enclose_optional(None);
+        assert!(unit.is_empty());
+        assert!(matches!(unit.nodes(), [WireNode::Optional(_)]));
+        unit.set_outcome(OutcomeKind::SourceError, WireLayout::default());
+        assert!(unit.outcome(OutcomeKind::Success).is_some());
+        assert!(unit.outcome(OutcomeKind::SourceError).is_some());
+        assert!(unit.outcome(OutcomeKind::BindingFailure).is_none());
+        let duplicate = WireLayout::from_nodes(vec![WireNode::Outcomes {
+            alternatives: vec![
+                WireOutcome {
+                    kind: OutcomeKind::Success,
+                    layout: unit.clone(),
                 },
-                element: vec![leaf("value")].into(),
-                metadata: None,
-            })]);
-        assert!(duplicate.validate().unwrap_err().contains("duplicate wire"));
-        let mut empty: WireLayout<syn::Type, ()> = WireLayout::default();
-        empty.enclose_optional(WireRepresentation::Inline { controls: vec![] }, None);
-        assert_eq!(empty.len(), 0);
-        assert!(empty.iter_mut().next().is_none());
-        empty.enclose_optional(
-            WireRepresentation::Inline {
-                controls: vec![leaf("flag")],
-            },
-            None,
-        );
-        assert_eq!(empty.len(), 1);
-        assert_eq!(empty[0].name, "flag");
+                WireOutcome {
+                    kind: OutcomeKind::Success,
+                    layout: unit,
+                },
+            ],
+        }]);
+        assert!(duplicate
+            .validate()
+            .unwrap_err()
+            .contains("duplicate outcome"));
+        let mut iter = duplicate.iter();
+        assert!(iter.next().is_none());
+        assert!(iter.next().is_none());
     }
     #[test]
-    fn sequence_is_one_outer_position_with_an_independent_element_schema() {
-        let mut rows: WireLayout<_, Meaning> = vec![leaf("x"), leaf("y")].into();
-        rows.enclose(Meaning::Record);
-        let mut layout = WireLayout::from_nodes(vec![
-            WireNode::Wire(leaf("before")),
-            WireNode::Sequence(WireContainer {
-                representation: WireRepresentation::Carrier(leaf("rows")),
-                element: rows,
-                metadata: None,
-            }),
-            WireNode::Wire(leaf("after")),
-        ]);
-        layout.validate().unwrap();
-        assert_eq!(layout.len(), 3);
-        assert_eq!(
-            layout
-                .iter()
-                .map(|w| w.name.to_string())
-                .collect::<Vec<_>>(),
-            ["before", "rows", "after"]
-        );
-        for (i, wire) in layout.iter().enumerate() {
-            assert!(std::ptr::eq(wire, &layout[i]));
+    fn alternatives_preserve_empty_arms_and_outcome_paths_use_channel_identity() {
+        let choice = WireLayout::from_nodes(vec![WireNode::Alternatives {
+            alternatives: vec![WireLayout::default(), vec![leaf("value")].into()],
+        }]);
+        let mut output: WireLayout<_, ()> = choice;
+        output.validate().unwrap();
+        let entry = output.entries().next().unwrap();
+        assert_eq!(entry.path, WirePath(vec![0, 1, 0]));
+        assert!(std::ptr::eq(
+            entry.wire,
+            output.get_path(&entry.path).unwrap()
+        ));
+        output.set_outcome(OutcomeKind::BindingFailure, vec![leaf("message")].into());
+        let path = output.entries().last().unwrap().path;
+        output.set_outcome(OutcomeKind::SourceError, vec![leaf("error")].into());
+        assert_eq!(output.get_path(&path).unwrap().name, "message");
+        output.validate().unwrap();
+        for wire in output.iter_mut() {
+            wire.kind = syn::parse_quote!(u64);
         }
-        layout.iter_mut().nth(1).unwrap().kind = syn::parse_quote!(*const u8);
-        let WireNode::Sequence(container) = &layout.nodes()[1] else {
-            panic!()
-        };
-        let carrier = container.carrier().unwrap();
-        let element = &container.element;
-        assert_eq!(crate::type_key(&carrier.kind), "* const u8");
-        assert_eq!(element.len(), 2);
-        let WireNode::Group { metadata, .. } = &element.nodes()[0] else {
-            panic!()
-        };
-        assert_eq!(metadata, &Meaning::Record);
-        let duplicate = WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
-            representation: WireRepresentation::Carrier(leaf("x")),
-            element: element.clone(),
-            metadata: None,
-        })]);
-        assert!(duplicate.validate().unwrap_err().contains("duplicate wire"));
-    }
-    #[test]
-    fn variants_empty_groups_and_records_have_one_physical_leaf_order() {
-        let mut empty = WireLayout::default();
-        empty.enclose(Meaning::Variant("Empty"));
-        let mut point: WireLayout<_, _> = vec![leaf("x"), leaf("y")].into();
-        point.enclose(Meaning::Record);
-        point.enclose(Meaning::Variant("Point"));
-        let mut variants = empty;
-        variants.extend(point);
-        variants.enclose(Meaning::Choice);
-        variants.prepend(leaf("tag"));
-        variants.validate().unwrap();
-        let mut iter = variants.iter();
-        assert_eq!(iter.len(), 3);
-        assert_eq!(iter.next().unwrap().name, "tag");
-        assert_eq!(iter.len(), 2);
+        assert_eq!(output.iter().count(), 3);
         assert_eq!(
-            iter.map(|w| w.name.to_string()).collect::<Vec<_>>(),
-            ["x", "y"]
+            crate::type_key(&output.get_path(&path).unwrap().kind),
+            "u64"
         );
-        for (i, w) in variants.iter().enumerate() {
-            assert!(std::ptr::eq(w, variants.get(i).unwrap()));
-        }
-        assert!(variants.get(3).is_none());
-        // Metadata is borrowed from the same authoritative tree as the wire view.
-        let WireNode::Group { metadata, children } = &variants.nodes()[1] else {
-            panic!()
-        };
-        assert_eq!(metadata, &Meaning::Choice);
-        let WireNode::Group { metadata, children } = &children.nodes()[0] else {
-            panic!()
-        };
-        assert_eq!(metadata, &Meaning::Variant("Empty"));
-        assert!(children.is_empty());
-        variants.iter_mut().nth(1).unwrap().kind = syn::parse_quote!(u64);
-        assert_eq!(crate::type_key(&variants.get(1).unwrap().kind), "u64");
-    }
-    #[test]
-    fn indexing_skips_empty_nodes_before_between_and_after_leaves() {
-        let empty = || WireNode::Group {
-            metadata: (),
-            children: WireLayout::default(),
-        };
-        let nested = WireLayout::from_nodes(vec![
-            empty(),
-            WireNode::Wire(leaf("a")),
-            empty(),
-            WireNode::Wire(leaf("b")),
-            empty(),
-        ]);
-        let mut tree = WireLayout::from_nodes(vec![
-            empty(),
-            WireNode::Group {
-                metadata: (),
-                children: nested,
-            },
-            empty(),
-        ]);
-        tree.push(leaf("c"));
-        tree.prepend(leaf("flag"));
-        tree.enclose(());
-        assert_eq!(tree.len(), 4);
-        for (i, wire) in tree.iter().enumerate() {
-            assert!(std::ptr::eq(wire, tree.get(i).unwrap()));
-        }
-        assert_eq!(tree[0].name, "flag");
-        assert_eq!(tree[3].name, "c");
-        assert!(tree.get(4).is_none());
-        assert!(tree.get(usize::MAX).is_none());
-    }
-    #[test]
-    fn duplicates_are_checked_across_groups_and_order_follows_edits() {
-        let mut a: WireLayout<_, ()> = vec![leaf("value")].into();
-        a.enclose(());
-        let mut b: WireLayout<_, ()> = vec![leaf("value")].into();
-        b.enclose(());
-        a.extend(b);
-        assert!(a.validate().unwrap_err().contains("duplicate wire"));
-        a.iter_mut().nth(1).unwrap().name = syn::parse_quote!(second);
-        a.prepend(leaf("flag"));
-        a.validate().unwrap();
-        assert_eq!(
-            a.iter().map(|w| w.name.to_string()).collect::<Vec<_>>(),
-            ["flag", "value", "second"]
-        );
+
+        let mut nested = output.clone();
+        nested.enclose_optional(None);
+        assert!(nested.validate().unwrap_err().contains("sole root"));
+        let mut mixed = output;
+        mixed.push(leaf("extra"));
+        assert!(mixed.validate().unwrap_err().contains("sole root"));
+        assert!(mixed.outcome(OutcomeKind::Success).is_none());
+        let missing_success: WireLayout<_, ()> = WireLayout::from_nodes(vec![WireNode::Outcomes {
+            alternatives: vec![WireOutcome {
+                kind: OutcomeKind::SourceError,
+                layout: vec![leaf("error")].into(),
+            }],
+        }]);
+        assert!(missing_success.validate().unwrap_err().contains("Success"));
     }
 }

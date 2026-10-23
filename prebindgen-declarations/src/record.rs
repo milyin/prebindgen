@@ -19,10 +19,11 @@ pub fn record_input<C: Codec>(
     fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
 ) -> Result<CodecInput<C>> {
     let mut out: CodecInput<C> = InputPlan {
+        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         acknowledgement: None,
-        layout: Default::default(),
+        transport: Default::default(),
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
         resources: Vec::new(),
@@ -34,7 +35,7 @@ pub fn record_input<C: Codec>(
     for field in fields {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        for wire in &mut child.layout {
+        for wire in &mut child.transport {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
         out.fallible |= child.fallible;
@@ -43,14 +44,15 @@ pub fn record_input<C: Codec>(
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        child.layout.enclose(codec.field_group(name.clone()));
-        out.layout.extend(child.layout);
+        child.transport.enclose(codec.field_group(name.clone()));
+        out.transport.extend(child.transport);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-    out.layout.enclose(codec.fields_group());
+    out.transport.enclose(codec.fields_group());
+    out.refresh_logical();
     Ok(out)
 }
 
@@ -78,11 +80,12 @@ pub fn record_output<C: Codec>(
         quote!(let _ = &(#value);)
     };
     let mut out = OutputPlan {
+        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        layout: Default::default(),
+        transport: Default::default(),
         statements: binding,
         values: Vec::new(),
     };
@@ -90,13 +93,14 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        for wire in &mut child.layout {
+        for wire in &mut child.transport {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        child.layout.enclose(codec.field_group(name));
+        child.transport.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    out.layout.enclose(codec.fields_group());
+    out.transport.enclose(codec.fields_group());
+    out.refresh_logical();
     Ok(out)
 }
 
@@ -123,11 +127,12 @@ pub fn record_output_owned<C: Codec>(
         quote!(let _ = #value;)
     };
     let mut out = OutputPlan {
+        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        layout: Default::default(),
+        transport: Default::default(),
         statements: binding,
         values: Vec::new(),
     };
@@ -135,13 +140,14 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        for wire in &mut child.layout {
+        for wire in &mut child.transport {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        child.layout.enclose(codec.field_group(name));
+        child.transport.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    out.layout.enclose(codec.fields_group());
+    out.transport.enclose(codec.fields_group());
+    out.refresh_logical();
     Ok(out)
 }
 

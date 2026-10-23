@@ -14,6 +14,12 @@ pub mod value;
 
 mod emission;
 pub use emission::{render_template, template_parameter, TemplateContext};
+mod native;
+pub use native::{NativeConversion, NativeConversionExt, NativeFunction};
+pub mod transport;
+pub use transport::{
+    TransportContainer, TransportLayout, TransportNode, TransportRepresentation, TransportWires,
+};
 mod plan;
 pub use plan::*;
 pub mod staged;

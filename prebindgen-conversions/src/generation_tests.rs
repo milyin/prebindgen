@@ -15,32 +15,32 @@ impl Input {
         let validate = format!("validate{index}");
         let acquire = format!("acquire{index}");
         let construct = format!("construct{index}");
-        InputPlan {
+        InputPlan { logical:Default::default(),
             fallible: false,
             context: Default::default(),
             acknowledgement: Some(
                 quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
             ),
-            layout: vec![].into(),
+            transport: vec![].into(),
             validation: quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); }),
             resources: vec![],
             acquire: quote!(log(#acquire);),
             statements: quote!(log(#construct); let #name = 1;),
             argument: quote!(#name),
-        }
+        }.with_logical()
     }
 }
 struct Output;
 impl Output {
     fn plan(&self) -> OutputPlan<syn::Type> {
-        OutputPlan {
+        OutputPlan { logical:Default::default(),
             fallible: false,
             context: Default::default(),
             delivery: Delivery {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
             },
-            layout: vec![Wire {
+            transport: vec![Wire {
                 name: syn::parse_quote!(out),
                 kind: syn::parse_quote!(i32),
             }]
@@ -48,7 +48,7 @@ impl Output {
             statements: quote!(log("prepare");),
             values: vec![source_result_expr()],
             commit: quote!(log("commit");),
-        }
+        }.with_logical()
     }
 }
 
@@ -121,22 +121,26 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
             .unwrap();
     let mut flat = Flat::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
     let result = source_result_expr();
-    flat.function_mut("point").unwrap().ret.slot = Some(OutputPlan {
-        fallible: false,
-        context: Default::default(),
-        delivery: Default::default(),
-        // Slot code owns field projection; callers only see ordered carriers and values.
-        layout: ["y", "x"]
-            .into_iter()
-            .map(|name| Wire {
-                name: format_ident!("wire_{name}"),
-                kind: syn::parse_quote!(f64),
-            })
-            .collect(),
-        statements: TokenStream::new(),
-        values: vec![quote!(#result.y), quote!(#result.x)],
-        commit: TokenStream::new(),
-    });
+    flat.function_mut("point").unwrap().ret.slot = Some(
+        OutputPlan {
+            logical: Default::default(),
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            // Slot code owns field projection; callers only see ordered carriers and values.
+            transport: ["y", "x"]
+                .into_iter()
+                .map(|name| Wire {
+                    name: format_ident!("wire_{name}"),
+                    kind: syn::parse_quote!(f64),
+                })
+                .collect(),
+            statements: TokenStream::new(),
+            values: vec![quote!(#result.y), quote!(#result.x)],
+            commit: TokenStream::new(),
+        }
+        .with_logical(),
+    );
     flat
 }
 
@@ -192,7 +196,7 @@ fn partial_projection_is_self_contained() {
         .slot
         .as_mut()
         .unwrap();
-    output.layout = vec![output.layout[0].clone()].into();
+    output.transport = vec![output.transport[0].clone()].into();
     output.values.pop();
     assert_eq!(
         flat.function("point")
@@ -214,9 +218,9 @@ fn several_physical_wires_may_supply_one_component() {
         .slot
         .as_mut()
         .unwrap();
-    let mut extra = output.layout[0].clone();
+    let mut extra = output.transport[0].clone();
     extra.name = syn::parse_quote!(additional_wire);
-    output.layout.push(extra);
+    output.transport.push(extra);
     output.values.push(quote!(0));
     assert_eq!(
         flat.function("point")
@@ -284,9 +288,10 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     };
     let f = flat.function_mut("echo").unwrap();
     f.params[0].ty.slot = Some(InputPlan {
+        logical: vec![wire()].into(),
         fallible: false,
         context: Default::default(),
-        layout: vec![wire()].into(),
+        transport: vec![wire()].into(),
         acknowledgement: None,
         validation: quote!(),
         acquire: quote!(),
@@ -295,9 +300,10 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         argument: quote!(x),
     });
     f.ret.slot = Some(OutputPlan {
+        logical: vec![wire()].into(),
         fallible: false,
         context: Default::default(),
-        layout: vec![wire()].into(),
+        transport: vec![wire()].into(),
         statements: quote!(),
         values: vec![source_result_expr()],
         commit: quote!(),
@@ -310,7 +316,11 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     let f = flat.function("echo").unwrap();
     assert!(std::ptr::eq(
         call.inputs().unwrap().next().unwrap(),
-        &f.params[0].ty.slot.as_ref().unwrap().layout[0]
+        &f.params[0].ty.slot.as_ref().unwrap().logical[0]
+    ));
+    assert!(std::ptr::eq(
+        call.native_inputs().unwrap().next().unwrap(),
+        &f.params[0].ty.slot.as_ref().unwrap().transport[0]
     ));
     assert!(std::ptr::eq(
         call.outputs(&(), &source_binding())
@@ -318,7 +328,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
             .next()
             .unwrap()
             .wire,
-        &f.ret.slot.as_ref().unwrap().layout[0]
+        &f.ret.slot.as_ref().unwrap().transport[0]
     ));
     let body = emit_call(call, &(), &source_binding(), &syn::parse_quote!(_))
         .unwrap()
@@ -396,29 +406,37 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         name: syn::parse_quote!(incoming),
         kind: syn::parse_quote!(i32),
     };
-    function.params[0].ty.slot = Some(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        layout: vec![wire()].into(),
-        acknowledgement: Some(quote!(*#ack = true;)),
-        validation: quote!(if #env < 0 { return Err("environment".into()); }),
-        acquire: quote!(),
-        resources: vec![],
-        statements: quote!(let converted = incoming + #env;),
-        argument: quote!(converted),
-    });
-    function.ret.slot = Some(OutputPlan {
-        fallible: false,
-        context: Default::default(),
-        layout: vec![wire()].into(),
-        statements: quote!(),
-        values: vec![value.clone()],
-        commit: quote!(),
-        delivery: Delivery {
-            statements: quote!(unsafe { #out.write(#ty { value: #value }); }),
-            result: value,
-        },
-    });
+    function.params[0].ty.slot = Some(
+        InputPlan {
+            logical: Default::default(),
+            fallible: false,
+            context: Default::default(),
+            transport: vec![wire()].into(),
+            acknowledgement: Some(quote!(*#ack = true;)),
+            validation: quote!(if #env < 0 { return Err("environment".into()); }),
+            acquire: quote!(),
+            resources: vec![],
+            statements: quote!(let converted = incoming + #env;),
+            argument: quote!(converted),
+        }
+        .with_logical(),
+    );
+    function.ret.slot = Some(
+        OutputPlan {
+            logical: Default::default(),
+            fallible: false,
+            context: Default::default(),
+            transport: vec![wire()].into(),
+            statements: quote!(),
+            values: vec![value.clone()],
+            commit: quote!(),
+            delivery: Delivery {
+                statements: quote!(unsafe { #out.write(#ty { value: #value }); }),
+                result: value,
+            },
+        }
+        .with_logical(),
+    );
     let mut wrappers = TokenStream::new();
     for (suffix, type_name) in [("a", "First"), ("b", "Second")] {
         let name = format_ident!("run_{suffix}");
@@ -606,34 +624,42 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
         Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse([(item, Default::default())])
             .unwrap();
     let function = flat.function_mut("length").unwrap();
-    function.params[0].ty.slot = Some(InputPlan {
-        fallible: false,
-        context: Default::default(),
-        layout: vec![Wire {
-            name: syn::parse_quote!(__prebindgen_argument_0),
-            kind: syn::parse_quote!(usize),
-        }]
-        .into(),
-        acknowledgement: None,
-        validation: quote!(let __prebindgen_argument_0_ = __prebindgen_argument_0 + 1;),
-        acquire: quote!(),
-        resources: vec![],
-        statements: quote!(let storage = String::from("abc");),
-        argument: quote!(storage.as_str()),
-    });
+    function.params[0].ty.slot = Some(
+        InputPlan {
+            logical: Default::default(),
+            fallible: false,
+            context: Default::default(),
+            transport: vec![Wire {
+                name: syn::parse_quote!(__prebindgen_argument_0),
+                kind: syn::parse_quote!(usize),
+            }]
+            .into(),
+            acknowledgement: None,
+            validation: quote!(let __prebindgen_argument_0_ = __prebindgen_argument_0 + 1;),
+            acquire: quote!(),
+            resources: vec![],
+            statements: quote!(let storage = String::from("abc");),
+            argument: quote!(storage.as_str()),
+        }
+        .with_logical(),
+    );
     let source = source_result_expr();
-    function.ret.slot = Some(OutputPlan {
-        fallible: false,
-        context: Default::default(),
-        layout: vec![].into(),
-        values: vec![],
-        statements: quote!(),
-        commit: quote!(),
-        delivery: Delivery {
+    function.ret.slot = Some(
+        OutputPlan {
+            logical: Default::default(),
+            fallible: false,
+            context: Default::default(),
+            transport: vec![].into(),
+            values: vec![],
             statements: quote!(),
-            result: quote!(#source + __prebindgen_argument_0_),
-        },
-    });
+            commit: quote!(),
+            delivery: Delivery {
+                statements: quote!(),
+                result: quote!(#source + __prebindgen_argument_0_),
+            },
+        }
+        .with_logical(),
+    );
     let context = ();
     let source = syn::parse_quote!(__prebindgen_argument_0__);
     let body = emit_call(function, &context, &source, &syn::parse_quote!(_)).unwrap();
@@ -685,9 +711,10 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
 
 fn validate_resources(resources: &[Resource]) -> TokenStream {
     let plan = InputPlan::<syn::Type> {
+        logical: Default::default(),
         fallible: false,
         context: Default::default(),
-        layout: vec![].into(),
+        transport: vec![].into(),
         acknowledgement: None,
         validation: quote!(),
         acquire: quote!(),

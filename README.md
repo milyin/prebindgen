@@ -169,18 +169,17 @@ settings remain commented out in the example manifests.
 
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
-- `Conversion` exposes its authoritative `layout()` tree,
-  `code_fragment_slot(mode, expected_type)` and
-  `code_fragment_wire(pos, mode, expected_type)`.
-- Import `ConversionExt` to use `wires()` (an iterator borrowing the tree's physical wires)
-  and `wire(pos)` (checked lookup). Both derive their order from `layout()`;
-  converters cannot override them. Walk physical wires depth first, left to right,
-  including inactive alternatives. `pos` uses that order; invalid positions are
-  errors. Finish structural edits before emission, which borrows the slot immutably.
-- Each generator defines its slot and wire request enums. Variants carry only the
-  data that operation needs. Associated request types have a lifetime parameter
-  so they can borrow names, contexts or other configuration without cloning it.
-  There is no mandatory context type or universal set of conversion phases.
+- `Conversion::layout()` describes logical values and outcomes; it prescribes no
+  ABI, packing or delivery mechanism. `code_fragment_slot(mode, expected_type)`
+  accepts the generator's own requests, including any element/branch context.
+- `ConversionExt::wires()` visits leaf definitions in structural order, including
+  every sequence element schema and every outcome once. `wire(index)` indexes
+  that traversal, rather than native parameters. `layout().entries()` returns
+  definitions with `WirePath` addresses; `wire_at(path)` resolves a definition
+  inside its branch/element context. Rebuild paths after structural edits.
+- Each generator defines its request enum. Requests can borrow names, settings,
+  paths and currently bound elements. There is no mandatory context, phase order
+  or physical per-wire request protocol in the common trait.
 - Successful requests return a Rust expression, including `()` for a no-op and
   block expressions for operations with statements. `expected_type` is the
   caller's expectation; implementations may use it to configure or validate the
@@ -202,7 +201,26 @@ The C and JNI adapters opt into `staged::emit_call`, which orders those requests
 checks allocation aliases and shared acknowledgement, and returns a fallible
 expression. The protocol and its assembly helper live outside Flat; generators
 with different requirements can compose their own request enums directly.
-`StagedFunction::outputs()` requests each output wire's value with its carrier type.
+The adapters also select `NativeConversion`, whose `transport()` describes this
+reader's physical wire order and whose `code_fragment_wire` requests a native
+value. `NativeFunction::native_inputs()` and `StagedFunction::outputs()` operate
+on that chosen transport, rather than flattening the logical tree into an ABI.
+`NativeConversionExt::native_wires()` has a blanket implementation that derives
+its order from `transport()`; converters cannot override the order independently.
+Callback/context parameters, acknowledgements and error packet/status details
+remain the generator's responsibility.
+
+Stored plans retain a logical specification and the selected native transport
+separately. `OutputPlan::values` matches only the native success transport; it
+has no one-expression-per-logical-leaf requirement. Declaration composition helpers return current logical schemas; finish hooks see
+those schemas before emission. The compiler preserves schema edits made by finish
+hooks. If custom code or a finish hook edits a plan's transport directly,
+that code must refresh its logical schema or supply an independent one. Converting
+an existing plan into `JniInput`/`JniOutput` preserves its supplied schema.
+The staged compiler's `refresh_logical()` convenience projects payload definitions while omitting
+transport carriers, presence controls and transport-only container metadata.
+A custom `Conversion` can describe its schema and requests independently of
+these native plans; it need not implement `NativeConversion`.
 
 Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
 binding supplied by the generator, and `source_result_expr()` marks the source
@@ -314,8 +332,8 @@ carrier types.
 
 `Codec::Input` and `Codec::Output` select the final slot implementations. After
 composition and finalization, preparation converts its plans into these types;
-JNI keeps one plan in `JniInput`/`JniOutput`; Rust and Kotlin emission read the
-same tree.
+JNI keeps the logical specification and selected native plan in
+`JniInput`/`JniOutput`; Rust and Kotlin emission share the native plan.
 Simple codecs may use `InputPlan`/`OutputPlan` directly. Declarations compose leaves, fields, constructors,
 input selectors and combined outputs. The composition model requires neither
 handles nor boxed storage. It has no object registry or universal `Send`
@@ -478,50 +496,32 @@ after acknowledgement Kotlin marks every selected handle consumed. Prepared
 outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.
 
-`WireNode::Optional` describes zero or one payload, and `WireNode::Sequence`
-describes zero or more elements. Both hold the same `WireContainer` structure:
-
-- `element` describes one payload/element.
-- `representation` determines which physical wires occupy the enclosing boundary.
-- `metadata` optionally holds adapter-specific information, such as a reserved
-  absent value. Code can recognize optionality without interpreting this metadata.
-
-`WireRepresentation::Inline { controls }` puts control wires followed by the
-payload wires in the enclosing boundary. For an optional value, the controls
-contain a presence flag, or are empty when a payload wire uses a niche.
-`WireRepresentation::Carrier(wire)` exposes only that one complete FFI value;
-the element fields have separate positions, such as fields inside array rows or
-arguments delivered to a visitor. That carrier can be an array, a C delivered
-count, or the existing JNI callback presence marker. Neither representation is
-chosen implicitly from the node's cardinality.
-
-For example, a flagged optional sequence of flagged optional elements has this
-structure (actual flags/niches depend on the adapter's declared conversion):
+`WireNode::Optional` describes zero or one payload; `WireNode::Sequence`
+describes zero or more elements. Both hold `WireContainer { element, metadata }`.
+There is no common `Inline`/`Carrier` choice. For example:
 
 ```text
-Optional — Inline
-  controls: collection_present
+Optional
   element:
-    Sequence — Carrier(rows)
+    Sequence
       element:
-        Optional — Inline
-          controls: item_present
-          element: value
+        Optional
+          element: integer
 ```
 
-The outer `wires()` order is `collection_present, rows`. The sequence element's
-order is `item_present, value`. The innermost optional's payload contains just
-`value`; presence flags are never payload fields. `len()`, indexed requests and
-mutable iteration all follow the same representation rules. The tree owns every
-wire once; it has no second flattened wire list or schema hidden in metadata.
+`wires()` visits the integer definition once. It describes neither a concrete
+runtime collection nor a native parameter list. A C reader can choose a row buffer
+and presence controls; another reader can deliver each integer through callback
+arguments. The same logical structure supports either choice. Fields nested in
+sequences have structural paths, rather than positions assigned to an enclosing
+function signature.
 
-The built-in C/JNI codecs currently emit inline optional values and carried
-sequences, preserving their existing ABI and conversion behavior. The common
-tree supports both representations for both node kinds; adapters reject
-representations they cannot generate. `Group` continues to hold adapter-defined
-relationships such as named fields and records. Adapter authors construct
-containers explicitly and supply optional-node metadata through
-`Codec::optional_metadata` (formerly `optional_group`).
+C/JNI use the opt-in `TransportLayout` in `prebindgen-conversions` for their
+existing lowering. Its `TransportNode`, `TransportContainer` and
+`TransportRepresentation::{Inline, Carrier}` describe physical placement for
+that protocol only. Native controls, arrays, delivered counts and callback
+presence markers live in this reader-owned plan; they are absent from the common
+logical schema. These adapters retain their existing ABI and conversion behavior.
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
 
@@ -799,54 +799,54 @@ one niche, or `None` when exhausted. The shared compiler suppresses niches on
 other payload wires and on inactive selector arms. Both input and output
 composition use this protocol.
 
-Every `Wire` describes one complete FFI value. Each conversion owns a
-`WireLayout<W, G>` tree. Physical wires are owned by wire nodes or container
-representations; containers hold element layouts and optional `G` metadata,
-while groups hold child layouts and `G` metadata. The tree is the source of both wire order and
-grouping. For example, a JNI optional record can use this tree (wire names are
-illustrative):
+Each logical `Wire<W>` defines one typed value. `WireLayout<W, G>` records
+payloads, repetition, field relationships and mutually exclusive alternatives.
+`Alternatives` describes a choice of payload schemas, including input constructor
+choices. It excludes the transport's selector tag. `Outcomes` describes named
+completion channels at the root of an output schema.
+It makes no assumption about where a value is passed. For example:
 
 ```text
-WireNode::Optional — Inline, metadata = JniGroup::Optional
-├── controls: present: jint       wire position 0
-└── element:
-    └── Group: JniGroup::Fields(Some) — construct Kotlin Point
-        ├── Group: JniGroup::Field("x")
-        │   └── x_value: jdouble  wire position 1
-        └── Group: JniGroup::Field("y")
-            └── y_value: jdouble  wire position 2
+Outcomes — exactly one channel is selected
+  Success:
+    Optional
+      element:
+        Sequence
+          element: integer, text
+  SourceError:
+    code, details
+  BindingFailure:
+    message
 ```
 
-`wires()` yields the three physical wires, including their `W` information.
-`layout().nodes()` exposes adapter metadata and nesting. Each physical
-wire appears once. Multiple ancestors may inspect that same leaf: nested optional
-chars, for example, use different absent values on one wire.
+`OutcomeKind::SourceError` contains the declared projection of `E` in
+`Result<T, E>`; it uses text only when a mapper was explicitly selected.
+`BindingFailure` is a separate conversion/invocation failure channel. C and JNI
+declare their diagnostic payload through `Codec::binding_failure_layout`.
+Readers choose how to deliver each channel: native outputs/status, typed error
+callbacks, or another policy. JNI always uses a binding-error callback and requires
+that channel in manually supplied schemas. C requires it for recoverable `Result`
+wrappers; other C functions abort on binding failures and may omit the channel
+in manual schemas. Standard C codec plans describe the diagnostic message in both
+cases; the C writer chooses whether to deliver it or abort. Empty channels retain their identity, including
+`Result<(), E>` and `Result<T, ()>`.
 
-The shared compiler builds conversion code from recipes and stores parent metadata
-in the adapter's `Codec::Group` type. It never interprets that stored metadata.
-Three codec hooks supply it while the compiler constructs the tree:
+`output.layout().outcome(OutcomeKind::SourceError)` accesses the error's logical
+schema just like the success schema. `layout().entries()` visits each definition
+once and supplies a path identifying its element and outcome. Equal wire names
+in different alternatives are allowed; a path distinguishes them. Actual
+runtime elements and the selected outcome are emission context supplied by the
+reader, rather than flat wire positions imposed by the trait. Outcomes require a
+Success channel and may appear only as the sole root node. Outcome paths encode
+channel identity, so adding a SourceError does not change a BindingFailure path;
+rebuild paths after other structural edits.
 
-- `optional_metadata(presence, discriminator, niche)` describes an Optional
-  node's presence binding, the payload/control wire to inspect, and its reserved
-  absent representation.
-- `field_group(name)` describes one source field and its subtree, which can have
-  zero, one or several wires.
-- `fields_group()` describes the ordered collection of field subtrees, including
-  an empty record or unit value.
-
-Adapters choose the return values freely. A codec that needs no group metadata
-can use `type Group = ()` and return `()` from all three hooks. The tree still
-preserves field boundaries and wire order. Codecs can also use their own enum,
-a string, or another metadata representation without implementing a common
-semantic group enum.
-
-C stores `CGroup::{Optional, Fields, Field}` to generate header comments for
-presence rules, source field paths and their boundary values. JNI stores
-`JniGroup::{Optional, Fields, Field}`. Its `Fields` variant can contain Kotlin
-class and binding information; field names and order remain in the child nodes.
-Both adapters render expanded fields, and JNI can construct a data class from
-those same field subtrees. The diagram above illustrates JNI metadata; these
-variant names are adapter choices.
+Adapter metadata `G` can retain field names, record information or other semantic
+relationships. The native staged compiler additionally uses
+`Codec::optional_metadata`, `field_group` and `fields_group` to prepare its
+transport. Its optional metadata describes a presence/niche rule in the native
+plan, rather than adding logical payload fields. The common tree does not
+interpret adapter metadata.
 
 For an option, the compiler chooses the discriminator and absent representation
 before calling the hook. The hook receives the normalized presence binding used
@@ -857,8 +857,9 @@ offer `0x110001` to the next option. `Codec::set_niche` updates this state;
 `Codec::niche` reads it. `None` means no niche remains.
 
 Record helpers check source field-name uniqueness while constructing input and
-borrowed/owned output conversions. Shared finalization checks physical wire
-names and output expression counts. Each adapter validates the metadata it
+borrowed/owned output conversions. Native-plan finalization checks physical wire
+names and success-transport expression counts; common logical validation checks
+outcome structure without imposing an ABI. Each adapter validates the metadata it
 stores, including optional references, field grouping and Kotlin binding names.
 
 Custom converters implement `Conversion::layout` and declare `Conversion::Group`;
@@ -929,3 +930,20 @@ UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.
 
 The native Rust benchmark is commented out because it depends on disabled
 optional-field and callback APIs. Its driver reports that limitation.
+
+
+Adapter API migration for the logical schema:
+
+- `Conversion` provides `layout()` and generator-defined slot requests. Physical
+  `WireFragment`/`code_fragment_wire` now belong to opt-in `NativeConversion`.
+- `ConversionExt::wires()` enumerates definitions, not native parameters. Use
+  `entries()`/`WirePath` for structural context and `native_wires()` only when
+  selecting the native staged protocol.
+- Stored plans expose `logical` and `transport` separately. Native expression
+  counts are checked against `transport`, never against logical alternatives.
+- Standard value/boxed helpers clone type metadata when building both views.
+  The common trait still supports non-Clone wire metadata; custom converters
+  and manually constructed plans can supply their schema without cloning.
+- Codecs describe source-error projections through `source_error_layout` and
+  binding-failure diagnostics through `binding_failure_layout`. Existing
+  C/JNI output signatures, typed error handlers and ownership rules are retained.

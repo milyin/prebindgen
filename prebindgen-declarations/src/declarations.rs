@@ -285,7 +285,7 @@ impl Declarations {
     ) -> Result<(FunctionDecl, syn::Ident)>
     where
         I: prebindgen_flat::Conversion + Clone,
-        O: prebindgen_flat::Conversion + Clone,
+        O: prebindgen_conversions::NativeConversion + Clone,
     {
         let source = flat.function(&decl.name)?;
         let layout = source
@@ -293,7 +293,7 @@ impl Declarations {
             .slot
             .as_ref()
             .ok_or("unbound sequence return")?
-            .layout();
+            .transport();
         let sequences = crate::sequence::return_sequences(layout);
         if sequences.len() != 1 || layout.len() > 2 {
             return Err(
@@ -405,13 +405,17 @@ impl Declarations {
             None
         };
         for input in inputs.iter_mut().flatten() {
+            input.refresh_logical();
             codec.finish_input(input, extra)?;
-            input.layout.validate()?;
+            input.logical.validate()?;
+            input.transport.validate()?;
         }
         if let Some(output) = &mut output {
+            crate::finalize_output_schema(codec, output, extra)?;
             codec.finish_output(output, extra)?;
+            output.logical.validate()?;
             output.validate_value_count()?;
-            output.layout.validate()?;
+            output.transport.validate()?;
         }
         // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;

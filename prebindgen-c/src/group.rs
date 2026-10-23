@@ -1,12 +1,13 @@
 //! C adapter-owned descriptions of the wire tree.
 use super::*;
-use prebindgen_flat::{WireLayout, WireNode};
+
+use prebindgen_conversions::{TransportLayout, TransportNode};
 use syn::ext::IdentExt;
 
 /// Metadata interpreted by the C binding writer.
 #[derive(Clone, Debug)]
 pub enum CGroup {
-    /// Metadata for `WireNode::Optional`, including its reserved absence value.
+    /// Metadata for `TransportNode::Optional`, including its reserved absence value.
     Optional(COptional),
     /// An ordered collection of field subtrees.
     Fields,
@@ -24,20 +25,37 @@ pub struct COptional {
     pub niche: Option<CNiche>,
 }
 
-pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> {
+pub(crate) fn validate_layout(layout: &TransportLayout<CWire, CGroup>) -> Result<()> {
     layout.validate()?;
     for wire in layout.iter() {
         wire.kind.validate()?;
     }
     fn visit(
-        layout: &WireLayout<CWire, CGroup>,
+        layout: &TransportLayout<CWire, CGroup>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<CNiche>>,
     ) -> Result<()> {
         for node in layout.nodes() {
             match node {
-                WireNode::Sequence(c) => {
+                TransportNode::Alternatives {
+                    selector,
+                    alternatives,
+                } => {
+                    if !matches!(
+                        selector.kind,
+                        CWire::Scalar {
+                            primitive: Primitive::I32,
+                            ..
+                        }
+                    ) {
+                        return Err("alternatives require an integer selector".into());
+                    }
+                    for arm in alternatives {
+                        visit(arm, bindings, false, reserved)?;
+                    }
+                }
+                TransportNode::Sequence(c) => {
                     let carrier = c.carrier().ok_or("sequence requires a separate carrier")?;
                     if !(matches!(
                         carrier.kind,
@@ -58,8 +76,8 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
                     }
                     validate_layout(&c.element)?;
                 }
-                WireNode::Optional(c) => {
-                    let prebindgen_flat::WireRepresentation::Inline { controls } =
+                TransportNode::Optional(c) => {
+                    let prebindgen_conversions::TransportRepresentation::Inline { controls } =
                         &c.representation
                     else {
                         return Err(
@@ -101,11 +119,11 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
                     }
                     visit(&c.element, bindings, false, reserved)?;
                 }
-                WireNode::Wire(w) if matches!(w.kind, CWire::Rows) => {
+                TransportNode::Wire(w) if matches!(w.kind, CWire::Rows) => {
                     return Err("array carrier requires a container node".into())
                 }
-                WireNode::Wire(_) => {}
-                WireNode::Group { metadata, children } => {
+                TransportNode::Wire(_) => {}
+                TransportNode::Group { metadata, children } => {
                     if let CGroup::Optional(_) = metadata {
                         return Err("optional metadata requires an Optional node".into());
                     }
@@ -118,7 +136,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
                         CGroup::Fields => {
                             let mut fields = std::collections::BTreeSet::new();
                             for child in children.nodes() {
-                                let WireNode::Group {
+                                let TransportNode::Group {
                                     metadata: CGroup::Field(name),
                                     ..
                                 } = child
@@ -156,22 +174,22 @@ pub(crate) fn validate_layout(layout: &WireLayout<CWire, CGroup>) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn enclose_optional_metadata(tree: &mut WireLayout<CWire, CGroup>, metadata: CGroup) {
+    fn enclose_optional_metadata(tree: &mut TransportLayout<CWire, CGroup>, metadata: CGroup) {
         let flag = matches!(&metadata,CGroup::Optional(o) if o.niche.is_none());
         let mut nodes = std::mem::take(tree).into_nodes();
         // These fixtures describe an explicit flag as the first physical wire.
         // Move it into the representation without changing its wire type.
-        let controls = if flag && matches!(nodes.first(), Some(WireNode::Wire(_))) {
-            let WireNode::Wire(wire) = nodes.remove(0) else {
+        let controls = if flag && matches!(nodes.first(), Some(TransportNode::Wire(_))) {
+            let TransportNode::Wire(wire) = nodes.remove(0) else {
                 unreachable!()
             };
             vec![wire]
         } else {
             vec![]
         };
-        *tree = WireLayout::from_nodes(nodes);
+        *tree = TransportLayout::from_nodes(nodes);
         tree.enclose_optional(
-            prebindgen_flat::WireRepresentation::Inline { controls },
+            prebindgen_conversions::TransportRepresentation::Inline { controls },
             Some(metadata),
         );
     }
@@ -190,7 +208,7 @@ mod tests {
     }
     #[test]
     fn structural_nodes_require_supported_explicit_representations() {
-        use prebindgen_flat::WireRepresentation;
+        use prebindgen_conversions::TransportRepresentation;
         let metadata = || {
             CGroup::Optional(COptional {
                 presence: syn::parse_quote!(flag),
@@ -198,35 +216,35 @@ mod tests {
                 niche: None,
             })
         };
-        let mut carried: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        let mut carried: TransportLayout<CWire, CGroup> = vec![leaf("value")].into();
         carried.enclose_optional(
-            WireRepresentation::Carrier(leaf("carrier")),
+            TransportRepresentation::Carrier(leaf("carrier")),
             Some(metadata()),
         );
         carried.validate().unwrap();
         assert!(validate_layout(&carried)
             .unwrap_err()
             .contains("inline optional"));
-        let mut sequence: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
-        sequence.enclose_sequence(WireRepresentation::Inline { controls: vec![] }, None);
+        let mut sequence: TransportLayout<CWire, CGroup> = vec![leaf("value")].into();
+        sequence.enclose_sequence(TransportRepresentation::Inline { controls: vec![] }, None);
         sequence.validate().unwrap();
         assert!(validate_layout(&sequence)
             .unwrap_err()
             .contains("separate carrier"));
-        let mut missing: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
-        missing.enclose_optional(WireRepresentation::Inline { controls: vec![] }, None);
+        let mut missing: TransportLayout<CWire, CGroup> = vec![leaf("value")].into();
+        missing.enclose_optional(TransportRepresentation::Inline { controls: vec![] }, None);
         assert!(validate_layout(&missing)
             .unwrap_err()
             .contains("requires optional metadata"));
-        let mut wrong: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        let mut wrong: TransportLayout<CWire, CGroup> = vec![leaf("value")].into();
         wrong.enclose(metadata());
         assert!(validate_layout(&wrong)
             .unwrap_err()
             .contains("requires an Optional node"));
-        let mut wrong_flag: WireLayout<CWire, CGroup> = vec![leaf("value")].into();
+        let mut wrong_flag: TransportLayout<CWire, CGroup> = vec![leaf("value")].into();
         // A char wire named flag is not the adapter's presence-flag type.
         wrong_flag.enclose_optional(
-            WireRepresentation::Inline {
+            TransportRepresentation::Inline {
                 controls: vec![leaf("flag")],
             },
             Some(metadata()),
@@ -237,7 +255,7 @@ mod tests {
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
-        let mut tree = WireLayout::from(vec![leaf("value")]);
+        let mut tree = TransportLayout::from(vec![leaf("value")]);
         tree[0]
             .kind
             .set_niche(Some(CNiche::Integer(0x110002)))
@@ -258,7 +276,7 @@ mod tests {
             .contains("outside payload"));
         enclose_optional_metadata(&mut tree, optional("inner", "value", true));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
-        let mut flag = WireLayout::from(vec![leaf("flag")]);
+        let mut flag = TransportLayout::from(vec![leaf("flag")]);
         flag[0].kind = CWire::scalar(Primitive::I32);
         enclose_optional_metadata(&mut flag, optional("flag", "flag", false));
         validate_layout(&flag).unwrap();
@@ -279,7 +297,7 @@ mod tests {
                 CNiche::Null,
             ),
         ] {
-            let mut tree = WireLayout::from(vec![GenericWire {
+            let mut tree = TransportLayout::from(vec![GenericWire {
                 name: syn::parse_quote!(value),
                 kind,
             }]);
@@ -313,7 +331,7 @@ mod tests {
                 CNiche::Integer(0),
             ),
         ] {
-            let mut tree = WireLayout::from(vec![GenericWire {
+            let mut tree = TransportLayout::from(vec![GenericWire {
                 name: syn::parse_quote!(value),
                 kind,
             }]);
@@ -330,7 +348,7 @@ mod tests {
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
-        let mut field: WireLayout<CWire, CGroup> = WireLayout::default();
+        let mut field: TransportLayout<CWire, CGroup> = TransportLayout::default();
         field.enclose(CGroup::Field(syn::parse_quote!(x)));
         assert!(validate_layout(&field)
             .unwrap_err()
@@ -343,12 +361,12 @@ mod tests {
             .contains("duplicate field"));
         field.enclose(CGroup::Fields);
         validate_layout(&field).unwrap();
-        let mut malformed = WireLayout::from(vec![leaf("value")]);
+        let mut malformed = TransportLayout::from(vec![leaf("value")]);
         malformed.enclose(CGroup::Fields);
         assert!(validate_layout(&malformed)
             .unwrap_err()
             .contains("named field children"));
-        let mut empty: WireLayout<CWire, CGroup> = WireLayout::default();
+        let mut empty: TransportLayout<CWire, CGroup> = TransportLayout::default();
         empty.enclose(CGroup::Fields);
         validate_layout(&empty).unwrap();
     }
@@ -364,7 +382,7 @@ mod tests {
             )
             .unwrap();
         input
-            .layout
+            .transport
             .enclose(CGroup::Field(syn::parse_quote!(orphan)));
         assert!(CCodec
             .finish_input(&mut input, &())
@@ -380,7 +398,7 @@ mod tests {
             )
             .unwrap();
         output
-            .layout
+            .transport
             .enclose(CGroup::Field(syn::parse_quote!(orphan)));
         assert!(CCodec
             .finish_output(&mut output, &())
@@ -408,7 +426,7 @@ mod tests {
                     &prebindgen_declarations::Condition::default(),
                 )
                 .unwrap();
-            plan.layout[0].kind = wire.clone();
+            plan.transport[0].kind = wire.clone();
             assert!(CCodec
                 .finish_input(&mut plan, &())
                 .unwrap_err()
@@ -422,7 +440,7 @@ mod tests {
                     false,
                 )
                 .unwrap();
-            output.layout[0].kind = wire;
+            output.transport[0].kind = wire;
             assert!(CCodec
                 .finish_output(&mut output, &())
                 .unwrap_err()

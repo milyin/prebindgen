@@ -155,6 +155,8 @@ pub struct DataGroup {
 pub(crate) struct DataCodec {
     pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) error_classes: BTreeMap<String, String>,
+    pub(crate) error_layouts:
+        BTreeMap<(String, bool), prebindgen_flat::WireLayout<JniWire, JniGroup>>,
     pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
     records: BTreeMap<String, Rc<RecordShape>>,
     pub(crate) enums: BTreeMap<String, JniEnum>,
@@ -276,6 +278,7 @@ impl DataCodec {
             callback_wire: None,
             error_classes: BTreeMap::new(),
             error_helpers: BTreeMap::new(),
+            error_layouts: BTreeMap::new(),
         })
     }
     fn enum_type(&self, ty: &syn::Type) -> Option<&JniEnum> {
@@ -415,7 +418,7 @@ impl RecordShape {
             plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
             "data fields must remain value-only"
         );
-        self.mark(&mut plan.layout, w.to_string(), kotlin_condition(active))?;
+        self.mark(&mut plan.transport, w.to_string(), kotlin_condition(active))?;
         Ok(plan)
     }
     fn output(
@@ -465,12 +468,12 @@ impl RecordShape {
                 convert,
             )
         }?;
-        self.mark(&mut plan.layout, w.to_string(), "true".into())?;
+        self.mark(&mut plan.transport, w.to_string(), "true".into())?;
         Ok(plan)
     }
     fn mark(
         &self,
-        layout: &mut prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        layout: &mut prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
         root: String,
         condition: String,
     ) -> Result<()> {
@@ -478,7 +481,8 @@ impl RecordShape {
             wire.kind.clear_niche();
         }
         let mut nodes = std::mem::take(layout).into_nodes();
-        let [prebindgen_flat::WireNode::Group { metadata, .. }] = nodes.as_mut_slice() else {
+        let [prebindgen_conversions::TransportNode::Group { metadata, .. }] = nodes.as_mut_slice()
+        else {
             return Err("record compiler must produce one field collection".into());
         };
         if !matches!(metadata, JniGroup::Fields(None)) {
@@ -489,7 +493,7 @@ impl RecordShape {
             class_name: self.fqn.clone(),
             condition,
         }));
-        *layout = prebindgen_flat::WireLayout::from_nodes(nodes);
+        *layout = prebindgen_conversions::TransportLayout::from_nodes(nodes);
         Ok(())
     }
 }
@@ -522,7 +526,7 @@ impl Codec for DataCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        element: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
         active: &Condition,
     ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
         JniCodec.sequence_input(e, w, n, i, element, active)
@@ -533,7 +537,7 @@ impl Codec for DataCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        element: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
         values: &[TokenStream],
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
         if self.callback_wire.as_ref() == Some(&w) {
@@ -541,6 +545,23 @@ impl Codec for DataCodec {
         } else {
             JniCodec.sequence_output(e, w, n, i, element, values)
         }
+    }
+    fn binding_failure_layout(
+        &self,
+        e: &(),
+    ) -> Result<Option<prebindgen_flat::WireLayout<JniWire, JniGroup>>> {
+        JniCodec.binding_failure_layout(e)
+    }
+    fn source_error_layout(
+        &self,
+        ty: &syn::Type,
+        mapped: bool,
+        _: &(),
+    ) -> Result<prebindgen_flat::WireLayout<JniWire, JniGroup>> {
+        self.error_layouts
+            .get(&(type_key(ty), mapped))
+            .cloned()
+            .ok_or_else(|| "missing logical JNI error projection".into())
     }
     fn result_error_value(
         &self,
@@ -791,7 +812,7 @@ impl Shape {
 
 type FieldNode<'a> = (
     &'a syn::Ident,
-    &'a prebindgen_flat::WireLayout<JniWire, JniGroup>,
+    &'a prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
 );
 fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
@@ -886,23 +907,24 @@ pub(crate) fn output_kotlin(
 #[cfg(test)]
 mod group_tests {
     use super::*;
-    use prebindgen_flat::{Wire, WireLayout, WireNode};
+    use prebindgen_conversions::{TransportLayout, TransportNode};
+    use prebindgen_flat::Wire;
 
-    fn record(root: &str) -> WireNode<JniWire, JniGroup> {
-        WireNode::Group {
+    fn record(root: &str) -> TransportNode<JniWire, JniGroup> {
+        TransportNode::Group {
             metadata: JniGroup::Fields(Some(DataGroup {
                 root: root.into(),
                 class_name: "example.Empty".into(),
                 condition: "true".into(),
             })),
-            children: WireLayout::default(),
+            children: TransportLayout::default(),
         }
     }
     #[test]
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
-        let mut optional: WireLayout<JniWire, JniGroup> = WireLayout::default();
+        let mut optional: TransportLayout<JniWire, JniGroup> = TransportLayout::default();
         optional.enclose_optional(
-            prebindgen_flat::WireRepresentation::Inline {
+            prebindgen_conversions::TransportRepresentation::Inline {
                 controls: vec![Wire {
                     name: syn::parse_quote!(flag),
                     kind: JniWire::selector(),
@@ -914,13 +936,13 @@ mod group_tests {
                 niche: None,
             })),
         );
-        optional.extend(WireLayout::from_nodes(vec![record("value")]));
+        optional.extend(TransportLayout::from_nodes(vec![record("value")]));
         crate::group::validate_layout(&optional).unwrap();
-        optional.extend(WireLayout::from_nodes(vec![record("flag")]));
+        optional.extend(TransportLayout::from_nodes(vec![record("flag")]));
         assert!(crate::group::validate_layout(&optional)
             .unwrap_err()
             .contains("duplicate Kotlin group binding `flag`"));
-        let duplicates = WireLayout::from_nodes(vec![record("value"), record("value")]);
+        let duplicates = TransportLayout::from_nodes(vec![record("value"), record("value")]);
         assert!(crate::group::validate_layout(&duplicates)
             .unwrap_err()
             .contains("duplicate Kotlin group binding `value`"));
@@ -929,7 +951,7 @@ mod group_tests {
     }
     #[test]
     fn kotlin_record_emission_reads_names_from_shared_fields() {
-        let mut field = WireLayout::from(vec![Wire {
+        let mut field = TransportLayout::from(vec![Wire {
             name: syn::parse_quote!(incoming),
             kind: JniWire::scalar(Primitive::I32),
         }]);
@@ -955,7 +977,7 @@ mod group_tests {
         assert_eq!(output.result_types, ["example.Point"]);
         assert!(output.delivered[0].contains("example.Point(result[0]"));
         // An empty record still denotes one Kotlin object with no ABI wires.
-        let empty = WireLayout::from_nodes(vec![record("empty")]);
+        let empty = TransportLayout::from_nodes(vec![record("empty")]);
         let output = kotlin::output_kotlin(empty.nodes(), &context).unwrap();
         assert_eq!(output.delivered, ["example.Empty()"]);
     }

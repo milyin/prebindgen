@@ -3,6 +3,8 @@ use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
 pub(crate) struct EnumCodec {
+    pub(crate) error_layouts:
+        std::collections::BTreeMap<String, prebindgen_flat::WireLayout<CWire, CGroup>>,
     pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) errors: std::collections::BTreeMap<String, String>,
     pub(crate) enums: std::collections::BTreeMap<String, (String, EnumMapping)>,
@@ -30,6 +32,23 @@ impl Codec for EnumCodec {
     type Context = CContext;
     type Input = InputPlan<CWire>;
     type Output = OutputPlan<CWire>;
+    fn binding_failure_layout(
+        &self,
+        e: &(),
+    ) -> Result<Option<prebindgen_flat::WireLayout<CWire, CGroup>>> {
+        CCodec.binding_failure_layout(e)
+    }
+    fn source_error_layout(
+        &self,
+        ty: &syn::Type,
+        mapped: bool,
+        e: &(),
+    ) -> Result<prebindgen_flat::WireLayout<CWire, CGroup>> {
+        if let Some(layout) = self.error_layouts.get(&prebindgen_flat::type_key(ty)) {
+            return Ok(layout.clone());
+        }
+        CCodec.source_error_layout(ty, mapped, e)
+    }
     fn optional_metadata(&self, p: syn::Ident, d: syn::Ident, n: Option<CNiche>) -> CGroup {
         CCodec.optional_metadata(p, d, n)
     }
@@ -51,7 +70,7 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        element: &prebindgen_conversions::TransportLayout<CWire, CGroup>,
         active: &Condition,
     ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
         CCodec.sequence_input(e, w, n, i, element, active)
@@ -62,7 +81,7 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        element: &prebindgen_conversions::TransportLayout<CWire, CGroup>,
         values: &[TokenStream],
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
         if self.callback_wire.as_ref() == Some(&w) {
@@ -275,6 +294,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let codec = EnumCodec {
+            error_layouts: Default::default(),
             callback_wire: None,
             errors: Default::default(),
             enums: std::collections::BTreeMap::from([(
@@ -303,13 +323,13 @@ mod tests {
             let output = codec
                 .output_leaf(&ty, &(), syn::parse_quote!(wire), quote!(value), false)
                 .unwrap();
-            assert_eq!(input.layout.len(), 1);
-            assert_eq!(output.layout.len(), 1);
+            assert_eq!(input.transport.len(), 1);
+            assert_eq!(output.transport.len(), 1);
             assert!(
-                matches!(input.layout[0].kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(input.transport[0].kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
-            super::super::group::validate_layout(&input.layout).unwrap();
-            super::super::group::validate_layout(&output.layout).unwrap();
+            super::super::group::validate_layout(&input.transport).unwrap();
+            super::super::group::validate_layout(&output.transport).unwrap();
         }
     }
     #[test]
@@ -317,7 +337,7 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let wire = EnumCodec::wire("code", &mapping);
-        let mut tree: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
+        let mut tree: prebindgen_conversions::TransportLayout<CWire, CGroup> = vec![GenericWire {
             name: syn::parse_quote!(wire),
             kind: wire,
         }]
@@ -330,7 +350,7 @@ mod tests {
             })
         };
         tree.enclose_optional(
-            prebindgen_flat::WireRepresentation::Inline { controls: vec![] },
+            prebindgen_conversions::TransportRepresentation::Inline { controls: vec![] },
             Some(group("inner", -2)),
         );
         assert!(super::super::group::validate_layout(&tree)
@@ -339,7 +359,7 @@ mod tests {
         tree[0].kind.clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
         tree.enclose_optional(
-            prebindgen_flat::WireRepresentation::Inline { controls: vec![] },
+            prebindgen_conversions::TransportRepresentation::Inline { controls: vec![] },
             Some(group("outer", -2)),
         );
         assert!(super::super::group::validate_layout(&tree)
@@ -359,11 +379,12 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
-                name: syn::parse_quote!(value),
-                kind: wire,
-            }]
-            .into();
+            let layout: prebindgen_conversions::TransportLayout<CWire, CGroup> =
+                vec![GenericWire {
+                    name: syn::parse_quote!(value),
+                    kind: wire,
+                }]
+                .into();
             assert!(super::super::group::validate_layout(&layout).is_err());
         }
     }

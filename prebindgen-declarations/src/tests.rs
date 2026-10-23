@@ -107,10 +107,11 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
+            logical: Default::default(),
             fallible: false,
             context: Default::default(),
             acknowledgement: None,
-            layout: vec![Wire {
+            transport: vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
             }]
@@ -120,7 +121,8 @@ impl Codec for TestCodec {
             resources: vec![],
             statements: quote!(let #v=receive_token(#w);),
             argument: quote!(#v),
-        })
+        }
+        .with_logical())
     }
     fn output_leaf(
         &self,
@@ -139,10 +141,11 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
+            logical: Default::default(),
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            layout: vec![Wire {
+            transport: vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
             }]
@@ -150,7 +153,8 @@ impl Codec for TestCodec {
             statements: quote!(let #w=send_token(#v);),
             values: vec![quote!(#w)],
             commit: quote!(),
-        })
+        }
+        .with_logical())
     }
 }
 fn parse(source: &str) -> Bindings<TestWire> {
@@ -205,10 +209,10 @@ fn different_occurrences_have_different_converters() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.layout.len(), 3);
-    assert_eq!(y.layout.len(), 1);
-    assert!(x.layout.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.layout[0].kind.name, "y");
+    assert_eq!(x.transport.len(), 3);
+    assert_eq!(y.transport.len(), 1);
+    assert!(x.transport.iter().all(|w| w.kind.name == "x"));
+    assert_eq!(y.transport[0].kind.name, "y");
 }
 #[test]
 fn rejects_incomplete_slots() {
@@ -306,7 +310,7 @@ fn observations_precede_move_but_wires_keep_order() {
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(o.layout[0].kind.kind == Kind::Token);
+    assert!(o.transport[0].kind.kind == Kind::Token);
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -371,7 +375,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
             .slot
             .as_ref()
             .unwrap()
-            .layout
+            .transport
             .len(),
         3
     );
@@ -386,12 +390,15 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.layout.len(), 3);
-    assert!(x.layout[2].kind.kind == Kind::Token);
-    assert!(x.layout.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.layout.len(), 1);
-    assert_eq!(y.layout[0].kind.name, "override");
-    assert_eq!(f.ret.slot.as_ref().unwrap().layout[0].kind.name, "result");
+    assert_eq!(x.transport.len(), 3);
+    assert!(x.transport[2].kind.kind == Kind::Token);
+    assert!(x.transport.iter().all(|w| w.kind.name == "x"));
+    assert_eq!(y.transport.len(), 1);
+    assert_eq!(y.transport[0].kind.name, "override");
+    assert_eq!(
+        f.ret.slot.as_ref().unwrap().transport[0].kind.name,
+        "result"
+    );
     assert!(x.validation.to_string().contains("\"x\""));
 }
 #[test]
@@ -441,8 +448,8 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
     let wires = f
         .params
         .iter()
-        .flat_map(|p| &p.ty.slot.as_ref().unwrap().layout)
-        .chain(&f.ret.slot.as_ref().unwrap().layout)
+        .flat_map(|p| &p.ty.slot.as_ref().unwrap().transport)
+        .chain(&f.ret.slot.as_ref().unwrap().transport)
         .collect::<Vec<_>>();
     let names = wires
         .iter()
@@ -466,10 +473,10 @@ fn field_defaults_follow_type_expansions() {
     )
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
-    assert!(output.layout[0].kind.kind == Kind::Value(Value::Text));
-    assert!(output.layout[1].kind.kind == Kind::Value(Value::Bytes));
-    assert_eq!(output.layout[0].kind.ty, "String");
-    assert_eq!(output.layout[1].kind.ty, "Vec < u8 >");
+    assert!(output.transport[0].kind.kind == Kind::Value(Value::Text));
+    assert!(output.transport[1].kind.kind == Kind::Value(Value::Bytes));
+    assert_eq!(output.transport[0].kind.ty, "String");
+    assert_eq!(output.transport[1].kind.ty, "Vec < u8 >");
 }
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
@@ -489,12 +496,12 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let input = f.params[0].ty.slot.as_ref().unwrap();
     let output = f.ret.slot.as_ref().unwrap();
     let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
-    assert_eq!(input.layout[0].kind.kind, scalar);
-    assert_eq!(output.layout[0].kind.kind, scalar);
-    assert_eq!(input.layout[0].kind.name, "scalar");
-    assert_eq!(input.layout[0].kind.ty, "i64");
-    assert_eq!(output.layout[0].kind.name, "scalar");
-    assert_eq!(output.layout[0].kind.ty, "i64");
+    assert_eq!(input.transport[0].kind.kind, scalar);
+    assert_eq!(output.transport[0].kind.kind, scalar);
+    assert_eq!(input.transport[0].kind.name, "scalar");
+    assert_eq!(input.transport[0].kind.ty, "i64");
+    assert_eq!(output.transport[0].kind.name, "scalar");
+    assert_eq!(output.transport[0].kind.ty, "i64");
     assert!(input.validation.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
@@ -552,7 +559,7 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &WireLayout<TestWire, TestGroup>| {
+    let foreign = |wires: &TransportLayout<TestWire, TestGroup>| {
         wires
             .iter()
             .filter_map(|w| match &w.kind.kind {
@@ -562,18 +569,18 @@ fn nested_recipes_use_only_the_callers_extra() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        foreign(&f.params[0].ty.slot.as_ref().unwrap().layout),
+        foreign(&f.params[0].ty.slot.as_ref().unwrap().transport),
         vec![
             ("x", "crate :: Payload".into()),
             ("x", "crate :: Key".into())
         ]
     );
     assert_eq!(
-        foreign(&f.params[1].ty.slot.as_ref().unwrap().layout),
+        foreign(&f.params[1].ty.slot.as_ref().unwrap().transport),
         vec![("y", "crate :: Key".into())]
     );
     assert_eq!(
-        foreign(&f.ret.slot.as_ref().unwrap().layout),
+        foreign(&f.ret.slot.as_ref().unwrap().transport),
         vec![
             ("result", "crate :: Payload".into()),
             ("result", "crate :: Key".into())
@@ -688,7 +695,9 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 plan.acknowledgement.as_ref().unwrap().to_string(),
                 quote!(ack();).to_string()
             );
-            assert_eq!(plan.layout.len(), 2);
+            assert_eq!(plan.transport.len(), 2);
+            assert_eq!(plan.logical.len(), 2);
+            plan.logical[0].name = syn::parse_quote!(finished_logical_input);
             Ok(())
         }
         fn finish_output(&self, plan: &mut OutputPlan<TestWire>, extra: &Extra) -> Result<()> {
@@ -696,7 +705,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 return Err("finalization failed".into());
             }
             assert!(plan.delivery.statements.is_empty());
-            assert!(plan.layout.is_empty());
+            assert!(plan.transport.is_empty());
+            assert!(matches!(
+                plan.logical.nodes(),
+                [prebindgen_flat::WireNode::Group { .. }]
+            ));
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
@@ -730,6 +743,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &Extra::default(),
     )
     .unwrap();
+    assert_eq!(
+        direct
+            .function("take")
+            .unwrap()
+            .input_conversions()
+            .unwrap()[0]
+            .logical[0]
+            .name,
+        "finished_logical_input"
+    );
     bind_output(
         &mut direct,
         &FinalizingCodec,
@@ -828,7 +851,7 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .slot
         .as_ref()
         .unwrap()
-        .layout;
+        .transport;
     let ty = syn::parse_quote!(crate::Point);
     shapes
         .validate_mapping(&ty, &id, wires.iter().map(|w| (&w.name, &w.kind.component)))
@@ -1006,7 +1029,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         quote!(ack()).to_string()
     );
     assert_eq!(
-        plan.layout[1].kind.component,
+        plan.transport[1].kind.component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
     assert!(record_input(
@@ -1054,7 +1077,7 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
     );
     assert_eq!(plan.values.len(), 2);
     assert_eq!(
-        plan.layout[1].kind.component,
+        plan.transport[1].kind.component,
         ComponentPath(vec![ComponentSegment::Field("y".into())])
     );
     assert!(make(true).unwrap_err().contains("finish_output"));
@@ -1074,7 +1097,7 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
         plan.statements.to_string(),
         quote!(let _ = &(next_record());).to_string()
     );
-    assert!(plan.layout.is_empty());
+    assert!(plan.transport.is_empty());
 }
 
 #[test]
@@ -1087,10 +1110,11 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
+                logical: Default::default(),
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                layout: Default::default(),
+                transport: Default::default(),
                 values: Vec::new(),
                 statements: quote! {
                     if mode == #index + 1 { return Err(()); }
@@ -1098,7 +1122,8 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
                 },
                 // Test delivery reclaims each committed allocation immediately.
                 commit: quote!(unsafe { drop(Box::from_raw(Box::into_raw(#local))); }),
-            })
+            }
+            .with_logical())
         },
     )
     .unwrap();
@@ -1200,25 +1225,26 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
 
 #[test]
 fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() {
-    let child = record_output_owned(
-        &TEST_CODEC,
-        format_ident!("record"),
-        quote!(payload),
-        [format_ident!("first"), format_ident!("second")],
-        |index, field| {
-            let local = format_ident!("box{index}");
-            Ok(OutputPlan {
+    let child =
+        record_output_owned(
+            &TEST_CODEC,
+            format_ident!("record"),
+            quote!(payload),
+            [format_ident!("first"), format_ident!("second")],
+            |index, field| {
+                let local = format_ident!("box{index}");
+                Ok(OutputPlan { logical:Default::default(),
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                layout: vec![].into(),
+                transport: vec![].into(),
                 values: vec![],
                 statements: quote!(if mode==#index+1{return Err(());} let #local=Box::new(#field);),
                 commit: quote!(drop(#local);),
-            })
-        },
-    )
-    .unwrap();
+            }.with_logical())
+            },
+        )
+        .unwrap();
     let plan = optional_output(
         &TEST_CODEC,
         &Extra::default(),
@@ -1264,7 +1290,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 
 #[test]
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
-    use prebindgen_flat::WireNode;
+    use prebindgen_conversions::TransportNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
     let input = Input::Fields(vec![
         Input::Optional(Box::new(Input::Leaf)),
@@ -1280,17 +1306,17 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &WireLayout<TestWire, TestGroup>) {
+    fn check(layout: &TransportLayout<TestWire, TestGroup>) {
         layout.validate().unwrap();
         assert_eq!(layout.len(), 4);
-        let [WireNode::Group { metadata, children }] = layout.nodes() else {
+        let [TransportNode::Group { metadata, children }] = layout.nodes() else {
             panic!()
         };
         assert!(matches!(metadata, TestGroup::Record));
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.nodes() {
-            let WireNode::Group { metadata, children } = node else {
+            let TransportNode::Group { metadata, children } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {
@@ -1311,7 +1337,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
             .slot
             .as_ref()
             .unwrap()
-            .layout,
+            .transport,
     );
     for owned in [false, true] {
         let fields = vec![
@@ -1326,7 +1352,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         };
         bind_output(&mut flat, &TEST_CODEC, "echo", &output, &Extra::default()).unwrap();
         let plan = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-        check(&plan.layout);
+        check(&plan.transport);
         assert_eq!(plan.values.len(), 4);
     }
 }
@@ -1396,7 +1422,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
         .unwrap();
     let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-    assert_eq!(output.layout.len(), 2);
+    assert_eq!(output.transport.len(), 2);
     let code = output.statements.to_string();
     assert!(code.contains(":: core :: result :: Result :: Ok"));
     assert!(code.contains("message (&"));
@@ -1509,4 +1535,31 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     let expansions = vec![ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()];
     let names = declarations::source_functions(&expansions, [&fun!(f).on_error(fun!(message))]);
     assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
+}
+
+#[test]
+fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
+    use prebindgen_flat::{Conversion, WireNode};
+    let mut model = parse("pub struct Item {} pub fn empty()->Item{} pub fn numbered(n:i32)->Item{} pub fn take(v:Item){}");
+    bind_input(
+        &mut model,
+        &TEST_CODEC,
+        "take",
+        "v",
+        &Input::selector([
+            Input::constructor("empty", []),
+            Input::constructor("numbered", [Input::Leaf]),
+        ]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let input = model.function("take").unwrap().input_conversions().unwrap()[0];
+    let [WireNode::Alternatives { alternatives }] = input.layout().nodes() else {
+        panic!()
+    };
+    assert!(alternatives[0].is_empty());
+    assert_eq!(alternatives[1].len(), 1);
+    assert_eq!(input.layout().len(), 1);
+    assert_eq!(input.transport.len(), 2);
+    assert!(input.transport[0].name != input.layout()[0].name);
 }

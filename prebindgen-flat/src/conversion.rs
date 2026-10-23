@@ -3,7 +3,8 @@ use crate::Result;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-/// Transport metadata that supplies the Rust carrier type of a wire.
+/// Type information for one logical value. A reader may pass it directly or
+/// encode it as a packed field/callback argument.
 /// The returned type describes the boundary value, not the source value being converted.
 /// For example, a boolean conversion may use `u8` as its Rust carrier type.
 ///
@@ -17,7 +18,7 @@ use quote::quote;
 /// assert_eq!(quote::quote!(#ty).to_string(), "u8");
 /// ```
 pub trait WireKind {
-    /// Rust type used to declare this wire in a wrapper signature or result structure.
+    /// Rust type for this individual value; this does not prescribe a signature.
     fn rust_type(&self) -> syn::Type;
 }
 impl WireKind for syn::Type {
@@ -26,7 +27,7 @@ impl WireKind for syn::Type {
     }
 }
 
-/// One boundary parameter or result component used by wrapper emission.
+/// One typed value definition in the logical input/output contract.
 ///
 /// `W` must implement [`WireKind`]. Call [`Wire::rust_type`]
 /// to obtain the Rust carrier type supplied by the kind.
@@ -49,9 +50,9 @@ impl WireKind for syn::Type {
 /// ```
 #[derive(Clone, Debug)]
 pub struct Wire<W: WireKind> {
-    /// Generated identifier used by conversion code and wrapper signatures.
+    /// Identifier used by conversion code within its element/branch context.
     pub name: syn::Ident,
-    /// Transport description implementing [`WireKind`].
+    /// Individual value information implementing [`WireKind`].
     /// Stores information about this individual value, such as conversion access
     /// and available niches. Relationships between values belong on parent tree nodes.
     pub kind: W,
@@ -59,7 +60,7 @@ pub struct Wire<W: WireKind> {
 
 impl<W: WireKind> Wire<W> {
     /// Rust carrier type supplied by this wire's [`WireKind`].
-    /// Used to declare a wrapper parameter or result field.
+    /// A reader can use this type directly or select a packed transport.
     pub fn rust_type(&self) -> syn::Type {
         self.kind.rust_type()
     }
@@ -118,10 +119,10 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// settings or other data it needs; no common context or phase order is imposed.
 /// Their lifetime parameter allows requests to borrow that data.
 ///
-/// The wire list is stable and includes conditional wires in boundary order.
-/// Wire request positions index this exact list; invalid positions must return
-/// an error. Activity, access modes and other policies may be requested through
-/// generator-defined variants rather than being interpreted by Flat.
+/// The tree describes logical values. Readers choose transport, runtime
+/// repetition and branch selection. A leaf traversal index is not an ABI
+/// parameter position. Requests needing an element/branch context carry it in
+/// the generator-defined request enum; no per-wire ABI protocol is mandatory.
 ///
 /// A reusable owned-box converter can define its own small request vocabulary.
 /// The pointee is preparation data, not a hardcoded application type. The slot
@@ -157,7 +158,6 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///     type Wire = Carrier;
 ///     type Group = ();
 ///     type SlotFragment<'a> = SlotRequest<'a>;
-///     type WireFragment<'a> = WireRequest;
 ///     fn layout(&self) -> &prebindgen_flat::WireLayout<Carrier> { &self.layout }
 ///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
 ///         -> Result<TokenStream>
@@ -181,6 +181,9 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///             }
 ///         }
 ///     }
+/// }
+/// // A generator may supply its own contextual wire-access API.
+/// impl OwnedBoxInput {
 ///     fn code_fragment_wire(&self, pos: usize, mode: WireRequest, expected: &Type)
 ///         -> Result<TokenStream>
 ///     {
@@ -215,27 +218,18 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Conversion {
-    /// Generator-defined boundary carrier.
+    /// Generator-defined type information for individual logical values.
     type Wire: WireKind;
     /// Metadata describing how child values form records, options or alternatives.
     type Group;
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
-    /// Requests concerning one wire.
-    type WireFragment<'a>;
-    /// Authoritative tree containing the slot's wires and group metadata.
+    /// Logical tree of values, repetition and outcomes. Its reader chooses ABI placement.
     fn layout(&self) -> &crate::WireLayout<Self::Wire, Self::Group>;
     /// Emit an expression for the whole slot.
     fn code_fragment_slot(
         &self,
         mode: Self::SlotFragment<'_>,
-        expected_type: &syn::Type,
-    ) -> Result<TokenStream>;
-    /// Emit an expression for wire `pos`, or an error for an invalid position.
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: Self::WireFragment<'_>,
         expected_type: &syn::Type,
     ) -> Result<TokenStream>;
 }
@@ -246,10 +240,16 @@ pub trait Conversion {
 /// `wire(position)`. Its blanket implementation prevents a slot implementation
 /// from supplying a different wire order than the tree used for grouping.
 pub trait ConversionExt: Conversion {
-    /// All physical wires in depth-first, left-to-right ABI order.
+    /// Logical leaf definitions in structural order, each schema visited once.
     fn wires(&self) -> crate::Wires<'_, Self::Wire, Self::Group>;
-    /// A wire at its current ABI position, or an error when out of range.
+    /// A definition at its traversal index; this is not a native ABI position.
     fn wire(&self, position: usize) -> Result<&Wire<Self::Wire>>;
+    /// Resolve a definition by element/outcome path, independently of transport.
+    fn wire_at(&self, path: &crate::WirePath) -> Result<&Wire<Self::Wire>> {
+        self.layout()
+            .get_path(path)
+            .ok_or_else(|| "invalid logical wire path".into())
+    }
 }
 impl<T: Conversion + ?Sized> ConversionExt for T {
     fn wires(&self) -> crate::Wires<'_, Self::Wire, Self::Group> {
@@ -296,7 +296,7 @@ impl<I: Conversion, O: Conversion> crate::Function<I, O> {
             .ok_or_else(|| format!("`{}`: result has no conversion", self.name))?;
         Ok(output)
     }
-    /// Boundary input wires read directly from the slots in parameter order.
+    /// Logical input definitions, including each element/branch schema once.
     pub fn inputs(&self) -> Result<impl Iterator<Item = &Wire<I::Wire>>> {
         Ok(self
             .input_conversions()?

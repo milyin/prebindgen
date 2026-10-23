@@ -7,7 +7,10 @@ struct OptionalLayout<N> {
     /// Inner wire index and its reserved absent representation; otherwise a flag is added.
     pub niche: Option<(usize, N)>,
 }
-fn layout<C: Codec>(codec: &C, wires: &WireLayout<C::Wire, C::Group>) -> OptionalLayout<C::Niche> {
+fn layout<C: Codec>(
+    codec: &C,
+    wires: &TransportLayout<C::Wire, C::Group>,
+) -> OptionalLayout<C::Niche> {
     OptionalLayout {
         niche: wires
             .iter()
@@ -26,11 +29,11 @@ pub fn optional_input<C: Codec>(
     active: &Condition,
     mut child: CodecInput<C>,
 ) -> Result<CodecInput<C>> {
-    let layout = layout(codec, &child.layout);
+    let layout = layout(codec, &child.transport);
     let mut validation = TokenStream::new();
     if let Some((i, niche)) = &layout.niche {
-        let w = &child.layout[*i].name;
-        let present = codec.is_present(&child.layout[*i].kind, niche, quote!(#w))?;
+        let w = &child.transport[*i].name;
+        let present = codec.is_present(&child.transport[*i].kind, niche, quote!(#w))?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
     } else {
         child.fallible = true;
@@ -44,7 +47,8 @@ pub fn optional_input<C: Codec>(
     let selected = active.arm(tag.clone(), 1).rust();
     child.statements = quote!(let #var = if #selected {#body Some(#arg)} else {None};);
     child.argument = quote!(#var);
-    mark(codec, extra, &mut child.layout, tag, layout);
+    mark(codec, extra, &mut child.transport, tag, layout);
+    child.refresh_logical();
     Ok(child)
 }
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
@@ -67,12 +71,12 @@ pub fn optional_output<C: Codec>(
     {
         return Err("optional child has delivery code".into());
     }
-    if child.layout.len() != child.values.len() {
+    if child.transport.len() != child.values.len() {
         return Err("optional output wire/value count mismatch".into());
     }
-    let layout = layout(codec, &child.layout);
+    let layout = layout(codec, &child.transport);
     let mut defaults = Vec::new();
-    for (i, w) in child.layout.iter().enumerate() {
+    for (i, w) in child.transport.iter().enumerate() {
         defaults.push(
             codec.absent_value(
                 &w.kind,
@@ -85,7 +89,7 @@ pub fn optional_output<C: Codec>(
             )?,
         );
     }
-    let names = (0..child.layout.len())
+    let names = (0..child.transport.len())
         .map(|i| format_ident!("{tag}_value{i}"))
         .collect::<Vec<_>>();
     let presence_binding = if layout.niche.is_some() {
@@ -118,14 +122,15 @@ pub fn optional_output<C: Codec>(
     if layout.niche.is_none() {
         child.values.insert(0, quote!(#tag));
     }
-    mark(codec, extra, &mut child.layout, tag, layout);
+    mark(codec, extra, &mut child.transport, tag, layout);
+    child.refresh_logical();
     Ok(child)
 }
 
 fn mark<C: Codec>(
     codec: &C,
     extra: &C::Extra,
-    tree: &mut WireLayout<C::Wire, C::Group>,
+    tree: &mut TransportLayout<C::Wire, C::Group>,
     tag: syn::Ident,
     layout: OptionalLayout<C::Niche>,
 ) {
@@ -155,7 +160,7 @@ fn mark<C: Codec>(
         vec![]
     };
     tree.enclose_optional(
-        prebindgen_flat::WireRepresentation::Inline { controls },
+        prebindgen_conversions::TransportRepresentation::Inline { controls },
         Some(codec.optional_metadata(tag, discriminator, layout.niche.map(|(_, n)| n))),
     );
 }

@@ -1,7 +1,8 @@
 //! Lift one element recipe into a runtime-sized collection without changing phases.
 use super::*;
 use prebindgen_conversions::{Resource, ResourceIdentity};
-use prebindgen_flat::{SequenceView, WireContainer, WireNode, WireRepresentation};
+use prebindgen_conversions::{TransportContainer, TransportNode, TransportRepresentation};
+use prebindgen_flat::SequenceView;
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
@@ -50,7 +51,7 @@ pub struct SequenceOutput<W> {
 
 fn replace(
     code: &TokenStream,
-    layout: &WireLayout<impl prebindgen_flat::WireKind, impl Sized>,
+    layout: &TransportLayout<impl prebindgen_flat::WireKind, impl Sized>,
     values: &[TokenStream],
 ) -> Result<TokenStream> {
     if layout.len() != values.len() {
@@ -114,7 +115,7 @@ fn replace(
 
 fn prepared(
     code: &TokenStream,
-    layout: &WireLayout<impl prebindgen_flat::WireKind, impl Sized>,
+    layout: &TransportLayout<impl prebindgen_flat::WireKind, impl Sized>,
     values: &[Option<TokenStream>],
 ) -> Result<TokenStream> {
     if values.len() != layout.len() {
@@ -161,7 +162,7 @@ pub(crate) fn input<C: Codec>(
     if matches!(element, Type::Reference(_)) {
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
-    if child.layout.is_empty() {
+    if child.transport.is_empty() {
         return Err("collection elements must have at least one wire".into());
     }
     if view != SequenceView::Owned
@@ -180,21 +181,25 @@ pub(crate) fn input<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.layout,
+        &child.transport,
         active,
     )?;
     let validation = replace(
         &child.validation,
-        &child.layout,
+        &child.transport,
         &transport.validation_values,
     )?;
-    let acquire = prepared(&child.acquire, &child.layout, &transport.prepared_values)?;
-    let statements = prepared(&child.statements, &child.layout, &transport.prepared_values)?;
+    let acquire = prepared(&child.acquire, &child.transport, &transport.prepared_values)?;
+    let statements = prepared(
+        &child.statements,
+        &child.transport,
+        &transport.prepared_values,
+    )?;
     // Wrap expressions as a local initializer so the syntax visitor can replace paths.
     let child_argument = &child.argument;
     let argument = prepared(
         &quote!(let #var = #child_argument;),
-        &child.layout,
+        &child.transport,
         &transport.prepared_values,
     )?;
     let mut resources = Vec::new();
@@ -210,7 +215,7 @@ pub(crate) fn input<C: Codec>(
         };
         collect.extend(prepared(
             &quote!(if #condition {#identity}),
-            &child.layout,
+            &child.transport,
             &transport.prepared_values,
         )?);
         resources.push(Resource {
@@ -231,16 +236,16 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Slice => quote!(#var.as_slice()),
         SequenceView::Mutable => unreachable!(),
     };
-    Ok(InputPlan {
+    Ok(InputPlan { logical:Default::default(),
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
-            representation: WireRepresentation::Carrier(Wire {
+        transport: TransportLayout::from_nodes(vec![TransportNode::Sequence(TransportContainer {
+            representation: TransportRepresentation::Carrier(Wire {
                 name: wire,
                 kind: transport.carrier,
             }),
-            element: child.layout,
+            element: child.transport,
             metadata: None,
         })]),
         validation: quote! {
@@ -255,7 +260,7 @@ pub(crate) fn input<C: Codec>(
         statements: quote!(let #var:Vec<#element>=#acquired.into_iter().map(|construct|construct()).collect::<::core::result::Result<_,String>>()?;),
         argument: value,
         resources,
-    })
+    }.with_logical())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -283,7 +288,7 @@ pub(crate) fn output<C: Codec>(
     if mode == ProjectionMode::Owned && (borrowed || view != SequenceView::Owned) {
         return Err("owned collection projection cannot consume a borrowed collection".into());
     }
-    if child.layout.is_empty() {
+    if child.transport.is_empty() {
         return Err("collection elements must have at least one wire".into());
     }
     if !child.delivery.statements.is_empty() {
@@ -294,7 +299,7 @@ pub(crate) fn output<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.layout,
+        &child.transport,
         &child.values,
     )?;
     let owner = format_ident!("{wire}_source");
@@ -345,15 +350,16 @@ pub(crate) fn output<C: Codec>(
         quote!(for commit in #commits {commit();})
     };
     Ok(OutputPlan {
+        logical: Default::default(),
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
-            representation: WireRepresentation::Carrier(Wire {
+        transport: TransportLayout::from_nodes(vec![TransportNode::Sequence(TransportContainer {
+            representation: TransportRepresentation::Carrier(Wire {
                 name: wire,
                 kind: carrier,
             }),
-            element: child.layout,
+            element: child.transport,
             metadata: None,
         })]),
         statements: quote! {
@@ -364,26 +370,27 @@ pub(crate) fn output<C: Codec>(
         },
         values: vec![value],
         commit: quote!(#commit #commit_elements),
-    })
+    }
+    .with_logical())
 }
 
 /// Outer sequences in a return scope, without descending into sequence elements.
 pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G>(
-    layout: &WireLayout<W, G>,
-) -> Vec<&WireContainer<W, G>> {
+    layout: &TransportLayout<W, G>,
+) -> Vec<&TransportContainer<W, G>> {
     fn visit<'a, W: prebindgen_flat::WireKind, G>(
-        layout: &'a WireLayout<W, G>,
-        out: &mut Vec<&'a WireContainer<W, G>>,
+        layout: &'a TransportLayout<W, G>,
+        out: &mut Vec<&'a TransportContainer<W, G>>,
     ) {
         for node in layout.nodes() {
             match node {
-                WireNode::Sequence(c) => out.push(c),
-                WireNode::Optional(c)
-                    if matches!(c.representation, WireRepresentation::Inline { .. }) =>
+                TransportNode::Sequence(c) => out.push(c),
+                TransportNode::Optional(c)
+                    if matches!(c.representation, TransportRepresentation::Inline { .. }) =>
                 {
                     visit(&c.element, out)
                 }
-                WireNode::Group { children, .. } => visit(children, out),
+                TransportNode::Group { children, .. } => visit(children, out),
                 _ => {}
             }
         }
@@ -394,8 +401,8 @@ pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G>(
 }
 /// Find an outer carried sequence, without descending into sequence elements.
 pub fn sequence_return<W: prebindgen_flat::WireKind, G>(
-    layout: &WireLayout<W, G>,
-) -> Option<(&Wire<W>, &WireLayout<W, G>)> {
+    layout: &TransportLayout<W, G>,
+) -> Option<(&Wire<W>, &TransportLayout<W, G>)> {
     return_sequences(layout)
         .into_iter()
         .find_map(|c| c.carrier().map(|wire| (wire, &c.element)))
@@ -410,26 +417,29 @@ mod tests {
             name: syn::parse_str(name).unwrap(),
             kind: syn::parse_quote!(i64),
         };
-        let mut carried: WireLayout<syn::Type, ()> = vec![leaf("value")].into();
-        carried.enclose_sequence(WireRepresentation::Carrier(leaf("rows")), None);
+        let mut carried: TransportLayout<syn::Type, ()> = vec![leaf("value")].into();
+        carried.enclose_sequence(TransportRepresentation::Carrier(leaf("rows")), None);
         carried.enclose_optional(
-            WireRepresentation::Inline {
+            TransportRepresentation::Inline {
                 controls: vec![leaf("present")],
             },
             None,
         );
         assert_eq!(return_sequences(&carried).len(), 1);
         assert_eq!(sequence_return(&carried).unwrap().0.name, "rows");
-        carried.enclose_optional(WireRepresentation::Carrier(leaf("optional_object")), None);
+        carried.enclose_optional(
+            TransportRepresentation::Carrier(leaf("optional_object")),
+            None,
+        );
         assert!(return_sequences(&carried).is_empty());
-        let mut inline: WireLayout<syn::Type, ()> = vec![leaf("inline_value")].into();
-        inline.enclose_sequence(WireRepresentation::Inline { controls: vec![] }, None);
+        let mut inline: TransportLayout<syn::Type, ()> = vec![leaf("inline_value")].into();
+        inline.enclose_sequence(TransportRepresentation::Inline { controls: vec![] }, None);
         assert_eq!(return_sequences(&inline).len(), 1);
         assert!(sequence_return(&inline).is_none());
     }
     #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
-        let layout: WireLayout<syn::Type> = vec![Wire {
+        let layout: TransportLayout<syn::Type> = vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(i64),
         }]
@@ -445,7 +455,7 @@ mod tests {
     }
     #[test]
     fn deleted_row_references_cannot_escape_into_deferred_phases() {
-        let layout: WireLayout<syn::Type> = vec![Wire {
+        let layout: TransportLayout<syn::Type> = vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(*const u8),
         }]

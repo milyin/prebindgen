@@ -3,14 +3,15 @@ use super::*;
 use crate::kotlin::{
     input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
 };
+use prebindgen_conversions::TransportLayout;
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
-use prebindgen_flat::{Wire, WireLayout};
+use prebindgen_flat::Wire;
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &TransportLayout<JniWire, JniGroup>,
     active: &Condition,
 ) -> Result<SequenceInput<JniWire>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -52,7 +53,7 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &TransportLayout<JniWire, JniGroup>,
     values: &[TokenStream],
 ) -> Result<SequenceOutput<JniWire>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -83,7 +84,7 @@ pub(crate) fn output(
 
 pub(crate) fn input_list(
     carrier: &Wire<JniWire>,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &TransportLayout<JniWire, JniGroup>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let child = input_kotlin(element.nodes(), context)?;
@@ -142,7 +143,7 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &TransportLayout<JniWire, JniGroup>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let row = format!("{}_row", context.output_prefix);

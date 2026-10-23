@@ -132,6 +132,24 @@ use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .configure(|flat| {
+            use prebindgen_conversions::NativeConversionExt;
+            use prebindgen_flat::{Conversion, OutcomeKind, WireNode};
+            let mut probe = flat.clone();
+            let declarations = prebindgen_declarations::Declarations::new(&probe, vec![])?;
+            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
+            // Observe a clone so the production builder still installs its own codec.
+            // Collections.kt exercises the separately generated production boundary.
+            let output = probe.function("collection_probe")?.output_conversion()?;
+            let logical = output.layout().outcome(OutcomeKind::Success).unwrap();
+            assert!(matches!(logical.nodes(), [WireNode::Sequence(_)]));
+            assert!(matches!(logical.get(0).unwrap().kind, prebindgen_jni::JniWire::Scalar {
+                primitive: prebindgen_flat::Primitive::Char, ..
+            }));
+            assert!(matches!(output.native_wires().next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
+            assert!(output.layout().outcome(OutcomeKind::BindingFailure).is_some());
+            Ok(())
+        })
         .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
         .expand(expand_return!(ResultFailure).field(fun!(result_error_code)))
         .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))

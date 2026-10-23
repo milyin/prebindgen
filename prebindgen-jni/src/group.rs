@@ -1,12 +1,13 @@
 //! JNI adapter-owned descriptions of the wire tree.
 use super::*;
-use prebindgen_flat::{WireLayout, WireNode};
+
+use prebindgen_conversions::{TransportLayout, TransportNode};
 use syn::ext::IdentExt;
 
 /// Metadata interpreted by the JNI binding writer.
 #[derive(Clone, Debug)]
 pub enum JniGroup {
-    /// Metadata for `WireNode::Optional`, including its reserved absence value.
+    /// Metadata for `TransportNode::Optional`, including its reserved absence value.
     Optional(JniOptional),
     /// An ordered collection of field subtrees.
     /// `Some` constructs a Kotlin data class; `None` exposes expanded values.
@@ -25,20 +26,31 @@ pub struct JniOptional {
     pub niche: Option<JniNiche>,
 }
 
-pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<()> {
+pub(crate) fn validate_layout(layout: &TransportLayout<JniWire, JniGroup>) -> Result<()> {
     layout.validate()?;
     for wire in layout.iter() {
         wire.kind.validate()?;
     }
     fn visit(
-        layout: &WireLayout<JniWire, JniGroup>,
+        layout: &TransportLayout<JniWire, JniGroup>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
     ) -> Result<()> {
         for node in layout.nodes() {
             match node {
-                WireNode::Sequence(c) => {
+                TransportNode::Alternatives {
+                    selector,
+                    alternatives,
+                } => {
+                    if !matches!(selector.kind, JniWire::Selector { .. }) {
+                        return Err("alternatives require an integer selector".into());
+                    }
+                    for arm in alternatives {
+                        visit(arm, bindings, false, reserved)?;
+                    }
+                }
+                TransportNode::Sequence(c) => {
                     let carrier = c.carrier().ok_or("sequence requires a separate carrier")?;
                     if !(matches!(carrier.kind, JniWire::Rows { .. })) || c.element.is_empty() {
                         return Err(
@@ -51,8 +63,8 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                     }
                     validate_layout(&c.element)?;
                 }
-                WireNode::Optional(c) => {
-                    let prebindgen_flat::WireRepresentation::Inline { controls } =
+                TransportNode::Optional(c) => {
+                    let prebindgen_conversions::TransportRepresentation::Inline { controls } =
                         &c.representation
                     else {
                         return Err(
@@ -95,11 +107,11 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                     }
                     visit(&c.element, bindings, false, reserved)?;
                 }
-                WireNode::Wire(w) if matches!(w.kind, JniWire::Rows { .. }) => {
+                TransportNode::Wire(w) if matches!(w.kind, JniWire::Rows { .. }) => {
                     return Err("array carrier requires a container node".into())
                 }
-                WireNode::Wire(_) => {}
-                WireNode::Group { metadata, children } => {
+                TransportNode::Wire(_) => {}
+                TransportNode::Group { metadata, children } => {
                     if let JniGroup::Optional(_) = metadata {
                         return Err("optional metadata requires an Optional node".into());
                     }
@@ -120,7 +132,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                         JniGroup::Fields(_) => {
                             let mut fields = std::collections::BTreeSet::new();
                             for child in children.nodes() {
-                                let WireNode::Group {
+                                let TransportNode::Group {
                                     metadata: JniGroup::Field(name),
                                     ..
                                 } = child
@@ -158,22 +170,25 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn enclose_optional_metadata(tree: &mut WireLayout<JniWire, JniGroup>, metadata: JniGroup) {
+    fn enclose_optional_metadata(
+        tree: &mut TransportLayout<JniWire, JniGroup>,
+        metadata: JniGroup,
+    ) {
         let flag = matches!(&metadata,JniGroup::Optional(o) if o.niche.is_none());
         let mut nodes = std::mem::take(tree).into_nodes();
         // These fixtures describe an explicit flag as the first physical wire.
         // Move it into the representation without changing its wire type.
-        let controls = if flag && matches!(nodes.first(), Some(WireNode::Wire(_))) {
-            let WireNode::Wire(wire) = nodes.remove(0) else {
+        let controls = if flag && matches!(nodes.first(), Some(TransportNode::Wire(_))) {
+            let TransportNode::Wire(wire) = nodes.remove(0) else {
                 unreachable!()
             };
             vec![wire]
         } else {
             vec![]
         };
-        *tree = WireLayout::from_nodes(nodes);
+        *tree = TransportLayout::from_nodes(nodes);
         tree.enclose_optional(
-            prebindgen_flat::WireRepresentation::Inline { controls },
+            prebindgen_conversions::TransportRepresentation::Inline { controls },
             Some(metadata),
         );
     }
@@ -192,7 +207,7 @@ mod tests {
     }
     #[test]
     fn structural_nodes_require_supported_explicit_representations() {
-        use prebindgen_flat::WireRepresentation;
+        use prebindgen_conversions::TransportRepresentation;
         let metadata = || {
             JniGroup::Optional(JniOptional {
                 presence: syn::parse_quote!(flag),
@@ -200,35 +215,35 @@ mod tests {
                 niche: None,
             })
         };
-        let mut carried: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        let mut carried: TransportLayout<JniWire, JniGroup> = vec![leaf("value")].into();
         carried.enclose_optional(
-            WireRepresentation::Carrier(leaf("carrier")),
+            TransportRepresentation::Carrier(leaf("carrier")),
             Some(metadata()),
         );
         carried.validate().unwrap();
         assert!(validate_layout(&carried)
             .unwrap_err()
             .contains("inline optional"));
-        let mut sequence: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
-        sequence.enclose_sequence(WireRepresentation::Inline { controls: vec![] }, None);
+        let mut sequence: TransportLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        sequence.enclose_sequence(TransportRepresentation::Inline { controls: vec![] }, None);
         sequence.validate().unwrap();
         assert!(validate_layout(&sequence)
             .unwrap_err()
             .contains("separate carrier"));
-        let mut missing: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
-        missing.enclose_optional(WireRepresentation::Inline { controls: vec![] }, None);
+        let mut missing: TransportLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        missing.enclose_optional(TransportRepresentation::Inline { controls: vec![] }, None);
         assert!(validate_layout(&missing)
             .unwrap_err()
             .contains("requires optional metadata"));
-        let mut wrong: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        let mut wrong: TransportLayout<JniWire, JniGroup> = vec![leaf("value")].into();
         wrong.enclose(metadata());
         assert!(validate_layout(&wrong)
             .unwrap_err()
             .contains("requires an Optional node"));
-        let mut wrong_flag: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        let mut wrong_flag: TransportLayout<JniWire, JniGroup> = vec![leaf("value")].into();
         // A char wire named flag is not the adapter's presence-flag type.
         wrong_flag.enclose_optional(
-            WireRepresentation::Inline {
+            TransportRepresentation::Inline {
                 controls: vec![leaf("flag")],
             },
             Some(metadata()),
@@ -239,7 +254,7 @@ mod tests {
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
-        let mut tree = WireLayout::from(vec![leaf("value")]);
+        let mut tree = TransportLayout::from(vec![leaf("value")]);
         tree[0].kind.set_niche(Some(JniNiche::Integer(-3))).unwrap();
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         enclose_optional_metadata(&mut tree, optional("outer", "value", Some(-2)));
@@ -252,7 +267,7 @@ mod tests {
             .contains("outside payload"));
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
-        let mut flag = WireLayout::from(vec![leaf("flag")]);
+        let mut flag = TransportLayout::from(vec![leaf("flag")]);
         flag[0].kind = JniWire::selector();
         enclose_optional_metadata(&mut flag, optional("flag", "flag", None));
         validate_layout(&flag).unwrap();
@@ -263,7 +278,7 @@ mod tests {
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
-        let mut field: WireLayout<JniWire, JniGroup> = WireLayout::default();
+        let mut field: TransportLayout<JniWire, JniGroup> = TransportLayout::default();
         field.enclose(JniGroup::Field(syn::parse_quote!(x)));
         assert!(validate_layout(&field)
             .unwrap_err()
@@ -276,12 +291,12 @@ mod tests {
             .contains("duplicate field"));
         field.enclose(JniGroup::Fields(None));
         validate_layout(&field).unwrap();
-        let mut malformed = WireLayout::from(vec![leaf("value")]);
+        let mut malformed = TransportLayout::from(vec![leaf("value")]);
         malformed.enclose(JniGroup::Fields(None));
         assert!(validate_layout(&malformed)
             .unwrap_err()
             .contains("named field children"));
-        let mut empty: WireLayout<JniWire, JniGroup> = WireLayout::default();
+        let mut empty: TransportLayout<JniWire, JniGroup> = TransportLayout::default();
         empty.enclose(JniGroup::Fields(None));
         validate_layout(&empty).unwrap();
     }
@@ -297,7 +312,7 @@ mod tests {
             )
             .unwrap();
         input
-            .layout
+            .transport
             .enclose(JniGroup::Field(syn::parse_quote!(orphan)));
         assert!(JniCodec
             .finish_input(&mut input, &())
@@ -313,7 +328,7 @@ mod tests {
             )
             .unwrap();
         output
-            .layout
+            .transport
             .enclose(JniGroup::Field(syn::parse_quote!(orphan)));
         assert!(JniCodec
             .finish_output(&mut output, &())
@@ -324,7 +339,7 @@ mod tests {
     fn reserved_niches_are_checked_independently_of_remaining_availability() {
         let mut wire = JniWire::scalar(Primitive::Char);
         wire.clear_niche();
-        let mut tree = WireLayout::from(vec![prebindgen_flat::Wire {
+        let mut tree = TransportLayout::from(vec![prebindgen_flat::Wire {
             name: syn::parse_quote!(value),
             kind: wire,
         }]);
@@ -349,7 +364,7 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        input.layout[0].kind = JniWire::Scalar {
+        input.transport[0].kind = JniWire::Scalar {
             primitive: Primitive::I64,
             next_integer_niche: Some(-1),
         };
@@ -366,7 +381,7 @@ mod tests {
                 false,
             )
             .unwrap();
-        output.layout[0].kind = input.layout[0].kind.clone();
+        output.transport[0].kind = input.transport[0].kind.clone();
         assert!(JniCodec
             .finish_output(&mut output, &())
             .unwrap_err()
@@ -374,7 +389,7 @@ mod tests {
     }
     #[test]
     fn optional_reservations_cannot_overlap_each_other_or_available_state() {
-        let mut tree = WireLayout::from(vec![leaf("value")]);
+        let mut tree = TransportLayout::from(vec![leaf("value")]);
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree)
             .unwrap_err()

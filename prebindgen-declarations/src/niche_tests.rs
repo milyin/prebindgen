@@ -132,17 +132,17 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
         } else {
             quote!(true)
         };
-        return InputPlan {
+        return InputPlan { logical:Default::default(),
             fallible: false,
             context: Default::default(),
-            layout: wires.into(),
+            transport: wires.into(),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
             acquire: quote!(),
             resources: vec![],
             acknowledgement: None,
             statements: quote!(),
             argument: quote!(raw),
-        };
+        }.with_logical();
     }
     let tag = format_ident!("tag{depth}");
     let child = input(domain, depth - 1, active.arm(tag.clone(), 1));
@@ -178,15 +178,15 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             );
             values.insert(0, quote!(123i32));
         }
-        return OutputPlan {
+        return OutputPlan { logical:Default::default(),
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            layout: wires.into(),
+            transport: wires.into(),
             statements: quote!(let raw = #source; if !(#valid) #(|| #invalid)* { return Err("invalid payload"); }),
             commit: quote!(),
             values,
-        };
+        }.with_logical();
     }
     let payload = format_ident!("payload{depth}");
     let child = output(domain, depth - 1, quote!(#payload));
@@ -293,21 +293,21 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                 let inp = input(&domain, depth, Condition::default());
                 let out = output(&domain, depth, quote!(source));
                 let expected = 1 + usize::from(prefix) + depth.saturating_sub(domain.unused.len());
-                assert_eq!(inp.layout.len(), expected);
-                assert_eq!(out.layout.len(), expected);
+                assert_eq!(inp.transport.len(), expected);
+                assert_eq!(out.transport.len(), expected);
                 let decode = format_ident!("decode{case}_{depth}_{suffix}");
                 let encode = format_ident!("encode{case}_{depth}_{suffix}");
                 let mut source_ty = ty.clone();
                 for _ in 0..depth {
                     source_ty = syn::parse_quote!(Option<#source_ty>);
                 }
-                let params = inp.layout.iter().map(|w| {
+                let params = inp.transport.iter().map(|w| {
                     let n = &w.name;
                     let t = w.kind.rust_type();
                     quote!(#n:#t)
                 });
-                let names = inp.layout.iter().map(|w| &w.name).collect::<Vec<_>>();
-                let types = out.layout.iter().map(|w| w.kind.rust_type());
+                let names = inp.transport.iter().map(|w| &w.name).collect::<Vec<_>>();
+                let types = out.transport.iter().map(|w| w.kind.rust_type());
                 let validation = inp.validation;
                 let construct = inp.statements;
                 let argument = inp.argument;
@@ -398,7 +398,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     let mut child = output(&domain, 0, quote!(payload));
     // A second view has the same base domain, but its absent default cannot be
     // treated as an independent discriminator by the enclosing optional layer.
-    child.layout.push(Wire {
+    child.transport.push(Wire {
         name: format_ident!("second"),
         kind: domain.clone(),
     });
@@ -415,15 +415,15 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     .unwrap();
     assert_eq!(
         DomainCodec
-            .niche(&plan.layout[0].kind)
+            .niche(&plan.transport[0].kind)
             .unwrap()
             .value
             .to_string(),
         "4u8"
     );
-    assert!(DomainCodec.niche(&plan.layout[1].kind).is_none());
-    assert_eq!(plan.layout[0].kind.unused.len(), 2); // Wire's base domain is unchanged.
-    assert_eq!(plan.layout[1].kind.unused.len(), 2);
+    assert!(DomainCodec.niche(&plan.transport[1].kind).is_none());
+    assert_eq!(plan.transport[0].kind.unused.len(), 2); // Wire's base domain is unchanged.
+    assert_eq!(plan.transport[1].kind.unused.len(), 2);
     plan = optional_output(
         &DomainCodec,
         &(),
@@ -434,9 +434,9 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.layout.len(), 2);
+    assert_eq!(plan.transport.len(), 2);
     assert!(plan
-        .layout
+        .transport
         .iter()
         .all(|w| DomainCodec.niche(&w.kind).is_none()));
     plan = optional_output(
@@ -449,10 +449,11 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.layout.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
-    assert_eq!(plan.layout[0].name, "tag3");
-    plan.layout.validate().unwrap();
-    let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
+    assert_eq!(plan.transport.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
+    assert_eq!(plan.transport[0].name, "tag3");
+    plan.transport.validate().unwrap();
+    let prebindgen_conversions::TransportNode::Optional(container) = &plan.transport.nodes()[0]
+    else {
         panic!()
     };
     assert!(container
@@ -461,9 +462,10 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         .unwrap()
         .starts_with("optional:tag3:"));
     assert!(
-        matches!(&container.representation,prebindgen_flat::WireRepresentation::Inline {controls} if controls.len()==1)
+        matches!(&container.representation,prebindgen_conversions::TransportRepresentation::Inline {controls} if controls.len()==1)
     );
-    let prebindgen_flat::WireNode::Optional(inner) = &container.element.nodes()[0] else {
+    let prebindgen_conversions::TransportNode::Optional(inner) = &container.element.nodes()[0]
+    else {
         panic!()
     };
     assert!(inner
@@ -472,8 +474,8 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         .unwrap()
         .starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
-    for w in independent.layout.iter_mut() {
+    for w in independent.transport.iter_mut() {
         DomainCodec.set_niche(&mut w.kind, None);
     }
-    assert!(DomainCodec.niche(&independent.layout[0].kind).is_none());
+    assert!(DomainCodec.niche(&independent.transport[0].kind).is_none());
 }

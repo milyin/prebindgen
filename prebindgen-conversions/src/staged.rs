@@ -1,8 +1,9 @@
 //! Optional expression protocol for stored plans used by the C and JNI adapters.
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
-use crate::{Access, InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Conversion, ConversionExt, Function, Result, Wire, WireKind};
+use crate::NativeConversionExt;
+use crate::{Access, InputPlan, NativeConversion, OutputPlan, TemplateContext};
+use prebindgen_flat::{Conversion, Function, Result, Wire, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -106,10 +107,10 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
     type Wire = W;
     type Group = G;
     type SlotFragment<'a> = InputFragment<'a, C>;
-    type WireFragment<'a> = InputWireFragment;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<W, G> {
-        &self.layout
+    fn layout(&self) -> &prebindgen_flat::WireLayout<Self::Wire, Self::Group> {
+        &self.logical
     }
+
     fn code_fragment_slot(
         &self,
         mode: InputFragment<'_, C>,
@@ -168,6 +169,12 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
             }
         })
     }
+}
+impl<W: WireKind, C: TemplateContext + 'static, G> crate::NativeConversion for InputPlan<W, C, G> {
+    type WireFragment<'a> = InputWireFragment;
+    fn transport(&self) -> &crate::TransportLayout<W, G> {
+        &self.transport
+    }
     fn code_fragment_wire(
         &self,
         pos: usize,
@@ -175,7 +182,7 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
         _expected_type: &syn::Type,
     ) -> Result<TokenStream> {
         let wire = self
-            .layout
+            .transport
             .get(pos)
             .ok_or_else(|| format!("invalid input wire position {pos}"))?;
         let name = &wire.name;
@@ -187,10 +194,10 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, 
     type Wire = W;
     type Group = G;
     type SlotFragment<'a> = OutputFragment<'a, C>;
-    type WireFragment<'a> = OutputWireFragment<'a, C>;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<W, G> {
-        &self.layout
+    fn layout(&self) -> &prebindgen_flat::WireLayout<Self::Wire, Self::Group> {
+        &self.logical
     }
+
     fn code_fragment_slot(
         &self,
         mode: OutputFragment<'_, C>,
@@ -224,6 +231,12 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, 
             }
         })
     }
+}
+impl<W: WireKind, C: TemplateContext + 'static, G> crate::NativeConversion for OutputPlan<W, C, G> {
+    type WireFragment<'a> = OutputWireFragment<'a, C>;
+    fn transport(&self) -> &crate::TransportLayout<W, G> {
+        &self.transport
+    }
     fn code_fragment_wire(
         &self,
         pos: usize,
@@ -239,13 +252,14 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, 
         expression(crate::emission::render_output(context, code, source)?)
     }
 }
+
 impl<W: WireKind, C, G> OutputPlan<W, C, G> {
-    /// Check that every tree leaf has one output expression.
+    /// Check this native transport's expression count, independently of the logical schema.
     pub fn validate_value_count(&self) -> Result<()> {
         self.check_arity()
     }
     fn check_arity(&self) -> Result<()> {
-        if self.layout.len() != self.values.len() {
+        if self.transport.len() != self.values.len() {
             return Err("output wire/value count differs".into());
         }
         Ok(())
@@ -271,8 +285,8 @@ pub trait StagedFunction<C, W: WireKind> {
 impl<I, O, C: 'static> StagedFunction<C, O::Wire> for Function<I, O>
 where
     I: Conversion,
-    O: Conversion,
-    for<'a> O: Conversion<WireFragment<'a> = OutputWireFragment<'a, C>>,
+    O: NativeConversion,
+    for<'a> O: NativeConversion<WireFragment<'a> = OutputWireFragment<'a, C>>,
 {
     fn outputs(
         &self,
@@ -281,7 +295,7 @@ where
     ) -> Result<std::vec::IntoIter<OutputValue<'_, O::Wire>>> {
         let output = self.output_conversion()?;
         output
-            .wires()
+            .native_wires()
             .enumerate()
             .map(|(pos, wire)| {
                 let value = output.code_fragment_wire(
@@ -309,10 +323,10 @@ pub fn emit_call<I, O, C: 'static>(
     result_type: &syn::Type,
 ) -> Result<TokenStream>
 where
-    I: Conversion,
-    O: Conversion,
-    for<'a> I: Conversion<SlotFragment<'a> = InputFragment<'a, C>>,
-    for<'a> O: Conversion<
+    I: NativeConversion,
+    O: NativeConversion,
+    for<'a> I: NativeConversion<SlotFragment<'a> = InputFragment<'a, C>>,
+    for<'a> O: NativeConversion<
         SlotFragment<'a> = OutputFragment<'a, C>,
         WireFragment<'a> = OutputWireFragment<'a, C>,
     >,
@@ -386,7 +400,7 @@ where
     let _ = function.outputs(context, source)?;
     let mut used = std::collections::BTreeSet::new();
     for input in &inputs {
-        for wire in input.wires() {
+        for wire in input.native_wires() {
             used.insert(wire.name.to_string());
         }
     }

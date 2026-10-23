@@ -9,7 +9,8 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_flat::{same_type, type_key, Flat, Result, Wire, WireLayout};
+use prebindgen_conversions::{TransportLayout, TransportNode};
+use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -294,15 +295,15 @@ impl Output {
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// let function = flat.function("echo")?;
 /// // Input: selector, constructor argument, direct value. Output: two values.
-/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().layout.len(), 3);
-/// assert_eq!(function.ret.slot.as_ref().unwrap().layout.len(), 2);
+/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().transport.len(), 3);
+/// assert_eq!(function.ret.slot.as_ref().unwrap().transport.len(), 2);
 /// // Replace just this parameter's converter; later default filling preserves it.
 /// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Leaf, &())?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
-/// assert_eq!(input.layout.len(), 1);
-/// assert_eq!(prebindgen_flat::type_key(&input.layout[0].kind), "i64");
+/// assert_eq!(input.transport.len(), 1);
+/// assert_eq!(prebindgen_flat::type_key(&input.transport[0].kind), "i64");
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -432,7 +433,7 @@ pub trait Codec {
         _wire: syn::Ident,
         _length: syn::Ident,
         _index: syn::Ident,
-        _element: &WireLayout<Self::Wire, Self::Group>,
+        _element: &TransportLayout<Self::Wire, Self::Group>,
         _active: &Condition,
     ) -> Result<SequenceInput<Self::Wire>> {
         Err("collections are unsupported by this codec".into())
@@ -445,7 +446,7 @@ pub trait Codec {
         _wire: syn::Ident,
         _length: syn::Ident,
         _index: syn::Ident,
-        _element: &WireLayout<Self::Wire, Self::Group>,
+        _element: &TransportLayout<Self::Wire, Self::Group>,
         _values: &[TokenStream],
     ) -> Result<SequenceOutput<Self::Wire>> {
         Err("collections are unsupported by this codec".into())
@@ -472,6 +473,37 @@ pub trait Codec {
             })?,
             extra,
         )
+    }
+    /// Logical payload of the source Err(E) channel. A mapped error explicitly
+    /// uses String; raw typed errors must provide their own declared projection.
+    fn source_error_layout(
+        &self,
+        ty: &Type,
+        mapped: bool,
+        extra: &Self::Extra,
+    ) -> Result<prebindgen_flat::WireLayout<Self::Wire, Self::Group>> {
+        if !mapped {
+            return Err(format!(
+                "missing logical error projection for `{}`",
+                type_key(ty)
+            ));
+        }
+        let plan = self.output_leaf(
+            &syn::parse_quote!(String),
+            extra,
+            format_ident!("source_error_message"),
+            quote!(source_error_message),
+            false,
+        )?;
+        Ok(plan.transport.logical())
+    }
+    /// Logical binding-failure payload, independently of how the reader delivers
+    /// it. None means this codec declares no binding-failure channel.
+    fn binding_failure_layout(
+        &self,
+        _extra: &Self::Extra,
+    ) -> Result<Option<prebindgen_flat::WireLayout<Self::Wire, Self::Group>>> {
+        Ok(None)
     }
     /// Report a mapped String in the adapter-specific error channel.
     /// The returned expression must produce String. The compiler returns Err
@@ -522,12 +554,17 @@ pub trait Codec {
         Err("optional values are unsupported by this codec".into())
     }
     /// Complete a composed parameter plan before it is stored in a slot.
-    /// Called once per bound parameter, including records and selectors.
+    /// Called once per bound parameter, including records and selectors. The
+    /// logical schema reflects the composed transport when this hook runs. A hook
+    /// that edits transport must refresh the schema or supply its own logical view;
+    /// the compiler preserves the hook's schema and validates it before installation.
     fn finish_input(&self, _plan: &mut CodecInput<Self>, _extra: &Self::Extra) -> Result<()> {
         Ok(())
     }
     /// Complete a composed result plan, including unit and multi-wire results.
     /// Install call-level delivery here, after all output expressions are known.
+    /// The logical schema already includes the composed payload and error channels.
+    /// As for finish_input, hooks own any later changes to transport or schema.
     fn finish_output(&self, _plan: &mut CodecOutput<Self>, _extra: &Self::Extra) -> Result<()> {
         Ok(())
     }
@@ -630,8 +667,10 @@ pub fn bind_input<C: Codec>(
         extra,
         &Condition::default(),
     )?;
+    conversion.refresh_logical();
     codec.finish_input(&mut conversion, extra)?;
-    conversion.layout.validate()?;
+    conversion.logical.validate()?;
+    conversion.transport.validate()?;
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
     Ok(())
 }
@@ -673,11 +712,26 @@ pub fn bind_output<C: Codec>(
         prebindgen_conversions::source_result_expr(),
         false,
     )?;
+    finalize_output_schema(codec, &mut conversion, extra)?;
     codec.finish_output(&mut conversion, extra)?;
+    conversion.logical.validate()?;
     conversion.validate_value_count()?;
-    conversion.layout.validate()?;
+    conversion.transport.validate()?;
     flat.function_mut(function)?.ret.slot = Some(conversion.into());
     Ok(())
+}
+
+fn finalize_output_schema<C: Codec>(
+    codec: &C,
+    plan: &mut CodecOutput<C>,
+    extra: &C::Extra,
+) -> Result<()> {
+    plan.refresh_logical();
+    if let Some(error) = codec.binding_failure_layout(extra)? {
+        plan.logical
+            .set_outcome(prebindgen_flat::OutcomeKind::BindingFailure, error);
+    }
+    plan.logical.validate()
 }
 
 struct Compiler<'a, C: Codec> {
@@ -701,7 +755,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         self.next.set(next + 1);
         n
     }
-    fn prefix(&self, wires: &mut WireLayout<C::Wire, C::Group>, segment: ComponentSegment) {
+    fn prefix(&self, wires: &mut TransportLayout<C::Wire, C::Group>, segment: ComponentSegment) {
         for wire in wires {
             self.codec.prefix_component(&mut wire.kind, segment.clone());
         }
@@ -717,7 +771,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());
         }
         let var = self.name();
-        let mut wires = WireLayout::default();
+        let mut wires = TransportLayout::default();
         let mut fallible = false;
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
@@ -751,16 +805,18 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     wires.enclose(self.codec.fields_group());
                     return Ok(InputPlan {
+                        logical: Default::default(),
                         fallible: false,
                         context: Default::default(),
                         acknowledgement,
-                        layout: wires,
+                        transport: wires,
                         validation,
                         acquire,
                         resources,
                         statements,
                         argument: quote!(()),
-                    });
+                    }
+                    .with_logical());
                 }
                 let r = self.flat.record(ty)?;
                 if r.fields.len() != children.len() {
@@ -799,7 +855,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 for (param, child) in f.params.iter().zip(args) {
                     let mut p = self.input(&param.ty.ty, child, extra, active)?;
                     self.prefix(
-                        &mut p.layout,
+                        &mut p.transport,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
                     fallible |= p.fallible;
@@ -808,7 +864,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     resources.extend(p.resources);
                     merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     statements.extend(p.statements);
-                    wires.extend(p.layout);
+                    wires.extend(p.transport);
                     call_args.push(p.argument);
                 }
                 let path = &f.path;
@@ -823,7 +879,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("selector results must be owned in this subset".into());
                 }
                 let tag = self.name();
-                wires.push(Wire {
+                let selector = Wire {
                     name: tag.clone(),
                     kind: {
                         let mut kind = self.codec.selector(extra);
@@ -831,15 +887,16 @@ impl<'a, C: Codec> Compiler<'a, C> {
                             .prefix_component(&mut kind, ComponentSegment::Selector);
                         kind
                     },
-                });
+                };
+                let mut alternatives = Vec::new();
                 let count = arms.len() as i32;
                 let invalid = active.and(quote!(!(0..#count).contains(&#tag)));
                 validation.extend(quote!(if #invalid {return Err("invalid selector".into());}));
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
-                    self.prefix(&mut p.layout, ComponentSegment::Alternative(i));
-                    for wire in p.layout.iter_mut() {
+                    self.prefix(&mut p.transport, ComponentSegment::Alternative(i));
+                    for wire in p.transport.iter_mut() {
                         self.codec.set_niche(&mut wire.kind, None);
                     }
                     fallible |= p.fallible;
@@ -849,24 +906,30 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     let body = p.statements;
                     let value = p.argument;
-                    wires.extend(p.layout);
+                    alternatives.push(p.transport);
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
+                wires = TransportLayout::from_nodes(vec![TransportNode::Alternatives {
+                    selector,
+                    alternatives,
+                }]);
                 statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
         Ok(InputPlan {
+            logical: Default::default(),
             fallible,
             context: Default::default(),
             acknowledgement,
-            layout: wires,
+            transport: wires,
             validation,
             acquire,
             resources,
             statements,
             argument,
-        })
+        }
+        .with_logical())
     }
     fn output_root(
         &self,
@@ -906,6 +969,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             } else {
                 None
             };
+            let mapped_error = mapped.is_some();
             let message =
                 self.codec
                     .result_error_value(error_ty, quote!(#failure), mapped, extra)?;
@@ -918,6 +982,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 };
                 #prepare
             };
+            child.refresh_logical();
+            child.logical.set_outcome(
+                prebindgen_flat::OutcomeKind::SourceError,
+                self.codec
+                    .source_error_layout(error_ty, mapped_error, extra)?,
+            );
             return Ok(child);
         }
         self.output(ty, recipe, extra, value, borrowed)
@@ -934,11 +1004,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
         }
         let mut out = OutputPlan {
+            logical: Default::default(),
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
-            layout: Default::default(),
+            transport: Default::default(),
             statements: TokenStream::new(),
             values: Vec::new(),
         };
@@ -1004,7 +1075,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
                 if type_key(ty) == "()" && children.is_empty() {
-                    out.layout.enclose(self.codec.fields_group());
+                    out.transport.enclose(self.codec.fields_group());
+                    out.refresh_logical();
                     return Ok(out);
                 }
                 let r = self.flat.record(ty)?;
@@ -1064,7 +1136,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
                 self.prefix(
-                    &mut child.layout,
+                    &mut child.transport,
                     ComponentSegment::Getter(function.clone()),
                 );
                 append(&mut out, child)?;
@@ -1090,7 +1162,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         quote!(&#value)
                     };
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
-                    self.prefix(&mut p.layout, ComponentSegment::View(index));
+                    self.prefix(&mut p.transport, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
                 }
@@ -1101,6 +1173,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
             }
         }
+        out.refresh_logical();
         Ok(out)
     }
 }
@@ -1115,7 +1188,7 @@ fn append<W: prebindgen_flat::WireKind, C, M>(
     }
     to.fallible |= from.fallible;
     to.commit.extend(from.commit);
-    to.layout.extend(from.layout);
+    to.transport.extend(from.transport);
     to.statements.extend(from.statements);
     to.values.extend(from.values);
     Ok(())

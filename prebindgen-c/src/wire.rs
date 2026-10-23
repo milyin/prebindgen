@@ -9,7 +9,7 @@ use super::*;
 #[derive(Clone, Debug)]
 pub enum CWire {
     /// One pointer/length carrier of generated ABI rows. Its element layout lives
-    /// in the enclosing WireNode::Sequence; empty rows may use a null pointer.
+    /// in the enclosing TransportNode::Sequence; empty rows may use a null pointer.
     Rows,
     /// A fieldless Rust enum represented by checked `int32_t` values.
     Enum {

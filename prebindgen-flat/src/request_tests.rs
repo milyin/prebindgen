@@ -18,7 +18,6 @@ impl Conversion for Input {
     type Wire = syn::Type;
     type Group = ();
     type SlotFragment<'a> = Read<'a>;
-    type WireFragment<'a> = InputWire;
     fn layout(&self) -> &WireLayout<syn::Type> {
         &self.layout
     }
@@ -39,6 +38,8 @@ impl Conversion for Input {
             }
         }
     }
+}
+impl Input {
     fn code_fragment_wire(
         &self,
         pos: usize,
@@ -71,7 +72,6 @@ impl Conversion for Output {
     type Group = ();
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;
-    type WireFragment<'a> = &'a syn::Ident;
     fn layout(&self) -> &WireLayout<syn::Type> {
         &self.layout
     }
@@ -81,6 +81,8 @@ impl Conversion for Output {
         }
         Ok(quote!(i64::from(#source)))
     }
+}
+impl Output {
     fn code_fragment_wire(
         &self,
         pos: usize,
@@ -184,4 +186,92 @@ fn binding_helper_requires_one_expression() {
     )
     .is_ok());
     assert!(bind_fragment(&name, &syn::parse_quote!(()), quote!(())).is_ok());
+}
+
+#[test]
+fn one_logical_sequence_supports_packed_and_callback_readers() {
+    enum Delivery<'a> {
+        Pack(&'a syn::Ident),
+        Visit {
+            source: &'a syn::Ident,
+            callback: &'a syn::Ident,
+        },
+    }
+    struct Sequence {
+        schema: WireLayout<syn::Type>,
+    }
+    impl Conversion for Sequence {
+        type Wire = syn::Type;
+        type Group = ();
+        type SlotFragment<'a> = Delivery<'a>;
+        fn layout(&self) -> &WireLayout<syn::Type> {
+            &self.schema
+        }
+        fn code_fragment_slot(&self, mode: Delivery<'_>, _: &syn::Type) -> Result<TokenStream> {
+            Ok(match mode {
+                Delivery::Pack(source) => {
+                    quote!(NativeRows {data:#source.as_ptr(),len:#source.len()})
+                }
+                Delivery::Visit { source, callback } => {
+                    quote!({for row in #source {#callback(row.x,row.y);}})
+                }
+            })
+        }
+    }
+    let mut schema: WireLayout<syn::Type> = ["x", "y"]
+        .into_iter()
+        .map(|name| Wire {
+            name: syn::parse_str(name).unwrap(),
+            kind: syn::parse_quote!(i64),
+        })
+        .collect();
+    schema.enclose_sequence(None);
+    let conversion = Sequence { schema };
+    assert_eq!(conversion.wires().count(), 2);
+    let source = syn::parse_quote!(values);
+    let callback = syn::parse_quote!(callback);
+    let pack = conversion
+        .code_fragment_slot(Delivery::Pack(&source), &syn::parse_quote!(NativeRows))
+        .unwrap();
+    let visit = conversion
+        .code_fragment_slot(
+            Delivery::Visit {
+                source: &source,
+                callback: &callback,
+            },
+            &syn::parse_quote!(()),
+        )
+        .unwrap();
+    let code = quote! {
+        #[repr(C)] struct Row {x:i64,y:i64}
+        #[repr(C)] struct NativeRows {data:*const Row,len:usize}
+        fn pack(values:&[Row])->NativeRows {#pack}
+        fn visit(values:&[Row],mut callback:impl FnMut(i64,i64)) {#visit}
+        fn main() {
+            let values=[Row {x:1,y:2},Row {x:3,y:4}];
+            let rows=pack(&values);assert_eq!(rows.len,2);
+            let packed=unsafe {std::slice::from_raw_parts(rows.data,rows.len)};
+            let mut visited=vec![];visit(&values,|x,y|visited.push((x,y)));
+            assert_eq!(visited,packed.iter().map(|row|(row.x,row.y)).collect::<Vec<_>>());
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("readers.rs");
+    let binary = dir.path().join("readers");
+    std::fs::write(&file, code.to_string()).unwrap();
+    let build = std::process::Command::new("rustc")
+        .arg(&file)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    assert!(std::process::Command::new(binary)
+        .status()
+        .unwrap()
+        .success());
 }

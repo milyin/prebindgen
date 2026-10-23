@@ -1,11 +1,11 @@
 //! Per-element native delivery and Kotlin folds, without invoking user code under JNI locks.
 use super::*;
+use prebindgen_conversions::TransportLayout;
 use prebindgen_declarations::SequenceOutput;
-use prebindgen_flat::WireLayout;
 
 pub(crate) fn transport(
     wire: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &TransportLayout<JniWire, JniGroup>,
     values: &[TokenStream],
 ) -> Result<SequenceOutput<JniWire>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -61,13 +61,15 @@ pub(crate) struct Fold {
     pub discard: String,
 }
 pub(crate) fn fold(
-    layout: &WireLayout<JniWire, JniGroup>,
+    layout: &TransportLayout<JniWire, JniGroup>,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
-    fn optional(nodes: &[prebindgen_flat::WireNode<JniWire, JniGroup>]) -> bool {
+    fn optional(nodes: &[prebindgen_conversions::TransportNode<JniWire, JniGroup>]) -> bool {
         nodes.iter().any(|node| match node {
-            prebindgen_flat::WireNode::Optional(_) => true,
-            prebindgen_flat::WireNode::Group { children, .. } => optional(children.nodes()),
+            prebindgen_conversions::TransportNode::Optional(_) => true,
+            prebindgen_conversions::TransportNode::Group { children, .. } => {
+                optional(children.nodes())
+            }
             _ => false,
         })
     }
