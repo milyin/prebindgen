@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">type </span>Wire = CWire;
 <a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">type </span>Niche = CNiche;
 <a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">type </span>Group = CGroup;
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">type </span>Reader = CCodec;
+<a href=#31 id=31 data-nosnippet>31</a>
 <a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">type </span>Extra = ();
 <a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">type </span>Context = CContext;
 <a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">type </span>Input = InputPlan&lt;CWire&gt;;
@@ -92,10 +92,10 @@
 <a href=#92 id=92 data-nosnippet>92</a>        n: syn::Ident,
 <a href=#93 id=93 data-nosnippet>93</a>        i: syn::Ident,
 <a href=#94 id=94 data-nosnippet>94</a>        element: <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;CWire, CGroup&gt;,
-<a href=#95 id=95 data-nosnippet>95</a>        values: <span class="kw-2">&amp;</span>[TokenStream],
+<a href=#95 id=95 data-nosnippet>95</a>        values: <span class="kw-2">&amp;</span>[(syn::Ident, TokenStream)],
 <a href=#96 id=96 data-nosnippet>96</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_declarations::SequenceOutput&lt;CGroup&gt;&gt; {
 <a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">if </span><span class="self">self</span>.callback_wire.as_ref() == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>w) {
-<a href=#98 id=98 data-nosnippet>98</a>            <span class="prelude-val">Ok</span>(sequence::callback_output(w, values, n))
+<a href=#98 id=98 data-nosnippet>98</a>            sequence::callback_output(w, values, element, n)
 <a href=#99 id=99 data-nosnippet>99</a>        } <span class="kw">else </span>{
 <a href=#100 id=100 data-nosnippet>100</a>            CCodec.sequence_output(e, w, n, i, element, values)
 <a href=#101 id=101 data-nosnippet>101</a>        }
@@ -212,185 +212,219 @@
 <a href=#212 id=212 data-nosnippet>212</a>        }
 <a href=#213 id=213 data-nosnippet>213</a>        CCodec.output_leaf(ty, e, w, v, borrowed)
 <a href=#214 id=214 data-nosnippet>214</a>    }
-<a href=#215 id=215 data-nosnippet>215</a>}
-<a href=#216 id=216 data-nosnippet>216</a>
-<a href=#217 id=217 data-nosnippet>217</a><span class="attr">#[cfg(test)]
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">mod </span>tests {
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">fn </span>flat(source: <span class="kw-2">&amp;</span>str) -&gt; Bindings {
-<a href=#221 id=221 data-nosnippet>221</a>        Flat::parse(
-<a href=#222 id=222 data-nosnippet>222</a>            syn::parse_file(source)
-<a href=#223 id=223 data-nosnippet>223</a>                .unwrap()
-<a href=#224 id=224 data-nosnippet>224</a>                .items
-<a href=#225 id=225 data-nosnippet>225</a>                .into_iter()
-<a href=#226 id=226 data-nosnippet>226</a>                .map(|i| (i, Default::default())),
-<a href=#227 id=227 data-nosnippet>227</a>        )
-<a href=#228 id=228 data-nosnippet>228</a>        .unwrap()
-<a href=#229 id=229 data-nosnippet>229</a>    }
-<a href=#230 id=230 data-nosnippet>230</a>    <span class="attr">#[test]
-<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="kw">fn </span>enum_declarations_emit_fixed_width_types_and_preserve_discriminants() {
-<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">let </span>output = Cbindgen::new(flat(
-<a href=#233 id=233 data-nosnippet>233</a>            <span class="string">"pub enum E { A = -2, B, C = 7, D, Min = -2147483648 } pub fn echo(x:E)-&gt;E{}"</span>,
-<a href=#234 id=234 data-nosnippet>234</a>        ))
-<a href=#235 id=235 data-nosnippet>235</a>        .enum_type(<span class="string">"code"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#236 id=236 data-nosnippet>236</a>        .function(<span class="macro">prebindgen_declarations::fun!</span>(echo))
-<a href=#237 id=237 data-nosnippet>237</a>        .panic()
-<a href=#238 id=238 data-nosnippet>238</a>        .build()
-<a href=#239 id=239 data-nosnippet>239</a>        .unwrap();
-<a href=#240 id=240 data-nosnippet>240</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"typedef int32_t pb_code;"</span>));
-<a href=#241 id=241 data-nosnippet>241</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"#define pb_code_B ((pb_code)(-1))"</span>));
-<a href=#242 id=242 data-nosnippet>242</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"#define pb_code_D ((pb_code)(8))"</span>));
-<a href=#243 id=243 data-nosnippet>243</a>        <span class="macro">assert!</span>(output
-<a href=#244 id=244 data-nosnippet>244</a>            .header
-<a href=#245 id=245 data-nosnippet>245</a>            .contains(<span class="string">"#define pb_code_Min ((pb_code)(INT32_MIN))"</span>));
-<a href=#246 id=246 data-nosnippet>246</a>        syn::parse_file(<span class="kw-2">&amp;</span>output.rust).unwrap();
-<a href=#247 id=247 data-nosnippet>247</a>    }
-<a href=#248 id=248 data-nosnippet>248</a>    <span class="attr">#[test]
-<a href=#249 id=249 data-nosnippet>249</a>    </span><span class="kw">fn </span>enum_declarations_reject_wrong_types_duplicate_sources_names_and_symbols() {
-<a href=#250 id=250 data-nosnippet>250</a>        <span class="kw">let </span>source = <span class="string">"pub enum E { A, B } pub fn code(x:E)-&gt;E {}"</span>;
-<a href=#251 id=251 data-nosnippet>251</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(source))
-<a href=#252 id=252 data-nosnippet>252</a>            .enum_type(<span class="string">"code"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#253 id=253 data-nosnippet>253</a>            .function(<span class="macro">prebindgen_declarations::fun!</span>(code))
-<a href=#254 id=254 data-nosnippet>254</a>            .panic()
-<a href=#255 id=255 data-nosnippet>255</a>            .build()
-<a href=#256 id=256 data-nosnippet>256</a>            .err()
-<a href=#257 id=257 data-nosnippet>257</a>            .unwrap()
-<a href=#258 id=258 data-nosnippet>258</a>            .contains(<span class="string">"duplicate C export"</span>));
-<a href=#259 id=259 data-nosnippet>259</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(source))
-<a href=#260 id=260 data-nosnippet>260</a>            .enum_type(<span class="string">"e"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#261 id=261 data-nosnippet>261</a>            .enum_type(<span class="string">"other"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#262 id=262 data-nosnippet>262</a>            .build()
-<a href=#263 id=263 data-nosnippet>263</a>            .err()
-<a href=#264 id=264 data-nosnippet>264</a>            .unwrap()
-<a href=#265 id=265 data-nosnippet>265</a>            .contains(<span class="string">"duplicate C enum source"</span>));
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(<span class="string">"pub type Alias = hidden::E;"</span>))
-<a href=#267 id=267 data-nosnippet>267</a>            .enum_type(<span class="string">"alias"</span>, <span class="macro">syn::parse_quote!</span>(Alias))
-<a href=#268 id=268 data-nosnippet>268</a>            .build()
-<a href=#269 id=269 data-nosnippet>269</a>            .err()
-<a href=#270 id=270 data-nosnippet>270</a>            .unwrap()
-<a href=#271 id=271 data-nosnippet>271</a>            .contains(<span class="string">"requires a fieldless enum"</span>));
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(source))
-<a href=#273 id=273 data-nosnippet>273</a>            .enum_type(<span class="string">"e"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#274 id=274 data-nosnippet>274</a>            .opaque_ptr(<span class="string">"e"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#275 id=275 data-nosnippet>275</a>            .build()
-<a href=#276 id=276 data-nosnippet>276</a>            .err()
-<a href=#277 id=277 data-nosnippet>277</a>            .unwrap()
-<a href=#278 id=278 data-nosnippet>278</a>            .contains(<span class="string">"names collide"</span>));
-<a href=#279 id=279 data-nosnippet>279</a>    }
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="attr">#[test]
-<a href=#281 id=281 data-nosnippet>281</a>    </span><span class="kw">fn </span>enum_symbols_cannot_shadow_runtime_or_generated_result_types() {
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">for </span>name <span class="kw">in </span>[<span class="string">"buffer"</span>, <span class="string">"int128"</span>, <span class="string">"H"</span>, <span class="string">"free_buffer"</span>] {
-<a href=#283 id=283 data-nosnippet>283</a>            <span class="macro">assert!</span>(
-<a href=#284 id=284 data-nosnippet>284</a>                Cbindgen::new(flat(<span class="string">"pub enum E { A, B }"</span>))
-<a href=#285 id=285 data-nosnippet>285</a>                    .enum_type(name, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#286 id=286 data-nosnippet>286</a>                    .build()
-<a href=#287 id=287 data-nosnippet>287</a>                    .is_err(),
-<a href=#288 id=288 data-nosnippet>288</a>                <span class="string">"{name}"
-<a href=#289 id=289 data-nosnippet>289</a>            </span>);
-<a href=#290 id=290 data-nosnippet>290</a>        }
-<a href=#291 id=291 data-nosnippet>291</a>        <span class="macro">assert!</span>(
-<a href=#292 id=292 data-nosnippet>292</a>            Cbindgen::new(flat(<span class="string">"pub enum E { A, B } pub fn echo(x:E)-&gt;E{}"</span>))
-<a href=#293 id=293 data-nosnippet>293</a>                .enum_type(<span class="string">"echo_result"</span>, <span class="macro">syn::parse_quote!</span>(E))
-<a href=#294 id=294 data-nosnippet>294</a>                .function(<span class="macro">prebindgen_declarations::fun!</span>(echo))
-<a href=#295 id=295 data-nosnippet>295</a>                .panic()
-<a href=#296 id=296 data-nosnippet>296</a>                .build()
-<a href=#297 id=297 data-nosnippet>297</a>                .err()
-<a href=#298 id=298 data-nosnippet>298</a>                .unwrap()
-<a href=#299 id=299 data-nosnippet>299</a>                .contains(<span class="string">"duplicate C result type"</span>)
-<a href=#300 id=300 data-nosnippet>300</a>        );
-<a href=#301 id=301 data-nosnippet>301</a>    }
-<a href=#302 id=302 data-nosnippet>302</a>    <span class="attr">#[test]
-<a href=#303 id=303 data-nosnippet>303</a>    </span><span class="kw">fn </span>enum_niches_skip_valid_values_and_survive_optional_composition() {
-<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">let </span>source = flat(<span class="string">"pub enum E { A = -2, B, C = 0, D = 7 }"</span>);
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">let </span>mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
-<a href=#306 id=306 data-nosnippet>306</a>        <span class="kw">let </span>codec = EnumCodec {
-<a href=#307 id=307 data-nosnippet>307</a>            error_layouts: Default::default(),
-<a href=#308 id=308 data-nosnippet>308</a>            callback_wire: <span class="prelude-val">None</span>,
-<a href=#309 id=309 data-nosnippet>309</a>            errors: Default::default(),
-<a href=#310 id=310 data-nosnippet>310</a>            enums: std::collections::BTreeMap::from([(
-<a href=#311 id=311 data-nosnippet>311</a>                <span class="string">"crate :: E"</span>.into(),
-<a href=#312 id=312 data-nosnippet>312</a>                (<span class="string">"code"</span>.into(), mapping.clone()),
-<a href=#313 id=313 data-nosnippet>313</a>            )]),
-<a href=#314 id=314 data-nosnippet>314</a>        };
-<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw">let </span>wire = EnumCodec::wire(<span class="string">"code"</span>, <span class="kw-2">&amp;</span>mapping);
-<a href=#316 id=316 data-nosnippet>316</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(wire.available_niche(), <span class="prelude-val">Some</span>(CNiche::Integer(-<span class="number">3</span>))));
-<a href=#317 id=317 data-nosnippet>317</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#318 id=318 data-nosnippet>318</a>            codec.remaining_niche(<span class="kw-2">&amp;</span>wire, <span class="kw-2">&amp;</span>CNiche::Integer(<span class="number">8</span>)),
-<a href=#319 id=319 data-nosnippet>319</a>            <span class="prelude-val">Some</span>(CNiche::Integer(<span class="number">6</span>))
-<a href=#320 id=320 data-nosnippet>320</a>        ));
-<a href=#321 id=321 data-nosnippet>321</a>        <span class="kw">let </span><span class="kw-2">mut </span>ty: syn::Type = <span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::E);
-<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">for </span>depth <span class="kw">in </span><span class="number">1</span>..=<span class="number">6 </span>{
-<a href=#323 id=323 data-nosnippet>323</a>            ty = <span class="macro">syn::parse_quote!</span>(<span class="prelude-ty">Option</span>&lt;#ty&gt;);
-<a href=#324 id=324 data-nosnippet>324</a>            <span class="kw">let </span>input = codec
-<a href=#325 id=325 data-nosnippet>325</a>                .input_leaf(
-<a href=#326 id=326 data-nosnippet>326</a>                    <span class="kw-2">&amp;</span>ty,
-<a href=#327 id=327 data-nosnippet>327</a>                    <span class="kw-2">&amp;</span>(),
-<a href=#328 id=328 data-nosnippet>328</a>                    <span class="macro">syn::parse_quote!</span>(wire),
-<a href=#329 id=329 data-nosnippet>329</a>                    <span class="macro">syn::parse_quote!</span>(value),
-<a href=#330 id=330 data-nosnippet>330</a>                    <span class="kw-2">&amp;</span>Condition::default(),
-<a href=#331 id=331 data-nosnippet>331</a>                )
-<a href=#332 id=332 data-nosnippet>332</a>                .unwrap();
-<a href=#333 id=333 data-nosnippet>333</a>            <span class="kw">let </span>output = codec
-<a href=#334 id=334 data-nosnippet>334</a>                .output_leaf(<span class="kw-2">&amp;</span>ty, <span class="kw-2">&amp;</span>(), <span class="macro">syn::parse_quote!</span>(wire), <span class="macro">quote!</span>(value), <span class="bool-val">false</span>)
-<a href=#335 id=335 data-nosnippet>335</a>                .unwrap();
-<a href=#336 id=336 data-nosnippet>336</a>            <span class="macro">assert_eq!</span>(CCodec::wires(input.layout.nodes()).len(), <span class="number">1</span>);
-<a href=#337 id=337 data-nosnippet>337</a>            <span class="macro">assert_eq!</span>(CCodec::wires(output.layout.nodes()).len(), <span class="number">1</span>);
-<a href=#338 id=338 data-nosnippet>338</a>            <span class="macro">assert!</span>(
-<a href=#339 id=339 data-nosnippet>339</a>                <span class="macro">matches!</span>(CCodec::wires(input.layout.nodes()).next().unwrap().kind.available_niche(),<span class="prelude-val">Some</span>(CNiche::Integer(n)) <span class="kw">if </span>n == -<span class="number">3</span>-depth)
-<a href=#340 id=340 data-nosnippet>340</a>            );
-<a href=#341 id=341 data-nosnippet>341</a>            <span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>input.layout).unwrap();
-<a href=#342 id=342 data-nosnippet>342</a>            <span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>output.layout).unwrap();
-<a href=#343 id=343 data-nosnippet>343</a>        }
-<a href=#344 id=344 data-nosnippet>344</a>    }
-<a href=#345 id=345 data-nosnippet>345</a>    <span class="attr">#[test]
-<a href=#346 id=346 data-nosnippet>346</a>    </span><span class="kw">fn </span>optional_enum_reservations_cannot_reuse_available_or_reserved_values() {
-<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">let </span>source = flat(<span class="string">"pub enum E { A = -1, B = 0 }"</span>);
-<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw">let </span>mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">fn </span>optional_niche(
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#218 id=218 data-nosnippet>218</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;,
+<a href=#219 id=219 data-nosnippet>219</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt; {
+<a href=#220 id=220 data-nosnippet>220</a>        CCodec.optional_niche(payload)
+<a href=#221 id=221 data-nosnippet>221</a>    }
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">fn </span>optional_presence(
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#224 id=224 data-nosnippet>224</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;,
+<a href=#225 id=225 data-nosnippet>225</a>        reservation: <span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;,
+<a href=#226 id=226 data-nosnippet>226</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#227 id=227 data-nosnippet>227</a>        CCodec.optional_presence(payload, reservation)
+<a href=#228 id=228 data-nosnippet>228</a>    }
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">fn </span>absent_output_values(
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#231 id=231 data-nosnippet>231</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;,
+<a href=#232 id=232 data-nosnippet>232</a>        reservation: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt;,
+<a href=#233 id=233 data-nosnippet>233</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(syn::Ident, TokenStream)&gt;&gt; {
+<a href=#234 id=234 data-nosnippet>234</a>        CCodec.absent_output_values(payload, reservation)
+<a href=#235 id=235 data-nosnippet>235</a>    }
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">fn </span>retire_niches(
+<a href=#237 id=237 data-nosnippet>237</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#238 id=238 data-nosnippet>238</a>        payload: <span class="kw-2">&amp;mut </span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;,
+<a href=#239 id=239 data-nosnippet>239</a>        reservation: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt;,
+<a href=#240 id=240 data-nosnippet>240</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#241 id=241 data-nosnippet>241</a>        CCodec.retire_niches(payload, reservation)
+<a href=#242 id=242 data-nosnippet>242</a>    }
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">fn </span>validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;</span>prebindgen_declarations::CodecInput&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#244 id=244 data-nosnippet>244</a>        CCodec.validate_input(plan)
+<a href=#245 id=245 data-nosnippet>245</a>    }
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;</span>prebindgen_declarations::CodecOutput&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#247 id=247 data-nosnippet>247</a>        CCodec.validate_output(plan)
+<a href=#248 id=248 data-nosnippet>248</a>    }
+<a href=#249 id=249 data-nosnippet>249</a>}
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a><span class="attr">#[cfg(test)]
+<a href=#252 id=252 data-nosnippet>252</a></span><span class="kw">mod </span>tests {
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">fn </span>flat(source: <span class="kw-2">&amp;</span>str) -&gt; Bindings {
+<a href=#255 id=255 data-nosnippet>255</a>        Flat::parse(
+<a href=#256 id=256 data-nosnippet>256</a>            syn::parse_file(source)
+<a href=#257 id=257 data-nosnippet>257</a>                .unwrap()
+<a href=#258 id=258 data-nosnippet>258</a>                .items
+<a href=#259 id=259 data-nosnippet>259</a>                .into_iter()
+<a href=#260 id=260 data-nosnippet>260</a>                .map(|i| (i, Default::default())),
+<a href=#261 id=261 data-nosnippet>261</a>        )
+<a href=#262 id=262 data-nosnippet>262</a>        .unwrap()
+<a href=#263 id=263 data-nosnippet>263</a>    }
+<a href=#264 id=264 data-nosnippet>264</a>    <span class="attr">#[test]
+<a href=#265 id=265 data-nosnippet>265</a>    </span><span class="kw">fn </span>enum_declarations_emit_fixed_width_types_and_preserve_discriminants() {
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>output = Cbindgen::new(flat(
+<a href=#267 id=267 data-nosnippet>267</a>            <span class="string">"pub enum E { A = -2, B, C = 7, D, Min = -2147483648 } pub fn echo(x:E)-&gt;E{}"</span>,
+<a href=#268 id=268 data-nosnippet>268</a>        ))
+<a href=#269 id=269 data-nosnippet>269</a>        .enum_type(<span class="string">"code"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#270 id=270 data-nosnippet>270</a>        .function(<span class="macro">prebindgen_declarations::fun!</span>(echo))
+<a href=#271 id=271 data-nosnippet>271</a>        .panic()
+<a href=#272 id=272 data-nosnippet>272</a>        .build()
+<a href=#273 id=273 data-nosnippet>273</a>        .unwrap();
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"typedef int32_t pb_code;"</span>));
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"#define pb_code_B ((pb_code)(-1))"</span>));
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="macro">assert!</span>(output.header.contains(<span class="string">"#define pb_code_D ((pb_code)(8))"</span>));
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="macro">assert!</span>(output
+<a href=#278 id=278 data-nosnippet>278</a>            .header
+<a href=#279 id=279 data-nosnippet>279</a>            .contains(<span class="string">"#define pb_code_Min ((pb_code)(INT32_MIN))"</span>));
+<a href=#280 id=280 data-nosnippet>280</a>        syn::parse_file(<span class="kw-2">&amp;</span>output.rust).unwrap();
+<a href=#281 id=281 data-nosnippet>281</a>    }
+<a href=#282 id=282 data-nosnippet>282</a>    <span class="attr">#[test]
+<a href=#283 id=283 data-nosnippet>283</a>    </span><span class="kw">fn </span>enum_declarations_reject_wrong_types_duplicate_sources_names_and_symbols() {
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="kw">let </span>source = <span class="string">"pub enum E { A, B } pub fn code(x:E)-&gt;E {}"</span>;
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(source))
+<a href=#286 id=286 data-nosnippet>286</a>            .enum_type(<span class="string">"code"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#287 id=287 data-nosnippet>287</a>            .function(<span class="macro">prebindgen_declarations::fun!</span>(code))
+<a href=#288 id=288 data-nosnippet>288</a>            .panic()
+<a href=#289 id=289 data-nosnippet>289</a>            .build()
+<a href=#290 id=290 data-nosnippet>290</a>            .err()
+<a href=#291 id=291 data-nosnippet>291</a>            .unwrap()
+<a href=#292 id=292 data-nosnippet>292</a>            .contains(<span class="string">"duplicate C export"</span>));
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(source))
+<a href=#294 id=294 data-nosnippet>294</a>            .enum_type(<span class="string">"e"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#295 id=295 data-nosnippet>295</a>            .enum_type(<span class="string">"other"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#296 id=296 data-nosnippet>296</a>            .build()
+<a href=#297 id=297 data-nosnippet>297</a>            .err()
+<a href=#298 id=298 data-nosnippet>298</a>            .unwrap()
+<a href=#299 id=299 data-nosnippet>299</a>            .contains(<span class="string">"duplicate C enum source"</span>));
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(<span class="string">"pub type Alias = hidden::E;"</span>))
+<a href=#301 id=301 data-nosnippet>301</a>            .enum_type(<span class="string">"alias"</span>, <span class="macro">syn::parse_quote!</span>(Alias))
+<a href=#302 id=302 data-nosnippet>302</a>            .build()
+<a href=#303 id=303 data-nosnippet>303</a>            .err()
+<a href=#304 id=304 data-nosnippet>304</a>            .unwrap()
+<a href=#305 id=305 data-nosnippet>305</a>            .contains(<span class="string">"requires a fieldless enum"</span>));
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="macro">assert!</span>(Cbindgen::new(flat(source))
+<a href=#307 id=307 data-nosnippet>307</a>            .enum_type(<span class="string">"e"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#308 id=308 data-nosnippet>308</a>            .opaque_ptr(<span class="string">"e"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#309 id=309 data-nosnippet>309</a>            .build()
+<a href=#310 id=310 data-nosnippet>310</a>            .err()
+<a href=#311 id=311 data-nosnippet>311</a>            .unwrap()
+<a href=#312 id=312 data-nosnippet>312</a>            .contains(<span class="string">"names collide"</span>));
+<a href=#313 id=313 data-nosnippet>313</a>    }
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="attr">#[test]
+<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">fn </span>enum_symbols_cannot_shadow_runtime_or_generated_result_types() {
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">for </span>name <span class="kw">in </span>[<span class="string">"buffer"</span>, <span class="string">"int128"</span>, <span class="string">"H"</span>, <span class="string">"free_buffer"</span>] {
+<a href=#317 id=317 data-nosnippet>317</a>            <span class="macro">assert!</span>(
+<a href=#318 id=318 data-nosnippet>318</a>                Cbindgen::new(flat(<span class="string">"pub enum E { A, B }"</span>))
+<a href=#319 id=319 data-nosnippet>319</a>                    .enum_type(name, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#320 id=320 data-nosnippet>320</a>                    .build()
+<a href=#321 id=321 data-nosnippet>321</a>                    .is_err(),
+<a href=#322 id=322 data-nosnippet>322</a>                <span class="string">"{name}"
+<a href=#323 id=323 data-nosnippet>323</a>            </span>);
+<a href=#324 id=324 data-nosnippet>324</a>        }
+<a href=#325 id=325 data-nosnippet>325</a>        <span class="macro">assert!</span>(
+<a href=#326 id=326 data-nosnippet>326</a>            Cbindgen::new(flat(<span class="string">"pub enum E { A, B } pub fn echo(x:E)-&gt;E{}"</span>))
+<a href=#327 id=327 data-nosnippet>327</a>                .enum_type(<span class="string">"echo_result"</span>, <span class="macro">syn::parse_quote!</span>(E))
+<a href=#328 id=328 data-nosnippet>328</a>                .function(<span class="macro">prebindgen_declarations::fun!</span>(echo))
+<a href=#329 id=329 data-nosnippet>329</a>                .panic()
+<a href=#330 id=330 data-nosnippet>330</a>                .build()
+<a href=#331 id=331 data-nosnippet>331</a>                .err()
+<a href=#332 id=332 data-nosnippet>332</a>                .unwrap()
+<a href=#333 id=333 data-nosnippet>333</a>                .contains(<span class="string">"duplicate C result type"</span>)
+<a href=#334 id=334 data-nosnippet>334</a>        );
+<a href=#335 id=335 data-nosnippet>335</a>    }
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="attr">#[test]
+<a href=#337 id=337 data-nosnippet>337</a>    </span><span class="kw">fn </span>enum_niches_skip_valid_values_and_survive_optional_composition() {
+<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw">let </span>source = flat(<span class="string">"pub enum E { A = -2, B, C = 0, D = 7 }"</span>);
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="kw">let </span>mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span>codec = EnumCodec {
+<a href=#341 id=341 data-nosnippet>341</a>            error_layouts: Default::default(),
+<a href=#342 id=342 data-nosnippet>342</a>            callback_wire: <span class="prelude-val">None</span>,
+<a href=#343 id=343 data-nosnippet>343</a>            errors: Default::default(),
+<a href=#344 id=344 data-nosnippet>344</a>            enums: std::collections::BTreeMap::from([(
+<a href=#345 id=345 data-nosnippet>345</a>                <span class="string">"crate :: E"</span>.into(),
+<a href=#346 id=346 data-nosnippet>346</a>                (<span class="string">"code"</span>.into(), mapping.clone()),
+<a href=#347 id=347 data-nosnippet>347</a>            )]),
+<a href=#348 id=348 data-nosnippet>348</a>        };
 <a href=#349 id=349 data-nosnippet>349</a>        <span class="kw">let </span>wire = EnumCodec::wire(<span class="string">"code"</span>, <span class="kw-2">&amp;</span>mapping);
-<a href=#350 id=350 data-nosnippet>350</a>        <span class="kw">let </span><span class="kw-2">mut </span>tree: prebindgen_flat::WireLayout&lt;CWire, CGroup&gt; = <span class="macro">vec!</span>[GenericWire {
-<a href=#351 id=351 data-nosnippet>351</a>            name: <span class="macro">syn::parse_quote!</span>(wire),
-<a href=#352 id=352 data-nosnippet>352</a>            kind: wire,
-<a href=#353 id=353 data-nosnippet>353</a>        }]
-<a href=#354 id=354 data-nosnippet>354</a>        .into();
-<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">let </span>group = |presence, value| {
-<a href=#356 id=356 data-nosnippet>356</a>            CGroup::Optional(COptional {
-<a href=#357 id=357 data-nosnippet>357</a>                controls: <span class="macro">vec!</span>[],
-<a href=#358 id=358 data-nosnippet>358</a>                presence: syn::parse_str(presence).unwrap(),
-<a href=#359 id=359 data-nosnippet>359</a>                discriminator: <span class="macro">syn::parse_quote!</span>(wire),
-<a href=#360 id=360 data-nosnippet>360</a>                niche: <span class="prelude-val">Some</span>(CNiche::Integer(value)),
-<a href=#361 id=361 data-nosnippet>361</a>            })
-<a href=#362 id=362 data-nosnippet>362</a>        };
-<a href=#363 id=363 data-nosnippet>363</a>        tree.enclose_optional(<span class="prelude-val">Some</span>(group(<span class="string">"inner"</span>, -<span class="number">2</span>)));
-<a href=#364 id=364 data-nosnippet>364</a>        <span class="macro">assert!</span>(<span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>tree)
-<a href=#365 id=365 data-nosnippet>365</a>            .unwrap_err()
-<a href=#366 id=366 data-nosnippet>366</a>            .contains(<span class="string">"already reserved"</span>));
-<a href=#367 id=367 data-nosnippet>367</a>        tree[<span class="number">0</span>].kind.clear_niche();
-<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>tree).unwrap();
-<a href=#369 id=369 data-nosnippet>369</a>        tree.enclose_optional(<span class="prelude-val">Some</span>(group(<span class="string">"outer"</span>, -<span class="number">2</span>)));
-<a href=#370 id=370 data-nosnippet>370</a>        <span class="macro">assert!</span>(<span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>tree)
-<a href=#371 id=371 data-nosnippet>371</a>            .unwrap_err()
-<a href=#372 id=372 data-nosnippet>372</a>            .contains(<span class="string">"duplicate"</span>));
-<a href=#373 id=373 data-nosnippet>373</a>    }
-<a href=#374 id=374 data-nosnippet>374</a>    <span class="attr">#[test]
-<a href=#375 id=375 data-nosnippet>375</a>    </span><span class="kw">fn </span>malformed_enum_niches_are_rejected_before_emission() {
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span>source = flat(<span class="string">"pub enum E { A = -1, B = 0 }"</span>);
-<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
-<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">for </span>n <span class="kw">in </span>[-<span class="number">1</span>, <span class="number">0</span>] {
-<a href=#379 id=379 data-nosnippet>379</a>            <span class="kw">let </span><span class="kw-2">mut </span>wire = EnumCodec::wire(<span class="string">"code"</span>, <span class="kw-2">&amp;</span>mapping);
-<a href=#380 id=380 data-nosnippet>380</a>            <span class="kw">let </span>CWire::Enum {
-<a href=#381 id=381 data-nosnippet>381</a>                next_integer_niche, ..
-<a href=#382 id=382 data-nosnippet>382</a>            } = <span class="kw-2">&amp;mut </span>wire
-<a href=#383 id=383 data-nosnippet>383</a>            <span class="kw">else </span>{
-<a href=#384 id=384 data-nosnippet>384</a>                <span class="macro">unreachable!</span>()
-<a href=#385 id=385 data-nosnippet>385</a>            };
-<a href=#386 id=386 data-nosnippet>386</a>            <span class="kw-2">*</span>next_integer_niche = <span class="prelude-val">Some</span>(n);
-<a href=#387 id=387 data-nosnippet>387</a>            <span class="kw">let </span>layout: prebindgen_flat::WireLayout&lt;CWire, CGroup&gt; = <span class="macro">vec!</span>[GenericWire {
-<a href=#388 id=388 data-nosnippet>388</a>                name: <span class="macro">syn::parse_quote!</span>(value),
-<a href=#389 id=389 data-nosnippet>389</a>                kind: wire,
-<a href=#390 id=390 data-nosnippet>390</a>            }]
-<a href=#391 id=391 data-nosnippet>391</a>            .into();
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="macro">assert!</span>(<span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>layout).is_err());
-<a href=#393 id=393 data-nosnippet>393</a>        }
-<a href=#394 id=394 data-nosnippet>394</a>    }
-<a href=#395 id=395 data-nosnippet>395</a>}
+<a href=#350 id=350 data-nosnippet>350</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(wire.available_niche(), <span class="prelude-val">Some</span>(CNiche::Integer(-<span class="number">3</span>))));
+<a href=#351 id=351 data-nosnippet>351</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(
+<a href=#352 id=352 data-nosnippet>352</a>            codec.remaining_niche(<span class="kw-2">&amp;</span>wire, <span class="kw-2">&amp;</span>CNiche::Integer(<span class="number">8</span>)),
+<a href=#353 id=353 data-nosnippet>353</a>            <span class="prelude-val">Some</span>(CNiche::Integer(<span class="number">6</span>))
+<a href=#354 id=354 data-nosnippet>354</a>        ));
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">let </span><span class="kw-2">mut </span>ty: syn::Type = <span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::E);
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">for </span>depth <span class="kw">in </span><span class="number">1</span>..=<span class="number">6 </span>{
+<a href=#357 id=357 data-nosnippet>357</a>            ty = <span class="macro">syn::parse_quote!</span>(<span class="prelude-ty">Option</span>&lt;#ty&gt;);
+<a href=#358 id=358 data-nosnippet>358</a>            <span class="kw">let </span>input = codec
+<a href=#359 id=359 data-nosnippet>359</a>                .input_leaf(
+<a href=#360 id=360 data-nosnippet>360</a>                    <span class="kw-2">&amp;</span>ty,
+<a href=#361 id=361 data-nosnippet>361</a>                    <span class="kw-2">&amp;</span>(),
+<a href=#362 id=362 data-nosnippet>362</a>                    <span class="macro">syn::parse_quote!</span>(wire),
+<a href=#363 id=363 data-nosnippet>363</a>                    <span class="macro">syn::parse_quote!</span>(value),
+<a href=#364 id=364 data-nosnippet>364</a>                    <span class="kw-2">&amp;</span>Condition::default(),
+<a href=#365 id=365 data-nosnippet>365</a>                )
+<a href=#366 id=366 data-nosnippet>366</a>                .unwrap();
+<a href=#367 id=367 data-nosnippet>367</a>            <span class="kw">let </span>output = codec
+<a href=#368 id=368 data-nosnippet>368</a>                .output_leaf(<span class="kw-2">&amp;</span>ty, <span class="kw-2">&amp;</span>(), <span class="macro">syn::parse_quote!</span>(wire), <span class="macro">quote!</span>(value), <span class="bool-val">false</span>)
+<a href=#369 id=369 data-nosnippet>369</a>                .unwrap();
+<a href=#370 id=370 data-nosnippet>370</a>            <span class="macro">assert_eq!</span>(input.layout.len(), <span class="number">1</span>);
+<a href=#371 id=371 data-nosnippet>371</a>            <span class="macro">assert_eq!</span>(<span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>output.layout).len(), <span class="number">1</span>);
+<a href=#372 id=372 data-nosnippet>372</a>            <span class="macro">assert!</span>(
+<a href=#373 id=373 data-nosnippet>373</a>                <span class="macro">matches!</span>(input.layout.iter().next().unwrap().kind.available_niche(),<span class="prelude-val">Some</span>(CNiche::Integer(n)) <span class="kw">if </span>n == -<span class="number">3</span>-depth)
+<a href=#374 id=374 data-nosnippet>374</a>            );
+<a href=#375 id=375 data-nosnippet>375</a>            <span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>input.layout).unwrap();
+<a href=#376 id=376 data-nosnippet>376</a>            <span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>output.layout).unwrap();
+<a href=#377 id=377 data-nosnippet>377</a>        }
+<a href=#378 id=378 data-nosnippet>378</a>    }
+<a href=#379 id=379 data-nosnippet>379</a>    <span class="attr">#[test]
+<a href=#380 id=380 data-nosnippet>380</a>    </span><span class="kw">fn </span>optional_enum_reservations_cannot_reuse_available_or_reserved_values() {
+<a href=#381 id=381 data-nosnippet>381</a>        <span class="kw">let </span>source = flat(<span class="string">"pub enum E { A = -1, B = 0 }"</span>);
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">let </span>mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
+<a href=#383 id=383 data-nosnippet>383</a>        <span class="kw">let </span>wire = EnumCodec::wire(<span class="string">"code"</span>, <span class="kw-2">&amp;</span>mapping);
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="kw">let </span><span class="kw-2">mut </span>tree: prebindgen_flat::WireLayout&lt;CWire, CGroup&gt; = <span class="macro">vec!</span>[GenericWire {
+<a href=#385 id=385 data-nosnippet>385</a>            name: <span class="macro">syn::parse_quote!</span>(wire),
+<a href=#386 id=386 data-nosnippet>386</a>            kind: wire,
+<a href=#387 id=387 data-nosnippet>387</a>        }]
+<a href=#388 id=388 data-nosnippet>388</a>        .into();
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">let </span>group = |presence, value| {
+<a href=#390 id=390 data-nosnippet>390</a>            CGroup::Optional(COptional {
+<a href=#391 id=391 data-nosnippet>391</a>                controls: <span class="macro">vec!</span>[],
+<a href=#392 id=392 data-nosnippet>392</a>                presence: syn::parse_str(presence).unwrap(),
+<a href=#393 id=393 data-nosnippet>393</a>                discriminator: <span class="macro">syn::parse_quote!</span>(wire),
+<a href=#394 id=394 data-nosnippet>394</a>                niche: <span class="prelude-val">Some</span>(CNiche::Integer(value)),
+<a href=#395 id=395 data-nosnippet>395</a>            })
+<a href=#396 id=396 data-nosnippet>396</a>        };
+<a href=#397 id=397 data-nosnippet>397</a>        tree.enclose_optional(<span class="prelude-val">Some</span>(group(<span class="string">"inner"</span>, -<span class="number">2</span>)));
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="macro">assert!</span>(<span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>tree)
+<a href=#399 id=399 data-nosnippet>399</a>            .unwrap_err()
+<a href=#400 id=400 data-nosnippet>400</a>            .contains(<span class="string">"already reserved"</span>));
+<a href=#401 id=401 data-nosnippet>401</a>        tree[<span class="number">0</span>].kind.clear_niche();
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>tree).unwrap();
+<a href=#403 id=403 data-nosnippet>403</a>        tree.enclose_optional(<span class="prelude-val">Some</span>(group(<span class="string">"outer"</span>, -<span class="number">2</span>)));
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="macro">assert!</span>(<span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>tree)
+<a href=#405 id=405 data-nosnippet>405</a>            .unwrap_err()
+<a href=#406 id=406 data-nosnippet>406</a>            .contains(<span class="string">"duplicate"</span>));
+<a href=#407 id=407 data-nosnippet>407</a>    }
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="attr">#[test]
+<a href=#409 id=409 data-nosnippet>409</a>    </span><span class="kw">fn </span>malformed_enum_niches_are_rejected_before_emission() {
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span>source = flat(<span class="string">"pub enum E { A = -1, B = 0 }"</span>);
+<a href=#411 id=411 data-nosnippet>411</a>        <span class="kw">let </span>mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="kw">for </span>n <span class="kw">in </span>[-<span class="number">1</span>, <span class="number">0</span>] {
+<a href=#413 id=413 data-nosnippet>413</a>            <span class="kw">let </span><span class="kw-2">mut </span>wire = EnumCodec::wire(<span class="string">"code"</span>, <span class="kw-2">&amp;</span>mapping);
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">let </span>CWire::Enum {
+<a href=#415 id=415 data-nosnippet>415</a>                next_integer_niche, ..
+<a href=#416 id=416 data-nosnippet>416</a>            } = <span class="kw-2">&amp;mut </span>wire
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw">else </span>{
+<a href=#418 id=418 data-nosnippet>418</a>                <span class="macro">unreachable!</span>()
+<a href=#419 id=419 data-nosnippet>419</a>            };
+<a href=#420 id=420 data-nosnippet>420</a>            <span class="kw-2">*</span>next_integer_niche = <span class="prelude-val">Some</span>(n);
+<a href=#421 id=421 data-nosnippet>421</a>            <span class="kw">let </span>layout: prebindgen_flat::WireLayout&lt;CWire, CGroup&gt; = <span class="macro">vec!</span>[GenericWire {
+<a href=#422 id=422 data-nosnippet>422</a>                name: <span class="macro">syn::parse_quote!</span>(value),
+<a href=#423 id=423 data-nosnippet>423</a>                kind: wire,
+<a href=#424 id=424 data-nosnippet>424</a>            }]
+<a href=#425 id=425 data-nosnippet>425</a>            .into();
+<a href=#426 id=426 data-nosnippet>426</a>            <span class="macro">assert!</span>(<span class="kw">super</span>::<span class="kw">super</span>::group::validate_layout(<span class="kw-2">&amp;</span>layout).is_err());
+<a href=#427 id=427 data-nosnippet>427</a>        }
+<a href=#428 id=428 data-nosnippet>428</a>    }
+<a href=#429 id=429 data-nosnippet>429</a>}
 </code></pre></div></section></main></body></html>

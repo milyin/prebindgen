@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>quote::quote;
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// Type information for one logical value. A reader may pass it directly or
+<a href=#6 id=6 data-nosnippet>6</a><span class="doccomment">/// Type information for one logical value. A generator may pass it directly or
 <a href=#7 id=7 data-nosnippet>7</a>/// encode it as a packed field/callback argument.
 <a href=#8 id=8 data-nosnippet>8</a>/// The returned type describes the boundary value, not the source value being converted.
 <a href=#9 id=9 data-nosnippet>9</a>/// For example, a boolean conversion may use `u8` as its Rust carrier type.
@@ -60,7 +60,7 @@
 <a href=#60 id=60 data-nosnippet>60</a>
 <a href=#61 id=61 data-nosnippet>61</a><span class="kw">impl</span>&lt;W: WireKind&gt; Wire&lt;W&gt; {
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="doccomment">/// Rust carrier type supplied by this wire's [`WireKind`].
-<a href=#63 id=63 data-nosnippet>63</a>    /// A reader can use this type directly or select a packed transport.
+<a href=#63 id=63 data-nosnippet>63</a>    /// A generator can use this type directly or select a packed transport.
 <a href=#64 id=64 data-nosnippet>64</a>    </span><span class="kw">pub fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
 <a href=#65 id=65 data-nosnippet>65</a>        <span class="self">self</span>.kind.rust_type()
 <a href=#66 id=66 data-nosnippet>66</a>    }
@@ -224,7 +224,7 @@
 <a href=#224 id=224 data-nosnippet>224</a>    </span><span class="kw">type </span>Group;
 <a href=#225 id=225 data-nosnippet>225</a>    <span class="doccomment">/// Requests concerning the whole slot.
 <a href=#226 id=226 data-nosnippet>226</a>    </span><span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt;;
-<a href=#227 id=227 data-nosnippet>227</a>    <span class="doccomment">/// Logical tree of values, repetition and outcomes. Its reader chooses ABI placement.
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="doccomment">/// Logical tree of values, repetition and outcomes. Its generator chooses ABI placement.
 <a href=#228 id=228 data-nosnippet>228</a>    </span><span class="kw">fn </span>layout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">crate</span>::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;;
 <a href=#229 id=229 data-nosnippet>229</a>    <span class="doccomment">/// Emit an expression for the whole slot.
 <a href=#230 id=230 data-nosnippet>230</a>    </span><span class="kw">fn </span>code_fragment_slot(

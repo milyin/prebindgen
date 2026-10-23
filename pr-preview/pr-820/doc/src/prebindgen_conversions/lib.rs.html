@@ -14,13 +14,26 @@
 <a href=#14 id=14 data-nosnippet>14</a>
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">mod </span>emission;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub use </span>emission::{render_template, template_parameter, TemplateContext};
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">mod </span>native;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">pub use </span>native::{validate_wire_names, NativeConversion, NativeFunction, NativeReader};
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">mod </span>plan;
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">pub use </span>plan::<span class="kw-2">*</span>;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">pub mod </span>staged;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">pub use </span>staged::{InputFragment, InputWireFragment, OutputFragment, OutputWireFragment};
-<a href=#23 id=23 data-nosnippet>23</a>
-<a href=#24 id=24 data-nosnippet>24</a><span class="attr">#[cfg(test)]
-<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">mod </span>generation_tests;
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">mod </span>plan;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">pub use </span>plan::<span class="kw-2">*</span>;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">pub mod </span>staged;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">pub use </span>staged::{InputFragment, OutputFragment};
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a><span class="doccomment">/// Check one adapter-selected namespace. The caller decides which values share
+<a href=#24 id=24 data-nosnippet>24</a>/// a namespace; this helper knows nothing about tree shape or ABI placement.
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub fn </span>validate_wire_names&lt;<span class="lifetime">'a</span>, W: prebindgen_flat::WireKind + <span class="lifetime">'a</span>&gt;(
+<a href=#26 id=26 data-nosnippet>26</a>    wires: <span class="kw">impl </span>IntoIterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>prebindgen_flat::Wire&lt;W&gt;&gt;,
+<a href=#27 id=27 data-nosnippet>27</a>) -&gt; prebindgen_flat::Result&lt;()&gt; {
+<a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">let </span><span class="kw-2">mut </span>names = std::collections::BTreeSet::new();
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">for </span>wire <span class="kw">in </span>wires {
+<a href=#30 id=30 data-nosnippet>30</a>        <span class="kw">if </span>!names.insert(wire.name.to_string()) {
+<a href=#31 id=31 data-nosnippet>31</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"duplicate wire identifier `{}`"</span>, wire.name));
+<a href=#32 id=32 data-nosnippet>32</a>        }
+<a href=#33 id=33 data-nosnippet>33</a>    }
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="prelude-val">Ok</span>(())
+<a href=#35 id=35 data-nosnippet>35</a>}
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="attr">#[cfg(test)]
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">mod </span>generation_tests;
 </code></pre></div></section></main></body></html>
