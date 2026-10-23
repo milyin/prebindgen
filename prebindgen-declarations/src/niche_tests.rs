@@ -1,7 +1,8 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), String>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), String>;
+use prebindgen_conversions::NativeLayoutExt;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -27,23 +28,61 @@ impl WireKind for Domain {
         self.ty.clone()
     }
 }
+#[derive(Clone, Debug)]
+struct DomainGroup {
+    description: String,
+    controls: Vec<Wire<Domain>>,
+}
+impl std::ops::Deref for DomainGroup {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.description
+    }
+}
+impl prebindgen_conversions::NativeMetadata<Domain> for DomainGroup {
+    fn encoding(&self) -> prebindgen_conversions::NativeEncoding<'_, Domain> {
+        prebindgen_conversions::NativeEncoding::Inline(&self.controls)
+    }
+    fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, Domain> {
+        prebindgen_conversions::NativeEncodingMut::Inline(&mut self.controls)
+    }
+}
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
-    type Group = String;
+    type Group = DomainGroup;
     fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<Sentinel>,
-    ) -> String {
-        format!("optional:{presence}:{discriminator}:{niche:?}")
+        controls: Vec<Wire<Domain>>,
+    ) -> DomainGroup {
+        DomainGroup {
+            description: format!("optional:{presence}:{discriminator}:{niche:?}"),
+            controls,
+        }
     }
-    fn field_group(&self, name: syn::Ident) -> String {
-        format!("member:{name}")
+    fn sequence_metadata(&self, _: Wire<Domain>) -> DomainGroup {
+        unreachable!()
     }
-    fn fields_group(&self) -> String {
-        "record".into()
+    fn alternatives_metadata(&self, selector: Wire<Domain>) -> DomainGroup {
+        DomainGroup {
+            description: "choice".into(),
+            controls: vec![selector],
+        }
+    }
+    fn field_group(&self, name: syn::Ident) -> DomainGroup {
+        DomainGroup {
+            description: format!("member:{name}"),
+            controls: vec![],
+        }
+    }
+    fn fields_group(&self) -> DomainGroup {
+        DomainGroup {
+            description: "record".into(),
+            controls: vec![],
+        }
     }
     type Extra = ();
     type Context = ();
@@ -132,17 +171,17 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
         } else {
             quote!(true)
         };
-        return InputPlan { logical:Default::default(),
+        return InputPlan {
             fallible: false,
             context: Default::default(),
-            transport: wires.into(),
+            layout: wires.into(),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
             acquire: quote!(),
             resources: vec![],
             acknowledgement: None,
             statements: quote!(),
             argument: quote!(raw),
-        }.with_logical();
+        };
     }
     let tag = format_ident!("tag{depth}");
     let child = input(domain, depth - 1, active.arm(tag.clone(), 1));
@@ -178,15 +217,15 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             );
             values.insert(0, quote!(123i32));
         }
-        return OutputPlan { logical:Default::default(),
+        return OutputPlan {
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            transport: wires.into(),
+            layout: wires.into(),
             statements: quote!(let raw = #source; if !(#valid) #(|| #invalid)* { return Err("invalid payload"); }),
             commit: quote!(),
             values,
-        }.with_logical();
+        };
     }
     let payload = format_ident!("payload{depth}");
     let child = output(domain, depth - 1, quote!(#payload));
@@ -293,21 +332,25 @@ fn arbitrary_domains_round_trip_all_nested_states_and_exhaust_to_flags() {
                 let inp = input(&domain, depth, Condition::default());
                 let out = output(&domain, depth, quote!(source));
                 let expected = 1 + usize::from(prefix) + depth.saturating_sub(domain.unused.len());
-                assert_eq!(inp.transport.len(), expected);
-                assert_eq!(out.transport.len(), expected);
+                assert_eq!(inp.layout.native_len(), expected);
+                assert_eq!(out.layout.native_len(), expected);
                 let decode = format_ident!("decode{case}_{depth}_{suffix}");
                 let encode = format_ident!("encode{case}_{depth}_{suffix}");
                 let mut source_ty = ty.clone();
                 for _ in 0..depth {
                     source_ty = syn::parse_quote!(Option<#source_ty>);
                 }
-                let params = inp.transport.iter().map(|w| {
+                let params = inp.layout.native_wires().map(|w| {
                     let n = &w.name;
                     let t = w.kind.rust_type();
                     quote!(#n:#t)
                 });
-                let names = inp.transport.iter().map(|w| &w.name).collect::<Vec<_>>();
-                let types = out.transport.iter().map(|w| w.kind.rust_type());
+                let names = inp
+                    .layout
+                    .native_wires()
+                    .map(|w| &w.name)
+                    .collect::<Vec<_>>();
+                let types = out.layout.native_wires().map(|w| w.kind.rust_type());
                 let validation = inp.validation;
                 let construct = inp.statements;
                 let argument = inp.argument;
@@ -398,7 +441,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     let mut child = output(&domain, 0, quote!(payload));
     // A second view has the same base domain, but its absent default cannot be
     // treated as an independent discriminator by the enclosing optional layer.
-    child.transport.push(Wire {
+    child.layout.push(Wire {
         name: format_ident!("second"),
         kind: domain.clone(),
     });
@@ -415,15 +458,17 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     .unwrap();
     assert_eq!(
         DomainCodec
-            .niche(&plan.transport[0].kind)
+            .niche(&plan.layout.native_get(0).unwrap().kind)
             .unwrap()
             .value
             .to_string(),
         "4u8"
     );
-    assert!(DomainCodec.niche(&plan.transport[1].kind).is_none());
-    assert_eq!(plan.transport[0].kind.unused.len(), 2); // Wire's base domain is unchanged.
-    assert_eq!(plan.transport[1].kind.unused.len(), 2);
+    assert!(DomainCodec
+        .niche(&plan.layout.native_get(1).unwrap().kind)
+        .is_none());
+    assert_eq!(plan.layout.native_get(0).unwrap().kind.unused.len(), 2); // Wire's base domain is unchanged.
+    assert_eq!(plan.layout.native_get(1).unwrap().kind.unused.len(), 2);
     plan = optional_output(
         &DomainCodec,
         &(),
@@ -434,9 +479,9 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.transport.len(), 2);
+    assert_eq!(plan.layout.native_len(), 2);
     assert!(plan
-        .transport
+        .layout
         .iter()
         .all(|w| DomainCodec.niche(&w.kind).is_none()));
     plan = optional_output(
@@ -449,11 +494,10 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         plan,
     )
     .unwrap();
-    assert_eq!(plan.transport.len(), 3); // Exhaustion adds a flag, not a wire wrapper.
-    assert_eq!(plan.transport[0].name, "tag3");
-    plan.transport.validate().unwrap();
-    let prebindgen_conversions::TransportNode::Optional(container) = &plan.transport.nodes()[0]
-    else {
+    assert_eq!(plan.layout.native_len(), 3); // Exhaustion adds a flag, not a wire wrapper.
+    assert_eq!(plan.layout.native_get(0).unwrap().name, "tag3");
+    plan.layout.validate().unwrap();
+    let prebindgen_flat::WireNode::Optional(container) = &plan.layout.nodes()[0] else {
         panic!()
     };
     assert!(container
@@ -461,11 +505,8 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         .as_ref()
         .unwrap()
         .starts_with("optional:tag3:"));
-    assert!(
-        matches!(&container.representation,prebindgen_conversions::TransportRepresentation::Inline {controls} if controls.len()==1)
-    );
-    let prebindgen_conversions::TransportNode::Optional(inner) = &container.element.nodes()[0]
-    else {
+    assert!(container.metadata.as_ref().unwrap().controls.len() == 1);
+    let prebindgen_flat::WireNode::Optional(inner) = &container.element.nodes()[0] else {
         panic!()
     };
     assert!(inner
@@ -474,8 +515,10 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         .unwrap()
         .starts_with("optional:tag2:"));
     let mut independent = output(&domain, 0, quote!(payload));
-    for w in independent.transport.iter_mut() {
+    for w in independent.layout.native_wires_mut() {
         DomainCodec.set_niche(&mut w.kind, None);
     }
-    assert!(DomainCodec.niche(&independent.transport[0].kind).is_none());
+    assert!(DomainCodec
+        .niche(&independent.layout.native_get(0).unwrap().kind)
+        .is_none());
 }

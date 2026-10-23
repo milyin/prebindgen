@@ -3,6 +3,7 @@
 
 use crate::{option_inner, result_parts, sequence_parts};
 use crate::{Codec, Compiler, Condition, Input, Output, Projection};
+use prebindgen_conversions::NativeLayoutExt;
 use prebindgen_flat::{type_key, Flat, Result};
 use std::collections::BTreeMap;
 
@@ -293,15 +294,17 @@ impl Declarations {
             .slot
             .as_ref()
             .ok_or("unbound sequence return")?
-            .transport();
+            .layout();
         let sequences = crate::sequence::return_sequences(layout);
-        if sequences.len() != 1 || layout.len() > 2 {
+        if sequences.len() != 1 || layout.native_len() > 2 {
             return Err(
                 "callback_return permits only one sequence and its optional presence flag".into(),
             );
         }
         let carrier = sequences[0]
-            .carrier()
+            .metadata
+            .as_ref()
+            .and_then(|m| prebindgen_conversions::NativeMetadata::encoding(m).carrier())
             .ok_or("callback_return requires a carried sequence representation")?;
         let carrier = carrier.name.clone();
         let mut function = source.clone();
@@ -405,17 +408,14 @@ impl Declarations {
             None
         };
         for input in inputs.iter_mut().flatten() {
-            input.refresh_logical();
             codec.finish_input(input, extra)?;
-            input.logical.validate()?;
-            input.transport.validate()?;
+            input.layout.validate_native_names()?;
         }
         if let Some(output) = &mut output {
             crate::finalize_output_schema(codec, output, extra)?;
             codec.finish_output(output, extra)?;
-            output.logical.validate()?;
             output.validate_value_count()?;
-            output.transport.validate()?;
+            output.layout.validate_native_names()?;
         }
         // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;

@@ -76,17 +76,13 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
     out
 }
 pub(crate) fn input_kotlin(
-    container: &prebindgen_conversions::TransportContainer<JniWire, JniGroup>,
+    container: &prebindgen_flat::WireContainer<JniWire, JniGroup>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let root = &o.presence.to_string();
     let nodes = container.element.nodes();
-    let prebindgen_conversions::TransportRepresentation::Inline { controls } =
-        &container.representation
-    else {
-        return Err("optional requires inline representation".into());
-    };
+    let controls = &o.controls;
     // The adapter validates exactly one selector for a flag, none for a niche.
     debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
     let inner = kotlin::leaf_wires(nodes);
@@ -175,17 +171,13 @@ pub(crate) fn input_kotlin(
     Ok(out)
 }
 pub(crate) fn output_kotlin(
-    container: &prebindgen_conversions::TransportContainer<JniWire, JniGroup>,
+    container: &prebindgen_flat::WireContainer<JniWire, JniGroup>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let nodes = container.element.nodes();
     let wires = kotlin::leaf_wires(nodes);
-    let prebindgen_conversions::TransportRepresentation::Inline { controls } =
-        &container.representation
-    else {
-        return Err("optional requires inline representation".into());
-    };
+    let controls = &o.controls;
     // The adapter validates exactly one selector for a flag, none for a niche.
     debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
     let flag = controls.len();

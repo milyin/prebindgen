@@ -3,9 +3,9 @@
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_conversions::NativeConversionExt;
+use prebindgen_conversions::NativeLayoutExt;
 use prebindgen_conversions::{NativeConversion, NativeFunction};
-use prebindgen_flat::{type_key, Flat, Result, WireKind};
+use prebindgen_flat::{type_key, Conversion, Flat, Result, WireKind};
 
 pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
@@ -468,7 +468,7 @@ impl JniGenBuilder {
             &self.prefix,
             &mut seen,
         )?;
-        let mut callbacks = BTreeMap::new();
+        let mut callbacks = BTreeSet::new();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
@@ -484,8 +484,8 @@ impl JniGenBuilder {
                     .slot
                     .as_ref()
                     .unwrap()
-                    .transport()
-                    .len()
+                    .layout()
+                    .native_len()
                     != 1
                 {
                     return Err("callback_return cannot discard additional return values".into());
@@ -503,16 +503,7 @@ impl JniGenBuilder {
                 }
                 functions.push((variant_name.clone(), pkg, name));
                 bound.insert(variant_name.clone());
-                callbacks.insert(
-                    variant_name.clone(),
-                    flat.function(&variant_name)?
-                        .ret
-                        .slot
-                        .as_ref()
-                        .unwrap()
-                        .transport()
-                        .clone(),
-                );
+                callbacks.insert(variant_name.clone());
                 if declaration.callback_return
                     == Some(prebindgen_declarations::CallbackReturn::Only)
                 {
@@ -598,12 +589,20 @@ impl Codec for JniCodec {
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
+        controls: Vec<prebindgen_flat::Wire<JniWire>>,
     ) -> JniGroup {
         JniGroup::Optional(JniOptional {
+            controls,
             presence,
             discriminator,
             niche,
         })
+    }
+    fn sequence_metadata(&self, carrier: prebindgen_flat::Wire<JniWire>) -> JniGroup {
+        JniGroup::Sequence(carrier)
+    }
+    fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<JniWire>) -> JniGroup {
+        JniGroup::Alternatives(selector)
     }
     fn field_group(&self, name: syn::Ident) -> JniGroup {
         JniGroup::Field(name)
@@ -617,7 +616,7 @@ impl Codec for JniCodec {
     type Input = JniInput;
     type Output = JniOutput;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.transport)?;
+        group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let ownership = prebindgen_conversions::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
@@ -632,10 +631,10 @@ impl Codec for JniCodec {
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
-        group::validate_layout(&plan.transport)?;
+        group::validate_layout(&plan.layout)?;
         let env = prebindgen_conversions::template_parameter("environment");
-        let count = plan.transport.len() + 1;
-        let encode = encode_array(&plan.transport, &plan.values, &syn::parse_quote!(result), 1);
+        let count = plan.layout.native_len() + 1;
+        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result), 1);
         let mark = prebindgen_conversions::template_parameter("mark_output");
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
@@ -654,7 +653,7 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         active: &prebindgen_declarations::Condition,
     ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
         sequence::input(wire, length, index, element, active)
@@ -665,7 +664,7 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
+        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
         values: &[TokenStream],
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
         sequence::output(wire, length, index, element, values)
@@ -835,14 +834,14 @@ impl Codec for JniCodec {
     }
 }
 pub(crate) fn encode_array(
-    layout: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
+    layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
     values: &[TokenStream],
     array: &syn::Ident,
     offset: usize,
 ) -> TokenStream {
     let env = prebindgen_conversions::template_parameter("environment");
     let mut encode = TokenStream::new();
-    for (i, (wire, value)) in layout.iter().zip(values).enumerate() {
+    for (i, (wire, value)) in layout.native_wires().zip(values).enumerate() {
         let expr = wire.kind.output_object(value);
         let i = (i + offset) as i32;
         encode.extend(quote! {
@@ -986,11 +985,11 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
 
 struct OutputBindings {
     errors: BTreeMap<String, errors::ErrorBinding>,
-    callbacks: BTreeMap<String, prebindgen_conversions::TransportLayout<JniWire, JniGroup>>,
+    callbacks: BTreeSet<String>,
 }
 
-fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
-    flat: Flat<I, O>,
+fn generate(
+    flat: Bindings,
     prefix: &str,
     init: &str,
     classes: BTreeMap<String, Class>,
@@ -1046,8 +1045,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     )?;
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let callback_layout = callbacks.get(&source);
-        let callback = callback_layout.is_some();
+        let callback = callbacks.contains(&source);
         let error = errors.get(&source);
         let logical = f.output_conversion()?.layout();
         logical.validate()?;
@@ -1103,7 +1101,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         }
         for input in f.input_conversions()? {
             let code = input.kotlin(&kotlin_context)?;
-            if code.arguments.len() != input.native_wires().len() {
+            if code.arguments.len() != input.layout().native_wires().len() {
                 return Err("Kotlin input argument/wire count differs".into());
             }
             kt_params.extend(code.parameters);
@@ -1141,10 +1139,10 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         }
         if callback {
             let (_, element) =
-                prebindgen_declarations::sequence_return(f.output_conversion()?.transport())
+                prebindgen_declarations::sequence_return(f.output_conversion()?.layout())
                     .ok_or("missing callback sequence")?;
             let fields = element
-                .iter()
+                .native_wires()
                 .enumerate()
                 .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
                 .collect::<Vec<_>>();
@@ -1190,7 +1188,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         };
         let fold = if callback {
             Some(sequence_callback::fold(
-                callback_layout.unwrap(),
+                f.output_conversion()?.layout(),
                 &kotlin_context,
             )?)
         } else {
@@ -1208,7 +1206,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             kotlin_context.result,
             kotlin_context.result,
             1,
-            f.output_conversion()?.native_wires().len(),
+            f.output_conversion()?.layout().native_wires().len(),
         );
         let KotlinOutput {
             delivered,

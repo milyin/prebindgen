@@ -123,7 +123,7 @@ impl EnumMapping {
 
 /// Prepare checked enum decoding with the supplied boundary carrier.
 /// References borrow the decoded local; mutable references are unsupported.
-pub fn enum_input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
+pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
     mapping: &EnumMapping,
     ty: &Type,
     wire: syn::Ident,
@@ -141,11 +141,10 @@ pub fn enum_input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
     let decode = mapping.decode(quote!(#wire));
     let active = active.rust();
     Ok(InputPlan {
-        logical: Default::default(),
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        transport: vec![Wire { name: wire, kind }].into(),
+        layout: vec![Wire { name: wire, kind }].into(),
         validation: quote!(let #var = if #active { Some(#decode) } else { None };),
         acquire: quote!(),
         resources: vec![],
@@ -159,11 +158,10 @@ pub fn enum_input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
         } else {
             quote!(#var)
         },
-    }
-    .with_logical())
+    })
 }
 /// Prepare enum output by matching a borrow, without requiring `Copy` or `Clone`.
-pub fn enum_output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
+pub fn enum_output<W: prebindgen_flat::WireKind, C, G>(
     mapping: &EnumMapping,
     wire: syn::Ident,
     value: TokenStream,
@@ -171,11 +169,10 @@ pub fn enum_output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
 ) -> OutputPlan<W, C, G> {
     let encoded = mapping.encode(quote!(&(#value)));
     OutputPlan {
-        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        transport: vec![Wire {
+        layout: vec![Wire {
             name: wire.clone(),
             kind,
         }]
@@ -184,7 +181,6 @@ pub fn enum_output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
         values: vec![quote!(#wire)],
         commit: quote!(),
     }
-    .with_logical()
 }
 
 #[cfg(test)]

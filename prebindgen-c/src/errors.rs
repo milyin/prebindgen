@@ -1,5 +1,6 @@
 //! Explicit Result error outputs. Message buffers and structured errors are caller-owned.
 use super::*;
+use prebindgen_conversions::NativeLayoutExt;
 use prebindgen_conversions::OutputFragment;
 use prebindgen_flat::Conversion;
 use prebindgen_flat::{Function, TypeUse};
@@ -45,7 +46,7 @@ pub(crate) fn prepare(
         let function = flat.functions.remove(&id.to_string()).unwrap();
         result?;
         let plan = function.ret.slot.unwrap();
-        let fields = field_names(&plan.transport);
+        let fields = field_names(&plan.layout);
         out.push(ErrorBinding {
             name,
             ty,
@@ -56,22 +57,25 @@ pub(crate) fn prepare(
     Ok(out)
 }
 
-fn field_names(layout: &prebindgen_conversions::TransportLayout<CWire, CGroup>) -> Vec<String> {
-    use prebindgen_conversions::TransportNode;
+fn field_names(layout: &prebindgen_flat::WireLayout<CWire, CGroup>) -> Vec<String> {
+    use prebindgen_flat::WireNode;
+    let layout = layout
+        .outcome(prebindgen_flat::OutcomeKind::Success)
+        .unwrap_or(layout);
     let mut names = Vec::new();
-    if let Some(TransportNode::Group {
+    if let Some(WireNode::Group {
         metadata: CGroup::Fields,
         children,
     }) = layout.nodes().first()
     {
         for node in children.nodes() {
-            if let TransportNode::Group {
+            if let WireNode::Group {
                 metadata: CGroup::Field(name),
                 children,
             } = node
             {
-                for _ in children.iter() {
-                    names.push(if children.len() == 1 {
+                for _ in children.native_wires() {
+                    names.push(if children.native_len() == 1 {
                         name.to_string().trim_start_matches("r#").to_owned()
                     } else {
                         format!("v{}", names.len())
@@ -82,14 +86,14 @@ fn field_names(layout: &prebindgen_conversions::TransportLayout<CWire, CGroup>) 
     }
     let keywords="auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Imaginary _Noreturn _Static_assert _Thread_local bool true false NULL";
     let mut unique = std::collections::BTreeSet::new();
-    if names.len() != layout.len()
+    if names.len() != layout.native_len()
         || names.iter().any(|name| {
             !name.is_ascii()
                 || keywords.split_whitespace().any(|word| word == name)
                 || !unique.insert(name.clone())
         })
     {
-        return (0..layout.len()).map(|i| format!("v{i}")).collect();
+        return (0..layout.native_len()).map(|i| format!("v{i}")).collect();
     }
     names
 }
@@ -118,7 +122,7 @@ pub(crate) fn emit(
         let context = CContext {
             row_types: {
                 let mut schemas = Vec::new();
-                sequence::schemas(&error.plan.transport, &mut schemas);
+                sequence::schemas(&error.plan.layout, &mut schemas);
                 schemas
                     .into_iter()
                     .map(|(wire, _)| {
@@ -140,7 +144,7 @@ pub(crate) fn emit(
             read_buffer: syn::parse_quote!(__pb_read),
         };
         let mut schemas = Vec::new();
-        sequence::schemas(&error.plan.transport, &mut schemas);
+        sequence::schemas(&error.plan.layout, &mut schemas);
         let carriers = schemas
             .iter()
             .map(|(wire, _)| wire.name.to_string())
@@ -176,11 +180,11 @@ pub(crate) fn emit(
         let mut fields = Vec::new();
         let mut drops = TokenStream::new();
         header.push_str("typedef struct {\n");
-        for (i, wire) in error.plan.transport.iter().enumerate() {
+        for (i, wire) in error.plan.layout.native_wires().enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
             fields.push(quote!(pub #field:#ty));
-            let c_field = if error.fields.len() == error.plan.transport.len() {
+            let c_field = if error.fields.len() == error.plan.layout.native_len() {
                 error.fields[i].trim_start_matches("r#").to_owned()
             } else {
                 format!("v{i}")
@@ -193,8 +197,8 @@ pub(crate) fn emit(
         }
         let values = error
             .plan
-            .transport
-            .iter()
+            .layout
+            .native_wires()
             .enumerate()
             .map(|(i, wire)| {
                 let field = format_ident!("v{i}");
@@ -222,7 +226,7 @@ pub(crate) fn emit(
             })
             .collect::<Vec<_>>();
         drops.extend(sequence::release(
-            &error.plan.transport,
+            &error.plan.layout,
             &values,
             &context,
             false,
@@ -232,8 +236,8 @@ pub(crate) fn emit(
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
-        let wires = error.plan.transport.iter().collect::<Vec<_>>();
-        let mut comments = describe_groups(&error.plan.transport, &wires, true, &mut 0, "error");
+        let wires = error.plan.layout.native_wires().collect::<Vec<_>>();
+        let mut comments = describe_groups(&error.plan.layout, &wires, true, &mut 0, "error");
         for i in (0..wires.len()).rev() {
             let field = if error.fields.len() == wires.len() {
                 error.fields[i].trim_start_matches("r#").to_owned()
@@ -264,7 +268,7 @@ pub(crate) fn result_function(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &prebindgen_conversions::TransportLayout<CWire, CGroup>,
+    function_output_layout: &prebindgen_flat::WireLayout<CWire, CGroup>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

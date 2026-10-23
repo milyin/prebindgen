@@ -133,7 +133,7 @@ use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 fn main() {
     let binding = JniGen::builder()
         .configure(|flat| {
-            use prebindgen_conversions::NativeConversionExt;
+            use prebindgen_conversions::NativeLayoutExt;
             use prebindgen_flat::{Conversion, OutcomeKind, WireNode};
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![])?;
@@ -146,7 +146,7 @@ fn main() {
             assert!(matches!(logical.get(0).unwrap().kind, prebindgen_jni::JniWire::Scalar {
                 primitive: prebindgen_flat::Primitive::Char, ..
             }));
-            assert!(matches!(output.native_wires().next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
+            assert!(matches!(output.layout().native_wires().next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
             assert!(output.layout().outcome(OutcomeKind::BindingFailure).is_some());
             Ok(())
         })

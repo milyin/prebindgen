@@ -9,8 +9,9 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_conversions::{TransportLayout, TransportNode};
+use prebindgen_conversions::{NativeLayoutExt, NativeMetadata};
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
+use prebindgen_flat::{WireLayout, WireNode};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -230,8 +231,8 @@ impl Output {
 /// carrier types for its wire kinds.
 ///
 /// ```
-/// use prebindgen_flat::{Result, validate_bindings};
-/// use prebindgen_conversions::value;
+/// use prebindgen_flat::{Result, Wire, validate_bindings};
+/// use prebindgen_conversions::{value, NativeLayoutExt};
 /// use prebindgen_declarations::{
 ///     Codec, CodecInput, CodecOutput, Declarations,
 ///     Bindings, fun, expand_param, expand_return, bind_input, Input,
@@ -251,16 +252,18 @@ impl Output {
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
 ///     type Niche = ();
-///     type Group = ();
+///     type Group = Vec<Wire<Type>>;
 ///     type Extra = ();
 ///     type Context = ();
 ///     type Input = CodecInput<Self>;
 ///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
-///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>) {}
-///     fn field_group(&self, _: Ident) {}
-///     fn fields_group(&self) {}
+///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, controls: Vec<Wire<Type>>) -> Self::Group { controls }
+///     fn sequence_metadata(&self, _: Wire<Type>) -> Self::Group { unreachable!() }
+///     fn alternatives_metadata(&self, selector: Wire<Type>) -> Self::Group { vec![selector] }
+///     fn field_group(&self, _: Ident) -> Self::Group { vec![] }
+///     fn fields_group(&self) -> Self::Group { vec![] }
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
 ///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
 ///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
@@ -285,7 +288,7 @@ impl Output {
 ///     pub fn to_i32(value: &i64) -> i32 { *value as i32 }
 ///     pub fn echo(value: i64) -> i64 { value }
 /// "#)?;
-/// let mut flat = Bindings::<Type>::parse(
+/// let mut flat = Bindings::<Type, (), Vec<Wire<Type>>>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let defaults = Declarations::new(&flat, vec![
@@ -295,15 +298,15 @@ impl Output {
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// let function = flat.function("echo")?;
 /// // Input: selector, constructor argument, direct value. Output: two values.
-/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().transport.len(), 3);
-/// assert_eq!(function.ret.slot.as_ref().unwrap().transport.len(), 2);
+/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().layout.native_len(), 3);
+/// assert_eq!(function.ret.slot.as_ref().unwrap().layout.native_len(), 2);
 /// // Replace just this parameter's converter; later default filling preserves it.
 /// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Leaf, &())?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
-/// assert_eq!(input.transport.len(), 1);
-/// assert_eq!(prebindgen_flat::type_key(&input.transport[0].kind), "i64");
+/// assert_eq!(input.layout.native_len(), 1);
+/// assert_eq!(prebindgen_flat::type_key(&input.layout.native_get(0).unwrap().kind), "i64");
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -313,19 +316,26 @@ pub trait Codec {
     type Niche: Clone;
     /// Adapter-owned metadata for group and container nodes in the wire tree.
     /// The shared compiler creates it through the metadata hooks below and never
-    /// interprets it. Use `()` when no group information is needed.
-    type Group: Clone;
+    /// interprets its semantic fields. The staged native reader asks NativeMetadata
+    /// only for additional controls or a carrier. Use `()` for plain leaves.
+    type Group: Clone + prebindgen_conversions::NativeMetadata<Self::Wire>;
     /// Describe an optional value in the adapter's own metadata format.
     /// `presence` is the normalized 0/1 binding used by payload conditions.
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
     /// representation, or `None` when a separate flag is an inline control wire.
-    /// With a flag, `presence` and `discriminator` name that same wire.
+    /// With a flag, `presence` and `discriminator` name that same wire. Retain the
+    /// supplied controls unchanged; the compiler validates their names and types.
     fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<Self::Niche>,
+        controls: Vec<Wire<Self::Wire>>,
     ) -> Self::Group;
+    /// Record the supplied physical carrier unchanged on its logical sequence node.
+    fn sequence_metadata(&self, carrier: Wire<Self::Wire>) -> Self::Group;
+    /// Record the supplied selector unchanged for mutually exclusive input alternatives.
+    fn alternatives_metadata(&self, selector: Wire<Self::Wire>) -> Self::Group;
     /// Describe one named source field, whose subtree may contain any number of wires.
     fn field_group(&self, name: syn::Ident) -> Self::Group;
     /// Describe a record or unit value's ordered collection of field subtrees.
@@ -433,7 +443,7 @@ pub trait Codec {
         _wire: syn::Ident,
         _length: syn::Ident,
         _index: syn::Ident,
-        _element: &TransportLayout<Self::Wire, Self::Group>,
+        _element: &WireLayout<Self::Wire, Self::Group>,
         _active: &Condition,
     ) -> Result<SequenceInput<Self::Wire>> {
         Err("collections are unsupported by this codec".into())
@@ -446,7 +456,7 @@ pub trait Codec {
         _wire: syn::Ident,
         _length: syn::Ident,
         _index: syn::Ident,
-        _element: &TransportLayout<Self::Wire, Self::Group>,
+        _element: &WireLayout<Self::Wire, Self::Group>,
         _values: &[TokenStream],
     ) -> Result<SequenceOutput<Self::Wire>> {
         Err("collections are unsupported by this codec".into())
@@ -495,7 +505,7 @@ pub trait Codec {
             quote!(source_error_message),
             false,
         )?;
-        Ok(plan.transport.logical())
+        Ok(plan.layout)
     }
     /// Logical binding-failure payload, independently of how the reader delivers
     /// it. None means this codec declares no binding-failure channel.
@@ -555,16 +565,16 @@ pub trait Codec {
     }
     /// Complete a composed parameter plan before it is stored in a slot.
     /// Called once per bound parameter, including records and selectors. The
-    /// logical schema reflects the composed transport when this hook runs. A hook
-    /// that edits transport must refresh the schema or supply its own logical view;
-    /// the compiler preserves the hook's schema and validates it before installation.
+    /// tree is complete when this hook runs. Edits to it or its metadata are
+    /// immediately visible to readers; no secondary layout needs refreshing.
+    /// The compiler validates the tree before installing the finished slot.
     fn finish_input(&self, _plan: &mut CodecInput<Self>, _extra: &Self::Extra) -> Result<()> {
         Ok(())
     }
     /// Complete a composed result plan, including unit and multi-wire results.
     /// Install call-level delivery here, after all output expressions are known.
     /// The logical schema already includes the composed payload and error channels.
-    /// As for finish_input, hooks own any later changes to transport or schema.
+    /// Edits to the tree or its adapter metadata are preserved and validated.
     fn finish_output(&self, _plan: &mut CodecOutput<Self>, _extra: &Self::Extra) -> Result<()> {
         Ok(())
     }
@@ -667,10 +677,9 @@ pub fn bind_input<C: Codec>(
         extra,
         &Condition::default(),
     )?;
-    conversion.refresh_logical();
+
     codec.finish_input(&mut conversion, extra)?;
-    conversion.logical.validate()?;
-    conversion.transport.validate()?;
+    conversion.layout.validate_native_names()?;
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
     Ok(())
 }
@@ -714,9 +723,8 @@ pub fn bind_output<C: Codec>(
     )?;
     finalize_output_schema(codec, &mut conversion, extra)?;
     codec.finish_output(&mut conversion, extra)?;
-    conversion.logical.validate()?;
     conversion.validate_value_count()?;
-    conversion.transport.validate()?;
+    conversion.layout.validate_native_names()?;
     flat.function_mut(function)?.ret.slot = Some(conversion.into());
     Ok(())
 }
@@ -726,12 +734,39 @@ fn finalize_output_schema<C: Codec>(
     plan: &mut CodecOutput<C>,
     extra: &C::Extra,
 ) -> Result<()> {
-    plan.refresh_logical();
     if let Some(error) = codec.binding_failure_layout(extra)? {
-        plan.logical
+        plan.layout
             .set_outcome(prebindgen_flat::OutcomeKind::BindingFailure, error);
     }
-    plan.logical.validate()
+    plan.layout.validate()
+}
+
+fn wire_signature<W: prebindgen_flat::WireKind>(wire: &Wire<W>) -> (syn::Ident, String) {
+    (wire.name.clone(), type_key(&wire.rust_type()))
+}
+fn checked_inline<W: prebindgen_flat::WireKind, G: prebindgen_conversions::NativeMetadata<W>>(
+    metadata: G,
+    expected: &[(syn::Ident, String)],
+) -> Result<G> {
+    match metadata.encoding() {
+        prebindgen_conversions::NativeEncoding::Inline(controls)
+            if controls
+                .iter()
+                .map(wire_signature)
+                .eq(expected.iter().cloned()) =>
+        {
+            Ok(metadata)
+        }
+        _ => Err("codec metadata must retain the supplied inline controls".into()),
+    }
+}
+fn sequence_metadata<C: Codec>(codec: &C, carrier: Wire<C::Wire>) -> Result<C::Group> {
+    let expected = wire_signature(&carrier);
+    let metadata = codec.sequence_metadata(carrier);
+    if metadata.encoding().carrier().map(wire_signature) != Some(expected) {
+        return Err("codec sequence metadata must retain the supplied carrier".into());
+    }
+    Ok(metadata)
 }
 
 struct Compiler<'a, C: Codec> {
@@ -755,8 +790,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
         self.next.set(next + 1);
         n
     }
-    fn prefix(&self, wires: &mut TransportLayout<C::Wire, C::Group>, segment: ComponentSegment) {
-        for wire in wires {
+    fn prefix(&self, wires: &mut WireLayout<C::Wire, C::Group>, segment: ComponentSegment) {
+        for wire in wires.native_wires_mut() {
             self.codec.prefix_component(&mut wire.kind, segment.clone());
         }
     }
@@ -771,7 +806,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());
         }
         let var = self.name();
-        let mut wires = TransportLayout::default();
+        let mut wires = WireLayout::default();
         let mut fallible = false;
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
@@ -805,18 +840,16 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 if type_key(ty) == "()" && children.is_empty() {
                     wires.enclose(self.codec.fields_group());
                     return Ok(InputPlan {
-                        logical: Default::default(),
                         fallible: false,
                         context: Default::default(),
                         acknowledgement,
-                        transport: wires,
+                        layout: wires,
                         validation,
                         acquire,
                         resources,
                         statements,
                         argument: quote!(()),
-                    }
-                    .with_logical());
+                    });
                 }
                 let r = self.flat.record(ty)?;
                 if r.fields.len() != children.len() {
@@ -855,7 +888,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 for (param, child) in f.params.iter().zip(args) {
                     let mut p = self.input(&param.ty.ty, child, extra, active)?;
                     self.prefix(
-                        &mut p.transport,
+                        &mut p.layout,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
                     fallible |= p.fallible;
@@ -864,7 +897,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     resources.extend(p.resources);
                     merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     statements.extend(p.statements);
-                    wires.extend(p.transport);
+                    wires.extend(p.layout);
                     call_args.push(p.argument);
                 }
                 let path = &f.path;
@@ -895,8 +928,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
-                    self.prefix(&mut p.transport, ComponentSegment::Alternative(i));
-                    for wire in p.transport.iter_mut() {
+                    self.prefix(&mut p.layout, ComponentSegment::Alternative(i));
+                    for wire in p.layout.native_wires_mut() {
                         self.codec.set_niche(&mut wire.kind, None);
                     }
                     fallible |= p.fallible;
@@ -906,30 +939,31 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     let body = p.statements;
                     let value = p.argument;
-                    alternatives.push(p.transport);
+                    alternatives.push(p.layout);
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
-                wires = TransportLayout::from_nodes(vec![TransportNode::Alternatives {
-                    selector,
+                let expected = vec![wire_signature(&selector)];
+                let metadata =
+                    checked_inline(self.codec.alternatives_metadata(selector), &expected)?;
+                wires = WireLayout::from_nodes(vec![WireNode::Alternatives {
+                    metadata: Some(metadata),
                     alternatives,
                 }]);
                 statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
         Ok(InputPlan {
-            logical: Default::default(),
             fallible,
             context: Default::default(),
             acknowledgement,
-            transport: wires,
+            layout: wires,
             validation,
             acquire,
             resources,
             statements,
             argument,
-        }
-        .with_logical())
+        })
     }
     fn output_root(
         &self,
@@ -982,8 +1016,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 };
                 #prepare
             };
-            child.refresh_logical();
-            child.logical.set_outcome(
+
+            child.layout.set_outcome(
                 prebindgen_flat::OutcomeKind::SourceError,
                 self.codec
                     .source_error_layout(error_ty, mapped_error, extra)?,
@@ -1004,12 +1038,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
         }
         let mut out = OutputPlan {
-            logical: Default::default(),
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
-            transport: Default::default(),
+            layout: Default::default(),
             statements: TokenStream::new(),
             values: Vec::new(),
         };
@@ -1075,8 +1108,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
                 if type_key(ty) == "()" && children.is_empty() {
-                    out.transport.enclose(self.codec.fields_group());
-                    out.refresh_logical();
+                    out.layout.enclose(self.codec.fields_group());
+
                     return Ok(out);
                 }
                 let r = self.flat.record(ty)?;
@@ -1136,7 +1169,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
                 self.prefix(
-                    &mut child.transport,
+                    &mut child.layout,
                     ComponentSegment::Getter(function.clone()),
                 );
                 append(&mut out, child)?;
@@ -1162,7 +1195,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         quote!(&#value)
                     };
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
-                    self.prefix(&mut p.transport, ComponentSegment::View(index));
+                    self.prefix(&mut p.layout, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
                 }
@@ -1173,7 +1206,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
             }
         }
-        out.refresh_logical();
+
         Ok(out)
     }
 }
@@ -1188,7 +1221,7 @@ fn append<W: prebindgen_flat::WireKind, C, M>(
     }
     to.fallible |= from.fallible;
     to.commit.extend(from.commit);
-    to.transport.extend(from.transport);
+    to.layout.extend(from.layout);
     to.statements.extend(from.statements);
     to.values.extend(from.values);
     Ok(())

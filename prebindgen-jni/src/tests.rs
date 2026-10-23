@@ -1,5 +1,4 @@
 use super::*;
-use prebindgen_conversions::NativeConversionExt;
 fn flat(source: &str) -> Bindings {
     Flat::parse(
         syn::parse_file(source)
@@ -378,10 +377,20 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .unwrap();
         let f = flat.function(name).unwrap();
         assert_eq!(
-            f.params[0].ty.slot.as_ref().unwrap().native_wires().len(),
+            f.params[0]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .layout()
+                .native_wires()
+                .len(),
             count
         );
-        assert_eq!(f.ret.slot.as_ref().unwrap().native_wires().len(), count);
+        assert_eq!(
+            f.ret.slot.as_ref().unwrap().layout().native_wires().len(),
+            count
+        );
     }
 }
 
@@ -446,20 +455,23 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 
 #[test]
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
-    use prebindgen_conversions::TransportNode;
+    use prebindgen_flat::WireNode;
     fn reservations(
-        layout: &prebindgen_conversions::TransportLayout<JniWire, JniGroup>,
+        layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
     ) -> Vec<Option<JniNiche>> {
+        let layout = layout
+            .outcome(prebindgen_flat::OutcomeKind::Success)
+            .unwrap_or(layout);
         let mut result = vec![];
         for node in layout.nodes() {
             match node {
-                TransportNode::Optional(c) => {
+                WireNode::Optional(c) => {
                     if let Some(JniGroup::Optional(optional)) = &c.metadata {
                         result.push(optional.niche.clone());
                     }
                     result.extend(reservations(&c.element));
                 }
-                TransportNode::Group { children, .. } => result.extend(reservations(children)),
+                WireNode::Group { children, .. } => result.extend(reservations(children)),
                 _ => {}
             }
         }
@@ -485,8 +497,8 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
             } else {
                 2
             };
-            assert_eq!(input.native_wires().len(), count, "input {ty}");
-            assert_eq!(output.native_wires().len(), count, "output {ty}");
+            assert_eq!(input.layout().native_wires().len(), count, "input {ty}");
+            assert_eq!(output.layout().native_wires().len(), count, "output {ty}");
             let mut expected = if reference {
                 vec![Some(JniNiche::Null)]
             } else {
@@ -500,8 +512,8 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 });
             }
             expected.reverse();
-            assert_eq!(reservations(input.transport()), expected, "input {ty}");
-            assert_eq!(reservations(output.transport()), expected, "output {ty}");
+            assert_eq!(reservations(input.layout()), expected, "input {ty}");
+            assert_eq!(reservations(output.layout()), expected, "output {ty}");
         }
     }
 }
@@ -528,14 +540,20 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         .slot
         .as_ref()
         .unwrap();
-    assert_eq!(input.native_wires().len(), 3); // one tag + two arm payloads, no option flags
+    assert_eq!(input.layout().native_wires().len(), 3); // one tag + two arm payloads, no option flags
     assert_eq!(
-        input.transport()[0].kind.available_niche(),
+        input
+            .layout()
+            .native_wires()
+            .next()
+            .unwrap()
+            .kind
+            .available_niche(),
         Some(JniNiche::Integer(-3))
     );
     assert!(input
-        .transport()
-        .iter()
+        .layout()
+        .native_wires()
         .skip(1)
         .all(|w| w.kind.available_niche().is_none()));
 }
@@ -801,7 +819,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         1
     );
     assert_eq!(output.wires().count(), 4);
-    assert_eq!(output.native_wires().count(), 1);
+    assert_eq!(output.layout().native_wires().count(), 1);
     let shape = |layout: &WireLayout<JniWire, JniGroup>| {
         layout
             .entries()
@@ -827,7 +845,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 }
 
 #[test]
-fn manual_jni_plans_preserve_logical_schemas_through_flat_and_configure() {
+fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
     use prebindgen_flat::{Conversion, OutcomeKind};
     fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
         let mut input = JniCodec.input_leaf(
@@ -838,7 +856,7 @@ fn manual_jni_plans_preserve_logical_schemas_through_flat_and_configure() {
             &Default::default(),
         )?;
         JniCodec.finish_input(&mut input, &())?;
-        input.logical[0].name = syn::parse_quote!(logical_input);
+
         let mut output = JniCodec.output_leaf(
             &syn::parse_quote!(i64),
             &(),
@@ -847,9 +865,9 @@ fn manual_jni_plans_preserve_logical_schemas_through_flat_and_configure() {
             false,
         )?;
         JniCodec.finish_output(&mut output, &())?;
-        output.logical[0].name = syn::parse_quote!(logical_output);
+
         if binding_failure {
-            output.logical.set_outcome(
+            output.layout.set_outcome(
                 OutcomeKind::BindingFailure,
                 JniCodec.binding_failure_layout(&())?.unwrap(),
             );
@@ -857,9 +875,24 @@ fn manual_jni_plans_preserve_logical_schemas_through_flat_and_configure() {
         let function = model.function_mut("echo")?;
         function.params[0].ty.slot = Some(input.into());
         function.ret.slot = Some(output.into());
+        let input = function.input_conversions()?[0];
+        assert!(std::ptr::eq(
+            input.layout().get(0).unwrap(),
+            input.layout().native_wires().next().unwrap()
+        ));
+        let output = function.output_conversion()?;
+        assert!(std::ptr::eq(
+            output
+                .layout()
+                .outcome(OutcomeKind::Success)
+                .unwrap()
+                .get(0)
+                .unwrap(),
+            output.layout().native_wires().next().unwrap()
+        ));
         assert_eq!(
             function.input_conversions()?[0].layout()[0].name,
-            "logical_input"
+            "native_input"
         );
         assert_eq!(
             function
@@ -868,11 +901,12 @@ fn manual_jni_plans_preserve_logical_schemas_through_flat_and_configure() {
                 .outcome(OutcomeKind::Success)
                 .unwrap()[0]
                 .name,
-            "logical_output"
+            "native_output"
         );
         assert_eq!(
             function
                 .output_conversion()?
+                .layout()
                 .native_wires()
                 .next()
                 .unwrap()

@@ -3,26 +3,27 @@ use super::*;
 use crate::kotlin::{
     input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
 };
-use prebindgen_conversions::TransportLayout;
+use prebindgen_conversions::NativeLayoutExt;
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 use prebindgen_flat::Wire;
+use prebindgen_flat::WireLayout;
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &TransportLayout<JniWire, JniGroup>,
+    element: &WireLayout<JniWire, JniGroup>,
     active: &Condition,
 ) -> Result<SequenceInput<JniWire>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = element.len();
+    let count = element.native_len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection element fields")?;
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
     let mut prepared_values = Vec::new();
-    for (position, field) in element.iter().enumerate() {
+    for (position, field) in element.native_wires().enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
         bind.extend(quote! {
@@ -53,12 +54,12 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &TransportLayout<JniWire, JniGroup>,
+    element: &WireLayout<JniWire, JniGroup>,
     values: &[TokenStream],
 ) -> Result<SequenceOutput<JniWire>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = element.len();
+    let count = element.native_len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
     let encode = encode_array(element, values, &row, 0);
     let frame = format_ident!("{wire}_frame");
@@ -84,7 +85,7 @@ pub(crate) fn output(
 
 pub(crate) fn input_list(
     carrier: &Wire<JniWire>,
-    element: &TransportLayout<JniWire, JniGroup>,
+    element: &WireLayout<JniWire, JniGroup>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let child = input_kotlin(element.nodes(), context)?;
@@ -143,7 +144,7 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &TransportLayout<JniWire, JniGroup>,
+    element: &WireLayout<JniWire, JniGroup>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let row = format!("{}_row", context.output_prefix);

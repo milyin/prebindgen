@@ -1,5 +1,6 @@
 //! Shared record composition for declaration recipes and adapter-defined leaves.
 use super::*;
+use prebindgen_conversions::NativeLayoutExt;
 
 /// Construct a named Rust record from field conversion plans in declaration order.
 /// Group hooks describe the collection and each named field in adapter metadata,
@@ -19,11 +20,10 @@ pub fn record_input<C: Codec>(
     fields: impl IntoIterator<Item = Result<(syn::Ident, CodecInput<C>)>>,
 ) -> Result<CodecInput<C>> {
     let mut out: CodecInput<C> = InputPlan {
-        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         acknowledgement: None,
-        transport: Default::default(),
+        layout: Default::default(),
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
         resources: Vec::new(),
@@ -35,7 +35,7 @@ pub fn record_input<C: Codec>(
     for field in fields {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        for wire in &mut child.transport {
+        for wire in child.layout.native_wires_mut() {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
         out.fallible |= child.fallible;
@@ -44,15 +44,15 @@ pub fn record_input<C: Codec>(
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        child.transport.enclose(codec.field_group(name.clone()));
-        out.transport.extend(child.transport);
+        child.layout.enclose(codec.field_group(name.clone()));
+        out.layout.extend(child.layout);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-    out.transport.enclose(codec.fields_group());
-    out.refresh_logical();
+    out.layout.enclose(codec.fields_group());
+
     Ok(out)
 }
 
@@ -80,12 +80,11 @@ pub fn record_output<C: Codec>(
         quote!(let _ = &(#value);)
     };
     let mut out = OutputPlan {
-        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        transport: Default::default(),
+        layout: Default::default(),
         statements: binding,
         values: Vec::new(),
     };
@@ -93,14 +92,14 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        for wire in &mut child.transport {
+        for wire in child.layout.native_wires_mut() {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        child.transport.enclose(codec.field_group(name));
+        child.layout.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    out.transport.enclose(codec.fields_group());
-    out.refresh_logical();
+    out.layout.enclose(codec.fields_group());
+
     Ok(out)
 }
 
@@ -127,12 +126,11 @@ pub fn record_output_owned<C: Codec>(
         quote!(let _ = #value;)
     };
     let mut out = OutputPlan {
-        logical: Default::default(),
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        transport: Default::default(),
+        layout: Default::default(),
         statements: binding,
         values: Vec::new(),
     };
@@ -140,14 +138,14 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        for wire in &mut child.transport {
+        for wire in child.layout.native_wires_mut() {
             codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
         }
-        child.transport.enclose(codec.field_group(name));
+        child.layout.enclose(codec.field_group(name));
         append(&mut out, child)?;
     }
-    out.transport.enclose(codec.fields_group());
-    out.refresh_logical();
+    out.layout.enclose(codec.fields_group());
+
     Ok(out)
 }
 

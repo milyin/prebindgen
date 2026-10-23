@@ -49,8 +49,20 @@ impl Codec for EnumCodec {
         }
         CCodec.source_error_layout(ty, mapped, e)
     }
-    fn optional_metadata(&self, p: syn::Ident, d: syn::Ident, n: Option<CNiche>) -> CGroup {
-        CCodec.optional_metadata(p, d, n)
+    fn optional_metadata(
+        &self,
+        p: syn::Ident,
+        d: syn::Ident,
+        n: Option<CNiche>,
+        controls: Vec<prebindgen_flat::Wire<CWire>>,
+    ) -> CGroup {
+        CCodec.optional_metadata(p, d, n, controls)
+    }
+    fn sequence_metadata(&self, carrier: prebindgen_flat::Wire<CWire>) -> CGroup {
+        CCodec.sequence_metadata(carrier)
+    }
+    fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<CWire>) -> CGroup {
+        CCodec.alternatives_metadata(selector)
     }
     fn field_group(&self, n: syn::Ident) -> CGroup {
         CCodec.field_group(n)
@@ -70,7 +82,7 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_conversions::TransportLayout<CWire, CGroup>,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         active: &Condition,
     ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
         CCodec.sequence_input(e, w, n, i, element, active)
@@ -81,7 +93,7 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_conversions::TransportLayout<CWire, CGroup>,
+        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
         values: &[TokenStream],
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
         if self.callback_wire.as_ref() == Some(&w) {
@@ -323,13 +335,13 @@ mod tests {
             let output = codec
                 .output_leaf(&ty, &(), syn::parse_quote!(wire), quote!(value), false)
                 .unwrap();
-            assert_eq!(input.transport.len(), 1);
-            assert_eq!(output.transport.len(), 1);
+            assert_eq!(input.layout.native_len(), 1);
+            assert_eq!(output.layout.native_len(), 1);
             assert!(
-                matches!(input.transport[0].kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+                matches!(input.layout.native_get(0).unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
             );
-            super::super::group::validate_layout(&input.transport).unwrap();
-            super::super::group::validate_layout(&output.transport).unwrap();
+            super::super::group::validate_layout(&input.layout).unwrap();
+            super::super::group::validate_layout(&output.layout).unwrap();
         }
     }
     #[test]
@@ -337,31 +349,26 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let wire = EnumCodec::wire("code", &mapping);
-        let mut tree: prebindgen_conversions::TransportLayout<CWire, CGroup> = vec![GenericWire {
+        let mut tree: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
             name: syn::parse_quote!(wire),
             kind: wire,
         }]
         .into();
         let group = |presence, value| {
             CGroup::Optional(COptional {
+                controls: vec![],
                 presence: syn::parse_str(presence).unwrap(),
                 discriminator: syn::parse_quote!(wire),
                 niche: Some(CNiche::Integer(value)),
             })
         };
-        tree.enclose_optional(
-            prebindgen_conversions::TransportRepresentation::Inline { controls: vec![] },
-            Some(group("inner", -2)),
-        );
+        tree.enclose_optional(Some(group("inner", -2)));
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
         tree[0].kind.clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree.enclose_optional(
-            prebindgen_conversions::TransportRepresentation::Inline { controls: vec![] },
-            Some(group("outer", -2)),
-        );
+        tree.enclose_optional(Some(group("outer", -2)));
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("duplicate"));
@@ -379,12 +386,11 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_conversions::TransportLayout<CWire, CGroup> =
-                vec![GenericWire {
-                    name: syn::parse_quote!(value),
-                    kind: wire,
-                }]
-                .into();
+            let layout: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
+                name: syn::parse_quote!(value),
+                kind: wire,
+            }]
+            .into();
             assert!(super::super::group::validate_layout(&layout).is_err());
         }
     }

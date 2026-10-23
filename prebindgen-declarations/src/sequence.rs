@@ -1,8 +1,10 @@
 //! Lift one element recipe into a runtime-sized collection without changing phases.
 use super::*;
+use prebindgen_conversions::NativeLayoutExt;
+use prebindgen_conversions::{NativeEncoding, NativeMetadata};
 use prebindgen_conversions::{Resource, ResourceIdentity};
-use prebindgen_conversions::{TransportContainer, TransportNode, TransportRepresentation};
 use prebindgen_flat::SequenceView;
+use prebindgen_flat::{WireContainer, WireNode};
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
@@ -49,16 +51,16 @@ pub struct SequenceOutput<W> {
     pub commit: TokenStream,
 }
 
-fn replace(
+fn replace<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
     code: &TokenStream,
-    layout: &TransportLayout<impl prebindgen_flat::WireKind, impl Sized>,
+    layout: &WireLayout<W, G>,
     values: &[TokenStream],
 ) -> Result<TokenStream> {
-    if layout.len() != values.len() {
+    if layout.native_len() != values.len() {
         return Err("collection wire/read count differs".into());
     }
     let replacements = layout
-        .iter()
+        .native_wires()
         .zip(values)
         .map(|(w, v)| {
             Ok((
@@ -113,12 +115,12 @@ fn replace(
         .collect())
 }
 
-fn prepared(
+fn prepared<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
     code: &TokenStream,
-    layout: &TransportLayout<impl prebindgen_flat::WireKind, impl Sized>,
+    layout: &WireLayout<W, G>,
     values: &[Option<TokenStream>],
 ) -> Result<TokenStream> {
-    if values.len() != layout.len() {
+    if values.len() != layout.native_len() {
         return Err("collection prepared read count differs".into());
     }
     fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
@@ -129,7 +131,7 @@ fn prepared(
         })
     }
     let mut reads = Vec::new();
-    for (wire, value) in layout.iter().zip(values) {
+    for (wire, value) in layout.native_wires().zip(values) {
         if value.is_none() && mentions(code.clone(), &wire.name) {
             return Err(format!(
                 "collection wire `{}` cannot be read after row validation",
@@ -162,7 +164,7 @@ pub(crate) fn input<C: Codec>(
     if matches!(element, Type::Reference(_)) {
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
-    if child.transport.is_empty() {
+    if child.layout.native_is_empty() {
         return Err("collection elements must have at least one wire".into());
     }
     if view != SequenceView::Owned
@@ -181,25 +183,21 @@ pub(crate) fn input<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.transport,
+        &child.layout,
         active,
     )?;
     let validation = replace(
         &child.validation,
-        &child.transport,
+        &child.layout,
         &transport.validation_values,
     )?;
-    let acquire = prepared(&child.acquire, &child.transport, &transport.prepared_values)?;
-    let statements = prepared(
-        &child.statements,
-        &child.transport,
-        &transport.prepared_values,
-    )?;
+    let acquire = prepared(&child.acquire, &child.layout, &transport.prepared_values)?;
+    let statements = prepared(&child.statements, &child.layout, &transport.prepared_values)?;
     // Wrap expressions as a local initializer so the syntax visitor can replace paths.
     let child_argument = &child.argument;
     let argument = prepared(
         &quote!(let #var = #child_argument;),
-        &child.transport,
+        &child.layout,
         &transport.prepared_values,
     )?;
     let mut resources = Vec::new();
@@ -215,7 +213,7 @@ pub(crate) fn input<C: Codec>(
         };
         collect.extend(prepared(
             &quote!(if #condition {#identity}),
-            &child.transport,
+            &child.layout,
             &transport.prepared_values,
         )?);
         resources.push(Resource {
@@ -236,17 +234,19 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Slice => quote!(#var.as_slice()),
         SequenceView::Mutable => unreachable!(),
     };
-    Ok(InputPlan { logical:Default::default(),
+    Ok(InputPlan {
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        transport: TransportLayout::from_nodes(vec![TransportNode::Sequence(TransportContainer {
-            representation: TransportRepresentation::Carrier(Wire {
-                name: wire,
-                kind: transport.carrier,
-            }),
-            element: child.transport,
-            metadata: None,
+        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
+            element: child.layout,
+            metadata: Some(super::sequence_metadata(
+                codec,
+                Wire {
+                    name: wire,
+                    kind: transport.carrier,
+                },
+            )?),
         })]),
         validation: quote! {
             #declarations
@@ -260,7 +260,7 @@ pub(crate) fn input<C: Codec>(
         statements: quote!(let #var:Vec<#element>=#acquired.into_iter().map(|construct|construct()).collect::<::core::result::Result<_,String>>()?;),
         argument: value,
         resources,
-    }.with_logical())
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -288,7 +288,7 @@ pub(crate) fn output<C: Codec>(
     if mode == ProjectionMode::Owned && (borrowed || view != SequenceView::Owned) {
         return Err("owned collection projection cannot consume a borrowed collection".into());
     }
-    if child.transport.is_empty() {
+    if child.layout.native_is_empty() {
         return Err("collection elements must have at least one wire".into());
     }
     if !child.delivery.statements.is_empty() {
@@ -299,7 +299,7 @@ pub(crate) fn output<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.transport,
+        &child.layout,
         &child.values,
     )?;
     let owner = format_ident!("{wire}_source");
@@ -350,17 +350,18 @@ pub(crate) fn output<C: Codec>(
         quote!(for commit in #commits {commit();})
     };
     Ok(OutputPlan {
-        logical: Default::default(),
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        transport: TransportLayout::from_nodes(vec![TransportNode::Sequence(TransportContainer {
-            representation: TransportRepresentation::Carrier(Wire {
-                name: wire,
-                kind: carrier,
-            }),
-            element: child.transport,
-            metadata: None,
+        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
+            element: child.layout,
+            metadata: Some(super::sequence_metadata(
+                codec,
+                Wire {
+                    name: wire,
+                    kind: carrier,
+                },
+            )?),
         })]),
         statements: quote! {
             let #owner=#binding; let #length=#owner.len(); #declarations
@@ -370,27 +371,37 @@ pub(crate) fn output<C: Codec>(
         },
         values: vec![value],
         commit: quote!(#commit #commit_elements),
-    }
-    .with_logical())
+    })
 }
 
 /// Outer sequences in a return scope, without descending into sequence elements.
-pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G>(
-    layout: &TransportLayout<W, G>,
-) -> Vec<&TransportContainer<W, G>> {
-    fn visit<'a, W: prebindgen_flat::WireKind, G>(
-        layout: &'a TransportLayout<W, G>,
-        out: &mut Vec<&'a TransportContainer<W, G>>,
+pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
+    layout: &WireLayout<W, G>,
+) -> Vec<&WireContainer<W, G>> {
+    fn visit<'a, W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
+        layout: &'a WireLayout<W, G>,
+        out: &mut Vec<&'a WireContainer<W, G>>,
     ) {
         for node in layout.nodes() {
             match node {
-                TransportNode::Sequence(c) => out.push(c),
-                TransportNode::Optional(c)
-                    if matches!(c.representation, TransportRepresentation::Inline { .. }) =>
+                WireNode::Sequence(c) => out.push(c),
+                WireNode::Optional(c)
+                    if !matches!(
+                        c.metadata.as_ref().map(NativeMetadata::encoding),
+                        Some(NativeEncoding::Carrier(_))
+                    ) =>
                 {
                     visit(&c.element, out)
                 }
-                TransportNode::Group { children, .. } => visit(children, out),
+                WireNode::Group { children, .. } => visit(children, out),
+                WireNode::Outcomes { alternatives } => {
+                    if let Some(success) = alternatives
+                        .iter()
+                        .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
+                    {
+                        visit(&success.layout, out);
+                    }
+                }
                 _ => {}
             }
         }
@@ -400,12 +411,15 @@ pub(crate) fn return_sequences<W: prebindgen_flat::WireKind, G>(
     out
 }
 /// Find an outer carried sequence, without descending into sequence elements.
-pub fn sequence_return<W: prebindgen_flat::WireKind, G>(
-    layout: &TransportLayout<W, G>,
-) -> Option<(&Wire<W>, &TransportLayout<W, G>)> {
+pub fn sequence_return<W: prebindgen_flat::WireKind, G: NativeMetadata<W>>(
+    layout: &WireLayout<W, G>,
+) -> Option<(&Wire<W>, &WireLayout<W, G>)> {
     return_sequences(layout)
         .into_iter()
-        .find_map(|c| c.carrier().map(|wire| (wire, &c.element)))
+        .find_map(|c| match c.metadata.as_ref()?.encoding() {
+            NativeEncoding::Carrier(wire) => Some((wire, &c.element)),
+            _ => None,
+        })
 }
 
 #[cfg(test)]
@@ -417,29 +431,48 @@ mod tests {
             name: syn::parse_str(name).unwrap(),
             kind: syn::parse_quote!(i64),
         };
-        let mut carried: TransportLayout<syn::Type, ()> = vec![leaf("value")].into();
-        carried.enclose_sequence(TransportRepresentation::Carrier(leaf("rows")), None);
-        carried.enclose_optional(
-            TransportRepresentation::Inline {
-                controls: vec![leaf("present")],
-            },
-            None,
-        );
+        enum Encoding {
+            Inline(Vec<Wire<syn::Type>>),
+            Carrier(Box<Wire<syn::Type>>),
+        }
+        impl NativeMetadata<syn::Type> for Encoding {
+            fn encoding(&self) -> NativeEncoding<'_, syn::Type> {
+                match self {
+                    Self::Inline(ws) => NativeEncoding::Inline(ws),
+                    Self::Carrier(w) => NativeEncoding::Carrier(w),
+                }
+            }
+            fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, syn::Type> {
+                use prebindgen_conversions::NativeEncodingMut;
+                match self {
+                    Self::Inline(ws) => NativeEncodingMut::Inline(ws),
+                    Self::Carrier(w) => NativeEncodingMut::Carrier(w),
+                }
+            }
+        }
+        let mut carried: WireLayout<syn::Type, Encoding> = vec![leaf("value")].into();
+        carried.enclose_sequence(Some(Encoding::Carrier(leaf("rows").into())));
+        carried.enclose_optional(Some(Encoding::Inline(vec![leaf("present")])));
         assert_eq!(return_sequences(&carried).len(), 1);
         assert_eq!(sequence_return(&carried).unwrap().0.name, "rows");
-        carried.enclose_optional(
-            TransportRepresentation::Carrier(leaf("optional_object")),
-            None,
+        carried.set_outcome(
+            prebindgen_flat::OutcomeKind::BindingFailure,
+            WireLayout::default(),
         );
-        assert!(return_sequences(&carried).is_empty());
-        let mut inline: TransportLayout<syn::Type, ()> = vec![leaf("inline_value")].into();
-        inline.enclose_sequence(TransportRepresentation::Inline { controls: vec![] }, None);
+        assert_eq!(sequence_return(&carried).unwrap().0.name, "rows");
+        // A carried option owns a distinct scope; discovery cannot enter it.
+        let mut hidden: WireLayout<syn::Type, Encoding> = vec![leaf("value")].into();
+        hidden.enclose_sequence(Some(Encoding::Carrier(leaf("rows").into())));
+        hidden.enclose_optional(Some(Encoding::Carrier(leaf("optional_object").into())));
+        assert!(return_sequences(&hidden).is_empty());
+        let mut inline: WireLayout<syn::Type, Encoding> = vec![leaf("inline_value")].into();
+        inline.enclose_sequence(Some(Encoding::Inline(vec![])));
         assert_eq!(return_sequences(&inline).len(), 1);
         assert!(sequence_return(&inline).is_none());
     }
     #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
-        let layout: TransportLayout<syn::Type> = vec![Wire {
+        let layout: WireLayout<syn::Type> = vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(i64),
         }]
@@ -455,7 +488,7 @@ mod tests {
     }
     #[test]
     fn deleted_row_references_cannot_escape_into_deferred_phases() {
-        let layout: TransportLayout<syn::Type> = vec![Wire {
+        let layout: WireLayout<syn::Type> = vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(*const u8),
         }]

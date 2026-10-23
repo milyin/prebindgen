@@ -15,10 +15,9 @@ pub mod value;
 mod emission;
 pub use emission::{render_template, template_parameter, TemplateContext};
 mod native;
-pub use native::{NativeConversion, NativeConversionExt, NativeFunction};
-pub mod transport;
-pub use transport::{
-    TransportContainer, TransportLayout, TransportNode, TransportRepresentation, TransportWires,
+pub use native::{
+    native_node_wires, NativeConversion, NativeEncoding, NativeEncodingMut, NativeFunction,
+    NativeLayoutExt, NativeMetadata,
 };
 mod plan;
 pub use plan::*;

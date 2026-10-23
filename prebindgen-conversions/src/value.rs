@@ -68,17 +68,17 @@ impl Value {
 /// is supplied by the adapter. Clear it only when decoding cannot return an error.
 ///
 /// ```
-/// use prebindgen_conversions::value;
+/// use prebindgen_conversions::{value, NativeLayoutExt};
 /// use quote::quote;
 /// let input = value::input::<syn::Type, (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
-/// assert_eq!(prebindgen_flat::type_key(&input.transport[0].rust_type()), "& str");
+/// assert_eq!(prebindgen_flat::type_key(&input.layout.native_get(0).unwrap().rust_type()), "& str");
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
+pub fn input<W: prebindgen_flat::WireKind, C, G>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
@@ -114,18 +114,16 @@ pub fn input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
         ),
     };
     Ok(InputPlan {
-        logical: Default::default(),
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        transport: vec![Wire { name: wire, kind }].into(),
+        layout: vec![Wire { name: wire, kind }].into(),
         validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
         acquire: quote!(),
         resources: vec![],
         statements,
         argument,
-    }
-    .with_logical())
+    })
 }
 
 /// Deliver an owned value type. A borrowed `value` is copied first: scalars by
@@ -145,7 +143,7 @@ pub fn input<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
+pub fn output<W: prebindgen_flat::WireKind, C, G>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
@@ -169,11 +167,10 @@ pub fn output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
     let expr = encode(value);
     statements.extend(quote!(let #wire = #expr;));
     Ok(OutputPlan {
-        logical: Default::default(),
         fallible: true,
         context: Default::default(),
         delivery: Default::default(),
-        transport: vec![Wire {
+        layout: vec![Wire {
             name: wire.clone(),
             kind,
         }]
@@ -181,6 +178,5 @@ pub fn output<W: prebindgen_flat::WireKind + Clone, C, G: Clone>(
         statements,
         values: vec![quote!(#wire)],
         commit: quote!(),
-    }
-    .with_logical())
+    })
 }

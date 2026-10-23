@@ -1,5 +1,6 @@
 //! Shared optional conversion composition and wire niches.
 use super::*;
+use prebindgen_conversions::NativeLayoutExt;
 
 /// Optional layout chosen from the inner conversion's available wire niches.
 #[derive(Clone, Debug)]
@@ -7,13 +8,10 @@ struct OptionalLayout<N> {
     /// Inner wire index and its reserved absent representation; otherwise a flag is added.
     pub niche: Option<(usize, N)>,
 }
-fn layout<C: Codec>(
-    codec: &C,
-    wires: &TransportLayout<C::Wire, C::Group>,
-) -> OptionalLayout<C::Niche> {
+fn layout<C: Codec>(codec: &C, wires: &WireLayout<C::Wire, C::Group>) -> OptionalLayout<C::Niche> {
     OptionalLayout {
         niche: wires
-            .iter()
+            .native_wires()
             .enumerate()
             .find_map(|(i, w)| codec.niche(&w.kind).map(|n| (i, n))),
     }
@@ -29,11 +27,15 @@ pub fn optional_input<C: Codec>(
     active: &Condition,
     mut child: CodecInput<C>,
 ) -> Result<CodecInput<C>> {
-    let layout = layout(codec, &child.transport);
+    let layout = layout(codec, &child.layout);
     let mut validation = TokenStream::new();
     if let Some((i, niche)) = &layout.niche {
-        let w = &child.transport[*i].name;
-        let present = codec.is_present(&child.transport[*i].kind, niche, quote!(#w))?;
+        let w = &child.layout.native_get(*i).unwrap().name;
+        let present = codec.is_present(
+            &child.layout.native_get(*i).unwrap().kind,
+            niche,
+            quote!(#w),
+        )?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
     } else {
         child.fallible = true;
@@ -47,8 +49,8 @@ pub fn optional_input<C: Codec>(
     let selected = active.arm(tag.clone(), 1).rust();
     child.statements = quote!(let #var = if #selected {#body Some(#arg)} else {None};);
     child.argument = quote!(#var);
-    mark(codec, extra, &mut child.transport, tag, layout);
-    child.refresh_logical();
+    mark(codec, extra, &mut child.layout, tag, layout)?;
+
     Ok(child)
 }
 /// Prepare only a present output, retaining its owners in a deferred commit closure.
@@ -71,12 +73,12 @@ pub fn optional_output<C: Codec>(
     {
         return Err("optional child has delivery code".into());
     }
-    if child.transport.len() != child.values.len() {
+    if child.layout.native_len() != child.values.len() {
         return Err("optional output wire/value count mismatch".into());
     }
-    let layout = layout(codec, &child.transport);
+    let layout = layout(codec, &child.layout);
     let mut defaults = Vec::new();
-    for (i, w) in child.transport.iter().enumerate() {
+    for (i, w) in child.layout.native_wires().enumerate() {
         defaults.push(
             codec.absent_value(
                 &w.kind,
@@ -89,7 +91,7 @@ pub fn optional_output<C: Codec>(
             )?,
         );
     }
-    let names = (0..child.transport.len())
+    let names = (0..child.layout.native_len())
         .map(|i| format_ident!("{tag}_value{i}"))
         .collect::<Vec<_>>();
     let presence_binding = if layout.niche.is_some() {
@@ -122,34 +124,34 @@ pub fn optional_output<C: Codec>(
     if layout.niche.is_none() {
         child.values.insert(0, quote!(#tag));
     }
-    mark(codec, extra, &mut child.transport, tag, layout);
-    child.refresh_logical();
+    mark(codec, extra, &mut child.layout, tag, layout)?;
+
     Ok(child)
 }
 
 fn mark<C: Codec>(
     codec: &C,
     extra: &C::Extra,
-    tree: &mut TransportLayout<C::Wire, C::Group>,
+    tree: &mut WireLayout<C::Wire, C::Group>,
     tag: syn::Ident,
     layout: OptionalLayout<C::Niche>,
-) {
+) -> Result<()> {
     let discriminator = layout
         .niche
         .as_ref()
-        .map(|(i, _)| tree[*i].name.clone())
+        .map(|(i, _)| tree.native_get(*i).unwrap().name.clone())
         .unwrap_or(tag.clone());
     let remaining = layout
         .niche
         .as_ref()
-        .and_then(|(i, n)| codec.remaining_niche(&tree[*i].kind, n));
+        .and_then(|(i, n)| codec.remaining_niche(&tree.native_get(*i).unwrap().kind, n));
     // Payload wires may be inactive. Preserve only the selected donor's
     // remaining niche; a fresh control flag retains its constructor's availability.
-    for wire in tree.iter_mut() {
+    for wire in tree.native_wires_mut() {
         codec.set_niche(&mut wire.kind, None);
     }
     if let Some((i, _)) = &layout.niche {
-        codec.set_niche(&mut tree[*i].kind, remaining);
+        codec.set_niche(&mut tree.native_get_mut(*i).unwrap().kind, remaining);
     }
     let controls = if layout.niche.is_none() {
         vec![Wire {
@@ -159,8 +161,11 @@ fn mark<C: Codec>(
     } else {
         vec![]
     };
-    tree.enclose_optional(
-        prebindgen_conversions::TransportRepresentation::Inline { controls },
-        Some(codec.optional_metadata(tag, discriminator, layout.niche.map(|(_, n)| n))),
-    );
+    let expected = controls.iter().map(wire_signature).collect::<Vec<_>>();
+    let metadata = checked_inline(
+        codec.optional_metadata(tag, discriminator, layout.niche.map(|(_, n)| n), controls),
+        &expected,
+    )?;
+    tree.enclose_optional(Some(metadata));
+    Ok(())
 }

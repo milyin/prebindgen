@@ -27,7 +27,8 @@ pub struct WireOutcome<W: WireKind, G> {
     /// Fields exchanged when this outcome is selected; may be empty.
     pub layout: WireLayout<W, G>,
 }
-/// Logical structure, without ABI positions, carriers, flags or callback placement.
+/// Logical structure. Common nodes impose no ABI positions or delivery rules;
+/// adapters may retain explicit encoding decisions in their opaque metadata.
 #[derive(Clone, Debug)]
 pub enum WireNode<W: WireKind, G> {
     /// Definition of one typed value, wherever the reader chooses to pass it.
@@ -46,6 +47,8 @@ pub enum WireNode<W: WireKind, G> {
     /// Exactly one alternative is selected; selector tags belong to the reader.
     /// Empty alternatives represent choices carrying no values.
     Alternatives {
+        /// Adapter-specific selection information, without common placement rules.
+        metadata: Option<G>,
         /// Mutually exclusive payload schemas in declaration order.
         alternatives: Vec<WireLayout<W, G>>,
     },
@@ -89,6 +92,10 @@ impl<W: WireKind, G> WireLayout<W, G> {
     /// Immediate logical nodes, including branch and element structure.
     pub fn nodes(&self) -> &[WireNode<W, G>] {
         &self.nodes
+    }
+    /// Edit nodes and their adapter metadata in place. Structural edits invalidate paths.
+    pub fn nodes_mut(&mut self) -> &mut [WireNode<W, G>] {
+        &mut self.nodes
     }
     /// Consume the schema for structural editing.
     pub fn into_nodes(self) -> Vec<WireNode<W, G>> {
@@ -213,7 +220,7 @@ impl<W: WireKind, G> WireLayout<W, G> {
                     }),
                     WireNode::Optional(c) | WireNode::Sequence(c) => visit(&c.element, prefix, out),
                     WireNode::Group { children, .. } => visit(children, prefix, out),
-                    WireNode::Alternatives { alternatives } => {
+                    WireNode::Alternatives { alternatives, .. } => {
                         for (arm, layout) in alternatives.iter().enumerate() {
                             prefix.push(arm);
                             visit(layout, prefix, out);
@@ -246,7 +253,7 @@ impl<W: WireKind, G> WireLayout<W, G> {
                 WireNode::Wire(wire) => rest.is_empty().then_some(wire),
                 WireNode::Optional(c) | WireNode::Sequence(c) => get(&c.element, rest),
                 WireNode::Group { children, .. } => get(children, rest),
-                WireNode::Alternatives { alternatives } => {
+                WireNode::Alternatives { alternatives, .. } => {
                     let (&arm, rest) = rest.split_first()?;
                     get(alternatives.get(arm)?, rest)
                 }
@@ -273,7 +280,7 @@ impl<W: WireKind, G> WireLayout<W, G> {
                     WireNode::Wire(_) => {}
                     WireNode::Optional(c) | WireNode::Sequence(c) => walk(&c.element, false)?,
                     WireNode::Group { children, .. } => walk(children, false)?,
-                    WireNode::Alternatives { alternatives } => {
+                    WireNode::Alternatives { alternatives, .. } => {
                         if alternatives.is_empty() {
                             return Err("selection has no alternatives".into());
                         }
@@ -343,7 +350,7 @@ impl<'a, W: WireKind, G> Iterator for Wires<'a, W, G> {
                     self.stack.push(c.element.nodes.iter())
                 }
                 Some(WireNode::Group { children, .. }) => self.stack.push(children.nodes.iter()),
-                Some(WireNode::Alternatives { alternatives }) => {
+                Some(WireNode::Alternatives { alternatives, .. }) => {
                     for arm in alternatives.iter().rev() {
                         self.stack.push(arm.nodes.iter());
                     }
@@ -377,7 +384,7 @@ impl<'a, W: WireKind, G> Iterator for WiresMut<'a, W, G> {
                 Some(WireNode::Group { children, .. }) => {
                     self.stack.push(children.nodes.iter_mut())
                 }
-                Some(WireNode::Alternatives { alternatives }) => {
+                Some(WireNode::Alternatives { alternatives, .. }) => {
                     for arm in alternatives.iter_mut().rev() {
                         self.stack.push(arm.nodes.iter_mut());
                     }
@@ -486,6 +493,7 @@ mod tests {
     #[test]
     fn alternatives_preserve_empty_arms_and_outcome_paths_use_channel_identity() {
         let choice = WireLayout::from_nodes(vec![WireNode::Alternatives {
+            metadata: None,
             alternatives: vec![WireLayout::default(), vec![leaf("value")].into()],
         }]);
         let mut output: WireLayout<_, ()> = choice;

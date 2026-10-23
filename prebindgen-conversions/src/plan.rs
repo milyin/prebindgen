@@ -1,6 +1,6 @@
 use crate::template_parameter;
-use crate::TransportLayout;
 use prebindgen_flat::WireKind;
+use prebindgen_flat::WireLayout;
 use proc_macro2::TokenStream;
 use quote::quote;
 /// An input conversion split into call-wide validation, acquisition and construction.
@@ -9,15 +9,14 @@ use quote::quote;
 /// Generators may use this protocol or implement their own request types.
 #[derive(Clone, Debug)]
 pub struct InputPlan<W: WireKind, C = (), G = ()> {
-    /// Logical value schema exposed through Conversion::layout.
-    pub logical: prebindgen_flat::WireLayout<W, G>,
     /// Whether validation or construction can return a binding error. This
     /// excludes panics and allocation aborts. Composition preserves child flags.
     pub fallible: bool,
     /// Context type supplied by the language generator at emission.
     pub context: std::marker::PhantomData<fn(&C)>,
-    /// Native lowering selected by this staged-protocol reader.
-    pub transport: TransportLayout<W, G>,
+    /// Authoritative value tree. Adapter metadata records native encoding choices;
+    /// physical parameters are derived from this tree when the reader needs them.
+    pub layout: WireLayout<W, G>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -37,8 +36,6 @@ pub struct InputPlan<W: WireKind, C = (), G = ()> {
 /// Delivery and ownership commit are separate requests.
 #[derive(Clone, Debug)]
 pub struct OutputPlan<W: WireKind, C = (), G = ()> {
-    /// Logical success/error schemas exposed through Conversion::layout.
-    pub logical: prebindgen_flat::WireLayout<W, G>,
     /// Whether preparation or delivery can return a binding error, excluding
     /// panics and allocation aborts. Adapters must mark custom fallible code.
     pub fallible: bool,
@@ -46,10 +43,9 @@ pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Delivery and return code prepared with this result slot.
     pub delivery: Delivery,
-    /// Native success transport selected by this reader. Each physical entry
-    /// corresponds to one expression in `values`; logical outcomes and repeated
-    /// field definitions have no such arity requirement.
-    pub transport: TransportLayout<W, G>,
+    /// Authoritative success/error value tree. Adapter metadata on its nodes
+    /// records explicit native encodings without duplicating payload subtrees.
+    pub layout: WireLayout<W, G>,
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
@@ -111,27 +107,4 @@ impl Default for Delivery {
 /// calling [`crate::TemplateContext::render`] for generator-specific parameters.
 pub fn source_result_expr() -> TokenStream {
     template_parameter("source_result")
-}
-
-impl<W: WireKind + Clone, C, G: Clone> InputPlan<W, C, G> {
-    /// Finalize this reader's logical payload specification from its chosen transport.
-    pub fn refresh_logical(&mut self) {
-        self.logical = self.transport.logical();
-    }
-    /// Finalize a freshly constructed native plan's logical specification.
-    pub fn with_logical(mut self) -> Self {
-        self.refresh_logical();
-        self
-    }
-}
-impl<W: WireKind + Clone, C, G: Clone> OutputPlan<W, C, G> {
-    /// Refresh the normal payload while retaining declared source/binding errors.
-    pub fn refresh_logical(&mut self) {
-        self.logical.replace_success(self.transport.logical());
-    }
-    /// Finalize a freshly constructed native plan's logical specification.
-    pub fn with_logical(mut self) -> Self {
-        self.refresh_logical();
-        self
-    }
 }

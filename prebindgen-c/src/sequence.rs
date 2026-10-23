@@ -1,19 +1,20 @@
-//! Array rows retain their element schema in TransportNode::Sequence, not in CWire.
+//! Array rows retain their element schema in WireNode::Sequence, not in CWire.
 use super::*;
+use prebindgen_conversions::NativeLayoutExt;
 use prebindgen_declarations::{SequenceInput, SequenceOutput};
 
-use prebindgen_conversions::{TransportLayout, TransportNode};
+use prebindgen_flat::{WireLayout, WireNode};
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &TransportLayout<CWire, CGroup>,
+    element: &WireLayout<CWire, CGroup>,
 ) -> Result<SequenceInput<CWire>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
-    for (position, field) in element.iter().enumerate() {
+    for (position, field) in element.native_wires().enumerate() {
         let name = &field.name;
         let member = format_ident!("v{position}");
         bind.extend(
@@ -33,11 +34,11 @@ pub(crate) fn input(
 pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &TransportLayout<CWire, CGroup>,
+    element: &WireLayout<CWire, CGroup>,
     values: &[TokenStream],
 ) -> Result<SequenceOutput<CWire>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
-    if element.len() != values.len() {
+    if element.native_len() != values.len() {
         return Err("collection row/value count differs".into());
     }
     let fields = values.iter().enumerate().map(|(i, value)| {
@@ -57,22 +58,34 @@ pub(crate) fn output(
     })
 }
 pub(crate) fn schemas<'a>(
-    layout: &'a TransportLayout<CWire, CGroup>,
-    out: &mut Vec<(&'a Wire, &'a TransportLayout<CWire, CGroup>)>,
+    layout: &'a WireLayout<CWire, CGroup>,
+    out: &mut Vec<(&'a Wire, &'a WireLayout<CWire, CGroup>)>,
 ) {
     for node in layout.nodes() {
         match node {
-            TransportNode::Wire(_) => {}
-            TransportNode::Alternatives { alternatives, .. } => {
+            WireNode::Wire(_) => {}
+            WireNode::Outcomes { alternatives } => {
+                if let Some(success) = alternatives
+                    .iter()
+                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
+                {
+                    schemas(&success.layout, out);
+                }
+            }
+            WireNode::Alternatives { alternatives, .. } => {
                 for arm in alternatives {
                     schemas(arm, out);
                 }
             }
-            TransportNode::Group { children, .. } => schemas(children, out),
-            TransportNode::Optional(c) => schemas(&c.element, out),
-            TransportNode::Sequence(c) => {
+            WireNode::Group { children, .. } => schemas(children, out),
+            WireNode::Optional(c) => schemas(&c.element, out),
+            WireNode::Sequence(c) => {
                 schemas(&c.element, out);
-                if let Some(carrier) = c.carrier() {
+                if let Some(carrier) = c
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| prebindgen_conversions::NativeMetadata::encoding(m).carrier())
+                {
                     out.push((carrier, &c.element));
                 }
             }
@@ -82,7 +95,7 @@ pub(crate) fn schemas<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_schemas(
-    schemas: Vec<(&Wire, &TransportLayout<CWire, CGroup>)>,
+    schemas: Vec<(&Wire, &WireLayout<CWire, CGroup>)>,
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
@@ -112,7 +125,7 @@ pub(crate) fn emit_schemas(
             }
         }
         let fields = element
-            .iter()
+            .native_wires()
             .enumerate()
             .map(|(i, w)| {
                 let name = format_ident!("v{i}");
@@ -122,7 +135,7 @@ pub(crate) fn emit_schemas(
             .collect::<Vec<_>>();
         tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
         header.push_str("typedef struct {\n");
-        for (i, w) in element.iter().enumerate() {
+        for (i, w) in element.native_wires().enumerate() {
             header.push_str(&format!(
                 "    {} v{i};\n",
                 c_ty(w, prefix, pointers, context)
@@ -144,7 +157,7 @@ pub(crate) fn emit_schemas(
 
 /// Reclaim a committed output that will not reach its caller, including nested rows.
 pub(crate) fn release(
-    layout: &TransportLayout<CWire, CGroup>,
+    layout: &WireLayout<CWire, CGroup>,
     values: &[TokenStream],
     context: &CContext,
     catch_panics: bool,
@@ -152,7 +165,7 @@ pub(crate) fn release(
     let mut schemas = Vec::new();
     self::schemas(layout, &mut schemas);
     let mut code = TokenStream::new();
-    for (wire, value) in layout.iter().zip(values) {
+    for (wire, value) in layout.native_wires().zip(values) {
         match &wire.kind {
             CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
             CWire::Pointer { pointer, .. } => {
@@ -166,7 +179,7 @@ pub(crate) fn release(
             CWire::Rows => {
                 let row=&context.row_types[&wire.name.to_string()];
                 let element=schemas.iter().find(|(carrier,_)|carrier.name==wire.name).unwrap().1;
-                let fields=element.iter().enumerate().map(|(i,_)|{let field=format_ident!("v{i}");quote!(row.#field)}).collect::<Vec<_>>();
+                let fields=element.native_wires().enumerate().map(|(i,_)|{let field=format_ident!("v{i}");quote!(row.#field)}).collect::<Vec<_>>();
                 let child=release(element,&fields,context,catch_panics);
                 code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
             }
@@ -199,31 +212,34 @@ pub(crate) fn callback_output(values: &[TokenStream], length: syn::Ident) -> Seq
 }
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
-pub(crate) fn callback_shape(layout: &TransportLayout<CWire, CGroup>) -> bool {
-    fn one(nodes: &[TransportNode<CWire, CGroup>]) -> bool {
+pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
+    fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
         match nodes {
-            [TransportNode::Sequence(c)] => c.carrier().is_some_and(|carrier| {
-                matches!(
-                    carrier.kind,
-                    CWire::Scalar {
-                        primitive: Primitive::Usize,
-                        ..
-                    }
-                )
-            }),
-            [TransportNode::Optional(c)] => match (&c.representation, &c.metadata) {
-                (
-                    prebindgen_conversions::TransportRepresentation::Inline { controls },
-                    Some(CGroup::Optional(o)),
-                ) if o.niche.is_none() => {
-                    matches!(controls.as_slice(),[flag] if flag.name==o.discriminator)
+            [WireNode::Sequence(c)] => c
+                .metadata
+                .as_ref()
+                .and_then(|m| prebindgen_conversions::NativeMetadata::encoding(m).carrier())
+                .is_some_and(|carrier| {
+                    matches!(
+                        carrier.kind,
+                        CWire::Scalar {
+                            primitive: Primitive::Usize,
+                            ..
+                        }
+                    )
+                }),
+            [WireNode::Optional(c)] => match &c.metadata {
+                Some(CGroup::Optional(o)) if o.niche.is_none() => {
+                    matches!(o.controls.as_slice(),[flag] if flag.name==o.discriminator)
                         && one(c.element.nodes())
                 }
                 _ => false,
             },
-            [TransportNode::Group { children, .. }] => one(children.nodes()),
+            [WireNode::Group { children, .. }] => one(children.nodes()),
             _ => false,
         }
     }
-    one(layout.nodes())
+    one(layout
+        .outcome(prebindgen_flat::OutcomeKind::Success)
+        .map_or(&[], WireLayout::nodes))
 }

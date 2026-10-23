@@ -1,9 +1,29 @@
 use super::*;
+use prebindgen_conversions::NativeLayoutExt;
 #[derive(Clone, Debug)]
 enum TestGroup {
-    Maybe,
+    Maybe(Vec<Wire<TestWire>>),
+    Carrier(Wire<TestWire>),
     Record,
     Member(syn::Ident),
+}
+impl prebindgen_conversions::NativeMetadata<TestWire> for TestGroup {
+    fn encoding(&self) -> prebindgen_conversions::NativeEncoding<'_, TestWire> {
+        use prebindgen_conversions::NativeEncoding;
+        match self {
+            Self::Maybe(ws) => NativeEncoding::Inline(ws),
+            Self::Carrier(w) => NativeEncoding::Carrier(w),
+            _ => NativeEncoding::Inline(&[]),
+        }
+    }
+    fn encoding_mut(&mut self) -> prebindgen_conversions::NativeEncodingMut<'_, TestWire> {
+        use prebindgen_conversions::NativeEncodingMut;
+        match self {
+            Self::Maybe(ws) => NativeEncodingMut::Inline(ws),
+            Self::Carrier(w) => NativeEncodingMut::Carrier(w),
+            _ => NativeEncodingMut::Inline(&mut []),
+        }
+    }
 }
 type Bindings<W> = super::Bindings<W, (), TestGroup>;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup>;
@@ -55,8 +75,20 @@ impl Codec for TestCodec {
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
     type Group = TestGroup;
-    fn optional_metadata(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
-        TestGroup::Maybe
+    fn optional_metadata(
+        &self,
+        _: syn::Ident,
+        _: syn::Ident,
+        _: Option<()>,
+        controls: Vec<Wire<TestWire>>,
+    ) -> TestGroup {
+        TestGroup::Maybe(controls)
+    }
+    fn sequence_metadata(&self, carrier: Wire<TestWire>) -> TestGroup {
+        TestGroup::Carrier(carrier)
+    }
+    fn alternatives_metadata(&self, selector: Wire<TestWire>) -> TestGroup {
+        TestGroup::Maybe(vec![selector])
     }
     fn field_group(&self, name: syn::Ident) -> TestGroup {
         TestGroup::Member(name)
@@ -107,11 +139,10 @@ impl Codec for TestCodec {
             );
         }
         Ok(InputPlan {
-            logical: Default::default(),
             fallible: false,
             context: Default::default(),
             acknowledgement: None,
-            transport: vec![Wire {
+            layout: vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
             }]
@@ -121,8 +152,7 @@ impl Codec for TestCodec {
             resources: vec![],
             statements: quote!(let #v=receive_token(#w);),
             argument: quote!(#v),
-        }
-        .with_logical())
+        })
     }
     fn output_leaf(
         &self,
@@ -141,11 +171,10 @@ impl Codec for TestCodec {
             return Err("test token cannot be copied".into());
         }
         Ok(OutputPlan {
-            logical: Default::default(),
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            transport: vec![Wire {
+            layout: vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
             }]
@@ -153,8 +182,7 @@ impl Codec for TestCodec {
             statements: quote!(let #w=send_token(#v);),
             values: vec![quote!(#w)],
             commit: quote!(),
-        }
-        .with_logical())
+        })
     }
 }
 fn parse(source: &str) -> Bindings<TestWire> {
@@ -209,10 +237,10 @@ fn different_occurrences_have_different_converters() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.transport.len(), 3);
-    assert_eq!(y.transport.len(), 1);
-    assert!(x.transport.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.transport[0].kind.name, "y");
+    assert_eq!(x.layout.native_len(), 3);
+    assert_eq!(y.layout.native_len(), 1);
+    assert!(x.layout.native_wires().all(|w| w.kind.name == "x"));
+    assert_eq!(y.layout.native_get(0).unwrap().kind.name, "y");
 }
 #[test]
 fn rejects_incomplete_slots() {
@@ -310,7 +338,7 @@ fn observations_precede_move_but_wires_keep_order() {
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(o.transport[0].kind.kind == Kind::Token);
+    assert!(o.layout.native_get(0).unwrap().kind.kind == Kind::Token);
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -375,8 +403,8 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
             .slot
             .as_ref()
             .unwrap()
-            .transport
-            .len(),
+            .layout
+            .native_len(),
         3
     );
     declarations
@@ -390,15 +418,12 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.transport.len(), 3);
-    assert!(x.transport[2].kind.kind == Kind::Token);
-    assert!(x.transport.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.transport.len(), 1);
-    assert_eq!(y.transport[0].kind.name, "override");
-    assert_eq!(
-        f.ret.slot.as_ref().unwrap().transport[0].kind.name,
-        "result"
-    );
+    assert_eq!(x.layout.native_len(), 3);
+    assert!(x.layout.native_get(2).unwrap().kind.kind == Kind::Token);
+    assert!(x.layout.native_wires().all(|w| w.kind.name == "x"));
+    assert_eq!(y.layout.native_len(), 1);
+    assert_eq!(y.layout.native_get(0).unwrap().kind.name, "override");
+    assert_eq!(f.ret.slot.as_ref().unwrap().layout[0].kind.name, "result");
     assert!(x.validation.to_string().contains("\"x\""));
 }
 #[test]
@@ -448,8 +473,8 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
     let wires = f
         .params
         .iter()
-        .flat_map(|p| &p.ty.slot.as_ref().unwrap().transport)
-        .chain(&f.ret.slot.as_ref().unwrap().transport)
+        .flat_map(|p| &p.ty.slot.as_ref().unwrap().layout)
+        .chain(&f.ret.slot.as_ref().unwrap().layout)
         .collect::<Vec<_>>();
     let names = wires
         .iter()
@@ -473,10 +498,10 @@ fn field_defaults_follow_type_expansions() {
     )
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
-    assert!(output.transport[0].kind.kind == Kind::Value(Value::Text));
-    assert!(output.transport[1].kind.kind == Kind::Value(Value::Bytes));
-    assert_eq!(output.transport[0].kind.ty, "String");
-    assert_eq!(output.transport[1].kind.ty, "Vec < u8 >");
+    assert!(output.layout.native_get(0).unwrap().kind.kind == Kind::Value(Value::Text));
+    assert!(output.layout.native_get(1).unwrap().kind.kind == Kind::Value(Value::Bytes));
+    assert_eq!(output.layout.native_get(0).unwrap().kind.ty, "String");
+    assert_eq!(output.layout.native_get(1).unwrap().kind.ty, "Vec < u8 >");
 }
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
@@ -496,12 +521,12 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let input = f.params[0].ty.slot.as_ref().unwrap();
     let output = f.ret.slot.as_ref().unwrap();
     let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
-    assert_eq!(input.transport[0].kind.kind, scalar);
-    assert_eq!(output.transport[0].kind.kind, scalar);
-    assert_eq!(input.transport[0].kind.name, "scalar");
-    assert_eq!(input.transport[0].kind.ty, "i64");
-    assert_eq!(output.transport[0].kind.name, "scalar");
-    assert_eq!(output.transport[0].kind.ty, "i64");
+    assert_eq!(input.layout.native_get(0).unwrap().kind.kind, scalar);
+    assert_eq!(output.layout.native_get(0).unwrap().kind.kind, scalar);
+    assert_eq!(input.layout.native_get(0).unwrap().kind.name, "scalar");
+    assert_eq!(input.layout.native_get(0).unwrap().kind.ty, "i64");
+    assert_eq!(output.layout.native_get(0).unwrap().kind.name, "scalar");
+    assert_eq!(output.layout.native_get(0).unwrap().kind.ty, "i64");
     assert!(input.validation.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
@@ -559,7 +584,7 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &TransportLayout<TestWire, TestGroup>| {
+    let foreign = |wires: &WireLayout<TestWire, TestGroup>| {
         wires
             .iter()
             .filter_map(|w| match &w.kind.kind {
@@ -569,18 +594,18 @@ fn nested_recipes_use_only_the_callers_extra() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        foreign(&f.params[0].ty.slot.as_ref().unwrap().transport),
+        foreign(&f.params[0].ty.slot.as_ref().unwrap().layout),
         vec![
             ("x", "crate :: Payload".into()),
             ("x", "crate :: Key".into())
         ]
     );
     assert_eq!(
-        foreign(&f.params[1].ty.slot.as_ref().unwrap().transport),
+        foreign(&f.params[1].ty.slot.as_ref().unwrap().layout),
         vec![("y", "crate :: Key".into())]
     );
     assert_eq!(
-        foreign(&f.ret.slot.as_ref().unwrap().transport),
+        foreign(&f.ret.slot.as_ref().unwrap().layout),
         vec![
             ("result", "crate :: Payload".into()),
             ("result", "crate :: Key".into())
@@ -641,8 +666,20 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
         type Group = TestGroup;
-        fn optional_metadata(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
-            TestGroup::Maybe
+        fn optional_metadata(
+            &self,
+            _: syn::Ident,
+            _: syn::Ident,
+            _: Option<()>,
+            controls: Vec<Wire<TestWire>>,
+        ) -> TestGroup {
+            TestGroup::Maybe(controls)
+        }
+        fn sequence_metadata(&self, carrier: Wire<TestWire>) -> TestGroup {
+            TestGroup::Carrier(carrier)
+        }
+        fn alternatives_metadata(&self, selector: Wire<TestWire>) -> TestGroup {
+            TestGroup::Maybe(vec![selector])
         }
         fn field_group(&self, name: syn::Ident) -> TestGroup {
             TestGroup::Member(name)
@@ -695,9 +732,9 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 plan.acknowledgement.as_ref().unwrap().to_string(),
                 quote!(ack();).to_string()
             );
-            assert_eq!(plan.transport.len(), 2);
-            assert_eq!(plan.logical.len(), 2);
-            plan.logical[0].name = syn::parse_quote!(finished_logical_input);
+            assert_eq!(plan.layout.native_len(), 2);
+            assert_eq!(plan.layout.len(), 2);
+            plan.layout.enclose(TestGroup::Record);
             Ok(())
         }
         fn finish_output(&self, plan: &mut OutputPlan<TestWire>, extra: &Extra) -> Result<()> {
@@ -705,9 +742,9 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 return Err("finalization failed".into());
             }
             assert!(plan.delivery.statements.is_empty());
-            assert!(plan.transport.is_empty());
+            assert!(plan.layout.native_is_empty());
             assert!(matches!(
-                plan.logical.nodes(),
+                plan.layout.nodes(),
                 [prebindgen_flat::WireNode::Group { .. }]
             ));
             plan.delivery.statements = quote!(deliver_unit(););
@@ -743,16 +780,19 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &Extra::default(),
     )
     .unwrap();
-    assert_eq!(
+    assert!(matches!(
         direct
             .function("take")
             .unwrap()
             .input_conversions()
             .unwrap()[0]
-            .logical[0]
-            .name,
-        "finished_logical_input"
-    );
+            .layout
+            .nodes(),
+        [prebindgen_flat::WireNode::Group {
+            metadata: TestGroup::Record,
+            ..
+        }]
+    ));
     bind_output(
         &mut direct,
         &FinalizingCodec,
@@ -851,7 +891,7 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .slot
         .as_ref()
         .unwrap()
-        .transport;
+        .layout;
     let ty = syn::parse_quote!(crate::Point);
     shapes
         .validate_mapping(&ty, &id, wires.iter().map(|w| (&w.name, &w.kind.component)))
@@ -1029,7 +1069,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         quote!(ack()).to_string()
     );
     assert_eq!(
-        plan.transport[1].kind.component,
+        plan.layout.native_get(1).unwrap().kind.component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
     assert!(record_input(
@@ -1077,7 +1117,7 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
     );
     assert_eq!(plan.values.len(), 2);
     assert_eq!(
-        plan.transport[1].kind.component,
+        plan.layout.native_get(1).unwrap().kind.component,
         ComponentPath(vec![ComponentSegment::Field("y".into())])
     );
     assert!(make(true).unwrap_err().contains("finish_output"));
@@ -1097,7 +1137,7 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
         plan.statements.to_string(),
         quote!(let _ = &(next_record());).to_string()
     );
-    assert!(plan.transport.is_empty());
+    assert!(plan.layout.native_is_empty());
 }
 
 #[test]
@@ -1110,11 +1150,10 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
         |index, field| {
             let local = format_ident!("box{index}");
             Ok(OutputPlan {
-                logical: Default::default(),
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                transport: Default::default(),
+                layout: Default::default(),
                 values: Vec::new(),
                 statements: quote! {
                     if mode == #index + 1 { return Err(()); }
@@ -1122,8 +1161,7 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
                 },
                 // Test delivery reclaims each committed allocation immediately.
                 commit: quote!(unsafe { drop(Box::from_raw(Box::into_raw(#local))); }),
-            }
-            .with_logical())
+            })
         },
     )
     .unwrap();
@@ -1225,26 +1263,25 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
 
 #[test]
 fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() {
-    let child =
-        record_output_owned(
-            &TEST_CODEC,
-            format_ident!("record"),
-            quote!(payload),
-            [format_ident!("first"), format_ident!("second")],
-            |index, field| {
-                let local = format_ident!("box{index}");
-                Ok(OutputPlan { logical:Default::default(),
+    let child = record_output_owned(
+        &TEST_CODEC,
+        format_ident!("record"),
+        quote!(payload),
+        [format_ident!("first"), format_ident!("second")],
+        |index, field| {
+            let local = format_ident!("box{index}");
+            Ok(OutputPlan {
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                transport: vec![].into(),
+                layout: vec![].into(),
                 values: vec![],
                 statements: quote!(if mode==#index+1{return Err(());} let #local=Box::new(#field);),
                 commit: quote!(drop(#local);),
-            }.with_logical())
-            },
-        )
-        .unwrap();
+            })
+        },
+    )
+    .unwrap();
     let plan = optional_output(
         &TEST_CODEC,
         &Extra::default(),
@@ -1290,7 +1327,7 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
 
 #[test]
 fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
-    use prebindgen_conversions::TransportNode;
+    use prebindgen_flat::WireNode;
     let mut flat = parse("pub struct Empty {} pub struct Pair { pub x: i32, pub y: i32 } pub struct Record { pub maybe: Option<i32>, pub empty: Empty, pub pair: Pair } pub fn echo(value: Record) -> Record { value }");
     let input = Input::Fields(vec![
         Input::Optional(Box::new(Input::Leaf)),
@@ -1306,24 +1343,25 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &TransportLayout<TestWire, TestGroup>) {
+    fn check(layout: &WireLayout<TestWire, TestGroup>) {
         layout.validate().unwrap();
-        assert_eq!(layout.len(), 4);
-        let [TransportNode::Group { metadata, children }] = layout.nodes() else {
+        assert_eq!(layout.len(), 3);
+        assert_eq!(layout.native_len(), 4);
+        let [WireNode::Group { metadata, children }] = layout.nodes() else {
             panic!()
         };
         assert!(matches!(metadata, TestGroup::Record));
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.nodes() {
-            let TransportNode::Group { metadata, children } = node else {
+            let WireNode::Group { metadata, children } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {
                 panic!()
             };
             names.push(name.to_string());
-            widths.push(children.len());
+            widths.push(children.native_len());
         }
         assert_eq!(names, ["maybe", "empty", "pair"]);
         assert_eq!(widths, [2, 0, 2]);
@@ -1337,7 +1375,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
             .slot
             .as_ref()
             .unwrap()
-            .transport,
+            .layout,
     );
     for owned in [false, true] {
         let fields = vec![
@@ -1352,7 +1390,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         };
         bind_output(&mut flat, &TEST_CODEC, "echo", &output, &Extra::default()).unwrap();
         let plan = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-        check(&plan.transport);
+        check(&plan.layout);
         assert_eq!(plan.values.len(), 4);
     }
 }
@@ -1422,7 +1460,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
         .unwrap();
     let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-    assert_eq!(output.transport.len(), 2);
+    assert_eq!(output.layout.native_len(), 2);
     let code = output.statements.to_string();
     assert!(code.contains(":: core :: result :: Result :: Ok"));
     assert!(code.contains("message (&"));
@@ -1554,12 +1592,139 @@ fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
     )
     .unwrap();
     let input = model.function("take").unwrap().input_conversions().unwrap()[0];
-    let [WireNode::Alternatives { alternatives }] = input.layout().nodes() else {
+    let [WireNode::Alternatives { alternatives, .. }] = input.layout().nodes() else {
         panic!()
     };
     assert!(alternatives[0].is_empty());
     assert_eq!(alternatives[1].len(), 1);
     assert_eq!(input.layout().len(), 1);
-    assert_eq!(input.transport.len(), 2);
-    assert!(input.transport[0].name != input.layout()[0].name);
+    assert_eq!(input.layout.native_len(), 2);
+    assert!(input.layout.native_get(0).unwrap().name != input.layout()[0].name);
+}
+
+#[test]
+fn codec_metadata_cannot_discard_or_replace_compiler_selected_native_values() {
+    struct BadMetadata;
+    impl Codec for BadMetadata {
+        type Niche = ();
+        type Group = TestGroup;
+        type Extra = Extra;
+        type Context = ();
+        type Wire = TestWire;
+        type Input = InputPlan<TestWire>;
+        type Output = OutputPlan<TestWire>;
+        fn optional_metadata(
+            &self,
+            _: syn::Ident,
+            _: syn::Ident,
+            _: Option<()>,
+            _: Vec<Wire<TestWire>>,
+        ) -> TestGroup {
+            TestGroup::Maybe(vec![])
+        }
+        fn alternatives_metadata(&self, mut selector: Wire<TestWire>) -> TestGroup {
+            selector.name = syn::parse_quote!(wrong_selector);
+            TestGroup::Maybe(vec![selector])
+        }
+        fn sequence_metadata(&self, carrier: Wire<TestWire>) -> TestGroup {
+            TestGroup::Maybe(vec![carrier])
+        }
+        fn field_group(&self, name: syn::Ident) -> TestGroup {
+            TEST_CODEC.field_group(name)
+        }
+        fn fields_group(&self) -> TestGroup {
+            TEST_CODEC.fields_group()
+        }
+        fn selector(&self, extra: &Extra) -> TestWire {
+            TEST_CODEC.selector(extra)
+        }
+        fn niche(&self, _: &TestWire) -> Option<()> {
+            None
+        }
+        fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
+        fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
+            TEST_CODEC.consumes(ty, extra)
+        }
+        fn input_leaf(
+            &self,
+            ty: &Type,
+            extra: &Extra,
+            w: syn::Ident,
+            v: syn::Ident,
+            active: &Condition,
+        ) -> Result<InputPlan<TestWire>> {
+            TEST_CODEC.input_leaf(ty, extra, w, v, active)
+        }
+        fn output_leaf(
+            &self,
+            ty: &Type,
+            extra: &Extra,
+            w: syn::Ident,
+            v: TokenStream,
+            borrowed: bool,
+        ) -> Result<OutputPlan<TestWire>> {
+            TEST_CODEC.output_leaf(ty, extra, w, v, borrowed)
+        }
+        fn sequence_output(
+            &self,
+            extra: &Extra,
+            _: syn::Ident,
+            _: syn::Ident,
+            _: syn::Ident,
+            _: &WireLayout<TestWire, TestGroup>,
+            _: &[TokenStream],
+        ) -> Result<SequenceOutput<TestWire>> {
+            Ok(SequenceOutput {
+                commit_each: false,
+                fallible: false,
+                carrier: self.selector(extra),
+                begin: quote!(),
+                enter: quote!(),
+                store: quote!(),
+                finish: quote!(),
+                value: quote!(()),
+                commit: quote!(),
+            })
+        }
+    }
+    let mut model =
+        parse("pub fn take(v:Option<i32>){} pub fn choice(v:i32){} pub fn values()->Vec<i32>{}");
+    let error = bind_input(
+        &mut model,
+        &BadMetadata,
+        "take",
+        "v",
+        &Input::Optional(Box::new(Input::Leaf)),
+        &Extra::default(),
+    )
+    .unwrap_err();
+    assert!(error.contains("retain the supplied inline controls"));
+    assert!(model.function("take").unwrap().params[0].ty.slot.is_none());
+    let error = bind_input(
+        &mut model,
+        &BadMetadata,
+        "choice",
+        "v",
+        &Input::selector([Input::Leaf, Input::Leaf]),
+        &Extra::default(),
+    )
+    .unwrap_err();
+    assert!(error.contains("retain the supplied inline controls"));
+    assert!(model.function("choice").unwrap().params[0]
+        .ty
+        .slot
+        .is_none());
+    let error = bind_output(
+        &mut model,
+        &BadMetadata,
+        "values",
+        &Output::Sequence {
+            element: Box::new(Output::Leaf),
+            mode: None,
+        },
+        &Extra::default(),
+    )
+    .unwrap_err();
+    assert!(error.contains("retain the supplied carrier"));
+    assert!(model.function("values").unwrap().ret.slot.is_none());
 }

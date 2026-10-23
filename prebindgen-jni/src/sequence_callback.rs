@@ -1,11 +1,12 @@
 //! Per-element native delivery and Kotlin folds, without invoking user code under JNI locks.
 use super::*;
-use prebindgen_conversions::TransportLayout;
+use prebindgen_conversions::NativeLayoutExt;
 use prebindgen_declarations::SequenceOutput;
+use prebindgen_flat::WireLayout;
 
 pub(crate) fn transport(
     wire: syn::Ident,
-    element: &TransportLayout<JniWire, JniGroup>,
+    element: &WireLayout<JniWire, JniGroup>,
     values: &[TokenStream],
 ) -> Result<SequenceOutput<JniWire>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -15,11 +16,14 @@ pub(crate) fn transport(
     let mut descriptor = String::from("(");
     let mut encode = TokenStream::new();
     let mut args = Vec::new();
-    let slots: usize = element.iter().map(|w| w.kind.parameter_slots()).sum();
+    let slots: usize = element
+        .native_wires()
+        .map(|w| w.kind.parameter_slots())
+        .sum();
     if slots > 254 {
         return Err("sequence callback exceeds JVM parameter limit".into());
     }
-    for (i, (field, value)) in element.iter().zip(values).enumerate() {
+    for (i, (field, value)) in element.native_wires().zip(values).enumerate() {
         descriptor.push_str(field.kind.jvm_descriptor());
         let local = format_ident!("{wire}_callback_object_{i}");
         let argument = field.kind.output_argument(value, &local);
@@ -27,7 +31,8 @@ pub(crate) fn transport(
         args.push(argument.value);
     }
     descriptor.push_str(")V");
-    let capacity = i32::try_from(element.len() + 8).map_err(|_| "too many callback fields")?;
+    let capacity =
+        i32::try_from(element.native_len() + 8).map_err(|_| "too many callback fields")?;
     Ok(SequenceOutput {
         commit_each: false,
         fallible: true,
@@ -61,22 +66,26 @@ pub(crate) struct Fold {
     pub discard: String,
 }
 pub(crate) fn fold(
-    layout: &TransportLayout<JniWire, JniGroup>,
+    layout: &WireLayout<JniWire, JniGroup>,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
-    fn optional(nodes: &[prebindgen_conversions::TransportNode<JniWire, JniGroup>]) -> bool {
+    fn optional(nodes: &[prebindgen_flat::WireNode<JniWire, JniGroup>]) -> bool {
         nodes.iter().any(|node| match node {
-            prebindgen_conversions::TransportNode::Optional(_) => true,
-            prebindgen_conversions::TransportNode::Group { children, .. } => {
-                optional(children.nodes())
-            }
+            prebindgen_flat::WireNode::Optional(_) => true,
+            prebindgen_flat::WireNode::Group { children, .. } => optional(children.nodes()),
             _ => false,
         })
     }
-    let optional = optional(layout.nodes());
+    let success = layout
+        .outcome(prebindgen_flat::OutcomeKind::Success)
+        .ok_or("missing Success outcome")?;
+    let optional = optional(success.nodes());
     let (carrier, element) = prebindgen_declarations::sequence_return(layout)
         .ok_or("missing sequence callback layout")?;
-    let position = layout.iter().position(|w| w.name == carrier.name).unwrap();
+    let position = layout
+        .native_wires()
+        .position(|w| w.name == carrier.name)
+        .unwrap();
     let row = "__pb_fold_row";
     let ctx = KotlinContext {
         result: row,

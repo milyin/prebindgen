@@ -201,26 +201,36 @@ The C and JNI adapters opt into `staged::emit_call`, which orders those requests
 checks allocation aliases and shared acknowledgement, and returns a fallible
 expression. The protocol and its assembly helper live outside Flat; generators
 with different requirements can compose their own request enums directly.
-The adapters also select `NativeConversion`, whose `transport()` describes this
-reader's physical wire order and whose `code_fragment_wire` requests a native
-value. `NativeFunction::native_inputs()` and `StagedFunction::outputs()` operate
-on that chosen transport, rather than flattening the logical tree into an ABI.
-`NativeConversionExt::native_wires()` has a blanket implementation that derives
-its order from `transport()`; converters cannot override the order independently.
-Callback/context parameters, acknowledgements and error packet/status details
-remain the generator's responsibility.
+C/JNI select the optional staged native reader from `prebindgen-conversions`.
+`InputPlan::layout` and `OutputPlan::layout` store one authoritative `WireLayout`.
+Payloads occur only in its leaves and children. Extra physical values belong to
+adapter metadata on the corresponding node: an optional presence flag, an input
+selector, or a sequence carrier. Metadata contains no copy of the child tree.
 
-Stored plans retain a logical specification and the selected native transport
-separately. `OutputPlan::values` matches only the native success transport; it
-has no one-expression-per-logical-leaf requirement. Declaration composition helpers return current logical schemas; finish hooks see
-those schemas before emission. The compiler preserves schema edits made by finish
-hooks. If custom code or a finish hook edits a plan's transport directly,
-that code must refresh its logical schema or supply an independent one. Converting
-an existing plan into `JniInput`/`JniOutput` preserves its supplied schema.
-The staged compiler's `refresh_logical()` convenience projects payload definitions while omitting
-transport carriers, presence controls and transport-only container metadata.
-A custom `Conversion` can describe its schema and requests independently of
-these native plans; it need not implement `NativeConversion`.
+`NativeMetadata` exposes those additional values through borrowed
+`NativeEncoding::Inline(controls)` or `Carrier(value)` views. `Inline` places
+controls before the child values; a carrier occupies one position in the current
+scope and its child fields have a separate scope. These are rules of this optional
+reader, not requirements of the common `Conversion` trait. The C/JNI validators
+check that each logical node has its supported, explicit encoding metadata.
+
+`NativeLayoutExt::native_wires()` traverses the same tree to borrow physical
+values from leaves and metadata. It does not construct another tree or clone wire
+descriptions. Edits to nodes or their encoding metadata immediately change the
+next native view; there is no refresh or synchronization step. At an `Outcomes`
+root, native enumeration selects Success. Readers access the other payloads
+explicitly through `outcome(SourceError)` and `outcome(BindingFailure)`.
+
+`NativeConversion` supplies per-physical-value code requests;
+`NativeLayoutExt::native_wires()`, `NativeFunction::native_inputs()` and
+`StagedFunction::outputs()` derive their order from the authoritative tree.
+`OutputPlan::values` matches this native Success view, not the count of logical
+leaf definitions. Finish hooks see the complete tree and can edit its metadata.
+Rust and C/Kotlin generation read that same tree. Callback/context parameters,
+acknowledgements and error packet/status details remain reader decisions.
+
+A custom `Conversion` can describe its schema and requests independently of these
+native plans and need not implement `NativeMetadata` or `NativeConversion`.
 
 Stored plans use `TemplateContext::render`. `template_parameter(name)` marks a
 binding supplied by the generator, and `source_result_expr()` marks the source
@@ -516,12 +526,12 @@ arguments. The same logical structure supports either choice. Fields nested in
 sequences have structural paths, rather than positions assigned to an enclosing
 function signature.
 
-C/JNI use the opt-in `TransportLayout` in `prebindgen-conversions` for their
-existing lowering. Its `TransportNode`, `TransportContainer` and
-`TransportRepresentation::{Inline, Carrier}` describe physical placement for
-that protocol only. Native controls, arrays, delivered counts and callback
-presence markers live in this reader-owned plan; they are absent from the common
-logical schema. These adapters retain their existing ABI and conversion behavior.
+C/JNI store their selected encoding in metadata on these same nodes. A sequence
+node owns its element schema; its adapter metadata owns the row buffer or callback
+completion carrier. An optional node similarly owns presence/niche metadata and
+any extra flag. Native parameter lists and row/callback field lists are borrowed
+views of that tree, with explicit scope boundaries chosen by the reader. These
+adapters retain their existing ABI and conversion behavior.
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
 
@@ -843,9 +853,10 @@ rebuild paths after other structural edits.
 
 Adapter metadata `G` can retain field names, record information or other semantic
 relationships. The native staged compiler additionally uses
-`Codec::optional_metadata`, `field_group` and `fields_group` to prepare its
-transport. Its optional metadata describes a presence/niche rule in the native
-plan, rather than adding logical payload fields. The common tree does not
+`Codec::optional_metadata`, `sequence_metadata` and `alternatives_metadata`
+to retain its selected encodings on logical nodes. `field_group` and `fields_group`
+retain field/record information. Optional metadata describes a presence/niche
+rule and owns any additional flag; it adds no logical payload fields. The common tree does not
 interpret adapter metadata.
 
 For an option, the compiler chooses the discriminator and absent representation
@@ -931,7 +942,6 @@ UndefinedBehaviorSanitizer; JNI always runs with `-Xcheck:jni`.
 The native Rust benchmark is commented out because it depends on disabled
 optional-field and callback APIs. Its driver reports that limitation.
 
-
 Adapter API migration for the logical schema:
 
 - `Conversion` provides `layout()` and generator-defined slot requests. Physical
@@ -939,11 +949,13 @@ Adapter API migration for the logical schema:
 - `ConversionExt::wires()` enumerates definitions, not native parameters. Use
   `entries()`/`WirePath` for structural context and `native_wires()` only when
   selecting the native staged protocol.
-- Stored plans expose `logical` and `transport` separately. Native expression
-  counts are checked against `transport`, never against logical alternatives.
-- Standard value/boxed helpers clone type metadata when building both views.
-  The common trait still supports non-Clone wire metadata; custom converters
-  and manually constructed plans can supply their schema without cloning.
+- Stored plans expose one `layout` tree. Adapter metadata owns extra native
+  controls/carriers. Implement `NativeMetadata` when selecting the staged native
+  reader; the common `Conversion` trait remains independent of that protocol.
+- `NativeLayoutExt` derives borrowed physical views from the tree. Native
+  expression counts use its Success view. No parallel layout or refresh API exists.
+- Value/boxed helpers and native views support non-Clone metadata; payload
+  descriptions are stored once.
 - Codecs describe source-error projections through `source_error_layout` and
   binding-failure diagnostics through `binding_failure_layout`. Existing
   C/JNI output signatures, typed error handlers and ownership rules are retained.
