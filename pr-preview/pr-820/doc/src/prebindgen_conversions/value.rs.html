@@ -70,7 +70,7 @@
 <a href=#70 id=70 data-nosnippet>70</a>/// ```
 <a href=#71 id=71 data-nosnippet>71</a>/// use prebindgen_conversions::{value};
 <a href=#72 id=72 data-nosnippet>72</a>/// use quote::quote;
-<a href=#73 id=73 data-nosnippet>73</a>/// let input = value::input::&lt;syn::Type, (), (), (), (), ()&gt;(
+<a href=#73 id=73 data-nosnippet>73</a>/// let input = value::input::&lt;syn::Type, (), (), ()&gt;(
 <a href=#74 id=74 data-nosnippet>74</a>///     &amp;syn::parse_quote!(&amp;str), syn::parse_quote!(raw), syn::parse_quote!(text),
 <a href=#75 id=75 data-nosnippet>75</a>///     &amp;quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&amp;str),
 <a href=#76 id=76 data-nosnippet>76</a>/// )?;
@@ -78,14 +78,14 @@
 <a href=#78 id=78 data-nosnippet>78</a>/// assert!(input.acquire.is_empty() &amp;&amp; input.resources.is_empty());
 <a href=#79 id=79 data-nosnippet>79</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#80 id=80 data-nosnippet>80</a>/// ```
-<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C, O, S, G, A&gt;(
+<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
 <a href=#82 id=82 data-nosnippet>82</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#83 id=83 data-nosnippet>83</a>    wire: syn::Ident,
 <a href=#84 id=84 data-nosnippet>84</a>    var: syn::Ident,
 <a href=#85 id=85 data-nosnippet>85</a>    active: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#86 id=86 data-nosnippet>86</a>    decode: TokenStream,
 <a href=#87 id=87 data-nosnippet>87</a>    kind: W,
-<a href=#88 id=88 data-nosnippet>88</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, O, S, G, A&gt;&gt; {
+<a href=#88 id=88 data-nosnippet>88</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, N, B&gt;&gt; {
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">if </span>Value::of(ty).is_none() {
 <a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}` is not a value type"</span>, type_key(ty)));
 <a href=#91 id=91 data-nosnippet>91</a>    }
@@ -117,7 +117,7 @@
 <a href=#117 id=117 data-nosnippet>117</a>        fallible: <span class="bool-val">true</span>,
 <a href=#118 id=118 data-nosnippet>118</a>        context: Default::default(),
 <a href=#119 id=119 data-nosnippet>119</a>        acknowledgement: <span class="prelude-val">None</span>,
-<a href=#120 id=120 data-nosnippet>120</a>        node: prebindgen_flat::WireNode::Wire(<span class="macro">vec!</span>[Wire {
+<a href=#120 id=120 data-nosnippet>120</a>        node: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
 <a href=#121 id=121 data-nosnippet>121</a>            name: wire.clone(),
 <a href=#122 id=122 data-nosnippet>122</a>            kind,
 <a href=#123 id=123 data-nosnippet>123</a>        }]),
@@ -146,14 +146,14 @@
 <a href=#146 id=146 data-nosnippet>146</a>/// * `encode` — maps a Rust expression of the owned value to the expression
 <a href=#147 id=147 data-nosnippet>147</a>///   delivered on the wire.
 <a href=#148 id=148 data-nosnippet>148</a>/// * `kind` — the adapter's [`Wire::kind`] for the wire.
-<a href=#149 id=149 data-nosnippet>149</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, O, S, G, A&gt;(
+<a href=#149 id=149 data-nosnippet>149</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, N, B&gt;(
 <a href=#150 id=150 data-nosnippet>150</a>    ty: <span class="kw-2">&amp;</span>Type,
 <a href=#151 id=151 data-nosnippet>151</a>    wire: syn::Ident,
 <a href=#152 id=152 data-nosnippet>152</a>    value: TokenStream,
 <a href=#153 id=153 data-nosnippet>153</a>    borrowed: bool,
 <a href=#154 id=154 data-nosnippet>154</a>    encode: <span class="kw">impl </span>FnOnce(TokenStream) -&gt; TokenStream,
 <a href=#155 id=155 data-nosnippet>155</a>    kind: W,
-<a href=#156 id=156 data-nosnippet>156</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, O, S, G, A&gt;&gt; {
+<a href=#156 id=156 data-nosnippet>156</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, N, B&gt;&gt; {
 <a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(class) = Value::of(ty).filter(|<span class="kw">_</span>| !<span class="macro">matches!</span>(ty, Type::Reference(<span class="kw">_</span>))) <span class="kw">else </span>{
 <a href=#158 id=158 data-nosnippet>158</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"`{}` is not an owned value type"</span>, type_key(ty)));
 <a href=#159 id=159 data-nosnippet>159</a>    };
@@ -174,7 +174,7 @@
 <a href=#174 id=174 data-nosnippet>174</a>        context: Default::default(),
 <a href=#175 id=175 data-nosnippet>175</a>        delivery: Default::default(),
 <a href=#176 id=176 data-nosnippet>176</a>        outcomes: prebindgen_flat::Outcomes {
-<a href=#177 id=177 data-nosnippet>177</a>            success: prebindgen_flat::WireNode::Wire(<span class="macro">vec!</span>[Wire {
+<a href=#177 id=177 data-nosnippet>177</a>            success: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[Wire {
 <a href=#178 id=178 data-nosnippet>178</a>                name: wire.clone(),
 <a href=#179 id=179 data-nosnippet>179</a>                kind,
 <a href=#180 id=180 data-nosnippet>180</a>            }]),
