@@ -90,8 +90,8 @@
 <a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">type </span>Wire = W;
 <a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">type </span>Group = G;
 <a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = InputFragment&lt;<span class="lifetime">'a</span>, C&gt;;
-<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">fn </span>layout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt; {
-<a href=#94 id=94 data-nosnippet>94</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.layout
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">fn </span>wire_nodes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;] {
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.nodes
 <a href=#95 id=95 data-nosnippet>95</a>    }
 <a href=#96 id=96 data-nosnippet>96</a>
 <a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">fn </span>code_fragment_slot(
@@ -157,8 +157,8 @@
 <a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">type </span>Wire = W;
 <a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">type </span>Group = G;
 <a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = OutputFragment&lt;<span class="lifetime">'a</span>, C&gt;;
-<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">fn </span>layout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt; {
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.layout
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">fn </span>wire_nodes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;] {
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.nodes
 <a href=#162 id=162 data-nosnippet>162</a>    }
 <a href=#163 id=163 data-nosnippet>163</a>
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>code_fragment_slot(

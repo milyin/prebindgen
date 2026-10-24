@@ -130,8 +130,8 @@
 <a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">type </span>Wire = JniWire;
 <a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">type </span>Group = JniGroup;
 <a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::InputFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;;
-<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">fn </span>layout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt; {
-<a href=#134 id=134 data-nosnippet>134</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.rust.layout
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">fn </span>wire_nodes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;] {
+<a href=#134 id=134 data-nosnippet>134</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.rust.nodes
 <a href=#135 id=135 data-nosnippet>135</a>    }
 <a href=#136 id=136 data-nosnippet>136</a>
 <a href=#137 id=137 data-nosnippet>137</a>    <span class="kw">fn </span>code_fragment_slot(
@@ -147,8 +147,8 @@
 <a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">type </span>Wire = JniWire;
 <a href=#148 id=148 data-nosnippet>148</a>    <span class="kw">type </span>Group = JniGroup;
 <a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">type </span>SlotFragment&lt;<span class="lifetime">'a</span>&gt; = prebindgen_conversions::OutputFragment&lt;<span class="lifetime">'a</span>, JniContext&gt;;
-<a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">fn </span>layout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::WireLayout&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt; {
-<a href=#151 id=151 data-nosnippet>151</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.rust.layout
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">fn </span>wire_nodes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Group&gt;] {
+<a href=#151 id=151 data-nosnippet>151</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.rust.nodes
 <a href=#152 id=152 data-nosnippet>152</a>    }
 <a href=#153 id=153 data-nosnippet>153</a>
 <a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">fn </span>code_fragment_slot(
@@ -162,9 +162,9 @@
 <a href=#162 id=162 data-nosnippet>162</a>
 <a href=#163 id=163 data-nosnippet>163</a><span class="kw">impl </span>KotlinInputConversion <span class="kw">for </span>JniInput {
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>kotlin(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinInput&gt; {
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="self">self</span>.layout().validate()<span class="question-mark">?</span>;
-<a href=#166 id=166 data-nosnippet>166</a>        validate_layout(<span class="self">self</span>.layout())<span class="question-mark">?</span>;
-<a href=#167 id=167 data-nosnippet>167</a>        input_kotlin(<span class="self">self</span>.layout().nodes(), context)
+<a href=#165 id=165 data-nosnippet>165</a>        prebindgen_flat::validate_wire_nodes(<span class="self">self</span>.wire_nodes().iter())<span class="question-mark">?</span>;
+<a href=#166 id=166 data-nosnippet>166</a>        validate_layout(<span class="self">self</span>.wire_nodes())<span class="question-mark">?</span>;
+<a href=#167 id=167 data-nosnippet>167</a>        input_kotlin(<span class="self">self</span>.wire_nodes(), context)
 <a href=#168 id=168 data-nosnippet>168</a>    }
 <a href=#169 id=169 data-nosnippet>169</a>}
 <a href=#170 id=170 data-nosnippet>170</a><span class="kw">fn </span>input_leaves(wires: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>Wire&lt;JniWire&gt;], context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinInput&gt; {
@@ -211,9 +211,9 @@
 <a href=#211 id=211 data-nosnippet>211</a>}
 <a href=#212 id=212 data-nosnippet>212</a><span class="kw">impl </span>KotlinOutputConversion <span class="kw">for </span>JniOutput {
 <a href=#213 id=213 data-nosnippet>213</a>    <span class="kw">fn </span>kotlin(<span class="kw-2">&amp;</span><span class="self">self</span>, context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinOutput&gt; {
-<a href=#214 id=214 data-nosnippet>214</a>        <span class="self">self</span>.layout().validate()<span class="question-mark">?</span>;
-<a href=#215 id=215 data-nosnippet>215</a>        validate_layout(<span class="self">self</span>.layout())<span class="question-mark">?</span>;
-<a href=#216 id=216 data-nosnippet>216</a>        output_kotlin(<span class="self">self</span>.layout().nodes(), context)
+<a href=#214 id=214 data-nosnippet>214</a>        prebindgen_flat::validate_wire_nodes(<span class="self">self</span>.wire_nodes().iter())<span class="question-mark">?</span>;
+<a href=#215 id=215 data-nosnippet>215</a>        validate_layout(<span class="self">self</span>.wire_nodes())<span class="question-mark">?</span>;
+<a href=#216 id=216 data-nosnippet>216</a>        output_kotlin(<span class="self">self</span>.wire_nodes(), context)
 <a href=#217 id=217 data-nosnippet>217</a>    }
 <a href=#218 id=218 data-nosnippet>218</a>}
 <a href=#219 id=219 data-nosnippet>219</a><span class="kw">fn </span>output_leaves(wires: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>Wire&lt;JniWire&gt;], context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinOutput&gt; {
@@ -281,12 +281,12 @@
 <a href=#281 id=281 data-nosnippet>281</a>        JniNode::Wire(<span class="kw">_</span>) | JniNode::Sequence(<span class="kw">_</span>) | JniNode::Outcomes { .. } =&gt; <span class="bool-val">false</span>,
 <a href=#282 id=282 data-nosnippet>282</a>        JniNode::Optional(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
 <a href=#283 id=283 data-nosnippet>283</a>        JniNode::Alternatives { alternatives, .. } =&gt; {
-<a href=#284 id=284 data-nosnippet>284</a>            alternatives.iter().any(|arm| has_optional(arm.nodes()))
+<a href=#284 id=284 data-nosnippet>284</a>            alternatives.iter().any(|arm| has_optional(arm.as_slice()))
 <a href=#285 id=285 data-nosnippet>285</a>        }
 <a href=#286 id=286 data-nosnippet>286</a>        JniNode::Group { metadata, children } =&gt; <span class="kw">match </span>metadata {
 <a href=#287 id=287 data-nosnippet>287</a>            JniGroup::Optional(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
 <a href=#288 id=288 data-nosnippet>288</a>            JniGroup::Fields(<span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="bool-val">false</span>,
-<a href=#289 id=289 data-nosnippet>289</a>            <span class="kw">_ </span>=&gt; has_optional(children.nodes()),
+<a href=#289 id=289 data-nosnippet>289</a>            <span class="kw">_ </span>=&gt; has_optional(children.as_slice()),
 <a href=#290 id=290 data-nosnippet>290</a>        },
 <a href=#291 id=291 data-nosnippet>291</a>    })
 <a href=#292 id=292 data-nosnippet>292</a>}
@@ -307,7 +307,7 @@
 <a href=#307 id=307 data-nosnippet>307</a>                };
 <a href=#308 id=308 data-nosnippet>308</a>                <span class="kw">let </span><span class="kw-2">mut </span>c = input_leaves(<span class="kw-2">&amp;</span>[selector], context)<span class="question-mark">?</span>;
 <a href=#309 id=309 data-nosnippet>309</a>                <span class="kw">for </span>arm <span class="kw">in </span>alternatives {
-<a href=#310 id=310 data-nosnippet>310</a>                    merge_input(<span class="kw-2">&amp;mut </span>c, input_kotlin(arm.nodes(), context)<span class="question-mark">?</span>);
+<a href=#310 id=310 data-nosnippet>310</a>                    merge_input(<span class="kw-2">&amp;mut </span>c, input_kotlin(arm.as_slice(), context)<span class="question-mark">?</span>);
 <a href=#311 id=311 data-nosnippet>311</a>                }
 <a href=#312 id=312 data-nosnippet>312</a>                c
 <a href=#313 id=313 data-nosnippet>313</a>            }
@@ -329,9 +329,9 @@
 <a href=#329 id=329 data-nosnippet>329</a>                JniGroup::Optional(<span class="kw">_</span>) | JniGroup::Sequence(<span class="kw">_</span>) | JniGroup::Alternatives(<span class="kw">_</span>) =&gt; {
 <a href=#330 id=330 data-nosnippet>330</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"encoding metadata requires its matching logical node"</span>.into())
 <a href=#331 id=331 data-nosnippet>331</a>                }
-<a href=#332 id=332 data-nosnippet>332</a>                JniGroup::Fields(<span class="prelude-val">Some</span>(d)) =&gt; data::input_kotlin(children.nodes(), d, context)<span class="question-mark">?</span>,
+<a href=#332 id=332 data-nosnippet>332</a>                JniGroup::Fields(<span class="prelude-val">Some</span>(d)) =&gt; data::input_kotlin(children.as_slice(), d, context)<span class="question-mark">?</span>,
 <a href=#333 id=333 data-nosnippet>333</a>                JniGroup::Fields(<span class="prelude-val">None</span>) | JniGroup::Field(<span class="kw">_</span>) =&gt; {
-<a href=#334 id=334 data-nosnippet>334</a>                    input_kotlin(children.nodes(), context)<span class="question-mark">?
+<a href=#334 id=334 data-nosnippet>334</a>                    input_kotlin(children.as_slice(), context)<span class="question-mark">?
 <a href=#335 id=335 data-nosnippet>335</a>                </span>}
 <a href=#336 id=336 data-nosnippet>336</a>            },
 <a href=#337 id=337 data-nosnippet>337</a>        };
@@ -376,7 +376,7 @@
 <a href=#376 id=376 data-nosnippet>376</a>            .iter()
 <a href=#377 id=377 data-nosnippet>377</a>            .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
 <a href=#378 id=378 data-nosnippet>378</a>            .ok_or(<span class="string">"missing Success outcome"</span>)<span class="question-mark">?</span>;
-<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">return </span>output_kotlin(success.layout.nodes(), context);
+<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">return </span>output_kotlin(success.nodes.as_slice(), context);
 <a href=#380 id=380 data-nosnippet>380</a>    }
 <a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">if </span>nodes.iter().all(|n| <span class="macro">matches!</span>(n, JniNode::Wire(<span class="kw">_</span>))) {
 <a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">return </span>output_leaves(<span class="kw-2">&amp;</span>leaf_wires(nodes), context);
@@ -409,9 +409,9 @@
 <a href=#409 id=409 data-nosnippet>409</a>                JniGroup::Optional(<span class="kw">_</span>) | JniGroup::Sequence(<span class="kw">_</span>) | JniGroup::Alternatives(<span class="kw">_</span>) =&gt; {
 <a href=#410 id=410 data-nosnippet>410</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"encoding metadata requires its matching logical node"</span>.into())
 <a href=#411 id=411 data-nosnippet>411</a>                }
-<a href=#412 id=412 data-nosnippet>412</a>                JniGroup::Fields(<span class="prelude-val">Some</span>(d)) =&gt; data::output_kotlin(children.nodes(), d, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?</span>,
+<a href=#412 id=412 data-nosnippet>412</a>                JniGroup::Fields(<span class="prelude-val">Some</span>(d)) =&gt; data::output_kotlin(children.as_slice(), d, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?</span>,
 <a href=#413 id=413 data-nosnippet>413</a>                JniGroup::Fields(<span class="prelude-val">None</span>) | JniGroup::Field(<span class="kw">_</span>) =&gt; {
-<a href=#414 id=414 data-nosnippet>414</a>                    output_kotlin(children.nodes(), <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?
+<a href=#414 id=414 data-nosnippet>414</a>                    output_kotlin(children.as_slice(), <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?
 <a href=#415 id=415 data-nosnippet>415</a>                </span>}
 <a href=#416 id=416 data-nosnippet>416</a>            },
 <a href=#417 id=417 data-nosnippet>417</a>        };
@@ -430,8 +430,8 @@
 <a href=#430 id=430 data-nosnippet>430</a>    <span class="doccomment">/// Fields stored in the successful JNI result array, excluding status/error
 <a href=#431 id=431 data-nosnippet>431</a>    /// framing. Sequence rows and visitor arguments have their own schemas.
 <a href=#432 id=432 data-nosnippet>432</a>    </span><span class="kw">pub fn </span>result_packet_fields(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;std::vec::IntoIter&lt;<span class="kw-2">&amp;</span>Wire&lt;JniWire&gt;&gt;&gt; {
-<a href=#433 id=433 data-nosnippet>433</a>        validate_layout(<span class="kw-2">&amp;</span><span class="self">self</span>.rust.layout)<span class="question-mark">?</span>;
-<a href=#434 id=434 data-nosnippet>434</a>        <span class="prelude-val">Ok</span>(<span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span><span class="self">self</span>.rust.layout))
+<a href=#433 id=433 data-nosnippet>433</a>        validate_layout(<span class="kw-2">&amp;</span><span class="self">self</span>.rust.nodes)<span class="question-mark">?</span>;
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="prelude-val">Ok</span>(<span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span><span class="self">self</span>.rust.nodes))
 <a href=#435 id=435 data-nosnippet>435</a>    }
 <a href=#436 id=436 data-nosnippet>436</a>}
 <a href=#437 id=437 data-nosnippet>437</a>
@@ -465,49 +465,64 @@
 <a href=#465 id=465 data-nosnippet>465</a>                <span class="kw-2">&amp;</span>prebindgen_declarations::Condition::default(),
 <a href=#466 id=466 data-nosnippet>466</a>            )
 <a href=#467 id=467 data-nosnippet>467</a>            .unwrap();
-<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">let </span>JniWire::Handle { condition, .. } = <span class="kw-2">&amp;mut </span>plan.layout[<span class="number">0</span>].kind <span class="kw">else </span>{
-<a href=#469 id=469 data-nosnippet>469</a>            <span class="macro">panic!</span>()
-<a href=#470 id=470 data-nosnippet>470</a>        };
-<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw-2">*</span>condition = <span class="string">"isEnabled() &amp;&amp; count &gt; 3"</span>.into();
-<a href=#472 id=472 data-nosnippet>472</a>        JniCodec.finish_input(<span class="kw-2">&amp;mut </span>plan, <span class="kw-2">&amp;</span>()).unwrap();
-<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span>input = JniInput::from(plan);
-<a href=#474 id=474 data-nosnippet>474</a>        <span class="comment">// A handle and an ordinary i64 expose identical transport information.
-<a href=#475 id=475 data-nosnippet>475</a>        </span><span class="kw">let </span>scalar = JniWire::scalar(Primitive::I64);
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="macro">assert_eq!</span>(
-<a href=#477 id=477 data-nosnippet>477</a>            prebindgen_flat::type_key(<span class="kw-2">&amp;</span>input.layout().iter().next().unwrap().kind.rust_type()),
-<a href=#478 id=478 data-nosnippet>478</a>            prebindgen_flat::type_key(<span class="kw-2">&amp;</span>scalar.rust_type())
-<a href=#479 id=479 data-nosnippet>479</a>        );
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="macro">assert_eq!</span>(
-<a href=#481 id=481 data-nosnippet>481</a>            input.layout().iter().next().unwrap().kind.kotlin_type(),
-<a href=#482 id=482 data-nosnippet>482</a>            scalar.kotlin_type()
-<a href=#483 id=483 data-nosnippet>483</a>        );
-<a href=#484 id=484 data-nosnippet>484</a>        <span class="kw">let </span>emitted = input.kotlin(<span class="kw-2">&amp;</span>context).unwrap();
-<a href=#485 id=485 data-nosnippet>485</a>        <span class="macro">assert_eq!</span>(emitted.locks, [<span class="string">"if (isEnabled() &amp;&amp; count &gt; 3) requireNotNull(incoming) { \"null handle\" } else null"</span>]);
-<a href=#486 id=486 data-nosnippet>486</a>        <span class="macro">assert_eq!</span>(
-<a href=#487 id=487 data-nosnippet>487</a>            emitted.consumed,
-<a href=#488 id=488 data-nosnippet>488</a>            [<span class="string">"if (isEnabled() &amp;&amp; count &gt; 3) incoming!!.markConsumed()"</span>]
-<a href=#489 id=489 data-nosnippet>489</a>        );
-<a href=#490 id=490 data-nosnippet>490</a>
-<a href=#491 id=491 data-nosnippet>491</a>        <span class="kw">let </span>plan = JniCodec
-<a href=#492 id=492 data-nosnippet>492</a>            .output_leaf(
-<a href=#493 id=493 data-nosnippet>493</a>                <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(Counter),
-<a href=#494 id=494 data-nosnippet>494</a>                <span class="kw-2">&amp;</span>(),
-<a href=#495 id=495 data-nosnippet>495</a>                <span class="macro">syn::parse_quote!</span>(wire),
-<a href=#496 id=496 data-nosnippet>496</a>                <span class="macro">quote!</span>(returned),
-<a href=#497 id=497 data-nosnippet>497</a>                <span class="bool-val">false</span>,
-<a href=#498 id=498 data-nosnippet>498</a>            )
-<a href=#499 id=499 data-nosnippet>499</a>            .unwrap();
-<a href=#500 id=500 data-nosnippet>500</a>        <span class="kw">let </span>output = JniOutput::from(plan).kotlin(<span class="kw-2">&amp;</span>context).unwrap();
-<a href=#501 id=501 data-nosnippet>501</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"requireNotNull(wrapped_0)"</span>]);
-<a href=#502 id=502 data-nosnippet>502</a>        <span class="macro">assert!</span>(output
-<a href=#503 id=503 data-nosnippet>503</a>            .materialize
-<a href=#504 id=504 data-nosnippet>504</a>            .contains(<span class="string">"example.Counter(native_values[0] as Long)"</span>));
-<a href=#505 id=505 data-nosnippet>505</a>        <span class="macro">assert!</span>(output
-<a href=#506 id=506 data-nosnippet>506</a>            .cleanup
-<a href=#507 id=507 data-nosnippet>507</a>            .contains(<span class="string">"example.Native.release(native_values[0] as Long)"</span>));
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="macro">assert!</span>(output
-<a href=#509 id=509 data-nosnippet>509</a>            .cleanup
-<a href=#510 id=510 data-nosnippet>510</a>            .contains(<span class="string">"delivery_error.addSuppressed(cleanup)"</span>));
-<a href=#511 id=511 data-nosnippet>511</a>    }
-<a href=#512 id=512 data-nosnippet>512</a>}
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">let </span>JniWire::Handle { condition, .. } =
+<a href=#469 id=469 data-nosnippet>469</a>            <span class="kw-2">&amp;mut </span>prebindgen_flat::wire_definitions_mut(plan.nodes.iter_mut())
+<a href=#470 id=470 data-nosnippet>470</a>                .next()
+<a href=#471 id=471 data-nosnippet>471</a>                .expect(<span class="string">"logical wire index out of range"</span>)
+<a href=#472 id=472 data-nosnippet>472</a>                .kind
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">else </span>{
+<a href=#474 id=474 data-nosnippet>474</a>            <span class="macro">panic!</span>()
+<a href=#475 id=475 data-nosnippet>475</a>        };
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw-2">*</span>condition = <span class="string">"isEnabled() &amp;&amp; count &gt; 3"</span>.into();
+<a href=#477 id=477 data-nosnippet>477</a>        JniCodec.finish_input(<span class="kw-2">&amp;mut </span>plan, <span class="kw-2">&amp;</span>()).unwrap();
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let </span>input = JniInput::from(plan);
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="comment">// A handle and an ordinary i64 expose identical transport information.
+<a href=#480 id=480 data-nosnippet>480</a>        </span><span class="kw">let </span>scalar = JniWire::scalar(Primitive::I64);
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="macro">assert_eq!</span>(
+<a href=#482 id=482 data-nosnippet>482</a>            prebindgen_flat::type_key(
+<a href=#483 id=483 data-nosnippet>483</a>                <span class="kw-2">&amp;</span>prebindgen_flat::wire_definitions(input.wire_nodes().iter())
+<a href=#484 id=484 data-nosnippet>484</a>                    .next()
+<a href=#485 id=485 data-nosnippet>485</a>                    .unwrap()
+<a href=#486 id=486 data-nosnippet>486</a>                    .kind
+<a href=#487 id=487 data-nosnippet>487</a>                    .rust_type()
+<a href=#488 id=488 data-nosnippet>488</a>            ),
+<a href=#489 id=489 data-nosnippet>489</a>            prebindgen_flat::type_key(<span class="kw-2">&amp;</span>scalar.rust_type())
+<a href=#490 id=490 data-nosnippet>490</a>        );
+<a href=#491 id=491 data-nosnippet>491</a>        <span class="macro">assert_eq!</span>(
+<a href=#492 id=492 data-nosnippet>492</a>            prebindgen_flat::wire_definitions(input.wire_nodes().iter())
+<a href=#493 id=493 data-nosnippet>493</a>                .next()
+<a href=#494 id=494 data-nosnippet>494</a>                .unwrap()
+<a href=#495 id=495 data-nosnippet>495</a>                .kind
+<a href=#496 id=496 data-nosnippet>496</a>                .kotlin_type(),
+<a href=#497 id=497 data-nosnippet>497</a>            scalar.kotlin_type()
+<a href=#498 id=498 data-nosnippet>498</a>        );
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">let </span>emitted = input.kotlin(<span class="kw-2">&amp;</span>context).unwrap();
+<a href=#500 id=500 data-nosnippet>500</a>        <span class="macro">assert_eq!</span>(emitted.locks, [<span class="string">"if (isEnabled() &amp;&amp; count &gt; 3) requireNotNull(incoming) { \"null handle\" } else null"</span>]);
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="macro">assert_eq!</span>(
+<a href=#502 id=502 data-nosnippet>502</a>            emitted.consumed,
+<a href=#503 id=503 data-nosnippet>503</a>            [<span class="string">"if (isEnabled() &amp;&amp; count &gt; 3) incoming!!.markConsumed()"</span>]
+<a href=#504 id=504 data-nosnippet>504</a>        );
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="kw">let </span>plan = JniCodec
+<a href=#507 id=507 data-nosnippet>507</a>            .output_leaf(
+<a href=#508 id=508 data-nosnippet>508</a>                <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(Counter),
+<a href=#509 id=509 data-nosnippet>509</a>                <span class="kw-2">&amp;</span>(),
+<a href=#510 id=510 data-nosnippet>510</a>                <span class="macro">syn::parse_quote!</span>(wire),
+<a href=#511 id=511 data-nosnippet>511</a>                <span class="macro">quote!</span>(returned),
+<a href=#512 id=512 data-nosnippet>512</a>                <span class="bool-val">false</span>,
+<a href=#513 id=513 data-nosnippet>513</a>            )
+<a href=#514 id=514 data-nosnippet>514</a>            .unwrap();
+<a href=#515 id=515 data-nosnippet>515</a>        <span class="kw">let </span>output = JniOutput::from(plan).kotlin(<span class="kw-2">&amp;</span>context).unwrap();
+<a href=#516 id=516 data-nosnippet>516</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"requireNotNull(wrapped_0)"</span>]);
+<a href=#517 id=517 data-nosnippet>517</a>        <span class="macro">assert!</span>(output
+<a href=#518 id=518 data-nosnippet>518</a>            .materialize
+<a href=#519 id=519 data-nosnippet>519</a>            .contains(<span class="string">"example.Counter(native_values[0] as Long)"</span>));
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="macro">assert!</span>(output
+<a href=#521 id=521 data-nosnippet>521</a>            .cleanup
+<a href=#522 id=522 data-nosnippet>522</a>            .contains(<span class="string">"example.Native.release(native_values[0] as Long)"</span>));
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="macro">assert!</span>(output
+<a href=#524 id=524 data-nosnippet>524</a>            .cleanup
+<a href=#525 id=525 data-nosnippet>525</a>            .contains(<span class="string">"delivery_error.addSuppressed(cleanup)"</span>));
+<a href=#526 id=526 data-nosnippet>526</a>    }
+<a href=#527 id=527 data-nosnippet>527</a>}
 </code></pre></div></section></main></body></html>

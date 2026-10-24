@@ -108,10 +108,10 @@
 <a href=#108 id=108 data-nosnippet>108</a>    active: <span class="kw-2">&amp;</span>Condition,
 <a href=#109 id=109 data-nosnippet>109</a>    <span class="kw-2">mut </span>child: CodecInput&lt;C&gt;,
 <a href=#110 id=110 data-nosnippet>110</a>) -&gt; <span class="prelude-ty">Result</span>&lt;CodecInput&lt;C&gt;&gt; {
-<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">let </span>reservation = codec.optional_niche(<span class="kw-2">&amp;</span>child.layout);
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">let </span>reservation = codec.optional_niche(<span class="kw-2">&amp;</span>child.nodes);
 <a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">let </span><span class="kw-2">mut </span>validation = TokenStream::new();
 <a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(reservation) = <span class="kw-2">&amp;</span>reservation {
-<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>present = codec.optional_presence(<span class="kw-2">&amp;</span>child.layout, reservation)<span class="question-mark">?</span>;
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>present = codec.optional_presence(<span class="kw-2">&amp;</span>child.nodes, reservation)<span class="question-mark">?</span>;
 <a href=#115 id=115 data-nosnippet>115</a>        validation.extend(<span class="macro">quote!</span>(<span class="kw">let </span>#tag: i32 = i32::from(#present);));
 <a href=#116 id=116 data-nosnippet>116</a>    } <span class="kw">else </span>{
 <a href=#117 id=117 data-nosnippet>117</a>        child.fallible = <span class="bool-val">true</span>;
@@ -125,7 +125,7 @@
 <a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">let </span>selected = active.arm(tag.clone(), <span class="number">1</span>).rust();
 <a href=#126 id=126 data-nosnippet>126</a>    child.statements = <span class="macro">quote!</span>(<span class="kw">let </span>#var = <span class="kw">if </span>#selected {#body <span class="prelude-val">Some</span>(#arg)} <span class="kw">else </span>{<span class="prelude-val">None</span>};);
 <a href=#127 id=127 data-nosnippet>127</a>    child.argument = <span class="macro">quote!</span>(#var);
-<a href=#128 id=128 data-nosnippet>128</a>    mark(codec, extra, <span class="kw-2">&amp;mut </span>child.layout, tag, reservation)<span class="question-mark">?</span>;
+<a href=#128 id=128 data-nosnippet>128</a>    mark(codec, extra, <span class="kw-2">&amp;mut </span>child.nodes, tag, reservation)<span class="question-mark">?</span>;
 <a href=#129 id=129 data-nosnippet>129</a>
 <a href=#130 id=130 data-nosnippet>130</a>    <span class="prelude-val">Ok</span>(child)
 <a href=#131 id=131 data-nosnippet>131</a>}
@@ -150,8 +150,8 @@
 <a href=#150 id=150 data-nosnippet>150</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"optional child has delivery code"</span>.into());
 <a href=#151 id=151 data-nosnippet>151</a>    }
 <a href=#152 id=152 data-nosnippet>152</a>    codec.validate_output(<span class="kw-2">&amp;</span>child)<span class="question-mark">?</span>;
-<a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">let </span>reservation = codec.optional_niche(<span class="kw-2">&amp;</span>child.layout);
-<a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">let </span>defaults = codec.absent_output_values(<span class="kw-2">&amp;</span>child.layout, reservation.as_ref())<span class="question-mark">?</span>;
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">let </span>reservation = codec.optional_niche(<span class="kw-2">&amp;</span>child.nodes);
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">let </span>defaults = codec.absent_output_values(<span class="kw-2">&amp;</span>child.nodes, reservation.as_ref())<span class="question-mark">?</span>;
 <a href=#155 id=155 data-nosnippet>155</a>    prebindgen_conversions::validate_value_bindings(<span class="kw-2">&amp;</span>defaults)<span class="question-mark">?</span>;
 <a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">let </span><span class="kw-2">mut </span>defaults_by_name = defaults
 <a href=#157 id=157 data-nosnippet>157</a>        .into_iter()
@@ -205,7 +205,7 @@
 <a href=#205 id=205 data-nosnippet>205</a>    <span class="kw">if </span>reservation.is_none() {
 <a href=#206 id=206 data-nosnippet>206</a>        child.values.insert(<span class="number">0</span>, (tag.clone(), <span class="macro">quote!</span>(#tag)));
 <a href=#207 id=207 data-nosnippet>207</a>    }
-<a href=#208 id=208 data-nosnippet>208</a>    mark(codec, extra, <span class="kw-2">&amp;mut </span>child.layout, tag, reservation)<span class="question-mark">?</span>;
+<a href=#208 id=208 data-nosnippet>208</a>    mark(codec, extra, <span class="kw-2">&amp;mut </span>child.nodes, tag, reservation)<span class="question-mark">?</span>;
 <a href=#209 id=209 data-nosnippet>209</a>
 <a href=#210 id=210 data-nosnippet>210</a>    <span class="prelude-val">Ok</span>(child)
 <a href=#211 id=211 data-nosnippet>211</a>}
@@ -213,7 +213,7 @@
 <a href=#213 id=213 data-nosnippet>213</a><span class="kw">fn </span>mark&lt;C: Codec&gt;(
 <a href=#214 id=214 data-nosnippet>214</a>    codec: <span class="kw-2">&amp;</span>C,
 <a href=#215 id=215 data-nosnippet>215</a>    extra: <span class="kw-2">&amp;</span>C::Extra,
-<a href=#216 id=216 data-nosnippet>216</a>    tree: <span class="kw-2">&amp;mut </span>WireLayout&lt;C::Wire, C::Group&gt;,
+<a href=#216 id=216 data-nosnippet>216</a>    tree: <span class="kw-2">&amp;mut </span>Vec&lt;prebindgen_flat::WireNode&lt;C::Wire, C::Group&gt;&gt;,
 <a href=#217 id=217 data-nosnippet>217</a>    tag: syn::Ident,
 <a href=#218 id=218 data-nosnippet>218</a>    reservation: <span class="prelude-ty">Option</span>&lt;NicheReservation&lt;C::Niche&gt;&gt;,
 <a href=#219 id=219 data-nosnippet>219</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -236,7 +236,7 @@
 <a href=#236 id=236 data-nosnippet>236</a>        element: std::mem::take(tree),
 <a href=#237 id=237 data-nosnippet>237</a>        metadata: <span class="prelude-val">Some</span>(metadata),
 <a href=#238 id=238 data-nosnippet>238</a>    });
-<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw-2">*</span>tree = WireLayout::from_nodes(<span class="macro">vec!</span>[node]);
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw-2">*</span>tree = <span class="macro">vec!</span>[node];
 <a href=#240 id=240 data-nosnippet>240</a>    <span class="prelude-val">Ok</span>(())
 <a href=#241 id=241 data-nosnippet>241</a>}
 </code></pre></div></section></main></body></html>

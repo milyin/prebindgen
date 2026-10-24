@@ -81,7 +81,7 @@
 <a href=#81 id=81 data-nosnippet>81</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#82 id=82 data-nosnippet>82</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinInput&gt; {
 <a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">let </span>root = <span class="kw-2">&amp;</span>o.presence.to_string();
-<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span>nodes = container.element.nodes();
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span>nodes = container.element.as_slice();
 <a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">let </span>controls = <span class="kw-2">&amp;</span>o.controls;
 <a href=#86 id=86 data-nosnippet>86</a>    <span class="comment">// The adapter validates exactly one selector for a flag, none for a niche.
 <a href=#87 id=87 data-nosnippet>87</a>    </span><span class="macro">debug_assert_eq!</span>(controls.len(), usize::from(o.niche.is_none()));
@@ -175,7 +175,7 @@
 <a href=#175 id=175 data-nosnippet>175</a>    o: <span class="kw-2">&amp;</span>JniOptional,
 <a href=#176 id=176 data-nosnippet>176</a>    context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#177 id=177 data-nosnippet>177</a>) -&gt; <span class="prelude-ty">Result</span>&lt;KotlinOutput&gt; {
-<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">let </span>nodes = container.element.nodes();
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">let </span>nodes = container.element.as_slice();
 <a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">let </span>wires = kotlin::leaf_wires(nodes);
 <a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">let </span>controls = <span class="kw-2">&amp;</span>o.controls;
 <a href=#181 id=181 data-nosnippet>181</a>    <span class="comment">// The adapter validates exactly one selector for a flag, none for a niche.
