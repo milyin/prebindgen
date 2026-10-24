@@ -3,6 +3,11 @@ use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
 pub(crate) struct EnumCodec {
+    #[allow(clippy::type_complexity)] // Cache value trees with each metadata role explicit.
+    pub(crate) error_layouts: std::collections::BTreeMap<
+        String,
+        prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+    >,
     pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) errors: std::collections::BTreeMap<String, String>,
     pub(crate) enums: std::collections::BTreeMap<String, (String, EnumMapping)>,
@@ -25,18 +30,49 @@ impl EnumCodec {
 impl Codec for EnumCodec {
     type Wire = CWire;
     type Niche = CNiche;
-    type Group = CGroup;
+    type Chain = CChain;
+    type Branch = CBranch;
+    fn group_metadata(&self) -> CBranch {
+        CBranch::Group(CGroup::Values)
+    }
+
     type Extra = ();
     type Context = CContext;
     type Input = InputPlan<CWire>;
     type Output = OutputPlan<CWire>;
-    fn optional_group(&self, p: syn::Ident, d: syn::Ident, n: Option<CNiche>) -> CGroup {
-        CCodec.optional_group(p, d, n)
+    fn binding_failure_layout(
+        &self,
+        e: &(),
+    ) -> Result<Option<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>>> {
+        CCodec.binding_failure_layout(e)
     }
-    fn field_group(&self, n: syn::Ident) -> CGroup {
+    fn source_error_layout(
+        &self,
+        ty: &syn::Type,
+        mapped: bool,
+        e: &(),
+    ) -> Result<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>> {
+        if let Some(layout) = self.error_layouts.get(&prebindgen_flat::type_key(ty)) {
+            return Ok(layout.clone());
+        }
+        CCodec.source_error_layout(ty, mapped, e)
+    }
+    fn optional_metadata(
+        &self,
+        p: syn::Ident,
+        d: syn::Ident,
+        n: Option<CNiche>,
+        controls: &[prebindgen_flat::Wire<CWire>],
+    ) -> Result<CChain> {
+        CCodec.optional_metadata(p, d, n, controls)
+    }
+    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<CWire>) -> Result<CBranch> {
+        CCodec.alternatives_metadata(selector)
+    }
+    fn field_group(&self, n: syn::Ident) -> CBranch {
         CCodec.field_group(n)
     }
-    fn fields_group(&self) -> CGroup {
+    fn fields_group(&self) -> CBranch {
         CCodec.fields_group()
     }
     fn finish_input(&self, p: &mut InputPlan<CWire>, e: &()) -> Result<()> {
@@ -51,9 +87,9 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
+        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire, crate::CChain>> {
         CCodec.sequence_input(e, w, n, i, element, active)
     }
     fn sequence_output(
@@ -62,11 +98,11 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireLayout<CWire, CGroup>,
-        values: &[TokenStream],
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire>> {
+        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+        values: &[(syn::Ident, TokenStream)],
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
         if self.callback_wire.as_ref() == Some(&w) {
-            Ok(sequence::callback_output(values, n))
+            sequence::callback_output(w, values, element, n)
         } else {
             CCodec.sequence_output(e, w, n, i, element, values)
         }
@@ -183,6 +219,40 @@ impl Codec for EnumCodec {
         }
         CCodec.output_leaf(ty, e, w, v, borrowed)
     }
+
+    fn optional_niche(
+        &self,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
+        CCodec.optional_niche(payload)
+    }
+    fn optional_presence(
+        &self,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        CCodec.optional_presence(payload, reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        CCodec.absent_output_values(payload, reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        CCodec.retire_niches(payload, reservation)
+    }
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        CCodec.validate_input(plan)
+    }
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        CCodec.validate_output(plan)
+    }
 }
 
 #[cfg(test)]
@@ -275,6 +345,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let codec = EnumCodec {
+            error_layouts: Default::default(),
             callback_wire: None,
             errors: Default::default(),
             enums: std::collections::BTreeMap::from([(
@@ -303,13 +374,19 @@ mod tests {
             let output = codec
                 .output_leaf(&ty, &(), syn::parse_quote!(wire), quote!(value), false)
                 .unwrap();
-            assert_eq!(input.layout.len(), 1);
-            assert_eq!(output.layout.len(), 1);
-            assert!(
-                matches!(input.layout[0].kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+            assert_eq!(
+                prebindgen_flat::wire_definitions(std::iter::once(&input.node)).count(),
+                1
             );
-            super::super::group::validate_layout(&input.layout).unwrap();
-            super::super::group::validate_layout(&output.layout).unwrap();
+            assert_eq!(
+                crate::group::result_packet_fields(&output.outcomes.success).len(),
+                1
+            );
+            assert!(
+                matches!(prebindgen_flat::wire_definitions(std::iter::once(&input.node)).next().unwrap().kind.available_niche(),Some(CNiche::Integer(n)) if n == -3-depth)
+            );
+            super::super::group::validate_layout(&input.node).unwrap();
+            super::super::group::validate_layout(&output.outcomes.success).unwrap();
         }
     }
     #[test]
@@ -317,25 +394,39 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let wire = EnumCodec::wire("code", &mapping);
-        let mut tree: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
-            name: syn::parse_quote!(wire),
-            kind: wire,
-        }]
-        .into();
+        let mut tree: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
+            prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+                name: syn::parse_quote!(wire),
+                kind: wire,
+            }]);
         let group = |presence, value| {
-            CGroup::Optional(COptional {
-                presence: syn::parse_str(presence).unwrap(),
-                discriminator: syn::parse_quote!(wire),
-                niche: Some(CNiche::Integer(value)),
-            })
+            COptional::from_parts(
+                syn::parse_str(presence).unwrap(),
+                syn::parse_quote!(wire),
+                Some(CNiche::Integer(value)),
+                &[],
+            )
+            .unwrap()
         };
-        tree.enclose(group("inner", -2));
+        tree = prebindgen_flat::WireNode::Chain {
+            controls: vec![],
+            meta: CChain::Optional(group("inner", -2)),
+            child: Box::new(std::mem::take(&mut tree)),
+        };
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
-        tree[0].kind.clear_niche();
+        prebindgen_flat::wire_definitions_mut(std::iter::once(&mut tree))
+            .next()
+            .expect("logical wire index out of range")
+            .kind
+            .clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree.enclose(group("outer", -2));
+        tree = prebindgen_flat::WireNode::Chain {
+            controls: vec![],
+            meta: CChain::Optional(group("outer", -2)),
+            child: Box::new(std::mem::take(&mut tree)),
+        };
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("duplicate"));
@@ -353,11 +444,11 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_flat::WireLayout<CWire, CGroup> = vec![GenericWire {
-                name: syn::parse_quote!(value),
-                kind: wire,
-            }]
-            .into();
+            let layout: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
+                prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+                    name: syn::parse_quote!(value),
+                    kind: wire,
+                }]);
             assert!(super::super::group::validate_layout(&layout).is_err());
         }
     }

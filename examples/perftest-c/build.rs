@@ -71,6 +71,8 @@ fn main() {
         .panic()
         .function(fun!(collection_optional).callback_return())
         .panic()
+        .function(fun!(collection_optional_items).callback_return())
+        .panic()
         .function(fun!(collection_enum).callback_return())
         .panic()
         .function(fun!(collection_probe))

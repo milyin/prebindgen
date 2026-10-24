@@ -11,7 +11,9 @@ pub use transport::JniArgument;
 /// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
-    /// One array of raw element rows. WireNode::Sequence owns the element layout.
+    /// One JNI object-array carrier. Buffered sequences store raw rows here;
+    /// callback delivery uses an empty array as its present marker. The
+    /// sequence container owns the element layout in both cases.
     Rows {
         /// Kotlin expression selecting this array's active input alternative.
         condition: String,
@@ -199,7 +201,7 @@ impl JniWire {
             } => *next_integer_niche = None,
         }
     }
-    // Reserved niches live on optional groups after availability has advanced or
+    // Reserved niches live on optional nodes after availability has advanced or
     // been cleared. Validate compatibility independently of the current state.
     pub(crate) fn validate_niche(&self, niche: &JniNiche) -> Result<()> {
         match (self, niche) {
