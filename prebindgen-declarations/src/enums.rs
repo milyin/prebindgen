@@ -144,11 +144,10 @@ pub fn enum_input<W: prebindgen_flat::WireKind, C, G>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: wire.clone(),
             kind,
-        }]
-        .into(),
+        })],
         validation: quote!(let #var = if #active { Some(#decode) } else { None };),
         acquire: quote!(),
         resources: vec![],
@@ -176,11 +175,10 @@ pub fn enum_output<W: prebindgen_flat::WireKind, C, G>(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: wire.clone(),
             kind,
-        }]
-        .into(),
+        })],
         statements: quote!(let #wire: i32 = #encoded;),
         values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),

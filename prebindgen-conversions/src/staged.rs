@@ -90,8 +90,8 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
     type Wire = W;
     type Group = G;
     type SlotFragment<'a> = InputFragment<'a, C>;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<Self::Wire, Self::Group> {
-        &self.layout
+    fn wire_nodes(&self) -> &[prebindgen_flat::WireNode<Self::Wire, Self::Group>] {
+        &self.nodes
     }
 
     fn code_fragment_slot(
@@ -157,8 +157,8 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, 
     type Wire = W;
     type Group = G;
     type SlotFragment<'a> = OutputFragment<'a, C>;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<Self::Wire, Self::Group> {
-        &self.layout
+    fn wire_nodes(&self) -> &[prebindgen_flat::WireNode<Self::Wire, Self::Group>] {
+        &self.nodes
     }
 
     fn code_fragment_slot(

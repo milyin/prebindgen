@@ -91,11 +91,12 @@ pub(crate) fn prepare(
         let output = output.unwrap();
         codec.error_layouts.insert(
             key.clone(),
-            output
-                .layout()
-                .outcome(prebindgen_flat::OutcomeKind::Success)
-                .expect("error payload")
-                .clone(),
+            prebindgen_flat::outcome_nodes(
+                output.wire_nodes(),
+                prebindgen_flat::OutcomeKind::Success,
+            )
+            .expect("error payload")
+            .to_vec(),
         );
         let handler = if let Some(handler) = handlers.get(&key) {
             handler.clone()
@@ -249,7 +250,7 @@ pub(crate) fn delivery(error: &ErrorBinding, context: &KotlinContext<'_>) -> Res
         context.result,
         context.result,
         1,
-        crate::group::result_packet_fields(error.output.layout()).len(),
+        crate::group::result_packet_fields(error.output.wire_nodes()).len(),
     );
     let call = format!("onError.run({})", output.delivered.join(", "));
     if output.cleanup.is_empty() {

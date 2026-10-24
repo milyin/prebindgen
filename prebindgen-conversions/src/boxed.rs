@@ -79,7 +79,7 @@ impl Storage {
 ///     },
 /// )?;
 /// assert_eq!(input.resources[0].access, Access::Shared);
-/// assert_eq!(prebindgen_flat::type_key(&input.layout.iter().next().unwrap().rust_type()), "* const Counter");
+/// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(input.nodes.iter()).next().unwrap().rust_type()), "* const Counter");
 /// assert!(input.acquire.is_empty());
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -133,14 +133,13 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
                 access,
             }),
-        }]
-        .into(),
+        })],
         validation,
         acquire,
         statements,
@@ -191,14 +190,13 @@ pub fn output<W: prebindgen_flat::WireKind, C, G>(
         fallible: false,
         context: Default::default(),
         delivery: Default::default(),
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: ty.clone(),
                 access: Access::Move,
             }),
-        }]
-        .into(),
+        })],
         statements: quote!(let mut #wire = Box::new(#value);),
         values: vec![(wire.clone(), quote!((&mut *#wire) as *mut #allocation))],
         commit: quote!(let _ = Box::into_raw(#wire);),

@@ -21,7 +21,7 @@ impl Input {
             acknowledgement: Some(
                 quote!(log("acknowledge"); if fail_acknowledge { return Err("acknowledgement".into()); }),
             ),
-            layout: vec![].into(),
+            nodes: vec![],
             validation: quote!(log(#validate); if #index == 1 && fail_validation { return Err("validation".into()); }),
             resources: vec![],
             acquire: quote!(log(#acquire);),
@@ -40,11 +40,10 @@ impl Output {
                 statements: quote!(log("deliver"); if fail_delivery { return Err("delivery".into()); }),
                 result: source_result_expr(),
             },
-            layout: vec![Wire {
+            nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
                 name: syn::parse_quote!(out),
                 kind: syn::parse_quote!(i32),
-            }]
-            .into(),
+            })],
             statements: quote!(log("prepare");),
             values: vec![(syn::parse_quote!(out), source_result_expr())],
             commit: quote!(log("commit");),
@@ -133,13 +132,14 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
         context: Default::default(),
         delivery: Default::default(),
         // Slot code owns field projection; callers only see ordered carriers and values.
-        layout: ["y", "x"]
+        nodes: ["y", "x"]
             .into_iter()
             .map(|name| Wire {
                 name: format_ident!("wire_{name}"),
                 kind: syn::parse_quote!(f64),
             })
-            .collect(),
+            .map(prebindgen_flat::WireNode::Wire)
+            .collect::<Vec<_>>(),
         statements: TokenStream::new(),
         values: vec![
             (syn::parse_quote!(wire_y), quote!(#result.y)),
@@ -196,7 +196,11 @@ fn partial_projection_is_self_contained() {
         .slot
         .as_mut()
         .unwrap();
-    output.layout = vec![output.layout.iter().next().unwrap().clone()].into();
+    let retained = prebindgen_flat::wire_definitions(output.nodes.iter())
+        .next()
+        .unwrap()
+        .clone();
+    output.nodes = vec![prebindgen_flat::WireNode::Wire(retained)];
     output.values.pop();
     assert_eq!(
         test_return_packet(flat.function("point").unwrap(), &(), &source_binding())
@@ -216,9 +220,12 @@ fn several_physical_wires_may_supply_one_component() {
         .slot
         .as_mut()
         .unwrap();
-    let mut extra = output.layout.iter().next().unwrap().clone();
+    let mut extra = prebindgen_flat::wire_definitions(output.nodes.iter())
+        .next()
+        .unwrap()
+        .clone();
     extra.name = syn::parse_quote!(additional_wire);
-    output.layout.push(extra);
+    output.nodes.push(prebindgen_flat::WireNode::Wire(extra));
     output
         .values
         .push((syn::parse_quote!(additional_wire), quote!(0)));
@@ -312,7 +319,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        layout: vec![wire()].into(),
+        nodes: vec![prebindgen_flat::WireNode::Wire(wire())],
         acknowledgement: None,
         validation: quote!(),
         acquire: quote!(),
@@ -323,7 +330,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        layout: vec![wire()].into(),
+        nodes: vec![prebindgen_flat::WireNode::Wire(wire())],
         statements: quote!(),
         values: vec![(wire().name, source_result_expr())],
         commit: quote!(),
@@ -335,12 +342,16 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     let call = flat.function("echo").unwrap();
     let f = flat.function("echo").unwrap();
     assert!(std::ptr::eq(
-        call.inputs().unwrap().next().unwrap(),
-        &f.params[0].ty.slot.as_ref().unwrap().layout[0]
+        call.input_wire_definitions().unwrap().next().unwrap(),
+        prebindgen_flat::wire_definitions(f.params[0].ty.slot.as_ref().unwrap().nodes.iter())
+            .next()
+            .expect("logical wire index out of range")
     ));
     assert!(std::ptr::eq(
         test_parameters(call).unwrap().next().unwrap(),
-        &f.params[0].ty.slot.as_ref().unwrap().layout[0]
+        prebindgen_flat::wire_definitions(f.params[0].ty.slot.as_ref().unwrap().nodes.iter())
+            .next()
+            .expect("logical wire index out of range")
     ));
     assert!(std::ptr::eq(
         test_return_packet(call, &(), &source_binding())
@@ -348,7 +359,9 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
             .next()
             .unwrap()
             .wire,
-        &f.ret.slot.as_ref().unwrap().layout[0]
+        prebindgen_flat::wire_definitions(f.ret.slot.as_ref().unwrap().nodes.iter())
+            .next()
+            .expect("logical wire index out of range")
     ));
     let body = emit_call(
         call,
@@ -443,7 +456,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        layout: vec![wire()].into(),
+        nodes: vec![prebindgen_flat::WireNode::Wire(wire())],
         acknowledgement: Some(quote!(*#ack = true;)),
         validation: quote!(if #env < 0 { return Err("environment".into()); }),
         acquire: quote!(),
@@ -454,7 +467,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        layout: vec![wire()].into(),
+        nodes: vec![prebindgen_flat::WireNode::Wire(wire())],
         statements: quote!(),
         values: vec![(wire().name, value.clone())],
         commit: quote!(),
@@ -660,11 +673,10 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: syn::parse_quote!(__prebindgen_argument_0),
             kind: syn::parse_quote!(usize),
-        }]
-        .into(),
+        })],
         acknowledgement: None,
         validation: quote!(let __prebindgen_argument_0_ = __prebindgen_argument_0 + 1;),
         acquire: quote!(),
@@ -676,7 +688,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.ret.slot = Some(OutputPlan {
         fallible: false,
         context: Default::default(),
-        layout: vec![].into(),
+        nodes: vec![],
         values: vec![],
         statements: quote!(),
         commit: quote!(),
@@ -745,7 +757,7 @@ fn validate_resources(resources: &[Resource]) -> TokenStream {
     let plan = InputPlan::<syn::Type> {
         fallible: false,
         context: Default::default(),
-        layout: vec![].into(),
+        nodes: vec![],
         acknowledgement: None,
         validation: quote!(),
         acquire: quote!(),
@@ -782,23 +794,26 @@ fn test_return_packet<
     source: &syn::Ident,
 ) -> prebindgen_flat::Result<std::vec::IntoIter<TestPacketValue<'a, W>>> {
     let plan = f.output_conversion()?;
-    crate::match_output_fields(plan.layout.iter(), &plan.values)?
-        .into_iter()
-        .map(|(wire, value)| {
-            Ok(TestPacketValue {
-                wire,
-                value: crate::emission::render_output(context, value, source)?,
-            })
+    crate::match_output_fields(
+        prebindgen_flat::wire_definitions(plan.nodes.iter()),
+        &plan.values,
+    )?
+    .into_iter()
+    .map(|(wire, value)| {
+        Ok(TestPacketValue {
+            wire,
+            value: crate::emission::render_output(context, value, source)?,
         })
-        .collect::<prebindgen_flat::Result<Vec<_>>>()
-        .map(Vec::into_iter)
+    })
+    .collect::<prebindgen_flat::Result<Vec<_>>>()
+    .map(Vec::into_iter)
 }
 fn test_parameters<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
     f: &prebindgen_flat::Function<I, O>,
 ) -> prebindgen_flat::Result<std::vec::IntoIter<&Wire<I::Wire>>> {
     Ok(f.input_conversions()?
         .into_iter()
-        .flat_map(|p| p.layout().iter())
+        .flat_map(|p| prebindgen_flat::wire_definitions(p.wire_nodes().iter()))
         .collect::<Vec<_>>()
         .into_iter())
 }
@@ -820,23 +835,36 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
         .unwrap()
         .clone();
     plan.values.reverse();
-    let matched = crate::match_output_fields(plan.layout.iter(), &plan.values).unwrap();
+    let matched = crate::match_output_fields(
+        prebindgen_flat::wire_definitions(plan.nodes.iter()),
+        &plan.values,
+    )
+    .unwrap();
     assert_eq!(matched[0].0.name, "wire_y");
     assert_eq!(matched[0].1.to_string(), plan.values[1].1.to_string());
     assert_eq!(matched[1].0.name, "wire_x");
     let mut broken = plan.values.clone();
     broken.pop();
-    assert!(crate::match_output_fields(plan.layout.iter(), &broken)
-        .unwrap_err()
-        .contains("missing"));
+    assert!(crate::match_output_fields(
+        prebindgen_flat::wire_definitions(plan.nodes.iter()),
+        &broken
+    )
+    .unwrap_err()
+    .contains("missing"));
     broken = plan.values.clone();
     broken.push((syn::parse_quote!(unknown), quote!(0)));
-    assert!(crate::match_output_fields(plan.layout.iter(), &broken)
-        .unwrap_err()
-        .contains("unexpected"));
+    assert!(crate::match_output_fields(
+        prebindgen_flat::wire_definitions(plan.nodes.iter()),
+        &broken
+    )
+    .unwrap_err()
+    .contains("unexpected"));
     broken = plan.values.clone();
     broken.push(broken[0].clone());
-    assert!(crate::match_output_fields(plan.layout.iter(), &broken)
-        .unwrap_err()
-        .contains("duplicate"));
+    assert!(crate::match_output_fields(
+        prebindgen_flat::wire_definitions(plan.nodes.iter()),
+        &broken
+    )
+    .unwrap_err()
+    .contains("duplicate"));
 }

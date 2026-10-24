@@ -2,13 +2,13 @@
 use super::*;
 use prebindgen_declarations::{SequenceInput, SequenceOutput};
 
-use prebindgen_flat::{WireLayout, WireNode};
+use prebindgen_flat::WireNode;
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<CWire, CGroup>,
+    element: &[prebindgen_flat::WireNode<CWire, CGroup>],
 ) -> Result<SequenceInput<CGroup>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let mut bind = TokenStream::new();
@@ -36,7 +36,7 @@ pub(crate) fn input(
 pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &WireLayout<CWire, CGroup>,
+    element: &[prebindgen_flat::WireNode<CWire, CGroup>],
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<CGroup>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
@@ -66,10 +66,10 @@ pub(crate) fn output(
     })
 }
 pub(crate) fn schemas<'a>(
-    layout: &'a WireLayout<CWire, CGroup>,
-    out: &mut Vec<(&'a Wire, &'a WireLayout<CWire, CGroup>)>,
+    layout: &'a [prebindgen_flat::WireNode<CWire, CGroup>],
+    out: &mut Vec<(&'a Wire, &'a [prebindgen_flat::WireNode<CWire, CGroup>])>,
 ) {
-    for node in layout.nodes() {
+    for node in layout {
         match node {
             WireNode::Wire(_) => {}
             WireNode::Outcomes { alternatives } => {
@@ -77,7 +77,7 @@ pub(crate) fn schemas<'a>(
                     .iter()
                     .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
                 {
-                    schemas(&success.layout, out);
+                    schemas(&success.nodes, out);
                 }
             }
             WireNode::Alternatives { alternatives, .. } => {
@@ -99,7 +99,7 @@ pub(crate) fn schemas<'a>(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_schemas(
-    schemas: Vec<(&Wire, &WireLayout<CWire, CGroup>)>,
+    schemas: Vec<(&Wire, &[prebindgen_flat::WireNode<CWire, CGroup>])>,
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
@@ -160,7 +160,7 @@ pub(crate) fn emit_schemas(
 
 /// Reclaim a committed output that will not reach its caller, including nested rows.
 pub(crate) fn release(
-    layout: &WireLayout<CWire, CGroup>,
+    layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
     fields: &[(&Wire, TokenStream)],
     context: &CContext,
     catch_panics: bool,
@@ -195,7 +195,7 @@ pub(crate) fn release(
 pub(crate) fn callback_output(
     wire: syn::Ident,
     values: &[(syn::Ident, TokenStream)],
-    element: &WireLayout<CWire, CGroup>,
+    element: &[prebindgen_flat::WireNode<CWire, CGroup>],
     length: syn::Ident,
 ) -> Result<SequenceOutput<CGroup>> {
     let values = prebindgen_conversions::match_output_fields(
@@ -227,7 +227,7 @@ pub(crate) fn callback_output(
 }
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
-pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
+pub(crate) fn callback_shape(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]) -> bool {
     fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
         match nodes {
             [WireNode::Sequence(c)] => c
@@ -246,36 +246,42 @@ pub(crate) fn callback_shape(layout: &WireLayout<CWire, CGroup>) -> bool {
             [WireNode::Optional(c)] => match &c.metadata {
                 Some(CGroup::Optional(o)) if o.niche.is_none() => {
                     matches!(o.controls.as_slice(),[flag] if flag.name==o.discriminator)
-                        && one(c.element.nodes())
+                        && one(c.element.as_slice())
                 }
                 _ => false,
             },
-            [WireNode::Group { children, .. }] => one(children.nodes()),
+            [WireNode::Group { children, .. }] => one(children.as_slice()),
             _ => false,
         }
     }
-    one(layout
-        .outcome(prebindgen_flat::OutcomeKind::Success)
-        .map_or(&[], WireLayout::nodes))
+    one(
+        prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
+            .unwrap_or(&[]),
+    )
 }
 
 /// The adapter selects its native scope before looking for a sequence.
+#[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &WireLayout<CWire, CGroup>,
-) -> Option<(&prebindgen_flat::Wire<CWire>, &WireLayout<CWire, CGroup>)> {
-    let success = layout.outcome(prebindgen_flat::OutcomeKind::Success)?;
+    layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
+) -> Option<(
+    &prebindgen_flat::Wire<CWire>,
+    &[prebindgen_flat::WireNode<CWire, CGroup>],
+)> {
+    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)?;
     prebindgen_declarations::outer_sequences(success)
         .into_iter()
         .find_map(|c| {
             c.metadata
                 .as_ref()
                 .and_then(CGroup::sequence_wire)
-                .map(|w| (w, &c.element))
+                .map(|w| (w, c.element.as_slice()))
         })
 }
-pub(crate) fn callback_target(layout: &WireLayout<CWire, CGroup>) -> Result<syn::Ident> {
-    let success = layout
-        .outcome(prebindgen_flat::OutcomeKind::Success)
+pub(crate) fn callback_target(
+    layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
+) -> Result<syn::Ident> {
+    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
         .ok_or("missing Success outcome")?;
     if prebindgen_declarations::outer_sequences(success).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2

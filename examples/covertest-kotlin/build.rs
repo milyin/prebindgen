@@ -140,13 +140,13 @@ fn main() {
             // Observe a clone so the production builder still installs its own codec.
             // Collections.kt exercises the separately generated production boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;
-            let logical = output.layout().outcome(OutcomeKind::Success).unwrap();
-            assert!(matches!(logical.nodes(), [WireNode::Sequence(_)]));
-            assert!(matches!(logical.get(0).unwrap().kind, prebindgen_jni::JniWire::Scalar {
+            let logical = prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::Success).unwrap();
+            assert!(matches!(logical, [WireNode::Sequence(_)]));
+            assert!(matches!(prebindgen_flat::wire_definitions(logical.iter()).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
                 primitive: prebindgen_flat::Primitive::Char, ..
             }));
             assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
-            assert!(output.layout().outcome(OutcomeKind::BindingFailure).is_some());
+            assert!(prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::BindingFailure).is_some());
             Ok(())
         })
         .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))

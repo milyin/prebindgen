@@ -74,7 +74,7 @@ impl Value {
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
-/// assert_eq!(prebindgen_flat::type_key(&input.layout.iter().next().unwrap().rust_type()), "& str");
+/// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(input.nodes.iter()).next().unwrap().rust_type()), "& str");
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -117,11 +117,10 @@ pub fn input<W: prebindgen_flat::WireKind, C, G>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: wire.clone(),
             kind,
-        }]
-        .into(),
+        })],
         validation: quote!(let #var = if #condition {Some(#decode)} else {None};),
         acquire: quote!(),
         resources: vec![],
@@ -174,11 +173,10 @@ pub fn output<W: prebindgen_flat::WireKind, C, G>(
         fallible: true,
         context: Default::default(),
         delivery: Default::default(),
-        layout: vec![Wire {
+        nodes: vec![prebindgen_flat::WireNode::Wire(Wire {
             name: wire.clone(),
             kind,
-        }]
-        .into(),
+        })],
         statements,
         values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),

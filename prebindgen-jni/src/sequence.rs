@@ -5,13 +5,12 @@ use crate::kotlin::{
 };
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 use prebindgen_flat::Wire;
-use prebindgen_flat::WireLayout;
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     active: &Condition,
 ) -> Result<SequenceInput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -62,7 +61,7 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -96,10 +95,10 @@ pub(crate) fn output(
 
 pub(crate) fn input_list(
     carrier: &Wire<JniWire>,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
-    let child = input_kotlin(element.nodes(), context)?;
+    let child = input_kotlin(element, context)?;
     if child.parameters.len() != 1 {
         return Err("Kotlin collection elements must expose exactly one value; declare a data class for expanded fields".into());
     }
@@ -155,7 +154,7 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let row = format!("{}_row", context.output_prefix);
@@ -168,7 +167,7 @@ pub(crate) fn output_list(
         output_prefix: &prefix,
         ..*context
     };
-    let child = output_kotlin(element.nodes(), &ctx)?;
+    let child = output_kotlin(element, &ctx)?;
     if child.delivered.len() != 1 {
         return Err("Kotlin collection elements must deliver exactly one value; declare a data class for expanded outputs".into());
     }
@@ -193,22 +192,27 @@ pub(crate) fn output_list(
 }
 
 /// The adapter selects its native scope before looking for a sequence.
+#[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &WireLayout<JniWire, JniGroup>,
-) -> Option<(&Wire<JniWire>, &WireLayout<JniWire, JniGroup>)> {
-    let success = layout.outcome(prebindgen_flat::OutcomeKind::Success)?;
+    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+) -> Option<(
+    &Wire<JniWire>,
+    &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+)> {
+    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)?;
     prebindgen_declarations::outer_sequences(success)
         .into_iter()
         .find_map(|c| {
             c.metadata
                 .as_ref()
                 .and_then(JniGroup::sequence_wire)
-                .map(|w| (w, &c.element))
+                .map(|w| (w, c.element.as_slice()))
         })
 }
-pub(crate) fn callback_target(layout: &WireLayout<JniWire, JniGroup>) -> Result<syn::Ident> {
-    let success = layout
-        .outcome(prebindgen_flat::OutcomeKind::Success)
+pub(crate) fn callback_target(
+    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+) -> Result<syn::Ident> {
+    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
         .ok_or("missing Success outcome")?;
     if prebindgen_declarations::outer_sequences(success).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2

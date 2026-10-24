@@ -474,7 +474,7 @@ impl JniGenBuilder {
                 let wire = sequence::callback_target(
                     flat.function(&declaration.name)?
                         .output_conversion()?
-                        .layout(),
+                        .wire_nodes(),
                 )?;
                 let variant = defaults.callback_variant(&mut flat, &declaration, &variant_name)?;
                 codec.callback_wire = Some(wire);
@@ -486,7 +486,7 @@ impl JniGenBuilder {
                         .slot
                         .as_ref()
                         .unwrap()
-                        .layout(),
+                        .wire_nodes(),
                 )
                 .len()
                     != 1
@@ -579,14 +579,13 @@ impl Codec for JniCodec {
     fn binding_failure_layout(
         &self,
         _: &(),
-    ) -> Result<Option<prebindgen_flat::WireLayout<Self::Wire, Self::Group>>> {
-        Ok(Some(
-            vec![prebindgen_flat::Wire {
+    ) -> Result<Option<Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>>> {
+        Ok(Some(vec![prebindgen_flat::WireNode::Wire(
+            prebindgen_flat::Wire {
                 name: syn::parse_quote!(message),
                 kind: JniWire::text(),
-            }]
-            .into(),
-        ))
+            },
+        )]))
     }
     fn optional_metadata(
         &self,
@@ -617,7 +616,7 @@ impl Codec for JniCodec {
     type Input = JniInput;
     type Output = JniOutput;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.layout)?;
+        group::validate_layout(&plan.nodes)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let ownership = prebindgen_conversions::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
@@ -632,11 +631,11 @@ impl Codec for JniCodec {
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
-        group::validate_layout(&plan.layout)?;
+        group::validate_layout(&plan.nodes)?;
         let env = prebindgen_conversions::template_parameter("environment");
-        let count = crate::group::result_packet_fields(&plan.layout).len() + 1;
+        let count = crate::group::result_packet_fields(&plan.nodes).len() + 1;
         let encode = encode_array(
-            crate::group::result_packet(&plan.layout, &plan.values)?,
+            crate::group::result_packet(&plan.nodes, &plan.values)?,
             &syn::parse_quote!(result),
             1,
         );
@@ -658,7 +657,7 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
         active: &prebindgen_declarations::Condition,
     ) -> Result<prebindgen_declarations::SequenceInput<JniGroup>> {
         sequence::input(wire, length, index, element, active)
@@ -669,7 +668,7 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
         values: &[(syn::Ident, TokenStream)],
     ) -> Result<prebindgen_declarations::SequenceOutput<JniGroup>> {
         sequence::output(wire, length, index, element, values)
@@ -840,37 +839,37 @@ impl Codec for JniCodec {
 
     fn optional_niche(
         &self,
-        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
     ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
         crate::group::optional_niche(payload)
     }
     fn optional_presence(
         &self,
-        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
         reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         crate::group::optional_presence(payload, reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         crate::group::absent_output_values(payload, reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut prebindgen_flat::WireLayout<Self::Wire, Self::Group>,
+        payload: &mut Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<()> {
         crate::group::retire_niches(payload, reservation)
     }
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
-        crate::group::validate_layout(&plan.layout)
+        crate::group::validate_layout(&plan.nodes)
     }
     fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
-        crate::group::validate_layout(&plan.layout)?;
-        crate::group::result_packet(&plan.layout, &plan.values)?;
+        crate::group::validate_layout(&plan.nodes)?;
+        crate::group::result_packet(&plan.nodes, &plan.values)?;
         Ok(())
     }
 }
@@ -1087,19 +1086,17 @@ fn generate(
         let f = flat.function(&source)?;
         let callback = callbacks.contains(&source);
         let error = errors.get(&source);
-        let logical = f.output_conversion()?.layout();
-        logical.validate()?;
+        let logical = f.output_conversion()?.wire_nodes();
+        prebindgen_flat::validate_wire_nodes(logical.iter())?;
         // Every JNI wrapper has a separate binding-error callback, including
         // functions without a source Result. Manual schemas must declare it.
-        if logical
-            .outcome(prebindgen_flat::OutcomeKind::SourceError)
+        if prebindgen_flat::outcome_nodes(logical, prebindgen_flat::OutcomeKind::SourceError)
             .is_some()
             != error.is_some()
         {
             return Err("JNI source-error schema must match its configured error converter".into());
         }
-        if logical
-            .outcome(prebindgen_flat::OutcomeKind::BindingFailure)
+        if prebindgen_flat::outcome_nodes(logical, prebindgen_flat::OutcomeKind::BindingFailure)
             .is_none()
         {
             return Err("JNI native delivery requires a declared binding-failure schema".into());
@@ -1178,7 +1175,7 @@ fn generate(
             kt_args.push("ownership".into());
         }
         if callback {
-            let (_, element) = sequence::return_sequence(f.output_conversion()?.layout())
+            let (_, element) = sequence::return_sequence(f.output_conversion()?.wire_nodes())
                 .ok_or("missing callback sequence")?;
             let fields = crate::group::row_fields(element)
                 .enumerate()
@@ -1229,7 +1226,7 @@ fn generate(
         };
         let fold = if callback {
             Some(sequence_callback::fold(
-                f.output_conversion()?.layout(),
+                f.output_conversion()?.wire_nodes(),
                 &kotlin_context,
             )?)
         } else {
@@ -1247,7 +1244,7 @@ fn generate(
             kotlin_context.result,
             kotlin_context.result,
             1,
-            crate::group::result_packet_fields(f.output_conversion()?.layout()).len(),
+            crate::group::result_packet_fields(f.output_conversion()?.wire_nodes()).len(),
         );
         let KotlinOutput {
             delivered,

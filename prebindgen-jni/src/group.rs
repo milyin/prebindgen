@@ -1,7 +1,7 @@
 //! JNI adapter-owned descriptions of the wire tree.
 use super::*;
 
-use prebindgen_flat::{WireLayout, WireNode};
+use prebindgen_flat::WireNode;
 use syn::ext::IdentExt;
 
 /// Metadata interpreted by the JNI binding writer.
@@ -49,12 +49,12 @@ fn values_mut(
         for node in nodes {
             match node {
                 WireNode::Wire(w) => out.push(w),
-                WireNode::Group { children, .. } => visit(children.nodes_mut(), out),
+                WireNode::Group { children, .. } => visit(children.as_mut_slice(), out),
                 WireNode::Optional(c) => {
                     if let Some(JniGroup::Optional(o)) = &mut c.metadata {
                         out.extend(&mut o.controls);
                     }
-                    visit(c.element.nodes_mut(), out);
+                    visit(c.element.as_mut_slice(), out);
                 }
                 WireNode::Sequence(c) => {
                     if let Some(JniGroup::Sequence(w)) = &mut c.metadata {
@@ -69,7 +69,7 @@ fn values_mut(
                         out.push(w);
                     }
                     for arm in alternatives {
-                        visit(arm.nodes_mut(), out);
+                        visit(arm.as_mut_slice(), out);
                     }
                 }
                 WireNode::Outcomes { alternatives } => {
@@ -77,7 +77,7 @@ fn values_mut(
                         .iter_mut()
                         .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
                     {
-                        visit(o.layout.nodes_mut(), out);
+                        visit(o.nodes.as_mut_slice(), out);
                     }
                 }
             }
@@ -98,19 +98,19 @@ fn read<'a>(
     for node in nodes {
         match node {
             WireNode::Wire(w) => out.push(w),
-            WireNode::Group { children, .. } => read(children.nodes(), out, elements),
+            WireNode::Group { children, .. } => read(children.as_slice(), out, elements),
             WireNode::Optional(c) => {
                 if let Some(JniGroup::Optional(o)) = &c.metadata {
                     out.extend(&o.controls);
                 }
-                read(c.element.nodes(), out, elements);
+                read(c.element.as_slice(), out, elements);
             }
             WireNode::Sequence(c) => {
                 if let Some(JniGroup::Sequence(w)) = &c.metadata {
                     out.push(w);
                 }
                 if elements {
-                    read(c.element.nodes(), out, elements);
+                    read(c.element.as_slice(), out, elements);
                 }
             }
             WireNode::Alternatives {
@@ -121,7 +121,7 @@ fn read<'a>(
                     out.push(w);
                 }
                 for arm in alternatives {
-                    read(arm.nodes(), out, elements);
+                    read(arm.as_slice(), out, elements);
                 }
             }
             WireNode::Outcomes { alternatives } => {
@@ -129,7 +129,7 @@ fn read<'a>(
                     .iter()
                     .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
                 {
-                    read(o.layout.nodes(), out, elements);
+                    read(o.nodes.as_slice(), out, elements);
                 }
             }
         }
@@ -144,27 +144,29 @@ impl JniGroup {
         }
     }
 }
-pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<()> {
-    layout.validate()?;
-    if let [WireNode::Outcomes { alternatives }] = layout.nodes() {
+pub(crate) fn validate_layout(
+    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+) -> Result<()> {
+    prebindgen_flat::validate_wire_nodes(layout.iter())?;
+    if let [WireNode::Outcomes { alternatives }] = layout {
         for arm in alternatives {
-            validate_layout(&arm.layout)?;
+            validate_layout(&arm.nodes)?;
         }
         return Ok(());
     }
     let mut definitions = vec![];
-    read(layout.nodes(), &mut definitions, true);
+    read(layout, &mut definitions, true);
     prebindgen_conversions::validate_wire_names(definitions)?;
-    for wire in crate::group::values(layout.nodes()) {
+    for wire in crate::group::values(layout) {
         wire.kind.validate()?;
     }
     fn visit(
-        layout: &WireLayout<JniWire, JniGroup>,
+        layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
     ) -> Result<()> {
-        for node in layout.nodes() {
+        for node in layout {
             match node {
                 WireNode::Alternatives {
                     metadata,
@@ -185,7 +187,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                         return Err("sequence requires a separate carrier".into());
                     };
                     if !(matches!(carrier.kind, JniWire::Rows { .. }))
-                        || crate::group::values(c.element.nodes()).len() == 0
+                        || crate::group::values(c.element.as_slice()).len() == 0
                     {
                         return Err(
                             "sequence requires a supported carrier and nonempty element layout"
@@ -212,7 +214,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                         if !controls.is_empty() {
                             return Err("niche optional must not have control wires".into());
                         }
-                        let wire = crate::group::values(c.element.nodes())
+                        let wire = crate::group::values(c.element.as_slice())
                             .find(|w| w.name == o.discriminator)
                             .ok_or("optional discriminator outside payload")?;
                         wire.kind.validate_niche(niche)?;
@@ -235,7 +237,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                 }
                 WireNode::Outcomes { alternatives } => {
                     for arm in alternatives {
-                        validate_layout(&arm.layout)?;
+                        validate_layout(&arm.nodes)?;
                     }
                 }
                 WireNode::Wire(w) if matches!(w.kind, JniWire::Rows { .. }) => {
@@ -265,7 +267,7 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
                         }
                         JniGroup::Fields(_) => {
                             let mut fields = std::collections::BTreeSet::new();
-                            for child in children.nodes() {
+                            for child in children.as_slice() {
                                 let WireNode::Group {
                                     metadata: JniGroup::Field(name),
                                     ..
@@ -305,16 +307,15 @@ pub(crate) fn validate_layout(layout: &WireLayout<JniWire, JniGroup>) -> Result<
 // private implementation; the logical tree itself defines no physical order.
 // Native parameters contributed by one source function argument.
 pub(crate) fn argument_parameters(
-    layout: &WireLayout<JniWire, JniGroup>,
+    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 ) -> Result<std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>>> {
     if layout
-        .nodes()
         .iter()
         .any(|n| matches!(n, WireNode::Outcomes { .. }))
     {
         return Err("function parameters cannot contain completion outcomes".into());
     }
-    Ok(values(layout.nodes()))
+    Ok(values(layout))
 }
 pub(crate) fn function_parameters<
     I: prebindgen_flat::Conversion<Wire = JniWire, Group = JniGroup>,
@@ -324,67 +325,65 @@ pub(crate) fn function_parameters<
 ) -> Result<std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {
-        out.extend(argument_parameters(input.layout())?);
+        out.extend(argument_parameters(input.wire_nodes())?);
     }
     Ok(out.into_iter())
 }
 pub(crate) fn result_packet_fields(
-    layout: &WireLayout<JniWire, JniGroup>,
+    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 ) -> std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>> {
     values(
-        layout
-            .outcome(prebindgen_flat::OutcomeKind::Success)
-            .expect("validated Success outcome")
-            .nodes(),
+        prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
+            .expect("validated Success outcome"),
     )
 }
 pub(crate) fn result_packet<'a>(
-    layout: &'a WireLayout<JniWire, JniGroup>,
+    layout: &'a [prebindgen_flat::WireNode<JniWire, JniGroup>],
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a prebindgen_flat::Wire<JniWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(result_packet_fields(layout), bindings)
 }
 pub(crate) fn row_fields(
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 ) -> std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>> {
-    values(element.nodes())
+    values(element)
 }
 pub(crate) fn row_values<'a>(
-    element: &'a WireLayout<JniWire, JniGroup>,
+    element: &'a [prebindgen_flat::WireNode<JniWire, JniGroup>],
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a prebindgen_flat::Wire<JniWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(row_fields(element), bindings)
 }
 pub(crate) fn callback_parameters(
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 ) -> std::vec::IntoIter<&prebindgen_flat::Wire<JniWire>> {
-    values(element.nodes())
+    values(element)
 }
 
 pub(crate) fn optional_niche(
-    payload: &WireLayout<JniWire, JniGroup>,
+    payload: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 ) -> Option<prebindgen_declarations::NicheReservation<JniNiche>> {
-    prebindgen_declarations::select_optional_niche(&JniCodec, values(payload.nodes()))
+    prebindgen_declarations::select_optional_niche(&JniCodec, values(payload))
 }
 pub(crate) fn optional_presence(
-    payload: &WireLayout<JniWire, JniGroup>,
+    payload: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     reservation: &prebindgen_declarations::NicheReservation<JniNiche>,
 ) -> Result<TokenStream> {
-    prebindgen_declarations::optional_presence(&JniCodec, values(payload.nodes()), reservation)
+    prebindgen_declarations::optional_presence(&JniCodec, values(payload), reservation)
 }
 pub(crate) fn absent_output_values(
-    payload: &WireLayout<JniWire, JniGroup>,
+    payload: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     reservation: Option<&prebindgen_declarations::NicheReservation<JniNiche>>,
 ) -> Result<Vec<(syn::Ident, TokenStream)>> {
-    prebindgen_declarations::absent_output_values(&JniCodec, values(payload.nodes()), reservation)
+    prebindgen_declarations::absent_output_values(&JniCodec, values(payload), reservation)
 }
 pub(crate) fn retire_niches(
-    payload: &mut WireLayout<JniWire, JniGroup>,
+    payload: &mut Vec<prebindgen_flat::WireNode<JniWire, JniGroup>>,
     reservation: Option<&prebindgen_declarations::NicheReservation<JniNiche>>,
 ) -> Result<()> {
     prebindgen_declarations::retire_optional_niches(
         &JniCodec,
-        values_mut(payload.nodes_mut()),
+        values_mut(payload.as_mut_slice()),
         reservation,
     )
 }
@@ -399,9 +398,12 @@ pub(crate) fn kotlin_result_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn enclose_optional_metadata(tree: &mut WireLayout<JniWire, JniGroup>, mut metadata: JniGroup) {
+    fn enclose_optional_metadata(
+        tree: &mut Vec<prebindgen_flat::WireNode<JniWire, JniGroup>>,
+        mut metadata: JniGroup,
+    ) {
         let flag = matches!(&metadata,JniGroup::Optional(o) if o.niche.is_none());
-        let mut nodes = std::mem::take(tree).into_nodes();
+        let mut nodes = std::mem::take(tree);
         // These fixtures describe an explicit flag as the first physical wire.
         // Move it into the representation without changing its wire type.
         let controls = if flag && matches!(nodes.first(), Some(WireNode::Wire(_))) {
@@ -412,11 +414,16 @@ mod tests {
         } else {
             vec![]
         };
-        *tree = WireLayout::from_nodes(nodes);
+        *tree = nodes;
         if let JniGroup::Optional(o) = &mut metadata {
             o.controls = controls;
         }
-        tree.enclose_optional(Some(metadata));
+        *tree = vec![prebindgen_flat::WireNode::Optional(
+            prebindgen_flat::WireContainer {
+                metadata: Some(metadata),
+                element: std::mem::take(&mut *tree),
+            },
+        )];
     }
     fn leaf(name: &str) -> prebindgen_flat::Wire<JniWire> {
         prebindgen_flat::Wire {
@@ -442,47 +449,75 @@ mod tests {
                 niche: None,
             })
         };
-        let mut carried: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
-        carried.enclose_optional(Some(JniGroup::Sequence(leaf("carrier"))));
+        let mut carried: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> =
+            vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
+        carried = vec![prebindgen_flat::WireNode::Optional(
+            prebindgen_flat::WireContainer {
+                metadata: Some(JniGroup::Sequence(leaf("carrier"))),
+                element: std::mem::take(&mut carried),
+            },
+        )];
         assert!(validate_layout(&carried)
             .unwrap_err()
             .contains("inline optional"));
-        let mut sequence: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
-        sequence.enclose_sequence(None);
+        let mut sequence: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> =
+            vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
+        sequence = vec![prebindgen_flat::WireNode::Sequence(
+            prebindgen_flat::WireContainer {
+                metadata: None,
+                element: std::mem::take(&mut sequence),
+            },
+        )];
         assert!(validate_layout(&sequence)
             .unwrap_err()
             .contains("separate carrier"));
-        let mut missing: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
-        missing.enclose_optional(None);
+        let mut missing: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> =
+            vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
+        missing = vec![prebindgen_flat::WireNode::Optional(
+            prebindgen_flat::WireContainer {
+                metadata: None,
+                element: std::mem::take(&mut missing),
+            },
+        )];
         assert!(validate_layout(&missing)
             .unwrap_err()
             .contains("requires optional metadata"));
-        let mut wrong: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
-        wrong.enclose(metadata());
+        let mut wrong: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> =
+            vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
+        wrong = vec![prebindgen_flat::WireNode::Group {
+            metadata: metadata(),
+            children: std::mem::take(&mut wrong),
+        }];
         assert!(validate_layout(&wrong)
             .unwrap_err()
             .contains("requires an Optional node"));
-        let mut wrong_flag: WireLayout<JniWire, JniGroup> = vec![leaf("value")].into();
+        let mut wrong_flag: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> =
+            vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
         let mut m = metadata();
         if let JniGroup::Optional(o) = &mut m {
             o.controls.push(leaf("flag"));
         }
-        wrong_flag.enclose_optional(Some(m));
+        wrong_flag = vec![prebindgen_flat::WireNode::Optional(
+            prebindgen_flat::WireContainer {
+                metadata: Some(m),
+                element: std::mem::take(&mut wrong_flag),
+            },
+        )];
         assert!(validate_layout(&wrong_flag)
             .unwrap_err()
             .contains("sole inline control"));
-        let mut wrong_choice: WireLayout<JniWire, JniGroup> =
-            WireLayout::from_nodes(vec![WireNode::Alternatives {
+        let mut wrong_choice: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> =
+            vec![WireNode::Alternatives {
                 metadata: Some(JniGroup::Alternatives(leaf("tag"))),
-                alternatives: vec![WireLayout::default()],
-            }]);
+                alternatives: vec![Vec::new()],
+            }];
         assert!(validate_layout(&wrong_choice)
             .unwrap_err()
             .contains("integer selector"));
         if let WireNode::Alternatives {
             metadata: Some(JniGroup::Alternatives(w)),
             ..
-        } = &mut wrong_choice.nodes_mut()[0]
+        } = &mut wrong_choice.as_mut_slice()[0]
         {
             w.kind = JniWire::selector();
         }
@@ -490,12 +525,17 @@ mod tests {
     }
     #[test]
     fn nested_optional_references_and_presence_bindings_are_validated() {
-        let mut tree = WireLayout::from(vec![leaf("value")]);
-        tree[0].kind.set_niche(Some(JniNiche::Integer(-3))).unwrap();
+        let mut tree = vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
+        prebindgen_flat::wire_definitions_mut(tree.iter_mut())
+            .next()
+            .expect("logical wire index out of range")
+            .kind
+            .set_niche(Some(JniNiche::Integer(-3)))
+            .unwrap();
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         enclose_optional_metadata(&mut tree, optional("outer", "value", Some(-2)));
         validate_layout(&tree).unwrap();
-        assert_eq!(crate::group::values(tree.nodes()).len(), 1);
+        assert_eq!(crate::group::values(tree.as_slice()).len(), 1);
         let mut bad = tree.clone();
         enclose_optional_metadata(&mut bad, optional("missing", "elsewhere", Some(-3)));
         assert!(validate_layout(&bad)
@@ -503,8 +543,8 @@ mod tests {
             .contains("outside payload"));
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree).unwrap_err().contains("duplicate"));
-        let mut flag = WireLayout::from(vec![leaf("flag")]);
-        crate::group::values_mut(flag.nodes_mut())
+        let mut flag = vec![prebindgen_flat::WireNode::Wire(leaf("flag"))];
+        crate::group::values_mut(flag.as_mut_slice())
             .next()
             .unwrap()
             .kind = JniWire::selector();
@@ -517,26 +557,41 @@ mod tests {
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
-        let mut field: WireLayout<JniWire, JniGroup> = WireLayout::default();
-        field.enclose(JniGroup::Field(syn::parse_quote!(x)));
+        let mut field: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> = Vec::new();
+        field = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Field(syn::parse_quote!(x)),
+            children: std::mem::take(&mut field),
+        }];
         assert!(validate_layout(&field)
             .unwrap_err()
             .contains("direct child"));
         let mut duplicates = field.clone();
         duplicates.extend(field.clone());
-        duplicates.enclose(JniGroup::Fields(None));
+        duplicates = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Fields(None),
+            children: std::mem::take(&mut duplicates),
+        }];
         assert!(validate_layout(&duplicates)
             .unwrap_err()
             .contains("duplicate field"));
-        field.enclose(JniGroup::Fields(None));
+        field = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Fields(None),
+            children: std::mem::take(&mut field),
+        }];
         validate_layout(&field).unwrap();
-        let mut malformed = WireLayout::from(vec![leaf("value")]);
-        malformed.enclose(JniGroup::Fields(None));
+        let mut malformed = vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
+        malformed = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Fields(None),
+            children: std::mem::take(&mut malformed),
+        }];
         assert!(validate_layout(&malformed)
             .unwrap_err()
             .contains("named field children"));
-        let mut empty: WireLayout<JniWire, JniGroup> = WireLayout::default();
-        empty.enclose(JniGroup::Fields(None));
+        let mut empty: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> = Vec::new();
+        empty = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Fields(None),
+            children: std::mem::take(&mut empty),
+        }];
         validate_layout(&empty).unwrap();
     }
     #[test]
@@ -550,9 +605,10 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        input
-            .layout
-            .enclose(JniGroup::Field(syn::parse_quote!(orphan)));
+        input.nodes = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Field(syn::parse_quote!(orphan)),
+            children: std::mem::take(&mut input.nodes),
+        }];
         assert!(JniCodec
             .finish_input(&mut input, &())
             .unwrap_err()
@@ -566,9 +622,10 @@ mod tests {
                 false,
             )
             .unwrap();
-        output
-            .layout
-            .enclose(JniGroup::Field(syn::parse_quote!(orphan)));
+        output.nodes = vec![prebindgen_flat::WireNode::Group {
+            metadata: JniGroup::Field(syn::parse_quote!(orphan)),
+            children: std::mem::take(&mut output.nodes),
+        }];
         assert!(JniCodec
             .finish_output(&mut output, &())
             .unwrap_err()
@@ -578,18 +635,18 @@ mod tests {
     fn reserved_niches_are_checked_independently_of_remaining_availability() {
         let mut wire = JniWire::scalar(Primitive::Char);
         wire.clear_niche();
-        let mut tree = WireLayout::from(vec![prebindgen_flat::Wire {
+        let mut tree = vec![prebindgen_flat::WireNode::Wire(prebindgen_flat::Wire {
             name: syn::parse_quote!(value),
             kind: wire,
-        }]);
+        })];
         enclose_optional_metadata(&mut tree, optional("present", "value", Some(-1)));
         validate_layout(&tree).unwrap();
-        crate::group::values_mut(tree.nodes_mut())
+        crate::group::values_mut(tree.as_mut_slice())
             .next()
             .unwrap()
             .kind = JniWire::scalar(Primitive::I64);
         assert!(validate_layout(&tree).unwrap_err().contains("incompatible"));
-        crate::group::values_mut(tree.nodes_mut())
+        crate::group::values_mut(tree.as_mut_slice())
             .next()
             .unwrap()
             .kind = JniWire::Scalar {
@@ -609,7 +666,7 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        crate::group::values_mut(input.layout.nodes_mut())
+        crate::group::values_mut(input.nodes.as_mut_slice())
             .next()
             .unwrap()
             .kind = JniWire::Scalar {
@@ -629,10 +686,10 @@ mod tests {
                 false,
             )
             .unwrap();
-        crate::group::values_mut(output.layout.nodes_mut())
+        crate::group::values_mut(output.nodes.as_mut_slice())
             .next()
             .unwrap()
-            .kind = crate::group::values(input.layout.nodes())
+            .kind = crate::group::values(input.nodes.as_slice())
             .next()
             .unwrap()
             .kind
@@ -644,12 +701,17 @@ mod tests {
     }
     #[test]
     fn optional_reservations_cannot_overlap_each_other_or_available_state() {
-        let mut tree = WireLayout::from(vec![leaf("value")]);
+        let mut tree = vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
         enclose_optional_metadata(&mut tree, optional("inner", "value", Some(-1)));
         assert!(validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
-        tree[0].kind.set_niche(Some(JniNiche::Integer(-2))).unwrap();
+        prebindgen_flat::wire_definitions_mut(tree.iter_mut())
+            .next()
+            .expect("logical wire index out of range")
+            .kind
+            .set_niche(Some(JniNiche::Integer(-2)))
+            .unwrap();
         validate_layout(&tree).unwrap();
         enclose_optional_metadata(&mut tree, optional("outer", "value", Some(-1)));
         assert!(validate_layout(&tree)
@@ -667,19 +729,28 @@ mod abi_tests {
             name: syn::parse_str(name).unwrap(),
             kind: JniWire::scalar(Primitive::I32),
         };
-        let element: WireLayout<JniWire, JniGroup> = vec![scalar("first"), scalar("second")].into();
+        let element: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> = vec![
+            prebindgen_flat::WireNode::Wire(scalar("first")),
+            prebindgen_flat::WireNode::Wire(scalar("second")),
+        ];
         let mut sequence = element.clone();
-        sequence.enclose_sequence(Some(JniGroup::Sequence(prebindgen_flat::Wire {
-            name: syn::parse_quote!(rows),
-            kind: JniWire::Rows {
-                condition: "true".into(),
-                null_niche_available: true,
+        sequence = vec![prebindgen_flat::WireNode::Sequence(
+            prebindgen_flat::WireContainer {
+                metadata: Some(JniGroup::Sequence(prebindgen_flat::Wire {
+                    name: syn::parse_quote!(rows),
+                    kind: JniWire::Rows {
+                        condition: "true".into(),
+                        null_niche_available: true,
+                    },
+                })),
+                element: std::mem::take(&mut sequence),
             },
-        })));
+        )];
         let mut result = sequence.clone();
-        result.set_outcome(
+        prebindgen_flat::set_outcome(
+            &mut result,
             prebindgen_flat::OutcomeKind::SourceError,
-            vec![scalar("error")].into(),
+            vec![prebindgen_flat::WireNode::Wire(scalar("error"))],
         );
         assert_eq!(
             result_packet_fields(&result)
@@ -721,7 +792,7 @@ mod abi_tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        input.layout = sequence;
+        input.nodes = sequence;
         flat.function_mut("f").unwrap().params[0].ty.slot = Some(input.clone().into());
         assert_eq!(
             function_parameters(flat.function("f").unwrap())
@@ -730,7 +801,7 @@ mod abi_tests {
                 .collect::<Vec<_>>(),
             ["rows"]
         );
-        input.layout = result;
+        input.nodes = result;
         flat.function_mut("f").unwrap().params[0].ty.slot = Some(input.into());
         assert!(function_parameters(flat.function("f").unwrap()).is_err());
     }

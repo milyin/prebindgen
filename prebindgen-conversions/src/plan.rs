@@ -1,6 +1,6 @@
 use crate::template_parameter;
 use prebindgen_flat::WireKind;
-use prebindgen_flat::WireLayout;
+
 use proc_macro2::TokenStream;
 use quote::quote;
 /// An input conversion split into call-wide validation, acquisition and construction.
@@ -15,7 +15,7 @@ pub struct InputPlan<W: WireKind, C = (), G = ()> {
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Authoritative value tree. Adapter metadata records native encoding choices;
     /// physical parameters are derived from this tree when the generator emits its signature.
-    pub layout: WireLayout<W, G>,
+    pub nodes: Vec<prebindgen_flat::WireNode<W, G>>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -43,7 +43,7 @@ pub struct OutputPlan<W: WireKind, C = (), G = ()> {
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
     /// records explicit native encodings without duplicating payload subtrees.
-    pub layout: WireLayout<W, G>,
+    pub nodes: Vec<prebindgen_flat::WireNode<W, G>>,
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
@@ -128,8 +128,8 @@ macro_rules! plan_traits {
         }
     }
 }
-plan_traits!(InputPlan; fallible, layout, acknowledgement, validation, acquire, resources, statements, argument);
-plan_traits!(OutputPlan; fallible, layout, delivery, commit, statements, values);
+plan_traits!(InputPlan; fallible, nodes, acknowledgement, validation, acquire, resources, statements, argument);
+plan_traits!(OutputPlan; fallible, nodes, delivery, commit, statements, values);
 
 /// Match prepared expressions to the fields of a concrete result packet or row.
 /// The caller supplies destination fields in ABI order. Names, rather than the

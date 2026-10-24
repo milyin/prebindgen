@@ -712,8 +712,9 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
     Some((element, view))
 }
 
-mod layout;
-pub use layout::{
-    OutcomeKind, WireContainer, WireEntry, WireLayout, WireNode, WireOutcome, WirePath, Wires,
-    WiresMut,
+mod wire_tree;
+pub use wire_tree::{
+    outcome_nodes, replace_success, set_outcome, validate_wire_nodes, wire_at_path,
+    wire_definitions, wire_definitions_mut, wire_definitions_with_paths, OutcomeKind,
+    WireContainer, WireEntry, WireNode, WireOutcome, WirePath,
 };

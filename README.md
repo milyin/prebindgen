@@ -169,14 +169,21 @@ settings remain commented out in the example manifests.
 
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
-- `Conversion::layout()` describes logical values and outcomes; it prescribes no
+- `Conversion::wire_nodes()` describes logical values and outcomes; it prescribes no
   ABI, packing or delivery mechanism. `code_fragment_slot(mode, expected_type)`
   accepts the generator's own requests, including any element/branch context.
-- `ConversionExt::wires()` visits leaf definitions in structural order, including
-  every sequence element schema and every outcome once. `wire(index)` indexes
-  that traversal, rather than native parameters. `layout().entries()` returns
-  definitions with `WirePath` addresses; `wire_at(path)` resolves a definition
-  inside its branch/element context. Rebuild paths after structural edits.
+- `wire_nodes()` returns an ordinary slice of immediate `WireNode` roots.
+  Child lists are ordinary vectors. `iter()`, `len()` and indexing retain their
+  normal collection meanings.
+- `wire_definitions(nodes.iter())` explicitly traverses recursive leaf definitions,
+  including each sequence element schema and every alternative/outcome once.
+  `wire_definitions_mut(nodes.iter_mut())` edits those definitions.
+  `Function::input_wire_definitions()` traverses all input definitions; it replaces
+  the former `inputs()` accessor.
+  `wire_definitions_with_paths(nodes.iter())` includes `WirePath` addresses;
+  `wire_at_path(nodes.iter(), &path)` resolves a definition. These operations also
+  accept filtered/chained node iterators. Paths are relative to that root selection
+  and must be rebuilt after structural edits or changing the selected roots.
 - Each generator defines its request enum. Requests can borrow names, settings,
   paths and currently bound elements. There is no mandatory context, phase order
   or physical per-wire request protocol in the common trait.
@@ -202,7 +209,8 @@ checks allocation aliases and shared acknowledgement, and returns a fallible
 expression. The protocol and its assembly helper live outside Flat; generators
 with different requirements can compose their own request enums directly.
 C/JNI use the optional staged conversion protocol from `prebindgen-conversions`.
-`InputPlan::layout` and `OutputPlan::layout` store one authoritative `WireLayout`.
+`InputPlan::nodes` and `OutputPlan::nodes` store the authoritative
+`Vec<WireNode<W, G>>`. There is no collection wrapper or alias.
 Payloads occur only in its leaves and children. Adapter metadata retains explicit
 native decisions and owns any additional values, such as presence flags,
 selectors or sequence parameters. Metadata contains no copy of the child tree.
@@ -527,7 +535,7 @@ Optional
           element: integer
 ```
 
-`wires()` visits the integer definition once. It describes neither a concrete
+`wire_definitions(nodes.iter())` visits the integer definition once. It describes neither a concrete
 runtime collection nor a native parameter list. The C adapter can choose a row buffer
 and presence controls; another adapter can deliver each integer through callback
 arguments. The same logical structure supports either choice. Fields nested in
@@ -817,8 +825,9 @@ one niche, or `None` when exhausted. The shared compiler suppresses niches on
 other payload wires and on inactive selector arms. Both input and output
 composition use this protocol.
 
-Each logical `Wire<W>` defines one typed value. `WireLayout<W, G>` records
+Each logical `Wire<W>` defines one typed value. A `Vec<WireNode<W, G>>` records
 payloads, repetition, field relationships and mutually exclusive alternatives.
+The vectors contain immediate nodes; recursive traversal is always explicit.
 `Alternatives` describes a choice of payload schemas, including input constructor
 choices. It excludes the transport's selector tag. `Outcomes` describes named
 completion channels at the root of an output schema.
@@ -850,8 +859,9 @@ in manual schemas. Standard C codec plans describe the diagnostic message in bot
 cases; the C writer chooses whether to deliver it or abort. Empty channels retain their identity, including
 `Result<(), E>` and `Result<T, ()>`.
 
-`output.layout().outcome(OutcomeKind::SourceError)` accesses the error's logical
-schema just like the success schema. `layout().entries()` visits each definition
+`outcome_nodes(output.wire_nodes(), OutcomeKind::SourceError)` accesses the
+error's logical schema just like the success schema.
+`wire_definitions_with_paths(output.wire_nodes().iter())` visits each definition
 once and supplies a path identifying its element and outcome. Equal wire names
 in different alternatives are allowed; a path distinguishes them. Actual
 runtime elements and the selected outcome are emission context supplied by the
@@ -883,7 +893,7 @@ names and success-transport expression counts; common logical validation checks
 outcome structure without imposing an ABI. Each adapter validates the metadata it
 stores, including optional references, field grouping and Kotlin binding names.
 
-Custom converters implement `Conversion::layout` and declare `Conversion::Group`;
+Custom converters implement `Conversion::wire_nodes` and declare `Conversion::Group`;
 use `()` when no grouping information is needed. Custom codecs return
 `CodecInput<Self>`/`CodecOutput<Self>`, implement the three group hooks, and
 implement the paired `niche` and `set_niche` methods. `Bindings<W, C, G>`,
@@ -954,12 +964,16 @@ optional-field and callback APIs. Its driver reports that limitation.
 
 Adapter API migration for the logical schema:
 
-- `Conversion` provides `layout()` and generator-defined slot requests.
+- Child lists use `Vec<WireNode<W, G>>` directly, with no wrapper or alias.
+  Construct `WireNode::Group`, `Optional` and `Sequence` explicitly.
+- `Conversion` provides `wire_nodes()` and generator-defined slot requests.
   Generators derive function parameters, result packets, rows and callback
   signatures through their own operations.
-- `ConversionExt::wires()` enumerates logical definitions. Use `entries()` and
-  `WirePath` for structural context.
-- Stored plans expose one `layout` tree. `OutputPlan::values` and sequence-hook
+- Use explicit `wire_definitions` / `wire_definitions_mut` traversal over node
+  iterators. `wire_definitions_with_paths` and `wire_at_path` provide structural
+  context. `validate_wire_nodes` checks branch structure; `outcome_nodes`,
+  `set_outcome` and `replace_success` operate on completion channels.
+- Stored plans expose `nodes: Vec<WireNode<W, G>>`. `OutputPlan::values` and sequence-hook
   reads are keyed by binding name. `match_output_fields` matches prepared output
   expressions to explicitly selected destination fields.
 - Codecs implement option niche reservation/presence, absent-output preparation,

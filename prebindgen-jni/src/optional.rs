@@ -81,7 +81,7 @@ pub(crate) fn input_kotlin(
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let root = &o.presence.to_string();
-    let nodes = container.element.nodes();
+    let nodes = container.element.as_slice();
     let controls = &o.controls;
     // The adapter validates exactly one selector for a flag, none for a niche.
     debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
@@ -175,7 +175,7 @@ pub(crate) fn output_kotlin(
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    let nodes = container.element.nodes();
+    let nodes = container.element.as_slice();
     let wires = kotlin::leaf_wires(nodes);
     let controls = &o.controls;
     // The adapter validates exactly one selector for a flag, none for a niche.

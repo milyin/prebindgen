@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 struct Input {
-    layout: WireLayout<syn::Type>,
+    nodes: Vec<crate::WireNode<syn::Type>>,
 }
 enum Read<'a> {
     Decode { bias: &'a i32 },
@@ -18,8 +18,8 @@ impl Conversion for Input {
     type Wire = syn::Type;
     type Group = ();
     type SlotFragment<'a> = Read<'a>;
-    fn layout(&self) -> &WireLayout<syn::Type> {
-        &self.layout
+    fn wire_nodes(&self) -> &[crate::WireNode<syn::Type>] {
+        &self.nodes
     }
     fn code_fragment_slot(&self, mode: Read<'_>, expected: &syn::Type) -> Result<TokenStream> {
         match mode {
@@ -27,7 +27,10 @@ impl Conversion for Input {
                 if !same_type(expected, &syn::parse_quote!(i32)) {
                     return Err("expected i32".into());
                 }
-                let wire = &self.layout[0].name;
+                let wire = &crate::wire_definitions(self.nodes.iter())
+                    .next()
+                    .expect("logical wire index out of range")
+                    .name;
                 Ok(quote!(i32::from(#wire) + #bias))
             }
             Read::Noop => {
@@ -46,7 +49,9 @@ impl Input {
         mode: InputWire,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        let wire = self.layout.get(pos).ok_or("wire out of range")?;
+        let wire = crate::wire_definitions(self.nodes.iter())
+            .nth(pos)
+            .ok_or("wire out of range")?;
         match mode {
             InputWire::Active => {
                 if !same_type(expected, &syn::parse_quote!(Option<bool>)) {
@@ -65,15 +70,15 @@ impl Input {
     }
 }
 struct Output {
-    layout: WireLayout<syn::Type>,
+    nodes: Vec<crate::WireNode<syn::Type>>,
 }
 impl Conversion for Output {
     type Wire = syn::Type;
     type Group = ();
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;
-    fn layout(&self) -> &WireLayout<syn::Type> {
-        &self.layout
+    fn wire_nodes(&self) -> &[crate::WireNode<syn::Type>] {
+        &self.nodes
     }
     fn code_fragment_slot(&self, source: &syn::Ident, expected: &syn::Type) -> Result<TokenStream> {
         if !same_type(expected, &syn::parse_quote!(i64)) {
@@ -89,7 +94,9 @@ impl Output {
         source: &syn::Ident,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        self.layout.get(pos).ok_or("wire out of range")?;
+        crate::wire_definitions(self.nodes.iter())
+            .nth(pos)
+            .ok_or("wire out of range")?;
         self.code_fragment_slot(source, expected)
     }
 }
@@ -97,18 +104,16 @@ impl Output {
 #[test]
 fn independent_protocols_compose_into_compilable_expressions() {
     let input = Input {
-        layout: vec![Wire {
+        nodes: vec![crate::WireNode::Wire(Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(u8),
-        }]
-        .into(),
+        })],
     };
     let output = Output {
-        layout: vec![Wire {
+        nodes: vec![crate::WireNode::Wire(Wire {
             name: syn::parse_quote!(out),
             kind: syn::parse_quote!(i64),
-        }]
-        .into(),
+        })],
     };
     let decoded = syn::parse_quote!(decoded);
     let bias = 7;
@@ -198,13 +203,13 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
         },
     }
     struct Sequence {
-        schema: WireLayout<syn::Type>,
+        schema: Vec<crate::WireNode<syn::Type>>,
     }
     impl Conversion for Sequence {
         type Wire = syn::Type;
         type Group = ();
         type SlotFragment<'a> = Delivery<'a>;
-        fn layout(&self) -> &WireLayout<syn::Type> {
+        fn wire_nodes(&self) -> &[crate::WireNode<syn::Type>] {
             &self.schema
         }
         fn code_fragment_slot(&self, mode: Delivery<'_>, _: &syn::Type) -> Result<TokenStream> {
@@ -218,16 +223,23 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
             })
         }
     }
-    let mut schema: WireLayout<syn::Type> = ["x", "y"]
+    let mut schema: Vec<crate::WireNode<syn::Type>> = ["x", "y"]
         .into_iter()
         .map(|name| Wire {
             name: syn::parse_str(name).unwrap(),
             kind: syn::parse_quote!(i64),
         })
-        .collect();
-    schema.enclose_sequence(None);
+        .map(crate::WireNode::Wire)
+        .collect::<Vec<_>>();
+    schema = vec![crate::WireNode::Sequence(crate::WireContainer {
+        metadata: None,
+        element: std::mem::take(&mut schema),
+    })];
     let conversion = Sequence { schema };
-    assert_eq!(conversion.wires().count(), 2);
+    assert_eq!(
+        crate::wire_definitions(conversion.wire_nodes().iter()).count(),
+        2
+    );
     let source = syn::parse_quote!(values);
     let callback = syn::parse_quote!(callback);
     let pack = conversion

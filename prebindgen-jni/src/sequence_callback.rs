@@ -1,11 +1,11 @@
 //! Per-element native delivery and Kotlin folds, without invoking user code under JNI locks.
 use super::*;
 use prebindgen_declarations::SequenceOutput;
-use prebindgen_flat::{Wire, WireLayout};
+use prebindgen_flat::Wire;
 
 pub(crate) fn transport(
     wire: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     values: &[(syn::Ident, TokenStream)],
 ) -> Result<SequenceOutput<JniGroup>> {
     let env = prebindgen_conversions::template_parameter("environment");
@@ -73,20 +73,19 @@ pub(crate) struct Fold {
     pub discard: String,
 }
 pub(crate) fn fold(
-    layout: &WireLayout<JniWire, JniGroup>,
+    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
     fn optional(nodes: &[prebindgen_flat::WireNode<JniWire, JniGroup>]) -> bool {
         nodes.iter().any(|node| match node {
             prebindgen_flat::WireNode::Optional(_) => true,
-            prebindgen_flat::WireNode::Group { children, .. } => optional(children.nodes()),
+            prebindgen_flat::WireNode::Group { children, .. } => optional(children.as_slice()),
             _ => false,
         })
     }
-    let success = layout
-        .outcome(prebindgen_flat::OutcomeKind::Success)
+    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
         .ok_or("missing Success outcome")?;
-    let optional = optional(success.nodes());
+    let optional = optional(success);
     let (carrier, element) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
     let position = crate::group::result_packet_fields(layout)
@@ -99,7 +98,7 @@ pub(crate) fn fold(
         cleanup_failure: None,
         ..*context
     };
-    let child = kotlin::output_kotlin(element.nodes(), &ctx)?;
+    let child = kotlin::output_kotlin(element, &ctx)?;
     let present = format!("{}[{position}] != null", context.result);
     let raw = "__pb_rows";
     let types = child.result_types.join(", ");

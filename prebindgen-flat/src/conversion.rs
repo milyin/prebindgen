@@ -119,7 +119,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// settings or other data it needs; no common context or phase order is imposed.
 /// Their lifetime parameter allows requests to borrow that data.
 ///
-/// The tree describes logical values. Readers choose transport, runtime
+/// The tree describes logical values. Generators choose transport, runtime
 /// repetition and branch selection. A leaf traversal index is not an ABI
 /// parameter position. Requests needing an element/branch context carry it in
 /// the generator-defined request enum; no per-wire ABI protocol is mandatory.
@@ -132,7 +132,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// policy; other implementations may use the expectation to configure emission.
 ///
 /// ```
-/// use prebindgen_flat::{bind_fragment, same_type, Conversion, ConversionExt, Result, Wire, WireKind};
+/// use prebindgen_flat::{bind_fragment, same_type, Conversion, Result, Wire, WireKind, WireNode, wire_definitions};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Type};
@@ -145,10 +145,9 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///     Validate { null_message: &'a str },
 ///     TakeOwnership,
 /// }
-/// enum WireRequest { Value, Active }
 /// struct OwnedBoxInput {
 ///     pointee: Type,
-///     layout: prebindgen_flat::WireLayout<Carrier>,
+///     nodes: [WireNode<Carrier>; 1],
 /// }
 /// fn expect(actual: &Type, expected: &Type) -> Result<()> {
 ///     if same_type(actual, expected) { Ok(()) }
@@ -158,11 +157,11 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///     type Wire = Carrier;
 ///     type Group = ();
 ///     type SlotFragment<'a> = SlotRequest<'a>;
-///     fn layout(&self) -> &prebindgen_flat::WireLayout<Carrier> { &self.layout }
+///     fn wire_nodes(&self) -> &[WireNode<Carrier>] { &self.nodes }
 ///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
 ///         -> Result<TokenStream>
 ///     {
-///         let name = &self.layout[0].name;
+///         let name = &wire_definitions(self.nodes.iter()).next().unwrap().name;
 ///         let pointee = &self.pointee;
 ///         match mode {
 ///             SlotRequest::Validate { null_message } => {
@@ -182,28 +181,9 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///         }
 ///     }
 /// }
-/// // A generator may supply its own contextual wire-access API.
-/// impl OwnedBoxInput {
-///     fn code_fragment_wire(&self, pos: usize, mode: WireRequest, expected: &Type)
-///         -> Result<TokenStream>
-///     {
-///         let wire = self.layout.get(pos).ok_or("invalid wire position")?;
-///         match mode {
-///             WireRequest::Value => {
-///                 expect(&wire.rust_type(), expected)?;
-///                 let name = &wire.name;
-///                 Ok(quote!(#name))
-///             }
-///             WireRequest::Active => {
-///                 expect(&parse_quote!(Option<bool>), expected)?;
-///                 Ok(quote!(None)) // An expression meaning unconditional activity.
-///             }
-///         }
-///     }
-/// }
 /// let slot = OwnedBoxInput {
 ///     pointee: parse_quote!(u64), // Supplied by preparation from the source type.
-///     layout: vec![Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }].into(),
+///     nodes: [WireNode::Wire(Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer })],
 /// };
 /// let validation = slot.code_fragment_slot(
 ///     SlotRequest::Validate { null_message: "null owned handle" }, &parse_quote!(()))?;
@@ -211,10 +191,8 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// let value = slot.code_fragment_slot(SlotRequest::TakeOwnership, &expected)?;
 /// let binding = bind_fragment(&parse_quote!(argument), &expected, value)?;
 /// let _: syn::Block = syn::parse2(quote!({ #validation; #binding }))?;
-/// let active = slot.code_fragment_wire(0, WireRequest::Active, &parse_quote!(Option<bool>))?;
-/// assert_eq!(active.to_string(), "None");
-/// let wire_value = slot.code_fragment_wire(0, WireRequest::Value, &slot.wire(0)?.rust_type())?;
-/// assert_eq!(wire_value.to_string(), "raw_value");
+/// let raw_parameter = wire_definitions(slot.wire_nodes().iter()).next().unwrap();
+/// assert_eq!(raw_parameter.name, "raw_value");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Conversion {
@@ -225,41 +203,13 @@ pub trait Conversion {
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
     /// Logical tree of values, repetition and outcomes. Its generator chooses ABI placement.
-    fn layout(&self) -> &crate::WireLayout<Self::Wire, Self::Group>;
+    fn wire_nodes(&self) -> &[crate::WireNode<Self::Wire, Self::Group>];
     /// Emit an expression for the whole slot.
     fn code_fragment_slot(
         &self,
         mode: Self::SlotFragment<'_>,
         expected_type: &syn::Type,
     ) -> Result<TokenStream>;
-}
-
-/// Wire access derived exclusively from a conversion's tree.
-///
-/// Import this extension trait alongside [`Conversion`] to call `wires()` and
-/// `wire(position)`. Its blanket implementation prevents a slot implementation
-/// from supplying a different wire order than the tree used for grouping.
-pub trait ConversionExt: Conversion {
-    /// Logical leaf definitions in structural order, each schema visited once.
-    fn wires(&self) -> crate::Wires<'_, Self::Wire, Self::Group>;
-    /// A definition at its traversal index; this is not a native ABI position.
-    fn wire(&self, position: usize) -> Result<&Wire<Self::Wire>>;
-    /// Resolve a definition by element/outcome path, independently of transport.
-    fn wire_at(&self, path: &crate::WirePath) -> Result<&Wire<Self::Wire>> {
-        self.layout()
-            .get_path(path)
-            .ok_or_else(|| "invalid logical wire path".into())
-    }
-}
-impl<T: Conversion + ?Sized> ConversionExt for T {
-    fn wires(&self) -> crate::Wires<'_, Self::Wire, Self::Group> {
-        self.layout().iter()
-    }
-    fn wire(&self, position: usize) -> Result<&Wire<Self::Wire>> {
-        self.layout()
-            .get(position)
-            .ok_or_else(|| format!("invalid wire position {position}"))
-    }
 }
 
 /// Bind an emitted expression to a caller-selected name and expected Rust type.
@@ -297,10 +247,10 @@ impl<I: Conversion, O: Conversion> crate::Function<I, O> {
         Ok(output)
     }
     /// Logical input definitions, including each element/branch schema once.
-    pub fn inputs(&self) -> Result<impl Iterator<Item = &Wire<I::Wire>>> {
+    pub fn input_wire_definitions(&self) -> Result<impl Iterator<Item = &Wire<I::Wire>>> {
         Ok(self
             .input_conversions()?
             .into_iter()
-            .flat_map(|i| i.wires()))
+            .flat_map(|i| crate::wire_definitions(i.wire_nodes().iter())))
     }
 }

@@ -9,8 +9,8 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
+use prebindgen_flat::WireNode;
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
-use prebindgen_flat::{WireLayout, WireNode};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -265,8 +265,8 @@ impl Output {
 ///     fn alternatives_metadata(&self, _: Wire<Type>) {}
 ///     fn field_group(&self, _: Ident) {}
 ///     fn fields_group(&self) {}
-///     fn optional_niche(&self, _: &prebindgen_flat::WireLayout<Self::Wire,Self::Group>) -> Option<prebindgen_declarations::NicheReservation<()>> {None}
-///     fn retire_niches(&self, _: &mut prebindgen_flat::WireLayout<Self::Wire,Self::Group>, _: Option<&prebindgen_declarations::NicheReservation<()>>) -> Result<()> {Ok(())}
+///     fn optional_niche(&self, _: &[prebindgen_flat::WireNode<Self::Wire,Self::Group>]) -> Option<prebindgen_declarations::NicheReservation<()>> {None}
+///     fn retire_niches(&self, _: &mut Vec<prebindgen_flat::WireNode<Self::Wire,Self::Group>>, _: Option<&prebindgen_declarations::NicheReservation<()>>) -> Result<()> {Ok(())}
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
 ///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
 ///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
@@ -301,15 +301,15 @@ impl Output {
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// let function = flat.function("echo")?;
 /// // Input: one constructor argument. Output: two projected values.
-/// assert_eq!(function.params[0].ty.slot.as_ref().unwrap().layout.len(), 1);
-/// assert_eq!(function.ret.slot.as_ref().unwrap().layout.len(), 2);
+/// assert_eq!(prebindgen_flat::wire_definitions(function.params[0].ty.slot.as_ref().unwrap().nodes.iter()).count(), 1);
+/// assert_eq!(prebindgen_flat::wire_definitions(function.ret.slot.as_ref().unwrap().nodes.iter()).count(), 2);
 /// // Replace just this parameter's converter; later default filling preserves it.
 /// bind_input(&mut flat, &RustCarriers, "echo", "value", &Input::Leaf, &())?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// validate_bindings(&flat)?;
 /// let input = flat.function("echo")?.params[0].ty.slot.as_ref().unwrap();
-/// assert_eq!(input.layout.len(), 1);
-/// assert_eq!(prebindgen_flat::type_key(&input.layout.iter().next().unwrap().kind), "i64");
+/// assert_eq!(prebindgen_flat::wire_definitions(input.nodes.iter()).count(), 1);
+/// assert_eq!(prebindgen_flat::type_key(&prebindgen_flat::wire_definitions(input.nodes.iter()).next().unwrap().kind), "i64");
 /// assert!(input.resources.is_empty()); // No foreign ownership in this codec.
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -444,7 +444,7 @@ pub trait Codec {
         _wire: syn::Ident,
         _length: syn::Ident,
         _index: syn::Ident,
-        _element: &WireLayout<Self::Wire, Self::Group>,
+        _element: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
         _active: &Condition,
     ) -> Result<SequenceInput<Self::Group>> {
         Err("collections are unsupported by this codec".into())
@@ -461,7 +461,7 @@ pub trait Codec {
         _wire: syn::Ident,
         _length: syn::Ident,
         _index: syn::Ident,
-        _element: &WireLayout<Self::Wire, Self::Group>,
+        _element: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
         _values: &[(syn::Ident, TokenStream)],
     ) -> Result<SequenceOutput<Self::Group>> {
         Err("collections are unsupported by this codec".into())
@@ -496,7 +496,7 @@ pub trait Codec {
         ty: &Type,
         mapped: bool,
         extra: &Self::Extra,
-    ) -> Result<prebindgen_flat::WireLayout<Self::Wire, Self::Group>> {
+    ) -> Result<Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>> {
         if !mapped {
             return Err(format!(
                 "missing logical error projection for `{}`",
@@ -510,14 +510,15 @@ pub trait Codec {
             quote!(source_error_message),
             false,
         )?;
-        Ok(plan.layout)
+        Ok(plan.nodes)
     }
     /// Logical binding-failure payload, independently of how the adapter delivers
     /// it. None means this codec declares no binding-failure channel.
+    #[allow(clippy::type_complexity)] // Keep the node vector explicit in the public contract.
     fn binding_failure_layout(
         &self,
         _extra: &Self::Extra,
-    ) -> Result<Option<prebindgen_flat::WireLayout<Self::Wire, Self::Group>>> {
+    ) -> Result<Option<Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>>> {
         Ok(None)
     }
     /// Report a mapped String in the adapter-specific error channel.
@@ -535,12 +536,12 @@ pub trait Codec {
     /// chooses candidates in its value domain, including metadata-owned controls.
     fn optional_niche(
         &self,
-        _payload: &WireLayout<Self::Wire, Self::Group>,
+        _payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
     ) -> Option<NicheReservation<Self::Niche>>;
     /// Test presence using the reserved representation without decoding a payload.
     fn optional_presence(
         &self,
-        _payload: &WireLayout<Self::Wire, Self::Group>,
+        _payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
         _reservation: &NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         Err("optional niche presence is unsupported".into())
@@ -548,7 +549,7 @@ pub trait Codec {
     /// Inert expressions for every named output of an absent payload.
     fn absent_output_values(
         &self,
-        _payload: &WireLayout<Self::Wire, Self::Group>,
+        _payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
         _reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         Err("optional outputs are unsupported".into())
@@ -557,16 +558,16 @@ pub trait Codec {
     /// donor with its remaining domain, when one was selected.
     fn retire_niches(
         &self,
-        _payload: &mut WireLayout<Self::Wire, Self::Group>,
+        _payload: &mut Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>,
         _reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<()>;
     /// Validate a prepared input before installing it or embedding it in a sequence.
     fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
-        plan.layout.validate()
+        prebindgen_flat::validate_wire_nodes(plan.nodes.iter())
     }
     /// Validate named success expressions against the adapter's output representation.
     fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
-        plan.layout.validate()?;
+        prebindgen_flat::validate_wire_nodes(plan.nodes.iter())?;
         prebindgen_conversions::validate_value_bindings(&plan.values)
     }
     /// Prepend a semantic source path to one prepared occurrence. Override when
@@ -574,7 +575,7 @@ pub trait Codec {
     /// path context. Codecs without source-path metadata need no implementation.
     fn prefix_layout(
         &self,
-        _layout: &mut WireLayout<Self::Wire, Self::Group>,
+        _layout: &mut Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>,
         _segment: ComponentSegment,
     ) {
     }
@@ -733,7 +734,7 @@ pub fn bind_input<C: Codec>(
     )?;
 
     codec.finish_input(&mut conversion, extra)?;
-    conversion.layout.validate()?;
+    prebindgen_flat::validate_wire_nodes(conversion.nodes.iter())?;
     codec.validate_input(&conversion)?;
     flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
     Ok(())
@@ -778,7 +779,7 @@ pub fn bind_output<C: Codec>(
     )?;
     finalize_output_schema(codec, &mut conversion, extra)?;
     codec.finish_output(&mut conversion, extra)?;
-    conversion.layout.validate()?;
+    prebindgen_flat::validate_wire_nodes(conversion.nodes.iter())?;
     codec.validate_output(&conversion)?;
     flat.function_mut(function)?.ret.slot = Some(conversion.into());
     Ok(())
@@ -790,10 +791,13 @@ fn finalize_output_schema<C: Codec>(
     extra: &C::Extra,
 ) -> Result<()> {
     if let Some(error) = codec.binding_failure_layout(extra)? {
-        plan.layout
-            .set_outcome(prebindgen_flat::OutcomeKind::BindingFailure, error);
+        prebindgen_flat::set_outcome(
+            &mut plan.nodes,
+            prebindgen_flat::OutcomeKind::BindingFailure,
+            error,
+        );
     }
-    plan.layout.validate()
+    prebindgen_flat::validate_wire_nodes(plan.nodes.iter())
 }
 
 struct Compiler<'a, C: Codec> {
@@ -817,7 +821,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
         self.next.set(next + 1);
         n
     }
-    fn prefix(&self, wires: &mut WireLayout<C::Wire, C::Group>, segment: ComponentSegment) {
+    fn prefix(
+        &self,
+        wires: &mut Vec<prebindgen_flat::WireNode<C::Wire, C::Group>>,
+        segment: ComponentSegment,
+    ) {
         self.codec.prefix_layout(wires, segment);
     }
     fn input(
@@ -831,7 +839,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());
         }
         let var = self.name();
-        let mut wires = WireLayout::default();
+        let mut wires = Vec::new();
         let mut fallible = false;
         let mut validation = TokenStream::new();
         let mut acquire = TokenStream::new();
@@ -863,12 +871,15 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Input::Fields(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
-                    wires.enclose(self.codec.fields_group());
+                    wires = vec![prebindgen_flat::WireNode::Group {
+                        metadata: self.codec.fields_group(),
+                        children: std::mem::take(&mut wires),
+                    }];
                     return Ok(InputPlan {
                         fallible: false,
                         context: Default::default(),
                         acknowledgement,
-                        layout: wires,
+                        nodes: wires,
                         validation,
                         acquire,
                         resources,
@@ -913,7 +924,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 for (param, child) in f.params.iter().zip(args) {
                     let mut p = self.input(&param.ty.ty, child, extra, active)?;
                     self.prefix(
-                        &mut p.layout,
+                        &mut p.nodes,
                         ComponentSegment::Argument(param.name.to_string()),
                     );
                     fallible |= p.fallible;
@@ -922,7 +933,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     resources.extend(p.resources);
                     merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     statements.extend(p.statements);
-                    wires.extend(p.layout);
+                    wires.extend(p.nodes);
                     call_args.push(p.argument);
                 }
                 let path = &f.path;
@@ -937,12 +948,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("selector results must be owned in this subset".into());
                 }
                 let tag = self.name();
-                let mut selector_layout = WireLayout::from(vec![Wire {
+                let mut selector_layout = vec![prebindgen_flat::WireNode::Wire(Wire {
                     name: tag.clone(),
                     kind: self.codec.selector(extra),
-                }]);
+                })];
                 self.prefix(&mut selector_layout, ComponentSegment::Selector);
-                let Some(WireNode::Wire(selector)) = selector_layout.into_nodes().pop() else {
+                let Some(WireNode::Wire(selector)) = selector_layout.pop() else {
                     return Err("selector prefixing must retain its value".into());
                 };
                 let mut alternatives = Vec::new();
@@ -952,8 +963,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let mut cases = Vec::new();
                 for (i, arm) in arms.iter().enumerate() {
                     let mut p = self.input(ty, arm, extra, &active.arm(tag.clone(), i as i32))?;
-                    self.prefix(&mut p.layout, ComponentSegment::Alternative(i));
-                    self.codec.retire_niches(&mut p.layout, None)?;
+                    self.prefix(&mut p.nodes, ComponentSegment::Alternative(i));
+                    self.codec.retire_niches(&mut p.nodes, None)?;
                     fallible |= p.fallible;
                     validation.extend(p.validation);
                     acquire.extend(p.acquire);
@@ -961,7 +972,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     merge_acknowledgement(&mut acknowledgement, p.acknowledgement)?;
                     let body = p.statements;
                     let value = p.argument;
-                    alternatives.push(p.layout);
+                    alternatives.push(p.nodes);
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
@@ -969,7 +980,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     metadata: Some(self.codec.alternatives_metadata(selector)),
                     alternatives,
                 };
-                wires = WireLayout::from_nodes(vec![node]);
+                wires = vec![node];
                 statements = quote!(let #var:#ty=match #tag{#(#cases,)* _=>unreachable!("validated selector")};);
             }
         }
@@ -977,7 +988,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             fallible,
             context: Default::default(),
             acknowledgement,
-            layout: wires,
+            nodes: wires,
             validation,
             acquire,
             resources,
@@ -1037,7 +1048,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 #prepare
             };
 
-            child.layout.set_outcome(
+            prebindgen_flat::set_outcome(
+                &mut child.nodes,
                 prebindgen_flat::OutcomeKind::SourceError,
                 self.codec
                     .source_error_layout(error_ty, mapped_error, extra)?,
@@ -1062,7 +1074,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
             context: Default::default(),
             delivery: Default::default(),
             commit: TokenStream::new(),
-            layout: Default::default(),
+            nodes: Default::default(),
             statements: TokenStream::new(),
             values: Vec::new(),
         };
@@ -1128,7 +1140,10 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
                 if type_key(ty) == "()" && children.is_empty() {
-                    out.layout.enclose(self.codec.fields_group());
+                    out.nodes = vec![prebindgen_flat::WireNode::Group {
+                        metadata: self.codec.fields_group(),
+                        children: std::mem::take(&mut out.nodes),
+                    }];
 
                     return Ok(out);
                 }
@@ -1188,10 +1203,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 };
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
-                self.prefix(
-                    &mut child.layout,
-                    ComponentSegment::Getter(function.clone()),
-                );
+                self.prefix(&mut child.nodes, ComponentSegment::Getter(function.clone()));
                 append(&mut out, child)?;
             }
             Output::Combine(parts) => {
@@ -1215,7 +1227,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         quote!(&#value)
                     };
                     let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
-                    self.prefix(&mut p.layout, ComponentSegment::View(index));
+                    self.prefix(&mut p.nodes, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
                 }
@@ -1241,7 +1253,7 @@ fn append<W: prebindgen_flat::WireKind, C, M>(
     }
     to.fallible |= from.fallible;
     to.commit.extend(from.commit);
-    to.layout.extend(from.layout);
+    to.nodes.extend(from.nodes);
     to.statements.extend(from.statements);
     to.values.extend(from.values);
     prebindgen_conversions::validate_value_bindings(&to.values)?;

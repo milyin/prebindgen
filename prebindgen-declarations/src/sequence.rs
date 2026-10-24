@@ -170,7 +170,7 @@ pub(crate) fn input<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.layout,
+        &child.nodes,
         active,
     )?;
     if transport.validation_values.is_empty() {
@@ -236,10 +236,10 @@ pub(crate) fn input<C: Codec>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
-            element: child.layout,
+        nodes: vec![WireNode::Sequence(WireContainer {
+            element: child.nodes,
             metadata: Some(transport.metadata),
-        })]),
+        })],
         validation: quote! {
             #declarations
             let mut #staged=Vec::new();
@@ -292,7 +292,7 @@ pub(crate) fn output<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.layout,
+        &child.nodes,
         &child.values,
     )?;
     let owner = format_ident!("{wire}_source");
@@ -346,10 +346,10 @@ pub(crate) fn output<C: Codec>(
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence(WireContainer {
-            element: child.layout,
+        nodes: vec![WireNode::Sequence(WireContainer {
+            element: child.nodes,
             metadata: Some(metadata),
-        })]),
+        })],
         statements: quote! {
             let #owner=#binding; let #length=#owner.len(); #declarations
             #begin
@@ -367,7 +367,7 @@ pub(crate) fn output<C: Codec>(
 /// This inspects structure only. The caller selects an outcome and decides which
 /// sequences belong to its emission scope; sequence elements are not traversed.
 pub fn outer_sequences<W: prebindgen_flat::WireKind, G>(
-    layout: &WireLayout<W, G>,
+    layout: &[prebindgen_flat::WireNode<W, G>],
 ) -> Vec<&WireContainer<W, G>> {
     fn visit<'a, W: prebindgen_flat::WireKind, G>(
         nodes: &'a [WireNode<W, G>],
@@ -376,11 +376,11 @@ pub fn outer_sequences<W: prebindgen_flat::WireKind, G>(
         for node in nodes {
             match node {
                 WireNode::Sequence(c) => out.push(c),
-                WireNode::Optional(c) => visit(c.element.nodes(), out),
-                WireNode::Group { children, .. } => visit(children.nodes(), out),
+                WireNode::Optional(c) => visit(c.element.as_slice(), out),
+                WireNode::Group { children, .. } => visit(children.as_slice(), out),
                 WireNode::Alternatives { alternatives, .. } => {
                     for arm in alternatives {
-                        visit(arm.nodes(), out);
+                        visit(arm.as_slice(), out);
                     }
                 }
                 WireNode::Wire(_) | WireNode::Outcomes { .. } => {}
@@ -388,7 +388,7 @@ pub fn outer_sequences<W: prebindgen_flat::WireKind, G>(
         }
     }
     let mut out = vec![];
-    visit(layout.nodes(), &mut out);
+    visit(layout, &mut out);
     out
 }
 
@@ -397,25 +397,41 @@ mod tests {
     use super::*;
     #[test]
     fn sequence_discovery_is_logical_and_outcome_selection_is_explicit() {
-        let mut layout: WireLayout<syn::Type> = vec![Wire {
-            name: syn::parse_quote!(value),
-            kind: syn::parse_quote!(i64),
-        }]
-        .into();
-        layout.enclose_sequence(None);
-        layout.enclose_optional(None);
-        layout.enclose(());
+        let mut layout: Vec<prebindgen_flat::WireNode<syn::Type>> =
+            vec![prebindgen_flat::WireNode::Wire(Wire {
+                name: syn::parse_quote!(value),
+                kind: syn::parse_quote!(i64),
+            })];
+        layout = vec![prebindgen_flat::WireNode::Sequence(
+            prebindgen_flat::WireContainer {
+                metadata: None,
+                element: std::mem::take(&mut layout),
+            },
+        )];
+        layout = vec![prebindgen_flat::WireNode::Optional(
+            prebindgen_flat::WireContainer {
+                metadata: None,
+                element: std::mem::take(&mut layout),
+            },
+        )];
+        layout = vec![prebindgen_flat::WireNode::Group {
+            metadata: (),
+            children: std::mem::take(&mut layout),
+        }];
         assert_eq!(outer_sequences(&layout).len(), 1);
-        layout.set_outcome(
+        prebindgen_flat::set_outcome(
+            &mut layout,
             prebindgen_flat::OutcomeKind::BindingFailure,
-            WireLayout::default(),
+            Vec::new(),
         );
         assert!(outer_sequences(&layout).is_empty());
         assert_eq!(
             outer_sequences(
-                layout
-                    .outcome(prebindgen_flat::OutcomeKind::Success)
-                    .unwrap()
+                prebindgen_flat::outcome_nodes(
+                    layout.as_slice(),
+                    prebindgen_flat::OutcomeKind::Success
+                )
+                .unwrap()
             )
             .len(),
             1
