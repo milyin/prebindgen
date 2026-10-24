@@ -13,31 +13,135 @@ pub enum JniGroup {
     /// One named source field.
     Field(syn::Ident),
 }
-/// Optional-value information retained by the JNI adapter.
+/// An integer tag binding used for alternative selection or presence.
+/// The carrier is private so callers cannot replace it with an unrelated wire kind.
 #[derive(Clone, Debug)]
-pub struct JniOptional {
-    /// Explicit native presence controls; empty when a payload niche is used.
-    pub controls: Vec<prebindgen_flat::Wire<JniWire>>,
-    /// Normalized presence binding used by payload conditions.
-    pub presence: syn::Ident,
-    /// Payload wire or inline control inspected for presence.
-    pub discriminator: syn::Ident,
-    /// Reserved absent representation; `None` means a separate 0/1 flag.
-    pub niche: Option<JniNiche>,
+pub struct JniSelector {
+    carrier: Wire<JniWire>,
+}
+impl JniSelector {
+    /// Create a tag binding with the adapter's initial niche availability.
+    pub fn new(name: syn::Ident) -> Self {
+        Self {
+            carrier: Wire {
+                name,
+                kind: JniWire::selector(),
+            },
+        }
+    }
+    /// The single integer value passed across the boundary.
+    pub fn carrier(&self) -> &Wire<JniWire> {
+        &self.carrier
+    }
+    pub(crate) fn carrier_mut(&mut self) -> &mut Wire<JniWire> {
+        &mut self.carrier
+    }
+}
+impl TryFrom<Wire<JniWire>> for JniSelector {
+    type Error = String;
+    fn try_from(carrier: Wire<JniWire>) -> Result<Self> {
+        if !matches!(carrier.kind, JniWire::Selector { .. }) {
+            return Err("selector requires the adapter's integer tag representation".into());
+        }
+        carrier.kind.validate()?;
+        Ok(Self { carrier })
+    }
+}
+/// How this optional occurrence distinguishes absence from a present payload.
+#[derive(Clone, Debug)]
+pub enum JniOptional {
+    /// A dedicated 0/1 tag. The binding is also the normalized presence value.
+    Flag(JniSelector),
+    /// An excluded representation in one payload value.
+    Niche {
+        /// Normalized presence local used by conversion conditions.
+        presence: syn::Ident,
+        /// Payload binding and reserved absent representation.
+        reservation: prebindgen_declarations::NicheReservation<JniNiche>,
+    },
+}
+impl JniOptional {
+    /// Binding of the normalized presence condition.
+    pub fn presence(&self) -> &syn::Ident {
+        match self {
+            Self::Flag(flag) => &flag.carrier.name,
+            Self::Niche { presence, .. } => presence,
+        }
+    }
+    /// Binding whose value distinguishes absent and present states.
+    pub fn discriminator(&self) -> &syn::Ident {
+        match self {
+            Self::Flag(flag) => &flag.carrier.name,
+            Self::Niche { reservation, .. } => &reservation.discriminator,
+        }
+    }
+    /// Reserved payload representation; a flag encoding has no reservation.
+    pub fn niche(&self) -> Option<&JniNiche> {
+        match self {
+            Self::Flag(_) => None,
+            Self::Niche { reservation, .. } => Some(&reservation.niche),
+        }
+    }
+    /// Dedicated presence wire, if this occurrence uses one.
+    pub fn control(&self) -> Option<&Wire<JniWire>> {
+        match self {
+            Self::Flag(flag) => Some(flag.carrier()),
+            Self::Niche { .. } => None,
+        }
+    }
+    fn control_mut(&mut self) -> Option<&mut Wire<JniWire>> {
+        match self {
+            Self::Flag(flag) => Some(flag.carrier_mut()),
+            Self::Niche { .. } => None,
+        }
+    }
+    pub(crate) fn from_parts(
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<JniNiche>,
+        controls: Vec<Wire<JniWire>>,
+    ) -> Result<Self> {
+        match niche {
+            Some(niche) if controls.is_empty() => Ok(Self::Niche {
+                presence,
+                reservation: prebindgen_declarations::NicheReservation {
+                    discriminator,
+                    niche,
+                },
+            }),
+            None if controls.len() == 1
+                && presence == discriminator
+                && controls[0].name == discriminator =>
+            {
+                Ok(Self::Flag(JniSelector::try_from(
+                    controls.into_iter().next().unwrap(),
+                )?))
+            }
+            _ => {
+                Err("optional encoding requires either one matching flag or a payload niche".into())
+            }
+        }
+    }
 }
 
 fn values(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     let mut out = vec![];
     read(node, &mut out, false);
     out.into_iter()
 }
 fn values_mut(
-    node: &mut WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &mut WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&mut Wire<JniWire>> {
     fn visit<'a>(
-        node: &'a mut WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+        node: &'a mut WireNode<
+            JniWire,
+            JniOptional,
+            crate::JniSequence,
+            JniGroup,
+            crate::JniSelector,
+        >,
         out: &mut Vec<&'a mut Wire<JniWire>>,
     ) {
         match node {
@@ -48,12 +152,12 @@ fn values_mut(
                 }
             }
             WireNode::Optional { element, metadata } => {
-                out.extend(&mut metadata.controls);
+                out.extend(metadata.control_mut());
                 visit(element, out);
             }
-            WireNode::Sequence { metadata, .. } => out.push(metadata),
+            WireNode::Sequence { metadata, .. } => out.push(metadata.carrier_mut()),
             WireNode::Alternatives { elements, metadata } => {
-                out.push(metadata);
+                out.push(metadata.carrier_mut());
                 for arm in elements {
                     visit(arm, out);
                 }
@@ -65,7 +169,7 @@ fn values_mut(
     out.into_iter()
 }
 fn read<'a>(
-    node: &'a WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &'a WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
     out: &mut Vec<&'a Wire<JniWire>>,
     elements: bool,
 ) {
@@ -79,11 +183,11 @@ fn read<'a>(
             }
         }
         WireNode::Optional { element, metadata } => {
-            out.extend(&metadata.controls);
+            out.extend(metadata.control());
             read(element, out, elements);
         }
         WireNode::Sequence { element, metadata } => {
-            out.push(metadata);
+            out.push(metadata.carrier());
             if elements {
                 read(element, out, elements);
             }
@@ -92,7 +196,7 @@ fn read<'a>(
             elements: children,
             metadata,
         } => {
-            out.push(metadata);
+            out.push(metadata.carrier());
             for child in children {
                 read(child, out, elements);
             }
@@ -100,7 +204,7 @@ fn read<'a>(
     }
 }
 pub(crate) fn validate_layout(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> Result<()> {
     prebindgen_flat::validate_wire_nodes(std::iter::once(node))?;
     let mut definitions = vec![];
@@ -110,7 +214,7 @@ pub(crate) fn validate_layout(
         wire.kind.validate()?;
     }
     fn visit(
-        node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+        node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<JniNiche>>,
@@ -125,43 +229,35 @@ pub(crate) fn validate_layout(
             }
             WireNode::Alternatives {
                 elements: alternatives,
-                metadata: selector,
+                metadata: _,
             } => {
-                if !matches!(selector.kind, JniWire::Selector { .. }) {
-                    return Err("alternatives require an integer selector".into());
-                }
                 for arm in alternatives {
                     visit(arm, bindings, false, reserved)?;
                 }
             }
             WireNode::Sequence {
                 element,
-                metadata: carrier,
+                metadata: _,
             } => {
-                if !(matches!(carrier.kind, JniWire::Rows { .. })) || values(element).len() == 0 {
-                    return Err(
-                        "sequence requires a supported carrier and nonempty element layout".into(),
-                    );
+                if values(element).len() == 0 {
+                    return Err("sequence requires a nonempty element layout".into());
                 }
+                crate::sequence::validate_buffered(element)?;
                 validate_layout(element)?;
             }
             WireNode::Optional {
                 element,
                 metadata: o,
             } => {
-                let controls = &o.controls;
-                if !bindings.insert(o.presence.to_string()) {
+                if !bindings.insert(o.presence().to_string()) {
                     return Err(format!(
                         "duplicate optional presence binding `{}`",
-                        o.presence
+                        o.presence()
                     ));
                 }
-                if let Some(niche) = &o.niche {
-                    if !controls.is_empty() {
-                        return Err("niche optional must not have control wires".into());
-                    }
+                if let Some(niche) = o.niche() {
                     let wire = crate::group::values(element)
-                        .find(|w| w.name == o.discriminator)
+                        .find(|w| w.name == *o.discriminator())
                         .ok_or("optional discriminator outside payload")?;
                     wire.kind.validate_niche(niche)?;
                     if wire.kind.available_niche().as_ref() == Some(niche) {
@@ -169,14 +265,11 @@ pub(crate) fn validate_layout(
                             "available JNI niche is already reserved by an optional node".into(),
                         );
                     }
-                    let values = reserved.entry(o.discriminator.to_string()).or_default();
+                    let values = reserved.entry(o.discriminator().to_string()).or_default();
                     if values.contains(niche) {
                         return Err("duplicate JNI niche reservation on one wire".into());
                     }
                     values.push(niche.clone());
-                } else if !matches!(controls.as_slice(),[flag] if flag.name==o.discriminator && o.presence==o.discriminator && matches!(flag.kind,JniWire::Selector { .. }))
-                {
-                    return Err("optional flag must be its sole inline control wire".into());
                 }
                 visit(element, bindings, false, reserved)?;
             }
@@ -235,7 +328,7 @@ pub(crate) fn validate_layout(
 
 /// Native parameters contributed by a source argument.
 pub(crate) fn argument_parameters(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
@@ -243,9 +336,9 @@ pub(crate) fn function_parameters<
     I: prebindgen_flat::InputConversion<
         Wire = JniWire,
         Optional = JniOptional,
-        Sequence = Wire<JniWire>,
+        Sequence = JniSequence,
         Group = JniGroup,
-        Alternatives = Wire<JniWire>,
+        Alternatives = JniSelector,
     >,
     O: prebindgen_flat::Conversion,
 >(
@@ -258,57 +351,57 @@ pub(crate) fn function_parameters<
     Ok(out.into_iter())
 }
 pub(crate) fn result_packet_fields(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
 pub(crate) fn result_packet<'a>(
-    node: &'a WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &'a WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<JniWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(result_packet_fields(node), bindings)
 }
 pub(crate) fn row_fields(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
 pub(crate) fn row_values<'a>(
-    node: &'a WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &'a WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<JniWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(row_fields(node), bindings)
 }
 pub(crate) fn callback_parameters(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
 pub(crate) fn optional_niche(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> Option<prebindgen_declarations::NicheReservation<JniNiche>> {
     prebindgen_declarations::select_optional_niche(&JniCodec, values(node))
 }
 pub(crate) fn optional_presence(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
     reservation: &prebindgen_declarations::NicheReservation<JniNiche>,
 ) -> Result<TokenStream> {
     prebindgen_declarations::optional_presence(&JniCodec, values(node), reservation)
 }
 pub(crate) fn absent_output_values(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
     reservation: Option<&prebindgen_declarations::NicheReservation<JniNiche>>,
 ) -> Result<Vec<(syn::Ident, TokenStream)>> {
     prebindgen_declarations::absent_output_values(&JniCodec, values(node), reservation)
 }
 pub(crate) fn retire_niches(
-    node: &mut WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &mut WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
     reservation: Option<&prebindgen_declarations::NicheReservation<JniNiche>>,
 ) -> Result<()> {
     prebindgen_declarations::retire_optional_niches(&JniCodec, values_mut(node), reservation)
 }
 pub(crate) fn kotlin_result_fields(
-    node: &WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+    node: &WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>,
 ) -> std::vec::IntoIter<&Wire<JniWire>> {
     values(node)
 }
@@ -317,14 +410,14 @@ pub(crate) fn kotlin_result_fields(
 mod tests {
     use super::*;
     fn enclose_optional_metadata(
-        tree: &mut WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>>,
+        tree: &mut WireNode<JniWire, JniOptional, JniSequence, JniGroup, JniSelector>,
         mut metadata: JniOptional,
     ) {
         let mut payload = std::mem::take(tree);
-        if metadata.niche.is_none() {
+        if matches!(metadata, JniOptional::Flag(_)) {
             if let WireNode::Wire(wires) = &mut payload {
                 if !wires.is_empty() {
-                    metadata.controls = vec![wires.remove(0)];
+                    metadata = JniOptional::Flag(JniSelector::try_from(wires.remove(0)).unwrap());
                 }
             }
         }
@@ -340,55 +433,97 @@ mod tests {
         }
     }
     fn optional(presence: &str, discriminator: &str, niche: Option<i64>) -> JniOptional {
-        JniOptional {
-            controls: vec![],
-            presence: syn::parse_str(presence).unwrap(),
-            discriminator: syn::parse_str(discriminator).unwrap(),
-            niche: niche.map(JniNiche::Integer),
+        match niche.map(JniNiche::Integer) {
+            Some(niche) => JniOptional::Niche {
+                presence: syn::parse_str(presence).unwrap(),
+                reservation: prebindgen_declarations::NicheReservation {
+                    discriminator: syn::parse_str(discriminator).unwrap(),
+                    niche,
+                },
+            },
+            None => JniOptional::Flag(JniSelector::new(syn::parse_str(discriminator).unwrap())),
+        }
+    }
+    #[test]
+    fn optional_construction_rejects_inconsistent_flag_and_niche_parts() {
+        let flag = JniSelector::new(syn::parse_quote!(flag)).carrier().clone();
+        assert!(JniOptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![]
+        )
+        .is_err());
+        assert!(JniOptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![flag.clone(), flag.clone()]
+        )
+        .is_err());
+        assert!(JniOptional::from_parts(
+            syn::parse_quote!(other),
+            syn::parse_quote!(flag),
+            None,
+            vec![flag.clone()]
+        )
+        .is_err());
+        assert!(JniOptional::from_parts(
+            syn::parse_quote!(present),
+            syn::parse_quote!(payload),
+            Some(JniNiche::Integer(-1)),
+            vec![flag.clone()]
+        )
+        .is_err());
+        let encoding = JniOptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![flag],
+        )
+        .unwrap();
+        assert!(matches!(encoding, JniOptional::Flag(_)));
+        assert_eq!(encoding.presence(), encoding.discriminator());
+    }
+    #[test]
+    fn selector_construction_preserves_consumed_and_remaining_niches() {
+        for remaining in [None, Some(JniNiche::Integer(-3))] {
+            let mut carrier = JniSelector::new(syn::parse_quote!(tag)).carrier().clone();
+            carrier.kind.set_niche(remaining.clone()).unwrap();
+            let selector = JniSelector::try_from(carrier).unwrap();
+            assert_eq!(selector.carrier().kind.available_niche(), remaining);
         }
     }
     #[test]
     fn structural_nodes_require_supported_explicit_representations() {
-        let mut sequence: WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>> =
+        assert!(JniSelector::try_from(leaf("tag"))
+            .unwrap_err()
+            .contains("integer tag"));
+        assert!(JniOptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![leaf("flag")]
+        )
+        .unwrap_err()
+        .contains("integer tag"));
+        let sequence: WireNode<JniWire, JniOptional, JniSequence, JniGroup, JniSelector> =
             WireNode::Sequence {
                 element: Box::new(WireNode::Wire(vec![leaf("value")])),
-                metadata: leaf("carrier"),
+                metadata: JniSequence::buffered(syn::parse_quote!(rows), "true"),
             };
-        assert!(validate_layout(&sequence)
-            .unwrap_err()
-            .contains("supported carrier"));
-        let WireNode::Sequence { metadata, .. } = &mut sequence else {
-            panic!()
-        };
-        metadata.kind = JniWire::Rows {
-            condition: "true".into(),
-            null_niche_available: true,
-        };
         validate_layout(&sequence).unwrap();
-        let wrong_flag = WireNode::Optional {
-            element: Box::new(WireNode::Wire(vec![leaf("value")])),
-            metadata: JniOptional {
-                controls: vec![leaf("flag")],
-                presence: syn::parse_quote!(flag),
-                discriminator: syn::parse_quote!(flag),
-                niche: None,
-            },
+        let empty = WireNode::Sequence {
+            element: Box::new(WireNode::default()),
+            metadata: JniSequence::buffered(syn::parse_quote!(rows), "true"),
         };
-        assert!(validate_layout(&wrong_flag)
+        assert!(validate_layout(&empty)
             .unwrap_err()
-            .contains("sole inline control"));
-        let mut choice: WireNode<JniWire, JniOptional, Wire<JniWire>, JniGroup, Wire<JniWire>> =
-            WireNode::Alternatives {
-                elements: vec![WireNode::default()],
-                metadata: leaf("tag"),
-            };
-        assert!(validate_layout(&choice)
-            .unwrap_err()
-            .contains("integer selector"));
-        let WireNode::Alternatives { metadata, .. } = &mut choice else {
-            panic!()
+            .contains("nonempty element"));
+        let choice = WireNode::Alternatives {
+            elements: vec![WireNode::default()],
+            metadata: JniSelector::new(syn::parse_quote!(tag)),
         };
-        metadata.kind = JniWire::selector();
         validate_layout(&choice).unwrap();
     }
     #[test]
@@ -415,10 +550,14 @@ mod tests {
         crate::group::values_mut(&mut flag).next().unwrap().kind = JniWire::selector();
         enclose_optional_metadata(&mut flag, optional("flag", "flag", None));
         validate_layout(&flag).unwrap();
-        enclose_optional_metadata(&mut flag, optional("outer", "flag", None));
-        assert!(validate_layout(&flag)
-            .unwrap_err()
-            .contains("inline control"));
+        assert!(JniOptional::from_parts(
+            syn::parse_quote!(outer),
+            syn::parse_quote!(flag),
+            None,
+            vec![JniSelector::new(syn::parse_quote!(flag)).carrier().clone()]
+        )
+        .unwrap_err()
+        .contains("one matching flag"));
     }
     #[test]
     fn field_names_placement_and_empty_records_are_validated() {
@@ -586,19 +725,13 @@ mod abi_tests {
         let element: prebindgen_flat::WireNode<
             JniWire,
             crate::JniOptional,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSequence,
             JniGroup,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSelector,
         > = prebindgen_flat::WireNode::Wire(vec![scalar("first"), scalar("second")]);
         let mut sequence = element.clone();
         sequence = prebindgen_flat::WireNode::Sequence {
-            metadata: prebindgen_flat::Wire {
-                name: syn::parse_quote!(rows),
-                kind: JniWire::Rows {
-                    condition: "true".into(),
-                    null_niche_available: true,
-                },
-            },
+            metadata: JniSequence::buffered(syn::parse_quote!(rows), "true"),
             element: Box::new(std::mem::take(&mut sequence)),
         };
         let result = prebindgen_flat::Outcomes {

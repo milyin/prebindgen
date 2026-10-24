@@ -79,17 +79,14 @@ pub(crate) fn input_kotlin(
     nodes: &prebindgen_flat::WireNode<
         JniWire,
         crate::JniOptional,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSequence,
         JniGroup,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSelector,
     >,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
-    let root = &o.presence.to_string();
-    let controls = &o.controls;
-    // The adapter validates exactly one selector for a flag, none for a niche.
-    debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
+    let root = &o.presence().to_string();
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
     let mut c = kotlin::input_kotlin(nodes, context)?;
@@ -133,14 +130,11 @@ pub(crate) fn input_kotlin(
         *a = a.replace(&format!("{} == 1", root), "true");
         *a = replace(a, root, "1");
     }
-    if !controls.is_empty() {
+    if matches!(o, JniOptional::Flag(_)) {
         out.arguments.push(tag);
     }
     for (j, a) in c.arguments.into_iter().enumerate() {
-        let niche = o
-            .niche
-            .as_ref()
-            .filter(|_| inner[j].name == o.discriminator);
+        let niche = o.niche().filter(|_| inner[j].name == *o.discriminator());
         let default = default_kt(&inner[j].kind, niche);
         let a = match niche {
             Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
@@ -179,22 +173,19 @@ pub(crate) fn output_kotlin(
     nodes: &prebindgen_flat::WireNode<
         JniWire,
         crate::JniOptional,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSequence,
         JniGroup,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSelector,
     >,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let wires = kotlin::leaf_wires(nodes);
-    let controls = &o.controls;
-    // The adapter validates exactly one selector for a flag, none for a niche.
-    debug_assert_eq!(controls.len(), usize::from(o.niche.is_none()));
-    let flag = controls.len();
-    let p = if let Some(n) = &o.niche {
+    let flag = usize::from(matches!(o, JniOptional::Flag(_)));
+    let p = if let Some(n) = o.niche() {
         let i = wires
             .iter()
-            .position(|w| w.name == o.discriminator)
+            .position(|w| w.name == *o.discriminator())
             .ok_or("missing optional discriminator")?;
         let absent = default_kt(&wires[i].kind, Some(n));
         format!("{}[{i}] != {absent}", context.result)

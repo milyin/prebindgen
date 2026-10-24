@@ -888,8 +888,35 @@ source field information. Constructor arguments and output combinations retain
 their group with one component; constructors without arguments retain an empty
 group. `optional_metadata` owns presence or niche controls,
 `alternatives_metadata` owns the selector, and sequence hooks supply `S`.
-C and JNI use distinct types for these roles, so a sequence cannot accidentally
-receive optional metadata.
+C and JNI use distinct types for these roles:
+
+- `CSequence` / `JniSequence` record `Buffered` or `Callback` delivery and own
+  the corresponding boundary carrier. Constructors choose its representation:
+  C uses row storage or a delivered-element count; JNI uses an object array
+  containing rows or a callback-result presence marker. Callback signatures,
+  cleanup and Kotlin fold generation read this choice from the tree. A separate
+  function-name registry does not select delivery during emission.
+- `COptional` / `JniOptional` are `Flag` or `Niche`. A flag owns one checked
+  integer selector; a niche stores the payload binding and reserved absent
+  representation. Missing flags, extra controls and conflicting binding names
+  are rejected during metadata construction.
+- `CSelector` / `JniSelector` describe integer alternative tags and preserve their
+  remaining niche state. Their carriers are private. `new` creates the adapter's
+  tag representation; `TryFrom<Wire<_>>` checks an existing descriptor without
+  resetting its niche availability.
+
+Physical carrier information is stored once. Metadata exposes an immutable
+carrier description; private niche handling mutates the same stored domain.
+Neither sequence nor selector metadata copies its child tree. Function sequence
+callbacks are supported only for the successful return, including supported
+optional wrapping; parameters, error channels and nested rows use buffered
+sequences. JNI's native callback fills an internal sink; user folds run after
+native return and handle-lock release.
+
+`Codec::optional_metadata` and `Codec::alternatives_metadata` return `Result` so
+adapters can reject invalid encodings before a conversion replaces an existing
+slot. Other adapters remain free to choose their own metadata types and delivery
+policies.
 
 For an option, the compiler chooses the discriminator and absent representation
 before calling the hook. The hook receives the normalized presence binding used

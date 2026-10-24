@@ -16,10 +16,11 @@ pub use optional::JniNiche;
 mod group;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataGroup};
-pub use group::{JniGroup, JniOptional};
+pub use group::{JniGroup, JniOptional, JniSelector};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
+pub use sequence::{JniSequence, JniSequenceDelivery};
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
@@ -31,17 +32,17 @@ type InputPlan<W> = prebindgen_conversions::InputPlan<
     W,
     JniContext,
     JniOptional,
-    prebindgen_flat::Wire<JniWire>,
+    crate::JniSequence,
     JniGroup,
-    prebindgen_flat::Wire<JniWire>,
+    crate::JniSelector,
 >;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<
     W,
     JniContext,
     JniOptional,
-    prebindgen_flat::Wire<JniWire>,
+    crate::JniSequence,
     JniGroup,
-    prebindgen_flat::Wire<JniWire>,
+    crate::JniSelector,
 >;
 mod kotlin;
 pub use kotlin::{
@@ -480,7 +481,6 @@ impl JniGenBuilder {
             &self.prefix,
             &mut seen,
         )?;
-        let mut callbacks = BTreeSet::new();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
@@ -494,16 +494,6 @@ impl JniGenBuilder {
                 codec.callback_wire = Some(wire);
                 defaults.fill(&mut flat, &codec, &variant, &())?;
                 codec.callback_wire = None;
-                if crate::group::result_packet_fields(
-                    &(flat.function(&variant_name)?.ret.slot.as_ref().unwrap())
-                        .output_outcomes()
-                        .success,
-                )
-                .len()
-                    != 1
-                {
-                    return Err("callback_return cannot discard additional return values".into());
-                }
                 if let Some(error) = errors.get(&declaration.name).cloned() {
                     errors.insert(variant_name.clone(), error);
                 }
@@ -517,7 +507,6 @@ impl JniGenBuilder {
                 }
                 functions.push((variant_name.clone(), pkg, name));
                 bound.insert(variant_name.clone());
-                callbacks.insert(variant_name.clone());
                 if declaration.callback_return
                     == Some(prebindgen_declarations::CallbackReturn::Only)
                 {
@@ -559,7 +548,7 @@ impl JniGenBuilder {
             classes,
             functions,
             data_files,
-            OutputBindings { errors, callbacks },
+            errors,
         )
     }
 }
@@ -586,9 +575,9 @@ pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
     type Optional = JniOptional;
-    type Sequence = prebindgen_flat::Wire<JniWire>;
+    type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = prebindgen_flat::Wire<JniWire>;
+    type Alternatives = JniSelector;
     fn group_metadata(&self) -> JniGroup {
         JniGroup::Values
     }
@@ -620,19 +609,14 @@ impl Codec for JniCodec {
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
         controls: Vec<prebindgen_flat::Wire<JniWire>>,
-    ) -> JniOptional {
-        JniOptional {
-            controls,
-            presence,
-            discriminator,
-            niche,
-        }
+    ) -> Result<JniOptional> {
+        JniOptional::from_parts(presence, discriminator, niche, controls)
     }
     fn alternatives_metadata(
         &self,
         selector: prebindgen_flat::Wire<JniWire>,
-    ) -> prebindgen_flat::Wire<JniWire> {
-        selector
+    ) -> Result<JniSelector> {
+        JniSelector::try_from(selector)
     }
     fn field_group(&self, name: syn::Ident) -> JniGroup {
         JniGroup::Field(name)
@@ -690,12 +674,12 @@ impl Codec for JniCodec {
         element: &prebindgen_flat::WireNode<
             JniWire,
             crate::JniOptional,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSequence,
             JniGroup,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSelector,
         >,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<prebindgen_flat::Wire<JniWire>>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<crate::JniSequence>> {
         sequence::input(wire, length, index, element, active)
     }
     fn sequence_output(
@@ -707,12 +691,12 @@ impl Codec for JniCodec {
         element: &prebindgen_flat::WireNode<
             JniWire,
             crate::JniOptional,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSequence,
             JniGroup,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSelector,
         >,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<prebindgen_flat::Wire<JniWire>>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<crate::JniSequence>> {
         sequence::output(wire, length, index, element, values)
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
@@ -931,9 +915,19 @@ impl Codec for JniCodec {
         crate::group::retire_niches(payload, reservation)
     }
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
     }
     fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        sequence::callback_delivery(&plan.outcomes.success)?;
+        for error in plan
+            .outcomes
+            .source_error
+            .iter()
+            .chain(plan.outcomes.binding_failure.iter())
+        {
+            sequence::validate_buffered(error)?;
+        }
         for node in std::iter::once(&plan.outcomes.success)
             .chain(plan.outcomes.source_error.iter())
             .chain(plan.outcomes.binding_failure.iter())
@@ -1093,11 +1087,6 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
     )
 }
 
-struct OutputBindings {
-    errors: BTreeMap<String, errors::ErrorBinding>,
-    callbacks: BTreeSet<String>,
-}
-
 fn generate(
     flat: Bindings,
     prefix: &str,
@@ -1105,9 +1094,8 @@ fn generate(
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
     mut files: BTreeMap<String, String>,
-    outputs: OutputBindings,
+    errors: BTreeMap<String, errors::ErrorBinding>,
 ) -> Result<JniGen> {
-    let OutputBindings { errors, callbacks } = outputs;
     let mut rust = errors::emit(&errors)?;
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
     errors::interfaces(prefix, &mut files)?;
@@ -1155,7 +1143,8 @@ fn generate(
     )?;
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let callback = callbacks.contains(&source);
+        let callback =
+            sequence::callback_delivery(&f.output_conversion()?.output_outcomes().success)?;
         let error = errors.get(&source);
         let outcomes = f.output_conversion()?.output_outcomes();
         let logical = &outcomes.success;
@@ -1164,6 +1153,13 @@ fn generate(
             .chain(outcomes.binding_failure.iter())
         {
             group::validate_layout(node)?;
+        }
+        for error in outcomes
+            .source_error
+            .iter()
+            .chain(outcomes.binding_failure.iter())
+        {
+            sequence::validate_buffered(error)?;
         }
         let has_source_error = outcomes.source_error.is_some();
         let has_binding_failure = outcomes.binding_failure.is_some();

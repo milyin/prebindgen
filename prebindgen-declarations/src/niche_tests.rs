@@ -178,17 +178,21 @@ impl Codec for DomainCodec {
         discriminator: syn::Ident,
         niche: Option<Sentinel>,
         controls: Vec<Wire<Domain>>,
-    ) -> DomainGroup {
-        DomainGroup {
-            description: format!("optional:{presence}:{discriminator}:{niche:?}"),
-            controls,
-        }
+    ) -> Result<DomainGroup> {
+        Ok({
+            DomainGroup {
+                description: format!("optional:{presence}:{discriminator}:{niche:?}"),
+                controls,
+            }
+        })
     }
-    fn alternatives_metadata(&self, selector: Wire<Domain>) -> DomainGroup {
-        DomainGroup {
-            description: "choice".into(),
-            controls: vec![selector],
-        }
+    fn alternatives_metadata(&self, selector: Wire<Domain>) -> Result<DomainGroup> {
+        Ok({
+            DomainGroup {
+                description: "choice".into(),
+                controls: vec![selector],
+            }
+        })
     }
     fn field_group(&self, name: syn::Ident) -> DomainGroup {
         DomainGroup {

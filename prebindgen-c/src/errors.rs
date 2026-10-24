@@ -60,9 +60,9 @@ fn field_names(
     layout: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
 ) -> Vec<String> {
     use prebindgen_flat::WireNode;
@@ -131,7 +131,8 @@ pub(crate) fn emit(
                 sequence::schemas(&error.plan.outcomes.success, &mut schemas);
                 schemas
                     .into_iter()
-                    .map(|(wire, _)| {
+                    .map(|(sequence, _)| {
+                        let wire = sequence.carrier();
                         (
                             wire.name.to_string(),
                             format_ident!("__PbRow_error_{}_{}", name, wire.name),
@@ -153,7 +154,7 @@ pub(crate) fn emit(
         sequence::schemas(&error.plan.outcomes.success, &mut schemas);
         let carriers = schemas
             .iter()
-            .map(|(wire, _)| wire.name.to_string())
+            .map(|(sequence, _)| sequence.carrier().name.to_string())
             .collect();
         sequence::emit_schemas(
             schemas, &carriers, &context, prefix, pointers, symbols, tokens, header,
@@ -280,9 +281,9 @@ pub(crate) fn result_function(
     function_output_layout: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,

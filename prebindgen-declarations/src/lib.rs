@@ -278,8 +278,8 @@ impl Output {
 ///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
-///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: Vec<Wire<Type>>) {}
-///     fn alternatives_metadata(&self, _: Wire<Type>) {}
+///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: Vec<Wire<Type>>) -> Result<()> {Ok(())}
+///     fn alternatives_metadata(&self, _: Wire<Type>) -> Result<()> {Ok(())}
 ///     fn field_group(&self, _: Ident) {}
 ///     fn fields_group(&self) {}
 ///     fn optional_niche(&self, _: &prebindgen_flat::WireNode<Self::Wire>) -> Option<prebindgen_declarations::NicheReservation<()>> {None}
@@ -353,16 +353,18 @@ pub trait Codec {
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
     /// representation, or `None` when a separate flag is an inline control wire.
     /// With a flag, `presence` and `discriminator` name that same wire. Retain the
-    /// supplied controls unchanged; the compiler validates their names and types.
+    /// supplied controls unchanged. Return an error when they cannot form the
+    /// adapter's flag or niche representation; failed preparation preserves existing slots.
     fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<Self::Niche>,
         controls: Vec<Wire<Self::Wire>>,
-    ) -> Self::Optional;
-    /// Record the supplied selector unchanged for mutually exclusive input alternatives.
-    fn alternatives_metadata(&self, selector: Wire<Self::Wire>) -> Self::Alternatives;
+    ) -> Result<Self::Optional>;
+    /// Record the supplied selector for mutually exclusive input alternatives,
+    /// preserving its niche state. Reject an unsupported tag representation.
+    fn alternatives_metadata(&self, selector: Wire<Self::Wire>) -> Result<Self::Alternatives>;
     /// Describe one named source field, whose subtree may contain any number of wires.
     fn field_group(&self, name: syn::Ident) -> Self::Group;
     /// Describe a record or unit value's ordered collection of field subtrees.
@@ -1082,7 +1084,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     cases.push(quote!(#i=>{#body #value}));
                 }
                 let node = WireNode::Alternatives {
-                    metadata: self.codec.alternatives_metadata(selector),
+                    metadata: self.codec.alternatives_metadata(selector)?,
                     elements: alternatives,
                 };
                 wires = vec![node];

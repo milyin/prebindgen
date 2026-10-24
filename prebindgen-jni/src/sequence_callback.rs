@@ -1,19 +1,18 @@
 //! Per-element native delivery and Kotlin folds, without invoking user code under JNI locks.
 use super::*;
 use prebindgen_declarations::SequenceOutput;
-use prebindgen_flat::Wire;
 
 pub(crate) fn transport(
     wire: syn::Ident,
     element: &prebindgen_flat::WireNode<
         JniWire,
         crate::JniOptional,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSequence,
         JniGroup,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSelector,
     >,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<prebindgen_flat::Wire<JniWire>>> {
+) -> Result<SequenceOutput<crate::JniSequence>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
     let class = format_ident!("{wire}_callback_class");
@@ -46,13 +45,7 @@ pub(crate) fn transport(
     Ok(SequenceOutput {
         commit_each: false,
         fallible: true,
-        metadata: Wire {
-            name: wire.clone(),
-            kind: JniWire::Rows {
-                condition: "true".into(),
-                null_niche_available: true,
-            },
-        },
+        metadata: JniSequence::callback(wire.clone()),
         begin: quote! {
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
@@ -82,9 +75,9 @@ pub(crate) fn fold(
     layout: &prebindgen_flat::WireNode<
         JniWire,
         crate::JniOptional,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSequence,
         JniGroup,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSelector,
     >,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
@@ -92,9 +85,9 @@ pub(crate) fn fold(
         node: &prebindgen_flat::WireNode<
             JniWire,
             JniOptional,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSequence,
             JniGroup,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSelector,
         >,
     ) -> bool {
         match node {
@@ -104,10 +97,10 @@ pub(crate) fn fold(
         }
     }
     let optional = optional(layout);
-    let (carrier, element) =
+    let (sequence, element) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
     let position = crate::group::result_packet_fields(layout)
-        .position(|w| w.name == carrier.name)
+        .position(|w| w.name == sequence.carrier().name)
         .unwrap();
     let row = "__pb_fold_row";
     let ctx = KotlinContext {

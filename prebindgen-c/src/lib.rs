@@ -27,26 +27,27 @@ mod errors;
 mod group;
 mod sequence;
 use group::validate_layout;
-pub use group::{CGroup, COptional};
+pub use group::{CGroup, COptional, CSelector};
 use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
+pub use sequence::{CSequence, CSequenceDelivery};
 mod emission;
 pub use emission::CContext;
 type InputPlan<W> = prebindgen_conversions::InputPlan<
     W,
     CContext,
     COptional,
-    prebindgen_flat::Wire<CWire>,
+    crate::CSequence,
     CGroup,
-    prebindgen_flat::Wire<CWire>,
+    crate::CSelector,
 >;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<
     W,
     CContext,
     COptional,
-    prebindgen_flat::Wire<CWire>,
+    crate::CSequence,
     CGroup,
-    prebindgen_flat::Wire<CWire>,
+    crate::CSelector,
 >;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
@@ -79,9 +80,9 @@ pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
     type Optional = COptional;
-    type Sequence = prebindgen_flat::Wire<CWire>;
+    type Sequence = CSequence;
     type Group = CGroup;
-    type Alternatives = prebindgen_flat::Wire<CWire>;
+    type Alternatives = CSelector;
     fn group_metadata(&self) -> CGroup {
         CGroup::Values
     }
@@ -113,19 +114,11 @@ impl Codec for CCodec {
         discriminator: syn::Ident,
         niche: Option<CNiche>,
         controls: Vec<prebindgen_flat::Wire<CWire>>,
-    ) -> COptional {
-        COptional {
-            controls,
-            presence,
-            discriminator,
-            niche,
-        }
+    ) -> Result<COptional> {
+        COptional::from_parts(presence, discriminator, niche, controls)
     }
-    fn alternatives_metadata(
-        &self,
-        selector: prebindgen_flat::Wire<CWire>,
-    ) -> prebindgen_flat::Wire<CWire> {
-        selector
+    fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<CWire>) -> Result<CSelector> {
+        CSelector::try_from(selector)
     }
     fn field_group(&self, name: syn::Ident) -> CGroup {
         CGroup::Field(name)
@@ -184,12 +177,12 @@ impl Codec for CCodec {
         element: &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
         _: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<prebindgen_flat::Wire<CWire>>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<crate::CSequence>> {
         sequence::input(wire, length, index, element)
     }
     fn sequence_output(
@@ -201,12 +194,12 @@ impl Codec for CCodec {
         element: &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<prebindgen_flat::Wire<CWire>>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<crate::CSequence>> {
         sequence::output(wire, length, element, values)
     }
     fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
@@ -466,9 +459,19 @@ impl Codec for CCodec {
         crate::group::retire_niches(payload, reservation)
     }
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
     }
     fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        sequence::callback_delivery(&plan.outcomes.success)?;
+        for error in plan
+            .outcomes
+            .source_error
+            .iter()
+            .chain(plan.outcomes.binding_failure.iter())
+        {
+            sequence::validate_buffered(error)?;
+        }
         for node in std::iter::once(&plan.outcomes.success)
             .chain(plan.outcomes.source_error.iter())
             .chain(plan.outcomes.binding_failure.iter())
@@ -812,18 +815,6 @@ impl Cbindgen {
                 codec.callback_wire = Some(wire);
                 declarations.fill(&mut flat, &codec, &variant, &())?;
                 codec.callback_wire = None;
-                if !sequence::callback_shape(
-                    &flat
-                        .function(&name)?
-                        .ret
-                        .slot
-                        .as_ref()
-                        .unwrap()
-                        .outcomes
-                        .success,
-                ) {
-                    return Err("callback_return cannot discard additional return values".into());
-                }
                 if self.panics.contains(&decl.name) {
                     self.panics.insert(name.clone());
                 }
@@ -872,7 +863,6 @@ impl Cbindgen {
             pointers,
             codec.enums.into_values().collect(),
             errors,
-            callbacks,
         )
     }
 }
@@ -969,17 +959,17 @@ fn generate<
     I: for<'a> prebindgen_flat::InputConversion<
         Wire = CWire,
         Optional = COptional,
-        Sequence = prebindgen_flat::Wire<CWire>,
+        Sequence = CSequence,
         Group = CGroup,
-        Alternatives = prebindgen_flat::Wire<CWire>,
+        Alternatives = CSelector,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
     O: for<'a> prebindgen_flat::OutputConversion<
         Wire = CWire,
         Optional = COptional,
-        Sequence = prebindgen_flat::Wire<CWire>,
+        Sequence = CSequence,
         Group = CGroup,
-        Alternatives = prebindgen_flat::Wire<CWire>,
+        Alternatives = CSelector,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
     >,
 >(
@@ -988,7 +978,6 @@ fn generate<
     pointers: Vec<(String, syn::Type)>,
     enums: Vec<(String, prebindgen_declarations::EnumMapping)>,
     errors: Vec<errors::ErrorBinding>,
-    callbacks: std::collections::BTreeSet<String>,
 ) -> Result<Generation> {
     let mut calls = Vec::new();
     let free = format_ident!("{prefix}_free_buffer");
@@ -1028,6 +1017,7 @@ fn generate<
         }
         for slot in f.params.iter().filter_map(|p| p.ty.slot.as_ref()) {
             prebindgen_flat::validate_wire_nodes(std::iter::once(slot.input_node()))?;
+            sequence::validate_buffered(slot.input_node())?;
             validate_layout(slot.input_node())?;
         }
         if let Some(slot) = f.ret.slot.as_ref() {
@@ -1045,6 +1035,13 @@ fn generate<
         }
         let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
         let outcomes = f.output_conversion()?.output_outcomes();
+        for error in outcomes
+            .source_error
+            .iter()
+            .chain(outcomes.binding_failure.iter())
+        {
+            sequence::validate_buffered(error)?;
+        }
         let has_source_error = outcomes.source_error.is_some();
         let has_binding_failure = outcomes.binding_failure.is_some();
         if is_result != has_source_error {
@@ -1067,7 +1064,8 @@ fn generate<
                 );
                 schemas
                     .into_iter()
-                    .map(|(wire, _)| {
+                    .map(|(sequence, _)| {
+                        let wire = sequence.carrier();
                         (
                             wire.name.to_string(),
                             format_ident!("__PbRow_{}_{}", f.name, wire.name),
@@ -1209,7 +1207,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         );
         let output_carriers = output_schemas
             .iter()
-            .map(|(wire, _)| wire.name.to_string())
+            .map(|(sequence, _)| sequence.carrier().name.to_string())
             .collect::<std::collections::BTreeSet<_>>();
         schemas.extend(output_schemas);
         sequence::emit_schemas(
@@ -1272,7 +1270,9 @@ The pointer must be null or a live allocation of the declared type returned by t
             params.push(quote!(#n:#ty));
             cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers, &context)));
         }
-        let body = if callbacks.contains(&f.name.to_string()) {
+        let body = if sequence::callback_delivery(
+            &f.output_conversion()?.output_outcomes().success,
+        )? {
             let (_, element) =
                 sequence::return_sequence(&f.output_conversion()?.output_outcomes().success)
                     .ok_or("missing callback element schema")?;
@@ -1412,9 +1412,9 @@ fn describe_groups(
     layout: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
     wires: &[&Wire],
     output: bool,
@@ -1425,9 +1425,9 @@ fn describe_groups(
         node: &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
@@ -1445,9 +1445,9 @@ fn describe_groups(
             }
         }
         if let prebindgen_flat::WireNode::Sequence { element, metadata } = node {
-            let carrier = metadata;
+            let carrier = metadata.carrier();
             let path = field_path.join(".");
-            if matches!(carrier.kind, CWire::Rows) {
+            if metadata.delivery() == CSequenceDelivery::Buffered {
                 out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,crate::group::row_fields(element).len()));
             } else {
                 out.push_str(&format!("/* Callback sequence {path}: {} reports the delivered element count; the visitor receives {} fields per element. */\n",carrier.name,crate::group::row_fields(element).len()));
@@ -1472,8 +1472,8 @@ fn describe_groups(
         {
             let label = format!("option{}", *next_label);
             *next_label += 1;
-            let discriminator = &names[&g.discriminator.to_string()];
-            let rule = match &g.niche {
+            let discriminator = &names[&g.discriminator().to_string()];
+            let rule = match g.niche() {
                     None => format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
                     Some(CNiche::Null) => format!("{discriminator} == NULL means None; non-null means Some"),
                     Some(CNiche::Integer(n)) => format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
@@ -1637,9 +1637,9 @@ mod generation_tests {
         let shape = |layout: &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >| {
             prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout))
                 .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
@@ -1696,6 +1696,27 @@ mod generation_tests {
             .panic()
             .build();
         assert!(result.err().unwrap().contains("additional return"));
+    }
+
+    #[test]
+    fn callback_only_elements_require_declared_c_types() {
+        let source =
+            syn::parse_file("pub struct Undeclared {pub n:i32} pub fn values()->Vec<Undeclared>{}")
+                .unwrap();
+        let flat = Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let error = Cbindgen::new(flat)
+            .function(prebindgen_declarations::fun!(values).callback_return_only())
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("declare a C opaque pointer"), "{error}");
     }
 
     #[test]
@@ -1962,9 +1983,9 @@ mod generation_tests {
                 panic!()
             };
             let optional = outer_metadata;
-            assert!(optional.niche.is_none());
+            assert!(optional.niche().is_none());
             assert_eq!(
-                optional.discriminator,
+                *optional.discriminator(),
                 crate::group::function_parameters(flat.function("echo").unwrap())
                     .unwrap()
                     .next()
@@ -2001,7 +2022,7 @@ mod generation_tests {
             .unwrap();
         let output = flat.function_mut("f").unwrap().ret.slot.as_mut().unwrap();
         output.outcomes.binding_failure = None;
-        let error = generate(flat, "test", vec![], vec![], vec![], Default::default())
+        let error = generate(flat, "test", vec![], vec![], vec![])
             .err()
             .unwrap();
         assert!(error.contains("binding-failure schema"));
@@ -2016,18 +2037,18 @@ mod generation_tests {
                 prebindgen_flat::WireNode<
                     CWire,
                     crate::COptional,
-                    prebindgen_flat::Wire<CWire>,
+                    crate::CSequence,
                     CGroup,
-                    prebindgen_flat::Wire<CWire>,
+                    crate::CSelector,
                 >,
             >,
         );
         impl prebindgen_flat::Conversion for CountedOutput {
             type Wire = CWire;
             type Optional = COptional;
-            type Sequence = prebindgen_flat::Wire<CWire>;
+            type Sequence = CSequence;
             type Group = CGroup;
-            type Alternatives = prebindgen_flat::Wire<CWire>;
+            type Alternatives = CSelector;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
 
             fn code_fragment_slot(
@@ -2053,9 +2074,9 @@ mod generation_tests {
                 prebindgen_flat::WireNode<
                     CWire,
                     COptional,
-                    prebindgen_flat::Wire<CWire>,
+                    crate::CSequence,
                     CGroup,
-                    prebindgen_flat::Wire<CWire>,
+                    crate::CSelector,
                 >,
             > {
                 &self.1
@@ -2072,7 +2093,7 @@ mod generation_tests {
         .unwrap();
         flat.function_mut("noop").unwrap().ret.slot =
             Some(CountedOutput(count.clone(), Default::default()));
-        let output = generate(flat, "test", vec![], vec![], vec![], Default::default()).unwrap();
+        let output = generate(flat, "test", vec![], vec![], vec![]).unwrap();
         assert!(output.header.contains("test_noop("));
         assert_eq!(count.get(), 1);
     }

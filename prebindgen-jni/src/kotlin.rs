@@ -130,9 +130,9 @@ impl From<OutputPlan<JniWire>> for JniOutput {
 impl Conversion for JniInput {
     type Wire = JniWire;
     type Optional = JniOptional;
-    type Sequence = Wire<JniWire>;
+    type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = Wire<JniWire>;
+    type Alternatives = JniSelector;
     type SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -147,9 +147,9 @@ impl Conversion for JniInput {
 impl Conversion for JniOutput {
     type Wire = JniWire;
     type Optional = JniOptional;
-    type Sequence = Wire<JniWire>;
+    type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = Wire<JniWire>;
+    type Alternatives = JniSelector;
     type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -164,6 +164,7 @@ impl Conversion for JniOutput {
 impl KotlinInputConversion for JniInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
         prebindgen_flat::validate_wire_nodes(std::iter::once(self.input_node()))?;
+        crate::sequence::validate_buffered(self.input_node())?;
         validate_layout(self.input_node())?;
         input_kotlin(self.input_node(), context)
     }
@@ -276,9 +277,9 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
 pub(crate) type JniNode = prebindgen_flat::WireNode<
     JniWire,
     crate::JniOptional,
-    prebindgen_flat::Wire<JniWire>,
+    crate::JniSequence,
     JniGroup,
-    prebindgen_flat::Wire<JniWire>,
+    crate::JniSelector,
 >;
 pub(crate) fn leaf_wires(node: &JniNode) -> Vec<&Wire<JniWire>> {
     crate::group::kotlin_result_fields(node).collect()
@@ -299,7 +300,7 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
     match node {
         JniNode::Wire(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
         JniNode::Alternatives { elements, metadata } => {
-            let mut out = input_leaves(&[metadata], context)?;
+            let mut out = input_leaves(&[metadata.carrier()], context)?;
             for arm in elements {
                 merge_input(&mut out, input_kotlin(arm, context)?);
             }
@@ -362,7 +363,12 @@ pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resu
         JniNode::Alternatives { .. } => {
             Err("native alternatives are input-only in the JNI adapter".into())
         }
-        JniNode::Sequence { element, .. } => crate::sequence::output_list(element, context),
+        JniNode::Sequence { element, metadata } => match metadata.delivery() {
+            JniSequenceDelivery::Buffered => crate::sequence::output_list(element, context),
+            JniSequenceDelivery::Callback => {
+                Err("callback sequence requires function-level callback delivery".into())
+            }
+        },
         JniNode::Optional { element, metadata } => {
             optional::output_kotlin(element, metadata, context)
         }

@@ -458,15 +458,15 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
         layout: &prebindgen_flat::WireNode<
             JniWire,
             crate::JniOptional,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSequence,
             JniGroup,
-            prebindgen_flat::Wire<JniWire>,
+            crate::JniSelector,
         >,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
             WireNode::Optional { element, metadata } => {
-                result.push(metadata.niche.clone());
+                result.push(metadata.niche().cloned());
                 result.extend(reservations(element));
             }
             WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
@@ -858,9 +858,9 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     let shape = |layout: &prebindgen_flat::WireNode<
         JniWire,
         crate::JniOptional,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSequence,
         JniGroup,
-        prebindgen_flat::Wire<JniWire>,
+        crate::JniSelector,
     >| {
         prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout))
             .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))

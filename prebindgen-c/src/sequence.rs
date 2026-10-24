@@ -4,6 +4,55 @@ use prebindgen_declarations::{SequenceInput, SequenceOutput};
 
 use prebindgen_flat::WireNode;
 
+/// Selected delivery of a logical sequence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CSequenceDelivery {
+    /// All rows travel in one collection carrier.
+    Buffered,
+    /// Each row is delivered through the function's sequence callback.
+    Callback,
+}
+/// The selected delivery and its boundary value, without a copy of the element tree.
+/// Constructors fix the carrier representation for each delivery choice.
+#[derive(Clone, Debug)]
+pub struct CSequence {
+    delivery: CSequenceDelivery,
+    carrier: prebindgen_flat::Wire<CWire>,
+}
+impl CSequence {
+    /// Use buffered rows with this boundary binding.
+    pub fn buffered(name: syn::Ident) -> Self {
+        Self {
+            delivery: CSequenceDelivery::Buffered,
+            carrier: prebindgen_flat::Wire {
+                name,
+                kind: CWire::Rows,
+            },
+        }
+    }
+    /// Deliver elements through the native sequence callback, returning the delivered count.
+    pub fn callback(name: syn::Ident) -> Self {
+        Self {
+            delivery: CSequenceDelivery::Callback,
+            carrier: prebindgen_flat::Wire {
+                name,
+                kind: CWire::scalar(Primitive::Usize),
+            },
+        }
+    }
+    /// Explicit delivery selected when constructing this occurrence.
+    pub fn delivery(&self) -> CSequenceDelivery {
+        self.delivery
+    }
+    /// Boundary value holding buffered rows or the delivered callback count.
+    pub fn carrier(&self) -> &prebindgen_flat::Wire<CWire> {
+        &self.carrier
+    }
+    pub(crate) fn carrier_mut(&mut self) -> &mut prebindgen_flat::Wire<CWire> {
+        &mut self.carrier
+    }
+}
+
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
@@ -11,11 +60,11 @@ pub(crate) fn input(
     element: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
-) -> Result<SequenceInput<prebindgen_flat::Wire<CWire>>> {
+) -> Result<SequenceInput<crate::CSequence>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
@@ -28,10 +77,7 @@ pub(crate) fn input(
         values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
-        metadata: Wire {
-            name: wire.clone(),
-            kind: CWire::Rows,
-        },
+        metadata: CSequence::buffered(wire.clone()),
         open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?;),
         bind,
         validation_values: values.clone(),
@@ -45,12 +91,12 @@ pub(crate) fn output(
     element: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<prebindgen_flat::Wire<CWire>>> {
+) -> Result<SequenceOutput<crate::CSequence>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let fields = crate::group::row_values(element, values)?
         .into_iter()
@@ -62,10 +108,7 @@ pub(crate) fn output(
     Ok(SequenceOutput {
         commit_each: false,
         fallible: false,
-        metadata: Wire {
-            name: wire.clone(),
-            kind: CWire::Rows,
-        },
+        metadata: CSequence::buffered(wire.clone()),
         begin: quote!(let mut #wire:Vec<#row>=Vec::with_capacity(#length);),
         enter: quote!(),
         store: quote!(#wire.push(#row {#(#fields),*});),
@@ -78,23 +121,19 @@ pub(crate) fn output(
     })
 }
 #[allow(clippy::type_complexity)] // Pair each sequence carrier with its element tree.
+/// Visit every sequence, including callback elements that need C declaration checks.
+/// Nested schemas precede their parents so generated row types can refer to them.
 pub(crate) fn schemas<'a>(
     node: &'a prebindgen_flat::WireNode<
         CWire,
         COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
     out: &mut Vec<(
-        &'a prebindgen_flat::Wire<CWire>,
-        &'a prebindgen_flat::WireNode<
-            CWire,
-            COptional,
-            prebindgen_flat::Wire<CWire>,
-            CGroup,
-            prebindgen_flat::Wire<CWire>,
-        >,
+        &'a CSequence,
+        &'a prebindgen_flat::WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     )>,
 ) {
     match node {
@@ -115,13 +154,13 @@ pub(crate) fn schemas<'a>(
 #[allow(clippy::type_complexity, clippy::too_many_arguments)] // Explicit schema and writer inputs.
 pub(crate) fn emit_schemas(
     schemas: Vec<(
-        &Wire,
+        &CSequence,
         &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
     )>,
     output_carriers: &std::collections::BTreeSet<String>,
@@ -132,10 +171,11 @@ pub(crate) fn emit_schemas(
     tokens: &mut TokenStream,
     header: &mut String,
 ) -> Result<()> {
-    for (carrier, element) in schemas {
-        if !matches!(carrier.kind, CWire::Rows) {
+    for (sequence, element) in schemas {
+        if sequence.delivery() != CSequenceDelivery::Buffered {
             continue;
         }
+        let carrier = sequence.carrier();
         let row = &context.row_types[&carrier.name.to_string()];
         let base = row.to_string();
         let base = base.trim_start_matches("__PbRow_");
@@ -187,9 +227,9 @@ pub(crate) fn release(
     layout: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
     fields: &[(&Wire, TokenStream)],
     context: &CContext,
@@ -211,7 +251,7 @@ pub(crate) fn release(
             }
             CWire::Rows => {
                 let row=&context.row_types[&wire.name.to_string()];
-                let element=schemas.iter().find(|(carrier,_)|carrier.name==wire.name).unwrap().1;
+                let element=schemas.iter().find(|(sequence,_)|sequence.carrier().name==wire.name).unwrap().1;
                 let fields=crate::group::row_fields(element).enumerate().map(|(i,wire)|{let field=format_ident!("v{i}");(wire,quote!(row.#field))}).collect::<Vec<_>>();
                 let child=release(element,&fields,context,catch_panics);
                 code.extend(quote! {if (#value).len != 0 {let rows=Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut #row,(#value).len));for row in rows.iter(){#child}}});
@@ -228,12 +268,12 @@ pub(crate) fn callback_output(
     element: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
     length: syn::Ident,
-) -> Result<SequenceOutput<prebindgen_flat::Wire<CWire>>> {
+) -> Result<SequenceOutput<crate::CSequence>> {
     let values = prebindgen_conversions::match_output_fields(
         crate::group::callback_parameters(element),
         values,
@@ -249,10 +289,7 @@ pub(crate) fn callback_output(
     Ok(SequenceOutput {
         commit_each: true,
         fallible: true, // A callback pointer must be provided; checked before source invocation.
-        metadata: Wire {
-            name: wire.clone(),
-            kind: CWire::scalar(Primitive::Usize),
-        },
+        metadata: CSequence::callback(wire.clone()),
         begin: quote!(),
         enter: quote!(),
         store: quote!(#(#prepare)* #commit unsafe { __pb_callback.expect("validated callback")(__pb_callback_context, #(#names),*); }),
@@ -264,26 +301,12 @@ pub(crate) fn callback_output(
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
 pub(crate) fn callback_shape(
-    node: &prebindgen_flat::WireNode<
-        CWire,
-        COptional,
-        prebindgen_flat::Wire<CWire>,
-        CGroup,
-        prebindgen_flat::Wire<CWire>,
-    >,
+    node: &prebindgen_flat::WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> bool {
     match node {
-        WireNode::Sequence { metadata, .. } => matches!(
-            metadata.kind,
-            CWire::Scalar {
-                primitive: Primitive::Usize,
-                ..
-            }
-        ),
+        WireNode::Sequence { metadata, .. } => metadata.delivery() == CSequenceDelivery::Callback,
         WireNode::Optional { element, metadata } => {
-            metadata.niche.is_none()
-                && matches!(metadata.controls.as_slice(),[flag] if flag.name==metadata.discriminator)
-                && callback_shape(element)
+            matches!(metadata, COptional::Flag(_)) && callback_shape(element)
         }
         WireNode::Group { elements, .. } => {
             matches!(elements.as_slice(),[only] if callback_shape(only))
@@ -298,19 +321,13 @@ pub(crate) fn return_sequence(
     layout: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
 ) -> Option<(
-    &prebindgen_flat::Wire<CWire>,
-    &prebindgen_flat::WireNode<
-        CWire,
-        crate::COptional,
-        prebindgen_flat::Wire<CWire>,
-        CGroup,
-        prebindgen_flat::Wire<CWire>,
-    >,
+    &CSequence,
+    &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, crate::CSelector>,
 )> {
     prebindgen_declarations::outer_sequences(layout)
         .into_iter()
@@ -321,19 +338,109 @@ pub(crate) fn callback_target(
     layout: &prebindgen_flat::WireNode<
         CWire,
         crate::COptional,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSequence,
         CGroup,
-        prebindgen_flat::Wire<CWire>,
+        crate::CSelector,
     >,
 ) -> Result<syn::Ident> {
     if prebindgen_declarations::outer_sequences(layout).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2
     {
         return Err(
-            "callback_return permits only one sequence and its optional presence flag".into(),
+            "callback_return permits only one sequence and its optional presence flag; cannot discard additional return values".into(),
         );
     }
     return_sequence(layout)
-        .map(|(wire, _)| wire.name.clone())
+        .map(|(sequence, _)| sequence.carrier().name.clone())
         .ok_or_else(|| "callback_return requires a sequence boundary".into())
+}
+
+/// Whether the successful return uses the function's sequence callback.
+pub(crate) fn callback_delivery(
+    node: &prebindgen_flat::WireNode<CWire, COptional, CSequence, CGroup, CSelector>,
+) -> Result<bool> {
+    let sequences = prebindgen_declarations::outer_sequences(node);
+    if !sequences
+        .iter()
+        .any(|(_, sequence)| sequence.delivery() == CSequenceDelivery::Callback)
+    {
+        return Ok(false);
+    }
+    callback_target(node)?;
+    if !callback_shape(node) {
+        return Err("callback sequence cannot be combined with additional return values".into());
+    }
+    Ok(true)
+}
+
+/// Function sequence callbacks are not available in parameters, error channels or rows.
+pub(crate) fn validate_buffered(
+    node: &prebindgen_flat::WireNode<CWire, COptional, CSequence, CGroup, CSelector>,
+) -> Result<()> {
+    match node {
+        prebindgen_flat::WireNode::Wire(_) => {}
+        prebindgen_flat::WireNode::Sequence { element, metadata } => {
+            if metadata.delivery() == CSequenceDelivery::Callback {
+                return Err(
+                    "callback sequence is only supported as the function's successful return"
+                        .into(),
+                );
+            }
+            validate_buffered(element)?;
+        }
+        prebindgen_flat::WireNode::Optional { element, .. } => validate_buffered(element)?,
+        prebindgen_flat::WireNode::Group { elements, .. }
+        | prebindgen_flat::WireNode::Alternatives { elements, .. } => {
+            for element in elements {
+                validate_buffered(element)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+    fn leaf() -> prebindgen_flat::WireNode<CWire, COptional, CSequence, CGroup, CSelector> {
+        prebindgen_flat::WireNode::Wire(vec![prebindgen_flat::Wire {
+            name: syn::parse_quote!(element),
+            kind: CWire::scalar(Primitive::I32),
+        }])
+    }
+    #[test]
+    fn delivery_is_explicit_and_callback_scope_is_checked() {
+        let buffered = CSequence::buffered(syn::parse_quote!(rows));
+        assert_eq!(buffered.delivery(), CSequenceDelivery::Buffered);
+        let callback = CSequence::callback(syn::parse_quote!(visitor));
+        assert_eq!(callback.delivery(), CSequenceDelivery::Callback);
+        let visitor = prebindgen_flat::WireNode::Sequence {
+            element: Box::new(leaf()),
+            metadata: callback,
+        };
+        assert!(callback_delivery(&visitor).unwrap());
+        assert!(validate_buffered(&visitor)
+            .unwrap_err()
+            .contains("successful return"));
+        let packed = prebindgen_flat::WireNode::Sequence {
+            element: Box::new(leaf()),
+            metadata: buffered.clone(),
+        };
+        assert!(!callback_delivery(&packed).unwrap());
+        validate_buffered(&packed).unwrap();
+        let nested = prebindgen_flat::WireNode::Sequence {
+            element: Box::new(visitor.clone()),
+            metadata: buffered,
+        };
+        assert!(crate::group::validate_layout(&nested)
+            .unwrap_err()
+            .contains("successful return"));
+        let extra = prebindgen_flat::WireNode::Group {
+            elements: vec![visitor, leaf()],
+            metadata: CGroup::Values,
+        };
+        assert!(callback_delivery(&extra)
+            .unwrap_err()
+            .contains("additional return"));
+    }
 }

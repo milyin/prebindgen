@@ -13,31 +13,135 @@ pub enum CGroup {
     /// One named source field.
     Field(syn::Ident),
 }
-/// Optional-value information retained by the C adapter.
+/// An integer tag binding used for alternative selection or presence.
+/// The carrier is private so callers cannot replace it with an unrelated wire kind.
 #[derive(Clone, Debug)]
-pub struct COptional {
-    /// Explicit native presence controls; empty when a payload niche is used.
-    pub controls: Vec<prebindgen_flat::Wire<CWire>>,
-    /// Normalized presence binding used by payload conditions.
-    pub presence: syn::Ident,
-    /// Payload wire or inline control inspected for presence.
-    pub discriminator: syn::Ident,
-    /// Reserved absent representation; `None` means a separate 0/1 flag.
-    pub niche: Option<CNiche>,
+pub struct CSelector {
+    carrier: Wire<CWire>,
+}
+impl CSelector {
+    /// Create a tag binding with the adapter's initial niche availability.
+    pub fn new(name: syn::Ident) -> Self {
+        Self {
+            carrier: Wire {
+                name,
+                kind: CWire::scalar(Primitive::I32),
+            },
+        }
+    }
+    /// The single integer value passed across the boundary.
+    pub fn carrier(&self) -> &Wire<CWire> {
+        &self.carrier
+    }
+    pub(crate) fn carrier_mut(&mut self) -> &mut Wire<CWire> {
+        &mut self.carrier
+    }
+}
+impl TryFrom<Wire<CWire>> for CSelector {
+    type Error = String;
+    fn try_from(carrier: Wire<CWire>) -> Result<Self> {
+        if !matches!(
+            carrier.kind,
+            CWire::Scalar {
+                primitive: Primitive::I32,
+                ..
+            }
+        ) {
+            return Err("selector requires the adapter's integer tag representation".into());
+        }
+        carrier.kind.validate()?;
+        Ok(Self { carrier })
+    }
+}
+/// How this optional occurrence distinguishes absence from a present payload.
+#[derive(Clone, Debug)]
+pub enum COptional {
+    /// A dedicated 0/1 tag. The binding is also the normalized presence value.
+    Flag(CSelector),
+    /// An excluded representation in one payload value.
+    Niche {
+        /// Normalized presence local used by conversion conditions.
+        presence: syn::Ident,
+        /// Payload binding and reserved absent representation.
+        reservation: prebindgen_declarations::NicheReservation<CNiche>,
+    },
+}
+impl COptional {
+    /// Binding of the normalized presence condition.
+    pub fn presence(&self) -> &syn::Ident {
+        match self {
+            Self::Flag(flag) => &flag.carrier.name,
+            Self::Niche { presence, .. } => presence,
+        }
+    }
+    /// Binding whose value distinguishes absent and present states.
+    pub fn discriminator(&self) -> &syn::Ident {
+        match self {
+            Self::Flag(flag) => &flag.carrier.name,
+            Self::Niche { reservation, .. } => &reservation.discriminator,
+        }
+    }
+    /// Reserved payload representation; a flag encoding has no reservation.
+    pub fn niche(&self) -> Option<&CNiche> {
+        match self {
+            Self::Flag(_) => None,
+            Self::Niche { reservation, .. } => Some(&reservation.niche),
+        }
+    }
+    /// Dedicated presence wire, if this occurrence uses one.
+    pub fn control(&self) -> Option<&Wire<CWire>> {
+        match self {
+            Self::Flag(flag) => Some(flag.carrier()),
+            Self::Niche { .. } => None,
+        }
+    }
+    fn control_mut(&mut self) -> Option<&mut Wire<CWire>> {
+        match self {
+            Self::Flag(flag) => Some(flag.carrier_mut()),
+            Self::Niche { .. } => None,
+        }
+    }
+    pub(crate) fn from_parts(
+        presence: syn::Ident,
+        discriminator: syn::Ident,
+        niche: Option<CNiche>,
+        controls: Vec<Wire<CWire>>,
+    ) -> Result<Self> {
+        match niche {
+            Some(niche) if controls.is_empty() => Ok(Self::Niche {
+                presence,
+                reservation: prebindgen_declarations::NicheReservation {
+                    discriminator,
+                    niche,
+                },
+            }),
+            None if controls.len() == 1
+                && presence == discriminator
+                && controls[0].name == discriminator =>
+            {
+                Ok(Self::Flag(CSelector::try_from(
+                    controls.into_iter().next().unwrap(),
+                )?))
+            }
+            _ => {
+                Err("optional encoding requires either one matching flag or a payload niche".into())
+            }
+        }
+    }
 }
 
 fn values(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     let mut out = vec![];
     read(node, &mut out, false);
     out.into_iter()
 }
 fn values_mut(
-    node: &mut WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &mut WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&mut Wire<CWire>> {
     fn visit<'a>(
-        node: &'a mut WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+        node: &'a mut WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
         out: &mut Vec<&'a mut Wire<CWire>>,
     ) {
         match node {
@@ -48,12 +152,12 @@ fn values_mut(
                 }
             }
             WireNode::Optional { element, metadata } => {
-                out.extend(&mut metadata.controls);
+                out.extend(metadata.control_mut());
                 visit(element, out);
             }
-            WireNode::Sequence { metadata, .. } => out.push(metadata),
+            WireNode::Sequence { metadata, .. } => out.push(metadata.carrier_mut()),
             WireNode::Alternatives { elements, metadata } => {
-                out.push(metadata);
+                out.push(metadata.carrier_mut());
                 for arm in elements {
                     visit(arm, out);
                 }
@@ -65,7 +169,7 @@ fn values_mut(
     out.into_iter()
 }
 fn read<'a>(
-    node: &'a WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &'a WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     out: &mut Vec<&'a Wire<CWire>>,
     elements: bool,
 ) {
@@ -79,11 +183,11 @@ fn read<'a>(
             }
         }
         WireNode::Optional { element, metadata } => {
-            out.extend(&metadata.controls);
+            out.extend(metadata.control());
             read(element, out, elements);
         }
         WireNode::Sequence { element, metadata } => {
-            out.push(metadata);
+            out.push(metadata.carrier());
             if elements {
                 read(element, out, elements);
             }
@@ -92,7 +196,7 @@ fn read<'a>(
             elements: children,
             metadata,
         } => {
-            out.push(metadata);
+            out.push(metadata.carrier());
             for child in children {
                 read(child, out, elements);
             }
@@ -100,7 +204,7 @@ fn read<'a>(
     }
 }
 pub(crate) fn validate_layout(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> Result<()> {
     prebindgen_flat::validate_wire_nodes(std::iter::once(node))?;
     let mut definitions = vec![];
@@ -110,7 +214,7 @@ pub(crate) fn validate_layout(
         wire.kind.validate()?;
     }
     fn visit(
-        node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+        node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
         bindings: &mut std::collections::BTreeSet<String>,
         in_fields: bool,
         reserved: &mut std::collections::BTreeMap<String, Vec<CNiche>>,
@@ -125,57 +229,35 @@ pub(crate) fn validate_layout(
             }
             WireNode::Alternatives {
                 elements: alternatives,
-                metadata: selector,
+                metadata: _,
             } => {
-                if !matches!(
-                    selector.kind,
-                    CWire::Scalar {
-                        primitive: Primitive::I32,
-                        ..
-                    }
-                ) {
-                    return Err("alternatives require an integer selector".into());
-                }
                 for arm in alternatives {
                     visit(arm, bindings, false, reserved)?;
                 }
             }
             WireNode::Sequence {
                 element,
-                metadata: carrier,
+                metadata: _,
             } => {
-                if !(matches!(
-                    carrier.kind,
-                    CWire::Rows
-                        | CWire::Scalar {
-                            primitive: Primitive::Usize,
-                            ..
-                        }
-                )) || values(element).len() == 0
-                {
-                    return Err(
-                        "sequence requires a supported carrier and nonempty element layout".into(),
-                    );
+                if values(element).len() == 0 {
+                    return Err("sequence requires a nonempty element layout".into());
                 }
+                crate::sequence::validate_buffered(element)?;
                 validate_layout(element)?;
             }
             WireNode::Optional {
                 element,
                 metadata: o,
             } => {
-                let controls = &o.controls;
-                if !bindings.insert(o.presence.to_string()) {
+                if !bindings.insert(o.presence().to_string()) {
                     return Err(format!(
                         "duplicate optional presence binding `{}`",
-                        o.presence
+                        o.presence()
                     ));
                 }
-                if let Some(niche) = &o.niche {
-                    if !controls.is_empty() {
-                        return Err("niche optional must not have control wires".into());
-                    }
+                if let Some(niche) = o.niche() {
                     let wire = crate::group::values(element)
-                        .find(|w| w.name == o.discriminator)
+                        .find(|w| w.name == *o.discriminator())
                         .ok_or("optional discriminator outside payload")?;
                     wire.kind.validate_niche(niche)?;
                     if wire.kind.available_niche().as_ref() == Some(niche) {
@@ -183,14 +265,11 @@ pub(crate) fn validate_layout(
                             "available C niche is already reserved by an optional node".into()
                         );
                     }
-                    let values = reserved.entry(o.discriminator.to_string()).or_default();
+                    let values = reserved.entry(o.discriminator().to_string()).or_default();
                     if values.contains(niche) {
                         return Err("duplicate C niche reservation on one wire".into());
                     }
                     values.push(niche.clone());
-                } else if !matches!(controls.as_slice(),[flag] if flag.name==o.discriminator && o.presence==o.discriminator && matches!(flag.kind,CWire::Scalar { primitive: Primitive::I32, .. }))
-                {
-                    return Err("optional flag must be its sole inline control wire".into());
                 }
                 visit(element, bindings, false, reserved)?;
             }
@@ -244,7 +323,7 @@ pub(crate) fn validate_layout(
 
 /// Native parameters contributed by a source argument.
 pub(crate) fn argument_parameters(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
@@ -252,9 +331,9 @@ pub(crate) fn function_parameters<
     I: prebindgen_flat::InputConversion<
         Wire = CWire,
         Optional = COptional,
-        Sequence = Wire<CWire>,
+        Sequence = CSequence,
         Group = CGroup,
-        Alternatives = Wire<CWire>,
+        Alternatives = CSelector,
     >,
     O: prebindgen_flat::Conversion,
 >(
@@ -267,57 +346,57 @@ pub(crate) fn function_parameters<
     Ok(out.into_iter())
 }
 pub(crate) fn result_packet_fields(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
 pub(crate) fn result_packet<'a>(
-    node: &'a WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &'a WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<CWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(result_packet_fields(node), bindings)
 }
 pub(crate) fn row_fields(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
 pub(crate) fn row_values<'a>(
-    node: &'a WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &'a WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     bindings: &'a [(syn::Ident, TokenStream)],
 ) -> Result<Vec<(&'a Wire<CWire>, &'a TokenStream)>> {
     prebindgen_conversions::match_output_fields(row_fields(node), bindings)
 }
 pub(crate) fn callback_parameters(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
 pub(crate) fn optional_niche(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> Option<prebindgen_declarations::NicheReservation<CNiche>> {
     prebindgen_declarations::select_optional_niche(&CCodec, values(node))
 }
 pub(crate) fn optional_presence(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     reservation: &prebindgen_declarations::NicheReservation<CNiche>,
 ) -> Result<TokenStream> {
     prebindgen_declarations::optional_presence(&CCodec, values(node), reservation)
 }
 pub(crate) fn absent_output_values(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     reservation: Option<&prebindgen_declarations::NicheReservation<CNiche>>,
 ) -> Result<Vec<(syn::Ident, TokenStream)>> {
     prebindgen_declarations::absent_output_values(&CCodec, values(node), reservation)
 }
 pub(crate) fn retire_niches(
-    node: &mut WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &mut WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
     reservation: Option<&prebindgen_declarations::NicheReservation<CNiche>>,
 ) -> Result<()> {
     prebindgen_declarations::retire_optional_niches(&CCodec, values_mut(node), reservation)
 }
 pub(crate) fn record_fields(
-    node: &WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+    node: &WireNode<CWire, COptional, crate::CSequence, CGroup, crate::CSelector>,
 ) -> std::vec::IntoIter<&Wire<CWire>> {
     values(node)
 }
@@ -326,14 +405,14 @@ pub(crate) fn record_fields(
 mod tests {
     use super::*;
     fn enclose_optional_metadata(
-        tree: &mut WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>>,
+        tree: &mut WireNode<CWire, COptional, CSequence, CGroup, CSelector>,
         mut metadata: COptional,
     ) {
         let mut payload = std::mem::take(tree);
-        if metadata.niche.is_none() {
+        if matches!(metadata, COptional::Flag(_)) {
             if let WireNode::Wire(wires) = &mut payload {
                 if !wires.is_empty() {
-                    metadata.controls = vec![wires.remove(0)];
+                    metadata = COptional::Flag(CSelector::try_from(wires.remove(0)).unwrap());
                 }
             }
         }
@@ -349,52 +428,88 @@ mod tests {
         }
     }
     fn optional(presence: &str, discriminator: &str, niche: bool) -> COptional {
-        COptional {
-            controls: vec![],
-            presence: syn::parse_str(presence).unwrap(),
-            discriminator: syn::parse_str(discriminator).unwrap(),
-            niche: niche.then_some(CNiche::Integer(0x110000)),
+        match niche.then_some(CNiche::Integer(0x110000)) {
+            Some(niche) => COptional::Niche {
+                presence: syn::parse_str(presence).unwrap(),
+                reservation: prebindgen_declarations::NicheReservation {
+                    discriminator: syn::parse_str(discriminator).unwrap(),
+                    niche,
+                },
+            },
+            None => COptional::Flag(CSelector::new(syn::parse_str(discriminator).unwrap())),
         }
     }
     #[test]
+    fn optional_construction_rejects_inconsistent_flag_and_niche_parts() {
+        let flag = CSelector::new(syn::parse_quote!(flag)).carrier().clone();
+        assert!(COptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![]
+        )
+        .is_err());
+        assert!(COptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![flag.clone(), flag.clone()]
+        )
+        .is_err());
+        assert!(COptional::from_parts(
+            syn::parse_quote!(other),
+            syn::parse_quote!(flag),
+            None,
+            vec![flag.clone()]
+        )
+        .is_err());
+        assert!(COptional::from_parts(
+            syn::parse_quote!(present),
+            syn::parse_quote!(payload),
+            Some(CNiche::Integer(-1)),
+            vec![flag.clone()]
+        )
+        .is_err());
+        let encoding = COptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![flag],
+        )
+        .unwrap();
+        assert!(matches!(encoding, COptional::Flag(_)));
+        assert_eq!(encoding.presence(), encoding.discriminator());
+    }
+    #[test]
     fn structural_nodes_require_supported_explicit_representations() {
-        let mut sequence: WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>> =
+        assert!(CSelector::try_from(leaf("tag"))
+            .unwrap_err()
+            .contains("integer tag"));
+        assert!(COptional::from_parts(
+            syn::parse_quote!(flag),
+            syn::parse_quote!(flag),
+            None,
+            vec![leaf("flag")]
+        )
+        .unwrap_err()
+        .contains("integer tag"));
+        let sequence: WireNode<CWire, COptional, CSequence, CGroup, CSelector> =
             WireNode::Sequence {
                 element: Box::new(WireNode::Wire(vec![leaf("value")])),
-                metadata: leaf("carrier"),
+                metadata: CSequence::buffered(syn::parse_quote!(rows)),
             };
-        assert!(validate_layout(&sequence)
-            .unwrap_err()
-            .contains("supported carrier"));
-        let WireNode::Sequence { metadata, .. } = &mut sequence else {
-            panic!()
-        };
-        metadata.kind = CWire::Rows;
         validate_layout(&sequence).unwrap();
-        let wrong_flag = WireNode::Optional {
-            element: Box::new(WireNode::Wire(vec![leaf("value")])),
-            metadata: COptional {
-                controls: vec![leaf("flag")],
-                presence: syn::parse_quote!(flag),
-                discriminator: syn::parse_quote!(flag),
-                niche: None,
-            },
+        let empty = WireNode::Sequence {
+            element: Box::new(WireNode::default()),
+            metadata: CSequence::buffered(syn::parse_quote!(rows)),
         };
-        assert!(validate_layout(&wrong_flag)
+        assert!(validate_layout(&empty)
             .unwrap_err()
-            .contains("sole inline control"));
-        let mut choice: WireNode<CWire, COptional, Wire<CWire>, CGroup, Wire<CWire>> =
-            WireNode::Alternatives {
-                elements: vec![WireNode::default()],
-                metadata: leaf("tag"),
-            };
-        assert!(validate_layout(&choice)
-            .unwrap_err()
-            .contains("integer selector"));
-        let WireNode::Alternatives { metadata, .. } = &mut choice else {
-            panic!()
+            .contains("nonempty element"));
+        let choice = WireNode::Alternatives {
+            elements: vec![WireNode::default()],
+            metadata: CSelector::new(syn::parse_quote!(tag)),
         };
-        metadata.kind = CWire::scalar(Primitive::I32);
         validate_layout(&choice).unwrap();
     }
     #[test]
@@ -409,7 +524,10 @@ mod tests {
         enclose_optional_metadata(&mut tree, optional("inner", "value", true));
         let mut outer = optional("outer", "value", true);
         let o = &mut outer;
-        o.niche = Some(CNiche::Integer(0x110001));
+        let COptional::Niche { reservation, .. } = o else {
+            panic!()
+        };
+        reservation.niche = CNiche::Integer(0x110001);
         enclose_optional_metadata(&mut tree, outer);
         validate_layout(&tree).unwrap();
         assert_eq!(crate::group::values(&tree).len(), 1);
@@ -424,10 +542,14 @@ mod tests {
         crate::group::values_mut(&mut flag).next().unwrap().kind = CWire::scalar(Primitive::I32);
         enclose_optional_metadata(&mut flag, optional("flag", "flag", false));
         validate_layout(&flag).unwrap();
-        enclose_optional_metadata(&mut flag, optional("outer", "flag", false));
-        assert!(validate_layout(&flag)
-            .unwrap_err()
-            .contains("inline control"));
+        assert!(COptional::from_parts(
+            syn::parse_quote!(outer),
+            syn::parse_quote!(flag),
+            None,
+            vec![CSelector::new(syn::parse_quote!(flag)).carrier().clone()]
+        )
+        .unwrap_err()
+        .contains("one matching flag"));
     }
     #[test]
     fn every_niche_reservation_is_checked_for_compatibility_and_reuse() {
@@ -445,11 +567,14 @@ mod tests {
                 name: syn::parse_quote!(value),
                 kind,
             }]);
-            let group = |presence: &str, niche: CNiche| COptional {
-                controls: vec![],
-                presence: syn::parse_str(presence).unwrap(),
-                discriminator: syn::parse_quote!(value),
-                niche: Some(niche),
+            let group = |presence: &str, niche: CNiche| {
+                COptional::from_parts(
+                    syn::parse_str(presence).unwrap(),
+                    syn::parse_quote!(value),
+                    Some(niche),
+                    vec![],
+                )
+                .unwrap()
             };
             enclose_optional_metadata(&mut tree, group("inner", niche.clone()));
             assert!(validate_layout(&tree)
@@ -484,12 +609,13 @@ mod tests {
             }]);
             enclose_optional_metadata(
                 &mut tree,
-                COptional {
-                    controls: vec![],
-                    presence: syn::parse_quote!(present),
-                    discriminator: syn::parse_quote!(value),
-                    niche: Some(niche),
-                },
+                COptional::from_parts(
+                    syn::parse_quote!(present),
+                    syn::parse_quote!(value),
+                    Some(niche),
+                    vec![],
+                )
+                .unwrap(),
             );
             assert!(validate_layout(&tree).unwrap_err().contains("incompatible"));
         }
@@ -640,16 +766,13 @@ mod abi_tests {
         let element: prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         > = prebindgen_flat::WireNode::Wire(vec![scalar("first"), scalar("second")]);
         let mut sequence = element.clone();
         sequence = prebindgen_flat::WireNode::Sequence {
-            metadata: prebindgen_flat::Wire {
-                name: syn::parse_quote!(rows),
-                kind: CWire::Rows,
-            },
+            metadata: CSequence::buffered(syn::parse_quote!(rows)),
             element: Box::new(std::mem::take(&mut sequence)),
         };
         let result = prebindgen_flat::Outcomes {

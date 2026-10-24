@@ -222,11 +222,11 @@ impl Codec for CodecImpl {
         _: syn::Ident,
         _: Option<()>,
         controls: Vec<Wire<Type>>,
-    ) -> Metadata {
-        Metadata::Values(controls)
+    ) -> Result<Metadata> {
+        Ok(Metadata::Values(controls))
     }
-    fn alternatives_metadata(&self, selector: Wire<Type>) -> Metadata {
-        Metadata::Values(vec![selector])
+    fn alternatives_metadata(&self, selector: Wire<Type>) -> Result<Metadata> {
+        Ok(Metadata::Values(vec![selector]))
     }
     fn field_group(&self, _: syn::Ident) -> Metadata {
         Metadata::Field

@@ -9,9 +9,9 @@ pub(crate) struct EnumCodec {
         prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
     >,
     pub(crate) callback_wire: Option<syn::Ident>,
@@ -37,9 +37,9 @@ impl Codec for EnumCodec {
     type Wire = CWire;
     type Niche = CNiche;
     type Optional = COptional;
-    type Sequence = prebindgen_flat::Wire<CWire>;
+    type Sequence = CSequence;
     type Group = CGroup;
-    type Alternatives = prebindgen_flat::Wire<CWire>;
+    type Alternatives = CSelector;
     fn group_metadata(&self) -> CGroup {
         CGroup::Values
     }
@@ -56,9 +56,9 @@ impl Codec for EnumCodec {
             prebindgen_flat::WireNode<
                 CWire,
                 crate::COptional,
-                prebindgen_flat::Wire<CWire>,
+                crate::CSequence,
                 CGroup,
-                prebindgen_flat::Wire<CWire>,
+                crate::CSelector,
             >,
         >,
     > {
@@ -73,9 +73,9 @@ impl Codec for EnumCodec {
         prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
     > {
         if let Some(layout) = self.error_layouts.get(&prebindgen_flat::type_key(ty)) {
@@ -89,13 +89,10 @@ impl Codec for EnumCodec {
         d: syn::Ident,
         n: Option<CNiche>,
         controls: Vec<prebindgen_flat::Wire<CWire>>,
-    ) -> COptional {
+    ) -> Result<COptional> {
         CCodec.optional_metadata(p, d, n, controls)
     }
-    fn alternatives_metadata(
-        &self,
-        selector: prebindgen_flat::Wire<CWire>,
-    ) -> prebindgen_flat::Wire<CWire> {
+    fn alternatives_metadata(&self, selector: prebindgen_flat::Wire<CWire>) -> Result<CSelector> {
         CCodec.alternatives_metadata(selector)
     }
     fn field_group(&self, n: syn::Ident) -> CGroup {
@@ -119,12 +116,12 @@ impl Codec for EnumCodec {
         element: &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
         active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<prebindgen_flat::Wire<CWire>>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<crate::CSequence>> {
         CCodec.sequence_input(e, w, n, i, element, active)
     }
     fn sequence_output(
@@ -136,12 +133,12 @@ impl Codec for EnumCodec {
         element: &prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         >,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<prebindgen_flat::Wire<CWire>>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<crate::CSequence>> {
         if self.callback_wire.as_ref() == Some(&w) {
             sequence::callback_output(w, values, element, n)
         } else {
@@ -462,18 +459,21 @@ mod tests {
         let mut tree: prebindgen_flat::WireNode<
             CWire,
             crate::COptional,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSequence,
             CGroup,
-            prebindgen_flat::Wire<CWire>,
+            crate::CSelector,
         > = prebindgen_flat::WireNode::Wire(vec![GenericWire {
             name: syn::parse_quote!(wire),
             kind: wire,
         }]);
-        let group = |presence, value| COptional {
-            controls: vec![],
-            presence: syn::parse_str(presence).unwrap(),
-            discriminator: syn::parse_quote!(wire),
-            niche: Some(CNiche::Integer(value)),
+        let group = |presence, value| {
+            COptional::from_parts(
+                syn::parse_str(presence).unwrap(),
+                syn::parse_quote!(wire),
+                Some(CNiche::Integer(value)),
+                vec![],
+            )
+            .unwrap()
         };
         tree = prebindgen_flat::WireNode::Optional {
             metadata: group("inner", -2),
@@ -512,9 +512,9 @@ mod tests {
             let layout: prebindgen_flat::WireNode<
                 CWire,
                 crate::COptional,
-                prebindgen_flat::Wire<CWire>,
+                crate::CSequence,
                 CGroup,
-                prebindgen_flat::Wire<CWire>,
+                crate::CSelector,
             > = prebindgen_flat::WireNode::Wire(vec![GenericWire {
                 name: syn::parse_quote!(value),
                 kind: wire,

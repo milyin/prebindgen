@@ -250,12 +250,21 @@ impl Codec for TestCodec {
         _: syn::Ident,
         _: Option<()>,
         controls: Vec<Wire<TestWire>>,
-    ) -> TestGroup {
-        TestGroup::Maybe(controls)
+    ) -> Result<TestGroup> {
+        if controls
+            .iter()
+            .any(|wire| wire.kind.name == "reject_optional_metadata")
+        {
+            return Err("optional metadata rejected".into());
+        }
+        Ok(TestGroup::Maybe(controls))
     }
 
-    fn alternatives_metadata(&self, selector: Wire<TestWire>) -> TestGroup {
-        TestGroup::Maybe(vec![selector])
+    fn alternatives_metadata(&self, selector: Wire<TestWire>) -> Result<TestGroup> {
+        if selector.kind.name == "reject_alternative_metadata" {
+            return Err("alternative metadata rejected".into());
+        }
+        Ok(TestGroup::Maybe(vec![selector]))
     }
     fn field_group(&self, name: syn::Ident) -> TestGroup {
         TestGroup::Member(name)
@@ -1007,12 +1016,12 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             _: syn::Ident,
             _: Option<()>,
             controls: Vec<Wire<TestWire>>,
-        ) -> TestGroup {
-            TestGroup::Maybe(controls)
+        ) -> Result<TestGroup> {
+            Ok(TestGroup::Maybe(controls))
         }
 
-        fn alternatives_metadata(&self, selector: Wire<TestWire>) -> TestGroup {
-            TestGroup::Maybe(vec![selector])
+        fn alternatives_metadata(&self, selector: Wire<TestWire>) -> Result<TestGroup> {
+            Ok(TestGroup::Maybe(vec![selector]))
         }
         fn field_group(&self, name: syn::Ident) -> TestGroup {
             TestGroup::Member(name)
@@ -2177,4 +2186,105 @@ fn malformed_error_channel_is_rejected_before_replacing_output() {
     let unchanged = flat.function("f").unwrap().ret.slot.as_ref().unwrap();
     assert!(unchanged.outcomes.binding_failure.is_none());
     assert_eq!(unchanged.statements.to_string(), before);
+}
+
+#[test]
+fn failed_metadata_construction_preserves_installed_conversions() {
+    let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
+    let optional = Input::Optional(Box::new(Input::Leaf));
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        "v",
+        &optional,
+        &Extra::default(),
+    )
+    .unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        &Output::Optional(Box::new(Output::Leaf)),
+        &Extra::default(),
+    )
+    .unwrap();
+    let input_before = flat.function("f").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap()
+        .validation
+        .to_string();
+    let output_before = flat
+        .function("f")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .statements
+        .to_string();
+    for (recipe, name, expected) in [
+        (
+            optional,
+            "reject_optional_metadata",
+            "optional metadata rejected",
+        ),
+        (
+            Input::selector([
+                Input::constructor("empty", []),
+                Input::constructor("some", [Input::Leaf]),
+            ]),
+            "reject_alternative_metadata",
+            "alternative metadata rejected",
+        ),
+    ] {
+        let error = bind_input(
+            &mut flat,
+            &TEST_CODEC,
+            "f",
+            "v",
+            &recipe,
+            &Extra {
+                name,
+                ..Extra::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, expected);
+        assert_eq!(
+            flat.function("f").unwrap().params[0]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .validation
+                .to_string(),
+            input_before
+        );
+    }
+    let error = bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        &Output::Optional(Box::new(Output::Leaf)),
+        &Extra {
+            name: "reject_optional_metadata",
+            ..Extra::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error, "optional metadata rejected");
+    assert_eq!(
+        flat.function("f")
+            .unwrap()
+            .ret
+            .slot
+            .as_ref()
+            .unwrap()
+            .statements
+            .to_string(),
+        output_before
+    );
 }
