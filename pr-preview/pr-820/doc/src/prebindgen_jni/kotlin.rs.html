@@ -278,8 +278,8 @@
 <a href=#278 id=278 data-nosnippet>278</a>}
 <a href=#279 id=279 data-nosnippet>279</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>has_optional(nodes: <span class="kw-2">&amp;</span>[JniNode]) -&gt; bool {
 <a href=#280 id=280 data-nosnippet>280</a>    nodes.iter().any(|node| <span class="kw">match </span>node {
-<a href=#281 id=281 data-nosnippet>281</a>        JniNode::Wire(<span class="kw">_</span>) | JniNode::Sequence(<span class="kw">_</span>) | JniNode::Outcomes { .. } =&gt; <span class="bool-val">false</span>,
-<a href=#282 id=282 data-nosnippet>282</a>        JniNode::Optional(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+<a href=#281 id=281 data-nosnippet>281</a>        JniNode::Wire(<span class="kw">_</span>) | JniNode::Sequence { .. } | JniNode::Outcomes { .. } =&gt; <span class="bool-val">false</span>,
+<a href=#282 id=282 data-nosnippet>282</a>        JniNode::Optional { .. } =&gt; <span class="bool-val">true</span>,
 <a href=#283 id=283 data-nosnippet>283</a>        JniNode::Alternatives { alternatives, .. } =&gt; {
 <a href=#284 id=284 data-nosnippet>284</a>            alternatives.iter().any(|arm| has_optional(arm.as_slice()))
 <a href=#285 id=285 data-nosnippet>285</a>        }
@@ -311,19 +311,19 @@
 <a href=#311 id=311 data-nosnippet>311</a>                }
 <a href=#312 id=312 data-nosnippet>312</a>                c
 <a href=#313 id=313 data-nosnippet>313</a>            }
-<a href=#314 id=314 data-nosnippet>314</a>            JniNode::Sequence(c) =&gt; <span class="kw">crate</span>::sequence::input_list(
-<a href=#315 id=315 data-nosnippet>315</a>                c.metadata
+<a href=#314 id=314 data-nosnippet>314</a>            JniNode::Sequence { element, metadata } =&gt; <span class="kw">crate</span>::sequence::input_list(
+<a href=#315 id=315 data-nosnippet>315</a>                metadata
 <a href=#316 id=316 data-nosnippet>316</a>                    .as_ref()
 <a href=#317 id=317 data-nosnippet>317</a>                    .and_then(JniGroup::sequence_wire)
 <a href=#318 id=318 data-nosnippet>318</a>                    .ok_or(<span class="string">"sequence requires a carrier"</span>)<span class="question-mark">?</span>,
-<a href=#319 id=319 data-nosnippet>319</a>                <span class="kw-2">&amp;</span>c.element,
+<a href=#319 id=319 data-nosnippet>319</a>                element,
 <a href=#320 id=320 data-nosnippet>320</a>                context,
 <a href=#321 id=321 data-nosnippet>321</a>            )<span class="question-mark">?</span>,
-<a href=#322 id=322 data-nosnippet>322</a>            JniNode::Optional(c) =&gt; {
-<a href=#323 id=323 data-nosnippet>323</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(JniGroup::Optional(o)) = <span class="kw-2">&amp;</span>c.metadata <span class="kw">else </span>{
+<a href=#322 id=322 data-nosnippet>322</a>            JniNode::Optional { element, metadata } =&gt; {
+<a href=#323 id=323 data-nosnippet>323</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(JniGroup::Optional(o)) = <span class="kw-2">&amp;</span>metadata <span class="kw">else </span>{
 <a href=#324 id=324 data-nosnippet>324</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"missing optional metadata"</span>.into());
 <a href=#325 id=325 data-nosnippet>325</a>                };
-<a href=#326 id=326 data-nosnippet>326</a>                optional::input_kotlin(c, o, context)<span class="question-mark">?
+<a href=#326 id=326 data-nosnippet>326</a>                optional::input_kotlin(element, o, context)<span class="question-mark">?
 <a href=#327 id=327 data-nosnippet>327</a>            </span>}
 <a href=#328 id=328 data-nosnippet>328</a>            JniNode::Group { metadata, children } =&gt; <span class="kw">match </span>metadata {
 <a href=#329 id=329 data-nosnippet>329</a>                JniGroup::Optional(<span class="kw">_</span>) | JniGroup::Sequence(<span class="kw">_</span>) | JniGroup::Alternatives(<span class="kw">_</span>) =&gt; {
@@ -394,12 +394,12 @@
 <a href=#394 id=394 data-nosnippet>394</a>            JniNode::Alternatives { .. } =&gt; {
 <a href=#395 id=395 data-nosnippet>395</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"native alternatives are input-only in the JNI adapter"</span>.into())
 <a href=#396 id=396 data-nosnippet>396</a>            }
-<a href=#397 id=397 data-nosnippet>397</a>            JniNode::Sequence(c) =&gt; <span class="kw">crate</span>::sequence::output_list(<span class="kw-2">&amp;</span>c.element, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?</span>,
-<a href=#398 id=398 data-nosnippet>398</a>            JniNode::Optional(c) =&gt; {
-<a href=#399 id=399 data-nosnippet>399</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(JniGroup::Optional(o)) = <span class="kw-2">&amp;</span>c.metadata <span class="kw">else </span>{
+<a href=#397 id=397 data-nosnippet>397</a>            JniNode::Sequence { element, .. } =&gt; <span class="kw">crate</span>::sequence::output_list(element, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?</span>,
+<a href=#398 id=398 data-nosnippet>398</a>            JniNode::Optional { element, metadata } =&gt; {
+<a href=#399 id=399 data-nosnippet>399</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(JniGroup::Optional(o)) = <span class="kw-2">&amp;</span>metadata <span class="kw">else </span>{
 <a href=#400 id=400 data-nosnippet>400</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"missing optional metadata"</span>.into());
 <a href=#401 id=401 data-nosnippet>401</a>                };
-<a href=#402 id=402 data-nosnippet>402</a>                optional::output_kotlin(c, o, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?
+<a href=#402 id=402 data-nosnippet>402</a>                optional::output_kotlin(element, o, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?
 <a href=#403 id=403 data-nosnippet>403</a>            </span>}
 <a href=#404 id=404 data-nosnippet>404</a>            JniNode::Group { metadata, children } =&gt; <span class="kw">match </span>metadata {
 <a href=#405 id=405 data-nosnippet>405</a>                JniGroup::Optional(<span class="kw">_</span>) | JniGroup::Sequence(<span class="kw">_</span>) | JniGroup::Alternatives(<span class="kw">_</span>) =&gt; {
