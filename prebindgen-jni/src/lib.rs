@@ -3,7 +3,7 @@
 //! expansion declarations, `.name()`, source selection, package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
-use prebindgen_flat::{type_key, Flat, Result, WireKind};
+use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod data;
@@ -19,7 +19,8 @@ pub use data::{ClassDecl, DataClassDecl, DataGroup};
 pub use group::{JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
-use prebindgen_flat::{Conversion, ConversionExt, Primitive};
+use prebindgen_flat::Primitive;
+pub use sequence::JniSequence;
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
@@ -27,8 +28,16 @@ pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 pub use emission::JniContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, JniContext, JniGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, JniContext, JniGroup>;
+type InputPlan<W> =
+    prebindgen_conversions::InputPlan<W, JniContext, JniOptional, crate::JniSequence, JniGroup, ()>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<
+    W,
+    JniContext,
+    JniOptional,
+    crate::JniSequence,
+    JniGroup,
+    (),
+>;
 mod kotlin;
 pub use kotlin::{
     JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinInput,
@@ -466,28 +475,19 @@ impl JniGenBuilder {
             &self.prefix,
             &mut seen,
         )?;
-        let mut callbacks = BTreeMap::new();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
                 let variant_name = format!("{}_fold", declaration.name);
-                let (variant, wire) =
-                    defaults.callback_variant(&mut flat, &declaration, &variant_name)?;
+                let wire = sequence::callback_target(
+                    &(flat.function(&declaration.name)?.output_conversion()?)
+                        .output_outcomes()
+                        .success,
+                )?;
+                let variant = defaults.callback_variant(&mut flat, &declaration, &variant_name)?;
                 codec.callback_wire = Some(wire);
                 defaults.fill(&mut flat, &codec, &variant, &())?;
                 codec.callback_wire = None;
-                if flat
-                    .function(&variant_name)?
-                    .ret
-                    .slot
-                    .as_ref()
-                    .unwrap()
-                    .layout()
-                    .len()
-                    != 1
-                {
-                    return Err("callback_return cannot discard additional return values".into());
-                }
                 if let Some(error) = errors.get(&declaration.name).cloned() {
                     errors.insert(variant_name.clone(), error);
                 }
@@ -501,16 +501,6 @@ impl JniGenBuilder {
                 }
                 functions.push((variant_name.clone(), pkg, name));
                 bound.insert(variant_name.clone());
-                callbacks.insert(
-                    variant_name.clone(),
-                    flat.function(&variant_name)?
-                        .ret
-                        .slot
-                        .as_ref()
-                        .unwrap()
-                        .layout()
-                        .clone(),
-                );
                 if declaration.callback_return
                     == Some(prebindgen_declarations::CallbackReturn::Only)
                 {
@@ -552,7 +542,7 @@ impl JniGenBuilder {
             classes,
             functions,
             data_files,
-            OutputBindings { errors, callbacks },
+            errors,
         )
     }
 }
@@ -578,18 +568,46 @@ impl Class {
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
+    type Optional = JniOptional;
+    type Sequence = JniSequence;
     type Group = JniGroup;
-    fn optional_group(
+    type Alternatives = ();
+    fn group_metadata(&self) -> JniGroup {
+        JniGroup::Values
+    }
+
+    fn binding_failure_layout(
+        &self,
+        _: &(),
+    ) -> Result<
+        Option<
+            prebindgen_flat::WireNode<
+                Self::Wire,
+                Self::Optional,
+                Self::Sequence,
+                Self::Group,
+                Self::Alternatives,
+            >,
+        >,
+    > {
+        Ok(Some(prebindgen_flat::WireNode::Wire(vec![
+            prebindgen_flat::Wire {
+                name: syn::parse_quote!(message),
+                kind: JniWire::text(),
+            },
+        ])))
+    }
+    fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
-    ) -> JniGroup {
-        JniGroup::Optional(JniOptional {
-            presence,
-            discriminator,
-            niche,
-        })
+        controls: &[prebindgen_flat::Wire<JniWire>],
+    ) -> Result<JniOptional> {
+        JniOptional::from_parts(presence, discriminator, niche, controls)
+    }
+    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<JniWire>) -> Result<()> {
+        group::validate_selector(selector)
     }
     fn field_group(&self, name: syn::Ident) -> JniGroup {
         JniGroup::Field(name)
@@ -603,7 +621,7 @@ impl Codec for JniCodec {
     type Input = JniInput;
     type Output = JniOutput;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
-        group::validate_layout(&plan.layout)?;
+        group::validate_layout(&plan.node)?;
         let env = prebindgen_conversions::template_parameter("environment");
         let ownership = prebindgen_conversions::template_parameter("acknowledgement");
         if plan.resources.iter().any(|r| r.access == Access::Move) {
@@ -618,10 +636,14 @@ impl Codec for JniCodec {
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
-        group::validate_layout(&plan.layout)?;
+        group::validate_layout(&plan.outcomes.success)?;
         let env = prebindgen_conversions::template_parameter("environment");
-        let count = plan.layout.len() + 1;
-        let encode = encode_array(&plan.layout, &plan.values, &syn::parse_quote!(result), 1);
+        let count = crate::group::result_packet_fields(&plan.outcomes.success).len() + 1;
+        let encode = encode_array(
+            crate::group::result_packet(&plan.outcomes.success, &plan.values)?,
+            &syn::parse_quote!(result),
+            1,
+        );
         let mark = prebindgen_conversions::template_parameter("mark_output");
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
@@ -640,9 +662,15 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
+        element: &prebindgen_flat::WireNode<
+            JniWire,
+            crate::JniOptional,
+            crate::JniSequence,
+            JniGroup,
+            (),
+        >,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, crate::JniSequence>> {
         sequence::input(wire, length, index, element, active)
     }
     fn sequence_output(
@@ -651,9 +679,15 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
-        values: &[TokenStream],
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire>> {
+        element: &prebindgen_flat::WireNode<
+            JniWire,
+            crate::JniOptional,
+            crate::JniSequence,
+            JniGroup,
+            (),
+        >,
+        values: &[(syn::Ident, TokenStream)],
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniSequence>> {
         sequence::output(wire, length, index, element, values)
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
@@ -819,16 +853,90 @@ impl Codec for JniCodec {
         };
         prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
     }
+
+    fn optional_niche(
+        &self,
+        payload: &prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
+    ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
+        crate::group::optional_niche(payload)
+    }
+    fn optional_presence(
+        &self,
+        payload: &prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
+        reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        crate::group::optional_presence(payload, reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        crate::group::absent_output_values(payload, reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
+        reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        crate::group::retire_niches(payload, reservation)
+    }
+    fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        sequence::validate_buffered(&plan.node)?;
+        crate::group::validate_layout(&plan.node)
+    }
+    fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
+        sequence::callback_delivery(&plan.outcomes.success)?;
+        for error in plan
+            .outcomes
+            .source_error
+            .iter()
+            .chain(plan.outcomes.binding_failure.iter())
+        {
+            sequence::validate_buffered(error)?;
+        }
+        for node in std::iter::once(&plan.outcomes.success)
+            .chain(plan.outcomes.source_error.iter())
+            .chain(plan.outcomes.binding_failure.iter())
+        {
+            crate::group::validate_layout(node)?;
+        }
+        crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
+        Ok(())
+    }
 }
 pub(crate) fn encode_array(
-    layout: &prebindgen_flat::WireLayout<JniWire, JniGroup>,
-    values: &[TokenStream],
+    fields: Vec<(&prebindgen_flat::Wire<JniWire>, &TokenStream)>,
     array: &syn::Ident,
     offset: usize,
 ) -> TokenStream {
     let env = prebindgen_conversions::template_parameter("environment");
     let mut encode = TokenStream::new();
-    for (i, (wire, value)) in layout.iter().zip(values).enumerate() {
+    for (i, (wire, value)) in fields.into_iter().enumerate() {
         let expr = wire.kind.output_object(value);
         let i = (i + offset) as i32;
         encode.extend(quote! {
@@ -970,21 +1078,15 @@ fn symbol(pkg: &str, method: &str) -> syn::Ident {
     )
 }
 
-struct OutputBindings {
-    errors: BTreeMap<String, errors::ErrorBinding>,
-    callbacks: BTreeMap<String, prebindgen_flat::WireLayout<JniWire, JniGroup>>,
-}
-
-fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
-    flat: Flat<I, O>,
+fn generate(
+    flat: Bindings,
     prefix: &str,
     init: &str,
     classes: BTreeMap<String, Class>,
     functions: Vec<(String, String, String)>,
     mut files: BTreeMap<String, String>,
-    outputs: OutputBindings,
+    errors: BTreeMap<String, errors::ErrorBinding>,
 ) -> Result<JniGen> {
-    let OutputBindings { errors, callbacks } = outputs;
     let mut rust = errors::emit(&errors)?;
     let mut packages: BTreeMap<String, String> = BTreeMap::new();
     errors::interfaces(prefix, &mut files)?;
@@ -1032,9 +1134,35 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
     )?;
     for (index, (source, pkg, name)) in functions.into_iter().enumerate() {
         let f = flat.function(&source)?;
-        let callback_layout = callbacks.get(&source);
-        let callback = callback_layout.is_some();
+        let callback =
+            sequence::callback_delivery(&f.output_conversion()?.output_outcomes().success)?;
         let error = errors.get(&source);
+        let outcomes = f.output_conversion()?.output_outcomes();
+        let logical = &outcomes.success;
+        for node in std::iter::once(logical)
+            .chain(outcomes.source_error.iter())
+            .chain(outcomes.binding_failure.iter())
+        {
+            group::validate_layout(node)?;
+        }
+        for error in outcomes
+            .source_error
+            .iter()
+            .chain(outcomes.binding_failure.iter())
+        {
+            sequence::validate_buffered(error)?;
+        }
+        let has_source_error = outcomes.source_error.is_some();
+        let has_binding_failure = outcomes.binding_failure.is_some();
+        if has_source_error != error.is_some() {
+            return Err("JNI source-error schema must match its configured error converter".into());
+        }
+        // Every JNI wrapper has a separate binding-error callback, including
+        // functions without a source Result. Manual schemas must declare it.
+        if !has_binding_failure {
+            return Err("JNI native delivery requires a declared binding-failure schema".into());
+        }
+
         let throws = error.map_or_else(String::new, |error| error.throws());
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
@@ -1063,7 +1191,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         let mut lock_groups = Vec::new();
         let mut setup = String::new();
         let mut consumed = Vec::new();
-        for w in f.inputs()? {
+        for w in crate::group::function_parameters(f)? {
             let n = &w.name;
             let rt = w.kind.rust_type();
             params.push(quote!(#n:#rt));
@@ -1071,9 +1199,6 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         }
         for input in f.input_conversions()? {
             let code = input.kotlin(&kotlin_context)?;
-            if code.arguments.len() != input.wires().len() {
-                return Err("Kotlin input argument/wire count differs".into());
-            }
             kt_params.extend(code.parameters);
             kt_args.extend(code.arguments);
             locks.extend(code.locks);
@@ -1082,6 +1207,9 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
                 setup.push_str(&format!("val {} = {}\n", binding.name, binding.expression));
             }
             consumed.extend(code.consumed);
+        }
+        if kt_args.len() != crate::group::function_parameters(f)?.len() {
+            return Err("Kotlin input argument/parameter count differs".into());
         }
         let has_consumes = !consumed.is_empty();
         let has_acknowledgement = f
@@ -1108,11 +1236,10 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             kt_args.push("ownership".into());
         }
         if callback {
-            let (_, element) =
-                prebindgen_declarations::sequence_return(f.output_conversion()?.layout())
+            let (_, element, _) =
+                sequence::return_sequence(&f.output_conversion()?.output_outcomes().success)
                     .ok_or("missing callback sequence")?;
-            let fields = element
-                .iter()
+            let fields = crate::group::row_fields(element)
                 .enumerate()
                 .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
                 .collect::<Vec<_>>();
@@ -1137,7 +1264,9 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         }
         let slots: usize = usize::from(has_consumes)
             + 2 * usize::from(callback)
-            + f.inputs()?.map(|w| w.kind.parameter_slots()).sum::<usize>();
+            + crate::group::function_parameters(f)?
+                .map(|w| w.kind.parameter_slots())
+                .sum::<usize>();
         if slots > 255 {
             return Err(format!(
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"
@@ -1148,6 +1277,9 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             &context,
             &source,
             &syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
+            &crate::group::function_parameters(f)?
+                .map(|w| w.name.clone())
+                .collect::<Vec<_>>(),
         )?;
         let body = if callback {
             quote!(if #env.get_array_length(&__pb_output_accepted).map_err(|e|e.to_string())? != 1 {return Err("invalid sequence output acknowledgement".into());} if __pb_callback.is_null(){return Err("null sequence callback".into());} #body)
@@ -1156,7 +1288,7 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
         };
         let fold = if callback {
             Some(sequence_callback::fold(
-                callback_layout.unwrap(),
+                &f.output_conversion()?.output_outcomes().success,
                 &kotlin_context,
             )?)
         } else {
@@ -1174,7 +1306,8 @@ fn generate<I: KotlinInputConversion, O: KotlinOutputConversion>(
             kotlin_context.result,
             kotlin_context.result,
             1,
-            f.output_conversion()?.wires().len(),
+            crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
+                .len(),
         );
         let KotlinOutput {
             delivered,

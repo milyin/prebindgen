@@ -2,7 +2,7 @@
 //! Scoped requests keep prepared temporaries alive while evaluating a continuation.
 //! Other generators can define entirely different request enums.
 use crate::{Access, InputPlan, OutputPlan, TemplateContext};
-use prebindgen_flat::{Conversion, ConversionExt, Function, Result, Wire, WireKind};
+use prebindgen_flat::{Conversion, Function, Result, WireKind};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -45,11 +45,6 @@ pub enum InputFragment<'a, C> {
         seen: &'a syn::Ident,
     },
 }
-/// Per-wire requests understood by stored input plans.
-pub enum InputWireFragment {
-    /// Read the boundary parameter as an expression.
-    Value,
-}
 /// Slot requests understood by stored output plans.
 pub enum OutputFragment<'a, C> {
     /// Prepare output temporaries, then evaluate `next` while they remain alive.
@@ -85,31 +80,22 @@ pub enum OutputFragment<'a, C> {
         source: &'a syn::Ident,
     },
 }
-/// Per-wire output expression requests.
-pub enum OutputWireFragment<'a, C> {
-    /// Read this wire's prepared value before ownership commit.
-    Value {
-        /// Bindings used to render prepared templates.
-        context: &'a C,
-        /// Caller-selected source-result binding.
-        source: &'a syn::Ident,
-    },
-}
-
 fn expression(code: TokenStream) -> Result<TokenStream> {
     syn::parse2::<syn::Expr>(code.clone())
         .map_err(|e| format!("conversion did not emit an expression: {e}"))?;
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C, G> {
+impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
+    for InputPlan<W, C, O, S, G, A>
+{
     type Wire = W;
+    type Optional = O;
+    type Sequence = S;
     type Group = G;
+    type Alternatives = A;
     type SlotFragment<'a> = InputFragment<'a, C>;
-    type WireFragment<'a> = InputWireFragment;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<W, G> {
-        &self.layout
-    }
+
     fn code_fragment_slot(
         &self,
         mode: InputFragment<'_, C>,
@@ -168,35 +154,22 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
             }
         })
     }
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        _mode: InputWireFragment,
-        _expected_type: &syn::Type,
-    ) -> Result<TokenStream> {
-        let wire = self
-            .layout
-            .get(pos)
-            .ok_or_else(|| format!("invalid input wire position {pos}"))?;
-        let name = &wire.name;
-        Ok(quote!(#name))
-    }
 }
-
-impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, C, G> {
+impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
+    for OutputPlan<W, C, O, S, G, A>
+{
     type Wire = W;
+    type Optional = O;
+    type Sequence = S;
     type Group = G;
+    type Alternatives = A;
     type SlotFragment<'a> = OutputFragment<'a, C>;
-    type WireFragment<'a> = OutputWireFragment<'a, C>;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<W, G> {
-        &self.layout
-    }
+
     fn code_fragment_slot(
         &self,
         mode: OutputFragment<'_, C>,
         _expected_type: &syn::Type,
     ) -> Result<TokenStream> {
-        self.check_arity()?;
         expression(match mode {
             OutputFragment::Prepare {
                 context,
@@ -224,78 +197,7 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, 
             }
         })
     }
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: OutputWireFragment<'_, C>,
-        _expected_type: &syn::Type,
-    ) -> Result<TokenStream> {
-        self.check_arity()?;
-        let code = self
-            .values
-            .get(pos)
-            .ok_or_else(|| format!("invalid output wire position {pos}"))?;
-        let OutputWireFragment::Value { context, source } = mode;
-        expression(crate::emission::render_output(context, code, source)?)
-    }
 }
-impl<W: WireKind, C, G> OutputPlan<W, C, G> {
-    /// Check that every tree leaf has one output expression.
-    pub fn validate_value_count(&self) -> Result<()> {
-        self.check_arity()
-    }
-    fn check_arity(&self) -> Result<()> {
-        if self.layout.len() != self.values.len() {
-            return Err("output wire/value count differs".into());
-        }
-        Ok(())
-    }
-}
-
-/// An output expression paired with its wire description.
-pub struct OutputValue<'a, W: WireKind> {
-    /// Boundary carrier description.
-    pub wire: &'a Wire<W>,
-    /// Expression requested using the wire's Rust carrier type.
-    pub value: TokenStream,
-}
-/// Convenience access to output values for generators choosing this protocol.
-pub trait StagedFunction<C, W: WireKind> {
-    /// Request each wire value in delivery order.
-    fn outputs(
-        &self,
-        context: &C,
-        source: &syn::Ident,
-    ) -> Result<std::vec::IntoIter<OutputValue<'_, W>>>;
-}
-impl<I, O, C: 'static> StagedFunction<C, O::Wire> for Function<I, O>
-where
-    I: Conversion,
-    O: Conversion,
-    for<'a> O: Conversion<WireFragment<'a> = OutputWireFragment<'a, C>>,
-{
-    fn outputs(
-        &self,
-        context: &C,
-        source: &syn::Ident,
-    ) -> Result<std::vec::IntoIter<OutputValue<'_, O::Wire>>> {
-        let output = self.output_conversion()?;
-        output
-            .wires()
-            .enumerate()
-            .map(|(pos, wire)| {
-                let value = output.code_fragment_wire(
-                    pos,
-                    OutputWireFragment::Value { context, source },
-                    &wire.rust_type(),
-                )?;
-                Ok(OutputValue { wire, value })
-            })
-            .collect::<Result<Vec<_>>>()
-            .map(Vec::into_iter)
-    }
-}
-
 /// Compose the opt-in staged protocol as a fallible expression.
 /// `result_type` is the wrapper result type inside `Result<_, String>`.
 ///
@@ -307,15 +209,11 @@ pub fn emit_call<I, O, C: 'static>(
     context: &C,
     source: &syn::Ident,
     result_type: &syn::Type,
+    parameter_names: &[syn::Ident],
 ) -> Result<TokenStream>
 where
-    I: Conversion,
-    O: Conversion,
     for<'a> I: Conversion<SlotFragment<'a> = InputFragment<'a, C>>,
-    for<'a> O: Conversion<
-        SlotFragment<'a> = OutputFragment<'a, C>,
-        WireFragment<'a> = OutputWireFragment<'a, C>,
-    >,
+    for<'a> O: Conversion<SlotFragment<'a> = OutputFragment<'a, C>>,
 {
     let inputs = function.input_conversions()?;
     let output = function.output_conversion()?;
@@ -383,13 +281,10 @@ where
     let commit = output.code_fragment_slot(OutputFragment::Commit { context, source }, &unit)?;
     let result =
         output.code_fragment_slot(OutputFragment::Result { context, source }, result_type)?;
-    let _ = function.outputs(context, source)?;
-    let mut used = std::collections::BTreeSet::new();
-    for input in &inputs {
-        for wire in input.wires() {
-            used.insert(wire.name.to_string());
-        }
-    }
+    let mut used = parameter_names
+        .iter()
+        .map(ToString::to_string)
+        .collect::<std::collections::BTreeSet<_>>();
     reserve(
         &quote!(#path #source #(#validation)* #(#acquire)* #prepare #deliver #commit #result #acknowledge),
         &mut used,
@@ -492,5 +387,22 @@ fn reserve(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
             proc_macro2::TokenTree::Group(group) => reserve(&group.stream(), used),
             _ => {}
         }
+    }
+}
+
+impl<W: WireKind, C: TemplateContext + 'static, O, S, G, A> prebindgen_flat::InputConversion
+    for InputPlan<W, C, O, S, G, A>
+{
+    fn input_node(&self) -> &prebindgen_flat::WireNode<W, O, S, G, A> {
+        &self.node
+    }
+}
+impl<W: WireKind, C: TemplateContext + 'static, O, S, G, A> prebindgen_flat::OutputConversion
+    for OutputPlan<W, C, O, S, G, A>
+{
+    fn output_outcomes(
+        &self,
+    ) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, O, S, G, A>> {
+        &self.outcomes
     }
 }

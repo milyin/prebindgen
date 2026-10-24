@@ -1,28 +1,33 @@
 //! Lift one element recipe into a runtime-sized collection without changing phases.
 use super::*;
+
 use prebindgen_conversions::{Resource, ResourceIdentity};
-use prebindgen_flat::{SequenceView, WireNode};
+use prebindgen_flat::SequenceView;
+use prebindgen_flat::WireNode;
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
-pub struct SequenceInput<W> {
-    /// One self-sufficient carrier for the array.
-    pub carrier: W,
-    /// Validate the carrier and bind the supplied length identifier.
+pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
+    /// Adapter policy for interpreting `controls`; must not own wire descriptors.
+    pub metadata: G,
+    /// Supporting boundary values, stored on the resulting sequence node.
+    pub controls: Vec<Wire<W>>,
+    /// Validate the outer input values and make the supplied length identifier
+    /// available, either as a boundary parameter or a local binding.
     pub open: TokenStream,
     /// Per-row setup, including any locals used by `validation_values`.
     pub bind: TokenStream,
-    /// Raw element-wire expressions, in element layout order, used in validation.
-    pub validation_values: Vec<TokenStream>,
+    /// Raw element expressions keyed by binding name, used during validation.
+    pub validation_values: Vec<(syn::Ident, TokenStream)>,
     /// Reads valid after `release`, used by acquisition/construction and identities.
     /// `None` forbids reading that raw wire after validation (for example a JNI
     /// reference deleted with its row frame). The compiler rejects such reads.
-    pub prepared_values: Vec<Option<TokenStream>>,
+    pub prepared_values: Vec<(syn::Ident, Option<TokenStream>)>,
     /// Per-row cleanup after validation, before deferred closures are retained.
     pub release: TokenStream,
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
-pub struct SequenceOutput<W> {
+pub struct SequenceOutput<W: prebindgen_flat::WireKind, G> {
     /// Commit each element inside `store`, after capturing its prepared wire values
     /// and before invoking a foreign visitor. `store` must contain exactly one
     /// `template_parameter("commit_element")` marker when true. When false, all
@@ -31,9 +36,10 @@ pub struct SequenceOutput<W> {
     /// Whether preparing or delivering the array transport can return a binding
     /// error, in addition to failures from converting its elements.
     pub fallible: bool,
-    /// One self-sufficient FFI value for the delivery result: an array carrier,
-    /// delivered count, or presence marker selected by the adapter.
-    pub carrier: W,
+    /// Adapter delivery policy; must not own wire descriptors or child trees.
+    pub metadata: G,
+    /// Supporting boundary values, stored on the resulting sequence node.
+    pub controls: Vec<Wire<W>>,
     /// Initialize delivery state, with the supplied element count available.
     pub begin: TokenStream,
     /// Per-row setup before element conversion.
@@ -42,27 +48,20 @@ pub struct SequenceOutput<W> {
     pub store: TokenStream,
     /// Finish preparing the result after every element has been delivered.
     pub finish: TokenStream,
-    /// Expression for the prepared array carrier.
-    pub value: TokenStream,
+    /// Named expressions for every outer value. The adapter determines ABI order.
+    pub values: Vec<(syn::Ident, TokenStream)>,
     /// Complete ownership transfer of the outer carrier, such as a row allocation.
     pub commit: TokenStream,
 }
 
-fn replace(
-    code: &TokenStream,
-    layout: &WireLayout<impl prebindgen_flat::WireKind, impl Sized>,
-    values: &[TokenStream],
-) -> Result<TokenStream> {
-    if layout.len() != values.len() {
-        return Err("collection wire/read count differs".into());
-    }
-    let replacements = layout
+fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<TokenStream> {
+    prebindgen_conversions::validate_value_bindings(values)?;
+    let replacements = values
         .iter()
-        .zip(values)
-        .map(|(w, v)| {
+        .map(|(name, value)| {
             Ok((
-                w.name.to_string(),
-                syn::parse2::<syn::Expr>(quote!((#v))).map_err(|e| e.to_string())?,
+                name.to_string(),
+                syn::parse2::<syn::Expr>(quote!((#value))).map_err(|e| e.to_string())?,
             ))
         })
         .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
@@ -114,12 +113,8 @@ fn replace(
 
 fn prepared(
     code: &TokenStream,
-    layout: &WireLayout<impl prebindgen_flat::WireKind, impl Sized>,
-    values: &[Option<TokenStream>],
+    values: &[(syn::Ident, Option<TokenStream>)],
 ) -> Result<TokenStream> {
-    if values.len() != layout.len() {
-        return Err("collection prepared read count differs".into());
-    }
     fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
         code.into_iter().any(|token| match token {
             proc_macro2::TokenTree::Ident(id) => id == *name,
@@ -128,17 +123,16 @@ fn prepared(
         })
     }
     let mut reads = Vec::new();
-    for (wire, value) in layout.iter().zip(values) {
-        if value.is_none() && mentions(code.clone(), &wire.name) {
+    for (name, value) in values {
+        if value.is_none() && mentions(code.clone(), name) {
             return Err(format!(
                 "collection wire `{}` cannot be read after row validation",
-                wire.name
+                name
             ));
         }
-        let name = &wire.name;
-        reads.push(value.clone().unwrap_or_else(|| quote!(#name)));
+        reads.push((name.clone(), value.clone().unwrap_or_else(|| quote!(#name))));
     }
-    replace(code, layout, &reads)
+    replace(code, &reads)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -161,9 +155,7 @@ pub(crate) fn input<C: Codec>(
     if matches!(element, Type::Reference(_)) {
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
-    if child.layout.is_empty() {
-        return Err("collection elements must have at least one wire".into());
-    }
+    codec.validate_input(&child)?;
     if view != SequenceView::Owned
         && child
             .resources
@@ -180,21 +172,33 @@ pub(crate) fn input<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.layout,
+        &child.node,
         active,
     )?;
-    let validation = replace(
-        &child.validation,
-        &child.layout,
-        &transport.validation_values,
-    )?;
-    let acquire = prepared(&child.acquire, &child.layout, &transport.prepared_values)?;
-    let statements = prepared(&child.statements, &child.layout, &transport.prepared_values)?;
+    if transport.validation_values.is_empty() {
+        return Err("collection elements must have at least one input binding".into());
+    }
+    prebindgen_conversions::validate_value_bindings(&transport.validation_values)?;
+    let names = transport
+        .validation_values
+        .iter()
+        .map(|(n, _)| n.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    let prepared_names = transport
+        .prepared_values
+        .iter()
+        .map(|(n, _)| n.to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    if names != prepared_names || prepared_names.len() != transport.prepared_values.len() {
+        return Err("collection prepared input names differ from validation bindings".into());
+    }
+    let validation = replace(&child.validation, &transport.validation_values)?;
+    let acquire = prepared(&child.acquire, &transport.prepared_values)?;
+    let statements = prepared(&child.statements, &transport.prepared_values)?;
     // Wrap expressions as a local initializer so the syntax visitor can replace paths.
     let child_argument = &child.argument;
     let argument = prepared(
         &quote!(let #var = #child_argument;),
-        &child.layout,
         &transport.prepared_values,
     )?;
     let mut resources = Vec::new();
@@ -210,7 +214,6 @@ pub(crate) fn input<C: Codec>(
         };
         collect.extend(prepared(
             &quote!(if #condition {#identity}),
-            &child.layout,
             &transport.prepared_values,
         )?);
         resources.push(Resource {
@@ -235,13 +238,11 @@ pub(crate) fn input<C: Codec>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence {
-            carrier: Wire {
-                name: wire,
-                kind: transport.carrier,
-            },
-            element: child.layout,
-        }]),
+        node: WireNode::Sequence {
+            controls: transport.controls,
+            element: Box::new(child.node),
+            metadata: transport.metadata,
+        },
         validation: quote! {
             #declarations
             let mut #staged=Vec::new();
@@ -282,7 +283,9 @@ pub(crate) fn output<C: Codec>(
     if mode == ProjectionMode::Owned && (borrowed || view != SequenceView::Owned) {
         return Err("owned collection projection cannot consume a borrowed collection".into());
     }
-    if child.layout.is_empty() {
+    validate_nested_output(&child)?;
+    codec.validate_output(&child)?;
+    if child.values.is_empty() {
         return Err("collection elements must have at least one wire".into());
     }
     if !child.delivery.statements.is_empty() {
@@ -293,7 +296,7 @@ pub(crate) fn output<C: Codec>(
         wire.clone(),
         length.clone(),
         index.clone(),
-        &child.layout,
+        &child.outcomes.success,
         &child.values,
     )?;
     let owner = format_ident!("{wire}_source");
@@ -308,12 +311,13 @@ pub(crate) fn output<C: Codec>(
     let SequenceOutput {
         commit_each,
         fallible,
-        carrier,
+        metadata,
+        controls,
         begin,
         enter,
         store,
         finish,
-        value,
+        values,
         commit,
     } = transport;
     let store = if commit_each {
@@ -343,53 +347,102 @@ pub(crate) fn output<C: Codec>(
     } else {
         quote!(for commit in #commits {commit();})
     };
-    Ok(OutputPlan {
+    let out: CodecOutput<C> = OutputPlan {
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        layout: WireLayout::from_nodes(vec![WireNode::Sequence {
-            carrier: Wire {
-                name: wire,
-                kind: carrier,
+        outcomes: prebindgen_flat::Outcomes {
+            success: WireNode::Sequence {
+                controls,
+                element: Box::new(child.outcomes.success),
+                metadata,
             },
-            element: child.layout,
-        }]),
+            source_error: None,
+            binding_failure: None,
+        },
         statements: quote! {
             let #owner=#binding; let #length=#owner.len(); #declarations
             #begin
             for (#index,#element) in #iterator.enumerate(){ #enter #prepare #store }
             #finish
         },
-        values: vec![value],
+        values,
         commit: quote!(#commit #commit_elements),
-    })
+    };
+    codec.validate_output(&out)?;
+    Ok(out)
 }
 
-/// Find the outer sequence in a return layout, without descending into its elements.
-pub fn sequence_return<W: prebindgen_flat::WireKind, G>(
-    layout: &WireLayout<W, G>,
-) -> Option<(&Wire<W>, &WireLayout<W, G>)> {
-    layout.nodes().iter().find_map(|node| match node {
-        WireNode::Sequence { carrier, element } => Some((carrier, element)),
-        WireNode::Group { children, .. } => sequence_return(children),
-        WireNode::Wire(_) => None,
-    })
+/// Find outer sequence payloads, control slices and metadata, in that order.
+/// Descends through groups,
+/// alternatives and options, and stops at each sequence. Choose the output
+/// completion channel before calling this operation.
+#[allow(clippy::type_complexity)]
+pub fn outer_sequences<W: prebindgen_flat::WireKind, O, S, G, A>(
+    node: &WireNode<W, O, S, G, A>,
+) -> Vec<(&WireNode<W, O, S, G, A>, &[Wire<W>], &S)> {
+    fn visit<'a, W: prebindgen_flat::WireKind, O, S, G, A>(
+        node: &'a WireNode<W, O, S, G, A>,
+        out: &mut Vec<(&'a WireNode<W, O, S, G, A>, &'a [Wire<W>], &'a S)>,
+    ) {
+        match node {
+            WireNode::Sequence {
+                element,
+                controls,
+                metadata,
+            } => out.push((element, controls, metadata)),
+            WireNode::Optional { element, .. } => visit(element, out),
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                for child in elements {
+                    visit(child, out);
+                }
+            }
+            WireNode::Wire(_) => {}
+        }
+    }
+    let mut out = vec![];
+    visit(node, &mut out);
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
+    fn sequence_discovery_is_logical_and_outcome_selection_is_explicit() {
+        let mut layout: prebindgen_flat::WireNode<syn::Type> =
+            prebindgen_flat::WireNode::Wire(vec![Wire {
+                name: syn::parse_quote!(value),
+                kind: syn::parse_quote!(i64),
+            }]);
+        layout = prebindgen_flat::WireNode::Sequence {
+            controls: vec![],
+            metadata: Default::default(),
+            element: Box::new(std::mem::take(&mut layout)),
+        };
+        layout = prebindgen_flat::WireNode::Optional {
+            controls: vec![],
+            metadata: Default::default(),
+            element: Box::new(std::mem::take(&mut layout)),
+        };
+        layout = prebindgen_flat::WireNode::Group {
+            metadata: (),
+            elements: vec![std::mem::take(&mut layout)],
+        };
+        assert_eq!(outer_sequences(&layout).len(), 1);
+        let output = prebindgen_flat::Outcomes {
+            success: layout,
+            source_error: None,
+            binding_failure: Some(WireNode::default()),
+        };
+        assert_eq!(outer_sequences(&output.success).len(), 1);
+        assert!(outer_sequences(output.binding_failure.as_ref().unwrap()).is_empty());
+    }
+    #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
-        let layout: WireLayout<syn::Type> = vec![Wire {
-            name: syn::parse_quote!(raw),
-            kind: syn::parse_quote!(i64),
-        }]
-        .into();
         let code = replace(
             &quote!(let value = unsafe { &(*pointer) }; consume(raw, value);),
-            &layout,
-            &[quote!(cached)],
+            &[(syn::parse_quote!(raw), quote!(cached))],
         )
         .unwrap();
         assert!(code.to_string().contains(&quote!(&(*pointer)).to_string()));
@@ -397,15 +450,20 @@ mod tests {
     }
     #[test]
     fn deleted_row_references_cannot_escape_into_deferred_phases() {
-        let layout: WireLayout<syn::Type> = vec![Wire {
-            name: syn::parse_quote!(raw),
-            kind: syn::parse_quote!(*const u8),
-        }]
-        .into();
-        assert!(prepared(&quote!(decode(raw);), &layout, &[None])
-            .unwrap_err()
-            .contains("after row validation"));
-        assert!(prepared(&quote!(decode_macro!(raw);), &layout, &[None]).is_err());
-        assert!(prepared(&quote!(decode(already_validated);), &layout, &[None]).is_ok());
+        assert!(
+            prepared(&quote!(decode(raw);), &[(syn::parse_quote!(raw), None)])
+                .unwrap_err()
+                .contains("after row validation")
+        );
+        assert!(prepared(
+            &quote!(decode_macro!(raw);),
+            &[(syn::parse_quote!(raw), None)]
+        )
+        .is_err());
+        assert!(prepared(
+            &quote!(decode(already_validated);),
+            &[(syn::parse_quote!(raw), None)]
+        )
+        .is_ok());
     }
 }

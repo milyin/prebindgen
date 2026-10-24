@@ -3372,6 +3372,10 @@ pub fn collection_optional(values: Option<Vec<i64>>) -> Option<Vec<i64>> {
     values
 }
 #[prebindgen]
+pub fn collection_optional_items(values: Option<Vec<Option<i64>>>) -> Option<Vec<Option<i64>>> {
+    values
+}
+#[prebindgen]
 pub fn collection_enum(values: Vec<SparseCode>) -> Vec<SparseCode> {
     values
 }

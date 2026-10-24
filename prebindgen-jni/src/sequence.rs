@@ -4,24 +4,38 @@ use crate::kotlin::{
     input_kotlin, output_kotlin, KotlinBinding, KotlinContext, KotlinInput, KotlinOutput,
 };
 use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
-use prebindgen_flat::{Wire, WireLayout};
+
+/// Selected delivery of a logical sequence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JniSequence {
+    /// All rows travel in one collection carrier.
+    Buffered,
+    /// Each row is delivered through the function's sequence callback.
+    Callback,
+}
 
 pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        crate::JniSequence,
+        JniGroup,
+        (),
+    >,
     active: &Condition,
-) -> Result<SequenceInput<JniWire>> {
+) -> Result<SequenceInput<JniWire, crate::JniSequence>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = element.len();
+    let count = crate::group::row_fields(element).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection element fields")?;
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
     let mut prepared_values = Vec::new();
-    for (position, field) in element.iter().enumerate() {
+    for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
         bind.extend(quote! {
@@ -29,18 +43,28 @@ pub(crate) fn input(
             if #name.is_err() && #env.exception_check().map_err(|e|e.to_string())? {return Err("JNI collection field decoding failed".into());}
         });
         let borrow = quote!(*);
-        validation_values.push(quote!(#borrow #name.as_ref().map_err(|e|e.clone())?));
-        prepared_values.push(if field.kind.is_reference() {
-            None
-        } else {
-            Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
-        });
+        validation_values.push((
+            field.name.clone(),
+            quote!(#borrow #name.as_ref().map_err(|e|e.clone())?),
+        ));
+        prepared_values.push((
+            field.name.clone(),
+            if field.kind.is_reference() {
+                None
+            } else {
+                Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
+            },
+        ));
     }
     Ok(SequenceInput {
-        carrier: JniWire::Rows {
-            condition: kotlin_condition(active),
-            null_niche_available: true,
-        },
+        controls: vec![prebindgen_flat::Wire {
+            name: wire.clone(),
+            kind: JniWire::Rows {
+                condition: kotlin_condition(active),
+                null_niche_available: true,
+            },
+        }],
+        metadata: JniSequence::Buffered,
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
@@ -52,22 +76,32 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &WireLayout<JniWire, JniGroup>,
-    values: &[TokenStream],
-) -> Result<SequenceOutput<JniWire>> {
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        crate::JniSequence,
+        JniGroup,
+        (),
+    >,
+    values: &[(syn::Ident, TokenStream)],
+) -> Result<SequenceOutput<JniWire, crate::JniSequence>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
-    let count = element.len();
+    let count = crate::group::row_fields(element).len();
     let capacity = i32::try_from(count + 8).map_err(|_| "too many collection fields")?;
-    let encode = encode_array(element, values, &row, 0);
+    let encode = encode_array(crate::group::row_values(element, values)?, &row, 0);
     let frame = format_ident!("{wire}_frame");
     Ok(SequenceOutput {
+        controls: vec![prebindgen_flat::Wire {
+            name: wire.clone(),
+            kind: JniWire::Rows {
+                condition: ("true").into(),
+                null_niche_available: true,
+            },
+        }],
         commit_each: false,
         fallible: true,
-        carrier: JniWire::Rows {
-            condition: "true".into(),
-            null_niche_available: true,
-        },
+        metadata: JniSequence::Buffered,
         begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
         enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
         store: quote! {
@@ -76,17 +110,29 @@ pub(crate) fn output(
             drop(#frame);
         },
         finish: quote!(let #wire=Some(#wire);),
-        value: quote!(#wire),
+        values: vec![(wire.clone(), quote!(#wire))],
         commit: quote!(),
     })
 }
 
 pub(crate) fn input_list(
-    carrier: &Wire<JniWire>,
-    element: &WireLayout<JniWire, JniGroup>,
+    carrier: &prebindgen_flat::Wire<JniWire>,
+    sequence: &JniSequence,
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        crate::JniSequence,
+        JniGroup,
+        (),
+    >,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
-    let child = input_kotlin(element.nodes(), context)?;
+    if *sequence != JniSequence::Buffered {
+        return Err(
+            "callback sequence is only supported as the function's successful return".into(),
+        );
+    }
+    let child = input_kotlin(element, context)?;
     if child.parameters.len() != 1 {
         return Err("Kotlin collection elements must expose exactly one value; declare a data class for expanded fields".into());
     }
@@ -96,7 +142,7 @@ pub(crate) fn input_list(
     let name = carrier.name.to_string();
     let state = format!("{name}_elements");
     let JniWire::Rows { condition, .. } = &carrier.kind else {
-        return Err("sequence node requires an array carrier".into());
+        return Err("sequence requires an object-array control".into());
     };
     let mut code = String::new();
     for binding in &child.setup {
@@ -142,7 +188,13 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &WireLayout<JniWire, JniGroup>,
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        crate::JniSequence,
+        JniGroup,
+        (),
+    >,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let row = format!("{}_row", context.output_prefix);
@@ -155,7 +207,7 @@ pub(crate) fn output_list(
         output_prefix: &prefix,
         ..*context
     };
-    let child = output_kotlin(element.nodes(), &ctx)?;
+    let child = output_kotlin(element, &ctx)?;
     if child.delivered.len() != 1 {
         return Err("Kotlin collection elements must deliver exactly one value; declare a data class for expanded outputs".into());
     }
@@ -177,4 +229,142 @@ pub(crate) fn output_list(
         materialize:format!("{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array<*>\n{}\n{actions}.add {{ {failure} -> {} }}\n{}\n{output}.add({value})\n}}\n",child.output_locals,child.cleanup,child.materialize),
         cleanup:format!("val {failure} = {failure_value}\n{actions}?.forEach {{ it({failure}) }}\nfor (index in ({actions}?.size ?: 0) until {raw}.size) {{\nval {row} = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}}\n{finish_cleanup}\n",child.output_locals,child.cleanup),
     })
+}
+
+/// The adapter selects its native scope before looking for a sequence.
+#[allow(clippy::type_complexity)]
+pub(crate) fn return_sequence(
+    layout: &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup, ()>,
+) -> Option<(
+    &prebindgen_flat::Wire<JniWire>,
+    &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup, ()>,
+    &JniSequence,
+)> {
+    prebindgen_declarations::outer_sequences(layout)
+        .into_iter()
+        .next()
+        .and_then(|(element, controls, metadata)| match controls {
+            [carrier] => Some((carrier, element, metadata)),
+            _ => None,
+        })
+}
+pub(crate) fn callback_target(
+    layout: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        crate::JniSequence,
+        JniGroup,
+        (),
+    >,
+) -> Result<syn::Ident> {
+    if prebindgen_declarations::outer_sequences(layout).len() != 1
+        || crate::group::result_packet_fields(layout).len() > 2
+    {
+        return Err(
+            "callback_return permits only one sequence and its optional presence flag; cannot discard additional return values".into(),
+        );
+    }
+    return_sequence(layout)
+        .map(|(carrier, _, _)| carrier.name.clone())
+        .ok_or_else(|| "callback_return requires a sequence boundary".into())
+}
+
+/// Whether the successful return uses the function's sequence callback.
+pub(crate) fn callback_delivery(
+    node: &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup>,
+) -> Result<bool> {
+    let sequences = prebindgen_declarations::outer_sequences(node);
+    if !sequences
+        .iter()
+        .any(|(_, _, metadata)| **metadata == JniSequence::Callback)
+    {
+        return Ok(false);
+    }
+    callback_target(node)?;
+    if crate::group::result_packet_fields(node).len() != 1 {
+        return Err("callback_return cannot discard additional return values".into());
+    }
+    Ok(true)
+}
+
+/// Function sequence callbacks are not available in parameters, error channels or rows.
+pub(crate) fn validate_buffered(
+    node: &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup>,
+) -> Result<()> {
+    match node {
+        prebindgen_flat::WireNode::Wire(_) => {}
+        prebindgen_flat::WireNode::Sequence {
+            element, metadata, ..
+        } => {
+            if *metadata == JniSequence::Callback {
+                return Err(
+                    "callback sequence is only supported as the function's successful return"
+                        .into(),
+                );
+            }
+            validate_buffered(element)?;
+        }
+        prebindgen_flat::WireNode::Optional { element, .. } => validate_buffered(element)?,
+        prebindgen_flat::WireNode::Group { elements, .. }
+        | prebindgen_flat::WireNode::Alternatives { elements, .. } => {
+            for element in elements {
+                validate_buffered(element)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+    use prebindgen_flat::WireNode;
+    fn leaf() -> prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup> {
+        WireNode::Wire(vec![prebindgen_flat::Wire {
+            name: syn::parse_quote!(element),
+            kind: JniWire::scalar(Primitive::I32),
+        }])
+    }
+    fn sequence(
+        delivery: JniSequence,
+        name: &str,
+        element: prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup>,
+    ) -> prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup> {
+        let kind = match delivery {
+            JniSequence::Buffered | JniSequence::Callback => JniWire::Rows {
+                condition: "true".into(),
+                null_niche_available: true,
+            },
+        };
+        WireNode::Sequence {
+            controls: vec![prebindgen_flat::Wire {
+                name: syn::parse_str(name).unwrap(),
+                kind,
+            }],
+            element: Box::new(element),
+            metadata: delivery,
+        }
+    }
+    #[test]
+    fn delivery_is_explicit_and_callback_scope_is_checked() {
+        let visitor = sequence(JniSequence::Callback, "visitor", leaf());
+        assert!(callback_delivery(&visitor).unwrap());
+        assert!(validate_buffered(&visitor)
+            .unwrap_err()
+            .contains("successful return"));
+        let packed = sequence(JniSequence::Buffered, "rows", leaf());
+        assert!(!callback_delivery(&packed).unwrap());
+        validate_buffered(&packed).unwrap();
+        let nested = sequence(JniSequence::Buffered, "rows", visitor.clone());
+        assert!(crate::group::validate_layout(&nested)
+            .unwrap_err()
+            .contains("successful return"));
+        let extra = WireNode::Group {
+            elements: vec![visitor, leaf()],
+            metadata: JniGroup::Values,
+        };
+        assert!(callback_delivery(&extra)
+            .unwrap_err()
+            .contains("additional return"));
+    }
 }
