@@ -239,8 +239,9 @@ fn mark<C: Codec>(
         vec![]
     };
     let metadata =
-        codec.optional_metadata(tag, discriminator, reservation.map(|r| r.niche), controls)?;
+        codec.optional_metadata(tag, discriminator, reservation.map(|r| r.niche), &controls)?;
     let node = WireNode::Optional {
+        controls,
         element: Box::new(std::mem::take(tree)),
         metadata,
     };

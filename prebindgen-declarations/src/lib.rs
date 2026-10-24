@@ -278,8 +278,8 @@ impl Output {
 ///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
-///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: Vec<Wire<Type>>) -> Result<()> {Ok(())}
-///     fn alternatives_metadata(&self, _: Wire<Type>) -> Result<()> {Ok(())}
+///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: &[Wire<Type>]) -> Result<()> {Ok(())}
+///     fn alternatives_metadata(&self, _: &Wire<Type>) -> Result<()> {Ok(())}
 ///     fn field_group(&self, _: Ident) {}
 ///     fn fields_group(&self) {}
 ///     fn optional_niche(&self, _: &prebindgen_flat::WireNode<Self::Wire>) -> Option<prebindgen_declarations::NicheReservation<()>> {None}
@@ -353,18 +353,20 @@ pub trait Codec {
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
     /// representation, or `None` when a separate flag is an inline control wire.
     /// With a flag, `presence` and `discriminator` name that same wire. Retain the
-    /// supplied controls unchanged. Return an error when they cannot form the
+    /// supplied controls stay in the tree. Borrow them to validate the encoding;
+    /// metadata must not retain wire descriptors. Return an error when they cannot form the
     /// adapter's flag or niche representation; failed preparation preserves existing slots.
     fn optional_metadata(
         &self,
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<Self::Niche>,
-        controls: Vec<Wire<Self::Wire>>,
+        controls: &[Wire<Self::Wire>],
     ) -> Result<Self::Optional>;
     /// Record the supplied selector for mutually exclusive input alternatives,
-    /// preserving its niche state. Reject an unsupported tag representation.
-    fn alternatives_metadata(&self, selector: Wire<Self::Wire>) -> Result<Self::Alternatives>;
+    /// preserving its niche state in the tree. Metadata must not retain the wire.
+    /// Reject an unsupported tag representation.
+    fn alternatives_metadata(&self, selector: &Wire<Self::Wire>) -> Result<Self::Alternatives>;
     /// Describe one named source field, whose subtree may contain any number of wires.
     fn field_group(&self, name: syn::Ident) -> Self::Group;
     /// Describe a record or unit value's ordered collection of field subtrees.
@@ -481,7 +483,7 @@ pub trait Codec {
             Self::Alternatives,
         >,
         _active: &Condition,
-    ) -> Result<SequenceInput<Self::Sequence>> {
+    ) -> Result<SequenceInput<Self::Wire, Self::Sequence>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Choose array output transport; store element values without publishing owners.
@@ -504,7 +506,7 @@ pub trait Codec {
             Self::Alternatives,
         >,
         _values: &[(syn::Ident, TokenStream)],
-    ) -> Result<SequenceOutput<Self::Sequence>> {
+    ) -> Result<SequenceOutput<Self::Wire, Self::Sequence>> {
         Err("collections are unsupported by this codec".into())
     }
     /// Route the owned source error value. `message`, when present, is an
@@ -591,7 +593,7 @@ pub trait Codec {
         Err("Result error routing is unsupported by this codec".into())
     }
     /// Select an excluded representation of this optional payload. The adapter
-    /// chooses candidates in its value domain, including metadata-owned controls.
+    /// chooses candidates in its value domain, including tree-owned controls.
     fn optional_niche(
         &self,
         _payload: &prebindgen_flat::WireNode<
@@ -657,7 +659,7 @@ pub trait Codec {
         prebindgen_conversions::validate_value_bindings(&plan.values)
     }
     /// Prepend a semantic source path to one prepared occurrence. Override when
-    /// metadata-owned values carry paths, or element definitions have a separate
+    /// node controls carry paths, or element definitions have a separate
     /// path context. Codecs without source-path metadata need no implementation.
     fn prefix_layout(
         &self,
@@ -1083,8 +1085,10 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     let i = i as i32;
                     cases.push(quote!(#i=>{#body #value}));
                 }
+                let metadata = self.codec.alternatives_metadata(&selector)?;
                 let node = WireNode::Alternatives {
-                    metadata: self.codec.alternatives_metadata(selector)?,
+                    controls: vec![selector],
+                    metadata,
                     elements: alternatives,
                 };
                 wires = vec![node];

@@ -6,7 +6,7 @@ use prebindgen_flat::InputConversion;
 #[derive(Clone, Debug)]
 enum Metadata {
     Components,
-    Values(Vec<Wire<Type>>),
+    Values,
     Fields,
     Field,
 }
@@ -42,33 +42,25 @@ impl PointerLenAbi {
             out: &mut Vec<&'a Wire<Type>>,
         ) {
             match node {
-                WireNode::Wire(ws) => out.extend(ws),
-                WireNode::Group {
-                    metadata: Metadata::Values(ws),
-                    ..
-                } => out.extend(ws),
+                WireNode::Wire(w) => out.extend(w),
                 WireNode::Group { elements, .. } => {
-                    for child in elements {
-                        visit(child, out);
+                    for n in elements {
+                        visit(n, out);
                     }
                 }
-                WireNode::Optional { element, metadata } => {
-                    if let Metadata::Values(ws) = metadata {
-                        out.extend(ws);
-                    }
+                WireNode::Optional {
+                    controls, element, ..
+                } => {
+                    out.extend(controls);
                     visit(element, out);
                 }
-                WireNode::Sequence { metadata, .. } => {
-                    if let Metadata::Values(ws) = metadata {
-                        out.extend(ws);
-                    }
-                }
-                WireNode::Alternatives { metadata, elements } => {
-                    if let Metadata::Values(ws) = metadata {
-                        out.extend(ws);
-                    }
-                    for child in elements {
-                        visit(child, out);
+                WireNode::Sequence { controls, .. } => out.extend(controls),
+                WireNode::Alternatives {
+                    controls, elements, ..
+                } => {
+                    out.extend(controls);
+                    for n in elements {
+                        visit(n, out);
                     }
                 }
             }
@@ -85,33 +77,25 @@ impl PointerLenAbi {
             out: &mut Vec<&'a mut Wire<Type>>,
         ) {
             match node {
-                WireNode::Wire(ws) => out.extend(ws),
-                WireNode::Group {
-                    metadata: Metadata::Values(ws),
-                    ..
-                } => out.extend(ws),
+                WireNode::Wire(w) => out.extend(w),
                 WireNode::Group { elements, .. } => {
-                    for child in elements {
-                        visit(child, out);
+                    for n in elements {
+                        visit(n, out);
                     }
                 }
-                WireNode::Optional { element, metadata } => {
-                    if let Metadata::Values(ws) = metadata {
-                        out.extend(ws);
-                    }
+                WireNode::Optional {
+                    controls, element, ..
+                } => {
+                    out.extend(controls);
                     visit(element, out);
                 }
-                WireNode::Sequence { metadata, .. } => {
-                    if let Metadata::Values(ws) = metadata {
-                        out.extend(ws);
-                    }
-                }
-                WireNode::Alternatives { metadata, elements } => {
-                    if let Metadata::Values(ws) = metadata {
-                        out.extend(ws);
-                    }
-                    for child in elements {
-                        visit(child, out);
+                WireNode::Sequence { controls, .. } => out.extend(controls),
+                WireNode::Alternatives {
+                    controls, elements, ..
+                } => {
+                    out.extend(controls);
+                    for n in elements {
+                        visit(n, out);
                     }
                 }
             }
@@ -221,12 +205,12 @@ impl Codec for CodecImpl {
         _: syn::Ident,
         _: syn::Ident,
         _: Option<()>,
-        controls: Vec<Wire<Type>>,
+        _controls: &[Wire<Type>],
     ) -> Result<Metadata> {
-        Ok(Metadata::Values(controls))
+        Ok(Metadata::Values)
     }
-    fn alternatives_metadata(&self, selector: Wire<Type>) -> Result<Metadata> {
-        Ok(Metadata::Values(vec![selector]))
+    fn alternatives_metadata(&self, _selector: &Wire<Type>) -> Result<Metadata> {
+        Ok(Metadata::Values)
     }
     fn field_group(&self, _: syn::Ident) -> Metadata {
         Metadata::Field
@@ -279,14 +263,14 @@ impl Codec for CodecImpl {
         index: syn::Ident,
         element: &prebindgen_flat::WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
         _: &Condition,
-    ) -> Result<SequenceInput<Metadata>> {
+    ) -> Result<SequenceInput<Type, Metadata>> {
         let field = PointerLenAbi::row_fields(element)
             .next()
             .unwrap()
             .name
             .clone();
         Ok(SequenceInput {
-            metadata: Metadata::Values(vec![
+            controls: vec![
                 Wire {
                     name: wire.clone(),
                     kind: syn::parse_quote!(*const i32),
@@ -295,7 +279,8 @@ impl Codec for CodecImpl {
                     name: length.clone(),
                     kind: syn::parse_quote!(usize),
                 },
-            ]),
+            ],
+            metadata: Metadata::Values,
             open: quote!(if #length>0 && #wire.is_null(){return Err("null sequence".into());}),
             bind: quote!(let #field=unsafe{*#wire.add(#index)};),
             validation_values: vec![(field.clone(), quote!(#field))],
@@ -318,7 +303,7 @@ impl Codec for CodecImpl {
         _: syn::Ident,
         element: &prebindgen_flat::WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<SequenceOutput<Metadata>> {
+    ) -> Result<SequenceOutput<Type, Metadata>> {
         assert_eq!(
             PointerLenAbi::row_fields(element).len(),
             values.len(),
@@ -330,7 +315,7 @@ impl Codec for CodecImpl {
         )?;
         let value = values[0].1;
         Ok(SequenceOutput {
-            metadata: Metadata::Values(vec![
+            controls: vec![
                 Wire {
                     name: wire.clone(),
                     kind: syn::parse_quote!(*const i32),
@@ -339,7 +324,8 @@ impl Codec for CodecImpl {
                     name: length.clone(),
                     kind: syn::parse_quote!(usize),
                 },
-            ]),
+            ],
+            metadata: Metadata::Values,
             commit_each: false,
             fallible: false,
             begin: quote!(let mut #wire=Vec::<i32>::with_capacity(#length);),
@@ -408,7 +394,7 @@ fn pointer_length_round_trip(reverse: bool) {
             f.input_conversions().unwrap()[0].input_node()
         ))
         .count(),
-        1
+        4
     );
     let input = f.input_conversions().unwrap()[0];
     let output = f.output_conversion().unwrap();

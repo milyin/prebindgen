@@ -9,10 +9,10 @@ pub(crate) fn transport(
         crate::JniOptional,
         crate::JniSequence,
         JniGroup,
-        crate::JniSelector,
+        (),
     >,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<crate::JniSequence>> {
+) -> Result<SequenceOutput<JniWire, crate::JniSequence>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
     let class = format_ident!("{wire}_callback_class");
@@ -43,9 +43,16 @@ pub(crate) fn transport(
     let capacity = i32::try_from(crate::group::callback_parameters(element).len() + 8)
         .map_err(|_| "too many callback fields")?;
     Ok(SequenceOutput {
+        controls: vec![prebindgen_flat::Wire {
+            name: wire.clone(),
+            kind: JniWire::Rows {
+                condition: ("true").into(),
+                null_niche_available: true,
+            },
+        }],
         commit_each: false,
         fallible: true,
-        metadata: JniSequence::callback(wire.clone()),
+        metadata: JniSequence::Callback,
         begin: quote! {
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
@@ -77,18 +84,12 @@ pub(crate) fn fold(
         crate::JniOptional,
         crate::JniSequence,
         JniGroup,
-        crate::JniSelector,
+        (),
     >,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
     fn optional(
-        node: &prebindgen_flat::WireNode<
-            JniWire,
-            JniOptional,
-            crate::JniSequence,
-            JniGroup,
-            crate::JniSelector,
-        >,
+        node: &prebindgen_flat::WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, ()>,
     ) -> bool {
         match node {
             prebindgen_flat::WireNode::Optional { .. } => true,
@@ -97,10 +98,10 @@ pub(crate) fn fold(
         }
     }
     let optional = optional(layout);
-    let (sequence, element) =
+    let (carrier, element, _) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;
     let position = crate::group::result_packet_fields(layout)
-        .position(|w| w.name == sequence.carrier().name)
+        .position(|w| w.name == carrier.name)
         .unwrap();
     let row = "__pb_fold_row";
     let ctx = KotlinContext {

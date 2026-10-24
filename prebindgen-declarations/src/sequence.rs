@@ -7,10 +7,11 @@ use prebindgen_flat::WireNode;
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
-pub struct SequenceInput<G> {
-    /// Adapter-owned description of every outer input value. The adapter
-    /// chooses their actual function parameters or row fields; element fields remain in the child tree.
+pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
+    /// Adapter policy for interpreting `controls`; must not own wire descriptors.
     pub metadata: G,
+    /// Supporting boundary values, stored on the resulting sequence node.
+    pub controls: Vec<Wire<W>>,
     /// Validate the outer input values and make the supplied length identifier
     /// available, either as a boundary parameter or a local binding.
     pub open: TokenStream,
@@ -26,7 +27,7 @@ pub struct SequenceInput<G> {
     pub release: TokenStream,
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
-pub struct SequenceOutput<G> {
+pub struct SequenceOutput<W: prebindgen_flat::WireKind, G> {
     /// Commit each element inside `store`, after capturing its prepared wire values
     /// and before invoking a foreign visitor. `store` must contain exactly one
     /// `template_parameter("commit_element")` marker when true. When false, all
@@ -35,9 +36,10 @@ pub struct SequenceOutput<G> {
     /// Whether preparing or delivering the array transport can return a binding
     /// error, in addition to failures from converting its elements.
     pub fallible: bool,
-    /// Adapter-owned description of the outer delivery values. There may be
-    /// several values, such as separate pointer and length parameters.
+    /// Adapter delivery policy; must not own wire descriptors or child trees.
     pub metadata: G,
+    /// Supporting boundary values, stored on the resulting sequence node.
+    pub controls: Vec<Wire<W>>,
     /// Initialize delivery state, with the supplied element count available.
     pub begin: TokenStream,
     /// Per-row setup before element conversion.
@@ -237,6 +239,7 @@ pub(crate) fn input<C: Codec>(
         context: Default::default(),
         acknowledgement: None,
         node: WireNode::Sequence {
+            controls: transport.controls,
             element: Box::new(child.node),
             metadata: transport.metadata,
         },
@@ -309,6 +312,7 @@ pub(crate) fn output<C: Codec>(
         commit_each,
         fallible,
         metadata,
+        controls,
         begin,
         enter,
         store,
@@ -349,6 +353,7 @@ pub(crate) fn output<C: Codec>(
         delivery: Default::default(),
         outcomes: prebindgen_flat::Outcomes {
             success: WireNode::Sequence {
+                controls,
                 element: Box::new(child.outcomes.success),
                 metadata,
             },
@@ -368,19 +373,24 @@ pub(crate) fn output<C: Codec>(
     Ok(out)
 }
 
-/// Find outer sequence payloads and their metadata. Descends through groups,
+/// Find outer sequence payloads, control slices and metadata, in that order.
+/// Descends through groups,
 /// alternatives and options, and stops at each sequence. Choose the output
 /// completion channel before calling this operation.
 #[allow(clippy::type_complexity)]
 pub fn outer_sequences<W: prebindgen_flat::WireKind, O, S, G, A>(
     node: &WireNode<W, O, S, G, A>,
-) -> Vec<(&WireNode<W, O, S, G, A>, &S)> {
+) -> Vec<(&WireNode<W, O, S, G, A>, &[Wire<W>], &S)> {
     fn visit<'a, W: prebindgen_flat::WireKind, O, S, G, A>(
         node: &'a WireNode<W, O, S, G, A>,
-        out: &mut Vec<(&'a WireNode<W, O, S, G, A>, &'a S)>,
+        out: &mut Vec<(&'a WireNode<W, O, S, G, A>, &'a [Wire<W>], &'a S)>,
     ) {
         match node {
-            WireNode::Sequence { element, metadata } => out.push((element, metadata)),
+            WireNode::Sequence {
+                element,
+                controls,
+                metadata,
+            } => out.push((element, controls, metadata)),
             WireNode::Optional { element, .. } => visit(element, out),
             WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
                 for child in elements {
@@ -406,10 +416,12 @@ mod tests {
                 kind: syn::parse_quote!(i64),
             }]);
         layout = prebindgen_flat::WireNode::Sequence {
+            controls: vec![],
             metadata: Default::default(),
             element: Box::new(std::mem::take(&mut layout)),
         };
         layout = prebindgen_flat::WireNode::Optional {
+            controls: vec![],
             metadata: Default::default(),
             element: Box::new(std::mem::take(&mut layout)),
         };

@@ -177,11 +177,12 @@ settings remain commented out in the example manifests.
   Neither interface prescribes ABI packing or delivery.
 - `WireNode<W, O, S, G, A>` has a terminal `Wire(Vec<Wire<W>>)` bundle, a single
   boxed payload for `Optional` and `Sequence`, and a vector of children for
-  `Group` and `Alternatives`. Each parent variant has its own metadata type.
+  `Group` and `Alternatives`. Each parent variant has its own metadata type. Optional, sequence and alternative
+  nodes also own a `controls: Vec<Wire<W>>` outside their payload children.
   Child vectors have normal collection iteration and indexing.
 - `wire_definitions(std::iter::once(input.input_node()))` explicitly traverses
-  logical wire definitions, visiting a sequence's element schema and every
-  alternative once. Select an output channel before traversing its tree.
+  all wire definitions, visiting node controls, a sequence's element schema
+  and every alternative once. Select an output channel before traversing its tree.
   `wire_definitions_mut` edits definitions without cloning metadata.
   `Function::input_wire_definitions()` visits all input definitions.
   `wire_definitions_with_paths` includes structural `WirePath` addresses;
@@ -215,9 +216,9 @@ with different requirements can compose their own request enums directly.
 C/JNI use the optional staged conversion protocol from `prebindgen-conversions`.
 `InputPlan::node` stores one authoritative input tree.
 `OutputPlan::outcomes` stores `Outcomes<WireNode<W, O, S, G, A>>`.
-Payloads occur only in terminal bundles and children. Adapter metadata retains
-explicit native decisions and owns additional values such as presence flags,
-selectors or sequence parameters. Metadata contains no copy of the child tree.
+All definitions occur in terminal bundles or the `controls` of optional, sequence
+and alternative nodes. Metadata retains encoding decisions and references to
+those definitions; it owns no wire descriptors or copies of child trees.
 
 Each adapter has operations for actual ABI tasks: building a function's
 parameters, laying out a successful result packet, defining one sequence row,
@@ -241,7 +242,7 @@ The adapter validates each prepared child before embedding it in a sequence.
 Option composition asks the codec to select a `NicheReservation`, test presence,
 prepare named absent outputs, and retire niches from inactive payload values.
 The reservation identifies a payload binding and its excluded representation.
-The adapter chooses its candidates, including metadata-owned controls, while
+The adapter chooses its candidates, including tree-owned controls, while
 shared composition handles conditional validation, preparation and ownership.
 `prefix_layout` lets a codec attach source paths without exposing its physical
 values to the common compiler. `validate_input` and `validate_output` check the
@@ -540,7 +541,8 @@ Optional
           element: integer
 ```
 
-`wire_definitions(nodes.iter())` visits the integer definition once. It describes neither a concrete
+`wire_definitions(nodes.iter())` visits the integer definition once, together with
+all presence flags and sequence controls declared on the enclosing nodes. It describes neither a concrete
 runtime collection nor a native parameter list. The C adapter can choose a row buffer
 and presence controls; another adapter can deliver each integer through callback
 arguments. The same logical structure supports either choice. Fields nested in
@@ -548,8 +550,8 @@ sequences have structural paths, rather than positions assigned to an enclosing
 function signature.
 
 C/JNI store their selected encoding in metadata on these same nodes. A sequence
-node owns its element schema; its adapter metadata owns the row buffer or callback
-completion carrier. An optional node similarly owns presence/niche metadata and
+node owns its element schema and its row-buffer or callback-completion controls.
+An optional node similarly owns its presence controls and niche metadata and
 any extra flag. Native parameter lists and row/callback field lists are borrowed
 views of that tree, with explicit scope boundaries chosen by the adapter. These
 adapters retain their existing ABI and conversion behavior.
@@ -835,7 +837,7 @@ describes a value assembled from wire bundles, repetition, field relationships
 and mutually exclusive alternatives. An empty bundle or group carries no values. Optional
 and sequence nodes each contain one complete payload node; use a `Group` when
 that payload has several related components. `Alternatives` describes choices
-such as input constructors; its metadata owns the transport selector.
+such as input constructors; its `controls` own the transport selector.
 `Outcomes` surrounds output value trees and cannot be nested inside them.
 It makes no assumption about where a value is passed. For example:
 
@@ -886,37 +888,45 @@ creates metadata through codec hooks and does not interpret it. `group_metadata`
 describes ordered conversion components; `field_group` and `fields_group` retain
 source field information. Constructor arguments and output combinations retain
 their group with one component; constructors without arguments retain an empty
-group. `optional_metadata` owns presence or niche controls,
-`alternatives_metadata` owns the selector, and sequence hooks supply `S`.
-C and JNI use distinct types for these roles:
+group. `optional_metadata` and `alternatives_metadata` borrow supporting wires
+for validation; the compiler moves those wires into `controls`. Sequence hooks
+return `SequenceInput<W, S>` or `SequenceOutput<W, S>`, with separate `controls`
+and metadata fields. Metadata must not retain wire descriptors.
 
-- `CSequence` / `JniSequence` record `Buffered` or `Callback` delivery and own
-  the corresponding boundary carrier. Constructors choose its representation:
-  C uses row storage or a delivered-element count; JNI uses an object array
-  containing rows or a callback-result presence marker. Callback signatures,
-  cleanup and Kotlin fold generation read this choice from the tree. A separate
-  function-name registry does not select delivery during emission.
-- `COptional` / `JniOptional` are `Flag` or `Niche`. A flag owns one checked
-  integer selector; a niche stores the payload binding and reserved absent
-  representation. Missing flags, extra controls and conflicting binding names
-  are rejected during metadata construction.
-- `CSelector` / `JniSelector` describe integer alternative tags and preserve their
-  remaining niche state. Their carriers are private. `new` creates the adapter's
-  tag representation; `TryFrom<Wire<_>>` checks an existing descriptor without
-  resetting its niche availability.
+- `CSequence` / `JniSequence` are `Buffered` or `Callback` delivery policies.
+  The sequence node's controls contain the actual row buffer, delivered-element
+  count or JNI presence marker. Callback signatures, cleanup and Kotlin folds
+  read the policy and controls from that node.
+- `COptional` / `JniOptional` are `Flag(binding)` or `Niche`. A flag references
+  one tree-owned integer control; a niche references a payload binding and its
+  reserved absent representation. The wire kind retains remaining niche state.
+- Alternative metadata is `()` for C/JNI. The selector is an ordinary control
+  wire, validated against the adapter's tag representation.
+  Its remaining niche state is stored on that same wire.
 
-Physical carrier information is stored once. Metadata exposes an immutable
-carrier description; private niche handling mutates the same stored domain.
-Neither sequence nor selector metadata copies its child tree. Function sequence
-callbacks are supported only for the successful return, including supported
-optional wrapping; parameters, error channels and nested rows use buffered
-sequences. JNI's native callback fills an internal sink; user folds run after
-native return and handle-lock release.
+`wire_definitions` and `wire_definitions_mut` visit every terminal and control
+wire once, including all alternative arms and one schema per repeated element.
+No metadata-specific wire enumeration trait is needed. This exhaustive list is
+not an extern signature: generators still select function parameters, result
+fields, sequence row fields and callback arguments for their respective scopes.
+Wrapper infrastructure such as JNI environment/class parameters is supplied by
+the wrapper writer rather than modeled as a conversion value.
 
-`Codec::optional_metadata` and `Codec::alternatives_metadata` return `Result` so
-adapters can reject invalid encodings before a conversion replaces an existing
-slot. Other adapters remain free to choose their own metadata types and delivery
-policies.
+Supporting values are outside their own node's payload: a presence flag remains
+available for an absent option, a selector is outside its arms, and a row buffer
+or count is outside the repeated row schema. Enclosing conditions still apply.
+Paths use branch 0 for a node's controls, then the control index; branch 1 selects
+its payload, with an additional arm index for alternatives. Terminal bundles and
+groups retain ordinary value/child indices. Rebuild paths after structural edits.
+
+Function sequence callbacks remain supported only for successful returns,
+including supported optional wrapping. Parameters, error channels and nested
+rows use buffered sequences. JNI's native callback fills an internal sink; user
+folds run after native return and handle-lock release.
+
+Metadata construction returns `Result`; errors leave installed conversions
+unchanged. Other adapters can use several controls, such as separate pointer and
+length values, and choose their own metadata types and policies.
 
 For an option, the compiler chooses the discriminator and absent representation
 before calling the hook. The hook receives the normalized presence binding used
@@ -1019,7 +1029,7 @@ Adapter API migration for the logical schema:
   `match_output_fields` matches expressions to selected destination fields.
 - Codecs implement option niche reservation/presence, absent-output preparation,
   niche retirement, path prefixing and conversion validation as needed.
-- `SequenceInput`/`SequenceOutput` retain complete node metadata. Callback variant
+- `SequenceInput<W, S>`/`SequenceOutput<W, S>` return controls separately from metadata. Callback variant
   eligibility and sequence callback signatures belong to the adapters.
 - `staged::emit_call` receives the generated function's parameter names for
   reserving locals; it never derives a parameter list from the logical tree.

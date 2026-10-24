@@ -159,13 +159,7 @@ pub(crate) struct DataCodec {
     // Cache value trees with independently typed parent metadata.
     pub(crate) error_layouts: BTreeMap<
         (String, bool),
-        prebindgen_flat::WireNode<
-            JniWire,
-            crate::JniOptional,
-            crate::JniSequence,
-            JniGroup,
-            crate::JniSelector,
-        >,
+        prebindgen_flat::WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, ()>,
     >,
     pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
     records: BTreeMap<String, Rc<RecordShape>>,
@@ -488,7 +482,7 @@ impl RecordShape {
             crate::JniOptional,
             crate::JniSequence,
             JniGroup,
-            crate::JniSelector,
+            (),
         >,
         root: String,
         condition: String,
@@ -516,7 +510,7 @@ impl Codec for DataCodec {
     type Optional = JniOptional;
     type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = JniSelector;
+    type Alternatives = ();
     fn group_metadata(&self) -> JniGroup {
         JniGroup::Values
     }
@@ -526,14 +520,11 @@ impl Codec for DataCodec {
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
-        controls: Vec<prebindgen_flat::Wire<JniWire>>,
+        controls: &[prebindgen_flat::Wire<JniWire>],
     ) -> Result<JniOptional> {
         JniCodec.optional_metadata(presence, discriminator, niche, controls)
     }
-    fn alternatives_metadata(
-        &self,
-        selector: prebindgen_flat::Wire<JniWire>,
-    ) -> Result<JniSelector> {
+    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<JniWire>) -> Result<()> {
         JniCodec.alternatives_metadata(selector)
     }
     fn field_group(&self, name: syn::Ident) -> JniGroup {
@@ -558,10 +549,10 @@ impl Codec for DataCodec {
             crate::JniOptional,
             crate::JniSequence,
             JniGroup,
-            crate::JniSelector,
+            (),
         >,
         active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<crate::JniSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, crate::JniSequence>> {
         JniCodec.sequence_input(e, w, n, i, element, active)
     }
     fn sequence_output(
@@ -575,10 +566,10 @@ impl Codec for DataCodec {
             crate::JniOptional,
             crate::JniSequence,
             JniGroup,
-            crate::JniSelector,
+            (),
         >,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<crate::JniSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniSequence>> {
         if self.callback_wire.as_ref() == Some(&w) {
             crate::sequence_callback::transport(w, element, values)
         } else {
@@ -595,7 +586,7 @@ impl Codec for DataCodec {
                 crate::JniOptional,
                 crate::JniSequence,
                 JniGroup,
-                crate::JniSelector,
+                (),
             >,
         >,
     > {
@@ -607,13 +598,7 @@ impl Codec for DataCodec {
         mapped: bool,
         _: &(),
     ) -> Result<
-        prebindgen_flat::WireNode<
-            JniWire,
-            crate::JniOptional,
-            crate::JniSequence,
-            JniGroup,
-            crate::JniSelector,
-        >,
+        prebindgen_flat::WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, ()>,
     > {
         self.error_layouts
             .get(&(type_key(ty), mapped))
@@ -927,13 +912,7 @@ impl Shape {
 
 type FieldNode<'a> = (
     &'a syn::Ident,
-    &'a prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        crate::JniSelector,
-    >,
+    &'a prebindgen_flat::WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, ()>,
 );
 fn fields(nodes: &[kotlin::JniNode]) -> Result<Vec<FieldNode<'_>>> {
     nodes
@@ -1036,8 +1015,7 @@ mod group_tests {
 
     fn record(
         root: &str,
-    ) -> WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, crate::JniSelector>
-    {
+    ) -> WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, ()> {
         WireNode::Group {
             metadata: JniGroup::Fields(Some(DataGroup {
                 root: root.into(),
@@ -1050,16 +1028,11 @@ mod group_tests {
     #[test]
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
         let optional = WireNode::Optional {
-            metadata: JniOptional::from_parts(
-                syn::parse_quote!(flag),
-                syn::parse_quote!(flag),
-                None,
-                vec![Wire {
-                    name: syn::parse_quote!(flag),
-                    kind: JniWire::selector(),
-                }],
-            )
-            .unwrap(),
+            controls: vec![Wire {
+                name: syn::parse_quote!(flag),
+                kind: JniWire::selector(),
+            }],
+            metadata: JniOptional::Flag(syn::parse_quote!(flag)),
             element: Box::default(),
         };
         let mut combined = WireNode::Group {

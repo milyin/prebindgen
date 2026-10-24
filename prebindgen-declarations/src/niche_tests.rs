@@ -32,7 +32,6 @@ impl WireKind for Domain {
 #[derive(Clone, Debug, Default)]
 struct DomainGroup {
     description: String,
-    controls: Vec<Wire<Domain>>,
 }
 impl std::ops::Deref for DomainGroup {
     type Target = str;
@@ -45,52 +44,16 @@ impl DomainAbi {
     fn wires(
         node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
     ) -> std::vec::IntoIter<&Wire<Domain>> {
-        fn visit<'a>(
-            node: &'a WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
-            out: &mut Vec<&'a Wire<Domain>>,
-        ) {
-            match node {
-                WireNode::Wire(ws) => out.extend(ws),
-                WireNode::Optional { element, metadata } => {
-                    out.extend(&metadata.controls);
-                    visit(element, out);
-                }
-                WireNode::Group { elements, .. } => {
-                    for child in elements {
-                        visit(child, out);
-                    }
-                }
-                _ => {}
-            }
-        }
-        let mut out = vec![];
-        visit(node, &mut out);
-        out.into_iter()
+        prebindgen_flat::wire_definitions(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
     fn wires_mut(
         node: &mut WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
     ) -> std::vec::IntoIter<&mut Wire<Domain>> {
-        fn visit<'a>(
-            node: &'a mut WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
-            out: &mut Vec<&'a mut Wire<Domain>>,
-        ) {
-            match node {
-                WireNode::Wire(ws) => out.extend(ws),
-                WireNode::Optional { element, metadata } => {
-                    out.extend(&mut metadata.controls);
-                    visit(element, out);
-                }
-                WireNode::Group { elements, .. } => {
-                    for child in elements {
-                        visit(child, out);
-                    }
-                }
-                _ => {}
-            }
-        }
-        let mut out = vec![];
-        visit(node, &mut out);
-        out.into_iter()
+        prebindgen_flat::wire_definitions_mut(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
     fn validate(
         node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
@@ -177,33 +140,29 @@ impl Codec for DomainCodec {
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<Sentinel>,
-        controls: Vec<Wire<Domain>>,
+        _controls: &[Wire<Domain>],
     ) -> Result<DomainGroup> {
         Ok({
             DomainGroup {
                 description: format!("optional:{presence}:{discriminator}:{niche:?}"),
-                controls,
             }
         })
     }
-    fn alternatives_metadata(&self, selector: Wire<Domain>) -> Result<DomainGroup> {
+    fn alternatives_metadata(&self, _selector: &Wire<Domain>) -> Result<DomainGroup> {
         Ok({
             DomainGroup {
                 description: "choice".into(),
-                controls: vec![selector],
             }
         })
     }
     fn field_group(&self, name: syn::Ident) -> DomainGroup {
         DomainGroup {
             description: format!("member:{name}"),
-            controls: vec![],
         }
     }
     fn fields_group(&self) -> DomainGroup {
         DomainGroup {
             description: "record".into(),
-            controls: vec![],
         }
     }
     type Extra = ();
@@ -659,12 +618,14 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     let prebindgen_flat::WireNode::Optional {
         element: outer_element,
         metadata: outer_metadata,
+        controls: outer_controls,
+        ..
     } = &plan.outcomes.success
     else {
         panic!()
     };
     assert!(outer_metadata.starts_with("optional:tag3:"));
-    assert!(outer_metadata.controls.len() == 1);
+    assert!(outer_controls.len() == 1);
     let prebindgen_flat::WireNode::Optional {
         metadata: inner_metadata,
         ..

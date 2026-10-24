@@ -16,11 +16,11 @@ pub use optional::JniNiche;
 mod group;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataGroup};
-pub use group::{JniGroup, JniOptional, JniSelector};
+pub use group::{JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
-pub use sequence::{JniSequence, JniSequenceDelivery};
+pub use sequence::JniSequence;
 mod wire;
 use prebindgen_conversions::Access;
 use prebindgen_declarations::Codec;
@@ -28,21 +28,15 @@ pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
 pub use emission::JniContext;
-type InputPlan<W> = prebindgen_conversions::InputPlan<
-    W,
-    JniContext,
-    JniOptional,
-    crate::JniSequence,
-    JniGroup,
-    crate::JniSelector,
->;
+type InputPlan<W> =
+    prebindgen_conversions::InputPlan<W, JniContext, JniOptional, crate::JniSequence, JniGroup, ()>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<
     W,
     JniContext,
     JniOptional,
     crate::JniSequence,
     JniGroup,
-    crate::JniSelector,
+    (),
 >;
 mod kotlin;
 pub use kotlin::{
@@ -577,7 +571,7 @@ impl Codec for JniCodec {
     type Optional = JniOptional;
     type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = JniSelector;
+    type Alternatives = ();
     fn group_metadata(&self) -> JniGroup {
         JniGroup::Values
     }
@@ -608,15 +602,12 @@ impl Codec for JniCodec {
         presence: syn::Ident,
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
-        controls: Vec<prebindgen_flat::Wire<JniWire>>,
+        controls: &[prebindgen_flat::Wire<JniWire>],
     ) -> Result<JniOptional> {
         JniOptional::from_parts(presence, discriminator, niche, controls)
     }
-    fn alternatives_metadata(
-        &self,
-        selector: prebindgen_flat::Wire<JniWire>,
-    ) -> Result<JniSelector> {
-        JniSelector::try_from(selector)
+    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<JniWire>) -> Result<()> {
+        group::validate_selector(selector)
     }
     fn field_group(&self, name: syn::Ident) -> JniGroup {
         JniGroup::Field(name)
@@ -676,10 +667,10 @@ impl Codec for JniCodec {
             crate::JniOptional,
             crate::JniSequence,
             JniGroup,
-            crate::JniSelector,
+            (),
         >,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<crate::JniSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, crate::JniSequence>> {
         sequence::input(wire, length, index, element, active)
     }
     fn sequence_output(
@@ -693,10 +684,10 @@ impl Codec for JniCodec {
             crate::JniOptional,
             crate::JniSequence,
             JniGroup,
-            crate::JniSelector,
+            (),
         >,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<crate::JniSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniSequence>> {
         sequence::output(wire, length, index, element, values)
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
@@ -1245,7 +1236,7 @@ fn generate(
             kt_args.push("ownership".into());
         }
         if callback {
-            let (_, element) =
+            let (_, element, _) =
                 sequence::return_sequence(&f.output_conversion()?.output_outcomes().success)
                     .ok_or("missing callback sequence")?;
             let fields = crate::group::row_fields(element)

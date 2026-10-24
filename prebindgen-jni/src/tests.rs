@@ -460,12 +460,14 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
             crate::JniOptional,
             crate::JniSequence,
             JniGroup,
-            crate::JniSelector,
+            (),
         >,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
-            WireNode::Optional { element, metadata } => {
+            WireNode::Optional {
+                element, metadata, ..
+            } => {
                 result.push(metadata.niche().cloned());
                 result.extend(reservations(element));
             }
@@ -819,7 +821,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 
     assert_eq!(
         prebindgen_flat::wire_definitions(std::iter::once(success)).count(),
-        1
+        3
     );
 
     assert_eq!(
@@ -849,7 +851,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     );
     assert_eq!(
         prebindgen_flat::wire_definitions([success, error, binding_failure]).count(),
-        4
+        6
     );
     assert_eq!(
         crate::group::result_packet_fields(&output.output_outcomes().success).count(),
@@ -860,7 +862,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         crate::JniOptional,
         crate::JniSequence,
         JniGroup,
-        crate::JniSelector,
+        (),
     >| {
         prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout))
             .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))

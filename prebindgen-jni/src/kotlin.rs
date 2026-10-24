@@ -132,7 +132,7 @@ impl Conversion for JniInput {
     type Optional = JniOptional;
     type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = JniSelector;
+    type Alternatives = ();
     type SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -149,7 +149,7 @@ impl Conversion for JniOutput {
     type Optional = JniOptional;
     type Sequence = JniSequence;
     type Group = JniGroup;
-    type Alternatives = JniSelector;
+    type Alternatives = ();
     type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -274,13 +274,8 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     })
 }
 
-pub(crate) type JniNode = prebindgen_flat::WireNode<
-    JniWire,
-    crate::JniOptional,
-    crate::JniSequence,
-    JniGroup,
-    crate::JniSelector,
->;
+pub(crate) type JniNode =
+    prebindgen_flat::WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, ()>;
 pub(crate) fn leaf_wires(node: &JniNode) -> Vec<&Wire<JniWire>> {
     crate::group::kotlin_result_fields(node).collect()
 }
@@ -299,19 +294,28 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
 pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
     match node {
         JniNode::Wire(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
-        JniNode::Alternatives { elements, metadata } => {
-            let mut out = input_leaves(&[metadata.carrier()], context)?;
+        JniNode::Alternatives {
+            elements, controls, ..
+        } => {
+            let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context)?;
             for arm in elements {
                 merge_input(&mut out, input_kotlin(arm, context)?);
             }
             Ok(out)
         }
-        JniNode::Sequence { element, metadata } => {
-            crate::sequence::input_list(metadata, element, context)
+        JniNode::Sequence {
+            controls,
+            element,
+            metadata,
+        } => {
+            let [carrier] = controls.as_slice() else {
+                return Err("sequence requires one carrier control".into());
+            };
+            crate::sequence::input_list(carrier, metadata, element, context)
         }
-        JniNode::Optional { element, metadata } => {
-            optional::input_kotlin(element, metadata, context)
-        }
+        JniNode::Optional {
+            element, metadata, ..
+        } => optional::input_kotlin(element, metadata, context),
         JniNode::Group { elements, metadata } => match metadata {
             JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context),
             _ => input_components(elements, context),
@@ -363,15 +367,17 @@ pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resu
         JniNode::Alternatives { .. } => {
             Err("native alternatives are input-only in the JNI adapter".into())
         }
-        JniNode::Sequence { element, metadata } => match metadata.delivery() {
-            JniSequenceDelivery::Buffered => crate::sequence::output_list(element, context),
-            JniSequenceDelivery::Callback => {
+        JniNode::Sequence {
+            element, metadata, ..
+        } => match metadata {
+            JniSequence::Buffered => crate::sequence::output_list(element, context),
+            JniSequence::Callback => {
                 Err("callback sequence requires function-level callback delivery".into())
             }
         },
-        JniNode::Optional { element, metadata } => {
-            optional::output_kotlin(element, metadata, context)
-        }
+        JniNode::Optional {
+            element, metadata, ..
+        } => optional::output_kotlin(element, metadata, context),
         JniNode::Group { elements, metadata } => match metadata {
             JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context),
             _ => output_components(elements, context),

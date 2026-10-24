@@ -234,6 +234,7 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
     }
     let schema = crate::Outcomes {
         success: crate::WireNode::Sequence {
+            controls: vec![],
             element: Box::new(crate::WireNode::Wire(
                 ["x", "y"]
                     .into_iter()

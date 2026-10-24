@@ -3,7 +3,7 @@ use prebindgen_flat::InputConversion;
 #[derive(Clone, Debug)]
 enum TestGroup {
     Values,
-    Maybe(Vec<Wire<TestWire>>),
+    Maybe,
     Record,
     Member(syn::Ident),
 }
@@ -24,25 +24,25 @@ impl TestAbi {
             out: &mut Vec<&'a mut Wire<TestWire>>,
         ) {
             match node {
-                WireNode::Wire(wires) => out.extend(wires),
+                WireNode::Wire(w) => out.extend(w),
                 WireNode::Group { elements, .. } => {
-                    for child in elements {
-                        visit(child, out);
+                    for n in elements {
+                        visit(n, out);
                     }
                 }
-                WireNode::Optional { element, metadata } => {
-                    if let TestGroup::Maybe(ws) = metadata {
-                        out.extend(ws);
-                    }
+                WireNode::Optional {
+                    controls, element, ..
+                } => {
+                    out.extend(controls);
                     visit(element, out);
                 }
-                WireNode::Sequence { .. } => {}
-                WireNode::Alternatives { elements, metadata } => {
-                    if let TestGroup::Maybe(ws) = metadata {
-                        out.extend(ws);
-                    }
-                    for child in elements {
-                        visit(child, out);
+                WireNode::Sequence { controls, .. } => out.extend(controls),
+                WireNode::Alternatives {
+                    controls, elements, ..
+                } => {
+                    out.extend(controls);
+                    for n in elements {
+                        visit(n, out);
                     }
                 }
             }
@@ -66,34 +66,36 @@ fn test_read<'a>(
     elements: bool,
 ) {
     match node {
-        WireNode::Wire(wires) => out.extend(wires),
+        WireNode::Wire(w) => out.extend(w),
         WireNode::Group {
             elements: children, ..
         } => {
-            for child in children {
-                test_read(child, out, elements);
+            for n in children {
+                test_read(n, out, elements);
             }
         }
-        WireNode::Optional { element, metadata } => {
-            if let TestGroup::Maybe(ws) = metadata {
-                out.extend(ws);
-            }
+        WireNode::Optional {
+            controls, element, ..
+        } => {
+            out.extend(controls);
             test_read(element, out, elements);
         }
-        WireNode::Sequence { element, .. } => {
+        WireNode::Sequence {
+            controls, element, ..
+        } => {
+            out.extend(controls);
             if elements {
                 test_read(element, out, elements);
             }
         }
         WireNode::Alternatives {
+            controls,
             elements: children,
-            metadata,
+            ..
         } => {
-            if let TestGroup::Maybe(ws) = metadata {
-                out.extend(ws);
-            }
-            for child in children {
-                test_read(child, out, elements);
+            out.extend(controls);
+            for n in children {
+                test_read(n, out, elements);
             }
         }
     }
@@ -147,8 +149,9 @@ impl Codec for TestCodec {
     ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>>> {
         Ok(
             (extra.name == "malformed_binding_failure").then(|| WireNode::Alternatives {
+                controls: vec![],
                 elements: vec![],
-                metadata: TestGroup::Maybe(vec![]),
+                metadata: TestGroup::Maybe,
             }),
         )
     }
@@ -249,7 +252,7 @@ impl Codec for TestCodec {
         _: syn::Ident,
         _: syn::Ident,
         _: Option<()>,
-        controls: Vec<Wire<TestWire>>,
+        controls: &[Wire<TestWire>],
     ) -> Result<TestGroup> {
         if controls
             .iter()
@@ -257,14 +260,14 @@ impl Codec for TestCodec {
         {
             return Err("optional metadata rejected".into());
         }
-        Ok(TestGroup::Maybe(controls))
+        Ok(TestGroup::Maybe)
     }
 
-    fn alternatives_metadata(&self, selector: Wire<TestWire>) -> Result<TestGroup> {
+    fn alternatives_metadata(&self, selector: &Wire<TestWire>) -> Result<TestGroup> {
         if selector.kind.name == "reject_alternative_metadata" {
             return Err("alternative metadata rejected".into());
         }
-        Ok(TestGroup::Maybe(vec![selector]))
+        Ok(TestGroup::Maybe)
     }
     fn field_group(&self, name: syn::Ident) -> TestGroup {
         TestGroup::Member(name)
@@ -1015,13 +1018,13 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             _: syn::Ident,
             _: syn::Ident,
             _: Option<()>,
-            controls: Vec<Wire<TestWire>>,
+            _controls: &[Wire<TestWire>],
         ) -> Result<TestGroup> {
-            Ok(TestGroup::Maybe(controls))
+            Ok(TestGroup::Maybe)
         }
 
-        fn alternatives_metadata(&self, selector: Wire<TestWire>) -> Result<TestGroup> {
-            Ok(TestGroup::Maybe(vec![selector]))
+        fn alternatives_metadata(&self, _selector: &Wire<TestWire>) -> Result<TestGroup> {
+            Ok(TestGroup::Maybe)
         }
         fn field_group(&self, name: syn::Ident) -> TestGroup {
             TestGroup::Member(name)
@@ -1729,7 +1732,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         prebindgen_flat::validate_wire_nodes(std::iter::once(layout)).unwrap();
         assert_eq!(
             prebindgen_flat::wire_definitions(std::iter::once(layout)).count(),
-            3
+            4
         );
         assert_eq!(TestAbi::wires(layout).len(), 4);
         let WireNode::Group {
@@ -1968,7 +1971,7 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
 }
 
 #[test]
-fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
+fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
     use prebindgen_flat::WireNode;
     let mut model = parse("pub struct Item {} pub fn empty()->Item{} pub fn numbered(n:i32)->Item{} pub fn take(v:Item){}");
     bind_input(
@@ -1986,6 +1989,7 @@ fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
     let input = model.function("take").unwrap().input_conversions().unwrap()[0];
     let WireNode::Alternatives {
         elements: alternatives,
+        controls,
         ..
     } = input.input_node()
     else {
@@ -2001,15 +2005,17 @@ fn selector_schema_contains_mutually_exclusive_payloads_without_a_tag() {
     );
     assert_eq!(
         prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).count(),
-        1
+        2
     );
     assert_eq!(TestAbi::wires(&input.node).len(), 2);
-    assert!(
-        TestAbi::wires(&input.node).next().unwrap().name
-            != prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
-                .next()
-                .expect("logical wire index out of range")
-                .name
+    assert_eq!(controls.len(), 1);
+    assert!(matches!(controls[0].kind.kind, Kind::Selector));
+    assert_eq!(
+        TestAbi::wires(&input.node).next().unwrap().name,
+        prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+            .next()
+            .unwrap()
+            .name
     );
 }
 
