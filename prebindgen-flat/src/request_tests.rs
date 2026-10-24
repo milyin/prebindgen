@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 struct Input {
-    nodes: Vec<crate::WireNode<syn::Type>>,
+    node: crate::WireNode<syn::Type>,
 }
 enum Read<'a> {
     Decode { bias: &'a i32 },
@@ -16,18 +16,18 @@ enum InputWire {
 }
 impl Conversion for Input {
     type Wire = syn::Type;
+    type Optional = ();
+    type Sequence = ();
     type Group = ();
+    type Alternatives = ();
     type SlotFragment<'a> = Read<'a>;
-    fn wire_nodes(&self) -> &[crate::WireNode<syn::Type>] {
-        &self.nodes
-    }
     fn code_fragment_slot(&self, mode: Read<'_>, expected: &syn::Type) -> Result<TokenStream> {
         match mode {
             Read::Decode { bias } => {
                 if !same_type(expected, &syn::parse_quote!(i32)) {
                     return Err("expected i32".into());
                 }
-                let wire = &crate::wire_definitions(self.nodes.iter())
+                let wire = &crate::wire_definitions(std::iter::once(&self.node))
                     .next()
                     .expect("logical wire index out of range")
                     .name;
@@ -49,7 +49,7 @@ impl Input {
         mode: InputWire,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        let wire = crate::wire_definitions(self.nodes.iter())
+        let wire = crate::wire_definitions(std::iter::once(&self.node))
             .nth(pos)
             .ok_or("wire out of range")?;
         match mode {
@@ -70,16 +70,16 @@ impl Input {
     }
 }
 struct Output {
-    nodes: Vec<crate::WireNode<syn::Type>>,
+    outcomes: crate::Outcomes<crate::WireNode<syn::Type>>,
 }
 impl Conversion for Output {
     type Wire = syn::Type;
+    type Optional = ();
+    type Sequence = ();
     type Group = ();
+    type Alternatives = ();
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;
-    fn wire_nodes(&self) -> &[crate::WireNode<syn::Type>] {
-        &self.nodes
-    }
     fn code_fragment_slot(&self, source: &syn::Ident, expected: &syn::Type) -> Result<TokenStream> {
         if !same_type(expected, &syn::parse_quote!(i64)) {
             return Err("expected i64".into());
@@ -94,7 +94,7 @@ impl Output {
         source: &syn::Ident,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
-        crate::wire_definitions(self.nodes.iter())
+        crate::wire_definitions(std::iter::once(&self.outcomes.success))
             .nth(pos)
             .ok_or("wire out of range")?;
         self.code_fragment_slot(source, expected)
@@ -104,16 +104,20 @@ impl Output {
 #[test]
 fn independent_protocols_compose_into_compilable_expressions() {
     let input = Input {
-        nodes: vec![crate::WireNode::Wire(Wire {
+        node: crate::WireNode::Wire(vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(u8),
-        })],
+        }]),
     };
     let output = Output {
-        nodes: vec![crate::WireNode::Wire(Wire {
-            name: syn::parse_quote!(out),
-            kind: syn::parse_quote!(i64),
-        })],
+        outcomes: Outcomes {
+            success: crate::WireNode::Wire(vec![Wire {
+                name: syn::parse_quote!(out),
+                kind: syn::parse_quote!(i64),
+            }]),
+            source_error: None,
+            binding_failure: None,
+        },
     };
     let decoded = syn::parse_quote!(decoded);
     let bias = 7;
@@ -203,15 +207,15 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
         },
     }
     struct Sequence {
-        schema: Vec<crate::WireNode<syn::Type>>,
+        schema: crate::Outcomes<crate::WireNode<syn::Type>>,
     }
     impl Conversion for Sequence {
         type Wire = syn::Type;
+        type Optional = ();
+        type Sequence = ();
         type Group = ();
+        type Alternatives = ();
         type SlotFragment<'a> = Delivery<'a>;
-        fn wire_nodes(&self) -> &[crate::WireNode<syn::Type>] {
-            &self.schema
-        }
         fn code_fragment_slot(&self, mode: Delivery<'_>, _: &syn::Type) -> Result<TokenStream> {
             Ok(match mode {
                 Delivery::Pack(source) => {
@@ -223,21 +227,30 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
             })
         }
     }
-    let mut schema: Vec<crate::WireNode<syn::Type>> = ["x", "y"]
-        .into_iter()
-        .map(|name| Wire {
-            name: syn::parse_str(name).unwrap(),
-            kind: syn::parse_quote!(i64),
-        })
-        .map(crate::WireNode::Wire)
-        .collect::<Vec<_>>();
-    schema = vec![crate::WireNode::Sequence {
-        metadata: None,
-        element: std::mem::take(&mut schema),
-    }];
+    impl OutputConversion for Sequence {
+        fn output_outcomes(&self) -> &crate::Outcomes<crate::WireNode<syn::Type>> {
+            &self.schema
+        }
+    }
+    let schema = crate::Outcomes {
+        success: crate::WireNode::Sequence {
+            element: Box::new(crate::WireNode::Wire(
+                ["x", "y"]
+                    .into_iter()
+                    .map(|name| Wire {
+                        name: syn::parse_str(name).unwrap(),
+                        kind: syn::parse_quote!(i64),
+                    })
+                    .collect(),
+            )),
+            metadata: (),
+        },
+        source_error: None,
+        binding_failure: None,
+    };
     let conversion = Sequence { schema };
     assert_eq!(
-        crate::wire_definitions(conversion.wire_nodes().iter()).count(),
+        crate::wire_definitions(std::iter::once(&conversion.output_outcomes().success)).count(),
         2
     );
     let source = syn::parse_quote!(values);
@@ -286,4 +299,15 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
         .status()
         .unwrap()
         .success());
+}
+
+impl InputConversion for Input {
+    fn input_node(&self) -> &crate::WireNode<syn::Type> {
+        &self.node
+    }
+}
+impl OutputConversion for Output {
+    fn output_outcomes(&self) -> &crate::Outcomes<crate::WireNode<syn::Type>> {
+        &self.outcomes
+    }
 }

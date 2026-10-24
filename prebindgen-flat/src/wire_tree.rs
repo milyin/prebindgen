@@ -1,254 +1,228 @@
 //! Logical values exchanged by a conversion; transport belongs to its generator.
 use crate::{Result, Wire, WireKind};
 
-/// Logical structure. Common nodes impose no ABI positions or delivery rules;
-/// adapters may retain explicit encoding decisions in their opaque metadata.
+/// Logical structure of one value. Each node kind has its own metadata type;
+/// adapters choose that metadata and interpret it when emitting bindings.
+///
+/// Metadata belongs to its specific parent variant:
+///
+/// ```compile_fail,E0308
+/// use prebindgen_flat::WireNode;
+/// struct OptionalInfo;
+/// struct SequenceInfo;
+/// let node: WireNode<syn::Type, OptionalInfo, SequenceInfo> = WireNode::Optional {
+///     element: Box::new(WireNode::default()), metadata: SequenceInfo,
+/// };
+/// ```
+/// Output completion channels cannot be nested in a value tree:
+///
+/// ```compile_fail,E0308
+/// use prebindgen_flat::{Outcomes, WireNode};
+/// let node: WireNode<syn::Type> = WireNode::Sequence {
+///     element: Box::new(Outcomes { success: WireNode::<syn::Type>::default(),
+///         source_error: None, binding_failure: None }), metadata: (),
+/// };
+/// ```
 #[derive(Clone, Debug)]
-pub enum WireNode<W: WireKind, G = ()> {
-    /// Definition of one typed value, wherever the generator chooses to pass it.
-    Wire(Wire<W>),
-    /// Zero or one occurrence of the element schema.
+pub enum WireNode<W: WireKind, O = (), S = (), G = (), A = ()> {
+    /// A terminal bundle of independent values. An empty bundle carries no values.
+    Wire(Vec<Wire<W>>),
+    /// Zero or one occurrence of the payload node.
     Optional {
-        /// Definition of one present payload.
-        element: Vec<WireNode<W, G>>,
-        /// Adapter-specific information about optional encoding.
-        metadata: Option<G>,
+        /// Description of one present payload.
+        element: Box<WireNode<W, O, S, G, A>>,
+        /// Adapter-specific information for this optional value.
+        metadata: O,
     },
-    /// Zero or more occurrences of the element schema.
+    /// Zero or more occurrences of the element node.
     Sequence {
-        /// Definition of one sequence element.
-        element: Vec<WireNode<W, G>>,
-        /// Adapter-specific information about sequence encoding.
-        metadata: Option<G>,
+        /// Description of one sequence element.
+        element: Box<WireNode<W, O, S, G, A>>,
+        /// Adapter-specific information for this sequence.
+        metadata: S,
     },
-    /// Adapter-described relationships, such as records and named fields.
+    /// Related child values, such as fields or ordered conversion components.
     Group {
-        /// Adapter-specific information about the children.
+        /// Child descriptions in declaration order; may be empty.
+        elements: Vec<WireNode<W, O, S, G, A>>,
+        /// Adapter-specific information about this group.
         metadata: G,
-        /// Logical child definitions in declared order.
-        children: Vec<WireNode<W, G>>,
     },
-    /// Exactly one alternative is selected; selector tags belong to the generator.
-    /// Empty alternatives represent choices carrying no values.
+    /// Exactly one complete alternative is selected. A payload-free choice uses
+    /// an empty bundle or group. At least one alternative must be declared.
     Alternatives {
-        /// Adapter-specific selection information, without common placement rules.
-        metadata: Option<G>,
-        /// Mutually exclusive payload schemas in declaration order.
-        alternatives: Vec<Vec<WireNode<W, G>>>,
-    },
-    /// One of the declared completion channels is selected. Success is always
-    /// declared; each error channel is independently optional. Empty payloads retain
-    /// their outcome identity; Result<(), E> is distinct from an ordinary unit return.
-    Outcomes {
-        /// Values delivered on successful completion; empty for a unit result.
-        success: Vec<WireNode<W, G>>,
-        /// Projected source error, present when this conversion routes `Err(E)`.
-        /// `Some(vec![])` declares a payload-free error; `None` omits the channel.
-        source_error: Option<Vec<WireNode<W, G>>>,
-        /// Conversion or invocation failure, independent of a source `Err(E)`.
-        /// `Some(vec![])` declares a payload-free failure; `None` omits the channel.
-        binding_failure: Option<Vec<WireNode<W, G>>>,
+        /// Mutually exclusive descriptions in declaration order.
+        elements: Vec<WireNode<W, O, S, G, A>>,
+        /// Adapter-specific information for selecting an alternative.
+        metadata: A,
     },
 }
+impl<W: WireKind, O, S, G, A> Default for WireNode<W, O, S, G, A> {
+    fn default() -> Self {
+        Self::Wire(vec![])
+    }
+}
 
-/// Visit logical wire definitions recursively. Each element/alternative schema
-/// is visited once, including every outcome. Metadata is left to the adapter.
-/// Accepts node iterators, including filtered or chained roots; vector iteration
-/// itself always means immediate nodes.
-pub fn wire_definitions<'a, W: WireKind + 'a, G: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, G>>,
+/// Completion channels of an output conversion. These surround value trees;
+/// they cannot appear inside an optional, sequence, group or alternative.
+#[derive(Clone, Debug)]
+pub struct Outcomes<N> {
+    /// Description delivered on successful completion, including unit.
+    pub success: N,
+    /// Projected `Err(E)`. `Some` with an empty bundle or group is a payload-free error.
+    pub source_error: Option<N>,
+    /// Conversion or invocation failure, separate from the source's `Err(E)`.
+    pub binding_failure: Option<N>,
+}
+impl<N: Default> Default for Outcomes<N> {
+    fn default() -> Self {
+        Self {
+            success: N::default(),
+            source_error: None,
+            binding_failure: None,
+        }
+    }
+}
+
+/// Visit each logical wire definition once. Repetitions are not expanded;
+/// adapter metadata is opaque. Roots may be filtered or chained explicitly.
+pub fn wire_definitions<'a, W: WireKind + 'a, O: 'a, S: 'a, G: 'a, A: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, O, S, G, A>>,
 ) -> impl std::iter::FusedIterator<Item = &'a Wire<W>> {
-    WireDefinitions {
-        roots: nodes.into_iter().fuse(),
-        stack: vec![],
+    enum Frame<'a, W: WireKind, O, S, G, A> {
+        Nodes(std::slice::Iter<'a, WireNode<W, O, S, G, A>>),
+        Wires(std::slice::Iter<'a, Wire<W>>),
     }
-}
-struct WireDefinitions<'a, W: WireKind, G, I> {
-    roots: I,
-    stack: Vec<std::slice::Iter<'a, WireNode<W, G>>>,
-}
-impl<'a, W: WireKind, G, I: Iterator<Item = &'a WireNode<W, G>>> Iterator
-    for WireDefinitions<'a, W, G, I>
-{
-    type Item = &'a Wire<W>;
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let node = if let Some(children) = self.stack.last_mut() {
-                if let Some(node) = children.next() {
+    let mut roots = nodes.into_iter().fuse();
+    let mut stack: Vec<Frame<'a, W, O, S, G, A>> = vec![];
+    std::iter::from_fn(move || loop {
+        let node = match stack.last_mut() {
+            Some(Frame::Wires(wires)) => {
+                if let Some(wire) = wires.next() {
+                    return Some(wire);
+                }
+                stack.pop();
+                continue;
+            }
+            Some(Frame::Nodes(nodes)) => {
+                if let Some(node) = nodes.next() {
                     node
                 } else {
-                    self.stack.pop();
+                    stack.pop();
                     continue;
                 }
-            } else {
-                self.roots.next()?
-            };
-            match node {
-                WireNode::Wire(w) => return Some(w),
-                WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
-                    self.stack.push(element.iter())
-                }
-                WireNode::Group { children, .. } => self.stack.push(children.iter()),
-                WireNode::Alternatives { alternatives, .. } => {
-                    for arm in alternatives.iter().rev() {
-                        self.stack.push(arm.iter());
-                    }
-                }
-                WireNode::Outcomes {
-                    success,
-                    source_error,
-                    binding_failure,
-                } => {
-                    if let Some(nodes) = binding_failure {
-                        self.stack.push(nodes.iter());
-                    }
-                    if let Some(nodes) = source_error {
-                        self.stack.push(nodes.iter());
-                    }
-                    self.stack.push(success.iter());
-                }
+            }
+            None => roots.next()?,
+        };
+        match node {
+            WireNode::Wire(wires) => stack.push(Frame::Wires(wires.iter())),
+            WireNode::Optional { element, .. } => {
+                stack.push(Frame::Nodes(std::slice::from_ref(element.as_ref()).iter()))
+            }
+            WireNode::Sequence { element, .. } => {
+                stack.push(Frame::Nodes(std::slice::from_ref(element.as_ref()).iter()))
+            }
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                stack.push(Frame::Nodes(elements.iter()))
             }
         }
-    }
-}
-impl<'a, W: WireKind, G, I: std::iter::FusedIterator<Item = &'a WireNode<W, G>>>
-    std::iter::FusedIterator for WireDefinitions<'a, W, G, I>
-{
+    })
+    .fuse()
 }
 
-/// Edit logical wire definitions recursively, including element and outcome
-/// schemas. Node structure and adapter metadata are unchanged by traversal.
-pub fn wire_definitions_mut<'a, W: WireKind + 'a, G: 'a>(
-    nodes: impl IntoIterator<Item = &'a mut WireNode<W, G>>,
+/// Mutate logical wire definitions without cloning metadata or changing nodes.
+pub fn wire_definitions_mut<'a, W: WireKind + 'a, O: 'a, S: 'a, G: 'a, A: 'a>(
+    nodes: impl IntoIterator<Item = &'a mut WireNode<W, O, S, G, A>>,
 ) -> impl std::iter::FusedIterator<Item = &'a mut Wire<W>> {
-    WireDefinitionsMut {
-        roots: nodes.into_iter().fuse(),
-        stack: vec![],
+    enum Frame<'a, W: WireKind, O, S, G, A> {
+        Nodes(std::slice::IterMut<'a, WireNode<W, O, S, G, A>>),
+        Wires(std::slice::IterMut<'a, Wire<W>>),
     }
-}
-struct WireDefinitionsMut<'a, W: WireKind, G, I> {
-    roots: I,
-    stack: Vec<std::slice::IterMut<'a, WireNode<W, G>>>,
-}
-impl<'a, W: WireKind, G, I: Iterator<Item = &'a mut WireNode<W, G>>> Iterator
-    for WireDefinitionsMut<'a, W, G, I>
-{
-    type Item = &'a mut Wire<W>;
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let node = if let Some(children) = self.stack.last_mut() {
-                if let Some(node) = children.next() {
+    let mut roots = nodes.into_iter().fuse();
+    let mut stack: Vec<Frame<'a, W, O, S, G, A>> = vec![];
+    std::iter::from_fn(move || loop {
+        let node = match stack.last_mut() {
+            Some(Frame::Wires(wires)) => {
+                if let Some(wire) = wires.next() {
+                    return Some(wire);
+                }
+                stack.pop();
+                continue;
+            }
+            Some(Frame::Nodes(nodes)) => {
+                if let Some(node) = nodes.next() {
                     node
                 } else {
-                    self.stack.pop();
+                    stack.pop();
                     continue;
                 }
-            } else {
-                self.roots.next()?
-            };
-            match node {
-                WireNode::Wire(w) => return Some(w),
-                WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
-                    self.stack.push(element.iter_mut())
-                }
-                WireNode::Group { children, .. } => self.stack.push(children.iter_mut()),
-                WireNode::Alternatives { alternatives, .. } => {
-                    for arm in alternatives.iter_mut().rev() {
-                        self.stack.push(arm.iter_mut());
-                    }
-                }
-                WireNode::Outcomes {
-                    success,
-                    source_error,
-                    binding_failure,
-                } => {
-                    if let Some(nodes) = binding_failure {
-                        self.stack.push(nodes.iter_mut());
-                    }
-                    if let Some(nodes) = source_error {
-                        self.stack.push(nodes.iter_mut());
-                    }
-                    self.stack.push(success.iter_mut());
-                }
+            }
+            None => roots.next()?,
+        };
+        match node {
+            WireNode::Wire(wires) => stack.push(Frame::Wires(wires.iter_mut())),
+            WireNode::Optional { element, .. } => stack.push(Frame::Nodes(
+                std::slice::from_mut(element.as_mut()).iter_mut(),
+            )),
+            WireNode::Sequence { element, .. } => stack.push(Frame::Nodes(
+                std::slice::from_mut(element.as_mut()).iter_mut(),
+            )),
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                stack.push(Frame::Nodes(elements.iter_mut()))
             }
         }
-    }
-}
-impl<'a, W: WireKind, G, I: std::iter::FusedIterator<Item = &'a mut WireNode<W, G>>>
-    std::iter::FusedIterator for WireDefinitionsMut<'a, W, G, I>
-{
+    })
+    .fuse()
 }
 
-/// Address of a definition relative to the supplied roots. Includes element and
-/// alternative boundaries. Outcome branch positions are fixed: 0 for success,
-/// 1 for source error and 2 for binding failure, including when a channel is absent.
-/// Rebuild paths after structural edits or choosing different root iterators.
+/// Address relative to the selected roots. The first component selects a root;
+/// following components select a child or a terminal wire within its bundle.
+/// Optional/sequence payloads use child position zero. Outcomes are not part of
+/// a value path: choose the completion channel before traversing its tree.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WirePath(pub Vec<usize>);
-/// A logical definition with its structural address.
+/// A borrowed wire definition and its address within the selected trees.
 pub struct WireEntry<'a, W: WireKind> {
-    /// Address relative to the supplied roots.
+    /// Structural address, rebuilt after edits or changing the selected roots.
     pub path: WirePath,
-    /// Borrowed leaf definition.
+    /// Borrowed terminal value.
     pub wire: &'a Wire<W>,
 }
-/// Visit logical wire definitions with structural paths. Paths are relative to
-/// this root iterator, so filtering roots also changes their root indices.
-pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, G: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, G>>,
+/// Visit wire definitions with paths, including their terminal bundle positions.
+pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, O: 'a, S: 'a, G: 'a, A: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, O, S, G, A>>,
 ) -> impl std::iter::FusedIterator<Item = WireEntry<'a, W>> {
-    fn visit<'a, W: WireKind, G>(
-        node: &'a WireNode<W, G>,
+    fn visit<'a, W: WireKind, O, S, G, A>(
+        node: &'a WireNode<W, O, S, G, A>,
         path: &mut Vec<usize>,
         out: &mut Vec<WireEntry<'a, W>>,
     ) {
-        fn children<'a, W: WireKind, G>(
-            nodes: &'a [WireNode<W, G>],
-            path: &mut Vec<usize>,
-            out: &mut Vec<WireEntry<'a, W>>,
-        ) {
-            for (i, node) in nodes.iter().enumerate() {
-                path.push(i);
-                visit(node, path, out);
-                path.pop();
-            }
-        }
         match node {
-            WireNode::Wire(wire) => out.push(WireEntry {
-                path: WirePath(path.clone()),
-                wire,
-            }),
-            WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
-                children(element, path, out)
-            }
-            WireNode::Group {
-                children: nodes, ..
-            } => children(nodes, path, out),
-            WireNode::Alternatives { alternatives, .. } => {
-                for (i, arm) in alternatives.iter().enumerate() {
+            WireNode::Wire(wires) => {
+                for (i, wire) in wires.iter().enumerate() {
                     path.push(i);
-                    children(arm, path, out);
+                    out.push(WireEntry {
+                        path: WirePath(path.clone()),
+                        wire,
+                    });
                     path.pop();
                 }
             }
-            WireNode::Outcomes {
-                success,
-                source_error,
-                binding_failure,
-            } => {
-                for (branch, nodes) in [
-                    Some(success.as_slice()),
-                    source_error.as_deref(),
-                    binding_failure.as_deref(),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if let Some(nodes) = nodes {
-                        path.push(branch);
-                        children(nodes, path, out);
-                        path.pop();
-                    }
+            WireNode::Optional { element, .. } => {
+                path.push(0);
+                visit(element, path, out);
+                path.pop();
+            }
+            WireNode::Sequence { element, .. } => {
+                path.push(0);
+                visit(element, path, out);
+                path.pop();
+            }
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                for (i, child) in elements.iter().enumerate() {
+                    path.push(i);
+                    visit(child, path, out);
+                    path.pop();
                 }
             }
         }
@@ -259,98 +233,68 @@ pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, G: 'a>(
     }
     out.into_iter()
 }
-/// Resolve a definition by a path produced for the same root selection.
-pub fn wire_at_path<'a, W: WireKind + 'a, G: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, G>>,
+/// Resolve a path produced for the same roots and selected completion channel.
+pub fn wire_at_path<'a, W: WireKind + 'a, O: 'a, S: 'a, G: 'a, A: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, O, S, G, A>>,
     path: &WirePath,
 ) -> Option<&'a Wire<W>> {
-    fn get<'a, W: WireKind, G>(node: &'a WireNode<W, G>, rest: &[usize]) -> Option<&'a Wire<W>> {
-        fn child<'a, W: WireKind, G>(
-            nodes: &'a [WireNode<W, G>],
-            path: &[usize],
-        ) -> Option<&'a Wire<W>> {
-            let (&index, rest) = path.split_first()?;
-            get(nodes.get(index)?, rest)
-        }
+    fn get<'a, W: WireKind, O, S, G, A>(
+        node: &'a WireNode<W, O, S, G, A>,
+        path: &[usize],
+    ) -> Option<&'a Wire<W>> {
+        let (&index, rest) = path.split_first()?;
         match node {
-            WireNode::Wire(w) => rest.is_empty().then_some(w),
-            WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
-                child(element, rest)
+            WireNode::Wire(wires) => rest.is_empty().then(|| wires.get(index)).flatten(),
+            WireNode::Optional { element, .. } => {
+                if index == 0 {
+                    get(element, rest)
+                } else {
+                    None
+                }
             }
-            WireNode::Group { children, .. } => child(children, rest),
-            WireNode::Alternatives { alternatives, .. } => {
-                let (&arm, rest) = rest.split_first()?;
-                child(alternatives.get(arm)?, rest)
+            WireNode::Sequence { element, .. } => {
+                if index == 0 {
+                    get(element, rest)
+                } else {
+                    None
+                }
             }
-            WireNode::Outcomes {
-                success,
-                source_error,
-                binding_failure,
-            } => {
-                let (&branch, rest) = rest.split_first()?;
-                let nodes = match branch {
-                    0 => success.as_slice(),
-                    1 => source_error.as_deref()?,
-                    2 => binding_failure.as_deref()?,
-                    _ => return None,
-                };
-                child(nodes, rest)
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                get(elements.get(index)?, rest)
             }
         }
     }
-    let (&index, rest) = path.0.split_first()?;
-    get(nodes.into_iter().nth(index)?, rest)
+    let (&root, rest) = path.0.split_first()?;
+    get(nodes.into_iter().nth(root)?, rest)
 }
-/// Check logical branch structure. An `Outcomes` node must be the sole root;
-/// its payloads cannot contain further `Outcomes` nodes. Named fields guarantee
-/// a success schema and at most one schema for each error channel. Names may
-/// repeat across contexts.
-pub fn validate_wire_nodes<'a, W: WireKind + 'a, G: 'a>(
-    nodes: impl IntoIterator<Item = &'a WireNode<W, G>>,
+/// Validate structural requirements independent of adapter metadata.
+pub fn validate_wire_nodes<'a, W: WireKind + 'a, O: 'a, S: 'a, G: 'a, A: 'a>(
+    nodes: impl IntoIterator<Item = &'a WireNode<W, O, S, G, A>>,
 ) -> Result<()> {
-    fn check<W: WireKind, G>(node: &WireNode<W, G>, allow_outcomes: bool) -> Result<()> {
-        fn nested<W: WireKind, G>(nodes: &[WireNode<W, G>]) -> Result<()> {
-            for node in nodes {
-                check(node, false)?;
-            }
-            Ok(())
-        }
+    fn check<W: WireKind, O, S, G, A>(node: &WireNode<W, O, S, G, A>) -> Result<()> {
         match node {
-            WireNode::Wire(_) => {}
-            WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
-                nested(element)?
+            WireNode::Wire(_) => Ok(()),
+            WireNode::Optional { element, .. } => check(element),
+            WireNode::Sequence { element, .. } => check(element),
+            WireNode::Group { elements, .. } => {
+                for child in elements {
+                    check(child)?;
+                }
+                Ok(())
             }
-            WireNode::Group { children, .. } => nested(children)?,
-            WireNode::Alternatives { alternatives, .. } => {
-                if alternatives.is_empty() {
+            WireNode::Alternatives { elements, .. } => {
+                if elements.is_empty() {
                     return Err("selection has no alternatives".into());
                 }
-                for arm in alternatives {
-                    nested(arm)?;
+                for child in elements {
+                    check(child)?;
                 }
-            }
-            WireNode::Outcomes {
-                success,
-                source_error,
-                binding_failure,
-            } => {
-                if !allow_outcomes {
-                    return Err("outcomes must be the sole root node".into());
-                }
-                nested(success)?;
-                if let Some(nodes) = source_error {
-                    nested(nodes)?;
-                }
-                if let Some(nodes) = binding_failure {
-                    nested(nodes)?;
-                }
+                Ok(())
             }
         }
-        Ok(())
     }
-    let mut roots = nodes.into_iter().enumerate().peekable();
-    while let Some((i, node)) = roots.next() {
-        check(node, i == 0 && roots.peek().is_none())?;
+    for node in nodes {
+        check(node)?;
     }
     Ok(())
 }
@@ -358,78 +302,62 @@ pub fn validate_wire_nodes<'a, W: WireKind + 'a, G: 'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn leaf(name: &str) -> WireNode<syn::Type> {
-        WireNode::Wire(Wire {
+    fn wire(name: &str) -> Wire<syn::Type> {
+        Wire {
             name: syn::parse_str(name).unwrap(),
             kind: syn::parse_quote!(i64),
-        })
+        }
+    }
+    fn leaf(name: &str) -> WireNode<syn::Type> {
+        WireNode::Wire(vec![wire(name)])
     }
     #[test]
-    fn vector_iteration_and_indexing_access_immediate_nodes() {
-        let mut nodes = vec![WireNode::Group {
-            metadata: (),
-            children: vec![leaf("first"), leaf("second")],
-        }];
-        assert_eq!(nodes.len(), 1);
-        assert!(matches!(nodes[0], WireNode::Group { .. }));
+    fn terminal_bundles_preserve_zero_one_and_multiple_values() {
+        let nodes = [
+            WireNode::Wire(vec![]),
+            leaf("one"),
+            WireNode::Wire(vec![wire("two"), wire("three")]),
+        ];
         assert_eq!(
             wire_definitions(nodes.iter())
                 .map(|w| w.name.to_string())
                 .collect::<Vec<_>>(),
-            ["first", "second"]
-        );
-        nodes.insert(0, leaf("prefix"));
-        assert_eq!(nodes.len(), 2);
-        assert_eq!(wire_definitions(nodes.iter()).count(), 3);
-    }
-    #[test]
-    fn paths_cover_elements_alternatives_and_stable_outcome_channels() {
-        let sequence = WireNode::Sequence {
-            element: vec![WireNode::Optional {
-                element: vec![leaf("value")],
-                metadata: None,
-            }],
-            metadata: None,
-        };
-        let mut nodes = vec![WireNode::Alternatives {
-            metadata: None,
-            alternatives: vec![vec![], vec![sequence, leaf("other")]],
-        }];
-        let entry = wire_definitions_with_paths(nodes.iter()).next().unwrap();
-        assert_eq!(entry.path, WirePath(vec![0, 1, 0, 0, 0]));
-        assert!(std::ptr::eq(
-            entry.wire,
-            wire_at_path(nodes.iter(), &entry.path).unwrap()
-        ));
-        nodes = vec![WireNode::Outcomes {
-            success: nodes,
-            source_error: None,
-            binding_failure: Some(vec![leaf("message")]),
-        }];
-        let binding_failure_path = wire_definitions_with_paths(nodes.iter())
-            .last()
-            .unwrap()
-            .path;
-        let [WireNode::Outcomes { source_error, .. }] = nodes.as_mut_slice() else {
-            panic!()
-        };
-        *source_error = Some(vec![leaf("value")]);
-        assert_eq!(
-            wire_at_path(nodes.iter(), &binding_failure_path)
-                .unwrap()
-                .name,
-            "message"
+            ["one", "two", "three"]
         );
         let entries = wire_definitions_with_paths(nodes.iter()).collect::<Vec<_>>();
-        assert_eq!(entries.len(), 4);
-        assert_ne!(entries[0].path, entries[2].path);
+        assert_eq!(entries[2].path, WirePath(vec![2, 1]));
         for entry in entries {
             assert!(std::ptr::eq(
                 entry.wire,
                 wire_at_path(nodes.iter(), &entry.path).unwrap()
             ));
         }
-        assert!(wire_at_path(nodes.iter(), &WirePath(vec![99])).is_none());
+    }
+    #[test]
+    fn paths_cover_group_choice_and_single_container_payloads() {
+        let nodes = [WireNode::Group {
+            metadata: (),
+            elements: vec![WireNode::Alternatives {
+                metadata: (),
+                elements: vec![
+                    WireNode::default(),
+                    WireNode::Sequence {
+                        metadata: (),
+                        element: Box::new(WireNode::Optional {
+                            metadata: (),
+                            element: Box::new(leaf("value")),
+                        }),
+                    },
+                ],
+            }],
+        }];
+        let entry = wire_definitions_with_paths(nodes.iter()).next().unwrap();
+        assert_eq!(entry.path, WirePath(vec![0, 0, 1, 0, 0, 0]));
+        assert!(std::ptr::eq(
+            entry.wire,
+            wire_at_path(nodes.iter(), &entry.path).unwrap()
+        ));
+        assert!(wire_at_path(nodes.iter(), &WirePath(vec![0, 0, 99])).is_none());
         validate_wire_nodes(nodes.iter()).unwrap();
     }
     struct Kind(u32);
@@ -438,49 +366,52 @@ mod tests {
             syn::parse_quote!(u32)
         }
     }
-    struct Metadata {
-        wire: Wire<Kind>,
+    struct OptionalInfo {
+        ignored: Wire<Kind>,
     }
-    fn non_clone_leaf(name: &str, value: u32) -> WireNode<Kind, Metadata> {
-        WireNode::Wire(Wire {
+    struct SequenceInfo;
+    struct GroupInfo;
+    struct AlternativeInfo;
+    fn typed_leaf(
+        name: &str,
+        value: u32,
+    ) -> WireNode<Kind, OptionalInfo, SequenceInfo, GroupInfo, AlternativeInfo> {
+        WireNode::Wire(vec![Wire {
             name: syn::parse_str(name).unwrap(),
             kind: Kind(value),
-        })
+        }])
     }
     #[test]
-    fn filtered_and_chained_traversals_borrow_without_cloning_metadata() {
+    fn typed_metadata_and_mutable_traversal_need_no_clone() {
         let mut nodes = [
-            non_clone_leaf("untouched", 1),
-            WireNode::Group {
-                metadata: Metadata {
-                    wire: Wire {
-                        name: syn::parse_quote!(metadata_value),
+            typed_leaf("untouched", 1),
+            WireNode::Optional {
+                metadata: OptionalInfo {
+                    ignored: Wire {
+                        name: syn::parse_quote!(metadata),
                         kind: Kind(99),
                     },
                 },
-                children: vec![WireNode::Sequence {
-                    element: vec![non_clone_leaf("changed", 2)],
-                    metadata: None,
-                }],
+                element: Box::new(WireNode::Sequence {
+                    metadata: SequenceInfo,
+                    element: Box::new(typed_leaf("changed", 2)),
+                }),
             },
         ];
         for wire in wire_definitions_mut(nodes.iter_mut().skip(1)) {
             wire.kind.0 += 10;
         }
-        let definitions = wire_definitions(nodes.iter()).collect::<Vec<_>>();
-        assert_eq!(definitions[0].kind.0, 1);
-        assert_eq!(definitions[1].kind.0, 12);
-        let WireNode::Group { metadata, .. } = &nodes[1] else {
+        assert_eq!(
+            wire_definitions(nodes.iter())
+                .map(|w| w.kind.0)
+                .collect::<Vec<_>>(),
+            [1, 12]
+        );
+        let WireNode::Optional { metadata, .. } = &nodes[1] else {
             panic!()
         };
-        assert_eq!(metadata.wire.kind.0, 99);
+        assert_eq!(metadata.ignored.kind.0, 99);
         let selected = || nodes.iter().skip(1).chain(nodes.iter().take(1));
-        assert_eq!(
-            wire_definitions(selected())
-                .map(|w| w.name.to_string())
-                .collect::<Vec<_>>(),
-            ["changed", "untouched"]
-        );
         for entry in wire_definitions_with_paths(selected()) {
             assert!(std::ptr::eq(
                 entry.wire,
@@ -489,7 +420,7 @@ mod tests {
         }
     }
     #[test]
-    fn wire_traversal_is_fused_even_when_root_iterator_is_not() {
+    fn wire_traversal_is_fused_when_roots_are_not() {
         let nodes = [leaf("first"), leaf("later")];
         let mut step = 0;
         let roots = std::iter::from_fn(|| {
@@ -501,145 +432,93 @@ mod tests {
                 _ => None,
             }
         });
-        let mut definitions = wire_definitions(roots);
-        assert_eq!(definitions.next().unwrap().name, "first");
-        assert!(definitions.next().is_none());
-        assert!(definitions.next().is_none());
+        let mut iter = wire_definitions(roots);
+        assert_eq!(iter.next().unwrap().name, "first");
+        assert!(iter.next().is_none());
+        assert!(iter.next().is_none());
     }
     #[test]
-    fn empty_optional_and_completion_payloads_keep_their_structure() {
-        let mut nodes: Vec<WireNode<syn::Type>> = vec![WireNode::Outcomes {
-            success: vec![WireNode::Optional {
-                element: vec![],
-                metadata: None,
-            }],
-            source_error: Some(vec![]),
-            binding_failure: None,
-        }];
+    fn empty_payloads_preserve_optional_and_group_structure() {
+        let nodes: [WireNode<syn::Type>; 2] = [
+            WireNode::Optional {
+                metadata: (),
+                element: Box::default(),
+            },
+            WireNode::Group {
+                metadata: (),
+                elements: vec![],
+            },
+        ];
         assert!(wire_definitions(nodes.iter()).next().is_none());
-        let [WireNode::Outcomes {
-            success,
-            source_error,
-            binding_failure,
-        }] = nodes.as_mut_slice()
-        else {
-            panic!()
-        };
-        assert_eq!(success.len(), 1);
-        assert!(matches!(&success[0], WireNode::Optional { .. }));
-        assert!(source_error.as_ref().unwrap().is_empty());
-        assert!(binding_failure.is_none());
-        *success = vec![leaf("new_value")];
-        assert!(source_error.is_some());
-        assert_eq!(
-            wire_definitions(nodes.iter()).next().unwrap().name,
-            "new_value"
-        );
+        assert!(matches!(nodes[0], WireNode::Optional { .. }));
+        assert!(matches!(nodes[1], WireNode::Group { .. }));
         validate_wire_nodes(nodes.iter()).unwrap();
     }
     #[test]
-    fn named_outcomes_traverse_and_mutate_all_declared_branches_without_cloning() {
-        for has_source_error in [false, true] {
-            for has_binding_failure in [false, true] {
-                let mut nodes = [WireNode::Outcomes {
-                    success: vec![non_clone_leaf("same", 1)],
-                    source_error: has_source_error.then(|| vec![non_clone_leaf("same", 2)]),
-                    binding_failure: has_binding_failure.then(|| vec![non_clone_leaf("same", 3)]),
-                }];
-                validate_wire_nodes(nodes.iter()).unwrap();
-                let expected = std::iter::once(1)
-                    .chain(has_source_error.then_some(2))
-                    .chain(has_binding_failure.then_some(3))
-                    .collect::<Vec<_>>();
-                assert_eq!(
-                    wire_definitions(nodes.iter())
-                        .map(|w| w.kind.0)
-                        .collect::<Vec<_>>(),
-                    expected
-                );
-                for entry in wire_definitions_with_paths(nodes.iter()) {
-                    // Absent channels keep their positions reserved in paths.
-                    assert_eq!(
-                        entry.path,
-                        WirePath(vec![0, (entry.wire.kind.0 - 1) as usize, 0])
-                    );
-                    assert!(std::ptr::eq(
-                        entry.wire,
-                        wire_at_path(nodes.iter(), &entry.path).unwrap()
-                    ));
+    fn output_channels_are_selected_before_traversing_value_nodes() {
+        for source in [false, true] {
+            for binding in [false, true] {
+                let mut outcomes = Outcomes {
+                    success: leaf("ok"),
+                    source_error: source.then(|| leaf("error")),
+                    binding_failure: binding.then(|| leaf("failure")),
+                };
+                let success_path = wire_definitions_with_paths(std::iter::once(&outcomes.success))
+                    .next()
+                    .unwrap()
+                    .path;
+                assert_eq!(success_path, WirePath(vec![0, 0]));
+                let count = wire_definitions(
+                    std::iter::once(&outcomes.success)
+                        .chain(outcomes.source_error.iter())
+                        .chain(outcomes.binding_failure.iter()),
+                )
+                .count();
+                assert_eq!(count, 1 + usize::from(source) + usize::from(binding));
+                for wire in wire_definitions_mut(
+                    std::iter::once(&mut outcomes.success)
+                        .chain(outcomes.source_error.iter_mut())
+                        .chain(outcomes.binding_failure.iter_mut()),
+                ) {
+                    wire.kind = syn::parse_quote!(u32);
                 }
                 assert_eq!(
-                    wire_at_path(nodes.iter(), &WirePath(vec![0, 1, 0])).is_some(),
-                    has_source_error
-                );
-                assert_eq!(
-                    wire_at_path(nodes.iter(), &WirePath(vec![0, 2, 0])).is_some(),
-                    has_binding_failure
-                );
-                assert!(wire_at_path(nodes.iter(), &WirePath(vec![0, 3, 0])).is_none());
-                for wire in wire_definitions_mut(nodes.iter_mut()) {
-                    wire.kind.0 += 10;
-                }
-                assert_eq!(
-                    wire_definitions(nodes.iter())
-                        .map(|w| w.kind.0)
-                        .collect::<Vec<_>>(),
-                    expected.into_iter().map(|v| v + 10).collect::<Vec<_>>()
+                    crate::type_key(
+                        &wire_at_path(std::iter::once(&outcomes.success), &success_path)
+                            .unwrap()
+                            .kind
+                    ),
+                    "u32"
                 );
             }
         }
     }
     #[test]
-    fn validation_checks_each_named_outcome_payload() {
-        for branch in 0..3 {
-            let mut success = vec![];
-            let mut source_error = None;
-            let mut binding_failure = None;
-            let invalid: Vec<WireNode<syn::Type>> = vec![WireNode::Alternatives {
-                metadata: None,
-                alternatives: vec![],
-            }];
-            match branch {
-                0 => success = invalid,
-                1 => source_error = Some(invalid),
-                2 => binding_failure = Some(invalid),
-                _ => unreachable!(),
-            }
-            let nodes = [WireNode::Outcomes {
-                success,
-                source_error,
-                binding_failure,
-            }];
-            assert!(validate_wire_nodes(nodes.iter())
-                .unwrap_err()
-                .contains("no alternatives"));
-        }
+    fn empty_error_payload_is_distinct_from_absence() {
+        let outcomes = Outcomes {
+            success: leaf("ok"),
+            source_error: Some(WireNode::default()),
+            binding_failure: None,
+        };
+        assert!(wire_definitions(outcomes.source_error.iter())
+            .next()
+            .is_none());
+        assert!(outcomes.source_error.is_some());
+        assert!(outcomes.binding_failure.is_none());
     }
     #[test]
-    fn validation_rejects_empty_choices_and_invalid_completion_roots() {
-        let mut nodes: Vec<WireNode<syn::Type>> = vec![WireNode::Alternatives {
-            metadata: None,
-            alternatives: vec![],
-        }];
-        assert!(validate_wire_nodes(nodes.iter())
+    fn alternatives_require_a_choice_but_choices_can_be_empty() {
+        let mut node: WireNode<syn::Type> = WireNode::Alternatives {
+            metadata: (),
+            elements: vec![],
+        };
+        assert!(validate_wire_nodes(std::iter::once(&node))
             .unwrap_err()
             .contains("no alternatives"));
-        nodes = vec![WireNode::Outcomes {
-            success: vec![leaf("value")],
-            source_error: None,
-            binding_failure: None,
-        }];
-        nodes.insert(0, leaf("extra"));
-        assert!(validate_wire_nodes(nodes.iter())
-            .unwrap_err()
-            .contains("sole root"));
-        validate_wire_nodes(nodes.iter().skip(1)).unwrap();
-        let nested = [WireNode::Optional {
-            element: nodes.into_iter().skip(1).collect(),
-            metadata: None,
-        }];
-        assert!(validate_wire_nodes(nested.iter())
-            .unwrap_err()
-            .contains("sole root"));
+        let WireNode::Alternatives { elements, .. } = &mut node else {
+            panic!()
+        };
+        elements.push(WireNode::default());
+        validate_wire_nodes(std::iter::once(&node)).unwrap();
     }
 }

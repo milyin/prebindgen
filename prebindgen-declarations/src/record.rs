@@ -22,7 +22,10 @@ pub fn record_input<C: Codec>(
         fallible: false,
         context: Default::default(),
         acknowledgement: None,
-        nodes: Default::default(),
+        node: WireNode::Group {
+            elements: vec![],
+            metadata: codec.fields_group(),
+        },
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
         resources: Vec::new(),
@@ -34,27 +37,26 @@ pub fn record_input<C: Codec>(
     for field in fields {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        codec.prefix_layout(&mut child.nodes, ComponentSegment::Field(name.to_string()));
+        codec.prefix_layout(&mut child.node, ComponentSegment::Field(name.to_string()));
         out.fallible |= child.fallible;
         out.validation.extend(child.validation);
         out.acquire.extend(child.acquire);
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        child.nodes = vec![prebindgen_flat::WireNode::Group {
+        child.node = prebindgen_flat::WireNode::Group {
             metadata: codec.field_group(name.clone()),
-            children: std::mem::take(&mut child.nodes),
-        }];
-        out.nodes.extend(child.nodes);
+            elements: vec![std::mem::take(&mut child.node)],
+        };
+        let WireNode::Group { elements, .. } = &mut out.node else {
+            unreachable!()
+        };
+        elements.push(child.node);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-    out.nodes = vec![prebindgen_flat::WireNode::Group {
-        metadata: codec.fields_group(),
-        children: std::mem::take(&mut out.nodes),
-    }];
 
     Ok(out)
 }
@@ -87,7 +89,14 @@ pub fn record_output<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        nodes: Default::default(),
+        outcomes: prebindgen_flat::Outcomes {
+            success: WireNode::Group {
+                elements: vec![],
+                metadata: codec.fields_group(),
+            },
+            source_error: None,
+            binding_failure: None,
+        },
         statements: binding,
         values: Vec::new(),
     };
@@ -95,17 +104,16 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        codec.prefix_layout(&mut child.nodes, ComponentSegment::Field(name.to_string()));
-        child.nodes = vec![prebindgen_flat::WireNode::Group {
+        codec.prefix_layout(
+            &mut child.outcomes.success,
+            ComponentSegment::Field(name.to_string()),
+        );
+        child.outcomes.success = prebindgen_flat::WireNode::Group {
             metadata: codec.field_group(name),
-            children: std::mem::take(&mut child.nodes),
-        }];
+            elements: vec![std::mem::take(&mut child.outcomes.success)],
+        };
         append(&mut out, child)?;
     }
-    out.nodes = vec![prebindgen_flat::WireNode::Group {
-        metadata: codec.fields_group(),
-        children: std::mem::take(&mut out.nodes),
-    }];
 
     Ok(out)
 }
@@ -137,7 +145,14 @@ pub fn record_output_owned<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        nodes: Default::default(),
+        outcomes: prebindgen_flat::Outcomes {
+            success: WireNode::Group {
+                elements: vec![],
+                metadata: codec.fields_group(),
+            },
+            source_error: None,
+            binding_failure: None,
+        },
         statements: binding,
         values: Vec::new(),
     };
@@ -145,17 +160,16 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        codec.prefix_layout(&mut child.nodes, ComponentSegment::Field(name.to_string()));
-        child.nodes = vec![prebindgen_flat::WireNode::Group {
+        codec.prefix_layout(
+            &mut child.outcomes.success,
+            ComponentSegment::Field(name.to_string()),
+        );
+        child.outcomes.success = prebindgen_flat::WireNode::Group {
             metadata: codec.field_group(name),
-            children: std::mem::take(&mut child.nodes),
-        }];
+            elements: vec![std::mem::take(&mut child.outcomes.success)],
+        };
         append(&mut out, child)?;
     }
-    out.nodes = vec![prebindgen_flat::WireNode::Group {
-        metadata: codec.fields_group(),
-        children: std::mem::take(&mut out.nodes),
-    }];
 
     Ok(out)
 }

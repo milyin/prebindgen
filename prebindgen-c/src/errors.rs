@@ -45,7 +45,7 @@ pub(crate) fn prepare(
         let function = flat.functions.remove(&id.to_string()).unwrap();
         result?;
         let plan = function.ret.slot.unwrap();
-        let fields = field_names(&plan.nodes);
+        let fields = field_names(&plan.outcomes.success);
         out.push(ErrorBinding {
             name,
             ty,
@@ -56,26 +56,30 @@ pub(crate) fn prepare(
     Ok(out)
 }
 
-fn field_names(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]) -> Vec<String> {
+fn field_names(
+    layout: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
+) -> Vec<String> {
     use prebindgen_flat::WireNode;
-    let layout = match layout {
-        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-        nodes => nodes,
-    };
     let mut names = Vec::new();
-    if let Some(WireNode::Group {
+    if let WireNode::Group {
         metadata: CGroup::Fields,
-        children,
-    }) = layout.first()
+        elements: children,
+    } = layout
     {
         for node in children.as_slice() {
             if let WireNode::Group {
                 metadata: CGroup::Field(name),
-                children,
+                ..
             } = node
             {
-                for _ in crate::group::record_fields(children) {
-                    names.push(if crate::group::record_fields(children).len() == 1 {
+                for _ in crate::group::record_fields(node) {
+                    names.push(if crate::group::record_fields(node).len() == 1 {
                         name.to_string().trim_start_matches("r#").to_owned()
                     } else {
                         format!("v{}", names.len())
@@ -124,7 +128,7 @@ pub(crate) fn emit(
         let context = CContext {
             row_types: {
                 let mut schemas = Vec::new();
-                sequence::schemas(&error.plan.nodes, &mut schemas);
+                sequence::schemas(&error.plan.outcomes.success, &mut schemas);
                 schemas
                     .into_iter()
                     .map(|(wire, _)| {
@@ -146,7 +150,7 @@ pub(crate) fn emit(
             read_buffer: syn::parse_quote!(__pb_read),
         };
         let mut schemas = Vec::new();
-        sequence::schemas(&error.plan.nodes, &mut schemas);
+        sequence::schemas(&error.plan.outcomes.success, &mut schemas);
         let carriers = schemas
             .iter()
             .map(|(wire, _)| wire.name.to_string())
@@ -182,12 +186,14 @@ pub(crate) fn emit(
         let mut fields = Vec::new();
         let mut drops = TokenStream::new();
         header.push_str("typedef struct {\n");
-        for (i, wire) in crate::group::result_packet_fields(&error.plan.nodes).enumerate() {
+        for (i, wire) in
+            crate::group::result_packet_fields(&error.plan.outcomes.success).enumerate()
+        {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
             fields.push(quote!(pub #field:#ty));
             let c_field = if error.fields.len()
-                == crate::group::result_packet_fields(&error.plan.nodes).len()
+                == crate::group::result_packet_fields(&error.plan.outcomes.success).len()
             {
                 error.fields[i].trim_start_matches("r#").to_owned()
             } else {
@@ -199,7 +205,7 @@ pub(crate) fn emit(
                 c_ty(wire, prefix, pointers, &context)
             ));
         }
-        let values = crate::group::result_packet_fields(&error.plan.nodes)
+        let values = crate::group::result_packet_fields(&error.plan.outcomes.success)
             .enumerate()
             .map(|(i, wire)| {
                 let field = format_ident!("v{i}");
@@ -227,7 +233,7 @@ pub(crate) fn emit(
             })
             .collect::<Vec<_>>();
         drops.extend(sequence::release(
-            &error.plan.nodes,
+            &error.plan.outcomes.success,
             &values,
             &context,
             false,
@@ -237,8 +243,10 @@ pub(crate) fn emit(
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
-        let wires = crate::group::result_packet_fields(&error.plan.nodes).collect::<Vec<_>>();
-        let mut comments = describe_groups(&error.plan.nodes, &wires, true, &mut 0, "error");
+        let wires =
+            crate::group::result_packet_fields(&error.plan.outcomes.success).collect::<Vec<_>>();
+        let mut comments =
+            describe_groups(&error.plan.outcomes.success, &wires, true, &mut 0, "error");
         for i in (0..wires.len()).rev() {
             let field = if error.fields.len() == wires.len() {
                 error.fields[i].trim_start_matches("r#").to_owned()
@@ -269,7 +277,13 @@ pub(crate) fn result_function(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
+    function_output_layout: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

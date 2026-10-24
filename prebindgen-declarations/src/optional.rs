@@ -108,10 +108,10 @@ pub fn optional_input<C: Codec>(
     active: &Condition,
     mut child: CodecInput<C>,
 ) -> Result<CodecInput<C>> {
-    let reservation = codec.optional_niche(&child.nodes);
+    let reservation = codec.optional_niche(&child.node);
     let mut validation = TokenStream::new();
     if let Some(reservation) = &reservation {
-        let present = codec.optional_presence(&child.nodes, reservation)?;
+        let present = codec.optional_presence(&child.node, reservation)?;
         validation.extend(quote!(let #tag: i32 = i32::from(#present);));
     } else {
         child.fallible = true;
@@ -125,7 +125,7 @@ pub fn optional_input<C: Codec>(
     let selected = active.arm(tag.clone(), 1).rust();
     child.statements = quote!(let #var = if #selected {#body Some(#arg)} else {None};);
     child.argument = quote!(#var);
-    mark(codec, extra, &mut child.nodes, tag, reservation)?;
+    mark(codec, extra, &mut child.node, tag, reservation)?;
 
     Ok(child)
 }
@@ -149,9 +149,10 @@ pub fn optional_output<C: Codec>(
     {
         return Err("optional child has delivery code".into());
     }
+    validate_nested_output(&child)?;
     codec.validate_output(&child)?;
-    let reservation = codec.optional_niche(&child.nodes);
-    let defaults = codec.absent_output_values(&child.nodes, reservation.as_ref())?;
+    let reservation = codec.optional_niche(&child.outcomes.success);
+    let defaults = codec.absent_output_values(&child.outcomes.success, reservation.as_ref())?;
     prebindgen_conversions::validate_value_bindings(&defaults)?;
     let mut defaults_by_name = defaults
         .into_iter()
@@ -205,15 +206,22 @@ pub fn optional_output<C: Codec>(
     if reservation.is_none() {
         child.values.insert(0, (tag.clone(), quote!(#tag)));
     }
-    mark(codec, extra, &mut child.nodes, tag, reservation)?;
+    mark(codec, extra, &mut child.outcomes.success, tag, reservation)?;
 
     Ok(child)
 }
 
+#[allow(clippy::type_complexity)] // Each parent has its own codec metadata type.
 fn mark<C: Codec>(
     codec: &C,
     extra: &C::Extra,
-    tree: &mut Vec<prebindgen_flat::WireNode<C::Wire, C::Group>>,
+    tree: &mut prebindgen_flat::WireNode<
+        C::Wire,
+        C::Optional,
+        C::Sequence,
+        C::Group,
+        C::Alternatives,
+    >,
     tag: syn::Ident,
     reservation: Option<NicheReservation<C::Niche>>,
 ) -> Result<()> {
@@ -233,9 +241,9 @@ fn mark<C: Codec>(
     let metadata =
         codec.optional_metadata(tag, discriminator, reservation.map(|r| r.niche), controls);
     let node = WireNode::Optional {
-        element: std::mem::take(tree),
-        metadata: Some(metadata),
+        element: Box::new(std::mem::take(tree)),
+        metadata,
     };
-    *tree = vec![node];
+    *tree = node;
     Ok(())
 }

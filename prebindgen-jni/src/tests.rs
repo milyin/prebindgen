@@ -1,4 +1,5 @@
 use super::*;
+use prebindgen_flat::InputConversion;
 fn flat(source: &str) -> Bindings {
     Flat::parse(
         syn::parse_file(source)
@@ -377,13 +378,15 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
         .unwrap();
         let f = flat.function(name).unwrap();
         assert_eq!(
-            crate::group::argument_parameters(f.params[0].ty.slot.as_ref().unwrap().wire_nodes())
-                .unwrap()
+            crate::group::argument_parameters(f.params[0].ty.slot.as_ref().unwrap().input_node())
                 .len(),
             count
         );
         assert_eq!(
-            crate::group::result_packet_fields(f.ret.slot.as_ref().unwrap().wire_nodes()).len(),
+            crate::group::result_packet_fields(
+                &(f.ret.slot.as_ref().unwrap()).output_outcomes().success
+            )
+            .len(),
             count
         );
     }
@@ -452,24 +455,26 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     use prebindgen_flat::WireNode;
     fn reservations(
-        layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+        layout: &prebindgen_flat::WireNode<
+            JniWire,
+            crate::JniOptional,
+            prebindgen_flat::Wire<JniWire>,
+            JniGroup,
+            prebindgen_flat::Wire<JniWire>,
+        >,
     ) -> Vec<Option<JniNiche>> {
-        let layout = match layout {
-            [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-            nodes => nodes,
-        };
         let mut result = vec![];
-        for node in layout {
-            match node {
-                WireNode::Optional { element, metadata } => {
-                    if let Some(JniGroup::Optional(optional)) = &metadata {
-                        result.push(optional.niche.clone());
-                    }
-                    result.extend(reservations(element));
-                }
-                WireNode::Group { children, .. } => result.extend(reservations(children)),
-                _ => {}
+        match layout {
+            WireNode::Optional { element, metadata } => {
+                result.push(metadata.niche.clone());
+                result.extend(reservations(element));
             }
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                for child in elements {
+                    result.extend(reservations(child));
+                }
+            }
+            _ => {}
         }
         result
     }
@@ -494,14 +499,12 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 2
             };
             assert_eq!(
-                crate::group::argument_parameters(input.wire_nodes())
-                    .unwrap()
-                    .len(),
+                crate::group::argument_parameters(input.input_node()).len(),
                 count,
                 "input {ty}"
             );
             assert_eq!(
-                crate::group::result_packet_fields(output.wire_nodes()).len(),
+                crate::group::result_packet_fields(&output.output_outcomes().success).len(),
                 count,
                 "output {ty}"
             );
@@ -518,8 +521,12 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 });
             }
             expected.reverse();
-            assert_eq!(reservations(input.wire_nodes()), expected, "input {ty}");
-            assert_eq!(reservations(output.wire_nodes()), expected, "output {ty}");
+            assert_eq!(reservations(input.input_node()), expected, "input {ty}");
+            assert_eq!(
+                reservations(&output.output_outcomes().success),
+                expected,
+                "output {ty}"
+            );
         }
     }
 }
@@ -547,22 +554,18 @@ fn nested_optional_selectors_reserve_distinct_tags_and_disable_arm_niches() {
         .as_ref()
         .unwrap();
     assert_eq!(
-        crate::group::argument_parameters(input.wire_nodes())
-            .unwrap()
-            .len(),
+        crate::group::argument_parameters(input.input_node()).len(),
         3
     ); // one tag + two arm payloads, no option flags
     assert_eq!(
-        crate::group::argument_parameters(input.wire_nodes())
-            .unwrap()
+        crate::group::argument_parameters(input.input_node())
             .next()
             .unwrap()
             .kind
             .available_niche(),
         Some(JniNiche::Integer(-3))
     );
-    assert!(crate::group::argument_parameters(input.wire_nodes())
-        .unwrap()
+    assert!(crate::group::argument_parameters(input.input_node())
         .skip(1)
         .all(|w| w.kind.available_niche().is_none()));
 }
@@ -782,7 +785,7 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
 #[test]
 fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     use prebindgen_declarations::{expand_return, fields, fun, Declarations};
-    use prebindgen_flat::Conversion;
+
     let mut flat=flat("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn parts(e:Failure)->Failure{} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
     let defaults = Declarations::new(
         &flat,
@@ -805,20 +808,26 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     assert_eq!(errors.len(), 1);
     defaults.fill(&mut flat, &codec, &decl, &()).unwrap();
     let output = flat.function("f").unwrap().output_conversion().unwrap();
-    let [prebindgen_flat::WireNode::Outcomes {
+    let prebindgen_flat::Outcomes {
         success,
         source_error: Some(error),
         binding_failure: Some(binding_failure),
-    }] = output.wire_nodes()
+    } = output.output_outcomes()
     else {
         panic!("all three completion channels must be declared")
     };
 
-    assert_eq!(prebindgen_flat::wire_definitions(success.iter()).count(), 1);
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(success)).count(),
+        1
+    );
 
-    assert_eq!(prebindgen_flat::wire_definitions(error.iter()).count(), 2);
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(error)).count(),
+        2
+    );
     assert!(matches!(
-        prebindgen_flat::wire_definitions(error.iter())
+        prebindgen_flat::wire_definitions(std::iter::once(error))
             .next()
             .unwrap()
             .kind,
@@ -828,36 +837,40 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         }
     ));
     assert!(matches!(
-        prebindgen_flat::wire_definitions(error.iter())
+        prebindgen_flat::wire_definitions(std::iter::once(error))
             .nth(1)
             .unwrap()
             .kind,
         JniWire::Text { .. }
     ));
     assert_eq!(
-        prebindgen_flat::wire_definitions(binding_failure.iter()).count(),
+        prebindgen_flat::wire_definitions(std::iter::once(binding_failure)).count(),
         1
     );
     assert_eq!(
-        prebindgen_flat::wire_definitions(output.wire_nodes().iter()).count(),
+        prebindgen_flat::wire_definitions([success, error, binding_failure]).count(),
         4
     );
     assert_eq!(
-        crate::group::result_packet_fields(output.wire_nodes()).count(),
+        crate::group::result_packet_fields(&output.output_outcomes().success).count(),
         1
     );
-    let shape = |layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>]| {
-        prebindgen_flat::wire_definitions_with_paths(layout.iter())
+    let shape = |layout: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >| {
+        prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout))
             .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
             .collect::<Vec<_>>()
     };
-    let expected = shape(output.wire_nodes());
+    let expected = shape(&output.output_outcomes().success);
     let wire = sequence::callback_target(
-        flat.function("f")
-            .unwrap()
-            .output_conversion()
-            .unwrap()
-            .wire_nodes(),
+        &(flat.function("f").unwrap().output_conversion().unwrap())
+            .output_outcomes()
+            .success,
     )
     .unwrap();
     let variant = defaults
@@ -867,11 +880,13 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     defaults.fill(&mut flat, &codec, &variant, &()).unwrap();
     assert_eq!(
         shape(
-            flat.function("f_fold")
+            &(flat
+                .function("f_fold")
                 .unwrap()
                 .output_conversion()
-                .unwrap()
-                .wire_nodes()
+                .unwrap())
+            .output_outcomes()
+            .success
         ),
         expected
     );
@@ -879,7 +894,6 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 
 #[test]
 fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
-    use prebindgen_flat::Conversion;
     fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
         let mut input = JniCodec.input_leaf(
             &syn::parse_quote!(i64),
@@ -900,65 +914,54 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         JniCodec.finish_output(&mut output, &())?;
 
         if binding_failure {
-            output.nodes = vec![prebindgen_flat::WireNode::Outcomes {
-                success: std::mem::take(&mut output.nodes),
-                source_error: None,
-                binding_failure: Some(JniCodec.binding_failure_layout(&())?.unwrap()),
-            }];
+            output.outcomes.binding_failure = Some(JniCodec.binding_failure_layout(&())?.unwrap());
         }
         let function = model.function_mut("echo")?;
         function.params[0].ty.slot = Some(input.into());
         function.ret.slot = Some(output.into());
         let input = function.input_conversions()?[0];
         assert!(std::ptr::eq(
-            prebindgen_flat::wire_definitions(input.wire_nodes().iter())
+            prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
                 .next()
                 .unwrap(),
-            crate::group::argument_parameters(input.wire_nodes())
-                .unwrap()
+            crate::group::argument_parameters(input.input_node())
                 .next()
                 .unwrap()
         ));
         let output = function.output_conversion()?;
         assert!(std::ptr::eq(
-            prebindgen_flat::wire_definitions(
-                match output.wire_nodes() {
-                    [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-                    nodes => nodes,
-                }
-                .iter()
-            )
-            .next()
-            .unwrap(),
-            crate::group::result_packet_fields(output.wire_nodes())
+            prebindgen_flat::wire_definitions(std::iter::once(&output.output_outcomes().success))
+                .next()
+                .unwrap(),
+            crate::group::result_packet_fields(&output.output_outcomes().success)
                 .next()
                 .unwrap()
         ));
         assert_eq!(
-            prebindgen_flat::wire_definitions(function.input_conversions()?[0].wire_nodes().iter())
-                .next()
-                .expect("logical wire index out of range")
-                .name,
+            prebindgen_flat::wire_definitions(std::iter::once(
+                function.input_conversions()?[0].input_node()
+            ))
+            .next()
+            .expect("logical wire index out of range")
+            .name,
             "native_input"
         );
         assert_eq!(
-            prebindgen_flat::wire_definitions(
-                match function.output_conversion()?.wire_nodes() {
-                    [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-                    nodes => nodes,
-                }
-                .iter()
-            )
+            prebindgen_flat::wire_definitions(std::iter::once(
+                &function.output_conversion()?.output_outcomes().success
+            ))
             .next()
             .expect("logical wire index out of range")
             .name,
             "native_output"
         );
         assert_eq!(
-            crate::group::result_packet_fields(function.output_conversion()?.wire_nodes())
-                .next()
-                .unwrap()
-                .name,
+            crate::group::result_packet_fields(
+                &function.output_conversion()?.output_outcomes().success
+            )
+            .next()
+            .unwrap()
+            .name,
             "native_output"
         );
         Ok(())

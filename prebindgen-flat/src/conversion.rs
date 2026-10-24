@@ -103,10 +103,11 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 
 /// Prepared slot conversion with a generator-defined request protocol.
 ///
-/// Input and output slots share this interface. Their payload types may define
-/// different wire kinds and request enums; direction comes from the slot in
-/// [`crate::Flat`], not from this trait. An output request can, for example, carry
-/// the source-result identifier without imposing a shared context type.
+/// Input and output slots share this emission interface. Their payload types
+/// may define different wire kinds and request enums. [`InputConversion`] adds
+/// an input value description; [`OutputConversion`] adds output completion
+/// channels. An output request can carry the source-result identifier without
+/// imposing a shared context type.
 ///
 /// Every successful request returns one Rust expression, including `()` for
 /// a no-op. Statements may appear inside a block expression. The caller decides
@@ -132,7 +133,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// policy; other implementations may use the expectation to configure emission.
 ///
 /// ```
-/// use prebindgen_flat::{bind_fragment, same_type, Conversion, Result, Wire, WireKind, WireNode, wire_definitions};
+/// use prebindgen_flat::{bind_fragment, same_type, Conversion, InputConversion, Result, Wire, WireKind, WireNode, wire_definitions};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 /// use syn::{parse_quote, Type};
@@ -147,7 +148,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// }
 /// struct OwnedBoxInput {
 ///     pointee: Type,
-///     nodes: [WireNode<Carrier>; 1],
+///     node: WireNode<Carrier>,
 /// }
 /// fn expect(actual: &Type, expected: &Type) -> Result<()> {
 ///     if same_type(actual, expected) { Ok(()) }
@@ -155,13 +156,15 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// }
 /// impl Conversion for OwnedBoxInput {
 ///     type Wire = Carrier;
+///     type Optional = ();
+///     type Sequence = ();
 ///     type Group = ();
+///     type Alternatives = ();
 ///     type SlotFragment<'a> = SlotRequest<'a>;
-///     fn wire_nodes(&self) -> &[WireNode<Carrier>] { &self.nodes }
 ///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
 ///         -> Result<TokenStream>
 ///     {
-///         let name = &wire_definitions(self.nodes.iter()).next().unwrap().name;
+///         let name = &wire_definitions(std::iter::once(&self.node)).next().unwrap().name;
 ///         let pointee = &self.pointee;
 ///         match mode {
 ///             SlotRequest::Validate { null_message } => {
@@ -181,9 +184,12 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 ///         }
 ///     }
 /// }
+/// impl InputConversion for OwnedBoxInput {
+///     fn input_node(&self) -> &WireNode<Carrier> { &self.node }
+/// }
 /// let slot = OwnedBoxInput {
 ///     pointee: parse_quote!(u64), // Supplied by preparation from the source type.
-///     nodes: [WireNode::Wire(Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer })],
+///     node: WireNode::Wire(vec![Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }]),
 /// };
 /// let validation = slot.code_fragment_slot(
 ///     SlotRequest::Validate { null_message: "null owned handle" }, &parse_quote!(()))?;
@@ -191,25 +197,54 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// let value = slot.code_fragment_slot(SlotRequest::TakeOwnership, &expected)?;
 /// let binding = bind_fragment(&parse_quote!(argument), &expected, value)?;
 /// let _: syn::Block = syn::parse2(quote!({ #validation; #binding }))?;
-/// let raw_parameter = wire_definitions(slot.wire_nodes().iter()).next().unwrap();
+/// let raw_parameter = wire_definitions(std::iter::once(slot.input_node())).next().unwrap();
 /// assert_eq!(raw_parameter.name, "raw_value");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Conversion {
     /// Generator-defined type information for individual logical values.
     type Wire: WireKind;
-    /// Metadata describing how child values form records, options or alternatives.
+    /// Metadata for one optional value.
+    type Optional;
+    /// Metadata for a sequence occurrence.
+    type Sequence;
+    /// Metadata for a related group of values.
     type Group;
+    /// Metadata for choosing between alternatives.
+    type Alternatives;
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
-    /// Logical tree of values, repetition and outcomes. Its generator chooses ABI placement.
-    fn wire_nodes(&self) -> &[crate::WireNode<Self::Wire, Self::Group>];
     /// Emit an expression for the whole slot.
     fn code_fragment_slot(
         &self,
         mode: Self::SlotFragment<'_>,
         expected_type: &syn::Type,
     ) -> Result<TokenStream>;
+}
+
+/// Conversion attached to one source function parameter.
+#[allow(clippy::type_complexity)] // Each parent variant has independently typed metadata.
+pub trait InputConversion: Conversion {
+    /// Description of the parameter value, independent of its native placement.
+    fn input_node(
+        &self,
+    ) -> &crate::WireNode<Self::Wire, Self::Optional, Self::Sequence, Self::Group, Self::Alternatives>;
+}
+/// Conversion attached to a function return, including its completion channels.
+#[allow(clippy::type_complexity)] // Keep completion channels and value metadata explicit.
+pub trait OutputConversion: Conversion {
+    /// Success and declared errors; outcomes cannot be children of a value node.
+    fn output_outcomes(
+        &self,
+    ) -> &crate::Outcomes<
+        crate::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
+    >;
 }
 
 /// Bind an emitted expression to a caller-selected name and expected Rust type.
@@ -247,10 +282,13 @@ impl<I: Conversion, O: Conversion> crate::Function<I, O> {
         Ok(output)
     }
     /// Logical input definitions, including each element/branch schema once.
-    pub fn input_wire_definitions(&self) -> Result<impl Iterator<Item = &Wire<I::Wire>>> {
+    pub fn input_wire_definitions(&self) -> Result<impl Iterator<Item = &Wire<I::Wire>>>
+    where
+        I: InputConversion,
+    {
         Ok(self
             .input_conversions()?
             .into_iter()
-            .flat_map(|i| crate::wire_definitions(i.wire_nodes().iter())))
+            .flat_map(|i| crate::wire_definitions(std::iter::once(i.input_node()))))
     }
 }

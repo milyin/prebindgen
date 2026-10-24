@@ -86,13 +86,15 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C, G> {
+impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
+    for InputPlan<W, C, O, S, G, A>
+{
     type Wire = W;
+    type Optional = O;
+    type Sequence = S;
     type Group = G;
+    type Alternatives = A;
     type SlotFragment<'a> = InputFragment<'a, C>;
-    fn wire_nodes(&self) -> &[prebindgen_flat::WireNode<Self::Wire, Self::Group>] {
-        &self.nodes
-    }
 
     fn code_fragment_slot(
         &self,
@@ -153,13 +155,15 @@ impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for InputPlan<W, C
         })
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, G> Conversion for OutputPlan<W, C, G> {
+impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
+    for OutputPlan<W, C, O, S, G, A>
+{
     type Wire = W;
+    type Optional = O;
+    type Sequence = S;
     type Group = G;
+    type Alternatives = A;
     type SlotFragment<'a> = OutputFragment<'a, C>;
-    fn wire_nodes(&self) -> &[prebindgen_flat::WireNode<Self::Wire, Self::Group>] {
-        &self.nodes
-    }
 
     fn code_fragment_slot(
         &self,
@@ -383,5 +387,22 @@ fn reserve(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
             proc_macro2::TokenTree::Group(group) => reserve(&group.stream(), used),
             _ => {}
         }
+    }
+}
+
+impl<W: WireKind, C: TemplateContext + 'static, O, S, G, A> prebindgen_flat::InputConversion
+    for InputPlan<W, C, O, S, G, A>
+{
+    fn input_node(&self) -> &prebindgen_flat::WireNode<W, O, S, G, A> {
+        &self.node
+    }
+}
+impl<W: WireKind, C: TemplateContext + 'static, O, S, G, A> prebindgen_flat::OutputConversion
+    for OutputPlan<W, C, O, S, G, A>
+{
+    fn output_outcomes(
+        &self,
+    ) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, O, S, G, A>> {
+        &self.outcomes
     }
 }

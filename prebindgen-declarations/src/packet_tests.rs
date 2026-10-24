@@ -1,10 +1,11 @@
 //! A backend whose sequence boundary has separate pointer and length values.
 use super::*;
 use prebindgen_conversions::{validate_wire_names, value};
-use prebindgen_flat::Conversion;
+use prebindgen_flat::InputConversion;
 
 #[derive(Clone, Debug)]
 enum Metadata {
+    Components,
     Values(Vec<Wire<Type>>),
     Fields,
     Field,
@@ -13,144 +14,126 @@ enum Metadata {
 struct PointerLenAbi;
 impl PointerLenAbi {
     fn parameters(
-        layout: &[prebindgen_flat::WireNode<Type, Metadata>],
+        node: &WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
     ) -> std::vec::IntoIter<&Wire<Type>> {
-        Self::values(layout)
+        Self::values(node)
     }
     fn row_fields(
-        element: &[prebindgen_flat::WireNode<Type, Metadata>],
+        node: &WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
     ) -> std::vec::IntoIter<&Wire<Type>> {
-        Self::values(element)
+        Self::values(node)
     }
     fn result_fields(
-        layout: &[prebindgen_flat::WireNode<Type, Metadata>],
+        node: &WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
     ) -> std::vec::IntoIter<&Wire<Type>> {
-        Self::values(match layout {
-            [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-            nodes => nodes,
-        })
+        Self::values(node)
     }
     fn result_packet<'a>(
-        layout: &'a [prebindgen_flat::WireNode<Type, Metadata>],
+        node: &'a WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
         bindings: &'a [(syn::Ident, TokenStream)],
     ) -> Result<Vec<(&'a Wire<Type>, &'a TokenStream)>> {
-        prebindgen_conversions::match_output_fields(Self::result_fields(layout), bindings)
+        prebindgen_conversions::match_output_fields(Self::result_fields(node), bindings)
     }
-    fn values(nodes: &[WireNode<Type, Metadata>]) -> std::vec::IntoIter<&Wire<Type>> {
-        fn visit<'a>(nodes: &'a [WireNode<Type, Metadata>], out: &mut Vec<&'a Wire<Type>>) {
-            for node in nodes {
-                match node {
-                    WireNode::Wire(w) => out.push(w),
-                    WireNode::Group {
-                        metadata: Metadata::Values(ws),
-                        ..
-                    } => out.extend(ws),
-                    WireNode::Group { children, .. } => visit(children.as_slice(), out),
-                    WireNode::Optional { element, metadata } => {
-                        if let Some(Metadata::Values(ws)) = &metadata {
-                            out.extend(ws);
-                        }
-                        visit(element.as_slice(), out);
+    fn values(
+        node: &WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
+    ) -> std::vec::IntoIter<&Wire<Type>> {
+        fn visit<'a>(
+            node: &'a WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
+            out: &mut Vec<&'a Wire<Type>>,
+        ) {
+            match node {
+                WireNode::Wire(ws) => out.extend(ws),
+                WireNode::Group {
+                    metadata: Metadata::Values(ws),
+                    ..
+                } => out.extend(ws),
+                WireNode::Group { elements, .. } => {
+                    for child in elements {
+                        visit(child, out);
                     }
-                    WireNode::Sequence { metadata, .. } => {
-                        if let Some(Metadata::Values(ws)) = &metadata {
-                            out.extend(ws);
-                        }
-                    }
-                    WireNode::Alternatives {
-                        metadata,
-                        alternatives,
-                    } => {
-                        if let Some(Metadata::Values(ws)) = metadata {
-                            out.extend(ws);
-                        }
-                        for arm in alternatives {
-                            visit(arm.as_slice(), out);
-                        }
-                    }
-                    WireNode::Outcomes { success, .. } => visit(success, out),
                 }
-            }
-        }
-        let mut out = vec![];
-        visit(nodes, &mut out);
-        out.into_iter()
-    }
-    fn values_mut(nodes: &mut [WireNode<Type, Metadata>]) -> std::vec::IntoIter<&mut Wire<Type>> {
-        fn visit<'a>(nodes: &'a mut [WireNode<Type, Metadata>], out: &mut Vec<&'a mut Wire<Type>>) {
-            for node in nodes {
-                match node {
-                    WireNode::Wire(w) => out.push(w),
-                    WireNode::Group {
-                        metadata: Metadata::Values(ws),
-                        ..
-                    } => out.extend(ws),
-                    WireNode::Group { children, .. } => visit(children.as_mut_slice(), out),
-                    WireNode::Optional { element, metadata } => {
-                        if let Some(Metadata::Values(ws)) = metadata {
-                            out.extend(ws);
-                        }
-                        visit(element.as_mut_slice(), out);
+                WireNode::Optional { element, metadata } => {
+                    if let Metadata::Values(ws) = metadata {
+                        out.extend(ws);
                     }
-                    WireNode::Sequence { metadata, .. } => {
-                        if let Some(Metadata::Values(ws)) = metadata {
-                            out.extend(ws);
-                        }
+                    visit(element, out);
+                }
+                WireNode::Sequence { metadata, .. } => {
+                    if let Metadata::Values(ws) = metadata {
+                        out.extend(ws);
                     }
-                    WireNode::Alternatives {
-                        metadata,
-                        alternatives,
-                    } => {
-                        if let Some(Metadata::Values(ws)) = metadata {
-                            out.extend(ws);
-                        }
-                        for arm in alternatives {
-                            visit(arm.as_mut_slice(), out);
-                        }
+                }
+                WireNode::Alternatives { metadata, elements } => {
+                    if let Metadata::Values(ws) = metadata {
+                        out.extend(ws);
                     }
-                    WireNode::Outcomes { success, .. } => {
-                        visit(success.as_mut_slice(), out);
+                    for child in elements {
+                        visit(child, out);
                     }
                 }
             }
         }
         let mut out = vec![];
-        visit(nodes, &mut out);
+        visit(node, &mut out);
         out.into_iter()
     }
-    fn validate(layout: &[prebindgen_flat::WireNode<Type, Metadata>]) -> Result<()> {
-        prebindgen_flat::validate_wire_nodes(layout.iter())?;
-        if let [WireNode::Outcomes {
-            success,
-            source_error,
-            binding_failure,
-        }] = layout
-        {
-            for nodes in std::iter::once(success)
-                .chain(source_error)
-                .chain(binding_failure)
-            {
-                Self::validate(nodes)?;
-            }
-            return Ok(());
-        }
-        validate_wire_names(Self::values(layout))?;
-        fn visit(nodes: &[WireNode<Type, Metadata>]) -> Result<()> {
-            for node in nodes {
-                match node {
-                    WireNode::Sequence { element, .. } => PointerLenAbi::validate(element)?,
-                    WireNode::Optional { element, .. } => visit(element.as_slice())?,
-                    WireNode::Group {
-                        metadata: Metadata::Values(_),
-                        children,
-                    } => PointerLenAbi::validate(children)?,
-                    WireNode::Group { children, .. } => visit(children.as_slice())?,
-                    _ => {}
+    fn values_mut(
+        node: &mut WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
+    ) -> std::vec::IntoIter<&mut Wire<Type>> {
+        fn visit<'a>(
+            node: &'a mut WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
+            out: &mut Vec<&'a mut Wire<Type>>,
+        ) {
+            match node {
+                WireNode::Wire(ws) => out.extend(ws),
+                WireNode::Group {
+                    metadata: Metadata::Values(ws),
+                    ..
+                } => out.extend(ws),
+                WireNode::Group { elements, .. } => {
+                    for child in elements {
+                        visit(child, out);
+                    }
+                }
+                WireNode::Optional { element, metadata } => {
+                    if let Metadata::Values(ws) = metadata {
+                        out.extend(ws);
+                    }
+                    visit(element, out);
+                }
+                WireNode::Sequence { metadata, .. } => {
+                    if let Metadata::Values(ws) = metadata {
+                        out.extend(ws);
+                    }
+                }
+                WireNode::Alternatives { metadata, elements } => {
+                    if let Metadata::Values(ws) = metadata {
+                        out.extend(ws);
+                    }
+                    for child in elements {
+                        visit(child, out);
+                    }
                 }
             }
-            Ok(())
         }
-        visit(layout)
+        let mut out = vec![];
+        visit(node, &mut out);
+        out.into_iter()
+    }
+    fn validate(node: &WireNode<Type, Metadata, Metadata, Metadata, Metadata>) -> Result<()> {
+        prebindgen_flat::validate_wire_nodes(std::iter::once(node))?;
+        validate_wire_names(Self::values(node))?;
+        match node {
+            WireNode::Sequence { element, .. } => Self::validate(element),
+            WireNode::Optional { element, .. } => Self::validate(element),
+            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+                for child in elements {
+                    Self::validate(child)?;
+                }
+                Ok(())
+            }
+            WireNode::Wire(_) => Ok(()),
+        }
     }
 }
 #[derive(Default)]
@@ -161,44 +144,70 @@ struct CodecImpl {
 }
 impl Codec for CodecImpl {
     type Wire = Type;
+    type Optional = Metadata;
+    type Sequence = Metadata;
     type Group = Metadata;
+    type Alternatives = Metadata;
+    fn group_metadata(&self) -> Metadata {
+        Metadata::Components
+    }
     fn optional_niche(
         &self,
-        payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
+        payload: &prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
     ) -> Option<NicheReservation<Self::Niche>> {
         select_optional_niche(self, PointerLenAbi::values(payload))
     }
     fn optional_presence(
         &self,
-        payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
+        payload: &prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
         reservation: &NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         optional_presence(self, PointerLenAbi::values(payload), reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &[prebindgen_flat::WireNode<Self::Wire, Self::Group>],
+        payload: &prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
         reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         absent_output_values(self, PointerLenAbi::values(payload), reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut Vec<prebindgen_flat::WireNode<Self::Wire, Self::Group>>,
+        payload: &mut prebindgen_flat::WireNode<
+            Self::Wire,
+            Self::Optional,
+            Self::Sequence,
+            Self::Group,
+            Self::Alternatives,
+        >,
         reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<()> {
-        retire_optional_niches(
-            self,
-            PointerLenAbi::values_mut(payload.as_mut_slice()),
-            reservation,
-        )
+        retire_optional_niches(self, PointerLenAbi::values_mut(payload), reservation)
     }
     fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
-        PointerLenAbi::validate(&plan.nodes)
+        PointerLenAbi::validate(&plan.node)
     }
     fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
-        PointerLenAbi::validate(&plan.nodes)?;
-        PointerLenAbi::result_packet(&plan.nodes, &plan.values)?;
+        PointerLenAbi::validate(&plan.outcomes.success)?;
+        PointerLenAbi::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
     }
 
@@ -268,7 +277,7 @@ impl Codec for CodecImpl {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &[prebindgen_flat::WireNode<Type, Metadata>],
+        element: &prebindgen_flat::WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
         _: &Condition,
     ) -> Result<SequenceInput<Metadata>> {
         let field = PointerLenAbi::row_fields(element)
@@ -307,7 +316,7 @@ impl Codec for CodecImpl {
         wire: syn::Ident,
         length: syn::Ident,
         _: syn::Ident,
-        element: &[prebindgen_flat::WireNode<Type, Metadata>],
+        element: &prebindgen_flat::WireNode<Type, Metadata, Metadata, Metadata, Metadata>,
         values: &[(syn::Ident, TokenStream)],
     ) -> Result<SequenceOutput<Metadata>> {
         assert_eq!(
@@ -353,7 +362,7 @@ impl Codec for CodecImpl {
         })
     }
     fn finish_output(&self, plan: &mut CodecOutput<Self>, _: &()) -> Result<()> {
-        let values = PointerLenAbi::result_packet(&plan.nodes, &plan.values)?;
+        let values = PointerLenAbi::result_packet(&plan.outcomes.success, &plan.values)?;
         // The result packet contains presence, data and length; preparation owns
         // the buffer until these expressions have been saved for delivery.
         let flag = values[0].1;
@@ -395,17 +404,19 @@ fn pointer_length_round_trip(reverse: bool) {
         .unwrap();
     let f = flat.function("echo").unwrap();
     assert_eq!(
-        prebindgen_flat::wire_definitions(f.input_conversions().unwrap()[0].wire_nodes().iter())
-            .count(),
+        prebindgen_flat::wire_definitions(std::iter::once(
+            f.input_conversions().unwrap()[0].input_node()
+        ))
+        .count(),
         1
     );
     let input = f.input_conversions().unwrap()[0];
     let output = f.output_conversion().unwrap();
-    assert_eq!(PointerLenAbi::parameters(input.wire_nodes()).len(), 3);
+    assert_eq!(PointerLenAbi::parameters(input.input_node()).len(), 3);
     assert_eq!(output.values.len(), 3);
     let cloned: CodecOutput<CodecImpl> = output.clone();
     assert_eq!(cloned.values.len(), 3);
-    let parameters = PointerLenAbi::parameters(&input.nodes)
+    let parameters = PointerLenAbi::parameters(&input.node)
         .map(|w| {
             let name = &w.name;
             let ty = w.rust_type();
@@ -417,7 +428,7 @@ fn pointer_length_round_trip(reverse: bool) {
         &(),
         &syn::parse_quote!(result),
         &syn::parse_quote!(Returned),
-        &PointerLenAbi::parameters(&input.nodes)
+        &PointerLenAbi::parameters(&input.node)
             .map(|w| w.name.clone())
             .collect::<Vec<_>>(),
     )

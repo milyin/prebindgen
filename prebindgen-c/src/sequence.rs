@@ -8,8 +8,14 @@ pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &[prebindgen_flat::WireNode<CWire, CGroup>],
-) -> Result<SequenceInput<CGroup>> {
+    element: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
+) -> Result<SequenceInput<prebindgen_flat::Wire<CWire>>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let mut bind = TokenStream::new();
     let mut values = Vec::new();
@@ -22,10 +28,10 @@ pub(crate) fn input(
         values.push((field.name.clone(), quote!(#name)));
     }
     Ok(SequenceInput {
-        metadata: CGroup::Sequence(Wire {
+        metadata: Wire {
             name: wire.clone(),
             kind: CWire::Rows,
-        }),
+        },
         open: quote!(let #length=#wire.len;::prebindgen_runtime::validate_slice(#wire.data as *const #row,#length)?;),
         bind,
         validation_values: values.clone(),
@@ -36,9 +42,15 @@ pub(crate) fn input(
 pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
-    element: &[prebindgen_flat::WireNode<CWire, CGroup>],
+    element: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<CGroup>> {
+) -> Result<SequenceOutput<prebindgen_flat::Wire<CWire>>> {
     let row = prebindgen_conversions::template_parameter(&format!("row_{wire}"));
     let fields = crate::group::row_values(element, values)?
         .into_iter()
@@ -50,10 +62,10 @@ pub(crate) fn output(
     Ok(SequenceOutput {
         commit_each: false,
         fallible: false,
-        metadata: CGroup::Sequence(Wire {
+        metadata: Wire {
             name: wire.clone(),
             kind: CWire::Rows,
-        }),
+        },
         begin: quote!(let mut #wire:Vec<#row>=Vec::with_capacity(#length);),
         enter: quote!(),
         store: quote!(#wire.push(#row {#(#fields),*});),
@@ -65,36 +77,53 @@ pub(crate) fn output(
         commit: quote!(let _=Box::into_raw(#wire);),
     })
 }
+#[allow(clippy::type_complexity)] // Pair each sequence carrier with its element tree.
 pub(crate) fn schemas<'a>(
-    layout: &'a [prebindgen_flat::WireNode<CWire, CGroup>],
-    out: &mut Vec<(&'a Wire, &'a [prebindgen_flat::WireNode<CWire, CGroup>])>,
+    node: &'a prebindgen_flat::WireNode<
+        CWire,
+        COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
+    out: &mut Vec<(
+        &'a prebindgen_flat::Wire<CWire>,
+        &'a prebindgen_flat::WireNode<
+            CWire,
+            COptional,
+            prebindgen_flat::Wire<CWire>,
+            CGroup,
+            prebindgen_flat::Wire<CWire>,
+        >,
+    )>,
 ) {
-    for node in layout {
-        match node {
-            WireNode::Wire(_) => {}
-            WireNode::Outcomes { success, .. } => {
-                schemas(success, out);
+    match node {
+        WireNode::Wire(_) => {}
+        WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+            for child in elements {
+                schemas(child, out);
             }
-            WireNode::Alternatives { alternatives, .. } => {
-                for arm in alternatives {
-                    schemas(arm, out);
-                }
-            }
-            WireNode::Group { children, .. } => schemas(children, out),
-            WireNode::Optional { element, .. } => schemas(element, out),
-            WireNode::Sequence { element, metadata } => {
-                schemas(element, out);
-                if let Some(carrier) = metadata.as_ref().and_then(CGroup::sequence_wire) {
-                    out.push((carrier, element));
-                }
-            }
+        }
+        WireNode::Optional { element, .. } => schemas(element, out),
+        WireNode::Sequence { element, metadata } => {
+            schemas(element, out);
+            out.push((metadata, element));
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)] // Explicit schema and writer inputs.
 pub(crate) fn emit_schemas(
-    schemas: Vec<(&Wire, &[prebindgen_flat::WireNode<CWire, CGroup>])>,
+    schemas: Vec<(
+        &Wire,
+        &prebindgen_flat::WireNode<
+            CWire,
+            crate::COptional,
+            prebindgen_flat::Wire<CWire>,
+            CGroup,
+            prebindgen_flat::Wire<CWire>,
+        >,
+    )>,
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
@@ -155,7 +184,13 @@ pub(crate) fn emit_schemas(
 
 /// Reclaim a committed output that will not reach its caller, including nested rows.
 pub(crate) fn release(
-    layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
+    layout: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
     fields: &[(&Wire, TokenStream)],
     context: &CContext,
     catch_panics: bool,
@@ -190,9 +225,15 @@ pub(crate) fn release(
 pub(crate) fn callback_output(
     wire: syn::Ident,
     values: &[(syn::Ident, TokenStream)],
-    element: &[prebindgen_flat::WireNode<CWire, CGroup>],
+    element: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
     length: syn::Ident,
-) -> Result<SequenceOutput<CGroup>> {
+) -> Result<SequenceOutput<prebindgen_flat::Wire<CWire>>> {
     let values = prebindgen_conversions::match_output_fields(
         crate::group::callback_parameters(element),
         values,
@@ -208,10 +249,10 @@ pub(crate) fn callback_output(
     Ok(SequenceOutput {
         commit_each: true,
         fallible: true, // A callback pointer must be provided; checked before source invocation.
-        metadata: CGroup::Sequence(Wire {
+        metadata: Wire {
             name: wire.clone(),
             kind: CWire::scalar(Primitive::Usize),
-        }),
+        },
         begin: quote!(),
         enter: quote!(),
         store: quote!(#(#prepare)* #commit unsafe { __pb_callback.expect("validated callback")(__pb_callback_context, #(#names),*); }),
@@ -222,66 +263,70 @@ pub(crate) fn callback_output(
 }
 
 /// A visitor may replace exactly one collection, optionally with its presence flag.
-pub(crate) fn callback_shape(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]) -> bool {
-    fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
-        match nodes {
-            [WireNode::Sequence { metadata, .. }] => metadata
-                .as_ref()
-                .and_then(CGroup::sequence_wire)
-                .is_some_and(|carrier| {
-                    matches!(
-                        carrier.kind,
-                        CWire::Scalar {
-                            primitive: Primitive::Usize,
-                            ..
-                        }
-                    )
-                }),
-            [WireNode::Optional { element, metadata }] => match &metadata {
-                Some(CGroup::Optional(o)) if o.niche.is_none() => {
-                    matches!(o.controls.as_slice(),[flag] if flag.name==o.discriminator)
-                        && one(element.as_slice())
-                }
-                _ => false,
-            },
-            [WireNode::Group { children, .. }] => one(children.as_slice()),
-            _ => false,
+pub(crate) fn callback_shape(
+    node: &prebindgen_flat::WireNode<
+        CWire,
+        COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
+) -> bool {
+    match node {
+        WireNode::Sequence { metadata, .. } => matches!(
+            metadata.kind,
+            CWire::Scalar {
+                primitive: Primitive::Usize,
+                ..
+            }
+        ),
+        WireNode::Optional { element, metadata } => {
+            metadata.niche.is_none()
+                && matches!(metadata.controls.as_slice(),[flag] if flag.name==metadata.discriminator)
+                && callback_shape(element)
         }
+        WireNode::Group { elements, .. } => {
+            matches!(elements.as_slice(),[only] if callback_shape(only))
+        }
+        _ => false,
     }
-    one(match layout {
-        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-        nodes => nodes,
-    })
 }
 
 /// The adapter selects its native scope before looking for a sequence.
 #[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
+    layout: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
 ) -> Option<(
     &prebindgen_flat::Wire<CWire>,
-    &[prebindgen_flat::WireNode<CWire, CGroup>],
+    &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
 )> {
-    let success = match layout {
-        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-        nodes => nodes,
-    };
-    prebindgen_declarations::outer_sequences(success)
+    prebindgen_declarations::outer_sequences(layout)
         .into_iter()
-        .find_map(|(element, metadata)| {
-            metadata
-                .and_then(CGroup::sequence_wire)
-                .map(|w| (w, element))
-        })
+        .next()
+        .map(|(element, metadata)| (metadata, element))
 }
 pub(crate) fn callback_target(
-    layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
+    layout: &prebindgen_flat::WireNode<
+        CWire,
+        crate::COptional,
+        prebindgen_flat::Wire<CWire>,
+        CGroup,
+        prebindgen_flat::Wire<CWire>,
+    >,
 ) -> Result<syn::Ident> {
-    let success = match layout {
-        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-        nodes => nodes,
-    };
-    if prebindgen_declarations::outer_sequences(success).len() != 1
+    if prebindgen_declarations::outer_sequences(layout).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2
     {
         return Err(

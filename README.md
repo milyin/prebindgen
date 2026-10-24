@@ -169,21 +169,25 @@ settings remain commented out in the example manifests.
 
 - `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
   Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
-- `Conversion::wire_nodes()` describes logical values and outcomes; it prescribes no
-  ABI, packing or delivery mechanism. `code_fragment_slot(mode, expected_type)`
-  accepts the generator's own requests, including any element/branch context.
-- `wire_nodes()` returns an ordinary slice of immediate `WireNode` roots.
-  Child lists are ordinary vectors. `iter()`, `len()` and indexing retain their
-  normal collection meanings.
-- `wire_definitions(nodes.iter())` explicitly traverses recursive leaf definitions,
-  including each sequence element schema and every alternative/outcome once.
-  `wire_definitions_mut(nodes.iter_mut())` edits those definitions.
-  `Function::input_wire_definitions()` traverses all input definitions; it replaces
-  the former `inputs()` accessor.
-  `wire_definitions_with_paths(nodes.iter())` includes `WirePath` addresses;
-  `wire_at_path(nodes.iter(), &path)` resolves a definition. These operations also
-  accept filtered/chained node iterators. Paths are relative to that root selection
-  and must be rebuilt after structural edits or changing the selected roots.
+- `Conversion::code_fragment_slot(mode, expected_type)` accepts the generator's
+  own requests, including any element or branch context.
+- `InputConversion::input_node()` describes one input value.
+  `OutputConversion::output_outcomes()` describes success and the optional source
+  error and binding failure channels. Each channel contains its own value tree.
+  Neither interface prescribes ABI packing or delivery.
+- `WireNode<W, O, S, G, A>` has a terminal `Wire(Vec<Wire<W>>)` bundle, a single
+  boxed payload for `Optional` and `Sequence`, and a vector of children for
+  `Group` and `Alternatives`. Each parent variant has its own metadata type.
+  Child vectors have normal collection iteration and indexing.
+- `wire_definitions(std::iter::once(input.input_node()))` explicitly traverses
+  logical wire definitions, visiting a sequence's element schema and every
+  alternative once. Select an output channel before traversing its tree.
+  `wire_definitions_mut` edits definitions without cloning metadata.
+  `Function::input_wire_definitions()` visits all input definitions.
+  `wire_definitions_with_paths` includes structural `WirePath` addresses;
+  `wire_at_path` resolves a definition. These operations accept filtered or
+  chained root iterators. Paths are relative to that selection and must be
+  rebuilt after structural edits or changing the selected roots.
 - Each generator defines its request enum. Requests can borrow names, settings,
   paths and currently bound elements. There is no mandatory context, phase order
   or physical per-wire request protocol in the common trait.
@@ -209,10 +213,10 @@ checks allocation aliases and shared acknowledgement, and returns a fallible
 expression. The protocol and its assembly helper live outside Flat; generators
 with different requirements can compose their own request enums directly.
 C/JNI use the optional staged conversion protocol from `prebindgen-conversions`.
-`InputPlan::nodes` and `OutputPlan::nodes` store the authoritative
-`Vec<WireNode<W, G>>`. There is no collection wrapper or alias.
-Payloads occur only in its leaves and children. Adapter metadata retains explicit
-native decisions and owns any additional values, such as presence flags,
+`InputPlan::node` stores one authoritative input tree.
+`OutputPlan::outcomes` stores `Outcomes<WireNode<W, O, S, G, A>>`.
+Payloads occur only in terminal bundles and children. Adapter metadata retains
+explicit native decisions and owns additional values such as presence flags,
 selectors or sequence parameters. Metadata contains no copy of the child tree.
 
 Each adapter has operations for actual ABI tasks: building a function's
@@ -523,8 +527,9 @@ outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.
 
 `WireNode::Optional` describes zero or one payload; `WireNode::Sequence`
-describes zero or more elements. Both store `element: Vec<WireNode<W, G>>` and `metadata: Option<G>` directly.
-There is no common `Inline`/`Carrier` choice. For example:
+describes zero or more elements. Each stores one boxed `element` node. Optional
+metadata has type `O`; sequence metadata has type `S`. A `Group` combines several
+related components into one payload. For example:
 
 ```text
 Optional
@@ -825,12 +830,13 @@ one niche, or `None` when exhausted. The shared compiler suppresses niches on
 other payload wires and on inactive selector arms. Both input and output
 composition use this protocol.
 
-Each logical `Wire<W>` defines one typed value. A `Vec<WireNode<W, G>>` records
-payloads, repetition, field relationships and mutually exclusive alternatives.
-The vectors contain immediate nodes; recursive traversal is always explicit.
-`Alternatives` describes a choice of payload schemas, including input constructor
-choices. It excludes the transport's selector tag. `Outcomes` describes named
-completion channels at the root of an output schema.
+Each logical `Wire<W>` defines one typed value. A `WireNode<W, O, S, G, A>`
+describes a value assembled from wire bundles, repetition, field relationships
+and mutually exclusive alternatives. An empty bundle or group carries no values. Optional
+and sequence nodes each contain one complete payload node; use a `Group` when
+that payload has several related components. `Alternatives` describes choices
+such as input constructors; its metadata owns the transport selector.
+`Outcomes` surrounds output value trees and cannot be nested inside them.
 It makes no assumption about where a value is passed. For example:
 
 ```text
@@ -859,29 +865,31 @@ in manual schemas. Standard C codec plans describe the diagnostic message in bot
 cases; the C writer chooses whether to deliver it or abort. Empty channels retain their identity, including
 `Result<(), E>` and `Result<T, ()>`.
 
-An `Outcomes` node has a required `success: Vec<WireNode<W, G>>` and two
-independently optional fields, `source_error` and `binding_failure`, each an
-`Option<Vec<WireNode<W, G>>>`. Read or update those fields directly.
-`None` omits an error channel; `Some(vec![])` declares an error with no payload.
-The representation cannot omit success or duplicate a channel.
-`wire_definitions_with_paths(output.wire_nodes().iter())` visits each definition
-once and supplies a path identifying its element and outcome. Equal wire names
-in different alternatives are allowed; a path distinguishes them. Actual
-runtime elements and the selected outcome are emission context supplied by the
-adapter, rather than flat wire positions imposed by the trait. Outcomes require a
-`success` field and may appear only as the sole root node. Outcome paths use
-fixed branch positions: 0 for success, 1 for source error and 2 for binding failure.
-Adding a source-error channel does not change a binding-failure path;
-rebuild paths after other structural edits.
+`Outcomes<N>` has a required `success: N` and two optional fields,
+`source_error: Option<N>` and `binding_failure: Option<N>`. Here `N` is a
+`WireNode<W, O, S, G, A>`. Read or update the channel fields directly.
+`None` omits an error channel; `Some(WireNode::Wire(vec![]))` declares an error
+with no payload. The type cannot omit success, duplicate a channel or insert
+completion channels into an input, sequence element or record field.
 
-Adapter metadata `G` can retain field names, record information or other semantic
-relationships. The native staged compiler additionally uses
-`Codec::optional_metadata` and `alternatives_metadata`, together with the
-metadata returned by `sequence_input`/`sequence_output`, to retain native
-decisions on logical nodes. `field_group` and `fields_group`
-retain field/record information. Optional metadata describes a presence/niche
-rule and owns any additional flag; it adds no logical payload fields. The common tree does not
-interpret adapter metadata.
+Choose a channel before traversing:
+`wire_definitions_with_paths(std::iter::once(&output.output_outcomes().success))`.
+Paths describe only the chosen value tree, including the terminal bundle index;
+they contain no outcome discriminator. Equal wire names in different alternatives
+are allowed. Runtime sequence elements and the selected output channel are
+context supplied by the adapter.
+
+Metadata types `O`, `S`, `G` and `A` describe optional values, sequences, related
+groups and alternative selection respectively. `W` describes each individual
+value. Use `()` for metadata a generator does not need. The shared compiler
+creates metadata through codec hooks and does not interpret it. `group_metadata`
+describes ordered conversion components; `field_group` and `fields_group` retain
+source field information. Constructor arguments and output combinations retain
+their group with one component; constructors without arguments retain an empty
+group. `optional_metadata` owns presence or niche controls,
+`alternatives_metadata` owns the selector, and sequence hooks supply `S`.
+C and JNI use distinct types for these roles, so a sequence cannot accidentally
+receive optional metadata.
 
 For an option, the compiler chooses the discriminator and absent representation
 before calling the hook. The hook receives the normalized presence binding used
@@ -891,19 +899,20 @@ option. After C reserves `0x110000` for `None` in `Option<char>`, that leaf can
 offer `0x110001` to the next option. `Codec::set_niche` updates this state;
 `Codec::niche` reads it. `None` means no niche remains.
 
-Record helpers check source field-name uniqueness while constructing input and
-borrowed/owned output conversions. Native-plan finalization checks physical wire
-names and success-transport expression counts; common logical validation checks
-outcome structure without imposing an ABI. Each adapter validates the metadata it
-stores, including optional references, field grouping and Kotlin binding names.
+Record helpers check source field names while constructing input and
+borrowed or owned output conversions. Native-plan finalization checks physical
+wire names and success-expression counts. Common tree validation checks that
+alternatives contain at least one choice; adapter validation checks metadata
+such as presence references, field grouping and Kotlin binding names. Completion
+channels returned prematurely by a nested leaf conversion are rejected.
 
-Custom converters implement `Conversion::wire_nodes` and declare `Conversion::Group`;
-use `()` when no grouping information is needed. Custom codecs return
-`CodecInput<Self>`/`CodecOutput<Self>`, implement the three group hooks, and
-implement the paired `niche` and `set_niche` methods. `Bindings<W, C, G>`,
-`InputPlan<W, C, G>` and `OutputPlan<W, C, G>` use `G` directly as parent metadata,
-defaulting to `()`. Shared value and boxed helpers create leaf-only trees with
-that group type. Information about each individual wire belongs in `W`.
+Custom converters implement `Conversion` for code emission and the applicable
+`InputConversion` or `OutputConversion` interface for their description.
+Custom codecs return `CodecInput<Self>` and `CodecOutput<Self>`, declare the
+four metadata types and implement their hooks. `Bindings<W, C, O, S, G, A>`,
+`InputPlan<W, C, O, S, G, A>` and `OutputPlan<W, C, O, S, G, A>` default all
+parameters after `W` to `()`. Shared value and boxed helpers create terminal
+bundles without inventing parent metadata.
 
 Niche metadata may describe enum tags, full-width unsigned values, bit patterns,
 or structured predicates. A custom float domain may explicitly exclude a NaN
@@ -968,19 +977,19 @@ optional-field and callback APIs. Its driver reports that limitation.
 
 Adapter API migration for the logical schema:
 
-- Child lists use `Vec<WireNode<W, G>>` directly, with no wrapper or alias.
-  Construct `WireNode::Group`, `Optional` and `Sequence` explicitly.
-- `Conversion` provides `wire_nodes()` and generator-defined slot requests.
-  Generators derive function parameters, result packets, rows and callback
-  signatures through their own operations.
-- Use explicit `wire_definitions` / `wire_definitions_mut` traversal over node
-  iterators. `wire_definitions_with_paths` and `wire_at_path` provide structural
-  context. `validate_wire_nodes` checks branch structure. Access the `Outcomes`
-  fields `success`, `source_error` and `binding_failure` directly; there is no
-  channel discriminator or generic channel-selection/setter API.
-- Stored plans expose `nodes: Vec<WireNode<W, G>>`. `OutputPlan::values` and sequence-hook
-  reads are keyed by binding name. `match_output_fields` matches prepared output
-  expressions to explicitly selected destination fields.
+- `WireNode<W, O, S, G, A>` separates parent metadata by role. `Wire` contains
+  a vector of terminal values; `Optional` and `Sequence` contain a boxed node;
+  `Group` and `Alternatives` contain vectors of nodes.
+- `Conversion` provides generator-defined emission requests. Inputs implement
+  `InputConversion::input_node`; outputs implement
+  `OutputConversion::output_outcomes`. The separate `Outcomes<N>` describes
+  completion channels and cannot be a child node.
+- Use explicit `wire_definitions` / `wire_definitions_mut` traversal over root
+  iterators. Select a completion channel first. Paths include terminal bundle
+  indices; rebuild them after structural edits.
+- Stored plans expose `InputPlan::node` and `OutputPlan::outcomes`.
+  `OutputPlan::values` and sequence-hook reads remain keyed by binding name.
+  `match_output_fields` matches expressions to selected destination fields.
 - Codecs implement option niche reservation/presence, absent-output preparation,
   niche retirement, path prefixing and conversion validation as needed.
 - `SequenceInput`/`SequenceOutput` retain complete node metadata. Callback variant

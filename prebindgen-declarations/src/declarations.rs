@@ -391,13 +391,17 @@ impl Declarations {
         };
         for input in inputs.iter_mut().flatten() {
             codec.finish_input(input, extra)?;
-            prebindgen_flat::validate_wire_nodes(input.nodes.iter())?;
+            prebindgen_flat::validate_wire_nodes(std::iter::once(&input.node))?;
             codec.validate_input(input)?;
         }
         if let Some(output) = &mut output {
             crate::finalize_output_schema(codec, output, extra)?;
             codec.finish_output(output, extra)?;
-            prebindgen_flat::validate_wire_nodes(output.nodes.iter())?;
+            prebindgen_flat::validate_wire_nodes(
+                std::iter::once(&output.outcomes.success)
+                    .chain(output.outcomes.source_error.iter())
+                    .chain(output.outcomes.binding_failure.iter()),
+            )?;
             codec.validate_output(output)?;
         }
         // Install slots only after every conversion has compiled successfully.

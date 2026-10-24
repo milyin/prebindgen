@@ -1,6 +1,7 @@
 //! JNI error channels reuse ordinary output conversions. User callbacks run in Kotlin.
 use super::*;
 use prebindgen_conversions::OutputFragment;
+use prebindgen_flat::OutputConversion;
 use prebindgen_flat::{Conversion, Function, TypeUse};
 
 #[derive(Clone)]
@@ -89,14 +90,9 @@ pub(crate) fn prepare(
         let output = flat.functions.remove(&helper.to_string()).unwrap().ret.slot;
         result.map_err(|e| format!("JNI error `{}` in `{}`: {e}", key.0, function.name))?;
         let output = output.unwrap();
-        codec.error_layouts.insert(
-            key.clone(),
-            match output.wire_nodes() {
-                [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-                nodes => nodes,
-            }
-            .to_vec(),
-        );
+        codec
+            .error_layouts
+            .insert(key.clone(), output.output_outcomes().success.clone());
         let handler = if let Some(handler) = handlers.get(&key) {
             handler.clone()
         } else {
@@ -249,7 +245,7 @@ pub(crate) fn delivery(error: &ErrorBinding, context: &KotlinContext<'_>) -> Res
         context.result,
         context.result,
         1,
-        crate::group::result_packet_fields(error.output.wire_nodes()).len(),
+        crate::group::result_packet_fields(&error.output.output_outcomes().success).len(),
     );
     let call = format!("onError.run({})", output.delivered.join(", "));
     if output.cleanup.is_empty() {

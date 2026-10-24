@@ -10,9 +10,15 @@ pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
     active: &Condition,
-) -> Result<SequenceInput<JniGroup>> {
+) -> Result<SequenceInput<prebindgen_flat::Wire<JniWire>>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
@@ -43,13 +49,13 @@ pub(crate) fn input(
         ));
     }
     Ok(SequenceInput {
-        metadata: JniGroup::Sequence(Wire {
+        metadata: Wire {
             name: wire.clone(),
             kind: JniWire::Rows {
                 condition: kotlin_condition(active),
                 null_niche_available: true,
             },
-        }),
+        },
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
@@ -61,9 +67,15 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<JniGroup>> {
+) -> Result<SequenceOutput<prebindgen_flat::Wire<JniWire>>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
@@ -73,13 +85,13 @@ pub(crate) fn output(
     Ok(SequenceOutput {
         commit_each: false,
         fallible: true,
-        metadata: JniGroup::Sequence(Wire {
+        metadata: Wire {
             name: wire.clone(),
             kind: JniWire::Rows {
                 condition: "true".into(),
                 null_niche_available: true,
             },
-        }),
+        },
         begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
         enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
         store: quote! {
@@ -95,7 +107,13 @@ pub(crate) fn output(
 
 pub(crate) fn input_list(
     carrier: &Wire<JniWire>,
-    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     let child = input_kotlin(element, context)?;
@@ -154,7 +172,13 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    element: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let row = format!("{}_row", context.output_prefix);
@@ -194,31 +218,38 @@ pub(crate) fn output_list(
 /// The adapter selects its native scope before looking for a sequence.
 #[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    layout: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
 ) -> Option<(
     &Wire<JniWire>,
-    &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
 )> {
-    let success = match layout {
-        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-        nodes => nodes,
-    };
-    prebindgen_declarations::outer_sequences(success)
+    prebindgen_declarations::outer_sequences(layout)
         .into_iter()
-        .find_map(|(element, metadata)| {
-            metadata
-                .and_then(JniGroup::sequence_wire)
-                .map(|w| (w, element))
-        })
+        .next()
+        .map(|(element, metadata)| (metadata, element))
 }
 pub(crate) fn callback_target(
-    layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
+    layout: &prebindgen_flat::WireNode<
+        JniWire,
+        crate::JniOptional,
+        prebindgen_flat::Wire<JniWire>,
+        JniGroup,
+        prebindgen_flat::Wire<JniWire>,
+    >,
 ) -> Result<syn::Ident> {
-    let success = match layout {
-        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
-        nodes => nodes,
-    };
-    if prebindgen_declarations::outer_sequences(success).len() != 1
+    if prebindgen_declarations::outer_sequences(layout).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2
     {
         return Err(
