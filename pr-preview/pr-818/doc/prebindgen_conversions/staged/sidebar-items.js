@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["InputFragment","InputWireFragment","OutputFragment","OutputWireFragment"],"fn":["emit_call"],"struct":["OutputValue"],"trait":["StagedFunction"]};
