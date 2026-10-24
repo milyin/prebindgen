@@ -162,9 +162,9 @@
 <a href=#162 id=162 data-nosnippet>162</a>        prebindgen_flat::WireNode&lt;
 <a href=#163 id=163 data-nosnippet>163</a>            JniWire,
 <a href=#164 id=164 data-nosnippet>164</a>            <span class="kw">crate</span>::JniOptional,
-<a href=#165 id=165 data-nosnippet>165</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#165 id=165 data-nosnippet>165</a>            <span class="kw">crate</span>::JniSequence,
 <a href=#166 id=166 data-nosnippet>166</a>            JniGroup,
-<a href=#167 id=167 data-nosnippet>167</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#167 id=167 data-nosnippet>167</a>            <span class="kw">crate</span>::JniSelector,
 <a href=#168 id=168 data-nosnippet>168</a>        &gt;,
 <a href=#169 id=169 data-nosnippet>169</a>    &gt;,
 <a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) error_helpers: BTreeMap&lt;(String, bool), syn::Ident&gt;,
@@ -486,9 +486,9 @@
 <a href=#486 id=486 data-nosnippet>486</a>        layout: <span class="kw-2">&amp;mut </span>prebindgen_flat::WireNode&lt;
 <a href=#487 id=487 data-nosnippet>487</a>            JniWire,
 <a href=#488 id=488 data-nosnippet>488</a>            <span class="kw">crate</span>::JniOptional,
-<a href=#489 id=489 data-nosnippet>489</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#489 id=489 data-nosnippet>489</a>            <span class="kw">crate</span>::JniSequence,
 <a href=#490 id=490 data-nosnippet>490</a>            JniGroup,
-<a href=#491 id=491 data-nosnippet>491</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#491 id=491 data-nosnippet>491</a>            <span class="kw">crate</span>::JniSelector,
 <a href=#492 id=492 data-nosnippet>492</a>        &gt;,
 <a href=#493 id=493 data-nosnippet>493</a>        root: String,
 <a href=#494 id=494 data-nosnippet>494</a>        condition: String,
@@ -514,9 +514,9 @@
 <a href=#514 id=514 data-nosnippet>514</a><span class="kw">impl </span>Codec <span class="kw">for </span>DataCodec {
 <a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">type </span>Niche = <span class="kw">crate</span>::optional::JniNiche;
 <a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">type </span>Optional = JniOptional;
-<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">type </span>Sequence = prebindgen_flat::Wire&lt;JniWire&gt;;
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">type </span>Sequence = JniSequence;
 <a href=#518 id=518 data-nosnippet>518</a>    <span class="kw">type </span>Group = JniGroup;
-<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">type </span>Alternatives = prebindgen_flat::Wire&lt;JniWire&gt;;
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">type </span>Alternatives = JniSelector;
 <a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">fn </span>group_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JniGroup {
 <a href=#521 id=521 data-nosnippet>521</a>        JniGroup::Values
 <a href=#522 id=522 data-nosnippet>522</a>    }
@@ -527,13 +527,13 @@
 <a href=#527 id=527 data-nosnippet>527</a>        discriminator: syn::Ident,
 <a href=#528 id=528 data-nosnippet>528</a>        niche: <span class="prelude-ty">Option</span>&lt;JniNiche&gt;,
 <a href=#529 id=529 data-nosnippet>529</a>        controls: Vec&lt;prebindgen_flat::Wire&lt;JniWire&gt;&gt;,
-<a href=#530 id=530 data-nosnippet>530</a>    ) -&gt; JniOptional {
+<a href=#530 id=530 data-nosnippet>530</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;JniOptional&gt; {
 <a href=#531 id=531 data-nosnippet>531</a>        JniCodec.optional_metadata(presence, discriminator, niche, controls)
 <a href=#532 id=532 data-nosnippet>532</a>    }
 <a href=#533 id=533 data-nosnippet>533</a>    <span class="kw">fn </span>alternatives_metadata(
 <a href=#534 id=534 data-nosnippet>534</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#535 id=535 data-nosnippet>535</a>        selector: prebindgen_flat::Wire&lt;JniWire&gt;,
-<a href=#536 id=536 data-nosnippet>536</a>    ) -&gt; prebindgen_flat::Wire&lt;JniWire&gt; {
+<a href=#536 id=536 data-nosnippet>536</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;JniSelector&gt; {
 <a href=#537 id=537 data-nosnippet>537</a>        JniCodec.alternatives_metadata(selector)
 <a href=#538 id=538 data-nosnippet>538</a>    }
 <a href=#539 id=539 data-nosnippet>539</a>    <span class="kw">fn </span>field_group(<span class="kw-2">&amp;</span><span class="self">self</span>, name: syn::Ident) -&gt; JniGroup {
@@ -556,12 +556,12 @@
 <a href=#556 id=556 data-nosnippet>556</a>        element: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;
 <a href=#557 id=557 data-nosnippet>557</a>            JniWire,
 <a href=#558 id=558 data-nosnippet>558</a>            <span class="kw">crate</span>::JniOptional,
-<a href=#559 id=559 data-nosnippet>559</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#559 id=559 data-nosnippet>559</a>            <span class="kw">crate</span>::JniSequence,
 <a href=#560 id=560 data-nosnippet>560</a>            JniGroup,
-<a href=#561 id=561 data-nosnippet>561</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#561 id=561 data-nosnippet>561</a>            <span class="kw">crate</span>::JniSelector,
 <a href=#562 id=562 data-nosnippet>562</a>        &gt;,
 <a href=#563 id=563 data-nosnippet>563</a>        active: <span class="kw-2">&amp;</span>Condition,
-<a href=#564 id=564 data-nosnippet>564</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_declarations::SequenceInput&lt;prebindgen_flat::Wire&lt;JniWire&gt;&gt;&gt; {
+<a href=#564 id=564 data-nosnippet>564</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_declarations::SequenceInput&lt;<span class="kw">crate</span>::JniSequence&gt;&gt; {
 <a href=#565 id=565 data-nosnippet>565</a>        JniCodec.sequence_input(e, w, n, i, element, active)
 <a href=#566 id=566 data-nosnippet>566</a>    }
 <a href=#567 id=567 data-nosnippet>567</a>    <span class="kw">fn </span>sequence_output(
@@ -573,12 +573,12 @@
 <a href=#573 id=573 data-nosnippet>573</a>        element: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;
 <a href=#574 id=574 data-nosnippet>574</a>            JniWire,
 <a href=#575 id=575 data-nosnippet>575</a>            <span class="kw">crate</span>::JniOptional,
-<a href=#576 id=576 data-nosnippet>576</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">crate</span>::JniSequence,
 <a href=#577 id=577 data-nosnippet>577</a>            JniGroup,
-<a href=#578 id=578 data-nosnippet>578</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#578 id=578 data-nosnippet>578</a>            <span class="kw">crate</span>::JniSelector,
 <a href=#579 id=579 data-nosnippet>579</a>        &gt;,
 <a href=#580 id=580 data-nosnippet>580</a>        values: <span class="kw-2">&amp;</span>[(syn::Ident, TokenStream)],
-<a href=#581 id=581 data-nosnippet>581</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_declarations::SequenceOutput&lt;prebindgen_flat::Wire&lt;JniWire&gt;&gt;&gt; {
+<a href=#581 id=581 data-nosnippet>581</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_declarations::SequenceOutput&lt;<span class="kw">crate</span>::JniSequence&gt;&gt; {
 <a href=#582 id=582 data-nosnippet>582</a>        <span class="kw">if </span><span class="self">self</span>.callback_wire.as_ref() == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>w) {
 <a href=#583 id=583 data-nosnippet>583</a>            <span class="kw">crate</span>::sequence_callback::transport(w, element, values)
 <a href=#584 id=584 data-nosnippet>584</a>        } <span class="kw">else </span>{
@@ -593,9 +593,9 @@
 <a href=#593 id=593 data-nosnippet>593</a>            prebindgen_flat::WireNode&lt;
 <a href=#594 id=594 data-nosnippet>594</a>                JniWire,
 <a href=#595 id=595 data-nosnippet>595</a>                <span class="kw">crate</span>::JniOptional,
-<a href=#596 id=596 data-nosnippet>596</a>                prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#596 id=596 data-nosnippet>596</a>                <span class="kw">crate</span>::JniSequence,
 <a href=#597 id=597 data-nosnippet>597</a>                JniGroup,
-<a href=#598 id=598 data-nosnippet>598</a>                prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#598 id=598 data-nosnippet>598</a>                <span class="kw">crate</span>::JniSelector,
 <a href=#599 id=599 data-nosnippet>599</a>            &gt;,
 <a href=#600 id=600 data-nosnippet>600</a>        &gt;,
 <a href=#601 id=601 data-nosnippet>601</a>    &gt; {
@@ -610,9 +610,9 @@
 <a href=#610 id=610 data-nosnippet>610</a>        prebindgen_flat::WireNode&lt;
 <a href=#611 id=611 data-nosnippet>611</a>            JniWire,
 <a href=#612 id=612 data-nosnippet>612</a>            <span class="kw">crate</span>::JniOptional,
-<a href=#613 id=613 data-nosnippet>613</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#613 id=613 data-nosnippet>613</a>            <span class="kw">crate</span>::JniSequence,
 <a href=#614 id=614 data-nosnippet>614</a>            JniGroup,
-<a href=#615 id=615 data-nosnippet>615</a>            prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#615 id=615 data-nosnippet>615</a>            <span class="kw">crate</span>::JniSelector,
 <a href=#616 id=616 data-nosnippet>616</a>        &gt;,
 <a href=#617 id=617 data-nosnippet>617</a>    &gt; {
 <a href=#618 id=618 data-nosnippet>618</a>        <span class="self">self</span>.error_layouts
@@ -930,9 +930,9 @@
 <a href=#930 id=930 data-nosnippet>930</a>    <span class="kw-2">&amp;</span><span class="lifetime">'a </span>prebindgen_flat::WireNode&lt;
 <a href=#931 id=931 data-nosnippet>931</a>        JniWire,
 <a href=#932 id=932 data-nosnippet>932</a>        <span class="kw">crate</span>::JniOptional,
-<a href=#933 id=933 data-nosnippet>933</a>        prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#933 id=933 data-nosnippet>933</a>        <span class="kw">crate</span>::JniSequence,
 <a href=#934 id=934 data-nosnippet>934</a>        JniGroup,
-<a href=#935 id=935 data-nosnippet>935</a>        prebindgen_flat::Wire&lt;JniWire&gt;,
+<a href=#935 id=935 data-nosnippet>935</a>        <span class="kw">crate</span>::JniSelector,
 <a href=#936 id=936 data-nosnippet>936</a>    &gt;,
 <a href=#937 id=937 data-nosnippet>937</a>);
 <a href=#938 id=938 data-nosnippet>938</a><span class="kw">fn </span>fields(nodes: <span class="kw-2">&amp;</span>[kotlin::JniNode]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;FieldNode&lt;<span class="lifetime">'_</span>&gt;&gt;&gt; {
@@ -1036,94 +1036,90 @@
 <a href=#1036 id=1036 data-nosnippet>1036</a>
 <a href=#1037 id=1037 data-nosnippet>1037</a>    <span class="kw">fn </span>record(
 <a href=#1038 id=1038 data-nosnippet>1038</a>        root: <span class="kw-2">&amp;</span>str,
-<a href=#1039 id=1039 data-nosnippet>1039</a>    ) -&gt; WireNode&lt;
-<a href=#1040 id=1040 data-nosnippet>1040</a>        JniWire,
-<a href=#1041 id=1041 data-nosnippet>1041</a>        <span class="kw">crate</span>::JniOptional,
-<a href=#1042 id=1042 data-nosnippet>1042</a>        prebindgen_flat::Wire&lt;JniWire&gt;,
-<a href=#1043 id=1043 data-nosnippet>1043</a>        JniGroup,
-<a href=#1044 id=1044 data-nosnippet>1044</a>        prebindgen_flat::Wire&lt;JniWire&gt;,
-<a href=#1045 id=1045 data-nosnippet>1045</a>    &gt; {
-<a href=#1046 id=1046 data-nosnippet>1046</a>        WireNode::Group {
-<a href=#1047 id=1047 data-nosnippet>1047</a>            metadata: JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
-<a href=#1048 id=1048 data-nosnippet>1048</a>                root: root.into(),
-<a href=#1049 id=1049 data-nosnippet>1049</a>                class_name: <span class="string">"example.Empty"</span>.into(),
-<a href=#1050 id=1050 data-nosnippet>1050</a>                condition: <span class="string">"true"</span>.into(),
-<a href=#1051 id=1051 data-nosnippet>1051</a>            })),
-<a href=#1052 id=1052 data-nosnippet>1052</a>            elements: Vec::new(),
-<a href=#1053 id=1053 data-nosnippet>1053</a>        }
-<a href=#1054 id=1054 data-nosnippet>1054</a>    }
-<a href=#1055 id=1055 data-nosnippet>1055</a>    <span class="attr">#[test]
-<a href=#1056 id=1056 data-nosnippet>1056</a>    </span><span class="kw">fn </span>kotlin_record_and_presence_bindings_share_a_namespace() {
-<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="kw">let </span>optional = WireNode::Optional {
-<a href=#1058 id=1058 data-nosnippet>1058</a>            metadata: JniOptional {
-<a href=#1059 id=1059 data-nosnippet>1059</a>                controls: <span class="macro">vec!</span>[Wire {
-<a href=#1060 id=1060 data-nosnippet>1060</a>                    name: <span class="macro">syn::parse_quote!</span>(flag),
-<a href=#1061 id=1061 data-nosnippet>1061</a>                    kind: JniWire::selector(),
-<a href=#1062 id=1062 data-nosnippet>1062</a>                }],
-<a href=#1063 id=1063 data-nosnippet>1063</a>                presence: <span class="macro">syn::parse_quote!</span>(flag),
-<a href=#1064 id=1064 data-nosnippet>1064</a>                discriminator: <span class="macro">syn::parse_quote!</span>(flag),
-<a href=#1065 id=1065 data-nosnippet>1065</a>                niche: <span class="prelude-val">None</span>,
-<a href=#1066 id=1066 data-nosnippet>1066</a>            },
-<a href=#1067 id=1067 data-nosnippet>1067</a>            element: Box::default(),
+<a href=#1039 id=1039 data-nosnippet>1039</a>    ) -&gt; WireNode&lt;JniWire, <span class="kw">crate</span>::JniOptional, <span class="kw">crate</span>::JniSequence, JniGroup, <span class="kw">crate</span>::JniSelector&gt;
+<a href=#1040 id=1040 data-nosnippet>1040</a>    {
+<a href=#1041 id=1041 data-nosnippet>1041</a>        WireNode::Group {
+<a href=#1042 id=1042 data-nosnippet>1042</a>            metadata: JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
+<a href=#1043 id=1043 data-nosnippet>1043</a>                root: root.into(),
+<a href=#1044 id=1044 data-nosnippet>1044</a>                class_name: <span class="string">"example.Empty"</span>.into(),
+<a href=#1045 id=1045 data-nosnippet>1045</a>                condition: <span class="string">"true"</span>.into(),
+<a href=#1046 id=1046 data-nosnippet>1046</a>            })),
+<a href=#1047 id=1047 data-nosnippet>1047</a>            elements: Vec::new(),
+<a href=#1048 id=1048 data-nosnippet>1048</a>        }
+<a href=#1049 id=1049 data-nosnippet>1049</a>    }
+<a href=#1050 id=1050 data-nosnippet>1050</a>    <span class="attr">#[test]
+<a href=#1051 id=1051 data-nosnippet>1051</a>    </span><span class="kw">fn </span>kotlin_record_and_presence_bindings_share_a_namespace() {
+<a href=#1052 id=1052 data-nosnippet>1052</a>        <span class="kw">let </span>optional = WireNode::Optional {
+<a href=#1053 id=1053 data-nosnippet>1053</a>            metadata: JniOptional::from_parts(
+<a href=#1054 id=1054 data-nosnippet>1054</a>                <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#1055 id=1055 data-nosnippet>1055</a>                <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#1056 id=1056 data-nosnippet>1056</a>                <span class="prelude-val">None</span>,
+<a href=#1057 id=1057 data-nosnippet>1057</a>                <span class="macro">vec!</span>[Wire {
+<a href=#1058 id=1058 data-nosnippet>1058</a>                    name: <span class="macro">syn::parse_quote!</span>(flag),
+<a href=#1059 id=1059 data-nosnippet>1059</a>                    kind: JniWire::selector(),
+<a href=#1060 id=1060 data-nosnippet>1060</a>                }],
+<a href=#1061 id=1061 data-nosnippet>1061</a>            )
+<a href=#1062 id=1062 data-nosnippet>1062</a>            .unwrap(),
+<a href=#1063 id=1063 data-nosnippet>1063</a>            element: Box::default(),
+<a href=#1064 id=1064 data-nosnippet>1064</a>        };
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw">let </span><span class="kw-2">mut </span>combined = WireNode::Group {
+<a href=#1066 id=1066 data-nosnippet>1066</a>            metadata: JniGroup::Values,
+<a href=#1067 id=1067 data-nosnippet>1067</a>            elements: <span class="macro">vec!</span>[optional, record(<span class="string">"value"</span>)],
 <a href=#1068 id=1068 data-nosnippet>1068</a>        };
-<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="kw">let </span><span class="kw-2">mut </span>combined = WireNode::Group {
-<a href=#1070 id=1070 data-nosnippet>1070</a>            metadata: JniGroup::Values,
-<a href=#1071 id=1071 data-nosnippet>1071</a>            elements: <span class="macro">vec!</span>[optional, record(<span class="string">"value"</span>)],
+<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined).unwrap();
+<a href=#1070 id=1070 data-nosnippet>1070</a>        <span class="kw">let </span>WireNode::Group { elements, .. } = <span class="kw-2">&amp;mut </span>combined <span class="kw">else </span>{
+<a href=#1071 id=1071 data-nosnippet>1071</a>            <span class="macro">panic!</span>()
 <a href=#1072 id=1072 data-nosnippet>1072</a>        };
-<a href=#1073 id=1073 data-nosnippet>1073</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined).unwrap();
-<a href=#1074 id=1074 data-nosnippet>1074</a>        <span class="kw">let </span>WireNode::Group { elements, .. } = <span class="kw-2">&amp;mut </span>combined <span class="kw">else </span>{
-<a href=#1075 id=1075 data-nosnippet>1075</a>            <span class="macro">panic!</span>()
-<a href=#1076 id=1076 data-nosnippet>1076</a>        };
-<a href=#1077 id=1077 data-nosnippet>1077</a>        elements.push(record(<span class="string">"flag"</span>));
-<a href=#1078 id=1078 data-nosnippet>1078</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined)
-<a href=#1079 id=1079 data-nosnippet>1079</a>            .unwrap_err()
-<a href=#1080 id=1080 data-nosnippet>1080</a>            .contains(<span class="string">"duplicate Kotlin group binding `flag`"</span>));
-<a href=#1081 id=1081 data-nosnippet>1081</a>        <span class="kw">let </span>duplicates = WireNode::Group {
-<a href=#1082 id=1082 data-nosnippet>1082</a>            metadata: JniGroup::Values,
-<a href=#1083 id=1083 data-nosnippet>1083</a>            elements: <span class="macro">vec!</span>[record(<span class="string">"value"</span>), record(<span class="string">"value"</span>)],
-<a href=#1084 id=1084 data-nosnippet>1084</a>        };
-<a href=#1085 id=1085 data-nosnippet>1085</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>duplicates)
-<a href=#1086 id=1086 data-nosnippet>1086</a>            .unwrap_err()
-<a href=#1087 id=1087 data-nosnippet>1087</a>            .contains(<span class="string">"duplicate Kotlin group binding `value`"</span>));
-<a href=#1088 id=1088 data-nosnippet>1088</a>        prebindgen_flat::validate_wire_nodes(std::iter::once(<span class="kw-2">&amp;</span>duplicates)).unwrap();
-<a href=#1089 id=1089 data-nosnippet>1089</a>    }
-<a href=#1090 id=1090 data-nosnippet>1090</a>    <span class="attr">#[test]
-<a href=#1091 id=1091 data-nosnippet>1091</a>    </span><span class="kw">fn </span>kotlin_record_emission_reads_names_from_shared_fields() {
-<a href=#1092 id=1092 data-nosnippet>1092</a>        <span class="kw">let </span><span class="kw-2">mut </span>field = prebindgen_flat::WireNode::Wire(<span class="macro">vec!</span>[Wire {
-<a href=#1093 id=1093 data-nosnippet>1093</a>            name: <span class="macro">syn::parse_quote!</span>(incoming),
-<a href=#1094 id=1094 data-nosnippet>1094</a>            kind: JniWire::scalar(Primitive::I32),
-<a href=#1095 id=1095 data-nosnippet>1095</a>        }]);
+<a href=#1073 id=1073 data-nosnippet>1073</a>        elements.push(record(<span class="string">"flag"</span>));
+<a href=#1074 id=1074 data-nosnippet>1074</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>combined)
+<a href=#1075 id=1075 data-nosnippet>1075</a>            .unwrap_err()
+<a href=#1076 id=1076 data-nosnippet>1076</a>            .contains(<span class="string">"duplicate Kotlin group binding `flag`"</span>));
+<a href=#1077 id=1077 data-nosnippet>1077</a>        <span class="kw">let </span>duplicates = WireNode::Group {
+<a href=#1078 id=1078 data-nosnippet>1078</a>            metadata: JniGroup::Values,
+<a href=#1079 id=1079 data-nosnippet>1079</a>            elements: <span class="macro">vec!</span>[record(<span class="string">"value"</span>), record(<span class="string">"value"</span>)],
+<a href=#1080 id=1080 data-nosnippet>1080</a>        };
+<a href=#1081 id=1081 data-nosnippet>1081</a>        <span class="macro">assert!</span>(<span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>duplicates)
+<a href=#1082 id=1082 data-nosnippet>1082</a>            .unwrap_err()
+<a href=#1083 id=1083 data-nosnippet>1083</a>            .contains(<span class="string">"duplicate Kotlin group binding `value`"</span>));
+<a href=#1084 id=1084 data-nosnippet>1084</a>        prebindgen_flat::validate_wire_nodes(std::iter::once(<span class="kw-2">&amp;</span>duplicates)).unwrap();
+<a href=#1085 id=1085 data-nosnippet>1085</a>    }
+<a href=#1086 id=1086 data-nosnippet>1086</a>    <span class="attr">#[test]
+<a href=#1087 id=1087 data-nosnippet>1087</a>    </span><span class="kw">fn </span>kotlin_record_emission_reads_names_from_shared_fields() {
+<a href=#1088 id=1088 data-nosnippet>1088</a>        <span class="kw">let </span><span class="kw-2">mut </span>field = prebindgen_flat::WireNode::Wire(<span class="macro">vec!</span>[Wire {
+<a href=#1089 id=1089 data-nosnippet>1089</a>            name: <span class="macro">syn::parse_quote!</span>(incoming),
+<a href=#1090 id=1090 data-nosnippet>1090</a>            kind: JniWire::scalar(Primitive::I32),
+<a href=#1091 id=1091 data-nosnippet>1091</a>        }]);
+<a href=#1092 id=1092 data-nosnippet>1092</a>        field = prebindgen_flat::WireNode::Group {
+<a href=#1093 id=1093 data-nosnippet>1093</a>            metadata: JniGroup::Field(<span class="macro">syn::parse_quote!</span>(r#type)),
+<a href=#1094 id=1094 data-nosnippet>1094</a>            elements: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
+<a href=#1095 id=1095 data-nosnippet>1095</a>        };
 <a href=#1096 id=1096 data-nosnippet>1096</a>        field = prebindgen_flat::WireNode::Group {
-<a href=#1097 id=1097 data-nosnippet>1097</a>            metadata: JniGroup::Field(<span class="macro">syn::parse_quote!</span>(r#type)),
-<a href=#1098 id=1098 data-nosnippet>1098</a>            elements: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
-<a href=#1099 id=1099 data-nosnippet>1099</a>        };
-<a href=#1100 id=1100 data-nosnippet>1100</a>        field = prebindgen_flat::WireNode::Group {
-<a href=#1101 id=1101 data-nosnippet>1101</a>            metadata: JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
-<a href=#1102 id=1102 data-nosnippet>1102</a>                root: <span class="string">"point"</span>.into(),
-<a href=#1103 id=1103 data-nosnippet>1103</a>                class_name: <span class="string">"example.Point"</span>.into(),
-<a href=#1104 id=1104 data-nosnippet>1104</a>                condition: <span class="string">"true"</span>.into(),
-<a href=#1105 id=1105 data-nosnippet>1105</a>            })),
-<a href=#1106 id=1106 data-nosnippet>1106</a>            elements: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
-<a href=#1107 id=1107 data-nosnippet>1107</a>        };
-<a href=#1108 id=1108 data-nosnippet>1108</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>field).unwrap();
-<a href=#1109 id=1109 data-nosnippet>1109</a>        <span class="kw">let </span>classes = BTreeMap::new();
-<a href=#1110 id=1110 data-nosnippet>1110</a>        <span class="kw">let </span>context = KotlinContext {
-<a href=#1111 id=1111 data-nosnippet>1111</a>            classes: <span class="kw-2">&amp;</span>classes,
-<a href=#1112 id=1112 data-nosnippet>1112</a>            result: <span class="string">"result"</span>,
-<a href=#1113 id=1113 data-nosnippet>1113</a>            failure: <span class="string">"failure"</span>,
-<a href=#1114 id=1114 data-nosnippet>1114</a>            cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#1115 id=1115 data-nosnippet>1115</a>            output_prefix: <span class="string">"output"</span>,
-<a href=#1116 id=1116 data-nosnippet>1116</a>        };
-<a href=#1117 id=1117 data-nosnippet>1117</a>        <span class="kw">let </span>input = kotlin::input_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#1118 id=1118 data-nosnippet>1118</a>        <span class="macro">assert_eq!</span>(input.parameters, [<span class="string">"point: example.Point"</span>]);
-<a href=#1119 id=1119 data-nosnippet>1119</a>        <span class="macro">assert!</span>(input.arguments[<span class="number">0</span>].contains(<span class="string">"point.`type`"</span>));
-<a href=#1120 id=1120 data-nosnippet>1120</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#1121 id=1121 data-nosnippet>1121</a>        <span class="macro">assert_eq!</span>(output.result_types, [<span class="string">"example.Point"</span>]);
-<a href=#1122 id=1122 data-nosnippet>1122</a>        <span class="macro">assert!</span>(output.delivered[<span class="number">0</span>].contains(<span class="string">"example.Point(result[0]"</span>));
-<a href=#1123 id=1123 data-nosnippet>1123</a>        <span class="comment">// An empty record still denotes one Kotlin object with no ABI wires.
-<a href=#1124 id=1124 data-nosnippet>1124</a>        </span><span class="kw">let </span>empty = record(<span class="string">"empty"</span>);
-<a href=#1125 id=1125 data-nosnippet>1125</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>empty, <span class="kw-2">&amp;</span>context).unwrap();
-<a href=#1126 id=1126 data-nosnippet>1126</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"example.Empty()"</span>]);
-<a href=#1127 id=1127 data-nosnippet>1127</a>    }
-<a href=#1128 id=1128 data-nosnippet>1128</a>}
+<a href=#1097 id=1097 data-nosnippet>1097</a>            metadata: JniGroup::Fields(<span class="prelude-val">Some</span>(DataGroup {
+<a href=#1098 id=1098 data-nosnippet>1098</a>                root: <span class="string">"point"</span>.into(),
+<a href=#1099 id=1099 data-nosnippet>1099</a>                class_name: <span class="string">"example.Point"</span>.into(),
+<a href=#1100 id=1100 data-nosnippet>1100</a>                condition: <span class="string">"true"</span>.into(),
+<a href=#1101 id=1101 data-nosnippet>1101</a>            })),
+<a href=#1102 id=1102 data-nosnippet>1102</a>            elements: <span class="macro">vec!</span>[std::mem::take(<span class="kw-2">&amp;mut </span>field)],
+<a href=#1103 id=1103 data-nosnippet>1103</a>        };
+<a href=#1104 id=1104 data-nosnippet>1104</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>field).unwrap();
+<a href=#1105 id=1105 data-nosnippet>1105</a>        <span class="kw">let </span>classes = BTreeMap::new();
+<a href=#1106 id=1106 data-nosnippet>1106</a>        <span class="kw">let </span>context = KotlinContext {
+<a href=#1107 id=1107 data-nosnippet>1107</a>            classes: <span class="kw-2">&amp;</span>classes,
+<a href=#1108 id=1108 data-nosnippet>1108</a>            result: <span class="string">"result"</span>,
+<a href=#1109 id=1109 data-nosnippet>1109</a>            failure: <span class="string">"failure"</span>,
+<a href=#1110 id=1110 data-nosnippet>1110</a>            cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#1111 id=1111 data-nosnippet>1111</a>            output_prefix: <span class="string">"output"</span>,
+<a href=#1112 id=1112 data-nosnippet>1112</a>        };
+<a href=#1113 id=1113 data-nosnippet>1113</a>        <span class="kw">let </span>input = kotlin::input_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#1114 id=1114 data-nosnippet>1114</a>        <span class="macro">assert_eq!</span>(input.parameters, [<span class="string">"point: example.Point"</span>]);
+<a href=#1115 id=1115 data-nosnippet>1115</a>        <span class="macro">assert!</span>(input.arguments[<span class="number">0</span>].contains(<span class="string">"point.`type`"</span>));
+<a href=#1116 id=1116 data-nosnippet>1116</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>field, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#1117 id=1117 data-nosnippet>1117</a>        <span class="macro">assert_eq!</span>(output.result_types, [<span class="string">"example.Point"</span>]);
+<a href=#1118 id=1118 data-nosnippet>1118</a>        <span class="macro">assert!</span>(output.delivered[<span class="number">0</span>].contains(<span class="string">"example.Point(result[0]"</span>));
+<a href=#1119 id=1119 data-nosnippet>1119</a>        <span class="comment">// An empty record still denotes one Kotlin object with no ABI wires.
+<a href=#1120 id=1120 data-nosnippet>1120</a>        </span><span class="kw">let </span>empty = record(<span class="string">"empty"</span>);
+<a href=#1121 id=1121 data-nosnippet>1121</a>        <span class="kw">let </span>output = kotlin::output_kotlin(<span class="kw-2">&amp;</span>empty, <span class="kw-2">&amp;</span>context).unwrap();
+<a href=#1122 id=1122 data-nosnippet>1122</a>        <span class="macro">assert_eq!</span>(output.delivered, [<span class="string">"example.Empty()"</span>]);
+<a href=#1123 id=1123 data-nosnippet>1123</a>    }
+<a href=#1124 id=1124 data-nosnippet>1124</a>}
 </code></pre></div></section></main></body></html>
