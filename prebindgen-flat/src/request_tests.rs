@@ -231,10 +231,10 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
         })
         .map(crate::WireNode::Wire)
         .collect::<Vec<_>>();
-    schema = vec![crate::WireNode::Sequence(crate::WireContainer {
+    schema = vec![crate::WireNode::Sequence {
         metadata: None,
         element: std::mem::take(&mut schema),
-    })];
+    }];
     let conversion = Sequence { schema };
     assert_eq!(
         crate::wire_definitions(conversion.wire_nodes().iter()).count(),

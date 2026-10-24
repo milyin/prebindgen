@@ -959,20 +959,18 @@ mod group_tests {
     #[test]
     fn kotlin_record_and_presence_bindings_share_a_namespace() {
         let mut optional: Vec<prebindgen_flat::WireNode<JniWire, JniGroup>> = Vec::new();
-        optional = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: Some(JniGroup::Optional(JniOptional {
-                    controls: vec![Wire {
-                        name: syn::parse_quote!(flag),
-                        kind: JniWire::selector(),
-                    }],
-                    presence: syn::parse_quote!(flag),
-                    discriminator: syn::parse_quote!(flag),
-                    niche: None,
-                })),
-                element: std::mem::take(&mut optional),
-            },
-        )];
+        optional = vec![prebindgen_flat::WireNode::Optional {
+            metadata: Some(JniGroup::Optional(JniOptional {
+                controls: vec![Wire {
+                    name: syn::parse_quote!(flag),
+                    kind: JniWire::selector(),
+                }],
+                presence: syn::parse_quote!(flag),
+                discriminator: syn::parse_quote!(flag),
+                niche: None,
+            })),
+            element: std::mem::take(&mut optional),
+        }];
         optional.extend(vec![record("value")]);
         crate::group::validate_layout(&optional).unwrap();
         optional.extend(vec![record("flag")]);

@@ -47,14 +47,14 @@ fn values_mut(
             match node {
                 WireNode::Wire(w) => out.push(w),
                 WireNode::Group { children, .. } => visit(children.as_mut_slice(), out),
-                WireNode::Optional(c) => {
-                    if let Some(CGroup::Optional(o)) = &mut c.metadata {
+                WireNode::Optional { element, metadata } => {
+                    if let Some(CGroup::Optional(o)) = metadata {
                         out.extend(&mut o.controls);
                     }
-                    visit(c.element.as_mut_slice(), out);
+                    visit(element.as_mut_slice(), out);
                 }
-                WireNode::Sequence(c) => {
-                    if let Some(CGroup::Sequence(w)) = &mut c.metadata {
+                WireNode::Sequence { metadata, .. } => {
+                    if let Some(CGroup::Sequence(w)) = metadata {
                         out.push(w);
                     }
                 }
@@ -91,18 +91,18 @@ fn read<'a>(
         match node {
             WireNode::Wire(w) => out.push(w),
             WireNode::Group { children, .. } => read(children.as_slice(), out, elements),
-            WireNode::Optional(c) => {
-                if let Some(CGroup::Optional(o)) = &c.metadata {
+            WireNode::Optional { element, metadata } => {
+                if let Some(CGroup::Optional(o)) = &metadata {
                     out.extend(&o.controls);
                 }
-                read(c.element.as_slice(), out, elements);
+                read(element.as_slice(), out, elements);
             }
-            WireNode::Sequence(c) => {
-                if let Some(CGroup::Sequence(w)) = &c.metadata {
+            WireNode::Sequence { element, metadata } => {
+                if let Some(CGroup::Sequence(w)) = &metadata {
                     out.push(w);
                 }
                 if elements {
-                    read(c.element.as_slice(), out, elements);
+                    read(element.as_slice(), out, elements);
                 }
             }
             WireNode::Alternatives {
@@ -181,8 +181,8 @@ pub(crate) fn validate_layout(layout: &[prebindgen_flat::WireNode<CWire, CGroup>
                         visit(arm, bindings, false, reserved)?;
                     }
                 }
-                WireNode::Sequence(c) => {
-                    let Some(CGroup::Sequence(carrier)) = &c.metadata else {
+                WireNode::Sequence { element, metadata } => {
+                    let Some(CGroup::Sequence(carrier)) = &metadata else {
                         return Err("sequence requires a separate carrier".into());
                     };
                     if !(matches!(
@@ -192,17 +192,17 @@ pub(crate) fn validate_layout(layout: &[prebindgen_flat::WireNode<CWire, CGroup>
                                 primitive: Primitive::Usize,
                                 ..
                             }
-                    )) || crate::group::values(c.element.as_slice()).len() == 0
+                    )) || crate::group::values(element.as_slice()).len() == 0
                     {
                         return Err(
                             "sequence requires a supported carrier and nonempty element layout"
                                 .into(),
                         );
                     }
-                    validate_layout(&c.element)?;
+                    validate_layout(element)?;
                 }
-                WireNode::Optional(c) => {
-                    let Some(CGroup::Optional(o)) = &c.metadata else {
+                WireNode::Optional { element, metadata } => {
+                    let Some(CGroup::Optional(o)) = &metadata else {
                         return Err(
                             "optional node requires optional metadata and inline optional encoding"
                                 .into(),
@@ -219,7 +219,7 @@ pub(crate) fn validate_layout(layout: &[prebindgen_flat::WireNode<CWire, CGroup>
                         if !controls.is_empty() {
                             return Err("niche optional must not have control wires".into());
                         }
-                        let wire = crate::group::values(c.element.as_slice())
+                        let wire = crate::group::values(element.as_slice())
                             .find(|w| w.name == o.discriminator)
                             .ok_or("optional discriminator outside payload")?;
                         wire.kind.validate_niche(niche)?;
@@ -237,7 +237,7 @@ pub(crate) fn validate_layout(layout: &[prebindgen_flat::WireNode<CWire, CGroup>
                     {
                         return Err("optional flag must be its sole inline control wire".into());
                     }
-                    visit(&c.element, bindings, false, reserved)?;
+                    visit(element, bindings, false, reserved)?;
                 }
                 WireNode::Outcomes {
                     success,
@@ -421,12 +421,10 @@ mod tests {
         if let CGroup::Optional(o) = &mut metadata {
             o.controls = controls;
         }
-        *tree = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: Some(metadata),
-                element: std::mem::take(&mut *tree),
-            },
-        )];
+        *tree = vec![prebindgen_flat::WireNode::Optional {
+            metadata: Some(metadata),
+            element: std::mem::take(&mut *tree),
+        }];
     }
     fn leaf(name: &str) -> prebindgen_flat::Wire<CWire> {
         prebindgen_flat::Wire {
@@ -454,34 +452,28 @@ mod tests {
         };
         let mut carried: Vec<prebindgen_flat::WireNode<CWire, CGroup>> =
             vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
-        carried = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: Some(CGroup::Sequence(leaf("carrier"))),
-                element: std::mem::take(&mut carried),
-            },
-        )];
+        carried = vec![prebindgen_flat::WireNode::Optional {
+            metadata: Some(CGroup::Sequence(leaf("carrier"))),
+            element: std::mem::take(&mut carried),
+        }];
         assert!(validate_layout(&carried)
             .unwrap_err()
             .contains("inline optional"));
         let mut sequence: Vec<prebindgen_flat::WireNode<CWire, CGroup>> =
             vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
-        sequence = vec![prebindgen_flat::WireNode::Sequence(
-            prebindgen_flat::WireContainer {
-                metadata: None,
-                element: std::mem::take(&mut sequence),
-            },
-        )];
+        sequence = vec![prebindgen_flat::WireNode::Sequence {
+            metadata: None,
+            element: std::mem::take(&mut sequence),
+        }];
         assert!(validate_layout(&sequence)
             .unwrap_err()
             .contains("separate carrier"));
         let mut missing: Vec<prebindgen_flat::WireNode<CWire, CGroup>> =
             vec![prebindgen_flat::WireNode::Wire(leaf("value"))];
-        missing = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: None,
-                element: std::mem::take(&mut missing),
-            },
-        )];
+        missing = vec![prebindgen_flat::WireNode::Optional {
+            metadata: None,
+            element: std::mem::take(&mut missing),
+        }];
         assert!(validate_layout(&missing)
             .unwrap_err()
             .contains("requires optional metadata"));
@@ -500,12 +492,10 @@ mod tests {
         if let CGroup::Optional(o) = &mut m {
             o.controls.push(leaf("flag"));
         }
-        wrong_flag = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: Some(m),
-                element: std::mem::take(&mut wrong_flag),
-            },
-        )];
+        wrong_flag = vec![prebindgen_flat::WireNode::Optional {
+            metadata: Some(m),
+            element: std::mem::take(&mut wrong_flag),
+        }];
         assert!(validate_layout(&wrong_flag)
             .unwrap_err()
             .contains("sole inline control"));
@@ -783,15 +773,13 @@ mod abi_tests {
             prebindgen_flat::WireNode::Wire(scalar("second")),
         ];
         let mut sequence = element.clone();
-        sequence = vec![prebindgen_flat::WireNode::Sequence(
-            prebindgen_flat::WireContainer {
-                metadata: Some(CGroup::Sequence(prebindgen_flat::Wire {
-                    name: syn::parse_quote!(rows),
-                    kind: CWire::Rows,
-                })),
-                element: std::mem::take(&mut sequence),
-            },
-        )];
+        sequence = vec![prebindgen_flat::WireNode::Sequence {
+            metadata: Some(CGroup::Sequence(prebindgen_flat::Wire {
+                name: syn::parse_quote!(rows),
+                kind: CWire::Rows,
+            })),
+            element: std::mem::take(&mut sequence),
+        }];
         let mut result = sequence.clone();
         result = vec![WireNode::Outcomes {
             success: result,

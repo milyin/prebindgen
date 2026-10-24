@@ -397,12 +397,10 @@ mod tests {
                 niche: Some(CNiche::Integer(value)),
             })
         };
-        tree = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: Some(group("inner", -2)),
-                element: std::mem::take(&mut tree),
-            },
-        )];
+        tree = vec![prebindgen_flat::WireNode::Optional {
+            metadata: Some(group("inner", -2)),
+            element: std::mem::take(&mut tree),
+        }];
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("already reserved"));
@@ -412,12 +410,10 @@ mod tests {
             .kind
             .clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: Some(group("outer", -2)),
-                element: std::mem::take(&mut tree),
-            },
-        )];
+        tree = vec![prebindgen_flat::WireNode::Optional {
+            metadata: Some(group("outer", -2)),
+            element: std::mem::take(&mut tree),
+        }];
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
             .contains("duplicate"));

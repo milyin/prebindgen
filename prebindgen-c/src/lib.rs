@@ -1333,13 +1333,11 @@ fn describe_groups(
                     visit(arm, names, parents, out, next_label, field_path);
                 }
             }
-            if let prebindgen_flat::WireNode::Sequence(c) = node {
-                let carrier = c
-                    .metadata
+            if let prebindgen_flat::WireNode::Sequence { element, metadata } = node {
+                let carrier = metadata
                     .as_ref()
                     .and_then(CGroup::sequence_wire)
                     .expect("validated sequence carrier");
-                let element = &c.element;
                 let path = field_path.join(".");
                 if matches!(carrier.kind, CWire::Rows) {
                     out.push_str(&format!("/* Collection {path}: {} carries rows of {} ABI fields; element-owned fields are released separately from row storage. */\n",carrier.name,crate::group::row_fields(element).len()));
@@ -1359,26 +1357,28 @@ fn describe_groups(
                     *last = original;
                 }
             }
-            if let prebindgen_flat::WireNode::Optional(c) = node {
-                if let Some(CGroup::Optional(g)) = &c.metadata {
-                    let label = format!("option{}", *next_label);
-                    *next_label += 1;
-                    let discriminator = &names[&g.discriminator.to_string()];
-                    let rule=match &g.niche {
-                        None=>format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
-                        Some(CNiche::Null)=>format!("{discriminator} == NULL means None; non-null means Some"),
-                        Some(CNiche::Integer(n))=>format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
-                    };
-                    let parent = if parents.is_empty() {
-                        String::new()
-                    } else {
-                        format!("; only when {} is present", parents.join(" and "))
-                    };
-                    out.push_str(&format!("/* Option {}: {rule}{parent}. */\n", label));
-                    parents.push(label);
-                    visit(&c.element, names, parents, out, next_label, field_path);
-                    parents.pop();
-                }
+            if let prebindgen_flat::WireNode::Optional {
+                element,
+                metadata: Some(CGroup::Optional(g)),
+            } = node
+            {
+                let label = format!("option{}", *next_label);
+                *next_label += 1;
+                let discriminator = &names[&g.discriminator.to_string()];
+                let rule = match &g.niche {
+                    None => format!("{discriminator}: 0 = None, 1 = Some; other active flags are errors"),
+                    Some(CNiche::Null) => format!("{discriminator} == NULL means None; non-null means Some"),
+                    Some(CNiche::Integer(n)) => format!("{discriminator} == {n} means None; other values encode Some and must be valid payloads"),
+                };
+                let parent = if parents.is_empty() {
+                    String::new()
+                } else {
+                    format!("; only when {} is present", parents.join(" and "))
+                };
+                out.push_str(&format!("/* Option {}: {rule}{parent}. */\n", label));
+                parents.push(label);
+                visit(element, names, parents, out, next_label, field_path);
+                parents.pop();
             }
             if let prebindgen_flat::WireNode::Outcomes { success, .. } = node {
                 visit(success, names, parents, out, next_label, field_path);
@@ -1828,10 +1828,14 @@ mod generation_tests {
                     .len(),
                 4
             );
-            let prebindgen_flat::WireNode::Optional(container) = &plan.nodes.as_slice()[0] else {
+            let prebindgen_flat::WireNode::Optional {
+                metadata: outer_metadata,
+                ..
+            } = &plan.nodes.as_slice()[0]
+            else {
                 panic!()
             };
-            let Some(CGroup::Optional(optional)) = &container.metadata else {
+            let Some(CGroup::Optional(optional)) = &outer_metadata else {
                 panic!()
             };
             assert!(optional.niche.is_none());

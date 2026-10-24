@@ -278,8 +278,8 @@ pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
 }
 pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
     nodes.iter().any(|node| match node {
-        JniNode::Wire(_) | JniNode::Sequence(_) | JniNode::Outcomes { .. } => false,
-        JniNode::Optional(_) => true,
+        JniNode::Wire(_) | JniNode::Sequence { .. } | JniNode::Outcomes { .. } => false,
+        JniNode::Optional { .. } => true,
         JniNode::Alternatives { alternatives, .. } => {
             alternatives.iter().any(|arm| has_optional(arm.as_slice()))
         }
@@ -311,19 +311,19 @@ pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Re
                 }
                 c
             }
-            JniNode::Sequence(c) => crate::sequence::input_list(
-                c.metadata
+            JniNode::Sequence { element, metadata } => crate::sequence::input_list(
+                metadata
                     .as_ref()
                     .and_then(JniGroup::sequence_wire)
                     .ok_or("sequence requires a carrier")?,
-                &c.element,
+                element,
                 context,
             )?,
-            JniNode::Optional(c) => {
-                let Some(JniGroup::Optional(o)) = &c.metadata else {
+            JniNode::Optional { element, metadata } => {
+                let Some(JniGroup::Optional(o)) = &metadata else {
                     return Err("missing optional metadata".into());
                 };
-                optional::input_kotlin(c, o, context)?
+                optional::input_kotlin(element, o, context)?
             }
             JniNode::Group { metadata, children } => match metadata {
                 JniGroup::Optional(_) | JniGroup::Sequence(_) | JniGroup::Alternatives(_) => {
@@ -394,12 +394,12 @@ pub(crate) fn output_kotlin(
             JniNode::Alternatives { .. } => {
                 return Err("native alternatives are input-only in the JNI adapter".into())
             }
-            JniNode::Sequence(c) => crate::sequence::output_list(&c.element, &ctx)?,
-            JniNode::Optional(c) => {
-                let Some(JniGroup::Optional(o)) = &c.metadata else {
+            JniNode::Sequence { element, .. } => crate::sequence::output_list(element, &ctx)?,
+            JniNode::Optional { element, metadata } => {
+                let Some(JniGroup::Optional(o)) = &metadata else {
                     return Err("missing optional metadata".into());
                 };
-                optional::output_kotlin(c, o, &ctx)?
+                optional::output_kotlin(element, o, &ctx)?
             }
             JniNode::Group { metadata, children } => match metadata {
                 JniGroup::Optional(_) | JniGroup::Sequence(_) | JniGroup::Alternatives(_) => {

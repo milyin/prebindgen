@@ -1,14 +1,6 @@
 //! Logical values exchanged by a conversion; transport belongs to its generator.
 use crate::{Result, Wire, WireKind};
 
-/// One payload/element schema. Its leaves may occur zero, one or many times.
-#[derive(Clone, Debug)]
-pub struct WireContainer<W: WireKind, G> {
-    /// Definition of one present payload or sequence element.
-    pub element: Vec<WireNode<W, G>>,
-    /// Optional adapter-specific information, without common placement rules.
-    pub metadata: Option<G>,
-}
 /// Logical structure. Common nodes impose no ABI positions or delivery rules;
 /// adapters may retain explicit encoding decisions in their opaque metadata.
 #[derive(Clone, Debug)]
@@ -16,9 +8,19 @@ pub enum WireNode<W: WireKind, G = ()> {
     /// Definition of one typed value, wherever the generator chooses to pass it.
     Wire(Wire<W>),
     /// Zero or one occurrence of the element schema.
-    Optional(WireContainer<W, G>),
+    Optional {
+        /// Definition of one present payload.
+        element: Vec<WireNode<W, G>>,
+        /// Adapter-specific information about optional encoding.
+        metadata: Option<G>,
+    },
     /// Zero or more occurrences of the element schema.
-    Sequence(WireContainer<W, G>),
+    Sequence {
+        /// Definition of one sequence element.
+        element: Vec<WireNode<W, G>>,
+        /// Adapter-specific information about sequence encoding.
+        metadata: Option<G>,
+    },
     /// Adapter-described relationships, such as records and named fields.
     Group {
         /// Adapter-specific information about the children.
@@ -83,7 +85,9 @@ impl<'a, W: WireKind, G, I: Iterator<Item = &'a WireNode<W, G>>> Iterator
             };
             match node {
                 WireNode::Wire(w) => return Some(w),
-                WireNode::Optional(c) | WireNode::Sequence(c) => self.stack.push(c.element.iter()),
+                WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
+                    self.stack.push(element.iter())
+                }
                 WireNode::Group { children, .. } => self.stack.push(children.iter()),
                 WireNode::Alternatives { alternatives, .. } => {
                     for arm in alternatives.iter().rev() {
@@ -144,8 +148,8 @@ impl<'a, W: WireKind, G, I: Iterator<Item = &'a mut WireNode<W, G>>> Iterator
             };
             match node {
                 WireNode::Wire(w) => return Some(w),
-                WireNode::Optional(c) | WireNode::Sequence(c) => {
-                    self.stack.push(c.element.iter_mut())
+                WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
+                    self.stack.push(element.iter_mut())
                 }
                 WireNode::Group { children, .. } => self.stack.push(children.iter_mut()),
                 WireNode::Alternatives { alternatives, .. } => {
@@ -214,7 +218,9 @@ pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, G: 'a>(
                 path: WirePath(path.clone()),
                 wire,
             }),
-            WireNode::Optional(c) | WireNode::Sequence(c) => children(&c.element, path, out),
+            WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
+                children(element, path, out)
+            }
             WireNode::Group {
                 children: nodes, ..
             } => children(nodes, path, out),
@@ -268,7 +274,9 @@ pub fn wire_at_path<'a, W: WireKind + 'a, G: 'a>(
         }
         match node {
             WireNode::Wire(w) => rest.is_empty().then_some(w),
-            WireNode::Optional(c) | WireNode::Sequence(c) => child(&c.element, rest),
+            WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
+                child(element, rest)
+            }
             WireNode::Group { children, .. } => child(children, rest),
             WireNode::Alternatives { alternatives, .. } => {
                 let (&arm, rest) = rest.split_first()?;
@@ -309,7 +317,9 @@ pub fn validate_wire_nodes<'a, W: WireKind + 'a, G: 'a>(
         }
         match node {
             WireNode::Wire(_) => {}
-            WireNode::Optional(c) | WireNode::Sequence(c) => nested(&c.element)?,
+            WireNode::Optional { element, .. } | WireNode::Sequence { element, .. } => {
+                nested(element)?
+            }
             WireNode::Group { children, .. } => nested(children)?,
             WireNode::Alternatives { alternatives, .. } => {
                 if alternatives.is_empty() {
@@ -374,13 +384,13 @@ mod tests {
     }
     #[test]
     fn paths_cover_elements_alternatives_and_stable_outcome_channels() {
-        let sequence = WireNode::Sequence(WireContainer {
-            element: vec![WireNode::Optional(WireContainer {
+        let sequence = WireNode::Sequence {
+            element: vec![WireNode::Optional {
                 element: vec![leaf("value")],
                 metadata: None,
-            })],
+            }],
             metadata: None,
-        });
+        };
         let mut nodes = vec![WireNode::Alternatives {
             metadata: None,
             alternatives: vec![vec![], vec![sequence, leaf("other")]],
@@ -448,10 +458,10 @@ mod tests {
                         kind: Kind(99),
                     },
                 },
-                children: vec![WireNode::Sequence(WireContainer {
+                children: vec![WireNode::Sequence {
                     element: vec![non_clone_leaf("changed", 2)],
                     metadata: None,
-                })],
+                }],
             },
         ];
         for wire in wire_definitions_mut(nodes.iter_mut().skip(1)) {
@@ -499,10 +509,10 @@ mod tests {
     #[test]
     fn empty_optional_and_completion_payloads_keep_their_structure() {
         let mut nodes: Vec<WireNode<syn::Type>> = vec![WireNode::Outcomes {
-            success: vec![WireNode::Optional(WireContainer {
+            success: vec![WireNode::Optional {
                 element: vec![],
                 metadata: None,
-            })],
+            }],
             source_error: Some(vec![]),
             binding_failure: None,
         }];
@@ -516,7 +526,7 @@ mod tests {
             panic!()
         };
         assert_eq!(success.len(), 1);
-        assert!(matches!(&success[0], WireNode::Optional(_)));
+        assert!(matches!(&success[0], WireNode::Optional { .. }));
         assert!(source_error.as_ref().unwrap().is_empty());
         assert!(binding_failure.is_none());
         *success = vec![leaf("new_value")];
@@ -624,10 +634,10 @@ mod tests {
             .unwrap_err()
             .contains("sole root"));
         validate_wire_nodes(nodes.iter().skip(1)).unwrap();
-        let nested = [WireNode::Optional(WireContainer {
+        let nested = [WireNode::Optional {
             element: nodes.into_iter().skip(1).collect(),
             metadata: None,
-        })];
+        }];
         assert!(validate_wire_nodes(nested.iter())
             .unwrap_err()
             .contains("sole root"));

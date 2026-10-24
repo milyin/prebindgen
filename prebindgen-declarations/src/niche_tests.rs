@@ -45,11 +45,11 @@ impl DomainAbi {
             for node in nodes {
                 match node {
                     WireNode::Wire(w) => out.push(w),
-                    WireNode::Optional(c) => {
-                        if let Some(m) = &c.metadata {
+                    WireNode::Optional { element, metadata } => {
+                        if let Some(m) = &metadata {
                             out.extend(&m.controls);
                         }
-                        visit(c.element.as_slice(), out);
+                        visit(element.as_slice(), out);
                     }
                     WireNode::Group { children, .. } => visit(children.as_slice(), out),
                     _ => {}
@@ -70,11 +70,11 @@ impl DomainAbi {
             for node in nodes {
                 match node {
                     WireNode::Wire(w) => out.push(w),
-                    WireNode::Optional(c) => {
-                        if let Some(m) = &mut c.metadata {
+                    WireNode::Optional { element, metadata } => {
+                        if let Some(m) = metadata {
                             out.extend(&mut m.controls);
                         }
-                        visit(c.element.as_mut_slice(), out);
+                        visit(element.as_mut_slice(), out);
                     }
                     WireNode::Group { children, .. } => visit(children.as_mut_slice(), out),
                     _ => {}
@@ -601,20 +601,26 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
         "tag3"
     );
     prebindgen_flat::validate_wire_nodes(plan.nodes.iter()).unwrap();
-    let prebindgen_flat::WireNode::Optional(container) = &plan.nodes.as_slice()[0] else {
+    let prebindgen_flat::WireNode::Optional {
+        element: outer_element,
+        metadata: outer_metadata,
+    } = &plan.nodes.as_slice()[0]
+    else {
         panic!()
     };
-    assert!(container
-        .metadata
+    assert!(outer_metadata
         .as_ref()
         .unwrap()
         .starts_with("optional:tag3:"));
-    assert!(container.metadata.as_ref().unwrap().controls.len() == 1);
-    let prebindgen_flat::WireNode::Optional(inner) = &container.element.as_slice()[0] else {
+    assert!(outer_metadata.as_ref().unwrap().controls.len() == 1);
+    let prebindgen_flat::WireNode::Optional {
+        metadata: inner_metadata,
+        ..
+    } = &outer_element.as_slice()[0]
+    else {
         panic!()
     };
-    assert!(inner
-        .metadata
+    assert!(inner_metadata
         .as_ref()
         .unwrap()
         .starts_with("optional:tag2:"));

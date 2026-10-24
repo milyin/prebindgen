@@ -715,5 +715,5 @@ pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
 mod wire_tree;
 pub use wire_tree::{
     validate_wire_nodes, wire_at_path, wire_definitions, wire_definitions_mut,
-    wire_definitions_with_paths, WireContainer, WireEntry, WireNode, WirePath,
+    wire_definitions_with_paths, WireEntry, WireNode, WirePath,
 };

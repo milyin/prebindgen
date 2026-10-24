@@ -23,13 +23,13 @@ impl TestAbi {
                 match node {
                     WireNode::Wire(w) => out.push(w),
                     WireNode::Group { children, .. } => visit(children.as_mut_slice(), out),
-                    WireNode::Optional(c) => {
-                        if let Some(TestGroup::Maybe(ws)) = &mut c.metadata {
+                    WireNode::Optional { element, metadata } => {
+                        if let Some(TestGroup::Maybe(ws)) = metadata {
                             out.extend(ws);
                         }
-                        visit(c.element.as_mut_slice(), out);
+                        visit(element.as_mut_slice(), out);
                     }
-                    WireNode::Sequence(_) => {}
+                    WireNode::Sequence { .. } => {}
                     WireNode::Alternatives {
                         metadata,
                         alternatives,
@@ -81,15 +81,15 @@ fn test_read<'a>(
         match node {
             WireNode::Wire(w) => out.push(w),
             WireNode::Group { children, .. } => test_read(children.as_slice(), out, elements),
-            WireNode::Optional(c) => {
-                if let Some(TestGroup::Maybe(ws)) = &c.metadata {
+            WireNode::Optional { element, metadata } => {
+                if let Some(TestGroup::Maybe(ws)) = &metadata {
                     out.extend(ws);
                 }
-                test_read(c.element.as_slice(), out, elements);
+                test_read(element.as_slice(), out, elements);
             }
-            WireNode::Sequence(c) => {
+            WireNode::Sequence { element, .. } => {
                 if elements {
-                    test_read(c.element.as_slice(), out, elements);
+                    test_read(element.as_slice(), out, elements);
                 }
             }
             WireNode::Alternatives {

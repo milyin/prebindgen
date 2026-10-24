@@ -523,7 +523,7 @@ outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.
 
 `WireNode::Optional` describes zero or one payload; `WireNode::Sequence`
-describes zero or more elements. Both hold `WireContainer { element, metadata }`.
+describes zero or more elements. Both store `element: Vec<WireNode<W, G>>` and `metadata: Option<G>` directly.
 There is no common `Inline`/`Carrier` choice. For example:
 
 ```text

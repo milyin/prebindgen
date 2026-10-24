@@ -144,7 +144,7 @@ fn main() {
                 return Err("collection probe must declare success and binding failure only".into());
             };
             let logical = success.as_slice();
-            assert!(matches!(logical, [WireNode::Sequence(_)]));
+            assert!(matches!(logical, [WireNode::Sequence { .. }]));
             assert!(matches!(prebindgen_flat::wire_definitions(logical.iter()).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
                 primitive: prebindgen_flat::Primitive::Char, ..
             }));

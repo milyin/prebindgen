@@ -205,11 +205,10 @@ pub(crate) fn return_sequence(
     };
     prebindgen_declarations::outer_sequences(success)
         .into_iter()
-        .find_map(|c| {
-            c.metadata
-                .as_ref()
+        .find_map(|(element, metadata)| {
+            metadata
                 .and_then(JniGroup::sequence_wire)
-                .map(|w| (w, c.element.as_slice()))
+                .map(|w| (w, element))
         })
 }
 pub(crate) fn callback_target(

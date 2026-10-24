@@ -81,11 +81,11 @@ pub(crate) fn schemas<'a>(
                 }
             }
             WireNode::Group { children, .. } => schemas(children, out),
-            WireNode::Optional(c) => schemas(&c.element, out),
-            WireNode::Sequence(c) => {
-                schemas(&c.element, out);
-                if let Some(carrier) = c.metadata.as_ref().and_then(CGroup::sequence_wire) {
-                    out.push((carrier, &c.element));
+            WireNode::Optional { element, .. } => schemas(element, out),
+            WireNode::Sequence { element, metadata } => {
+                schemas(element, out);
+                if let Some(carrier) = metadata.as_ref().and_then(CGroup::sequence_wire) {
+                    out.push((carrier, element));
                 }
             }
         }
@@ -225,8 +225,7 @@ pub(crate) fn callback_output(
 pub(crate) fn callback_shape(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]) -> bool {
     fn one(nodes: &[WireNode<CWire, CGroup>]) -> bool {
         match nodes {
-            [WireNode::Sequence(c)] => c
-                .metadata
+            [WireNode::Sequence { metadata, .. }] => metadata
                 .as_ref()
                 .and_then(CGroup::sequence_wire)
                 .is_some_and(|carrier| {
@@ -238,10 +237,10 @@ pub(crate) fn callback_shape(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]
                         }
                     )
                 }),
-            [WireNode::Optional(c)] => match &c.metadata {
+            [WireNode::Optional { element, metadata }] => match &metadata {
                 Some(CGroup::Optional(o)) if o.niche.is_none() => {
                     matches!(o.controls.as_slice(),[flag] if flag.name==o.discriminator)
-                        && one(c.element.as_slice())
+                        && one(element.as_slice())
                 }
                 _ => false,
             },
@@ -269,11 +268,10 @@ pub(crate) fn return_sequence(
     };
     prebindgen_declarations::outer_sequences(success)
         .into_iter()
-        .find_map(|c| {
-            c.metadata
-                .as_ref()
+        .find_map(|(element, metadata)| {
+            metadata
                 .and_then(CGroup::sequence_wire)
-                .map(|w| (w, c.element.as_slice()))
+                .map(|w| (w, element))
         })
 }
 pub(crate) fn callback_target(

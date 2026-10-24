@@ -3,7 +3,7 @@ use super::*;
 
 use prebindgen_conversions::{Resource, ResourceIdentity};
 use prebindgen_flat::SequenceView;
-use prebindgen_flat::{WireContainer, WireNode};
+use prebindgen_flat::WireNode;
 use quote::ToTokens;
 
 /// Adapter-supplied array input transport. Element conversion remains shared.
@@ -236,10 +236,10 @@ pub(crate) fn input<C: Codec>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        nodes: vec![WireNode::Sequence(WireContainer {
+        nodes: vec![WireNode::Sequence {
             element: child.nodes,
             metadata: Some(transport.metadata),
-        })],
+        }],
         validation: quote! {
             #declarations
             let mut #staged=Vec::new();
@@ -346,10 +346,10 @@ pub(crate) fn output<C: Codec>(
         fallible: child.fallible || fallible,
         context: Default::default(),
         delivery: Default::default(),
-        nodes: vec![WireNode::Sequence(WireContainer {
+        nodes: vec![WireNode::Sequence {
             element: child.nodes,
             metadata: Some(metadata),
-        })],
+        }],
         statements: quote! {
             let #owner=#binding; let #length=#owner.len(); #declarations
             #begin
@@ -366,17 +366,21 @@ pub(crate) fn output<C: Codec>(
 /// Find outer logical sequence nodes, including through groups and options.
 /// This inspects structure only. The caller selects an outcome and decides which
 /// sequences belong to its emission scope; sequence elements are not traversed.
+/// Returns each sequence's element nodes and optional adapter metadata by reference.
+#[allow(clippy::type_complexity)]
 pub fn outer_sequences<W: prebindgen_flat::WireKind, G>(
     layout: &[prebindgen_flat::WireNode<W, G>],
-) -> Vec<&WireContainer<W, G>> {
+) -> Vec<(&[WireNode<W, G>], Option<&G>)> {
     fn visit<'a, W: prebindgen_flat::WireKind, G>(
         nodes: &'a [WireNode<W, G>],
-        out: &mut Vec<&'a WireContainer<W, G>>,
+        out: &mut Vec<(&'a [WireNode<W, G>], Option<&'a G>)>,
     ) {
         for node in nodes {
             match node {
-                WireNode::Sequence(c) => out.push(c),
-                WireNode::Optional(c) => visit(c.element.as_slice(), out),
+                WireNode::Sequence { element, metadata } => {
+                    out.push((element.as_slice(), metadata.as_ref()))
+                }
+                WireNode::Optional { element, .. } => visit(element.as_slice(), out),
                 WireNode::Group { children, .. } => visit(children.as_slice(), out),
                 WireNode::Alternatives { alternatives, .. } => {
                     for arm in alternatives {
@@ -402,18 +406,14 @@ mod tests {
                 name: syn::parse_quote!(value),
                 kind: syn::parse_quote!(i64),
             })];
-        layout = vec![prebindgen_flat::WireNode::Sequence(
-            prebindgen_flat::WireContainer {
-                metadata: None,
-                element: std::mem::take(&mut layout),
-            },
-        )];
-        layout = vec![prebindgen_flat::WireNode::Optional(
-            prebindgen_flat::WireContainer {
-                metadata: None,
-                element: std::mem::take(&mut layout),
-            },
-        )];
+        layout = vec![prebindgen_flat::WireNode::Sequence {
+            metadata: None,
+            element: std::mem::take(&mut layout),
+        }];
+        layout = vec![prebindgen_flat::WireNode::Optional {
+            metadata: None,
+            element: std::mem::take(&mut layout),
+        }];
         layout = vec![prebindgen_flat::WireNode::Group {
             metadata: (),
             children: std::mem::take(&mut layout),

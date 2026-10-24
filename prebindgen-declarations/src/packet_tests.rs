@@ -46,14 +46,14 @@ impl PointerLenAbi {
                         ..
                     } => out.extend(ws),
                     WireNode::Group { children, .. } => visit(children.as_slice(), out),
-                    WireNode::Optional(c) => {
-                        if let Some(Metadata::Values(ws)) = &c.metadata {
+                    WireNode::Optional { element, metadata } => {
+                        if let Some(Metadata::Values(ws)) = &metadata {
                             out.extend(ws);
                         }
-                        visit(c.element.as_slice(), out);
+                        visit(element.as_slice(), out);
                     }
-                    WireNode::Sequence(c) => {
-                        if let Some(Metadata::Values(ws)) = &c.metadata {
+                    WireNode::Sequence { metadata, .. } => {
+                        if let Some(Metadata::Values(ws)) = &metadata {
                             out.extend(ws);
                         }
                     }
@@ -86,14 +86,14 @@ impl PointerLenAbi {
                         ..
                     } => out.extend(ws),
                     WireNode::Group { children, .. } => visit(children.as_mut_slice(), out),
-                    WireNode::Optional(c) => {
-                        if let Some(Metadata::Values(ws)) = &mut c.metadata {
+                    WireNode::Optional { element, metadata } => {
+                        if let Some(Metadata::Values(ws)) = metadata {
                             out.extend(ws);
                         }
-                        visit(c.element.as_mut_slice(), out);
+                        visit(element.as_mut_slice(), out);
                     }
-                    WireNode::Sequence(c) => {
-                        if let Some(Metadata::Values(ws)) = &mut c.metadata {
+                    WireNode::Sequence { metadata, .. } => {
+                        if let Some(Metadata::Values(ws)) = metadata {
                             out.extend(ws);
                         }
                     }
@@ -138,8 +138,8 @@ impl PointerLenAbi {
         fn visit(nodes: &[WireNode<Type, Metadata>]) -> Result<()> {
             for node in nodes {
                 match node {
-                    WireNode::Sequence(c) => PointerLenAbi::validate(&c.element)?,
-                    WireNode::Optional(c) => visit(c.element.as_slice())?,
+                    WireNode::Sequence { element, .. } => PointerLenAbi::validate(element)?,
+                    WireNode::Optional { element, .. } => visit(element.as_slice())?,
                     WireNode::Group {
                         metadata: Metadata::Values(_),
                         children,

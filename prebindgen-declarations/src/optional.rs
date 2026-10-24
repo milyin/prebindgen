@@ -232,10 +232,10 @@ fn mark<C: Codec>(
     };
     let metadata =
         codec.optional_metadata(tag, discriminator, reservation.map(|r| r.niche), controls);
-    let node = WireNode::Optional(prebindgen_flat::WireContainer {
+    let node = WireNode::Optional {
         element: std::mem::take(tree),
         metadata: Some(metadata),
-    });
+    };
     *tree = vec![node];
     Ok(())
 }
