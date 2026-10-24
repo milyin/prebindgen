@@ -16,7 +16,7 @@ pub use optional::JniNiche;
 mod group;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataGroup};
-pub use group::{JniGroup, JniOptional};
+pub use group::{JniBranch, JniChain, JniGroup, JniOptional};
 use prebindgen_conversions::boxed::BoxedWire;
 use prebindgen_conversions::value::Value;
 use prebindgen_flat::Primitive;
@@ -29,15 +29,9 @@ mod emission;
 mod errors;
 pub use emission::JniContext;
 type InputPlan<W> =
-    prebindgen_conversions::InputPlan<W, JniContext, JniOptional, crate::JniSequence, JniGroup, ()>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<
-    W,
-    JniContext,
-    JniOptional,
-    crate::JniSequence,
-    JniGroup,
-    (),
->;
+    prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
+type OutputPlan<W> =
+    prebindgen_conversions::OutputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
 mod kotlin;
 pub use kotlin::{
     JniInput, JniOutput, KotlinBinding, KotlinClass, KotlinContext, KotlinInput,
@@ -568,29 +562,17 @@ impl Class {
 pub struct JniCodec;
 impl Codec for JniCodec {
     type Niche = crate::optional::JniNiche;
-    type Optional = JniOptional;
-    type Sequence = JniSequence;
-    type Group = JniGroup;
-    type Alternatives = ();
-    fn group_metadata(&self) -> JniGroup {
-        JniGroup::Values
+    type Chain = JniChain;
+    type Branch = JniBranch;
+    fn group_metadata(&self) -> JniBranch {
+        JniBranch::Group(JniGroup::Values)
     }
 
     fn binding_failure_layout(
         &self,
         _: &(),
-    ) -> Result<
-        Option<
-            prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
-        >,
-    > {
-        Ok(Some(prebindgen_flat::WireNode::Wire(vec![
+    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
+        Ok(Some(prebindgen_flat::WireNode::Leaf(vec![
             prebindgen_flat::Wire {
                 name: syn::parse_quote!(message),
                 kind: JniWire::text(),
@@ -603,17 +585,21 @@ impl Codec for JniCodec {
         discriminator: syn::Ident,
         niche: Option<JniNiche>,
         controls: &[prebindgen_flat::Wire<JniWire>],
-    ) -> Result<JniOptional> {
-        JniOptional::from_parts(presence, discriminator, niche, controls)
+    ) -> Result<JniChain> {
+        JniOptional::from_parts(presence, discriminator, niche, controls).map(JniChain::Optional)
     }
-    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<JniWire>) -> Result<()> {
-        group::validate_selector(selector)
+    fn alternatives_metadata(
+        &self,
+        selector: &prebindgen_flat::Wire<JniWire>,
+    ) -> Result<JniBranch> {
+        group::validate_selector(selector)?;
+        Ok(JniBranch::Alternatives)
     }
-    fn field_group(&self, name: syn::Ident) -> JniGroup {
-        JniGroup::Field(name)
+    fn field_group(&self, name: syn::Ident) -> JniBranch {
+        JniBranch::Group(JniGroup::Field(name))
     }
-    fn fields_group(&self) -> JniGroup {
-        JniGroup::Fields(None)
+    fn fields_group(&self) -> JniBranch {
+        JniBranch::Group(JniGroup::Fields(None))
     }
     type Extra = ();
     type Wire = JniWire;
@@ -662,15 +648,9 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireNode<
-            JniWire,
-            crate::JniOptional,
-            crate::JniSequence,
-            JniGroup,
-            (),
-        >,
+        element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         active: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, crate::JniSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, crate::JniChain>> {
         sequence::input(wire, length, index, element, active)
     }
     fn sequence_output(
@@ -679,15 +659,9 @@ impl Codec for JniCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireNode<
-            JniWire,
-            crate::JniOptional,
-            crate::JniSequence,
-            JniGroup,
-            (),
-        >,
+        element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniChain>> {
         sequence::output(wire, length, index, element, values)
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
@@ -856,51 +830,27 @@ impl Codec for JniCodec {
 
     fn optional_niche(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
     ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
         crate::group::optional_niche(payload)
     }
     fn optional_presence(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         crate::group::optional_presence(payload, reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         crate::group::absent_output_values(payload, reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<()> {
         crate::group::retire_niches(payload, reservation)

@@ -238,10 +238,10 @@ pub(crate) fn input<C: Codec>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        node: WireNode::Sequence {
+        node: WireNode::Chain {
             controls: transport.controls,
-            element: Box::new(child.node),
-            metadata: transport.metadata,
+            child: Box::new(child.node),
+            meta: transport.metadata,
         },
         validation: quote! {
             #declarations
@@ -352,10 +352,10 @@ pub(crate) fn output<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         outcomes: prebindgen_flat::Outcomes {
-            success: WireNode::Sequence {
+            success: WireNode::Chain {
                 controls,
-                element: Box::new(child.outcomes.success),
-                metadata,
+                child: Box::new(child.outcomes.success),
+                meta: metadata,
             },
             source_error: None,
             binding_failure: None,
@@ -373,71 +373,9 @@ pub(crate) fn output<C: Codec>(
     Ok(out)
 }
 
-/// Find outer sequence payloads, control slices and metadata, in that order.
-/// Descends through groups,
-/// alternatives and options, and stops at each sequence. Choose the output
-/// completion channel before calling this operation.
-#[allow(clippy::type_complexity)]
-pub fn outer_sequences<W: prebindgen_flat::WireKind, O, S, G, A>(
-    node: &WireNode<W, O, S, G, A>,
-) -> Vec<(&WireNode<W, O, S, G, A>, &[Wire<W>], &S)> {
-    fn visit<'a, W: prebindgen_flat::WireKind, O, S, G, A>(
-        node: &'a WireNode<W, O, S, G, A>,
-        out: &mut Vec<(&'a WireNode<W, O, S, G, A>, &'a [Wire<W>], &'a S)>,
-    ) {
-        match node {
-            WireNode::Sequence {
-                element,
-                controls,
-                metadata,
-            } => out.push((element, controls, metadata)),
-            WireNode::Optional { element, .. } => visit(element, out),
-            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
-                for child in elements {
-                    visit(child, out);
-                }
-            }
-            WireNode::Wire(_) => {}
-        }
-    }
-    let mut out = vec![];
-    visit(node, &mut out);
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn sequence_discovery_is_logical_and_outcome_selection_is_explicit() {
-        let mut layout: prebindgen_flat::WireNode<syn::Type> =
-            prebindgen_flat::WireNode::Wire(vec![Wire {
-                name: syn::parse_quote!(value),
-                kind: syn::parse_quote!(i64),
-            }]);
-        layout = prebindgen_flat::WireNode::Sequence {
-            controls: vec![],
-            metadata: Default::default(),
-            element: Box::new(std::mem::take(&mut layout)),
-        };
-        layout = prebindgen_flat::WireNode::Optional {
-            controls: vec![],
-            metadata: Default::default(),
-            element: Box::new(std::mem::take(&mut layout)),
-        };
-        layout = prebindgen_flat::WireNode::Group {
-            metadata: (),
-            elements: vec![std::mem::take(&mut layout)],
-        };
-        assert_eq!(outer_sequences(&layout).len(), 1);
-        let output = prebindgen_flat::Outcomes {
-            success: layout,
-            source_error: None,
-            binding_failure: Some(WireNode::default()),
-        };
-        assert_eq!(outer_sequences(&output.success).len(), 1);
-        assert!(outer_sequences(output.binding_failure.as_ref().unwrap()).is_empty());
-    }
     #[test]
     fn row_read_replacement_preserves_raw_pointer_reborrows() {
         let code = replace(

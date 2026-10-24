@@ -89,7 +89,8 @@ pub struct KotlinOutput {
 pub trait KotlinInputConversion:
     for<'a> Conversion<
     Wire = JniWire,
-    Group = JniGroup,
+    Chain = JniChain,
+    Branch = JniBranch,
     SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>,
 >
 {
@@ -100,7 +101,8 @@ pub trait KotlinInputConversion:
 pub trait KotlinOutputConversion:
     for<'a> Conversion<
     Wire = JniWire,
-    Group = JniGroup,
+    Chain = JniChain,
+    Branch = JniBranch,
     SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>,
 >
 {
@@ -129,10 +131,8 @@ impl From<OutputPlan<JniWire>> for JniOutput {
 }
 impl Conversion for JniInput {
     type Wire = JniWire;
-    type Optional = JniOptional;
-    type Sequence = JniSequence;
-    type Group = JniGroup;
-    type Alternatives = ();
+    type Chain = JniChain;
+    type Branch = JniBranch;
     type SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -146,10 +146,8 @@ impl Conversion for JniInput {
 
 impl Conversion for JniOutput {
     type Wire = JniWire;
-    type Optional = JniOptional;
-    type Sequence = JniSequence;
-    type Group = JniGroup;
-    type Alternatives = ();
+    type Chain = JniChain;
+    type Branch = JniBranch;
     type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>;
 
     fn code_fragment_slot(
@@ -163,7 +161,6 @@ impl Conversion for JniOutput {
 
 impl KotlinInputConversion for JniInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
-        prebindgen_flat::validate_wire_nodes(std::iter::once(self.input_node()))?;
         crate::sequence::validate_buffered(self.input_node())?;
         validate_layout(self.input_node())?;
         input_kotlin(self.input_node(), context)
@@ -213,7 +210,6 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
 }
 impl KotlinOutputConversion for JniOutput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
-        prebindgen_flat::validate_wire_nodes(std::iter::once(&self.output_outcomes().success))?;
         validate_layout(&self.output_outcomes().success)?;
         output_kotlin(&self.output_outcomes().success, context)
     }
@@ -274,28 +270,45 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     })
 }
 
-pub(crate) type JniNode =
-    prebindgen_flat::WireNode<JniWire, crate::JniOptional, crate::JniSequence, JniGroup, ()>;
+pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>;
 pub(crate) fn leaf_wires(node: &JniNode) -> Vec<&Wire<JniWire>> {
     crate::group::kotlin_result_fields(node).collect()
 }
 pub(crate) fn has_optional(node: &JniNode) -> bool {
     match node {
-        JniNode::Wire(_) | JniNode::Sequence { .. } => false,
-        JniNode::Optional { .. } => true,
-        JniNode::Alternatives { elements, .. } => elements.iter().any(has_optional),
-        JniNode::Group {
-            metadata: JniGroup::Fields(Some(_)),
+        JniNode::Leaf(_)
+        | JniNode::Chain {
+            meta: JniChain::Sequence(_),
             ..
         } => false,
-        JniNode::Group { elements, .. } => elements.iter().any(has_optional),
+        JniNode::Chain {
+            meta: JniChain::Optional(_),
+            ..
+        } => true,
+        JniNode::Branch {
+            meta: JniBranch::Alternatives,
+            children: elements,
+            ..
+        } => elements.iter().any(has_optional),
+        JniNode::Branch {
+            meta: JniBranch::Group(JniGroup::Fields(Some(_))),
+            ..
+        } => false,
+        JniNode::Branch {
+            meta: JniBranch::Group(_),
+            children: elements,
+            ..
+        } => elements.iter().any(has_optional),
     }
 }
 pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
     match node {
-        JniNode::Wire(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
-        JniNode::Alternatives {
-            elements, controls, ..
+        JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Branch {
+            meta: JniBranch::Alternatives,
+            children: elements,
+            controls,
+            ..
         } => {
             let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context)?;
             for arm in elements {
@@ -303,20 +316,27 @@ pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resul
             }
             Ok(out)
         }
-        JniNode::Sequence {
+        JniNode::Chain {
             controls,
-            element,
-            metadata,
+            child: element,
+            meta: JniChain::Sequence(metadata),
+            ..
         } => {
             let [carrier] = controls.as_slice() else {
                 return Err("sequence requires one carrier control".into());
             };
             crate::sequence::input_list(carrier, metadata, element, context)
         }
-        JniNode::Optional {
-            element, metadata, ..
+        JniNode::Chain {
+            child: element,
+            meta: JniChain::Optional(metadata),
+            ..
         } => optional::input_kotlin(element, metadata, context),
-        JniNode::Group { elements, metadata } => match metadata {
+        JniNode::Branch {
+            children: elements,
+            meta: JniBranch::Group(metadata),
+            ..
+        } => match metadata {
             JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context),
             _ => input_components(elements, context),
         },
@@ -363,22 +383,31 @@ pub(crate) fn remap_output(
 }
 pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
     match node {
-        JniNode::Wire(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context),
-        JniNode::Alternatives { .. } => {
-            Err("native alternatives are input-only in the JNI adapter".into())
-        }
-        JniNode::Sequence {
-            element, metadata, ..
+        JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Branch {
+            meta: JniBranch::Alternatives,
+            ..
+        } => Err("native alternatives are input-only in the JNI adapter".into()),
+        JniNode::Chain {
+            child: element,
+            meta: JniChain::Sequence(metadata),
+            ..
         } => match metadata {
             JniSequence::Buffered => crate::sequence::output_list(element, context),
             JniSequence::Callback => {
                 Err("callback sequence requires function-level callback delivery".into())
             }
         },
-        JniNode::Optional {
-            element, metadata, ..
+        JniNode::Chain {
+            child: element,
+            meta: JniChain::Optional(metadata),
+            ..
         } => optional::output_kotlin(element, metadata, context),
-        JniNode::Group { elements, metadata } => match metadata {
+        JniNode::Branch {
+            children: elements,
+            meta: JniBranch::Group(metadata),
+            ..
+        } => match metadata {
             JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context),
             _ => output_components(elements, context),
         },
@@ -388,7 +417,7 @@ pub(crate) fn output_components(
     nodes: &[JniNode],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    if nodes.iter().all(|n| matches!(n, JniNode::Wire(_))) {
+    if nodes.iter().all(|n| matches!(n, JniNode::Leaf(_))) {
         let wires = nodes.iter().flat_map(leaf_wires).collect::<Vec<_>>();
         return output_leaves(&wires, context);
     }

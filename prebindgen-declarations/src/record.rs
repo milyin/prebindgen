@@ -22,9 +22,10 @@ pub fn record_input<C: Codec>(
         fallible: false,
         context: Default::default(),
         acknowledgement: None,
-        node: WireNode::Group {
-            elements: vec![],
-            metadata: codec.fields_group(),
+        node: WireNode::Branch {
+            controls: vec![],
+            children: vec![],
+            meta: codec.fields_group(),
         },
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
@@ -44,11 +45,15 @@ pub fn record_input<C: Codec>(
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        child.node = prebindgen_flat::WireNode::Group {
-            metadata: codec.field_group(name.clone()),
-            elements: vec![std::mem::take(&mut child.node)],
+        child.node = prebindgen_flat::WireNode::Branch {
+            controls: vec![],
+            meta: codec.field_group(name.clone()),
+            children: vec![std::mem::take(&mut child.node)],
         };
-        let WireNode::Group { elements, .. } = &mut out.node else {
+        let WireNode::Branch {
+            children: elements, ..
+        } = &mut out.node
+        else {
             unreachable!()
         };
         elements.push(child.node);
@@ -90,9 +95,10 @@ pub fn record_output<C: Codec>(
         delivery: Default::default(),
         commit: TokenStream::new(),
         outcomes: prebindgen_flat::Outcomes {
-            success: WireNode::Group {
-                elements: vec![],
-                metadata: codec.fields_group(),
+            success: WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: codec.fields_group(),
             },
             source_error: None,
             binding_failure: None,
@@ -108,9 +114,10 @@ pub fn record_output<C: Codec>(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = prebindgen_flat::WireNode::Group {
-            metadata: codec.field_group(name),
-            elements: vec![std::mem::take(&mut child.outcomes.success)],
+        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+            controls: vec![],
+            meta: codec.field_group(name),
+            children: vec![std::mem::take(&mut child.outcomes.success)],
         };
         append(&mut out, child)?;
     }
@@ -146,9 +153,10 @@ pub fn record_output_owned<C: Codec>(
         delivery: Default::default(),
         commit: TokenStream::new(),
         outcomes: prebindgen_flat::Outcomes {
-            success: WireNode::Group {
-                elements: vec![],
-                metadata: codec.fields_group(),
+            success: WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: codec.fields_group(),
             },
             source_error: None,
             binding_failure: None,
@@ -164,9 +172,10 @@ pub fn record_output_owned<C: Codec>(
             &mut child.outcomes.success,
             ComponentSegment::Field(name.to_string()),
         );
-        child.outcomes.success = prebindgen_flat::WireNode::Group {
-            metadata: codec.field_group(name),
-            elements: vec![std::mem::take(&mut child.outcomes.success)],
+        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+            controls: vec![],
+            meta: codec.field_group(name),
+            children: vec![std::mem::take(&mut child.outcomes.success)],
         };
         append(&mut out, child)?;
     }

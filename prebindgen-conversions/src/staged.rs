@@ -86,14 +86,10 @@ fn expression(code: TokenStream) -> Result<TokenStream> {
     Ok(code)
 }
 
-impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
-    for InputPlan<W, C, O, S, G, A>
-{
+impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W, C, N, B> {
     type Wire = W;
-    type Optional = O;
-    type Sequence = S;
-    type Group = G;
-    type Alternatives = A;
+    type Chain = N;
+    type Branch = B;
     type SlotFragment<'a> = InputFragment<'a, C>;
 
     fn code_fragment_slot(
@@ -155,14 +151,10 @@ impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
         })
     }
 }
-impl<O, S, A, W: WireKind, C: TemplateContext + 'static, G> Conversion
-    for OutputPlan<W, C, O, S, G, A>
-{
+impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<W, C, N, B> {
     type Wire = W;
-    type Optional = O;
-    type Sequence = S;
-    type Group = G;
-    type Alternatives = A;
+    type Chain = N;
+    type Branch = B;
     type SlotFragment<'a> = OutputFragment<'a, C>;
 
     fn code_fragment_slot(
@@ -390,19 +382,17 @@ fn reserve(code: &TokenStream, used: &mut std::collections::BTreeSet<String>) {
     }
 }
 
-impl<W: WireKind, C: TemplateContext + 'static, O, S, G, A> prebindgen_flat::InputConversion
-    for InputPlan<W, C, O, S, G, A>
+impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::InputConversion
+    for InputPlan<W, C, N, B>
 {
-    fn input_node(&self) -> &prebindgen_flat::WireNode<W, O, S, G, A> {
+    fn input_node(&self) -> &prebindgen_flat::WireNode<W, N, B> {
         &self.node
     }
 }
-impl<W: WireKind, C: TemplateContext + 'static, O, S, G, A> prebindgen_flat::OutputConversion
-    for OutputPlan<W, C, O, S, G, A>
+impl<W: WireKind, C: TemplateContext + 'static, N, B> prebindgen_flat::OutputConversion
+    for OutputPlan<W, C, N, B>
 {
-    fn output_outcomes(
-        &self,
-    ) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, O, S, G, A>> {
+    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>> {
         &self.outcomes
     }
 }

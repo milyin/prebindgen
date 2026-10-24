@@ -455,23 +455,28 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
 fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     use prebindgen_flat::WireNode;
     fn reservations(
-        layout: &prebindgen_flat::WireNode<
-            JniWire,
-            crate::JniOptional,
-            crate::JniSequence,
-            JniGroup,
-            (),
-        >,
+        layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     ) -> Vec<Option<JniNiche>> {
         let mut result = vec![];
         match layout {
-            WireNode::Optional {
-                element, metadata, ..
+            WireNode::Chain {
+                child: element,
+                meta: JniChain::Optional(metadata),
+                ..
             } => {
                 result.push(metadata.niche().cloned());
                 result.extend(reservations(element));
             }
-            WireNode::Group { elements, .. } | WireNode::Alternatives { elements, .. } => {
+            WireNode::Branch {
+                meta: JniBranch::Group(_),
+                children: elements,
+                ..
+            }
+            | WireNode::Branch {
+                meta: JniBranch::Alternatives,
+                children: elements,
+                ..
+            } => {
                 for child in elements {
                     result.extend(reservations(child));
                 }
@@ -857,13 +862,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         crate::group::result_packet_fields(&output.output_outcomes().success).count(),
         1
     );
-    let shape = |layout: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >| {
+    let shape = |layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>| {
         prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout))
             .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
             .collect::<Vec<_>>()

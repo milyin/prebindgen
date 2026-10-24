@@ -16,10 +16,8 @@ enum InputWire {
 }
 impl Conversion for Input {
     type Wire = syn::Type;
-    type Optional = ();
-    type Sequence = ();
-    type Group = ();
-    type Alternatives = ();
+    type Chain = ();
+    type Branch = ();
     type SlotFragment<'a> = Read<'a>;
     fn code_fragment_slot(&self, mode: Read<'_>, expected: &syn::Type) -> Result<TokenStream> {
         match mode {
@@ -74,10 +72,8 @@ struct Output {
 }
 impl Conversion for Output {
     type Wire = syn::Type;
-    type Optional = ();
-    type Sequence = ();
-    type Group = ();
-    type Alternatives = ();
+    type Chain = ();
+    type Branch = ();
     // Deliberately different from the input: no shared context or phase vocabulary.
     type SlotFragment<'a> = &'a syn::Ident;
     fn code_fragment_slot(&self, source: &syn::Ident, expected: &syn::Type) -> Result<TokenStream> {
@@ -104,14 +100,14 @@ impl Output {
 #[test]
 fn independent_protocols_compose_into_compilable_expressions() {
     let input = Input {
-        node: crate::WireNode::Wire(vec![Wire {
+        node: crate::WireNode::Leaf(vec![Wire {
             name: syn::parse_quote!(raw),
             kind: syn::parse_quote!(u8),
         }]),
     };
     let output = Output {
         outcomes: Outcomes {
-            success: crate::WireNode::Wire(vec![Wire {
+            success: crate::WireNode::Leaf(vec![Wire {
                 name: syn::parse_quote!(out),
                 kind: syn::parse_quote!(i64),
             }]),
@@ -211,10 +207,8 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
     }
     impl Conversion for Sequence {
         type Wire = syn::Type;
-        type Optional = ();
-        type Sequence = ();
-        type Group = ();
-        type Alternatives = ();
+        type Chain = ();
+        type Branch = ();
         type SlotFragment<'a> = Delivery<'a>;
         fn code_fragment_slot(&self, mode: Delivery<'_>, _: &syn::Type) -> Result<TokenStream> {
             Ok(match mode {
@@ -233,9 +227,9 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
         }
     }
     let schema = crate::Outcomes {
-        success: crate::WireNode::Sequence {
+        success: crate::WireNode::Chain {
             controls: vec![],
-            element: Box::new(crate::WireNode::Wire(
+            child: Box::new(crate::WireNode::Leaf(
                 ["x", "y"]
                     .into_iter()
                     .map(|name| Wire {
@@ -244,7 +238,7 @@ fn one_logical_sequence_supports_packed_and_callback_readers() {
                     })
                     .collect(),
             )),
-            metadata: (),
+            meta: (),
         },
         source_error: None,
         binding_failure: None,

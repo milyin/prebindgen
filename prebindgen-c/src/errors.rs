@@ -57,18 +57,19 @@ pub(crate) fn prepare(
 }
 
 fn field_names(
-    layout: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
 ) -> Vec<String> {
     use prebindgen_flat::WireNode;
     let mut names = Vec::new();
-    if let WireNode::Group {
-        metadata: CGroup::Fields,
-        elements: children,
+    if let WireNode::Branch {
+        meta: CBranch::Group(CGroup::Fields),
+        children,
+        ..
     } = layout
     {
         for node in children.as_slice() {
-            if let WireNode::Group {
-                metadata: CGroup::Field(name),
+            if let WireNode::Branch {
+                meta: CBranch::Group(CGroup::Field(name)),
                 ..
             } = node
             {
@@ -271,13 +272,7 @@ pub(crate) fn result_function(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
-    function_output_layout: &prebindgen_flat::WireNode<
-        CWire,
-        crate::COptional,
-        crate::CSequence,
-        CGroup,
-        (),
-    >,
+    function_output_layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,

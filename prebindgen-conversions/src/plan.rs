@@ -7,7 +7,7 @@ use quote::quote;
 ///
 /// Optional storage for the staged request protocol in this crate.
 /// Generators may use this protocol or implement their own request types.
-pub struct InputPlan<W: WireKind, C = (), O = (), S = (), G = (), A = ()> {
+pub struct InputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Whether validation or construction can return a binding error. This
     /// excludes panics and allocation aborts. Composition preserves child flags.
     pub fallible: bool,
@@ -15,7 +15,7 @@ pub struct InputPlan<W: WireKind, C = (), O = (), S = (), G = (), A = ()> {
     pub context: std::marker::PhantomData<fn(&C)>,
     /// Authoritative value tree. Adapter metadata records native encoding choices;
     /// physical parameters are derived from this tree when the generator emits its signature.
-    pub node: prebindgen_flat::WireNode<W, O, S, G, A>,
+    pub node: prebindgen_flat::WireNode<W, N, B>,
     /// Shared call acknowledgement, if this input needs one.
     pub acknowledgement: Option<TokenStream>,
     /// Validate and prepare every active leaf before any ownership transfer.
@@ -33,7 +33,7 @@ pub struct InputPlan<W: WireKind, C = (), O = (), S = (), G = (), A = ()> {
 ///
 /// Optional concrete storage implementing [`prebindgen_flat::Conversion`].
 /// Delivery and ownership commit are separate requests.
-pub struct OutputPlan<W: WireKind, C = (), O = (), S = (), G = (), A = ()> {
+pub struct OutputPlan<W: WireKind, C = (), N = (), B = ()> {
     /// Whether preparation or delivery can return a binding error, excluding
     /// panics and allocation aborts. Adapters must mark custom fallible code.
     pub fallible: bool,
@@ -43,7 +43,7 @@ pub struct OutputPlan<W: WireKind, C = (), O = (), S = (), G = (), A = ()> {
     pub delivery: Delivery,
     /// Authoritative success/error value tree. Adapter metadata on its nodes
     /// records explicit native encodings without duplicating payload subtrees.
-    pub outcomes: prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, O, S, G, A>>,
+    pub outcomes: prebindgen_flat::Outcomes<prebindgen_flat::WireNode<W, N, B>>,
     /// Complete transfers for the selected protocol. Buffered outputs commit after
     /// foreign delivery succeeds; explicit visitor protocols can commit each
     /// element at callback entry during preparation.
@@ -109,7 +109,7 @@ pub fn source_result_expr() -> TokenStream {
 
 macro_rules! plan_traits {
     ($plan:ident; $($field:ident),* $(,)?) => {
-        impl<W: WireKind + Clone, C, O: Clone, S: Clone, G: Clone, A: Clone> Clone for $plan<W, C, O, S, G, A> {
+        impl<W: WireKind + Clone, C, N: Clone, B: Clone> Clone for $plan<W, C, N, B> {
             fn clone(&self) -> Self {
                 Self {
                     context: self.context,
@@ -117,8 +117,8 @@ macro_rules! plan_traits {
                 }
             }
         }
-        impl<W: WireKind + std::fmt::Debug, C, O: std::fmt::Debug, S: std::fmt::Debug, G: std::fmt::Debug, A: std::fmt::Debug> std::fmt::Debug
-            for $plan<W, C, O, S, G, A>
+        impl<W: WireKind + std::fmt::Debug, C, N: std::fmt::Debug, B: std::fmt::Debug> std::fmt::Debug
+            for $plan<W, C, N, B>
         {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 f.debug_struct(stringify!($plan))

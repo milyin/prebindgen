@@ -41,7 +41,7 @@ impl Output {
                 result: source_result_expr(),
             },
             outcomes: prebindgen_flat::Outcomes {
-                success: prebindgen_flat::WireNode::Wire(vec![Wire {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
                     name: syn::parse_quote!(out),
                     kind: syn::parse_quote!(i32),
                 }]),
@@ -137,7 +137,7 @@ fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
         delivery: Default::default(),
         // Slot code owns field projection; callers only see ordered carriers and values.
         outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Wire(
+            success: prebindgen_flat::WireNode::Leaf(
                 ["y", "x"]
                     .into_iter()
                     .map(|name| Wire {
@@ -209,7 +209,7 @@ fn partial_projection_is_self_contained() {
         .next()
         .unwrap()
         .clone();
-    output.outcomes.success = prebindgen_flat::WireNode::Wire(vec![retained]);
+    output.outcomes.success = prebindgen_flat::WireNode::Leaf(vec![retained]);
     output.values.pop();
     assert_eq!(
         test_return_packet(flat.function("point").unwrap(), &(), &source_binding())
@@ -234,7 +234,7 @@ fn several_physical_wires_may_supply_one_component() {
         .unwrap()
         .clone();
     extra.name = syn::parse_quote!(additional_wire);
-    let prebindgen_flat::WireNode::Wire(wires) = &mut output.outcomes.success else {
+    let prebindgen_flat::WireNode::Leaf(wires) = &mut output.outcomes.success else {
         panic!()
     };
     wires.push(extra);
@@ -331,7 +331,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
     f.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        node: prebindgen_flat::WireNode::Wire(vec![wire()]),
+        node: prebindgen_flat::WireNode::Leaf(vec![wire()]),
         acknowledgement: None,
         validation: quote!(),
         acquire: quote!(),
@@ -343,7 +343,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         fallible: false,
         context: Default::default(),
         outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Wire(vec![wire()]),
+            success: prebindgen_flat::WireNode::Leaf(vec![wire()]),
             source_error: None,
             binding_failure: None,
         },
@@ -478,7 +478,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        node: prebindgen_flat::WireNode::Wire(vec![wire()]),
+        node: prebindgen_flat::WireNode::Leaf(vec![wire()]),
         acknowledgement: Some(quote!(*#ack = true;)),
         validation: quote!(if #env < 0 { return Err("environment".into()); }),
         acquire: quote!(),
@@ -490,7 +490,7 @@ fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
         fallible: false,
         context: Default::default(),
         outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Wire(vec![wire()]),
+            success: prebindgen_flat::WireNode::Leaf(vec![wire()]),
             source_error: None,
             binding_failure: None,
         },
@@ -699,7 +699,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
         context: Default::default(),
-        node: prebindgen_flat::WireNode::Wire(vec![Wire {
+        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: syn::parse_quote!(__prebindgen_argument_0),
             kind: syn::parse_quote!(usize),
         }]),

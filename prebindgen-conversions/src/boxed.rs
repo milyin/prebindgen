@@ -70,7 +70,7 @@ impl Storage {
 /// ```
 /// use prebindgen_conversions::{boxed};
 /// use prebindgen_conversions::Access;
-/// let input = boxed::input::<syn::Type, (), (), (), (), ()>(
+/// let input = boxed::input::<syn::Type, (), (), ()>(
 ///     &boxed::Storage::Direct, &syn::parse_quote!(&Counter),
 ///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 ///     &quote::quote!(true), |boxed| {
@@ -84,14 +84,14 @@ impl Storage {
 /// assert_eq!(input.resources.len(), 1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C, O, S, G, A>(
+pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<InputPlan<W, C, O, S, G, A>> {
+) -> Result<InputPlan<W, C, N, B>> {
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,
@@ -133,7 +133,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, O, S, G, A>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        node: prebindgen_flat::WireNode::Wire(vec![Wire {
+        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind: wire_kind(BoxedWire {
                 ty: target.clone(),
@@ -168,14 +168,14 @@ pub fn input<W: prebindgen_flat::WireKind, C, O, S, G, A>(
 /// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 ///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 /// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-pub fn output<W: prebindgen_flat::WireKind, C, O, S, G, A>(
+pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
     storage: &Storage,
     ty: &syn::Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     wire_kind: impl FnOnce(BoxedWire) -> W,
-) -> Result<OutputPlan<W, C, O, S, G, A>> {
+) -> Result<OutputPlan<W, C, N, B>> {
     if matches!(ty, syn::Type::Reference(_)) {
         return Err("borrowed pointer outputs are outside this subset".into());
     }
@@ -191,7 +191,7 @@ pub fn output<W: prebindgen_flat::WireKind, C, O, S, G, A>(
         context: Default::default(),
         delivery: Default::default(),
         outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Wire(vec![Wire {
+            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind: wire_kind(BoxedWire {
                     ty: ty.clone(),

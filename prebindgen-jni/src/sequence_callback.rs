@@ -4,15 +4,9 @@ use prebindgen_declarations::SequenceOutput;
 
 pub(crate) fn transport(
     wire: syn::Ident,
-    element: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<JniWire, crate::JniSequence>> {
+) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let method = format_ident!("{wire}_callback_method");
     let class = format_ident!("{wire}_callback_class");
@@ -52,7 +46,7 @@ pub(crate) fn transport(
         }],
         commit_each: false,
         fallible: true,
-        metadata: JniSequence::Callback,
+        metadata: JniChain::Sequence(JniSequence::Callback),
         begin: quote! {
             let #class=#env.get_object_class(&__pb_callback).map_err(|e|e.to_string())?;
             let #method=#env.get_method_id(&#class,"run",#descriptor).map_err(|e|e.to_string())?;
@@ -79,21 +73,22 @@ pub(crate) struct Fold {
     pub discard: String,
 }
 pub(crate) fn fold(
-    layout: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
 ) -> Result<Fold> {
     fn optional(
-        node: &prebindgen_flat::WireNode<JniWire, JniOptional, crate::JniSequence, JniGroup, ()>,
+        node: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     ) -> bool {
         match node {
-            prebindgen_flat::WireNode::Optional { .. } => true,
-            prebindgen_flat::WireNode::Group { elements, .. } => elements.iter().any(optional),
+            prebindgen_flat::WireNode::Chain {
+                meta: JniChain::Optional(_),
+                ..
+            } => true,
+            prebindgen_flat::WireNode::Branch {
+                meta: JniBranch::Group(_),
+                children: elements,
+                ..
+            } => elements.iter().any(optional),
             _ => false,
         }
     }

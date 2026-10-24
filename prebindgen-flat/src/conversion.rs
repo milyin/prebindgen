@@ -156,10 +156,8 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// }
 /// impl Conversion for OwnedBoxInput {
 ///     type Wire = Carrier;
-///     type Optional = ();
-///     type Sequence = ();
-///     type Group = ();
-///     type Alternatives = ();
+///     type Chain = ();
+///     type Branch = ();
 ///     type SlotFragment<'a> = SlotRequest<'a>;
 ///     fn code_fragment_slot(&self, mode: SlotRequest<'_>, expected: &Type)
 ///         -> Result<TokenStream>
@@ -189,7 +187,7 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 /// }
 /// let slot = OwnedBoxInput {
 ///     pointee: parse_quote!(u64), // Supplied by preparation from the source type.
-///     node: WireNode::Wire(vec![Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }]),
+///     node: WireNode::Leaf(vec![Wire { name: parse_quote!(raw_value), kind: Carrier::OpaquePointer }]),
 /// };
 /// let validation = slot.code_fragment_slot(
 ///     SlotRequest::Validate { null_message: "null owned handle" }, &parse_quote!(()))?;
@@ -204,14 +202,10 @@ pub fn rust_source(tokens: TokenStream) -> Result<String> {
 pub trait Conversion {
     /// Generator-defined type information for individual logical values.
     type Wire: WireKind;
-    /// Metadata for one optional value.
-    type Optional;
-    /// Metadata for a sequence occurrence.
-    type Sequence;
-    /// Metadata for a related group of values.
-    type Group;
-    /// Metadata for choosing between alternatives.
-    type Alternatives;
+    /// Adapter metadata for parents with exactly one child description.
+    type Chain;
+    /// Adapter metadata for parents with an ordered list of child descriptions.
+    type Branch;
     /// Requests concerning the whole slot.
     type SlotFragment<'a>;
     /// Emit an expression for the whole slot.
@@ -226,9 +220,7 @@ pub trait Conversion {
 #[allow(clippy::type_complexity)] // Each parent variant has independently typed metadata.
 pub trait InputConversion: Conversion {
     /// Description of the parameter value, independent of its native placement.
-    fn input_node(
-        &self,
-    ) -> &crate::WireNode<Self::Wire, Self::Optional, Self::Sequence, Self::Group, Self::Alternatives>;
+    fn input_node(&self) -> &crate::WireNode<Self::Wire, Self::Chain, Self::Branch>;
 }
 /// Conversion attached to a function return, including its completion channels.
 #[allow(clippy::type_complexity)] // Keep completion channels and value metadata explicit.
@@ -236,15 +228,7 @@ pub trait OutputConversion: Conversion {
     /// Success and declared errors; outcomes cannot be children of a value node.
     fn output_outcomes(
         &self,
-    ) -> &crate::Outcomes<
-        crate::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
-    >;
+    ) -> &crate::Outcomes<crate::WireNode<Self::Wire, Self::Chain, Self::Branch>>;
 }
 
 /// Bind an emitted expression to a caller-selected name and expected Rust type.

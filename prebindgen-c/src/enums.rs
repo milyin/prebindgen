@@ -6,7 +6,7 @@ pub(crate) struct EnumCodec {
     #[allow(clippy::type_complexity)] // Cache value trees with each metadata role explicit.
     pub(crate) error_layouts: std::collections::BTreeMap<
         String,
-        prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+        prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
     >,
     pub(crate) callback_wire: Option<syn::Ident>,
     pub(crate) errors: std::collections::BTreeMap<String, String>,
@@ -30,12 +30,10 @@ impl EnumCodec {
 impl Codec for EnumCodec {
     type Wire = CWire;
     type Niche = CNiche;
-    type Optional = COptional;
-    type Sequence = CSequence;
-    type Group = CGroup;
-    type Alternatives = ();
-    fn group_metadata(&self) -> CGroup {
-        CGroup::Values
+    type Chain = CChain;
+    type Branch = CBranch;
+    fn group_metadata(&self) -> CBranch {
+        CBranch::Group(CGroup::Values)
     }
 
     type Extra = ();
@@ -45,9 +43,7 @@ impl Codec for EnumCodec {
     fn binding_failure_layout(
         &self,
         e: &(),
-    ) -> Result<
-        Option<prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>>,
-    > {
+    ) -> Result<Option<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>>> {
         CCodec.binding_failure_layout(e)
     }
     fn source_error_layout(
@@ -55,8 +51,7 @@ impl Codec for EnumCodec {
         ty: &syn::Type,
         mapped: bool,
         e: &(),
-    ) -> Result<prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>>
-    {
+    ) -> Result<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>> {
         if let Some(layout) = self.error_layouts.get(&prebindgen_flat::type_key(ty)) {
             return Ok(layout.clone());
         }
@@ -68,16 +63,16 @@ impl Codec for EnumCodec {
         d: syn::Ident,
         n: Option<CNiche>,
         controls: &[prebindgen_flat::Wire<CWire>],
-    ) -> Result<COptional> {
+    ) -> Result<CChain> {
         CCodec.optional_metadata(p, d, n, controls)
     }
-    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<CWire>) -> Result<()> {
+    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<CWire>) -> Result<CBranch> {
         CCodec.alternatives_metadata(selector)
     }
-    fn field_group(&self, n: syn::Ident) -> CGroup {
+    fn field_group(&self, n: syn::Ident) -> CBranch {
         CCodec.field_group(n)
     }
-    fn fields_group(&self) -> CGroup {
+    fn fields_group(&self) -> CBranch {
         CCodec.fields_group()
     }
     fn finish_input(&self, p: &mut InputPlan<CWire>, e: &()) -> Result<()> {
@@ -92,9 +87,9 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         active: &Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire, crate::CSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire, crate::CChain>> {
         CCodec.sequence_input(e, w, n, i, element, active)
     }
     fn sequence_output(
@@ -103,9 +98,9 @@ impl Codec for EnumCodec {
         w: syn::Ident,
         n: syn::Ident,
         i: syn::Ident,
-        element: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
         if self.callback_wire.as_ref() == Some(&w) {
             sequence::callback_output(w, values, element, n)
         } else {
@@ -227,51 +222,27 @@ impl Codec for EnumCodec {
 
     fn optional_niche(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
     ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
         CCodec.optional_niche(payload)
     }
     fn optional_presence(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         CCodec.optional_presence(payload, reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         CCodec.absent_output_values(payload, reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<()> {
         CCodec.retire_niches(payload, reservation)
@@ -423,16 +394,11 @@ mod tests {
         let source = flat("pub enum E { A = -1, B = 0 }");
         let mapping = EnumMapping::new(source.enums.values().next().unwrap()).unwrap();
         let wire = EnumCodec::wire("code", &mapping);
-        let mut tree: prebindgen_flat::WireNode<
-            CWire,
-            crate::COptional,
-            crate::CSequence,
-            CGroup,
-            (),
-        > = prebindgen_flat::WireNode::Wire(vec![GenericWire {
-            name: syn::parse_quote!(wire),
-            kind: wire,
-        }]);
+        let mut tree: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
+            prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+                name: syn::parse_quote!(wire),
+                kind: wire,
+            }]);
         let group = |presence, value| {
             COptional::from_parts(
                 syn::parse_str(presence).unwrap(),
@@ -442,10 +408,10 @@ mod tests {
             )
             .unwrap()
         };
-        tree = prebindgen_flat::WireNode::Optional {
+        tree = prebindgen_flat::WireNode::Chain {
             controls: vec![],
-            metadata: group("inner", -2),
-            element: Box::new(std::mem::take(&mut tree)),
+            meta: CChain::Optional(group("inner", -2)),
+            child: Box::new(std::mem::take(&mut tree)),
         };
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
@@ -456,10 +422,10 @@ mod tests {
             .kind
             .clear_niche();
         super::super::group::validate_layout(&tree).unwrap();
-        tree = prebindgen_flat::WireNode::Optional {
+        tree = prebindgen_flat::WireNode::Chain {
             controls: vec![],
-            metadata: group("outer", -2),
-            element: Box::new(std::mem::take(&mut tree)),
+            meta: CChain::Optional(group("outer", -2)),
+            child: Box::new(std::mem::take(&mut tree)),
         };
         assert!(super::super::group::validate_layout(&tree)
             .unwrap_err()
@@ -478,16 +444,11 @@ mod tests {
                 unreachable!()
             };
             *next_integer_niche = Some(n);
-            let layout: prebindgen_flat::WireNode<
-                CWire,
-                crate::COptional,
-                crate::CSequence,
-                CGroup,
-                (),
-            > = prebindgen_flat::WireNode::Wire(vec![GenericWire {
-                name: syn::parse_quote!(value),
-                kind: wire,
-            }]);
+            let layout: prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch> =
+                prebindgen_flat::WireNode::Leaf(vec![GenericWire {
+                    name: syn::parse_quote!(value),
+                    kind: wire,
+                }]);
             assert!(super::super::group::validate_layout(&layout).is_err());
         }
     }

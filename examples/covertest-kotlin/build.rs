@@ -144,7 +144,7 @@ fn main() {
                 return Err("collection probe must declare success and binding failure only".into());
             };
             let logical = success;
-            let WireNode::Sequence {element, controls,..}=logical else {return Err("expected sequence".into());};
+            let WireNode::Chain {meta: prebindgen_jni::JniChain::Sequence(_), child: element, controls}=logical else {return Err("expected sequence".into());};
             assert_eq!(controls.len(),1);
             assert_eq!(prebindgen_flat::wire_definitions(std::iter::once(logical)).count(),2);
             assert!(matches!(prebindgen_flat::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {

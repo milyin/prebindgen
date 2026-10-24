@@ -18,15 +18,9 @@ pub(crate) fn input(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     active: &Condition,
-) -> Result<SequenceInput<JniWire, crate::JniSequence>> {
+) -> Result<SequenceInput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
@@ -64,7 +58,7 @@ pub(crate) fn input(
                 null_niche_available: true,
             },
         }],
-        metadata: JniSequence::Buffered,
+        metadata: JniChain::Sequence(JniSequence::Buffered),
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
@@ -76,15 +70,9 @@ pub(crate) fn output(
     wire: syn::Ident,
     length: syn::Ident,
     index: syn::Ident,
-    element: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     values: &[(syn::Ident, TokenStream)],
-) -> Result<SequenceOutput<JniWire, crate::JniSequence>> {
+) -> Result<SequenceOutput<JniWire, crate::JniChain>> {
     let env = prebindgen_conversions::template_parameter("environment");
     let row = format_ident!("{wire}_row");
     let count = crate::group::row_fields(element).len();
@@ -101,7 +89,7 @@ pub(crate) fn output(
         }],
         commit_each: false,
         fallible: true,
-        metadata: JniSequence::Buffered,
+        metadata: JniChain::Sequence(JniSequence::Buffered),
         begin: quote!(let #wire=::prebindgen_jni_runtime::array(&mut #env,#length)?;),
         enter: quote!(let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;),
         store: quote! {
@@ -118,13 +106,7 @@ pub(crate) fn output(
 pub(crate) fn input_list(
     carrier: &prebindgen_flat::Wire<JniWire>,
     sequence: &JniSequence,
-    element: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
     if *sequence != JniSequence::Buffered {
@@ -188,13 +170,7 @@ pub(crate) fn input_list(
 }
 
 pub(crate) fn output_list(
-    element: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
     let row = format!("{}_row", context.output_prefix);
@@ -234,13 +210,13 @@ pub(crate) fn output_list(
 /// The adapter selects its native scope before looking for a sequence.
 #[allow(clippy::type_complexity)]
 pub(crate) fn return_sequence(
-    layout: &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup, ()>,
+    layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 ) -> Option<(
     &prebindgen_flat::Wire<JniWire>,
-    &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup, ()>,
+    &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     &JniSequence,
 )> {
-    prebindgen_declarations::outer_sequences(layout)
+    outer_sequences(layout)
         .into_iter()
         .next()
         .and_then(|(element, controls, metadata)| match controls {
@@ -249,17 +225,9 @@ pub(crate) fn return_sequence(
         })
 }
 pub(crate) fn callback_target(
-    layout: &prebindgen_flat::WireNode<
-        JniWire,
-        crate::JniOptional,
-        crate::JniSequence,
-        JniGroup,
-        (),
-    >,
+    layout: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
 ) -> Result<syn::Ident> {
-    if prebindgen_declarations::outer_sequences(layout).len() != 1
-        || crate::group::result_packet_fields(layout).len() > 2
-    {
+    if outer_sequences(layout).len() != 1 || crate::group::result_packet_fields(layout).len() > 2 {
         return Err(
             "callback_return permits only one sequence and its optional presence flag; cannot discard additional return values".into(),
         );
@@ -271,9 +239,9 @@ pub(crate) fn callback_target(
 
 /// Whether the successful return uses the function's sequence callback.
 pub(crate) fn callback_delivery(
-    node: &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup>,
+    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
 ) -> Result<bool> {
-    let sequences = prebindgen_declarations::outer_sequences(node);
+    let sequences = outer_sequences(node);
     if !sequences
         .iter()
         .any(|(_, _, metadata)| **metadata == JniSequence::Callback)
@@ -289,12 +257,14 @@ pub(crate) fn callback_delivery(
 
 /// Function sequence callbacks are not available in parameters, error channels or rows.
 pub(crate) fn validate_buffered(
-    node: &prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup>,
+    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
 ) -> Result<()> {
     match node {
-        prebindgen_flat::WireNode::Wire(_) => {}
-        prebindgen_flat::WireNode::Sequence {
-            element, metadata, ..
+        prebindgen_flat::WireNode::Leaf(_) => {}
+        prebindgen_flat::WireNode::Chain {
+            child: element,
+            meta: JniChain::Sequence(metadata),
+            ..
         } => {
             if *metadata == JniSequence::Callback {
                 return Err(
@@ -304,9 +274,21 @@ pub(crate) fn validate_buffered(
             }
             validate_buffered(element)?;
         }
-        prebindgen_flat::WireNode::Optional { element, .. } => validate_buffered(element)?,
-        prebindgen_flat::WireNode::Group { elements, .. }
-        | prebindgen_flat::WireNode::Alternatives { elements, .. } => {
+        prebindgen_flat::WireNode::Chain {
+            meta: JniChain::Optional(_),
+            child: element,
+            ..
+        } => validate_buffered(element)?,
+        prebindgen_flat::WireNode::Branch {
+            meta: JniBranch::Group(_),
+            children: elements,
+            ..
+        }
+        | prebindgen_flat::WireNode::Branch {
+            meta: JniBranch::Alternatives,
+            children: elements,
+            ..
+        } => {
             for element in elements {
                 validate_buffered(element)?;
             }
@@ -315,12 +297,50 @@ pub(crate) fn validate_buffered(
     Ok(())
 }
 
+// A sequence owns a separate row scope: find the outer occurrences only.
+#[allow(clippy::type_complexity)] // Borrow the element schema, controls and delivery policy together.
+fn outer_sequences(
+    node: &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+) -> Vec<(
+    &prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+    &[prebindgen_flat::Wire<JniWire>],
+    &JniSequence,
+)> {
+    fn visit<'a>(
+        node: &'a prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+        out: &mut Vec<(
+            &'a prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+            &'a [prebindgen_flat::Wire<JniWire>],
+            &'a JniSequence,
+        )>,
+    ) {
+        use prebindgen_flat::WireNode;
+        match node {
+            WireNode::Chain {
+                meta: JniChain::Sequence(meta),
+                child,
+                controls,
+            } => out.push((child, controls, meta)),
+            WireNode::Chain { child, .. } => visit(child, out),
+            WireNode::Branch { children, .. } => {
+                for child in children {
+                    visit(child, out)
+                }
+            }
+            WireNode::Leaf(_) => {}
+        }
+    }
+    let mut out = vec![];
+    visit(node, &mut out);
+    out
+}
+
 #[cfg(test)]
 mod delivery_tests {
     use super::*;
     use prebindgen_flat::WireNode;
-    fn leaf() -> prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup> {
-        WireNode::Wire(vec![prebindgen_flat::Wire {
+    fn leaf() -> prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
+        WireNode::Leaf(vec![prebindgen_flat::Wire {
             name: syn::parse_quote!(element),
             kind: JniWire::scalar(Primitive::I32),
         }])
@@ -328,21 +348,21 @@ mod delivery_tests {
     fn sequence(
         delivery: JniSequence,
         name: &str,
-        element: prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup>,
-    ) -> prebindgen_flat::WireNode<JniWire, JniOptional, JniSequence, JniGroup> {
+        element: prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
+    ) -> prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
         let kind = match delivery {
             JniSequence::Buffered | JniSequence::Callback => JniWire::Rows {
                 condition: "true".into(),
                 null_niche_available: true,
             },
         };
-        WireNode::Sequence {
+        WireNode::Chain {
             controls: vec![prebindgen_flat::Wire {
                 name: syn::parse_str(name).unwrap(),
                 kind,
             }],
-            element: Box::new(element),
-            metadata: delivery,
+            child: Box::new(element),
+            meta: JniChain::Sequence(delivery),
         }
     }
     #[test]
@@ -359,9 +379,10 @@ mod delivery_tests {
         assert!(crate::group::validate_layout(&nested)
             .unwrap_err()
             .contains("successful return"));
-        let extra = WireNode::Group {
-            elements: vec![visitor, leaf()],
-            metadata: JniGroup::Values,
+        let extra = WireNode::Branch {
+            controls: vec![],
+            children: vec![visitor, leaf()],
+            meta: JniBranch::Group(JniGroup::Values),
         };
         assert!(callback_delivery(&extra)
             .unwrap_err()

@@ -70,7 +70,7 @@ impl Value {
 /// ```
 /// use prebindgen_conversions::{value};
 /// use quote::quote;
-/// let input = value::input::<syn::Type, (), (), (), (), ()>(
+/// let input = value::input::<syn::Type, (), (), ()>(
 ///     &syn::parse_quote!(&str), syn::parse_quote!(raw), syn::parse_quote!(text),
 ///     &quote::quote!(true), quote::quote!(read(raw)?), syn::parse_quote!(&str),
 /// )?;
@@ -78,14 +78,14 @@ impl Value {
 /// assert!(input.acquire.is_empty() && input.resources.is_empty());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn input<W: prebindgen_flat::WireKind, C, O, S, G, A>(
+pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
     ty: &Type,
     wire: syn::Ident,
     var: syn::Ident,
     active: &TokenStream,
     decode: TokenStream,
     kind: W,
-) -> Result<InputPlan<W, C, O, S, G, A>> {
+) -> Result<InputPlan<W, C, N, B>> {
     if Value::of(ty).is_none() {
         return Err(format!("`{}` is not a value type", type_key(ty)));
     }
@@ -117,7 +117,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, O, S, G, A>(
         fallible: true,
         context: Default::default(),
         acknowledgement: None,
-        node: prebindgen_flat::WireNode::Wire(vec![Wire {
+        node: prebindgen_flat::WireNode::Leaf(vec![Wire {
             name: wire.clone(),
             kind,
         }]),
@@ -146,14 +146,14 @@ pub fn input<W: prebindgen_flat::WireKind, C, O, S, G, A>(
 /// * `encode` — maps a Rust expression of the owned value to the expression
 ///   delivered on the wire.
 /// * `kind` — the adapter's [`Wire::kind`] for the wire.
-pub fn output<W: prebindgen_flat::WireKind, C, O, S, G, A>(
+pub fn output<W: prebindgen_flat::WireKind, C, N, B>(
     ty: &Type,
     wire: syn::Ident,
     value: TokenStream,
     borrowed: bool,
     encode: impl FnOnce(TokenStream) -> TokenStream,
     kind: W,
-) -> Result<OutputPlan<W, C, O, S, G, A>> {
+) -> Result<OutputPlan<W, C, N, B>> {
     let Some(class) = Value::of(ty).filter(|_| !matches!(ty, Type::Reference(_))) else {
         return Err(format!("`{}` is not an owned value type", type_key(ty)));
     };
@@ -174,7 +174,7 @@ pub fn output<W: prebindgen_flat::WireKind, C, O, S, G, A>(
         context: Default::default(),
         delivery: Default::default(),
         outcomes: prebindgen_flat::Outcomes {
-            success: prebindgen_flat::WireNode::Wire(vec![Wire {
+            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
                 name: wire.clone(),
                 kind,
             }]),

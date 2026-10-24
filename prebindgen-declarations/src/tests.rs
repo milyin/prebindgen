@@ -10,101 +10,42 @@ enum TestGroup {
 struct TestAbi;
 impl TestAbi {
     fn wires(
-        node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>,
+        node: &WireNode<TestWire, TestGroup, TestGroup>,
     ) -> std::vec::IntoIter<&Wire<TestWire>> {
-        let mut out = vec![];
-        test_read(node, &mut out, false);
-        out.into_iter()
+        prebindgen_flat::wire_definitions(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
     fn wires_mut(
-        node: &mut WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>,
+        node: &mut WireNode<TestWire, TestGroup, TestGroup>,
     ) -> std::vec::IntoIter<&mut Wire<TestWire>> {
-        fn visit<'a>(
-            node: &'a mut WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>,
-            out: &mut Vec<&'a mut Wire<TestWire>>,
-        ) {
+        prebindgen_flat::wire_definitions_mut(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+    fn validate(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
+        fn check(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
             match node {
-                WireNode::Wire(w) => out.extend(w),
-                WireNode::Group { elements, .. } => {
-                    for n in elements {
-                        visit(n, out);
+                WireNode::Leaf(_) => {}
+                WireNode::Chain { child, .. } => check(child)?,
+                WireNode::Branch { meta, children, .. } => {
+                    if matches!(meta, TestGroup::Maybe) && children.is_empty() {
+                        return Err("selection has no alternatives".into());
                     }
-                }
-                WireNode::Optional {
-                    controls, element, ..
-                } => {
-                    out.extend(controls);
-                    visit(element, out);
-                }
-                WireNode::Sequence { controls, .. } => out.extend(controls),
-                WireNode::Alternatives {
-                    controls, elements, ..
-                } => {
-                    out.extend(controls);
-                    for n in elements {
-                        visit(n, out);
+                    for child in children {
+                        check(child)?;
                     }
                 }
             }
+            Ok(())
         }
-        let mut out = vec![];
-        visit(node, &mut out);
-        out.into_iter()
-    }
-    fn validate(
-        node: &WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>,
-    ) -> Result<()> {
-        prebindgen_flat::validate_wire_nodes(std::iter::once(node))?;
-        let mut wires = vec![];
-        test_read(node, &mut wires, true);
-        prebindgen_conversions::validate_wire_names(wires)
+        check(node)?;
+        prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
-fn test_read<'a>(
-    node: &'a WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>,
-    out: &mut Vec<&'a Wire<TestWire>>,
-    elements: bool,
-) {
-    match node {
-        WireNode::Wire(w) => out.extend(w),
-        WireNode::Group {
-            elements: children, ..
-        } => {
-            for n in children {
-                test_read(n, out, elements);
-            }
-        }
-        WireNode::Optional {
-            controls, element, ..
-        } => {
-            out.extend(controls);
-            test_read(element, out, elements);
-        }
-        WireNode::Sequence {
-            controls, element, ..
-        } => {
-            out.extend(controls);
-            if elements {
-                test_read(element, out, elements);
-            }
-        }
-        WireNode::Alternatives {
-            controls,
-            elements: children,
-            ..
-        } => {
-            out.extend(controls);
-            for n in children {
-                test_read(n, out, elements);
-            }
-        }
-    }
-}
-type Bindings<W> = super::Bindings<W, (), TestGroup, TestGroup, TestGroup, TestGroup>;
-type InputPlan<W> =
-    prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup, TestGroup, TestGroup>;
-type OutputPlan<W> =
-    prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup, TestGroup, TestGroup>;
+type Bindings<W> = super::Bindings<W, (), TestGroup, TestGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup>;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
 struct TestCodec;
@@ -146,12 +87,12 @@ impl Codec for TestCodec {
     fn binding_failure_layout(
         &self,
         extra: &Extra,
-    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>>> {
+    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup>>> {
         Ok(
-            (extra.name == "malformed_binding_failure").then(|| WireNode::Alternatives {
+            (extra.name == "malformed_binding_failure").then(|| WireNode::Branch {
                 controls: vec![],
-                elements: vec![],
-                metadata: TestGroup::Maybe,
+                children: vec![],
+                meta: TestGroup::Maybe,
             }),
         )
     }
@@ -163,60 +104,34 @@ impl Codec for TestCodec {
     }
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
-    type Optional = TestGroup;
-    type Sequence = TestGroup;
-    type Group = TestGroup;
-    type Alternatives = TestGroup;
+    type Chain = TestGroup;
+    type Branch = TestGroup;
     fn group_metadata(&self) -> TestGroup {
         TestGroup::Values
     }
     fn optional_niche(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
     ) -> Option<NicheReservation<Self::Niche>> {
         select_optional_niche(self, TestAbi::wires(payload))
     }
     fn optional_presence(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: &NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         optional_presence(self, TestAbi::wires(payload), reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         absent_output_values(self, TestAbi::wires(payload), reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<()> {
         retire_optional_niches(self, TestAbi::wires_mut(payload), reservation)
@@ -225,7 +140,12 @@ impl Codec for TestCodec {
         TestAbi::validate(&plan.node)
     }
     fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
-        TestAbi::validate(&plan.outcomes.success)?;
+        for node in std::iter::once(&plan.outcomes.success)
+            .chain(plan.outcomes.source_error.iter())
+            .chain(plan.outcomes.binding_failure.iter())
+        {
+            TestAbi::validate(node)?;
+        }
         prebindgen_conversions::match_output_fields(
             TestAbi::wires(&plan.outcomes.success),
             &plan.values,
@@ -234,13 +154,7 @@ impl Codec for TestCodec {
     }
     fn prefix_layout(
         &self,
-        layout: &mut prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         segment: ComponentSegment,
     ) {
         for w in TestAbi::wires_mut(layout) {
@@ -319,7 +233,7 @@ impl Codec for TestCodec {
             fallible: false,
             context: Default::default(),
             acknowledgement: None,
-            node: prebindgen_flat::WireNode::Wire(vec![Wire {
+            node: prebindgen_flat::WireNode::Leaf(vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
             }]),
@@ -351,7 +265,7 @@ impl Codec for TestCodec {
             context: Default::default(),
             delivery: Default::default(),
             outcomes: prebindgen_flat::Outcomes {
-                success: prebindgen_flat::WireNode::Wire(vec![Wire {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
                     name: w.clone(),
                     kind: wire(Kind::Token, ty, extra),
                 }]),
@@ -843,13 +757,7 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &prebindgen_flat::WireNode<
-        TestWire,
-        TestGroup,
-        TestGroup,
-        TestGroup,
-        TestGroup,
-    >| {
+    let foreign = |wires: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup>| {
         prebindgen_flat::wire_definitions(std::iter::once(wires))
             .filter_map(|w| match &w.kind.kind {
                 Kind::Token => Some((w.kind.name, w.kind.ty.clone())),
@@ -929,60 +837,34 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
-        type Optional = TestGroup;
-        type Sequence = TestGroup;
-        type Group = TestGroup;
-        type Alternatives = TestGroup;
+        type Chain = TestGroup;
+        type Branch = TestGroup;
         fn group_metadata(&self) -> TestGroup {
             TestGroup::Values
         }
         fn optional_niche(
             &self,
-            payload: &prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
+            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         ) -> Option<NicheReservation<Self::Niche>> {
             select_optional_niche(self, TestAbi::wires(payload))
         }
         fn optional_presence(
             &self,
-            payload: &prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
+            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
             reservation: &NicheReservation<Self::Niche>,
         ) -> Result<TokenStream> {
             optional_presence(self, TestAbi::wires(payload), reservation)
         }
         fn absent_output_values(
             &self,
-            payload: &prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
+            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
             reservation: Option<&NicheReservation<Self::Niche>>,
         ) -> Result<Vec<(syn::Ident, TokenStream)>> {
             absent_output_values(self, TestAbi::wires(payload), reservation)
         }
         fn retire_niches(
             &self,
-            payload: &mut prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
+            payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
             reservation: Option<&NicheReservation<Self::Niche>>,
         ) -> Result<()> {
             retire_optional_niches(self, TestAbi::wires_mut(payload), reservation)
@@ -991,7 +873,12 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             TestAbi::validate(&plan.node)
         }
         fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
-            TestAbi::validate(&plan.outcomes.success)?;
+            for node in std::iter::once(&plan.outcomes.success)
+                .chain(plan.outcomes.source_error.iter())
+                .chain(plan.outcomes.binding_failure.iter())
+            {
+                TestAbi::validate(node)?;
+            }
             prebindgen_conversions::match_output_fields(
                 TestAbi::wires(&plan.outcomes.success),
                 &plan.values,
@@ -1000,13 +887,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn prefix_layout(
             &self,
-            layout: &mut prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
+            layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
             segment: ComponentSegment,
         ) {
             for w in TestAbi::wires_mut(layout) {
@@ -1080,9 +961,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 prebindgen_flat::wire_definitions(std::iter::once(&plan.node)).count(),
                 2
             );
-            plan.node = prebindgen_flat::WireNode::Group {
-                metadata: TestGroup::Record,
-                elements: vec![std::mem::take(&mut plan.node)],
+            plan.node = prebindgen_flat::WireNode::Branch {
+                controls: vec![],
+                meta: TestGroup::Record,
+                children: vec![std::mem::take(&mut plan.node)],
             };
             Ok(())
         }
@@ -1094,7 +976,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             assert!(TestAbi::wires(&plan.outcomes.success).len() == 0);
             assert!(matches!(
                 &plan.outcomes.success,
-                prebindgen_flat::WireNode::Group { .. }
+                prebindgen_flat::WireNode::Branch { .. }
             ));
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
@@ -1136,8 +1018,8 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             .input_conversions()
             .unwrap()[0]
             .node,
-        prebindgen_flat::WireNode::Group {
-            metadata: TestGroup::Record,
+        prebindgen_flat::WireNode::Branch {
+            meta: TestGroup::Record,
             ..
         }
     ));
@@ -1726,18 +1608,16 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(
-        layout: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup, TestGroup, TestGroup>,
-    ) {
-        prebindgen_flat::validate_wire_nodes(std::iter::once(layout)).unwrap();
+    fn check(layout: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup>) {
         assert_eq!(
             prebindgen_flat::wire_definitions(std::iter::once(layout)).count(),
             4
         );
         assert_eq!(TestAbi::wires(layout).len(), 4);
-        let WireNode::Group {
-            metadata,
-            elements: children,
+        let WireNode::Branch {
+            meta: metadata,
+            children,
+            ..
         } = layout
         else {
             panic!()
@@ -1746,7 +1626,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         let mut names = Vec::new();
         let mut widths = Vec::new();
         for node in children.as_slice() {
-            let WireNode::Group { metadata, .. } = node else {
+            let WireNode::Branch { meta: metadata, .. } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {
@@ -1987,8 +1867,8 @@ fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
     )
     .unwrap();
     let input = model.function("take").unwrap().input_conversions().unwrap()[0];
-    let WireNode::Alternatives {
-        elements: alternatives,
+    let WireNode::Branch {
+        children: alternatives,
         controls,
         ..
     } = input.input_node()
@@ -2102,9 +1982,10 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
         .contains("outermost"));
         let mut parent = child.clone();
         parent.outcomes = prebindgen_flat::Outcomes {
-            success: WireNode::Group {
-                elements: vec![],
-                metadata: TestGroup::Values,
+            success: WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: TestGroup::Values,
             },
             source_error: None,
             binding_failure: None,
@@ -2113,7 +1994,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
             .unwrap_err()
             .contains("outermost"));
         assert!(
-            matches!(parent.outcomes.success, WireNode::Group { elements, .. } if elements.is_empty())
+            matches!(parent.outcomes.success, WireNode::Branch { children: elements, .. } if elements.is_empty())
         );
     }
 }
@@ -2137,7 +2018,7 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
             .as_ref()
             .unwrap();
         assert!(
-            matches!(&input.node, WireNode::Group { metadata: TestGroup::Values, elements } if elements.len() == count)
+            matches!(&input.node, WireNode::Branch { meta: TestGroup::Values, children: elements , .. } if elements.len() == count)
         );
         if count == 0 {
             continue;
@@ -2152,7 +2033,7 @@ fn constructor_and_output_components_keep_groups_at_every_arity() {
         .unwrap();
         let output = flat.function("f").unwrap().ret.slot.as_ref().unwrap();
         assert!(
-            matches!(&output.outcomes.success, WireNode::Group { metadata: TestGroup::Values, elements } if elements.len() == count)
+            matches!(&output.outcomes.success, WireNode::Branch { meta: TestGroup::Values, children: elements , .. } if elements.len() == count)
         );
     }
 }

@@ -27,16 +27,14 @@ mod errors;
 mod group;
 mod sequence;
 use group::validate_layout;
-pub use group::{CGroup, COptional};
+pub use group::{CBranch, CChain, CGroup, COptional};
 use prebindgen_declarations::Codec;
 use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
 mod emission;
 pub use emission::CContext;
-type InputPlan<W> =
-    prebindgen_conversions::InputPlan<W, CContext, COptional, crate::CSequence, CGroup, ()>;
-type OutputPlan<W> =
-    prebindgen_conversions::OutputPlan<W, CContext, COptional, crate::CSequence, CGroup, ()>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, crate::CChain, crate::CBranch>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, crate::CChain, crate::CBranch>;
 type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
@@ -67,29 +65,17 @@ use quote::{format_ident, quote};
 pub struct CCodec;
 impl Codec for CCodec {
     type Niche = CNiche;
-    type Optional = COptional;
-    type Sequence = CSequence;
-    type Group = CGroup;
-    type Alternatives = ();
-    fn group_metadata(&self) -> CGroup {
-        CGroup::Values
+    type Chain = CChain;
+    type Branch = CBranch;
+    fn group_metadata(&self) -> CBranch {
+        CBranch::Group(CGroup::Values)
     }
 
     fn binding_failure_layout(
         &self,
         _: &(),
-    ) -> Result<
-        Option<
-            prebindgen_flat::WireNode<
-                Self::Wire,
-                Self::Optional,
-                Self::Sequence,
-                Self::Group,
-                Self::Alternatives,
-            >,
-        >,
-    > {
-        Ok(Some(prebindgen_flat::WireNode::Wire(vec![
+    ) -> Result<Option<prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>>> {
+        Ok(Some(prebindgen_flat::WireNode::Leaf(vec![
             prebindgen_flat::Wire {
                 name: syn::parse_quote!(message),
                 kind: CWire::Buffer,
@@ -102,17 +88,18 @@ impl Codec for CCodec {
         discriminator: syn::Ident,
         niche: Option<CNiche>,
         controls: &[prebindgen_flat::Wire<CWire>],
-    ) -> Result<COptional> {
-        COptional::from_parts(presence, discriminator, niche, controls)
+    ) -> Result<CChain> {
+        COptional::from_parts(presence, discriminator, niche, controls).map(CChain::Optional)
     }
-    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<CWire>) -> Result<()> {
-        group::validate_selector(selector)
+    fn alternatives_metadata(&self, selector: &prebindgen_flat::Wire<CWire>) -> Result<CBranch> {
+        group::validate_selector(selector)?;
+        Ok(CBranch::Alternatives)
     }
-    fn field_group(&self, name: syn::Ident) -> CGroup {
-        CGroup::Field(name)
+    fn field_group(&self, name: syn::Ident) -> CBranch {
+        CBranch::Group(CGroup::Field(name))
     }
-    fn fields_group(&self) -> CGroup {
-        CGroup::Fields
+    fn fields_group(&self) -> CBranch {
+        CBranch::Group(CGroup::Fields)
     }
     type Extra = ();
     type Wire = CWire;
@@ -162,9 +149,9 @@ impl Codec for CCodec {
         wire: syn::Ident,
         length: syn::Ident,
         index: syn::Ident,
-        element: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         _: &prebindgen_declarations::Condition,
-    ) -> Result<prebindgen_declarations::SequenceInput<CWire, crate::CSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceInput<CWire, crate::CChain>> {
         sequence::input(wire, length, index, element)
     }
     fn sequence_output(
@@ -173,9 +160,9 @@ impl Codec for CCodec {
         wire: syn::Ident,
         length: syn::Ident,
         _: syn::Ident,
-        element: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+        element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         values: &[(syn::Ident, TokenStream)],
-    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CSequence>> {
+    ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
         sequence::output(wire, length, element, values)
     }
     fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
@@ -385,51 +372,27 @@ impl Codec for CCodec {
 
     fn optional_niche(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
     ) -> Option<prebindgen_declarations::NicheReservation<Self::Niche>> {
         crate::group::optional_niche(payload)
     }
     fn optional_presence(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: &prebindgen_declarations::NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         crate::group::optional_presence(payload, reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         crate::group::absent_output_values(payload, reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&prebindgen_declarations::NicheReservation<Self::Niche>>,
     ) -> Result<()> {
         crate::group::retire_niches(payload, reservation)
@@ -934,18 +897,14 @@ fn validate_wire_declaration(
 fn generate<
     I: for<'a> prebindgen_flat::InputConversion<
         Wire = CWire,
-        Optional = COptional,
-        Sequence = CSequence,
-        Group = CGroup,
-        Alternatives = (),
+        Chain = CChain,
+        Branch = CBranch,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
     O: for<'a> prebindgen_flat::OutputConversion<
         Wire = CWire,
-        Optional = COptional,
-        Sequence = CSequence,
-        Group = CGroup,
-        Alternatives = (),
+        Chain = CChain,
+        Branch = CBranch,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
     >,
 >(
@@ -992,7 +951,6 @@ fn generate<
             continue;
         }
         for slot in f.params.iter().filter_map(|p| p.ty.slot.as_ref()) {
-            prebindgen_flat::validate_wire_nodes(std::iter::once(slot.input_node()))?;
             sequence::validate_buffered(slot.input_node())?;
             validate_layout(slot.input_node())?;
         }
@@ -1384,22 +1342,23 @@ The pointer must be null or a live allocation of the declared type returned by t
 }
 
 fn describe_groups(
-    layout: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
     wires: &[&Wire],
     output: bool,
     next_label: &mut usize,
     root: &str,
 ) -> String {
     fn visit(
-        node: &prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+        node: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         names: &std::collections::BTreeMap<String, String>,
         parents: &mut Vec<String>,
         out: &mut String,
         next_label: &mut usize,
         field_path: &mut Vec<String>,
     ) {
-        if let prebindgen_flat::WireNode::Alternatives {
-            elements: alternatives,
+        if let prebindgen_flat::WireNode::Branch {
+            meta: CBranch::Alternatives,
+            children: alternatives,
             ..
         } = node
         {
@@ -1407,10 +1366,11 @@ fn describe_groups(
                 visit(arm, names, parents, out, next_label, field_path);
             }
         }
-        if let prebindgen_flat::WireNode::Sequence {
+        if let prebindgen_flat::WireNode::Chain {
             controls,
-            element,
-            metadata,
+            child: element,
+            meta: CChain::Sequence(metadata),
+            ..
         } = node
         {
             let [carrier] = controls.as_slice() else {
@@ -1435,9 +1395,9 @@ fn describe_groups(
                 *last = original;
             }
         }
-        if let prebindgen_flat::WireNode::Optional {
-            element,
-            metadata: g,
+        if let prebindgen_flat::WireNode::Chain {
+            child: element,
+            meta: CChain::Optional(g),
             ..
         } = node
         {
@@ -1459,9 +1419,10 @@ fn describe_groups(
             visit(element, names, parents, out, next_label, field_path);
             parents.pop();
         }
-        if let prebindgen_flat::WireNode::Group {
-            metadata,
-            elements: children,
+        if let prebindgen_flat::WireNode::Branch {
+            meta: CBranch::Group(metadata),
+            children,
+            ..
         } = node
         {
             if let CGroup::Field(name) = metadata {
@@ -1605,13 +1566,7 @@ mod generation_tests {
                 ..
             }
         ));
-        let shape = |layout: &prebindgen_flat::WireNode<
-            CWire,
-            crate::COptional,
-            crate::CSequence,
-            CGroup,
-            (),
-        >| {
+        let shape = |layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>| {
             let (_, element, _) = sequence::return_sequence(layout).unwrap();
             prebindgen_flat::wire_definitions_with_paths(std::iter::once(element))
                 .map(|e| (e.path, prebindgen_flat::type_key(&e.wire.rust_type())))
@@ -1960,8 +1915,8 @@ mod generation_tests {
                     .len(),
                 4
             );
-            let prebindgen_flat::WireNode::Optional {
-                metadata: outer_metadata,
+            let prebindgen_flat::WireNode::Chain {
+                meta: CChain::Optional(outer_metadata),
                 ..
             } = &plan.node
             else {
@@ -2019,15 +1974,13 @@ mod generation_tests {
         struct CountedOutput(
             std::rc::Rc<std::cell::Cell<usize>>,
             prebindgen_flat::Outcomes<
-                prebindgen_flat::WireNode<CWire, crate::COptional, crate::CSequence, CGroup, ()>,
+                prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
             >,
         );
         impl prebindgen_flat::Conversion for CountedOutput {
             type Wire = CWire;
-            type Optional = COptional;
-            type Sequence = CSequence;
-            type Group = CGroup;
-            type Alternatives = ();
+            type Chain = CChain;
+            type Branch = CBranch;
             type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>;
 
             fn code_fragment_slot(
@@ -2050,7 +2003,7 @@ mod generation_tests {
             fn output_outcomes(
                 &self,
             ) -> &prebindgen_flat::Outcomes<
-                prebindgen_flat::WireNode<CWire, COptional, crate::CSequence, CGroup, ()>,
+                prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
             > {
                 &self.1
             }

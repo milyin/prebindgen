@@ -1,9 +1,7 @@
 //! Executable conformance tests for codecs with domains unrelated to C or JNI.
 use super::*;
-type InputPlan<W> =
-    prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup, DomainGroup, DomainGroup>;
-type OutputPlan<W> =
-    prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup, DomainGroup, DomainGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), DomainGroup, DomainGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), DomainGroup, DomainGroup>;
 use prebindgen_flat::WireKind;
 
 // This is intentionally not an enum of primitive sentinel kinds. An adapter may
@@ -42,83 +40,54 @@ impl std::ops::Deref for DomainGroup {
 struct DomainAbi;
 impl DomainAbi {
     fn wires(
-        node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
+        node: &WireNode<Domain, DomainGroup, DomainGroup>,
     ) -> std::vec::IntoIter<&Wire<Domain>> {
         prebindgen_flat::wire_definitions(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
     fn wires_mut(
-        node: &mut WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
+        node: &mut WireNode<Domain, DomainGroup, DomainGroup>,
     ) -> std::vec::IntoIter<&mut Wire<Domain>> {
         prebindgen_flat::wire_definitions_mut(std::iter::once(node))
             .collect::<Vec<_>>()
             .into_iter()
     }
-    fn validate(
-        node: &WireNode<Domain, DomainGroup, DomainGroup, DomainGroup, DomainGroup>,
-    ) -> Result<()> {
-        prebindgen_flat::validate_wire_nodes(std::iter::once(node))?;
+    fn validate(node: &WireNode<Domain, DomainGroup, DomainGroup>) -> Result<()> {
         prebindgen_conversions::validate_wire_names(Self::wires(node))
     }
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
     type Niche = Sentinel;
-    type Optional = DomainGroup;
-    type Sequence = DomainGroup;
-    type Group = DomainGroup;
-    type Alternatives = DomainGroup;
+    type Chain = DomainGroup;
+    type Branch = DomainGroup;
     fn group_metadata(&self) -> DomainGroup {
         DomainGroup::default()
     }
     fn optional_niche(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
     ) -> Option<NicheReservation<Self::Niche>> {
         select_optional_niche(self, DomainAbi::wires(payload))
     }
     fn optional_presence(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: &NicheReservation<Self::Niche>,
     ) -> Result<TokenStream> {
         optional_presence(self, DomainAbi::wires(payload), reservation)
     }
     fn absent_output_values(
         &self,
-        payload: &prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<Vec<(syn::Ident, TokenStream)>> {
         absent_output_values(self, DomainAbi::wires(payload), reservation)
     }
     fn retire_niches(
         &self,
-        payload: &mut prebindgen_flat::WireNode<
-            Self::Wire,
-            Self::Optional,
-            Self::Sequence,
-            Self::Group,
-            Self::Alternatives,
-        >,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         reservation: Option<&NicheReservation<Self::Niche>>,
     ) -> Result<()> {
         retire_optional_niches(self, DomainAbi::wires_mut(payload), reservation)
@@ -255,7 +224,7 @@ fn input(domain: &Domain, depth: usize, active: Condition) -> InputPlan<Domain> 
         return InputPlan {
             fallible: false,
             context: Default::default(),
-            node: WireNode::Wire(wires),
+            node: WireNode::Leaf(wires),
             validation: quote!(if #check && (!(#prefix_valid) || !(#valid) #(|| #invalid)*) {return Err("invalid payload");}),
             acquire: quote!(),
             resources: vec![],
@@ -303,7 +272,7 @@ fn output(domain: &Domain, depth: usize, source: TokenStream) -> OutputPlan<Doma
             context: Default::default(),
             delivery: Default::default(),
             outcomes: prebindgen_flat::Outcomes {
-                success: WireNode::Wire(wires),
+                success: WireNode::Leaf(wires),
                 source_error: None,
                 binding_failure: None,
             },
@@ -524,7 +493,7 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     let mut child = output(&domain, 0, quote!(payload));
     // A second view has the same base domain, but its absent default cannot be
     // treated as an independent discriminator by the enclosing optional layer.
-    let WireNode::Wire(wires) = &mut child.outcomes.success else {
+    let WireNode::Leaf(wires) = &mut child.outcomes.success else {
         panic!()
     };
     wires.push(Wire {
@@ -614,10 +583,10 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
             .name,
         "tag3"
     );
-    prebindgen_flat::validate_wire_nodes(std::iter::once(&plan.outcomes.success)).unwrap();
-    let prebindgen_flat::WireNode::Optional {
-        element: outer_element,
-        metadata: outer_metadata,
+
+    let prebindgen_flat::WireNode::Chain {
+        child: outer_element,
+        meta: outer_metadata,
         controls: outer_controls,
         ..
     } = &plan.outcomes.success
@@ -626,8 +595,8 @@ fn optional_niches_live_on_leaves_and_only_the_discriminator_keeps_one() {
     };
     assert!(outer_metadata.starts_with("optional:tag3:"));
     assert!(outer_controls.len() == 1);
-    let prebindgen_flat::WireNode::Optional {
-        metadata: inner_metadata,
+    let prebindgen_flat::WireNode::Chain {
+        meta: inner_metadata,
         ..
     } = &**outer_element
     else {

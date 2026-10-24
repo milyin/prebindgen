@@ -215,13 +215,7 @@ pub fn optional_output<C: Codec>(
 fn mark<C: Codec>(
     codec: &C,
     extra: &C::Extra,
-    tree: &mut prebindgen_flat::WireNode<
-        C::Wire,
-        C::Optional,
-        C::Sequence,
-        C::Group,
-        C::Alternatives,
-    >,
+    tree: &mut prebindgen_flat::WireNode<C::Wire, C::Chain, C::Branch>,
     tag: syn::Ident,
     reservation: Option<NicheReservation<C::Niche>>,
 ) -> Result<()> {
@@ -240,10 +234,10 @@ fn mark<C: Codec>(
     };
     let metadata =
         codec.optional_metadata(tag, discriminator, reservation.map(|r| r.niche), &controls)?;
-    let node = WireNode::Optional {
+    let node = WireNode::Chain {
         controls,
-        element: Box::new(std::mem::take(tree)),
-        metadata,
+        child: Box::new(std::mem::take(tree)),
+        meta: metadata,
     };
     *tree = node;
     Ok(())
