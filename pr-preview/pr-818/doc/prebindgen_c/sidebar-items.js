@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CBranch","CChain","CGroup","CNiche","COptional","CSequence","CWire"],"struct":["CCodec","CContext","CPointer","Cbindgen","Generation"],"type":["Bindings"]};
