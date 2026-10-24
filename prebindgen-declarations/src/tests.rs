@@ -41,13 +41,8 @@ impl TestAbi {
                             visit(arm.as_mut_slice(), out);
                         }
                     }
-                    WireNode::Outcomes { alternatives } => {
-                        if let Some(o) = alternatives
-                            .iter_mut()
-                            .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                        {
-                            visit(o.nodes.as_mut_slice(), out);
-                        }
+                    WireNode::Outcomes { success, .. } => {
+                        visit(success.as_mut_slice(), out);
                     }
                 }
             }
@@ -58,9 +53,17 @@ impl TestAbi {
     }
     fn validate(layout: &[prebindgen_flat::WireNode<TestWire, TestGroup>]) -> Result<()> {
         prebindgen_flat::validate_wire_nodes(layout.iter())?;
-        if let [WireNode::Outcomes { alternatives }] = layout {
-            for o in alternatives {
-                Self::validate(&o.nodes)?;
+        if let [WireNode::Outcomes {
+            success,
+            source_error,
+            binding_failure,
+        }] = layout
+        {
+            for nodes in std::iter::once(success)
+                .chain(source_error)
+                .chain(binding_failure)
+            {
+                Self::validate(nodes)?;
             }
             return Ok(());
         }
@@ -100,13 +103,8 @@ fn test_read<'a>(
                     test_read(arm.as_slice(), out, elements);
                 }
             }
-            WireNode::Outcomes { alternatives } => {
-                if let Some(o) = alternatives
-                    .iter()
-                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                {
-                    test_read(o.nodes.as_slice(), out, elements);
-                }
+            WireNode::Outcomes { success, .. } => {
+                test_read(success.as_slice(), out, elements);
             }
         }
     }

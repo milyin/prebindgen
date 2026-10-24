@@ -199,7 +199,10 @@ pub(crate) fn return_sequence(
     &Wire<JniWire>,
     &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 )> {
-    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)?;
+    let success = match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    };
     prebindgen_declarations::outer_sequences(success)
         .into_iter()
         .find_map(|c| {
@@ -212,8 +215,10 @@ pub(crate) fn return_sequence(
 pub(crate) fn callback_target(
     layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
 ) -> Result<syn::Ident> {
-    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-        .ok_or("missing Success outcome")?;
+    let success = match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    };
     if prebindgen_declarations::outer_sequences(success).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2
     {

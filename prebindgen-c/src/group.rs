@@ -69,13 +69,8 @@ fn values_mut(
                         visit(arm.as_mut_slice(), out);
                     }
                 }
-                WireNode::Outcomes { alternatives } => {
-                    if let Some(o) = alternatives
-                        .iter_mut()
-                        .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                    {
-                        visit(o.nodes.as_mut_slice(), out);
-                    }
+                WireNode::Outcomes { success, .. } => {
+                    visit(success.as_mut_slice(), out);
                 }
             }
         }
@@ -121,13 +116,8 @@ fn read<'a>(
                     read(arm.as_slice(), out, elements);
                 }
             }
-            WireNode::Outcomes { alternatives } => {
-                if let Some(o) = alternatives
-                    .iter()
-                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                {
-                    read(o.nodes.as_slice(), out, elements);
-                }
+            WireNode::Outcomes { success, .. } => {
+                read(success.as_slice(), out, elements);
             }
         }
     }
@@ -143,9 +133,17 @@ impl CGroup {
 }
 pub(crate) fn validate_layout(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]) -> Result<()> {
     prebindgen_flat::validate_wire_nodes(layout.iter())?;
-    if let [WireNode::Outcomes { alternatives }] = layout {
-        for arm in alternatives {
-            validate_layout(&arm.nodes)?;
+    if let [WireNode::Outcomes {
+        success,
+        source_error,
+        binding_failure,
+    }] = layout
+    {
+        for nodes in std::iter::once(success)
+            .chain(source_error)
+            .chain(binding_failure)
+        {
+            validate_layout(nodes)?;
         }
         return Ok(());
     }
@@ -241,9 +239,16 @@ pub(crate) fn validate_layout(layout: &[prebindgen_flat::WireNode<CWire, CGroup>
                     }
                     visit(&c.element, bindings, false, reserved)?;
                 }
-                WireNode::Outcomes { alternatives } => {
-                    for arm in alternatives {
-                        validate_layout(&arm.nodes)?;
+                WireNode::Outcomes {
+                    success,
+                    source_error,
+                    binding_failure,
+                } => {
+                    for nodes in std::iter::once(success)
+                        .chain(source_error)
+                        .chain(binding_failure)
+                    {
+                        validate_layout(nodes)?;
                     }
                 }
                 WireNode::Wire(w) if matches!(w.kind, CWire::Rows) => {
@@ -330,10 +335,10 @@ pub(crate) fn function_parameters<
 pub(crate) fn result_packet_fields(
     layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
 ) -> std::vec::IntoIter<&prebindgen_flat::Wire<CWire>> {
-    values(
-        prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-            .expect("validated Success outcome"),
-    )
+    values(match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    })
 }
 pub(crate) fn result_packet<'a>(
     layout: &'a [prebindgen_flat::WireNode<CWire, CGroup>],
@@ -788,11 +793,11 @@ mod abi_tests {
             },
         )];
         let mut result = sequence.clone();
-        prebindgen_flat::set_outcome(
-            &mut result,
-            prebindgen_flat::OutcomeKind::SourceError,
-            vec![prebindgen_flat::WireNode::Wire(scalar("error"))],
-        );
+        result = vec![WireNode::Outcomes {
+            success: result,
+            source_error: Some(vec![WireNode::Wire(scalar("error"))]),
+            binding_failure: None,
+        }];
         assert_eq!(
             result_packet_fields(&result)
                 .map(|w| w.name.to_string())

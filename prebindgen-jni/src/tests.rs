@@ -454,8 +454,10 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
     fn reservations(
         layout: &[prebindgen_flat::WireNode<JniWire, JniGroup>],
     ) -> Vec<Option<JniNiche>> {
-        let layout = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-            .unwrap_or(layout);
+        let layout = match layout {
+            [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+            nodes => nodes,
+        };
         let mut result = vec![];
         for node in layout {
             match node {
@@ -780,7 +782,7 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
 #[test]
 fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     use prebindgen_declarations::{expand_return, fields, fun, Declarations};
-    use prebindgen_flat::{Conversion, OutcomeKind};
+    use prebindgen_flat::Conversion;
     let mut flat=flat("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn parts(e:Failure)->Failure{} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
     let defaults = Declarations::new(
         &flat,
@@ -803,17 +805,17 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     assert_eq!(errors.len(), 1);
     defaults.fill(&mut flat, &codec, &decl, &()).unwrap();
     let output = flat.function("f").unwrap().output_conversion().unwrap();
-    assert_eq!(
-        prebindgen_flat::wire_definitions(
-            prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::Success)
-                .unwrap()
-                .iter()
-        )
-        .count(),
-        1
-    );
-    let error =
-        prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::SourceError).unwrap();
+    let [prebindgen_flat::WireNode::Outcomes {
+        success,
+        source_error: Some(error),
+        binding_failure: Some(binding_failure),
+    }] = output.wire_nodes()
+    else {
+        panic!("all three completion channels must be declared")
+    };
+
+    assert_eq!(prebindgen_flat::wire_definitions(success.iter()).count(), 1);
+
     assert_eq!(prebindgen_flat::wire_definitions(error.iter()).count(), 2);
     assert!(matches!(
         prebindgen_flat::wire_definitions(error.iter())
@@ -833,12 +835,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         JniWire::Text { .. }
     ));
     assert_eq!(
-        prebindgen_flat::wire_definitions(
-            prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::BindingFailure)
-                .unwrap()
-                .iter()
-        )
-        .count(),
+        prebindgen_flat::wire_definitions(binding_failure.iter()).count(),
         1
     );
     assert_eq!(
@@ -882,7 +879,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 
 #[test]
 fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
-    use prebindgen_flat::{Conversion, OutcomeKind};
+    use prebindgen_flat::Conversion;
     fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
         let mut input = JniCodec.input_leaf(
             &syn::parse_quote!(i64),
@@ -903,11 +900,11 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         JniCodec.finish_output(&mut output, &())?;
 
         if binding_failure {
-            prebindgen_flat::set_outcome(
-                &mut output.nodes,
-                OutcomeKind::BindingFailure,
-                JniCodec.binding_failure_layout(&())?.unwrap(),
-            );
+            output.nodes = vec![prebindgen_flat::WireNode::Outcomes {
+                success: std::mem::take(&mut output.nodes),
+                source_error: None,
+                binding_failure: Some(JniCodec.binding_failure_layout(&())?.unwrap()),
+            }];
         }
         let function = model.function_mut("echo")?;
         function.params[0].ty.slot = Some(input.into());
@@ -925,9 +922,11 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         let output = function.output_conversion()?;
         assert!(std::ptr::eq(
             prebindgen_flat::wire_definitions(
-                prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::Success)
-                    .unwrap()
-                    .iter()
+                match output.wire_nodes() {
+                    [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+                    nodes => nodes,
+                }
+                .iter()
             )
             .next()
             .unwrap(),
@@ -944,11 +943,10 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         );
         assert_eq!(
             prebindgen_flat::wire_definitions(
-                prebindgen_flat::outcome_nodes(
-                    function.output_conversion()?.wire_nodes(),
-                    OutcomeKind::Success
-                )
-                .unwrap()
+                match function.output_conversion()?.wire_nodes() {
+                    [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+                    nodes => nodes,
+                }
                 .iter()
             )
             .next()

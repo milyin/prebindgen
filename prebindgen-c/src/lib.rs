@@ -712,11 +712,10 @@ impl Cbindgen {
         for error in &errors {
             codec.error_layouts.insert(
                 prebindgen_flat::type_key(&error.ty),
-                prebindgen_flat::outcome_nodes(
-                    error.plan.nodes.as_slice(),
-                    prebindgen_flat::OutcomeKind::Success,
-                )
-                .expect("error payload")
+                match error.plan.nodes.as_slice() {
+                    [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+                    nodes => nodes,
+                }
                 .to_vec(),
             );
         }
@@ -955,24 +954,20 @@ fn generate<
             return Err("duplicate C result type symbol".into());
         }
         let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
-        let source_error = prebindgen_flat::outcome_nodes(
-            f.output_conversion()?.wire_nodes(),
-            prebindgen_flat::OutcomeKind::SourceError,
-        );
-        if is_result != source_error.is_some() {
+        let (has_source_error, has_binding_failure) = match f.output_conversion()?.wire_nodes() {
+            [prebindgen_flat::WireNode::Outcomes {
+                source_error,
+                binding_failure,
+                ..
+            }] => (source_error.is_some(), binding_failure.is_some()),
+            _ => (false, false),
+        };
+        if is_result != has_source_error {
             return Err("C source-error schema must match the declared Result return".into());
         }
-
-        // Result wrappers recover binding failures through their diagnostic
-        // callback/status. Non-Result wrappers retain main's abort policy and
-        // may omit this channel in a manually supplied logical schema.
-        if is_result
-            && prebindgen_flat::outcome_nodes(
-                f.output_conversion()?.wire_nodes(),
-                prebindgen_flat::OutcomeKind::BindingFailure,
-            )
-            .is_none()
-        {
+        // Recoverable Result wrappers require a diagnostic channel. Other C
+        // wrappers retain main's abort policy and may omit it in manual schemas.
+        if is_result && !has_binding_failure {
             return Err("recoverable C delivery requires a binding-failure schema".into());
         }
         let context = CContext {
@@ -1385,13 +1380,8 @@ fn describe_groups(
                     parents.pop();
                 }
             }
-            if let prebindgen_flat::WireNode::Outcomes { alternatives } = node {
-                if let Some(success) = alternatives
-                    .iter()
-                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                {
-                    visit(&success.nodes, names, parents, out, next_label, field_path);
-                }
+            if let prebindgen_flat::WireNode::Outcomes { success, .. } = node {
+                visit(success, names, parents, out, next_label, field_path);
             }
             if let prebindgen_flat::WireNode::Group { metadata, children } = node {
                 if let CGroup::Field(name) = metadata {
@@ -1459,7 +1449,7 @@ mod generation_tests {
     #[test]
     fn logical_outcomes_and_sequence_fields_are_independent_of_c_transport() {
         use prebindgen_declarations::{fun, Declarations};
-        use prebindgen_flat::{Conversion, OutcomeKind};
+        use prebindgen_flat::Conversion;
         let mut flat=error_model("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
         let ty = flat.resolve_type(&syn::parse_quote!(Failure)).unwrap();
         let mut codec = enums::EnumCodec {
@@ -1481,9 +1471,11 @@ mod generation_tests {
         .unwrap();
         codec.error_layouts.insert(
             prebindgen_flat::type_key(&ty),
-            prebindgen_flat::outcome_nodes(bindings[0].plan.nodes.as_slice(), OutcomeKind::Success)
-                .unwrap()
-                .to_vec(),
+            match bindings[0].plan.nodes.as_slice() {
+                [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+                nodes => nodes,
+            }
+            .to_vec(),
         );
         let decl = fun!(f).callback_return();
         declarations.fill(&mut flat, &codec, &decl, &()).unwrap();
@@ -1494,29 +1486,24 @@ mod generation_tests {
             2
         );
         let output = normal.output_conversion().unwrap();
-        assert_eq!(
-            prebindgen_flat::wire_definitions(
-                prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::Success)
-                    .unwrap()
-                    .iter()
-            )
-            .count(),
-            1
-        );
-        let errors =
-            prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::SourceError).unwrap();
+        let [prebindgen_flat::WireNode::Outcomes {
+            success,
+            source_error: Some(errors),
+            binding_failure: Some(binding_failure),
+        }] = output.wire_nodes()
+        else {
+            panic!("all three completion channels must be declared")
+        };
+
+        assert_eq!(prebindgen_flat::wire_definitions(success.iter()).count(), 1);
+
         assert_eq!(prebindgen_flat::wire_definitions(errors.iter()).count(), 2);
         assert_eq!(
             crate::group::result_packet_fields(&bindings[0].plan.nodes).count(),
             3
         );
         assert_eq!(
-            prebindgen_flat::wire_definitions(
-                prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::BindingFailure)
-                    .unwrap()
-                    .iter()
-            )
-            .count(),
+            prebindgen_flat::wire_definitions(binding_failure.iter()).count(),
             1
         );
         assert_ne!(
@@ -1524,14 +1511,10 @@ mod generation_tests {
             output.values.len()
         );
         assert!(matches!(
-            prebindgen_flat::wire_definitions(
-                prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::Success)
-                    .unwrap()
-                    .iter()
-            )
-            .next()
-            .unwrap()
-            .kind,
+            prebindgen_flat::wire_definitions(success.iter())
+                .next()
+                .unwrap()
+                .kind,
             CWire::Scalar {
                 primitive: Primitive::I64,
                 ..
@@ -1882,19 +1865,20 @@ mod generation_tests {
     #[test]
     fn recoverable_c_results_require_a_declared_binding_failure_channel() {
         use prebindgen_declarations::{fun, Declarations};
-        use prebindgen_flat::{OutcomeKind, WireNode};
+        use prebindgen_flat::WireNode;
         let mut flat = error_model("pub fn message(e:i64)->String{} pub fn f()->Result<i64,i64>{}");
         let declarations = Declarations::new(&flat, vec![]).unwrap();
         declarations
             .fill(&mut flat, &CCodec, &fun!(f).on_error(fun!(message)), &())
             .unwrap();
         let output = flat.function_mut("f").unwrap().ret.slot.as_mut().unwrap();
-        let WireNode::Outcomes { mut alternatives } = std::mem::take(&mut output.nodes).remove(0)
+        let [WireNode::Outcomes {
+            binding_failure, ..
+        }] = output.nodes.as_mut_slice()
         else {
             panic!()
         };
-        alternatives.retain(|o| o.kind != OutcomeKind::BindingFailure);
-        output.nodes = vec![WireNode::Outcomes { alternatives }];
+        *binding_failure = None;
         let error = generate(flat, "test", vec![], vec![], vec![], Default::default())
             .err()
             .unwrap();

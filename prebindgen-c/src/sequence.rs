@@ -72,13 +72,8 @@ pub(crate) fn schemas<'a>(
     for node in layout {
         match node {
             WireNode::Wire(_) => {}
-            WireNode::Outcomes { alternatives } => {
-                if let Some(success) = alternatives
-                    .iter()
-                    .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-                {
-                    schemas(&success.nodes, out);
-                }
+            WireNode::Outcomes { success, .. } => {
+                schemas(success, out);
             }
             WireNode::Alternatives { alternatives, .. } => {
                 for arm in alternatives {
@@ -254,10 +249,10 @@ pub(crate) fn callback_shape(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]
             _ => false,
         }
     }
-    one(
-        prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-            .unwrap_or(&[]),
-    )
+    one(match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    })
 }
 
 /// The adapter selects its native scope before looking for a sequence.
@@ -268,7 +263,10 @@ pub(crate) fn return_sequence(
     &prebindgen_flat::Wire<CWire>,
     &[prebindgen_flat::WireNode<CWire, CGroup>],
 )> {
-    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)?;
+    let success = match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    };
     prebindgen_declarations::outer_sequences(success)
         .into_iter()
         .find_map(|c| {
@@ -281,8 +279,10 @@ pub(crate) fn return_sequence(
 pub(crate) fn callback_target(
     layout: &[prebindgen_flat::WireNode<CWire, CGroup>],
 ) -> Result<syn::Ident> {
-    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-        .ok_or("missing Success outcome")?;
+    let success = match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    };
     if prebindgen_declarations::outer_sequences(success).len() != 1
         || crate::group::result_packet_fields(layout).len() > 2
     {

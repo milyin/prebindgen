@@ -83,8 +83,10 @@ pub(crate) fn fold(
             _ => false,
         })
     }
-    let success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-        .ok_or("missing Success outcome")?;
+    let success = match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    };
     let optional = optional(success);
     let (carrier, element) =
         crate::sequence::return_sequence(layout).ok_or("missing sequence callback layout")?;

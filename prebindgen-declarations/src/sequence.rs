@@ -419,20 +419,17 @@ mod tests {
             children: std::mem::take(&mut layout),
         }];
         assert_eq!(outer_sequences(&layout).len(), 1);
-        prebindgen_flat::set_outcome(
-            &mut layout,
-            prebindgen_flat::OutcomeKind::BindingFailure,
-            Vec::new(),
-        );
+        layout = vec![WireNode::Outcomes {
+            success: layout,
+            source_error: None,
+            binding_failure: Some(vec![]),
+        }];
         assert!(outer_sequences(&layout).is_empty());
         assert_eq!(
-            outer_sequences(
-                prebindgen_flat::outcome_nodes(
-                    layout.as_slice(),
-                    prebindgen_flat::OutcomeKind::Success
-                )
-                .unwrap()
-            )
+            outer_sequences(match layout.as_slice() {
+                [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+                nodes => nodes,
+            })
             .len(),
             1
         );

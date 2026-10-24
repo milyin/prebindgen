@@ -1088,17 +1088,20 @@ fn generate(
         let error = errors.get(&source);
         let logical = f.output_conversion()?.wire_nodes();
         prebindgen_flat::validate_wire_nodes(logical.iter())?;
-        // Every JNI wrapper has a separate binding-error callback, including
-        // functions without a source Result. Manual schemas must declare it.
-        if prebindgen_flat::outcome_nodes(logical, prebindgen_flat::OutcomeKind::SourceError)
-            .is_some()
-            != error.is_some()
-        {
+        let (has_source_error, has_binding_failure) = match logical {
+            [prebindgen_flat::WireNode::Outcomes {
+                source_error,
+                binding_failure,
+                ..
+            }] => (source_error.is_some(), binding_failure.is_some()),
+            _ => (false, false),
+        };
+        if has_source_error != error.is_some() {
             return Err("JNI source-error schema must match its configured error converter".into());
         }
-        if prebindgen_flat::outcome_nodes(logical, prebindgen_flat::OutcomeKind::BindingFailure)
-            .is_none()
-        {
+        // Every JNI wrapper has a separate binding-error callback, including
+        // functions without a source Result. Manual schemas must declare it.
+        if !has_binding_failure {
             return Err("JNI native delivery requires a declared binding-failure schema".into());
         }
 

@@ -58,8 +58,10 @@ pub(crate) fn prepare(
 
 fn field_names(layout: &[prebindgen_flat::WireNode<CWire, CGroup>]) -> Vec<String> {
     use prebindgen_flat::WireNode;
-    let layout = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-        .unwrap_or(layout);
+    let layout = match layout {
+        [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+        nodes => nodes,
+    };
     let mut names = Vec::new();
     if let Some(WireNode::Group {
         metadata: CGroup::Fields,

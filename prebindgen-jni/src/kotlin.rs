@@ -371,12 +371,8 @@ pub(crate) fn output_kotlin(
     nodes: &[JniNode],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    if let [JniNode::Outcomes { alternatives }] = nodes {
-        let success = alternatives
-            .iter()
-            .find(|o| o.kind == prebindgen_flat::OutcomeKind::Success)
-            .ok_or("missing Success outcome")?;
-        return output_kotlin(success.nodes.as_slice(), context);
+    if let [JniNode::Outcomes { success, .. }] = nodes {
+        return output_kotlin(success, context);
     }
     if nodes.iter().all(|n| matches!(n, JniNode::Wire(_))) {
         return output_leaves(&leaf_wires(nodes), context);

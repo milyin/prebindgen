@@ -91,11 +91,10 @@ pub(crate) fn prepare(
         let output = output.unwrap();
         codec.error_layouts.insert(
             key.clone(),
-            prebindgen_flat::outcome_nodes(
-                output.wire_nodes(),
-                prebindgen_flat::OutcomeKind::Success,
-            )
-            .expect("error payload")
+            match output.wire_nodes() {
+                [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+                nodes => nodes,
+            }
             .to_vec(),
         );
         let handler = if let Some(handler) = handlers.get(&key) {

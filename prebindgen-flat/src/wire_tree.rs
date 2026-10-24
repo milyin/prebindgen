@@ -9,24 +9,6 @@ pub struct WireContainer<W: WireKind, G> {
     /// Optional adapter-specific information, without common placement rules.
     pub metadata: Option<G>,
 }
-/// Mutually exclusive completion channels, independent of delivery mechanism.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum OutcomeKind {
-    /// Normal return value, including a successful Result payload.
-    Success = 0,
-    /// The projected E of a source Result<T, E>.
-    SourceError = 1,
-    /// Failure of conversion or invocation, distinct from the source's Err(E).
-    BindingFailure = 2,
-}
-/// The logical payload of one completion channel.
-#[derive(Clone, Debug)]
-pub struct WireOutcome<W: WireKind, G> {
-    /// Which completion channel selects this payload.
-    pub kind: OutcomeKind,
-    /// Fields exchanged when this outcome is selected; may be empty.
-    pub nodes: Vec<WireNode<W, G>>,
-}
 /// Logical structure. Common nodes impose no ABI positions or delivery rules;
 /// adapters may retain explicit encoding decisions in their opaque metadata.
 #[derive(Clone, Debug)]
@@ -52,11 +34,18 @@ pub enum WireNode<W: WireKind, G = ()> {
         /// Mutually exclusive payload schemas in declaration order.
         alternatives: Vec<Vec<WireNode<W, G>>>,
     },
-    /// Exactly one completion channel is selected. Empty payloads retain their
-    /// outcome identity; Result<(), E> is distinct from an ordinary unit return.
+    /// One of the declared completion channels is selected. Success is always
+    /// declared; each error channel is independently optional. Empty payloads retain
+    /// their outcome identity; Result<(), E> is distinct from an ordinary unit return.
     Outcomes {
-        /// Available channels and their payload schemas.
-        alternatives: Vec<WireOutcome<W, G>>,
+        /// Values delivered on successful completion; empty for a unit result.
+        success: Vec<WireNode<W, G>>,
+        /// Projected source error, present when this conversion routes `Err(E)`.
+        /// `Some(vec![])` declares a payload-free error; `None` omits the channel.
+        source_error: Option<Vec<WireNode<W, G>>>,
+        /// Conversion or invocation failure, independent of a source `Err(E)`.
+        /// `Some(vec![])` declares a payload-free failure; `None` omits the channel.
+        binding_failure: Option<Vec<WireNode<W, G>>>,
     },
 }
 
@@ -101,10 +90,18 @@ impl<'a, W: WireKind, G, I: Iterator<Item = &'a WireNode<W, G>>> Iterator
                         self.stack.push(arm.iter());
                     }
                 }
-                WireNode::Outcomes { alternatives } => {
-                    for outcome in alternatives.iter().rev() {
-                        self.stack.push(outcome.nodes.iter());
+                WireNode::Outcomes {
+                    success,
+                    source_error,
+                    binding_failure,
+                } => {
+                    if let Some(nodes) = binding_failure {
+                        self.stack.push(nodes.iter());
                     }
+                    if let Some(nodes) = source_error {
+                        self.stack.push(nodes.iter());
+                    }
+                    self.stack.push(success.iter());
                 }
             }
         }
@@ -156,10 +153,18 @@ impl<'a, W: WireKind, G, I: Iterator<Item = &'a mut WireNode<W, G>>> Iterator
                         self.stack.push(arm.iter_mut());
                     }
                 }
-                WireNode::Outcomes { alternatives } => {
-                    for outcome in alternatives.iter_mut().rev() {
-                        self.stack.push(outcome.nodes.iter_mut());
+                WireNode::Outcomes {
+                    success,
+                    source_error,
+                    binding_failure,
+                } => {
+                    if let Some(nodes) = binding_failure {
+                        self.stack.push(nodes.iter_mut());
                     }
+                    if let Some(nodes) = source_error {
+                        self.stack.push(nodes.iter_mut());
+                    }
+                    self.stack.push(success.iter_mut());
                 }
             }
         }
@@ -171,7 +176,8 @@ impl<'a, W: WireKind, G, I: std::iter::FusedIterator<Item = &'a mut WireNode<W, 
 }
 
 /// Address of a definition relative to the supplied roots. Includes element and
-/// alternative boundaries; outcome components use stable channel identities.
+/// alternative boundaries. Outcome branch positions are fixed: 0 for success,
+/// 1 for source error and 2 for binding failure, including when a channel is absent.
 /// Rebuild paths after structural edits or choosing different root iterators.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WirePath(pub Vec<usize>);
@@ -219,11 +225,24 @@ pub fn wire_definitions_with_paths<'a, W: WireKind + 'a, G: 'a>(
                     path.pop();
                 }
             }
-            WireNode::Outcomes { alternatives } => {
-                for outcome in alternatives {
-                    path.push(outcome.kind as usize);
-                    children(&outcome.nodes, path, out);
-                    path.pop();
+            WireNode::Outcomes {
+                success,
+                source_error,
+                binding_failure,
+            } => {
+                for (branch, nodes) in [
+                    Some(success.as_slice()),
+                    source_error.as_deref(),
+                    binding_failure.as_deref(),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if let Some(nodes) = nodes {
+                        path.push(branch);
+                        children(nodes, path, out);
+                        path.pop();
+                    }
                 }
             }
         }
@@ -255,85 +274,29 @@ pub fn wire_at_path<'a, W: WireKind + 'a, G: 'a>(
                 let (&arm, rest) = rest.split_first()?;
                 child(alternatives.get(arm)?, rest)
             }
-            WireNode::Outcomes { alternatives } => {
-                let (&channel, rest) = rest.split_first()?;
-                child(
-                    &alternatives
-                        .iter()
-                        .find(|o| o.kind as usize == channel)?
-                        .nodes,
-                    rest,
-                )
+            WireNode::Outcomes {
+                success,
+                source_error,
+                binding_failure,
+            } => {
+                let (&branch, rest) = rest.split_first()?;
+                let nodes = match branch {
+                    0 => success.as_slice(),
+                    1 => source_error.as_deref()?,
+                    2 => binding_failure.as_deref()?,
+                    _ => return None,
+                };
+                child(nodes, rest)
             }
         }
     }
     let (&index, rest) = path.0.split_first()?;
     get(nodes.into_iter().nth(index)?, rest)
 }
-/// Select an explicit completion payload. A plain node slice implicitly means
-/// Success. Malformed mixed outcome roots have no implicit Success payload.
-pub fn outcome_nodes<W: WireKind, G>(
-    nodes: &[WireNode<W, G>],
-    kind: OutcomeKind,
-) -> Option<&[WireNode<W, G>]> {
-    if let [WireNode::Outcomes { alternatives }] = nodes {
-        alternatives
-            .iter()
-            .find(|o| o.kind == kind)
-            .map(|o| o.nodes.as_slice())
-    } else {
-        (kind == OutcomeKind::Success
-            && !nodes.iter().any(|n| matches!(n, WireNode::Outcomes { .. })))
-        .then_some(nodes)
-    }
-}
-/// Add or replace a completion channel. An ordinary node vector becomes the
-/// Success payload; empty payloads retain their completion identity.
-pub fn set_outcome<W: WireKind, G>(
-    nodes: &mut Vec<WireNode<W, G>>,
-    kind: OutcomeKind,
-    payload: Vec<WireNode<W, G>>,
-) {
-    if let [WireNode::Outcomes { alternatives }] = nodes.as_mut_slice() {
-        if let Some(outcome) = alternatives.iter_mut().find(|o| o.kind == kind) {
-            outcome.nodes = payload;
-        } else {
-            alternatives.push(WireOutcome {
-                kind,
-                nodes: payload,
-            });
-            alternatives.sort_by_key(|o| o.kind);
-        }
-    } else {
-        let success = std::mem::take(nodes);
-        let mut alternatives = vec![WireOutcome {
-            kind: OutcomeKind::Success,
-            nodes: success,
-        }];
-        if kind == OutcomeKind::Success {
-            alternatives[0].nodes = payload;
-        } else {
-            alternatives.push(WireOutcome {
-                kind,
-                nodes: payload,
-            });
-        }
-        nodes.push(WireNode::Outcomes { alternatives });
-    }
-}
-/// Replace the successful result nodes while retaining declared error channels.
-pub fn replace_success<W: WireKind, G>(
-    nodes: &mut Vec<WireNode<W, G>>,
-    payload: Vec<WireNode<W, G>>,
-) {
-    if matches!(nodes.as_slice(), [WireNode::Outcomes { .. }]) {
-        set_outcome(nodes, OutcomeKind::Success, payload)
-    } else {
-        *nodes = payload;
-    }
-}
-/// Check logical branch structure. Completion channels must be the sole root,
-/// include Success, and have unique kinds. Names may repeat across contexts.
+/// Check logical branch structure. An `Outcomes` node must be the sole root;
+/// its payloads cannot contain further `Outcomes` nodes. Named fields guarantee
+/// a success schema and at most one schema for each error channel. Names may
+/// repeat across contexts.
 pub fn validate_wire_nodes<'a, W: WireKind + 'a, G: 'a>(
     nodes: impl IntoIterator<Item = &'a WireNode<W, G>>,
 ) -> Result<()> {
@@ -356,21 +319,20 @@ pub fn validate_wire_nodes<'a, W: WireKind + 'a, G: 'a>(
                     nested(arm)?;
                 }
             }
-            WireNode::Outcomes { alternatives } => {
+            WireNode::Outcomes {
+                success,
+                source_error,
+                binding_failure,
+            } => {
                 if !allow_outcomes {
                     return Err("outcomes must be the sole root node".into());
                 }
-                let mut kinds = std::collections::BTreeSet::new();
-                for outcome in alternatives {
-                    if !kinds.insert(outcome.kind) {
-                        return Err("duplicate outcome kind".into());
-                    }
+                nested(success)?;
+                if let Some(nodes) = source_error {
+                    nested(nodes)?;
                 }
-                if !kinds.contains(&OutcomeKind::Success) {
-                    return Err("outcomes require a Success channel".into());
-                }
-                for outcome in alternatives {
-                    nested(&outcome.nodes)?;
+                if let Some(nodes) = binding_failure {
+                    nested(nodes)?;
                 }
             }
         }
@@ -429,16 +391,19 @@ mod tests {
             entry.wire,
             wire_at_path(nodes.iter(), &entry.path).unwrap()
         ));
-        set_outcome(
-            &mut nodes,
-            OutcomeKind::BindingFailure,
-            vec![leaf("message")],
-        );
+        nodes = vec![WireNode::Outcomes {
+            success: nodes,
+            source_error: None,
+            binding_failure: Some(vec![leaf("message")]),
+        }];
         let binding_failure_path = wire_definitions_with_paths(nodes.iter())
             .last()
             .unwrap()
             .path;
-        set_outcome(&mut nodes, OutcomeKind::SourceError, vec![leaf("value")]);
+        let [WireNode::Outcomes { source_error, .. }] = nodes.as_mut_slice() else {
+            panic!()
+        };
+        *source_error = Some(vec![leaf("value")]);
         assert_eq!(
             wire_at_path(nodes.iter(), &binding_failure_path)
                 .unwrap()
@@ -533,31 +498,112 @@ mod tests {
     }
     #[test]
     fn empty_optional_and_completion_payloads_keep_their_structure() {
-        let mut nodes: Vec<WireNode<syn::Type>> = vec![WireNode::Optional(WireContainer {
-            element: vec![],
-            metadata: None,
-        })];
-        assert_eq!(nodes.len(), 1);
+        let mut nodes: Vec<WireNode<syn::Type>> = vec![WireNode::Outcomes {
+            success: vec![WireNode::Optional(WireContainer {
+                element: vec![],
+                metadata: None,
+            })],
+            source_error: Some(vec![]),
+            binding_failure: None,
+        }];
         assert!(wire_definitions(nodes.iter()).next().is_none());
-        set_outcome(&mut nodes, OutcomeKind::SourceError, vec![]);
+        let [WireNode::Outcomes {
+            success,
+            source_error,
+            binding_failure,
+        }] = nodes.as_mut_slice()
+        else {
+            panic!()
+        };
+        assert_eq!(success.len(), 1);
+        assert!(matches!(&success[0], WireNode::Optional(_)));
+        assert!(source_error.as_ref().unwrap().is_empty());
+        assert!(binding_failure.is_none());
+        *success = vec![leaf("new_value")];
+        assert!(source_error.is_some());
         assert_eq!(
-            outcome_nodes(&nodes, OutcomeKind::Success).unwrap().len(),
-            1
-        );
-        assert!(outcome_nodes(&nodes, OutcomeKind::SourceError)
-            .unwrap()
-            .is_empty());
-        assert!(outcome_nodes(&nodes, OutcomeKind::BindingFailure).is_none());
-        replace_success(&mut nodes, vec![leaf("new_value")]);
-        assert_eq!(
-            wire_definitions(outcome_nodes(&nodes, OutcomeKind::Success).unwrap())
-                .next()
-                .unwrap()
-                .name,
+            wire_definitions(nodes.iter()).next().unwrap().name,
             "new_value"
         );
-        assert!(outcome_nodes(&nodes, OutcomeKind::SourceError).is_some());
         validate_wire_nodes(nodes.iter()).unwrap();
+    }
+    #[test]
+    fn named_outcomes_traverse_and_mutate_all_declared_branches_without_cloning() {
+        for has_source_error in [false, true] {
+            for has_binding_failure in [false, true] {
+                let mut nodes = [WireNode::Outcomes {
+                    success: vec![non_clone_leaf("same", 1)],
+                    source_error: has_source_error.then(|| vec![non_clone_leaf("same", 2)]),
+                    binding_failure: has_binding_failure.then(|| vec![non_clone_leaf("same", 3)]),
+                }];
+                validate_wire_nodes(nodes.iter()).unwrap();
+                let expected = std::iter::once(1)
+                    .chain(has_source_error.then_some(2))
+                    .chain(has_binding_failure.then_some(3))
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    wire_definitions(nodes.iter())
+                        .map(|w| w.kind.0)
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+                for entry in wire_definitions_with_paths(nodes.iter()) {
+                    // Absent channels keep their positions reserved in paths.
+                    assert_eq!(
+                        entry.path,
+                        WirePath(vec![0, (entry.wire.kind.0 - 1) as usize, 0])
+                    );
+                    assert!(std::ptr::eq(
+                        entry.wire,
+                        wire_at_path(nodes.iter(), &entry.path).unwrap()
+                    ));
+                }
+                assert_eq!(
+                    wire_at_path(nodes.iter(), &WirePath(vec![0, 1, 0])).is_some(),
+                    has_source_error
+                );
+                assert_eq!(
+                    wire_at_path(nodes.iter(), &WirePath(vec![0, 2, 0])).is_some(),
+                    has_binding_failure
+                );
+                assert!(wire_at_path(nodes.iter(), &WirePath(vec![0, 3, 0])).is_none());
+                for wire in wire_definitions_mut(nodes.iter_mut()) {
+                    wire.kind.0 += 10;
+                }
+                assert_eq!(
+                    wire_definitions(nodes.iter())
+                        .map(|w| w.kind.0)
+                        .collect::<Vec<_>>(),
+                    expected.into_iter().map(|v| v + 10).collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+    #[test]
+    fn validation_checks_each_named_outcome_payload() {
+        for branch in 0..3 {
+            let mut success = vec![];
+            let mut source_error = None;
+            let mut binding_failure = None;
+            let invalid: Vec<WireNode<syn::Type>> = vec![WireNode::Alternatives {
+                metadata: None,
+                alternatives: vec![],
+            }];
+            match branch {
+                0 => success = invalid,
+                1 => source_error = Some(invalid),
+                2 => binding_failure = Some(invalid),
+                _ => unreachable!(),
+            }
+            let nodes = [WireNode::Outcomes {
+                success,
+                source_error,
+                binding_failure,
+            }];
+            assert!(validate_wire_nodes(nodes.iter())
+                .unwrap_err()
+                .contains("no alternatives"));
+        }
     }
     #[test]
     fn validation_rejects_empty_choices_and_invalid_completion_roots() {
@@ -569,40 +615,14 @@ mod tests {
             .unwrap_err()
             .contains("no alternatives"));
         nodes = vec![WireNode::Outcomes {
-            alternatives: vec![WireOutcome {
-                kind: OutcomeKind::SourceError,
-                nodes: vec![],
-            }],
-        }];
-        assert!(validate_wire_nodes(nodes.iter())
-            .unwrap_err()
-            .contains("Success"));
-        nodes = vec![WireNode::Outcomes {
-            alternatives: vec![
-                WireOutcome {
-                    kind: OutcomeKind::Success,
-                    nodes: vec![],
-                },
-                WireOutcome {
-                    kind: OutcomeKind::Success,
-                    nodes: vec![],
-                },
-            ],
-        }];
-        assert!(validate_wire_nodes(nodes.iter())
-            .unwrap_err()
-            .contains("duplicate outcome"));
-        nodes = vec![WireNode::Outcomes {
-            alternatives: vec![WireOutcome {
-                kind: OutcomeKind::Success,
-                nodes: vec![leaf("value")],
-            }],
+            success: vec![leaf("value")],
+            source_error: None,
+            binding_failure: None,
         }];
         nodes.insert(0, leaf("extra"));
         assert!(validate_wire_nodes(nodes.iter())
             .unwrap_err()
             .contains("sole root"));
-        assert!(outcome_nodes(&nodes, OutcomeKind::Success).is_none());
         validate_wire_nodes(nodes.iter().skip(1)).unwrap();
         let nested = [WireNode::Optional(WireContainer {
             element: nodes.into_iter().skip(1).collect(),

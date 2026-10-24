@@ -1,7 +1,7 @@
 //! A backend whose sequence boundary has separate pointer and length values.
 use super::*;
 use prebindgen_conversions::{validate_wire_names, value};
-use prebindgen_flat::{Conversion, OutcomeKind};
+use prebindgen_flat::Conversion;
 
 #[derive(Clone, Debug)]
 enum Metadata {
@@ -25,7 +25,10 @@ impl PointerLenAbi {
     fn result_fields(
         layout: &[prebindgen_flat::WireNode<Type, Metadata>],
     ) -> std::vec::IntoIter<&Wire<Type>> {
-        Self::values(prebindgen_flat::outcome_nodes(layout, OutcomeKind::Success).unwrap())
+        Self::values(match layout {
+            [prebindgen_flat::WireNode::Outcomes { success, .. }] => success.as_slice(),
+            nodes => nodes,
+        })
     }
     fn result_packet<'a>(
         layout: &'a [prebindgen_flat::WireNode<Type, Metadata>],
@@ -65,13 +68,7 @@ impl PointerLenAbi {
                             visit(arm.as_slice(), out);
                         }
                     }
-                    WireNode::Outcomes { alternatives } => {
-                        if let Some(o) =
-                            alternatives.iter().find(|o| o.kind == OutcomeKind::Success)
-                        {
-                            visit(o.nodes.as_slice(), out);
-                        }
-                    }
+                    WireNode::Outcomes { success, .. } => visit(success, out),
                 }
             }
         }
@@ -111,13 +108,8 @@ impl PointerLenAbi {
                             visit(arm.as_mut_slice(), out);
                         }
                     }
-                    WireNode::Outcomes { alternatives } => {
-                        if let Some(o) = alternatives
-                            .iter_mut()
-                            .find(|o| o.kind == OutcomeKind::Success)
-                        {
-                            visit(o.nodes.as_mut_slice(), out);
-                        }
+                    WireNode::Outcomes { success, .. } => {
+                        visit(success.as_mut_slice(), out);
                     }
                 }
             }
@@ -128,9 +120,17 @@ impl PointerLenAbi {
     }
     fn validate(layout: &[prebindgen_flat::WireNode<Type, Metadata>]) -> Result<()> {
         prebindgen_flat::validate_wire_nodes(layout.iter())?;
-        if let [WireNode::Outcomes { alternatives }] = layout {
-            for o in alternatives {
-                Self::validate(&o.nodes)?;
+        if let [WireNode::Outcomes {
+            success,
+            source_error,
+            binding_failure,
+        }] = layout
+        {
+            for nodes in std::iter::once(success)
+                .chain(source_error)
+                .chain(binding_failure)
+            {
+                Self::validate(nodes)?;
             }
             return Ok(());
         }

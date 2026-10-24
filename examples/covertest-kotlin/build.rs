@@ -133,20 +133,22 @@ use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 fn main() {
     let binding = JniGen::builder()
         .configure(|flat| {
-            use prebindgen_flat::{Conversion, OutcomeKind, WireNode};
+            use prebindgen_flat::{Conversion, WireNode};
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
             // Observe a clone so the production builder still installs its own codec.
             // Collections.kt exercises the separately generated production boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;
-            let logical = prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::Success).unwrap();
+            let [WireNode::Outcomes { success, source_error: None, binding_failure: Some(_) }] = output.wire_nodes() else {
+                return Err("collection probe must declare success and binding failure only".into());
+            };
+            let logical = success.as_slice();
             assert!(matches!(logical, [WireNode::Sequence(_)]));
             assert!(matches!(prebindgen_flat::wire_definitions(logical.iter()).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
                 primitive: prebindgen_flat::Primitive::Char, ..
             }));
             assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
-            assert!(prebindgen_flat::outcome_nodes(output.wire_nodes(), OutcomeKind::BindingFailure).is_some());
             Ok(())
         })
         .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))

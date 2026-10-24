@@ -243,8 +243,8 @@ shared composition handles conditional validation, preparation and ownership.
 values to the common compiler. `validate_input` and `validate_output` check the
 finished conversion before installation.
 
-C/JNI select Success when building normal result packets. SourceError and
-BindingFailure remain accessible through their explicit outcome schemas.
+C/JNI select `success` when building normal result packets. The `source_error`
+and `binding_failure` payloads remain accessible through their named fields.
 Callback/context parameters, acknowledgements and error packet/status details
 belong to the adapters. The base `Conversion` trait requires only the logical
 tree and the generator's slot requests.
@@ -835,21 +835,21 @@ It makes no assumption about where a value is passed. For example:
 
 ```text
 Outcomes — exactly one channel is selected
-  Success:
+  success:
     Optional
       element:
         Sequence
           element: integer, text
-  SourceError:
+  source_error:
     code, details
-  BindingFailure:
+  binding_failure:
     message
 ```
 
-`OutcomeKind::SourceError` contains the declared projection of `E` in
+The `source_error` field contains the declared projection of `E` in
 `Result<T, E>`. Converting the error into a diagnostic message requires an
 explicit mapper; string-valued fields retain their ordinary conversions.
-`BindingFailure` is a separate conversion/invocation failure channel. C and JNI
+`binding_failure` is a separate conversion/invocation failure channel. C and JNI
 declare their diagnostic payload through `Codec::binding_failure_layout`.
 Adapters choose how to deliver each channel: native outputs/status, typed error
 callbacks, or another policy. JNI always uses a binding-error callback and requires
@@ -859,15 +859,19 @@ in manual schemas. Standard C codec plans describe the diagnostic message in bot
 cases; the C writer chooses whether to deliver it or abort. Empty channels retain their identity, including
 `Result<(), E>` and `Result<T, ()>`.
 
-`outcome_nodes(output.wire_nodes(), OutcomeKind::SourceError)` accesses the
-error's logical schema just like the success schema.
+An `Outcomes` node has a required `success: Vec<WireNode<W, G>>` and two
+independently optional fields, `source_error` and `binding_failure`, each an
+`Option<Vec<WireNode<W, G>>>`. Read or update those fields directly.
+`None` omits an error channel; `Some(vec![])` declares an error with no payload.
+The representation cannot omit success or duplicate a channel.
 `wire_definitions_with_paths(output.wire_nodes().iter())` visits each definition
 once and supplies a path identifying its element and outcome. Equal wire names
 in different alternatives are allowed; a path distinguishes them. Actual
 runtime elements and the selected outcome are emission context supplied by the
 adapter, rather than flat wire positions imposed by the trait. Outcomes require a
-Success channel and may appear only as the sole root node. Outcome paths encode
-channel identity, so adding a SourceError does not change a BindingFailure path;
+`success` field and may appear only as the sole root node. Outcome paths use
+fixed branch positions: 0 for success, 1 for source error and 2 for binding failure.
+Adding a source-error channel does not change a binding-failure path;
 rebuild paths after other structural edits.
 
 Adapter metadata `G` can retain field names, record information or other semantic
@@ -971,8 +975,9 @@ Adapter API migration for the logical schema:
   signatures through their own operations.
 - Use explicit `wire_definitions` / `wire_definitions_mut` traversal over node
   iterators. `wire_definitions_with_paths` and `wire_at_path` provide structural
-  context. `validate_wire_nodes` checks branch structure; `outcome_nodes`,
-  `set_outcome` and `replace_success` operate on completion channels.
+  context. `validate_wire_nodes` checks branch structure. Access the `Outcomes`
+  fields `success`, `source_error` and `binding_failure` directly; there is no
+  channel discriminator or generic channel-selection/setter API.
 - Stored plans expose `nodes: Vec<WireNode<W, G>>`. `OutputPlan::values` and sequence-hook
   reads are keyed by binding name. `match_output_fields` matches prepared output
   expressions to explicitly selected destination fields.

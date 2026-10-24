@@ -791,11 +791,18 @@ fn finalize_output_schema<C: Codec>(
     extra: &C::Extra,
 ) -> Result<()> {
     if let Some(error) = codec.binding_failure_layout(extra)? {
-        prebindgen_flat::set_outcome(
-            &mut plan.nodes,
-            prebindgen_flat::OutcomeKind::BindingFailure,
-            error,
-        );
+        match plan.nodes.as_mut_slice() {
+            [WireNode::Outcomes {
+                binding_failure, ..
+            }] => *binding_failure = Some(error),
+            _ => {
+                plan.nodes = vec![WireNode::Outcomes {
+                    success: std::mem::take(&mut plan.nodes),
+                    source_error: None,
+                    binding_failure: Some(error),
+                }]
+            }
+        }
     }
     prebindgen_flat::validate_wire_nodes(plan.nodes.iter())
 }
@@ -1048,12 +1055,19 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 #prepare
             };
 
-            prebindgen_flat::set_outcome(
-                &mut child.nodes,
-                prebindgen_flat::OutcomeKind::SourceError,
-                self.codec
-                    .source_error_layout(error_ty, mapped_error, extra)?,
-            );
+            let error = self
+                .codec
+                .source_error_layout(error_ty, mapped_error, extra)?;
+            match child.nodes.as_mut_slice() {
+                [WireNode::Outcomes { source_error, .. }] => *source_error = Some(error),
+                _ => {
+                    child.nodes = vec![WireNode::Outcomes {
+                        success: std::mem::take(&mut child.nodes),
+                        source_error: Some(error),
+                        binding_failure: None,
+                    }]
+                }
+            }
             return Ok(child);
         }
         self.output(ty, recipe, extra, value, borrowed)
