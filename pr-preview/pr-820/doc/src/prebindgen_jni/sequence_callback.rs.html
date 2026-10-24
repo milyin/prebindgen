@@ -83,37 +83,39 @@
 <a href=#83 id=83 data-nosnippet>83</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
 <a href=#84 id=84 data-nosnippet>84</a>        })
 <a href=#85 id=85 data-nosnippet>85</a>    }
-<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">let </span>success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-<a href=#87 id=87 data-nosnippet>87</a>        .ok_or(<span class="string">"missing Success outcome"</span>)<span class="question-mark">?</span>;
-<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">let </span>optional = optional(success);
-<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>(carrier, element) =
-<a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">crate</span>::sequence::return_sequence(layout).ok_or(<span class="string">"missing sequence callback layout"</span>)<span class="question-mark">?</span>;
-<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">let </span>position = <span class="kw">crate</span>::group::result_packet_fields(layout)
-<a href=#92 id=92 data-nosnippet>92</a>        .position(|w| w.name == carrier.name)
-<a href=#93 id=93 data-nosnippet>93</a>        .unwrap();
-<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">let </span>row = <span class="string">"__pb_fold_row"</span>;
-<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">let </span>ctx = KotlinContext {
-<a href=#96 id=96 data-nosnippet>96</a>        result: row,
-<a href=#97 id=97 data-nosnippet>97</a>        output_prefix: <span class="string">"foldElement"</span>,
-<a href=#98 id=98 data-nosnippet>98</a>        cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#99 id=99 data-nosnippet>99</a>        ..<span class="kw-2">*</span>context
-<a href=#100 id=100 data-nosnippet>100</a>    };
-<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">let </span>child = kotlin::output_kotlin(element, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?</span>;
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span>present = <span class="macro">format!</span>(<span class="string">"{}[{position}] != null"</span>, context.result);
-<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">let </span>raw = <span class="string">"__pb_rows"</span>;
-<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">let </span>types = child.result_types.join(<span class="string">", "</span>);
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">let </span>args = child.delivered.join(<span class="string">", "</span>);
-<a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">let </span>failure = context.failure;
-<a href=#107 id=107 data-nosnippet>107</a>    <span class="prelude-val">Ok</span>(Fold {
-<a href=#108 id=108 data-nosnippet>108</a>        parameter:<span class="macro">format!</span>(<span class="string">"fold: (A, {types}) -&gt; A"</span>),
-<a href=#109 id=109 data-nosnippet>109</a>        discard:<span class="macro">format!</span>(<span class="string">"fun __pb_discard({failure}: Throwable) {{ for (rawRow in __pb_rows) {{ val {row} = rawRow as kotlin.Array&lt;*&gt;\n{}\n{}\n}} }}\n"</span>,child.output_locals,child.cleanup),
-<a href=#110 id=110 data-nosnippet>110</a>        output:KotlinOutput {
-<a href=#111 id=111 data-nosnippet>111</a>            delivered:<span class="macro">vec!</span>[<span class="kw">if </span>optional{<span class="string">"__pb_accumulator"</span>.into()}<span class="kw">else</span>{<span class="string">"__pb_accumulator as A"</span>.into()}],
-<a href=#112 id=112 data-nosnippet>112</a>            result_types:<span class="macro">vec!</span>[<span class="kw">if </span>optional{<span class="string">"A?"</span>.into()}<span class="kw">else</span>{<span class="string">"A"</span>.into()}],
-<a href=#113 id=113 data-nosnippet>113</a>            output_locals:<span class="string">"var __pb_accumulator: A? = null\nvar __pb_processed = 0\nvar __pb_pending: ((Throwable) -&gt; Unit)? = null\n"</span>.into(),
-<a href=#114 id=114 data-nosnippet>114</a>            materialize:<span class="macro">format!</span>(<span class="string">"if ({present}) {{\nvar current = initial\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array&lt;*&gt;\n{}\n__pb_pending = {{ {failure} -&gt; {} }}\n{}\ncurrent = fold(current, {args})\n__pb_pending = null\n__pb_processed++\n}}\n__pb_accumulator = current\n}}\n"</span>,child.output_locals,child.cleanup,child.materialize),
-<a href=#115 id=115 data-nosnippet>115</a>            cleanup:<span class="macro">format!</span>(<span class="string">"__pb_pending?.invoke({failure})\nif ({present}) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until {raw}.size) {{\nval {row} = {raw}[index] as kotlin.Array&lt;*&gt;\n{}\n{}\n}}\n"</span>,child.output_locals,child.cleanup),
-<a href=#116 id=116 data-nosnippet>116</a>        },
-<a href=#117 id=117 data-nosnippet>117</a>    })
-<a href=#118 id=118 data-nosnippet>118</a>}
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">let </span>success = <span class="kw">match </span>layout {
+<a href=#87 id=87 data-nosnippet>87</a>        [prebindgen_flat::WireNode::Outcomes { success, .. }] =&gt; success.as_slice(),
+<a href=#88 id=88 data-nosnippet>88</a>        nodes =&gt; nodes,
+<a href=#89 id=89 data-nosnippet>89</a>    };
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>optional = optional(success);
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">let </span>(carrier, element) =
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">crate</span>::sequence::return_sequence(layout).ok_or(<span class="string">"missing sequence callback layout"</span>)<span class="question-mark">?</span>;
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">let </span>position = <span class="kw">crate</span>::group::result_packet_fields(layout)
+<a href=#94 id=94 data-nosnippet>94</a>        .position(|w| w.name == carrier.name)
+<a href=#95 id=95 data-nosnippet>95</a>        .unwrap();
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">let </span>row = <span class="string">"__pb_fold_row"</span>;
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">let </span>ctx = KotlinContext {
+<a href=#98 id=98 data-nosnippet>98</a>        result: row,
+<a href=#99 id=99 data-nosnippet>99</a>        output_prefix: <span class="string">"foldElement"</span>,
+<a href=#100 id=100 data-nosnippet>100</a>        cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#101 id=101 data-nosnippet>101</a>        ..<span class="kw-2">*</span>context
+<a href=#102 id=102 data-nosnippet>102</a>    };
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">let </span>child = kotlin::output_kotlin(element, <span class="kw-2">&amp;</span>ctx)<span class="question-mark">?</span>;
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">let </span>present = <span class="macro">format!</span>(<span class="string">"{}[{position}] != null"</span>, context.result);
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">let </span>raw = <span class="string">"__pb_rows"</span>;
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">let </span>types = child.result_types.join(<span class="string">", "</span>);
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">let </span>args = child.delivered.join(<span class="string">", "</span>);
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">let </span>failure = context.failure;
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="prelude-val">Ok</span>(Fold {
+<a href=#110 id=110 data-nosnippet>110</a>        parameter:<span class="macro">format!</span>(<span class="string">"fold: (A, {types}) -&gt; A"</span>),
+<a href=#111 id=111 data-nosnippet>111</a>        discard:<span class="macro">format!</span>(<span class="string">"fun __pb_discard({failure}: Throwable) {{ for (rawRow in __pb_rows) {{ val {row} = rawRow as kotlin.Array&lt;*&gt;\n{}\n{}\n}} }}\n"</span>,child.output_locals,child.cleanup),
+<a href=#112 id=112 data-nosnippet>112</a>        output:KotlinOutput {
+<a href=#113 id=113 data-nosnippet>113</a>            delivered:<span class="macro">vec!</span>[<span class="kw">if </span>optional{<span class="string">"__pb_accumulator"</span>.into()}<span class="kw">else</span>{<span class="string">"__pb_accumulator as A"</span>.into()}],
+<a href=#114 id=114 data-nosnippet>114</a>            result_types:<span class="macro">vec!</span>[<span class="kw">if </span>optional{<span class="string">"A?"</span>.into()}<span class="kw">else</span>{<span class="string">"A"</span>.into()}],
+<a href=#115 id=115 data-nosnippet>115</a>            output_locals:<span class="string">"var __pb_accumulator: A? = null\nvar __pb_processed = 0\nvar __pb_pending: ((Throwable) -&gt; Unit)? = null\n"</span>.into(),
+<a href=#116 id=116 data-nosnippet>116</a>            materialize:<span class="macro">format!</span>(<span class="string">"if ({present}) {{\nvar current = initial\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array&lt;*&gt;\n{}\n__pb_pending = {{ {failure} -&gt; {} }}\n{}\ncurrent = fold(current, {args})\n__pb_pending = null\n__pb_processed++\n}}\n__pb_accumulator = current\n}}\n"</span>,child.output_locals,child.cleanup,child.materialize),
+<a href=#117 id=117 data-nosnippet>117</a>            cleanup:<span class="macro">format!</span>(<span class="string">"__pb_pending?.invoke({failure})\nif ({present}) for (index in (__pb_processed + if (__pb_pending != null) 1 else 0) until {raw}.size) {{\nval {row} = {raw}[index] as kotlin.Array&lt;*&gt;\n{}\n{}\n}}\n"</span>,child.output_locals,child.cleanup),
+<a href=#118 id=118 data-nosnippet>118</a>        },
+<a href=#119 id=119 data-nosnippet>119</a>    })
+<a href=#120 id=120 data-nosnippet>120</a>}
 </code></pre></div></section></main></body></html>

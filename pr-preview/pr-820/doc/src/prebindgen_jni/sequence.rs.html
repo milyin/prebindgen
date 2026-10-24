@@ -199,30 +199,35 @@
 <a href=#199 id=199 data-nosnippet>199</a>    <span class="kw-2">&amp;</span>Wire&lt;JniWire&gt;,
 <a href=#200 id=200 data-nosnippet>200</a>    <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;JniWire, JniGroup&gt;],
 <a href=#201 id=201 data-nosnippet>201</a>)&gt; {
-<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">let </span>success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)<span class="question-mark">?</span>;
-<a href=#203 id=203 data-nosnippet>203</a>    prebindgen_declarations::outer_sequences(success)
-<a href=#204 id=204 data-nosnippet>204</a>        .into_iter()
-<a href=#205 id=205 data-nosnippet>205</a>        .find_map(|c| {
-<a href=#206 id=206 data-nosnippet>206</a>            c.metadata
-<a href=#207 id=207 data-nosnippet>207</a>                .as_ref()
-<a href=#208 id=208 data-nosnippet>208</a>                .and_then(JniGroup::sequence_wire)
-<a href=#209 id=209 data-nosnippet>209</a>                .map(|w| (w, c.element.as_slice()))
-<a href=#210 id=210 data-nosnippet>210</a>        })
-<a href=#211 id=211 data-nosnippet>211</a>}
-<a href=#212 id=212 data-nosnippet>212</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_target(
-<a href=#213 id=213 data-nosnippet>213</a>    layout: <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;JniWire, JniGroup&gt;],
-<a href=#214 id=214 data-nosnippet>214</a>) -&gt; <span class="prelude-ty">Result</span>&lt;syn::Ident&gt; {
-<a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">let </span>success = prebindgen_flat::outcome_nodes(layout, prebindgen_flat::OutcomeKind::Success)
-<a href=#216 id=216 data-nosnippet>216</a>        .ok_or(<span class="string">"missing Success outcome"</span>)<span class="question-mark">?</span>;
-<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">if </span>prebindgen_declarations::outer_sequences(success).len() != <span class="number">1
-<a href=#218 id=218 data-nosnippet>218</a>        </span>|| <span class="kw">crate</span>::group::result_packet_fields(layout).len() &gt; <span class="number">2
-<a href=#219 id=219 data-nosnippet>219</a>    </span>{
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(
-<a href=#221 id=221 data-nosnippet>221</a>            <span class="string">"callback_return permits only one sequence and its optional presence flag"</span>.into(),
-<a href=#222 id=222 data-nosnippet>222</a>        );
-<a href=#223 id=223 data-nosnippet>223</a>    }
-<a href=#224 id=224 data-nosnippet>224</a>    return_sequence(layout)
-<a href=#225 id=225 data-nosnippet>225</a>        .map(|(wire, <span class="kw">_</span>)| wire.name.clone())
-<a href=#226 id=226 data-nosnippet>226</a>        .ok_or_else(|| <span class="string">"callback_return requires a sequence boundary"</span>.into())
-<a href=#227 id=227 data-nosnippet>227</a>}
+<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">let </span>success = <span class="kw">match </span>layout {
+<a href=#203 id=203 data-nosnippet>203</a>        [prebindgen_flat::WireNode::Outcomes { success, .. }] =&gt; success.as_slice(),
+<a href=#204 id=204 data-nosnippet>204</a>        nodes =&gt; nodes,
+<a href=#205 id=205 data-nosnippet>205</a>    };
+<a href=#206 id=206 data-nosnippet>206</a>    prebindgen_declarations::outer_sequences(success)
+<a href=#207 id=207 data-nosnippet>207</a>        .into_iter()
+<a href=#208 id=208 data-nosnippet>208</a>        .find_map(|c| {
+<a href=#209 id=209 data-nosnippet>209</a>            c.metadata
+<a href=#210 id=210 data-nosnippet>210</a>                .as_ref()
+<a href=#211 id=211 data-nosnippet>211</a>                .and_then(JniGroup::sequence_wire)
+<a href=#212 id=212 data-nosnippet>212</a>                .map(|w| (w, c.element.as_slice()))
+<a href=#213 id=213 data-nosnippet>213</a>        })
+<a href=#214 id=214 data-nosnippet>214</a>}
+<a href=#215 id=215 data-nosnippet>215</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_target(
+<a href=#216 id=216 data-nosnippet>216</a>    layout: <span class="kw-2">&amp;</span>[prebindgen_flat::WireNode&lt;JniWire, JniGroup&gt;],
+<a href=#217 id=217 data-nosnippet>217</a>) -&gt; <span class="prelude-ty">Result</span>&lt;syn::Ident&gt; {
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="kw">let </span>success = <span class="kw">match </span>layout {
+<a href=#219 id=219 data-nosnippet>219</a>        [prebindgen_flat::WireNode::Outcomes { success, .. }] =&gt; success.as_slice(),
+<a href=#220 id=220 data-nosnippet>220</a>        nodes =&gt; nodes,
+<a href=#221 id=221 data-nosnippet>221</a>    };
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">if </span>prebindgen_declarations::outer_sequences(success).len() != <span class="number">1
+<a href=#223 id=223 data-nosnippet>223</a>        </span>|| <span class="kw">crate</span>::group::result_packet_fields(layout).len() &gt; <span class="number">2
+<a href=#224 id=224 data-nosnippet>224</a>    </span>{
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(
+<a href=#226 id=226 data-nosnippet>226</a>            <span class="string">"callback_return permits only one sequence and its optional presence flag"</span>.into(),
+<a href=#227 id=227 data-nosnippet>227</a>        );
+<a href=#228 id=228 data-nosnippet>228</a>    }
+<a href=#229 id=229 data-nosnippet>229</a>    return_sequence(layout)
+<a href=#230 id=230 data-nosnippet>230</a>        .map(|(wire, <span class="kw">_</span>)| wire.name.clone())
+<a href=#231 id=231 data-nosnippet>231</a>        .ok_or_else(|| <span class="string">"callback_return requires a sequence boundary"</span>.into())
+<a href=#232 id=232 data-nosnippet>232</a>}
 </code></pre></div></section></main></body></html>
