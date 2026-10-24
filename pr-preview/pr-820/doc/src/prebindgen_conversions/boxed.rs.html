@@ -70,7 +70,7 @@
 <a href=#70 id=70 data-nosnippet>70</a>/// ```
 <a href=#71 id=71 data-nosnippet>71</a>/// use prebindgen_conversions::{boxed};
 <a href=#72 id=72 data-nosnippet>72</a>/// use prebindgen_conversions::Access;
-<a href=#73 id=73 data-nosnippet>73</a>/// let input = boxed::input::&lt;syn::Type, (), ()&gt;(
+<a href=#73 id=73 data-nosnippet>73</a>/// let input = boxed::input::&lt;syn::Type, (), (), (), (), ()&gt;(
 <a href=#74 id=74 data-nosnippet>74</a>///     &amp;boxed::Storage::Direct, &amp;syn::parse_quote!(&amp;Counter),
 <a href=#75 id=75 data-nosnippet>75</a>///     syn::parse_quote!(raw), syn::parse_quote!(counter),
 <a href=#76 id=76 data-nosnippet>76</a>///     &amp;quote::quote!(true), |boxed| {
@@ -79,19 +79,19 @@
 <a href=#79 id=79 data-nosnippet>79</a>///     },
 <a href=#80 id=80 data-nosnippet>80</a>/// )?;
 <a href=#81 id=81 data-nosnippet>81</a>/// assert_eq!(input.resources[0].access, Access::Shared);
-<a href=#82 id=82 data-nosnippet>82</a>/// assert_eq!(prebindgen_flat::type_key(&amp;prebindgen_flat::wire_definitions(input.nodes.iter()).next().unwrap().rust_type()), "* const Counter");
+<a href=#82 id=82 data-nosnippet>82</a>/// assert_eq!(prebindgen_flat::type_key(&amp;prebindgen_flat::wire_definitions(std::iter::once(&amp;input.node)).next().unwrap().rust_type()), "* const Counter");
 <a href=#83 id=83 data-nosnippet>83</a>/// assert!(input.acquire.is_empty());
 <a href=#84 id=84 data-nosnippet>84</a>/// assert_eq!(input.resources.len(), 1);
 <a href=#85 id=85 data-nosnippet>85</a>/// # Ok::&lt;(), Box&lt;dyn std::error::Error&gt;&gt;(())
 <a href=#86 id=86 data-nosnippet>86</a>/// ```
-<a href=#87 id=87 data-nosnippet>87</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C, G&gt;(
+<a href=#87 id=87 data-nosnippet>87</a></span><span class="kw">pub fn </span>input&lt;W: prebindgen_flat::WireKind, C, O, S, G, A&gt;(
 <a href=#88 id=88 data-nosnippet>88</a>    storage: <span class="kw-2">&amp;</span>Storage,
 <a href=#89 id=89 data-nosnippet>89</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#90 id=90 data-nosnippet>90</a>    wire: syn::Ident,
 <a href=#91 id=91 data-nosnippet>91</a>    var: syn::Ident,
 <a href=#92 id=92 data-nosnippet>92</a>    active: <span class="kw-2">&amp;</span>TokenStream,
 <a href=#93 id=93 data-nosnippet>93</a>    wire_kind: <span class="kw">impl </span>FnOnce(BoxedWire) -&gt; W,
-<a href=#94 id=94 data-nosnippet>94</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, G&gt;&gt; {
+<a href=#94 id=94 data-nosnippet>94</a>) -&gt; <span class="prelude-ty">Result</span>&lt;InputPlan&lt;W, C, O, S, G, A&gt;&gt; {
 <a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">let </span>(target, access) = <span class="kw">match </span>ty {
 <a href=#96 id=96 data-nosnippet>96</a>        syn::Type::Reference(r) =&gt; (
 <a href=#97 id=97 data-nosnippet>97</a>            <span class="kw-2">&amp;*</span>r.elem,
@@ -133,13 +133,13 @@
 <a href=#133 id=133 data-nosnippet>133</a>        fallible: <span class="bool-val">true</span>,
 <a href=#134 id=134 data-nosnippet>134</a>        context: Default::default(),
 <a href=#135 id=135 data-nosnippet>135</a>        acknowledgement: <span class="prelude-val">None</span>,
-<a href=#136 id=136 data-nosnippet>136</a>        nodes: <span class="macro">vec!</span>[prebindgen_flat::WireNode::Wire(Wire {
+<a href=#136 id=136 data-nosnippet>136</a>        node: prebindgen_flat::WireNode::Wire(<span class="macro">vec!</span>[Wire {
 <a href=#137 id=137 data-nosnippet>137</a>            name: wire.clone(),
 <a href=#138 id=138 data-nosnippet>138</a>            kind: wire_kind(BoxedWire {
 <a href=#139 id=139 data-nosnippet>139</a>                ty: target.clone(),
 <a href=#140 id=140 data-nosnippet>140</a>                access,
 <a href=#141 id=141 data-nosnippet>141</a>            }),
-<a href=#142 id=142 data-nosnippet>142</a>        })],
+<a href=#142 id=142 data-nosnippet>142</a>        }]),
 <a href=#143 id=143 data-nosnippet>143</a>        validation,
 <a href=#144 id=144 data-nosnippet>144</a>        acquire,
 <a href=#145 id=145 data-nosnippet>145</a>        statements,
@@ -168,14 +168,14 @@
 <a href=#168 id=168 data-nosnippet>168</a>/// * `borrowed` — `true` when `value` is a shared reference to `ty`; the generated
 <a href=#169 id=169 data-nosnippet>169</a>///   code then boxes a clone, which requires `ty: Clone`. `false` moves the value.
 <a href=#170 id=170 data-nosnippet>170</a>/// * `wire_kind` — builds [`Wire::kind`] from the source type and access mode.
-<a href=#171 id=171 data-nosnippet>171</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, G&gt;(
+<a href=#171 id=171 data-nosnippet>171</a></span><span class="kw">pub fn </span>output&lt;W: prebindgen_flat::WireKind, C, O, S, G, A&gt;(
 <a href=#172 id=172 data-nosnippet>172</a>    storage: <span class="kw-2">&amp;</span>Storage,
 <a href=#173 id=173 data-nosnippet>173</a>    ty: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#174 id=174 data-nosnippet>174</a>    wire: syn::Ident,
 <a href=#175 id=175 data-nosnippet>175</a>    value: TokenStream,
 <a href=#176 id=176 data-nosnippet>176</a>    borrowed: bool,
 <a href=#177 id=177 data-nosnippet>177</a>    wire_kind: <span class="kw">impl </span>FnOnce(BoxedWire) -&gt; W,
-<a href=#178 id=178 data-nosnippet>178</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, G&gt;&gt; {
+<a href=#178 id=178 data-nosnippet>178</a>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputPlan&lt;W, C, O, S, G, A&gt;&gt; {
 <a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">if </span><span class="macro">matches!</span>(ty, syn::Type::Reference(<span class="kw">_</span>)) {
 <a href=#180 id=180 data-nosnippet>180</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"borrowed pointer outputs are outside this subset"</span>.into());
 <a href=#181 id=181 data-nosnippet>181</a>    }
@@ -190,16 +190,20 @@
 <a href=#190 id=190 data-nosnippet>190</a>        fallible: <span class="bool-val">false</span>,
 <a href=#191 id=191 data-nosnippet>191</a>        context: Default::default(),
 <a href=#192 id=192 data-nosnippet>192</a>        delivery: Default::default(),
-<a href=#193 id=193 data-nosnippet>193</a>        nodes: <span class="macro">vec!</span>[prebindgen_flat::WireNode::Wire(Wire {
-<a href=#194 id=194 data-nosnippet>194</a>            name: wire.clone(),
-<a href=#195 id=195 data-nosnippet>195</a>            kind: wire_kind(BoxedWire {
-<a href=#196 id=196 data-nosnippet>196</a>                ty: ty.clone(),
-<a href=#197 id=197 data-nosnippet>197</a>                access: Access::Move,
-<a href=#198 id=198 data-nosnippet>198</a>            }),
-<a href=#199 id=199 data-nosnippet>199</a>        })],
-<a href=#200 id=200 data-nosnippet>200</a>        statements: <span class="macro">quote!</span>(<span class="kw">let </span><span class="kw-2">mut </span>#wire = Box::new(#value);),
-<a href=#201 id=201 data-nosnippet>201</a>        values: <span class="macro">vec!</span>[(wire.clone(), <span class="macro">quote!</span>((<span class="kw-2">&amp;mut *</span>#wire) <span class="kw">as </span><span class="kw-2">*mut </span>#allocation))],
-<a href=#202 id=202 data-nosnippet>202</a>        commit: <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#wire);),
-<a href=#203 id=203 data-nosnippet>203</a>    })
-<a href=#204 id=204 data-nosnippet>204</a>}
+<a href=#193 id=193 data-nosnippet>193</a>        outcomes: prebindgen_flat::Outcomes {
+<a href=#194 id=194 data-nosnippet>194</a>            success: prebindgen_flat::WireNode::Wire(<span class="macro">vec!</span>[Wire {
+<a href=#195 id=195 data-nosnippet>195</a>                name: wire.clone(),
+<a href=#196 id=196 data-nosnippet>196</a>                kind: wire_kind(BoxedWire {
+<a href=#197 id=197 data-nosnippet>197</a>                    ty: ty.clone(),
+<a href=#198 id=198 data-nosnippet>198</a>                    access: Access::Move,
+<a href=#199 id=199 data-nosnippet>199</a>                }),
+<a href=#200 id=200 data-nosnippet>200</a>            }]),
+<a href=#201 id=201 data-nosnippet>201</a>            source_error: <span class="prelude-val">None</span>,
+<a href=#202 id=202 data-nosnippet>202</a>            binding_failure: <span class="prelude-val">None</span>,
+<a href=#203 id=203 data-nosnippet>203</a>        },
+<a href=#204 id=204 data-nosnippet>204</a>        statements: <span class="macro">quote!</span>(<span class="kw">let </span><span class="kw-2">mut </span>#wire = Box::new(#value);),
+<a href=#205 id=205 data-nosnippet>205</a>        values: <span class="macro">vec!</span>[(wire.clone(), <span class="macro">quote!</span>((<span class="kw-2">&amp;mut *</span>#wire) <span class="kw">as </span><span class="kw-2">*mut </span>#allocation))],
+<a href=#206 id=206 data-nosnippet>206</a>        commit: <span class="macro">quote!</span>(<span class="kw">let _ </span>= Box::into_raw(#wire);),
+<a href=#207 id=207 data-nosnippet>207</a>    })
+<a href=#208 id=208 data-nosnippet>208</a>}
 </code></pre></div></section></main></body></html>
