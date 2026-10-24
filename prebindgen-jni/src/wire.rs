@@ -1,5 +1,7 @@
 //! One JNI boundary value and its remaining niche availability.
 use super::*;
+mod transport;
+pub use transport::JniArgument;
 
 /// One self-sufficient JNI value and its conversion information.
 ///
@@ -9,6 +11,15 @@ use super::*;
 /// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
+    /// One JNI object-array carrier. Buffered sequences store raw rows here;
+    /// callback delivery uses an empty array as its present marker. The
+    /// sequence container owns the element layout in both cases.
+    Rows {
+        /// Kotlin expression selecting this array's active input alternative.
+        condition: String,
+        /// Whether a null array remains available to an enclosing option.
+        null_niche_available: bool,
+    },
     /// A fieldless Rust enum carried as a checked JVM `int`.
     Enum {
         /// Valid source variants and generated Kotlin class information.
@@ -95,6 +106,10 @@ impl JniWire {
                 null_niche_available: true,
                 ..
             }
+            | Self::Rows {
+                null_niche_available: true,
+                ..
+            }
             | Self::Text {
                 null_niche_available: true,
             }
@@ -122,6 +137,10 @@ impl JniWire {
             ) if is_integer_niche(*primitive, n) => *next_integer_niche = Some(n),
             (
                 Self::Handle {
+                    null_niche_available,
+                    ..
+                }
+                | Self::Rows {
                     null_niche_available,
                     ..
                 }
@@ -166,6 +185,10 @@ impl JniWire {
                 null_niche_available,
                 ..
             }
+            | Self::Rows {
+                null_niche_available,
+                ..
+            }
             | Self::Text {
                 null_niche_available,
             }
@@ -178,7 +201,7 @@ impl JniWire {
             } => *next_integer_niche = None,
         }
     }
-    // Reserved niches live on optional groups after availability has advanced or
+    // Reserved niches live on optional nodes after availability has advanced or
     // been cleared. Validate compatibility independently of the current state.
     pub(crate) fn validate_niche(&self, niche: &JniNiche) -> Result<()> {
         match (self, niche) {
@@ -187,9 +210,10 @@ impl JniWire {
             {
                 Ok(())
             }
-            (Self::Handle { .. } | Self::Text { .. } | Self::Bytes { .. }, JniNiche::Null) => {
-                Ok(())
-            }
+            (
+                Self::Handle { .. } | Self::Rows { .. } | Self::Text { .. } | Self::Bytes { .. },
+                JniNiche::Null,
+            ) => Ok(()),
             (Self::Enum { enum_type, .. }, JniNiche::Integer(n))
                 if enum_type.mapping.is_niche(*n) =>
             {
@@ -210,39 +234,6 @@ impl JniWire {
         match self.available_niche() {
             Some(niche) => self.validate_niche(&niche),
             None => Ok(()),
-        }
-    }
-    /// Kotlin type used by the native declaration.
-    pub fn kotlin_type(&self) -> &'static str {
-        match self {
-            Self::Scalar { primitive, .. } => scalar::raw_kotlin(*primitive),
-            Self::Handle { .. } => "Long",
-            Self::Selector { .. } | Self::Enum { .. } => "Int",
-            Self::Text { .. } => "String?",
-            Self::Bytes { .. } => "ByteArray?",
-        }
-    }
-    /// JVM argument slots occupied by this value.
-    pub fn parameter_slots(&self) -> usize {
-        match self {
-            Self::Handle { .. } => 2,
-            Self::Scalar { primitive, .. } => scalar::parameter_slots(*primitive),
-            _ => 1,
-        }
-    }
-}
-impl WireKind for JniWire {
-    fn rust_type(&self) -> syn::Type {
-        match self {
-            Self::Scalar { primitive, .. } => scalar::rust_type(*primitive),
-            Self::Handle { .. } => syn::parse_quote!(i64),
-            Self::Selector { .. } | Self::Enum { .. } => syn::parse_quote!(i32),
-            Self::Text { .. } => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
-            }
-            Self::Bytes { .. } => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
-            }
         }
     }
 }

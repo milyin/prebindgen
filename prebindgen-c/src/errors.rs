@@ -45,7 +45,7 @@ pub(crate) fn prepare(
         let function = flat.functions.remove(&id.to_string()).unwrap();
         result?;
         let plan = function.ret.slot.unwrap();
-        let fields = field_names(&plan.layout);
+        let fields = field_names(&plan.outcomes.success);
         out.push(ErrorBinding {
             name,
             ty,
@@ -56,22 +56,25 @@ pub(crate) fn prepare(
     Ok(out)
 }
 
-fn field_names(layout: &prebindgen_flat::WireLayout<CWire, CGroup>) -> Vec<String> {
+fn field_names(
+    layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
+) -> Vec<String> {
     use prebindgen_flat::WireNode;
     let mut names = Vec::new();
-    if let Some(WireNode::Group {
-        metadata: CGroup::Fields,
+    if let WireNode::Branch {
+        meta: CBranch::Group(CGroup::Fields),
         children,
-    }) = layout.nodes().first()
+        ..
+    } = layout
     {
-        for node in children.nodes() {
-            if let WireNode::Group {
-                metadata: CGroup::Field(name),
-                children,
+        for node in children.as_slice() {
+            if let WireNode::Branch {
+                meta: CBranch::Group(CGroup::Field(name)),
+                ..
             } = node
             {
-                for _ in children.iter() {
-                    names.push(if children.len() == 1 {
+                for _ in crate::group::record_fields(node) {
+                    names.push(if crate::group::record_fields(node).len() == 1 {
                         name.to_string().trim_start_matches("r#").to_owned()
                     } else {
                         format!("v{}", names.len())
@@ -82,14 +85,16 @@ fn field_names(layout: &prebindgen_flat::WireLayout<CWire, CGroup>) -> Vec<Strin
     }
     let keywords="auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while _Alignas _Alignof _Atomic _Bool _Complex _Generic _Imaginary _Noreturn _Static_assert _Thread_local bool true false NULL";
     let mut unique = std::collections::BTreeSet::new();
-    if names.len() != layout.len()
+    if names.len() != crate::group::result_packet_fields(layout).len()
         || names.iter().any(|name| {
             !name.is_ascii()
                 || keywords.split_whitespace().any(|word| word == name)
                 || !unique.insert(name.clone())
         })
     {
-        return (0..layout.len()).map(|i| format!("v{i}")).collect();
+        return (0..crate::group::result_packet_fields(layout).len())
+            .map(|i| format!("v{i}"))
+            .collect();
     }
     names
 }
@@ -116,6 +121,19 @@ pub(crate) fn emit(
         let helper = helper(name);
         let input = format_ident!("source_error");
         let context = CContext {
+            row_types: {
+                let mut schemas = Vec::new();
+                sequence::schemas(&error.plan.outcomes.success, &mut schemas);
+                schemas
+                    .into_iter()
+                    .map(|(wire, _, _)| {
+                        (
+                            wire.name.to_string(),
+                            format_ident!("__PbRow_error_{}_{}", name, wire.name),
+                        )
+                    })
+                    .collect()
+            },
             acknowledgement: format_ident!("unused_acknowledgement"),
             output_pointer: format_ident!("error_output"),
             output_type: syn::parse_quote!(#rust_name),
@@ -126,6 +144,15 @@ pub(crate) fn emit(
             wide_integer_type: syn::parse_quote!(__Pb128),
             read_buffer: syn::parse_quote!(__pb_read),
         };
+        let mut schemas = Vec::new();
+        sequence::schemas(&error.plan.outcomes.success, &mut schemas);
+        let carriers = schemas
+            .iter()
+            .map(|(wire, _, _)| wire.name.to_string())
+            .collect();
+        sequence::emit_schemas(
+            schemas, &carriers, &context, prefix, pointers, symbols, tokens, header,
+        )?;
         let commit = error.plan.code_fragment_slot(
             OutputFragment::Commit {
                 context: &context,
@@ -154,11 +181,15 @@ pub(crate) fn emit(
         let mut fields = Vec::new();
         let mut drops = TokenStream::new();
         header.push_str("typedef struct {\n");
-        for (i, wire) in error.plan.layout.iter().enumerate() {
+        for (i, wire) in
+            crate::group::result_packet_fields(&error.plan.outcomes.success).enumerate()
+        {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
             fields.push(quote!(pub #field:#ty));
-            let c_field = if error.fields.len() == error.plan.layout.len() {
+            let c_field = if error.fields.len()
+                == crate::group::result_packet_fields(&error.plan.outcomes.success).len()
+            {
                 error.fields[i].trim_start_matches("r#").to_owned()
             } else {
                 format!("v{i}")
@@ -166,21 +197,51 @@ pub(crate) fn emit(
             prebindgen_declarations::ident(&c_field)?;
             header.push_str(&format!(
                 "    {} {c_field};\n",
-                c_ty(wire, prefix, pointers)
+                c_ty(wire, prefix, pointers, &context)
             ));
-            match &wire.kind {
-                CWire::Buffer => drops.extend(quote! { let value=std::mem::replace(&mut (*error).#field,__PbBuffer {data:std::ptr::null(),len:0}); if !value.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(value.data as *mut u8,value.len)));} }),
-                CWire::Pointer {pointer,..} => {let ty=&pointer.ty; drops.extend(quote! {let value=std::mem::replace(&mut (*error).#field,std::ptr::null_mut());if !value.is_null(){drop(Box::from_raw(value as *mut #ty));}});}
-                _ => {}
-            }
         }
+        let values = crate::group::result_packet_fields(&error.plan.outcomes.success)
+            .enumerate()
+            .map(|(i, wire)| {
+                let field = format_ident!("v{i}");
+                if !matches!(
+                    wire.kind,
+                    CWire::Buffer | CWire::Pointer { .. } | CWire::Rows
+                ) {
+                    return (wire, quote!((*error).#field));
+                }
+                let empty = match wire.kind {
+                    CWire::Buffer => quote!(__PbBuffer {
+                        data: std::ptr::null(),
+                        len: 0
+                    }),
+                    CWire::Rows => quote!(__PbRows {
+                        data: std::ptr::null(),
+                        len: 0
+                    }),
+                    CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
+                    _ => unreachable!(),
+                };
+                let local = format_ident!("owned_{i}");
+                drops.extend(quote!(let #local=std::mem::replace(&mut (*error).#field,#empty);));
+                (wire, quote!(#local))
+            })
+            .collect::<Vec<_>>();
+        drops.extend(sequence::release(
+            &error.plan.outcomes.success,
+            &values,
+            &context,
+            false,
+        ));
         if fields.is_empty() {
             fields.push(quote!(pub unused:u8));
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
-        let wires = error.plan.layout.iter().collect::<Vec<_>>();
-        let mut comments = describe_groups(&error.plan.layout, &wires, true, &mut 0, "error");
+        let wires =
+            crate::group::result_packet_fields(&error.plan.outcomes.success).collect::<Vec<_>>();
+        let mut comments =
+            describe_groups(&error.plan.outcomes.success, &wires, true, &mut 0, "error");
         for i in (0..wires.len()).rev() {
             let field = if error.fields.len() == wires.len() {
                 error.fields[i].trim_start_matches("r#").to_owned()
@@ -211,6 +272,7 @@ pub(crate) fn result_function(
     source_name: &syn::Ident,
     error_ty: &syn::Type,
     outputs: &[&Wire],
+    function_output_layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
     mut params: Vec<TokenStream>,
     mut cparams: Vec<String>,
     body: &TokenStream,
@@ -266,7 +328,7 @@ pub(crate) fn result_function(
         let failure = CCodec.absent_value(&wire.kind, Some(niche), false)?;
         (
             quote!(#ty),
-            c_ty(wire, prefix, pointers),
+            c_ty(wire, prefix, pointers, context),
             failure,
             quote!(value.#field),
         )
@@ -285,7 +347,7 @@ pub(crate) fn result_function(
         let field = format_ident!("v{i}");
         let ty = wire.rust_type();
         params.push(quote!(#id:*mut #ty));
-        cparams.push(format!("{} *{id}", c_ty(wire, prefix, pointers)));
+        cparams.push(format!("{} *{id}", c_ty(wire, prefix, pointers, context)));
         checks.extend(quote!(if #id.is_null(){return Err("null success-output pointer".into());}));
         writes.extend(quote!(std::ptr::write(#id,value.#field);));
         display.push(format!("*{id}"));
@@ -327,15 +389,19 @@ pub(crate) fn result_function(
     }
     header.push_str("/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */\n");
     header.push_str(&format!("{c_return} {name}({});\n", cparams.join(", ")));
-    let mut rollback = TokenStream::new();
-    for (i, wire) in outputs.iter().enumerate() {
-        let field = format_ident!("v{i}");
-        match &wire.kind {
-            CWire::Buffer=>rollback.extend(quote!{if !value.#field.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(value.#field.data as *mut u8,value.#field.len)));}}),
-            CWire::Pointer {pointer,..}=>{let ty=&pointer.ty;rollback.extend(quote!{if !value.#field.is_null(){let _=::prebindgen_runtime::boundary(||{drop(Box::from_raw(value.#field as *mut #ty));Ok(())});}});},
-            _=>{}
-        }
-    }
+    let rollback = sequence::release(
+        function_output_layout,
+        &outputs
+            .iter()
+            .enumerate()
+            .map(|(i, wire)| {
+                let field = format_ident!("v{i}");
+                (*wire, quote!(value.#field))
+            })
+            .collect::<Vec<_>>(),
+        context,
+        true,
+    );
     tokens.extend(quote! {
         #[doc="# Safety\nSuccess, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract."]
         #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]

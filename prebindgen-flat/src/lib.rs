@@ -431,7 +431,7 @@ impl<I, O> Flat<I, O> {
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
-    /// `Option<T>` and `Result<T, E>` recursively, and references without explicit lifetimes. A successful result does not mean
+    /// `Option<T>`, `Result<T, E>`, vectors and slices recursively, and references without explicit lifetimes. A successful result does not mean
     /// a consumer can use the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
@@ -450,6 +450,10 @@ impl<I, O> Flat<I, O> {
                     }
                 }
                 syn::visit_mut::visit_type_mut(self, ty);
+                if let Some(inner) = vec_inner(ty) {
+                    let inner = inner.clone();
+                    *ty = syn::parse_quote!(Vec<#inner>);
+                }
                 if let Some((ok, err)) = result_parts(ty) {
                     let (ok, err) = (ok.clone(), err.clone());
                     *ty = syn::parse_quote!(::core::result::Result<#ok, #err>);
@@ -471,6 +475,9 @@ impl<I, O> Flat<I, O> {
         if let Some(inner) = option_inner(ty) {
             return self.validate_type(inner);
         }
+        if let Some(inner) = vec_inner(ty) {
+            return self.validate_type(inner);
+        }
         if let Some((ok, err)) = result_parts(ty) {
             self.validate_type(ok)?;
             return self.validate_type(err);
@@ -482,7 +489,7 @@ impl<I, O> Flat<I, O> {
         match ty {
             Type::Tuple(t) if t.elems.is_empty() => Ok(()),
             Type::Reference(r) if r.lifetime.is_none() => self.validate_type(&r.elem),
-            Type::Slice(s) if type_key(&s.elem) == "u8" => Ok(()),
+            Type::Slice(s) => self.validate_type(&s.elem),
             Type::Path(_)
                 if matches!(
                     type_key(ty).as_str(),
@@ -640,5 +647,73 @@ pub fn result_parts(ty: &Type) -> Option<(&Type, &Type)> {
     }
 }
 
-mod layout;
-pub use layout::{WireLayout, WireNode, Wires, WiresMut};
+/// Payload of a standard Vec spelling; byte vectors are included here.
+pub fn vec_inner(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    if p.qself.is_some() {
+        return None;
+    }
+    let name = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    if !matches!(name.as_str(), "Vec" | "std::vec::Vec" | "alloc::vec::Vec") {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &p.path.segments.last()?.arguments else {
+        return None;
+    };
+    if args.args.len() != 1 {
+        return None;
+    }
+    match args.args.first()? {
+        syn::GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    }
+}
+/// Which Rust collection view an occurrence uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SequenceView {
+    /// An owned Vec, whose elements may be transferred.
+    Owned,
+    /// A shared Vec reference.
+    Vector,
+    /// A shared slice reference.
+    Slice,
+    /// A mutable collection view, requiring unsupported write-back semantics.
+    Mutable,
+}
+/// Source collection shape, excluding byte vectors/slices which retain byte transport.
+pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
+    let (inner, reference) = match ty {
+        Type::Reference(r) => (r.elem.as_ref(), Some(r)),
+        _ => (ty, None),
+    };
+    let (element, slice) = if let Some(element) = vec_inner(inner) {
+        (element, false)
+    } else if let Type::Slice(s) = inner {
+        (s.elem.as_ref(), true)
+    } else {
+        return None;
+    };
+    if type_key(element) == "u8" {
+        return None;
+    }
+    let view = match reference {
+        Some(r) if r.mutability.is_some() => SequenceView::Mutable,
+        Some(_) if slice => SequenceView::Slice,
+        Some(_) => SequenceView::Vector,
+        None if slice => return None,
+        None => SequenceView::Owned,
+    };
+    Some((element, view))
+}
+
+mod wire_tree;
+pub use wire_tree::{
+    wire_at_path, wire_definitions, wire_definitions_mut, wire_definitions_with_paths, Outcomes,
+    WireEntry, WireNode, WirePath,
+};

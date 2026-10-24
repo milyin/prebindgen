@@ -132,6 +132,28 @@ use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .configure(|flat| {
+            use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
+            let mut probe = flat.clone();
+            let declarations = prebindgen_declarations::Declarations::new(&probe, vec![])?;
+            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
+            // Observe a clone so the production builder still installs its own codec.
+            // Collections.kt exercises the separately generated production boundary.
+            let output = probe.function("collection_probe")?.output_conversion()?;
+            let Outcomes { success, source_error: None, binding_failure: Some(_) } = output.output_outcomes() else {
+                return Err("collection probe must declare success and binding failure only".into());
+            };
+            let logical = success;
+            let WireNode::Chain {meta: prebindgen_jni::JniChain::Sequence(_), child: element, controls}=logical else {return Err("expected sequence".into());};
+            assert_eq!(controls.len(),1);
+            assert_eq!(prebindgen_flat::wire_definitions(std::iter::once(logical)).count(),2);
+            assert!(matches!(prebindgen_flat::wire_definitions(std::iter::once(element.as_ref())).next().unwrap().kind, prebindgen_jni::JniWire::Scalar {
+                primitive: prebindgen_flat::Primitive::Char, ..
+            }));
+            assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
+            Ok(())
+        })
+        .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
         .expand(expand_return!(ResultFailure).field(fun!(result_error_code)))
         .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error_class(syn::parse_quote!(StorageError), "java.lang.IllegalStateException")
@@ -141,6 +163,40 @@ fn main() {
         .expand(expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)))
         .expand(expand_return!(CResourceError).fields_into(fields!(result_resource_error_into)))
         .expand(expand_return!(CRichError).fields_into(fields!(result_rich_error_into)))
+        .package(package!("collections").class(data_class!(Payload))
+            .class(data_class!(SequenceScalars))
+            .fun(fun!(collection_scalars).callback_return())
+            .fun(fun!(collection_u128).callback_return())
+            .fun(fun!(collection_construct_all).expand_param("values",expand_param!(CollectionItem).variant(fun!(collection_construct))))
+.fun(fun!(collection_make_items).expand_return(expand_return!(CollectionItem).fields_into(fields!(collection_item_into))))
+.fun(fun!(collection_bundle).expand_return(expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into))))
+.fun(fun!(collection_optional_handles).callback_return())
+.fun(fun!(collection_nested_handles).callback_return())
+.fun(fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view))))
+.fun(fun!(collection_resource_ids).expand_param("values",expand_param!(OwnedResource).variant(fun!(collection_resource_clone))))
+.fun(fun!(collection_i64).callback_return())
+            .fun(fun!(collection_text).callback_return())
+            .fun(fun!(collection_bytes).callback_return())
+            .fun(fun!(collection_nested).callback_return())
+            .fun(fun!(collection_options).callback_return())
+            .fun(fun!(collection_optional).callback_return())
+            .fun(fun!(collection_optional_items).callback_return())
+            .fun(fun!(collection_enum).callback_return())
+            .fun(fun!(collection_probe))
+            .fun(fun!(collection_borrow).callback_return())
+            .fun(fun!(collection_slice).callback_return())
+            .fun(fun!(collection_resource_new))
+            .fun(fun!(collection_handles).callback_return())
+            .fun(fun!(collection_alias))
+            .fun(fun!(collection_result).callback_return())
+            .fun(fun!(collection_fail))
+            .fun(fun!(collection_result_optional).callback_return())
+            .fun(fun!(sequence_late_drop).callback_return_only().expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))))
+            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into))))
+            .fun(fun!(sequence_parts).callback_return_only().expand_return(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))))
+
+            .fun(fun!(storage_put_slice).expand_param("payloads",expand_param!(Payload).variant_self()))
+            .fun(fun!(storage_get_vec).callback_return().expand_return(expand_return!(Payload).field_self_into())))
         .package(package!("results")
             .fun(fun!(c_result_error_drop))
             .fun(fun!(c_result_late_niche))
@@ -157,8 +213,8 @@ fn main() {
             .fun(fun!(result_error_drops)))
         .package(package!("enums")
             .fun(fun!(enum_boundary_probe)).class(enum_class!(Priority))
-            .class(ptr_class!(Payload).name("EnumPayload"))
-            .fun(fun!(enum_payload_new).expand_return(expand_return!(Payload).field_self_into()))
+            .class(ptr_class!(PayloadHandle).name("EnumPayload"))
+            .fun(fun!(enum_payload_new).expand_return(expand_return!(PayloadHandle).field_self_into()))
             .fun(fun!(payload_priority)).class(enum_class!(SparseCode).name("Code"))
             .class(enum_class!(EnumNames).variant_name("name","Name").variant_name("ordinal","Ordinal").variant_name("entries","Entries").variant_name("kotlin","Kotlin")).class(data_class!(EnumRecord))
             .fun(fun!(priority_weight)).fun(fun!(priority_or))
@@ -1115,7 +1171,7 @@ fn main() {
 .fun(fun!(storage_put_slice))
 */
                 /* Unsupported: the signature or function options need unsupported conversions.
-.fun(fun!(storage_get_vec))
+.fun(fun!(storage_get_vec).callback_return())
 */
                 /* Unsupported: the signature or function options need unsupported conversions.
 .fun(fun!(payload_handler_new))

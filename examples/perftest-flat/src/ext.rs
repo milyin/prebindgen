@@ -127,7 +127,7 @@ pub enum Priority {
 
 /// Classify a payload by magnitude of its `value` (enum **return**).
 #[prebindgen]
-pub fn payload_priority(p: &Payload) -> Priority {
+pub fn payload_priority(p: &PayloadHandle) -> Priority {
     let v = p.value.abs();
     if v < 10.0 {
         Priority::Low
@@ -3047,8 +3047,11 @@ pub fn enum_boundary_probe(
     value
 }
 
+/// Explicit handle surface for Payload, alongside its collection data-class surface.
 #[prebindgen]
-pub fn enum_payload_new(value: f64) -> Payload {
+pub type PayloadHandle = Payload;
+#[prebindgen]
+pub fn enum_payload_new(value: f64) -> PayloadHandle {
     Payload {
         id: 0,
         seq: 0,
@@ -3340,4 +3343,309 @@ pub fn c_panic_output_new() -> CPanicOutput {
 #[prebindgen]
 pub fn c_plain_panic() -> i64 {
     panic!("non-Result source panic")
+}
+
+// Runtime-sized collections exercise the same element recipes as scalar calls.
+#[prebindgen]
+pub fn collection_i64(values: Vec<i64>) -> Vec<i64> {
+    values
+}
+#[prebindgen]
+pub fn collection_text(values: Vec<String>) -> Vec<String> {
+    values
+}
+#[prebindgen]
+pub fn collection_bytes(values: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    values
+}
+#[prebindgen]
+pub fn collection_nested(values: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
+    values
+}
+#[prebindgen]
+pub fn collection_options(values: Vec<Option<i64>>, tag: i16) -> Vec<Option<i64>> {
+    let _ = tag;
+    values
+}
+#[prebindgen]
+pub fn collection_optional(values: Option<Vec<i64>>) -> Option<Vec<i64>> {
+    values
+}
+#[prebindgen]
+pub fn collection_optional_items(values: Option<Vec<Option<i64>>>) -> Option<Vec<Option<i64>>> {
+    values
+}
+#[prebindgen]
+pub fn collection_enum(values: Vec<SparseCode>) -> Vec<SparseCode> {
+    values
+}
+#[prebindgen]
+pub fn collection_probe(values: Vec<char>, tag: &str) -> Vec<char> {
+    let _ = tag;
+    values
+}
+#[prebindgen]
+pub fn collection_borrow(values: &Vec<i64>) -> &[i64] {
+    values.as_slice()
+}
+#[prebindgen]
+pub fn collection_slice(values: &[i64]) -> Vec<i64> {
+    values.to_vec()
+}
+#[prebindgen]
+pub fn collection_resource_new(id: i64) -> OwnedResource {
+    OwnedResourceImpl { id }
+}
+#[prebindgen]
+pub fn collection_handles(
+    values: Vec<OwnedResource>,
+    valid: char,
+    mode: i32,
+) -> Result<Vec<OwnedResource>, ResultFailure> {
+    let _ = valid;
+    match mode {
+        0 => Ok(values),
+        1 => Err(ResultFailureImpl { code: 6 }),
+        _ => panic!("collection source panic"),
+    }
+}
+#[prebindgen]
+pub fn collection_alias(values: Vec<OwnedResource>, other: &OwnedResource) -> i64 {
+    values.iter().map(|v| v.id).sum::<i64>() + other.id
+}
+#[prebindgen]
+pub fn collection_result(values: Vec<i64>, succeed: bool) -> Result<Vec<i64>, ResultFailure> {
+    if succeed {
+        Ok(values)
+    } else {
+        Err(ResultFailureImpl { code: 7 })
+    }
+}
+
+#[prebindgen]
+pub struct CollectionItem {
+    pub resource: OwnedResource,
+}
+#[prebindgen]
+pub fn collection_construct(resource: OwnedResource) -> CollectionItem {
+    assert_ne!(resource.id, 2, "collection constructor panic");
+    CollectionItem { resource }
+}
+#[prebindgen]
+pub fn collection_construct_all(values: Vec<CollectionItem>) -> i64 {
+    values.iter().map(|v| v.resource.id).sum()
+}
+#[prebindgen]
+pub fn collection_make_items() -> Vec<CollectionItem> {
+    (1..=3)
+        .map(|id| CollectionItem {
+            resource: OwnedResourceImpl { id },
+        })
+        .collect()
+}
+#[prebindgen]
+pub fn collection_item_into(value: CollectionItem) -> CollectionItem {
+    assert_ne!(value.resource.id, 2, "collection projection panic");
+    value
+}
+
+#[prebindgen]
+pub struct CollectionBundle {
+    pub values: Vec<OwnedResource>,
+    pub tag: i64,
+}
+#[prebindgen]
+pub fn collection_bundle() -> CollectionBundle {
+    CollectionBundle {
+        values: (1..=3).map(|id| OwnedResourceImpl { id }).collect(),
+        tag: 42,
+    }
+}
+#[prebindgen]
+pub fn collection_bundle_into(value: CollectionBundle) -> CollectionBundle {
+    value
+}
+
+#[prebindgen]
+pub fn collection_optional_handles(
+    values: Option<Vec<OwnedResource>>,
+) -> Option<Vec<OwnedResource>> {
+    values
+}
+#[prebindgen]
+pub fn collection_nested_handles(values: Vec<Vec<OwnedResource>>) -> Vec<Vec<OwnedResource>> {
+    values
+}
+
+#[prebindgen]
+pub struct CollectionNumbers {
+    pub values: Vec<i64>,
+    pub tag: i64,
+}
+#[prebindgen]
+pub fn collection_numbers() -> CollectionNumbers {
+    CollectionNumbers {
+        values: vec![7, 9],
+        tag: 42,
+    }
+}
+#[prebindgen]
+pub fn collection_numbers_view(value: &CollectionNumbers) -> CollectionNumbers {
+    CollectionNumbers {
+        values: value.values.clone(),
+        tag: value.tag,
+    }
+}
+
+#[prebindgen]
+pub fn collection_resource_clone(value: &OwnedResource) -> OwnedResource {
+    OwnedResourceImpl { id: value.id }
+}
+#[prebindgen]
+pub fn collection_resource_ids(values: &[OwnedResource]) -> Vec<i64> {
+    values.iter().map(|v| v.id).collect()
+}
+
+// Result wrappers let C callers observe conversion failures without aborting.
+#[prebindgen]
+pub fn collection_try_construct_all(values: Vec<CollectionItem>) -> Result<i64, ResultFailure> {
+    Ok(collection_construct_all(values))
+}
+#[prebindgen]
+pub fn collection_try_make_items() -> Result<Vec<CollectionItem>, ResultFailure> {
+    Ok(collection_make_items())
+}
+#[prebindgen]
+pub struct CollectionError {
+    pub resources: Vec<OwnedResource>,
+    pub codes: Vec<Vec<i64>>,
+}
+impl From<String> for CollectionError {
+    fn from(_: String) -> Self {
+        Self {
+            resources: vec![],
+            codes: vec![],
+        }
+    }
+}
+#[prebindgen]
+pub fn collection_error_into(value: CollectionError) -> CollectionError {
+    value
+}
+#[prebindgen]
+pub fn collection_fail() -> Result<(), CollectionError> {
+    Err(CollectionError {
+        resources: vec![OwnedResourceImpl { id: 71 }, OwnedResourceImpl { id: 72 }],
+        codes: vec![vec![7, 9], vec![]],
+    })
+}
+
+#[prebindgen]
+pub fn collection_late_values(_value: &CPanicOutput) -> Vec<Vec<OwnedResource>> {
+    vec![
+        vec![OwnedResourceImpl { id: 81 }],
+        vec![OwnedResourceImpl { id: 82 }],
+    ]
+}
+#[prebindgen]
+pub fn collection_late_drop() -> Result<CPanicOutput, CResultError> {
+    Ok(CPanicOutputImpl { _marker: 1 })
+}
+
+#[prebindgen]
+pub struct SequencePart {
+    pub number: i64,
+    pub text: String,
+    pub resource: OwnedResource,
+}
+#[prebindgen]
+pub fn sequence_part_into(value: SequencePart) -> SequencePart {
+    assert_ne!(value.number, -2, "sequence element projection panic");
+    value
+}
+#[prebindgen]
+pub fn sequence_parts(mode: i32) -> Result<Vec<SequencePart>, ResultFailure> {
+    if mode == 1 {
+        return Err(ResultFailureImpl { code: 7 });
+    }
+    Ok((1..=3)
+        .map(|id| SequencePart {
+            number: if mode == 2 && id == 2 { -2 } else { id },
+            text: format!("part {id} 世界"),
+            resource: OwnedResourceImpl { id },
+        })
+        .collect())
+}
+
+#[prebindgen]
+pub struct SequenceScalars {
+    pub flag: bool,
+    pub byte: i8,
+    pub short: i16,
+    pub number: i32,
+    pub long: i64,
+    pub float: f32,
+    pub double: f64,
+    pub wide: i128,
+    pub text: Option<String>,
+}
+#[prebindgen]
+pub fn sequence_scalars_into(value: SequenceScalars) -> SequenceScalars {
+    value
+}
+#[prebindgen]
+pub fn collection_scalars(values: Vec<SequenceScalars>, _tag: f64) -> Vec<SequenceScalars> {
+    values
+}
+#[prebindgen]
+pub fn collection_u128(values: Vec<u128>) -> Vec<u128> {
+    values
+}
+#[prebindgen]
+pub fn sequence_scalars() -> Vec<SequenceScalars> {
+    vec![
+        SequenceScalars {
+            flag: true,
+            byte: -7,
+            short: -1234,
+            number: -123456,
+            long: i64::MIN,
+            float: 1.25,
+            double: -2.5,
+            wide: i128::MIN,
+            text: Some("世界".into()),
+        },
+        SequenceScalars {
+            flag: false,
+            byte: 7,
+            short: 1234,
+            number: 123456,
+            long: i64::MAX,
+            float: -1.25,
+            double: 2.5,
+            wide: i128::MAX,
+            text: None,
+        },
+    ]
+}
+
+#[prebindgen]
+pub fn sequence_late_drop() -> Result<Vec<CPanicOutput>, ResultFailure> {
+    Ok(vec![CPanicOutputImpl { _marker: 1 }])
+}
+#[prebindgen]
+pub fn sequence_late_view(_source: &Vec<CPanicOutput>) -> Vec<OwnedResource> {
+    vec![OwnedResourceImpl { id: 81 }, OwnedResourceImpl { id: 82 }]
+}
+
+#[prebindgen]
+pub fn collection_result_optional(
+    values: Vec<OwnedResource>,
+    mode: i32,
+) -> Result<Option<Vec<OwnedResource>>, ResultFailure> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(values)),
+        _ => Err(ResultFailureImpl { code: 7 }),
+    }
 }

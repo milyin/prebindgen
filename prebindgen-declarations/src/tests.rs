@@ -1,14 +1,51 @@
 use super::*;
+use prebindgen_flat::InputConversion;
 #[derive(Clone, Debug)]
 enum TestGroup {
+    Values,
     Maybe,
     Record,
     Member(syn::Ident),
 }
-type Bindings<W> = super::Bindings<W, (), TestGroup>;
-type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup>;
-type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup>;
-use prebindgen_conversions::staged::StagedFunction;
+struct TestAbi;
+impl TestAbi {
+    fn wires(
+        node: &WireNode<TestWire, TestGroup, TestGroup>,
+    ) -> std::vec::IntoIter<&Wire<TestWire>> {
+        prebindgen_flat::wire_definitions(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+    fn wires_mut(
+        node: &mut WireNode<TestWire, TestGroup, TestGroup>,
+    ) -> std::vec::IntoIter<&mut Wire<TestWire>> {
+        prebindgen_flat::wire_definitions_mut(std::iter::once(node))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+    fn validate(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
+        fn check(node: &WireNode<TestWire, TestGroup, TestGroup>) -> Result<()> {
+            match node {
+                WireNode::Leaf(_) => {}
+                WireNode::Chain { child, .. } => check(child)?,
+                WireNode::Branch { meta, children, .. } => {
+                    if matches!(meta, TestGroup::Maybe) && children.is_empty() {
+                        return Err("selection has no alternatives".into());
+                    }
+                    for child in children {
+                        check(child)?;
+                    }
+                }
+            }
+            Ok(())
+        }
+        check(node)?;
+        prebindgen_conversions::validate_wire_names(Self::wires(node))
+    }
+}
+type Bindings<W> = super::Bindings<W, (), TestGroup, TestGroup>;
+type InputPlan<W> = prebindgen_conversions::InputPlan<W, (), TestGroup, TestGroup>;
+type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, (), TestGroup, TestGroup>;
 use prebindgen_conversions::value::{self, Value};
 use prebindgen_flat::validate_bindings;
 struct TestCodec;
@@ -45,7 +82,20 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
         component: Default::default(),
     }
 }
+#[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
+    fn binding_failure_layout(
+        &self,
+        extra: &Extra,
+    ) -> Result<Option<WireNode<TestWire, TestGroup, TestGroup>>> {
+        Ok(
+            (extra.name == "malformed_binding_failure").then(|| WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: TestGroup::Maybe,
+            }),
+        )
+    }
     fn result_error(&self, _: &Type, message: TokenStream, _: &Extra) -> Result<TokenStream> {
         Ok(message)
     }
@@ -54,9 +104,84 @@ impl Codec for TestCodec {
     }
     fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
     type Niche = ();
-    type Group = TestGroup;
-    fn optional_group(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
-        TestGroup::Maybe
+    type Chain = TestGroup;
+    type Branch = TestGroup;
+    fn group_metadata(&self) -> TestGroup {
+        TestGroup::Values
+    }
+    fn optional_niche(
+        &self,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+    ) -> Option<NicheReservation<Self::Niche>> {
+        select_optional_niche(self, TestAbi::wires(payload))
+    }
+    fn optional_presence(
+        &self,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        reservation: &NicheReservation<Self::Niche>,
+    ) -> Result<TokenStream> {
+        optional_presence(self, TestAbi::wires(payload), reservation)
+    }
+    fn absent_output_values(
+        &self,
+        payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+        absent_output_values(self, TestAbi::wires(payload), reservation)
+    }
+    fn retire_niches(
+        &self,
+        payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        reservation: Option<&NicheReservation<Self::Niche>>,
+    ) -> Result<()> {
+        retire_optional_niches(self, TestAbi::wires_mut(payload), reservation)
+    }
+    fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+        TestAbi::validate(&plan.node)
+    }
+    fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+        for node in std::iter::once(&plan.outcomes.success)
+            .chain(plan.outcomes.source_error.iter())
+            .chain(plan.outcomes.binding_failure.iter())
+        {
+            TestAbi::validate(node)?;
+        }
+        prebindgen_conversions::match_output_fields(
+            TestAbi::wires(&plan.outcomes.success),
+            &plan.values,
+        )?;
+        Ok(())
+    }
+    fn prefix_layout(
+        &self,
+        layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        segment: ComponentSegment,
+    ) {
+        for w in TestAbi::wires_mut(layout) {
+            w.kind.component.prepend(segment.clone());
+        }
+    }
+    fn optional_metadata(
+        &self,
+        _: syn::Ident,
+        _: syn::Ident,
+        _: Option<()>,
+        controls: &[Wire<TestWire>],
+    ) -> Result<TestGroup> {
+        if controls
+            .iter()
+            .any(|wire| wire.kind.name == "reject_optional_metadata")
+        {
+            return Err("optional metadata rejected".into());
+        }
+        Ok(TestGroup::Maybe)
+    }
+
+    fn alternatives_metadata(&self, selector: &Wire<TestWire>) -> Result<TestGroup> {
+        if selector.kind.name == "reject_alternative_metadata" {
+            return Err("alternative metadata rejected".into());
+        }
+        Ok(TestGroup::Maybe)
     }
     fn field_group(&self, name: syn::Ident) -> TestGroup {
         TestGroup::Member(name)
@@ -69,9 +194,7 @@ impl Codec for TestCodec {
     type Context = ();
     type Input = InputPlan<TestWire>;
     type Output = OutputPlan<TestWire>;
-    fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
-        wire.component.prepend(segment);
-    }
+
     fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
         Ok(quote!(Default::default()))
     }
@@ -110,11 +233,10 @@ impl Codec for TestCodec {
             fallible: false,
             context: Default::default(),
             acknowledgement: None,
-            layout: vec![Wire {
+            node: prebindgen_flat::WireNode::Leaf(vec![Wire {
                 name: w.clone(),
                 kind: wire(Kind::Token, ty, extra),
-            }]
-            .into(),
+            }]),
             validation: quote!(),
             acquire: quote!(),
             resources: vec![],
@@ -142,13 +264,16 @@ impl Codec for TestCodec {
             fallible: false,
             context: Default::default(),
             delivery: Default::default(),
-            layout: vec![Wire {
-                name: w.clone(),
-                kind: wire(Kind::Token, ty, extra),
-            }]
-            .into(),
+            outcomes: prebindgen_flat::Outcomes {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: w.clone(),
+                    kind: wire(Kind::Token, ty, extra),
+                }]),
+                source_error: None,
+                binding_failure: None,
+            },
             statements: quote!(let #w=send_token(#v);),
-            values: vec![quote!(#w)],
+            values: vec![(w.clone(), quote!(#w))],
             commit: quote!(),
         })
     }
@@ -205,10 +330,10 @@ fn different_occurrences_have_different_converters() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.layout.len(), 3);
-    assert_eq!(y.layout.len(), 1);
-    assert!(x.layout.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.layout[0].kind.name, "y");
+    assert_eq!(TestAbi::wires(&x.node).len(), 3);
+    assert_eq!(TestAbi::wires(&y.node).len(), 1);
+    assert!(TestAbi::wires(&x.node).all(|w| w.kind.name == "x"));
+    assert_eq!(TestAbi::wires(&y.node).next().unwrap().kind.name, "y");
 }
 #[test]
 fn rejects_incomplete_slots() {
@@ -306,7 +431,14 @@ fn observations_precede_move_but_wires_keep_order() {
     )
     .unwrap();
     let o = flat.function("foo").unwrap().ret.slot.as_ref().unwrap();
-    assert!(o.layout[0].kind.kind == Kind::Token);
+    assert!(
+        TestAbi::wires(&o.outcomes.success)
+            .next()
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Token
+    );
     let body = o.statements.to_string();
     assert!(body.find("clone").unwrap() < body.find("send_token").unwrap());
 }
@@ -366,13 +498,15 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .fill(&mut flat, &TEST_CODEC, &fun!(foo), &extra("defaults"))
         .unwrap();
     assert_eq!(
-        flat.function("foo").unwrap().params[1]
-            .ty
-            .slot
-            .as_ref()
-            .unwrap()
-            .layout
-            .len(),
+        TestAbi::wires(
+            &flat.function("foo").unwrap().params[1]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .node
+        )
+        .len(),
         3
     );
     declarations
@@ -386,12 +520,24 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     let f = flat.function("foo").unwrap();
     let x = f.params[0].ty.slot.as_ref().unwrap();
     let y = f.params[1].ty.slot.as_ref().unwrap();
-    assert_eq!(x.layout.len(), 3);
-    assert!(x.layout[2].kind.kind == Kind::Token);
-    assert!(x.layout.iter().all(|w| w.kind.name == "x"));
-    assert_eq!(y.layout.len(), 1);
-    assert_eq!(y.layout[0].kind.name, "override");
-    assert_eq!(f.ret.slot.as_ref().unwrap().layout[0].kind.name, "result");
+    assert_eq!(TestAbi::wires(&x.node).len(), 3);
+    assert!(TestAbi::wires(&x.node).nth(2).unwrap().kind.kind == Kind::Token);
+    assert!(TestAbi::wires(&x.node).all(|w| w.kind.name == "x"));
+    assert_eq!(TestAbi::wires(&y.node).len(), 1);
+    assert_eq!(
+        TestAbi::wires(&y.node).next().unwrap().kind.name,
+        "override"
+    );
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(
+            &f.ret.slot.as_ref().unwrap().outcomes.success
+        ))
+        .next()
+        .expect("logical wire index out of range")
+        .kind
+        .name,
+        "result"
+    );
     assert!(x.validation.to_string().contains("\"x\""));
 }
 #[test]
@@ -441,8 +587,12 @@ fn independent_binding_and_rebinding_keeps_names_unique_and_stable() {
     let wires = f
         .params
         .iter()
-        .flat_map(|p| &p.ty.slot.as_ref().unwrap().layout)
-        .chain(&f.ret.slot.as_ref().unwrap().layout)
+        .flat_map(|p| {
+            prebindgen_flat::wire_definitions(std::iter::once(&p.ty.slot.as_ref().unwrap().node))
+        })
+        .chain(prebindgen_flat::wire_definitions(std::iter::once(
+            &f.ret.slot.as_ref().unwrap().outcomes.success,
+        )))
         .collect::<Vec<_>>();
     let names = wires
         .iter()
@@ -466,10 +616,38 @@ fn field_defaults_follow_type_expansions() {
     )
     .unwrap();
     let output = flat.function("read").unwrap().ret.slot.as_ref().unwrap();
-    assert!(output.layout[0].kind.kind == Kind::Value(Value::Text));
-    assert!(output.layout[1].kind.kind == Kind::Value(Value::Bytes));
-    assert_eq!(output.layout[0].kind.ty, "String");
-    assert_eq!(output.layout[1].kind.ty, "Vec < u8 >");
+    assert!(
+        TestAbi::wires(&output.outcomes.success)
+            .next()
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Value(Value::Text)
+    );
+    assert!(
+        TestAbi::wires(&output.outcomes.success)
+            .nth(1)
+            .unwrap()
+            .kind
+            .kind
+            == Kind::Value(Value::Bytes)
+    );
+    assert_eq!(
+        TestAbi::wires(&output.outcomes.success)
+            .next()
+            .unwrap()
+            .kind
+            .ty,
+        "String"
+    );
+    assert_eq!(
+        TestAbi::wires(&output.outcomes.success)
+            .nth(1)
+            .unwrap()
+            .kind
+            .ty,
+        "Vec < u8 >"
+    );
 }
 #[test]
 fn explicit_scalar_identity_is_a_value_conversion() {
@@ -489,12 +667,39 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let input = f.params[0].ty.slot.as_ref().unwrap();
     let output = f.ret.slot.as_ref().unwrap();
     let scalar = Kind::Value(Value::Scalar(prebindgen_flat::Primitive::I64));
-    assert_eq!(input.layout[0].kind.kind, scalar);
-    assert_eq!(output.layout[0].kind.kind, scalar);
-    assert_eq!(input.layout[0].kind.name, "scalar");
-    assert_eq!(input.layout[0].kind.ty, "i64");
-    assert_eq!(output.layout[0].kind.name, "scalar");
-    assert_eq!(output.layout[0].kind.ty, "i64");
+    assert_eq!(
+        TestAbi::wires(&input.node).next().unwrap().kind.kind,
+        scalar
+    );
+    assert_eq!(
+        TestAbi::wires(&output.outcomes.success)
+            .next()
+            .unwrap()
+            .kind
+            .kind,
+        scalar
+    );
+    assert_eq!(
+        TestAbi::wires(&input.node).next().unwrap().kind.name,
+        "scalar"
+    );
+    assert_eq!(TestAbi::wires(&input.node).next().unwrap().kind.ty, "i64");
+    assert_eq!(
+        TestAbi::wires(&output.outcomes.success)
+            .next()
+            .unwrap()
+            .kind
+            .name,
+        "scalar"
+    );
+    assert_eq!(
+        TestAbi::wires(&output.outcomes.success)
+            .next()
+            .unwrap()
+            .kind
+            .ty,
+        "i64"
+    );
     assert!(input.validation.to_string().contains("scalar"));
     assert!(output.statements.to_string().contains("scalar"));
 }
@@ -552,9 +757,8 @@ fn nested_recipes_use_only_the_callers_extra() {
     )
     .unwrap();
     let f = flat.function("foo").unwrap();
-    let foreign = |wires: &WireLayout<TestWire, TestGroup>| {
-        wires
-            .iter()
+    let foreign = |wires: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup>| {
+        prebindgen_flat::wire_definitions(std::iter::once(wires))
             .filter_map(|w| match &w.kind.kind {
                 Kind::Token => Some((w.kind.name, w.kind.ty.clone())),
                 _ => None,
@@ -562,18 +766,18 @@ fn nested_recipes_use_only_the_callers_extra() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        foreign(&f.params[0].ty.slot.as_ref().unwrap().layout),
+        foreign(&f.params[0].ty.slot.as_ref().unwrap().node),
         vec![
             ("x", "crate :: Payload".into()),
             ("x", "crate :: Key".into())
         ]
     );
     assert_eq!(
-        foreign(&f.params[1].ty.slot.as_ref().unwrap().layout),
+        foreign(&f.params[1].ty.slot.as_ref().unwrap().node),
         vec![("y", "crate :: Key".into())]
     );
     assert_eq!(
-        foreign(&f.ret.slot.as_ref().unwrap().layout),
+        foreign(&f.ret.slot.as_ref().unwrap().outcomes.success),
         vec![
             ("result", "crate :: Payload".into()),
             ("result", "crate :: Key".into())
@@ -616,7 +820,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
     .unwrap();
     let call = flat.function("point").unwrap();
     assert_eq!(
-        call.outputs(&(), &source_binding())
+        test_return_packet(call, &(), &source_binding())
             .unwrap()
             .map(|out| out.wire.kind.component.clone())
             .collect::<Vec<_>>(),
@@ -633,9 +837,75 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn set_niche(&self, _: &mut TestWire, _: Option<()>) {}
         type Niche = ();
-        type Group = TestGroup;
-        fn optional_group(&self, _: syn::Ident, _: syn::Ident, _: Option<()>) -> TestGroup {
-            TestGroup::Maybe
+        type Chain = TestGroup;
+        type Branch = TestGroup;
+        fn group_metadata(&self) -> TestGroup {
+            TestGroup::Values
+        }
+        fn optional_niche(
+            &self,
+            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        ) -> Option<NicheReservation<Self::Niche>> {
+            select_optional_niche(self, TestAbi::wires(payload))
+        }
+        fn optional_presence(
+            &self,
+            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            reservation: &NicheReservation<Self::Niche>,
+        ) -> Result<TokenStream> {
+            optional_presence(self, TestAbi::wires(payload), reservation)
+        }
+        fn absent_output_values(
+            &self,
+            payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            reservation: Option<&NicheReservation<Self::Niche>>,
+        ) -> Result<Vec<(syn::Ident, TokenStream)>> {
+            absent_output_values(self, TestAbi::wires(payload), reservation)
+        }
+        fn retire_niches(
+            &self,
+            payload: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            reservation: Option<&NicheReservation<Self::Niche>>,
+        ) -> Result<()> {
+            retire_optional_niches(self, TestAbi::wires_mut(payload), reservation)
+        }
+        fn validate_input(&self, plan: &CodecInput<Self>) -> Result<()> {
+            TestAbi::validate(&plan.node)
+        }
+        fn validate_output(&self, plan: &CodecOutput<Self>) -> Result<()> {
+            for node in std::iter::once(&plan.outcomes.success)
+                .chain(plan.outcomes.source_error.iter())
+                .chain(plan.outcomes.binding_failure.iter())
+            {
+                TestAbi::validate(node)?;
+            }
+            prebindgen_conversions::match_output_fields(
+                TestAbi::wires(&plan.outcomes.success),
+                &plan.values,
+            )?;
+            Ok(())
+        }
+        fn prefix_layout(
+            &self,
+            layout: &mut prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
+            segment: ComponentSegment,
+        ) {
+            for w in TestAbi::wires_mut(layout) {
+                w.kind.component.prepend(segment.clone());
+            }
+        }
+        fn optional_metadata(
+            &self,
+            _: syn::Ident,
+            _: syn::Ident,
+            _: Option<()>,
+            _controls: &[Wire<TestWire>],
+        ) -> Result<TestGroup> {
+            Ok(TestGroup::Maybe)
+        }
+
+        fn alternatives_metadata(&self, _selector: &Wire<TestWire>) -> Result<TestGroup> {
+            Ok(TestGroup::Maybe)
         }
         fn field_group(&self, name: syn::Ident) -> TestGroup {
             TestGroup::Member(name)
@@ -648,9 +918,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         type Context = ();
         type Input = InputPlan<TestWire>;
         type Output = OutputPlan<TestWire>;
-        fn prefix_component(&self, wire: &mut TestWire, segment: ComponentSegment) {
-            wire.component.prepend(segment);
-        }
+
         fn selector(&self, extra: &Extra) -> TestWire {
             TEST_CODEC.selector(extra)
         }
@@ -688,7 +956,16 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 plan.acknowledgement.as_ref().unwrap().to_string(),
                 quote!(ack();).to_string()
             );
-            assert_eq!(plan.layout.len(), 2);
+            assert_eq!(TestAbi::wires(&plan.node).len(), 2);
+            assert_eq!(
+                prebindgen_flat::wire_definitions(std::iter::once(&plan.node)).count(),
+                2
+            );
+            plan.node = prebindgen_flat::WireNode::Branch {
+                controls: vec![],
+                meta: TestGroup::Record,
+                children: vec![std::mem::take(&mut plan.node)],
+            };
             Ok(())
         }
         fn finish_output(&self, plan: &mut OutputPlan<TestWire>, extra: &Extra) -> Result<()> {
@@ -696,7 +973,11 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 return Err("finalization failed".into());
             }
             assert!(plan.delivery.statements.is_empty());
-            assert!(plan.layout.is_empty());
+            assert!(TestAbi::wires(&plan.outcomes.success).len() == 0);
+            assert!(matches!(
+                &plan.outcomes.success,
+                prebindgen_flat::WireNode::Branch { .. }
+            ));
             plan.delivery.statements = quote!(deliver_unit(););
             Ok(())
         }
@@ -730,6 +1011,18 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &Extra::default(),
     )
     .unwrap();
+    assert!(matches!(
+        &direct
+            .function("take")
+            .unwrap()
+            .input_conversions()
+            .unwrap()[0]
+            .node,
+        prebindgen_flat::WireNode::Branch {
+            meta: TestGroup::Record,
+            ..
+        }
+    ));
     bind_output(
         &mut direct,
         &FinalizingCodec,
@@ -768,7 +1061,8 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             flat.function("take").unwrap(),
             &(),
             &source_binding(),
-            &syn::parse_quote!(_)
+            &syn::parse_quote!(_),
+            &test_parameter_names(flat.function("take").unwrap())
         )
         .unwrap()
         .to_string(),
@@ -776,7 +1070,8 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
             direct.function("take").unwrap(),
             &(),
             &source_binding(),
-            &syn::parse_quote!(_)
+            &syn::parse_quote!(_),
+            &test_parameter_names(direct.function("take").unwrap())
         )
         .unwrap()
         .to_string()
@@ -828,26 +1123,39 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .slot
         .as_ref()
         .unwrap()
-        .layout;
+        .outcomes
+        .success;
     let ty = syn::parse_quote!(crate::Point);
     shapes
-        .validate_mapping(&ty, &id, wires.iter().map(|w| (&w.name, &w.kind.component)))
+        .validate_mapping(
+            &ty,
+            &id,
+            prebindgen_flat::wire_definitions(std::iter::once(wires))
+                .map(|w| (&w.name, &w.kind.component)),
+        )
         .unwrap();
     assert!(shapes
         .validate_mapping(
             &ty,
             &id,
-            wires.iter().take(1).map(|w| (&w.name, &w.kind.component))
+            prebindgen_flat::wire_definitions(std::iter::once(wires))
+                .take(1)
+                .map(|w| (&w.name, &w.kind.component))
         )
         .unwrap_err()
         .contains("has no wire"));
     let mut bad_wires = wires.clone();
-    bad_wires[0].kind.component = ComponentPath(vec![ComponentSegment::Named("missing".into())]);
+    prebindgen_flat::wire_definitions_mut(std::iter::once(&mut bad_wires))
+        .next()
+        .expect("logical wire index out of range")
+        .kind
+        .component = ComponentPath(vec![ComponentSegment::Named("missing".into())]);
     assert!(shapes
         .validate_mapping(
             &ty,
             &id,
-            bad_wires.iter().map(|w| (&w.name, &w.kind.component))
+            prebindgen_flat::wire_definitions(std::iter::once(&bad_wires))
+                .map(|w| (&w.name, &w.kind.component))
         )
         .unwrap_err()
         .contains("no component"));
@@ -855,7 +1163,8 @@ fn preparation_checks_representation_fields_references_and_mappings() {
         .validate_mapping(
             &syn::parse_quote!(i64),
             &id,
-            wires.iter().map(|w| (&w.name, &w.kind.component))
+            prebindgen_flat::wire_definitions(std::iter::once(wires))
+                .map(|w| (&w.name, &w.kind.component))
         )
         .unwrap_err()
         .contains("does not match"));
@@ -906,6 +1215,7 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
         &(),
         &source_binding(),
         &syn::parse_quote!(_),
+        &test_parameter_names(flat.function("point").unwrap()),
     )
     .unwrap()
     .to_string();
@@ -928,20 +1238,26 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     drop(shapes);
     flat.records.clear();
     let call = flat.function("point").unwrap();
-    assert_eq!(call.outputs(&(), &source_binding()).unwrap().len(), 2);
+    assert_eq!(
+        test_return_packet(call, &(), &source_binding())
+            .unwrap()
+            .len(),
+        2
+    );
     assert_eq!(
         prebindgen_conversions::staged::emit_call(
             call,
             &(),
             &source_binding(),
-            &syn::parse_quote!(_)
+            &syn::parse_quote!(_),
+            &test_parameter_names(call)
         )
         .unwrap()
         .to_string(),
         before
     );
     assert_eq!(
-        call.outputs(&(), &source_binding())
+        test_return_packet(call, &(), &source_binding())
             .unwrap()
             .next()
             .unwrap()
@@ -975,7 +1291,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         child.acquire = quote!(acquire(#index););
         child.acknowledgement = Some(ack);
         child.resources.push(Resource {
-            identity: quote!(#index),
+            identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#index)),
             access: Access::Move,
             active: quote!(selected),
         });
@@ -1006,7 +1322,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         quote!(ack()).to_string()
     );
     assert_eq!(
-        plan.layout[1].kind.component,
+        TestAbi::wires(&plan.node).nth(1).unwrap().kind.component,
         ComponentPath(vec![ComponentSegment::Field("field1".into())])
     );
     assert!(record_input(
@@ -1054,7 +1370,11 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
     );
     assert_eq!(plan.values.len(), 2);
     assert_eq!(
-        plan.layout[1].kind.component,
+        TestAbi::wires(&plan.outcomes.success)
+            .nth(1)
+            .unwrap()
+            .kind
+            .component,
         ComponentPath(vec![ComponentSegment::Field("y".into())])
     );
     assert!(make(true).unwrap_err().contains("finish_output"));
@@ -1074,7 +1394,7 @@ fn shared_empty_record_output_evaluates_without_an_unused_local() {
         plan.statements.to_string(),
         quote!(let _ = &(next_record());).to_string()
     );
-    assert!(plan.layout.is_empty());
+    assert!(TestAbi::wires(&plan.outcomes.success).len() == 0);
 }
 
 #[test]
@@ -1090,7 +1410,11 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                layout: Default::default(),
+                outcomes: prebindgen_flat::Outcomes {
+                    success: Default::default(),
+                    source_error: None,
+                    binding_failure: None,
+                },
                 values: Vec::new(),
                 statements: quote! {
                     if mode == #index + 1 { return Err(()); }
@@ -1211,7 +1535,11 @@ fn optional_output_drops_prepared_owners_on_failure_and_skips_absent_payloads() 
                 fallible: false,
                 context: Default::default(),
                 delivery: Default::default(),
-                layout: vec![].into(),
+                outcomes: prebindgen_flat::Outcomes {
+                    success: Default::default(),
+                    source_error: None,
+                    binding_failure: None,
+                },
                 values: vec![],
                 statements: quote!(if mode==#index+1{return Err(());} let #local=Box::new(#field);),
                 commit: quote!(drop(#local);),
@@ -1280,29 +1608,40 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         &Extra::default(),
     )
     .unwrap();
-    fn check(layout: &WireLayout<TestWire, TestGroup>) {
-        layout.validate().unwrap();
-        assert_eq!(layout.len(), 4);
-        let [WireNode::Group { metadata, children }] = layout.nodes() else {
+    fn check(layout: &prebindgen_flat::WireNode<TestWire, TestGroup, TestGroup>) {
+        assert_eq!(
+            prebindgen_flat::wire_definitions(std::iter::once(layout)).count(),
+            4
+        );
+        assert_eq!(TestAbi::wires(layout).len(), 4);
+        let WireNode::Branch {
+            meta: metadata,
+            children,
+            ..
+        } = layout
+        else {
             panic!()
         };
         assert!(matches!(metadata, TestGroup::Record));
         let mut names = Vec::new();
         let mut widths = Vec::new();
-        for node in children.nodes() {
-            let WireNode::Group { metadata, children } = node else {
+        for node in children.as_slice() {
+            let WireNode::Branch { meta: metadata, .. } = node else {
                 panic!()
             };
             let TestGroup::Member(name) = metadata else {
                 panic!()
             };
             names.push(name.to_string());
-            widths.push(children.len());
+            widths.push(TestAbi::wires(node).len());
         }
         assert_eq!(names, ["maybe", "empty", "pair"]);
         assert_eq!(widths, [2, 0, 2]);
-        for (i, wire) in layout.iter().enumerate() {
-            assert!(std::ptr::eq(wire, layout.get(i).unwrap()));
+        for entry in prebindgen_flat::wire_definitions_with_paths(std::iter::once(layout)) {
+            assert!(std::ptr::eq(
+                entry.wire,
+                prebindgen_flat::wire_at_path(std::iter::once(layout), &entry.path).unwrap()
+            ));
         }
     }
     check(
@@ -1311,7 +1650,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
             .slot
             .as_ref()
             .unwrap()
-            .layout,
+            .node,
     );
     for owned in [false, true] {
         let fields = vec![
@@ -1326,7 +1665,7 @@ fn field_groups_preserve_empty_and_multiwire_fields_in_both_directions() {
         };
         bind_output(&mut flat, &TEST_CODEC, "echo", &output, &Extra::default()).unwrap();
         let plan = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-        check(&plan.layout);
+        check(&plan.outcomes.success);
         assert_eq!(plan.values.len(), 4);
     }
 }
@@ -1396,7 +1735,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(&mut flat, &TEST_CODEC, &fun!(echo), &Extra::default())
         .unwrap();
     let output = flat.function("echo").unwrap().ret.slot.as_ref().unwrap();
-    assert_eq!(output.layout.len(), 2);
+    assert_eq!(TestAbi::wires(&output.outcomes.success).len(), 2);
     let code = output.statements.to_string();
     assert!(code.contains(":: core :: result :: Result :: Ok"));
     assert!(code.contains("message (&"));
@@ -1509,4 +1848,330 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     let expansions = vec![ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()];
     let names = declarations::source_functions(&expansions, [&fun!(f).on_error(fun!(message))]);
     assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
+}
+
+#[test]
+fn selector_schema_separates_control_from_mutually_exclusive_payloads() {
+    use prebindgen_flat::WireNode;
+    let mut model = parse("pub struct Item {} pub fn empty()->Item{} pub fn numbered(n:i32)->Item{} pub fn take(v:Item){}");
+    bind_input(
+        &mut model,
+        &TEST_CODEC,
+        "take",
+        "v",
+        &Input::selector([
+            Input::constructor("empty", []),
+            Input::constructor("numbered", [Input::Leaf]),
+        ]),
+        &Extra::default(),
+    )
+    .unwrap();
+    let input = model.function("take").unwrap().input_conversions().unwrap()[0];
+    let WireNode::Branch {
+        children: alternatives,
+        controls,
+        ..
+    } = input.input_node()
+    else {
+        panic!()
+    };
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(&alternatives[0])).count(),
+        0
+    );
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(&alternatives[1])).count(),
+        1
+    );
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(input.input_node())).count(),
+        2
+    );
+    assert_eq!(TestAbi::wires(&input.node).len(), 2);
+    assert_eq!(controls.len(), 1);
+    assert!(matches!(controls[0].kind.kind, Kind::Selector));
+    assert_eq!(
+        TestAbi::wires(&input.node).next().unwrap().name,
+        prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+            .next()
+            .unwrap()
+            .name
+    );
+}
+
+struct TestPacketValue<'a> {
+    wire: &'a Wire<TestWire>,
+}
+fn test_return_packet<'a>(
+    f: &'a prebindgen_flat::Function<InputPlan<TestWire>, OutputPlan<TestWire>>,
+    _context: &(),
+    _source: &syn::Ident,
+) -> Result<std::vec::IntoIter<TestPacketValue<'a>>> {
+    let plan = f.output_conversion()?;
+    prebindgen_conversions::match_output_fields(
+        TestAbi::wires(&plan.outcomes.success),
+        &plan.values,
+    )?
+    .into_iter()
+    .map(|(wire, _)| Ok(TestPacketValue { wire }))
+    .collect::<Result<Vec<_>>>()
+    .map(Vec::into_iter)
+}
+fn test_parameter_names(
+    f: &prebindgen_flat::Function<InputPlan<TestWire>, OutputPlan<TestWire>>,
+) -> Vec<syn::Ident> {
+    f.input_conversions()
+        .unwrap()
+        .into_iter()
+        .flat_map(|p| TestAbi::wires(&p.node))
+        .map(|w| w.name.clone())
+        .collect()
+}
+
+#[test]
+fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
+    for source_error in [false, true] {
+        let mut child = TEST_CODEC
+            .output_leaf(
+                &syn::parse_quote!(i32),
+                &Extra::default(),
+                syn::parse_quote!(out),
+                quote!(value),
+                false,
+            )
+            .unwrap();
+        if source_error {
+            child.outcomes.source_error = Some(WireNode::default());
+        } else {
+            child.outcomes.binding_failure = Some(WireNode::default());
+        }
+        assert!(optional_output(
+            &TEST_CODEC,
+            &Extra::default(),
+            syn::parse_quote!(presence),
+            syn::parse_quote!(payload),
+            quote!(value),
+            false,
+            child.clone(),
+        )
+        .unwrap_err()
+        .contains("outermost"));
+        assert!(sequence::output(
+            &TEST_CODEC,
+            &syn::parse_quote!(Vec<i32>),
+            &Extra::default(),
+            syn::parse_quote!(rows),
+            syn::parse_quote!(element),
+            syn::parse_quote!(length),
+            syn::parse_quote!(index),
+            quote!(value),
+            false,
+            ProjectionMode::Owned,
+            child.clone(),
+        )
+        .unwrap_err()
+        .contains("outermost"));
+        assert!(record_output(
+            &TEST_CODEC,
+            syn::parse_quote!(record),
+            quote!(value),
+            [syn::parse_quote!(field)],
+            |_, _| Ok(child.clone()),
+        )
+        .unwrap_err()
+        .contains("outermost"));
+        let mut parent = child.clone();
+        parent.outcomes = prebindgen_flat::Outcomes {
+            success: WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: TestGroup::Values,
+            },
+            source_error: None,
+            binding_failure: None,
+        };
+        assert!(append(&mut parent, child)
+            .unwrap_err()
+            .contains("outermost"));
+        assert!(
+            matches!(parent.outcomes.success, WireNode::Branch { children: elements, .. } if elements.is_empty())
+        );
+    }
+}
+
+#[test]
+fn constructor_and_output_components_keep_groups_at_every_arity() {
+    let mut flat = parse("pub fn zero()->i64{} pub fn one(a:i64)->i64{} pub fn two(a:i64,b:i64)->i64{} pub fn observe(v:&i64)->i64{} pub fn f(value:i64)->i64{}");
+    for (name, count) in [("zero", 0), ("one", 1), ("two", 2)] {
+        bind_input(
+            &mut flat,
+            &TEST_CODEC,
+            "f",
+            "value",
+            &Input::constructor(name, vec![Input::Leaf; count]),
+            &Extra::default(),
+        )
+        .unwrap();
+        let input = flat.function("f").unwrap().params[0]
+            .ty
+            .slot
+            .as_ref()
+            .unwrap();
+        assert!(
+            matches!(&input.node, WireNode::Branch { meta: TestGroup::Values, children: elements , .. } if elements.len() == count)
+        );
+        if count == 0 {
+            continue;
+        } // Empty combinations are intentionally rejected.
+        bind_output(
+            &mut flat,
+            &TEST_CODEC,
+            "f",
+            &Output::combine(vec![Output::getter("observe", Output::Leaf); count]),
+            &Extra::default(),
+        )
+        .unwrap();
+        let output = flat.function("f").unwrap().ret.slot.as_ref().unwrap();
+        assert!(
+            matches!(&output.outcomes.success, WireNode::Branch { meta: TestGroup::Values, children: elements , .. } if elements.len() == count)
+        );
+    }
+}
+
+#[test]
+fn malformed_error_channel_is_rejected_before_replacing_output() {
+    let mut flat = parse("pub fn f()->i64{}");
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        &Output::Leaf,
+        &Extra::default(),
+    )
+    .unwrap();
+    let before = flat
+        .function("f")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .statements
+        .to_string();
+    let error = bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        &Output::Leaf,
+        &Extra {
+            name: "malformed_binding_failure",
+            ..Extra::default()
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("no alternatives"), "{error}");
+    let unchanged = flat.function("f").unwrap().ret.slot.as_ref().unwrap();
+    assert!(unchanged.outcomes.binding_failure.is_none());
+    assert_eq!(unchanged.statements.to_string(), before);
+}
+
+#[test]
+fn failed_metadata_construction_preserves_installed_conversions() {
+    let mut flat=parse("pub fn empty()->Option<i64>{} pub fn some(v:i64)->Option<i64>{} pub fn f(v:Option<i64>)->Option<i64>{}");
+    let optional = Input::Optional(Box::new(Input::Leaf));
+    bind_input(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        "v",
+        &optional,
+        &Extra::default(),
+    )
+    .unwrap();
+    bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        &Output::Optional(Box::new(Output::Leaf)),
+        &Extra::default(),
+    )
+    .unwrap();
+    let input_before = flat.function("f").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap()
+        .validation
+        .to_string();
+    let output_before = flat
+        .function("f")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .statements
+        .to_string();
+    for (recipe, name, expected) in [
+        (
+            optional,
+            "reject_optional_metadata",
+            "optional metadata rejected",
+        ),
+        (
+            Input::selector([
+                Input::constructor("empty", []),
+                Input::constructor("some", [Input::Leaf]),
+            ]),
+            "reject_alternative_metadata",
+            "alternative metadata rejected",
+        ),
+    ] {
+        let error = bind_input(
+            &mut flat,
+            &TEST_CODEC,
+            "f",
+            "v",
+            &recipe,
+            &Extra {
+                name,
+                ..Extra::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, expected);
+        assert_eq!(
+            flat.function("f").unwrap().params[0]
+                .ty
+                .slot
+                .as_ref()
+                .unwrap()
+                .validation
+                .to_string(),
+            input_before
+        );
+    }
+    let error = bind_output(
+        &mut flat,
+        &TEST_CODEC,
+        "f",
+        &Output::Optional(Box::new(Output::Leaf)),
+        &Extra {
+            name: "reject_optional_metadata",
+            ..Extra::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error, "optional metadata rejected");
+    assert_eq!(
+        flat.function("f")
+            .unwrap()
+            .ret
+            .slot
+            .as_ref()
+            .unwrap()
+            .statements
+            .to_string(),
+        output_before
+    );
 }

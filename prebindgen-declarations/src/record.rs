@@ -22,7 +22,11 @@ pub fn record_input<C: Codec>(
         fallible: false,
         context: Default::default(),
         acknowledgement: None,
-        layout: Default::default(),
+        node: WireNode::Branch {
+            controls: vec![],
+            children: vec![],
+            meta: codec.fields_group(),
+        },
         validation: TokenStream::new(),
         acquire: TokenStream::new(),
         resources: Vec::new(),
@@ -34,23 +38,31 @@ pub fn record_input<C: Codec>(
     for field in fields {
         let (name, mut child) = field?;
         check_field(&mut names, &name)?;
-        for wire in &mut child.layout {
-            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
-        }
+        codec.prefix_layout(&mut child.node, ComponentSegment::Field(name.to_string()));
         out.fallible |= child.fallible;
         out.validation.extend(child.validation);
         out.acquire.extend(child.acquire);
         out.resources.extend(child.resources);
         merge_acknowledgement(&mut out.acknowledgement, child.acknowledgement)?;
         out.statements.extend(child.statements);
-        child.layout.enclose(codec.field_group(name.clone()));
-        out.layout.extend(child.layout);
+        child.node = prebindgen_flat::WireNode::Branch {
+            controls: vec![],
+            meta: codec.field_group(name.clone()),
+            children: vec![std::mem::take(&mut child.node)],
+        };
+        let WireNode::Branch {
+            children: elements, ..
+        } = &mut out.node
+        else {
+            unreachable!()
+        };
+        elements.push(child.node);
         let argument = child.argument;
         values.push(quote!(#name: #argument));
     }
     out.statements
         .extend(quote!(let #var: #ty = #ty { #(#values),* };));
-    out.layout.enclose(codec.fields_group());
+
     Ok(out)
 }
 
@@ -82,7 +94,15 @@ pub fn record_output<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        layout: Default::default(),
+        outcomes: prebindgen_flat::Outcomes {
+            success: WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: codec.fields_group(),
+            },
+            source_error: None,
+            binding_failure: None,
+        },
         statements: binding,
         values: Vec::new(),
     };
@@ -90,13 +110,18 @@ pub fn record_output<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(&#var.#name))?;
-        for wire in &mut child.layout {
-            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
-        }
-        child.layout.enclose(codec.field_group(name));
+        codec.prefix_layout(
+            &mut child.outcomes.success,
+            ComponentSegment::Field(name.to_string()),
+        );
+        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+            controls: vec![],
+            meta: codec.field_group(name),
+            children: vec![std::mem::take(&mut child.outcomes.success)],
+        };
         append(&mut out, child)?;
     }
-    out.layout.enclose(codec.fields_group());
+
     Ok(out)
 }
 
@@ -127,7 +152,15 @@ pub fn record_output_owned<C: Codec>(
         context: Default::default(),
         delivery: Default::default(),
         commit: TokenStream::new(),
-        layout: Default::default(),
+        outcomes: prebindgen_flat::Outcomes {
+            success: WireNode::Branch {
+                controls: vec![],
+                children: vec![],
+                meta: codec.fields_group(),
+            },
+            source_error: None,
+            binding_failure: None,
+        },
         statements: binding,
         values: Vec::new(),
     };
@@ -135,13 +168,18 @@ pub fn record_output_owned<C: Codec>(
     for (index, name) in fields.enumerate() {
         check_field(&mut names, &name)?;
         let mut child = convert(index, quote!(#var.#name))?;
-        for wire in &mut child.layout {
-            codec.prefix_component(&mut wire.kind, ComponentSegment::Field(name.to_string()));
-        }
-        child.layout.enclose(codec.field_group(name));
+        codec.prefix_layout(
+            &mut child.outcomes.success,
+            ComponentSegment::Field(name.to_string()),
+        );
+        child.outcomes.success = prebindgen_flat::WireNode::Branch {
+            controls: vec![],
+            meta: codec.field_group(name),
+            children: vec![std::mem::take(&mut child.outcomes.success)],
+        };
         append(&mut out, child)?;
     }
-    out.layout.enclose(codec.fields_group());
+
     Ok(out)
 }
 

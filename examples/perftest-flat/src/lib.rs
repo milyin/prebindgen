@@ -249,35 +249,28 @@ pub fn storage_put_by_take(s: &mut Storage, payload: Payload) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Array (slice / Vec) API: store and retrieve a whole batch in one FFI call,
-// amortizing per-call boundary overhead. The slice input crosses as
-// `(const payload_t *, size_t)` in C (zero-copy reinterpret — `Payload` is
-// `#[repr(C)]`) and as a `List<Payload>` in Kotlin; the `Vec` return crosses as a
-// malloc'd `(payload_t *, size_t)` array in C and a `List<Payload>` in Kotlin.
+// using the same element converters as single values. C transports typed row
+// buffers and Kotlin transports lists. Input rows are decoded into a temporary
+// Rust collection; output rows are a separate allocation owned by the caller.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Replace the stored batch with a clone of `payloads`. The single-payload puts
-// /// are the array-of-one case of this.
-// #[prebindgen]
-// pub fn storage_put_slice(s: &mut Storage, payloads: &[Payload]) {
-//     s.payloads = payloads.to_vec();
-// }
+/// Replace the stored batch with a clone of `payloads`. The single-payload puts
+/// are the array-of-one case of this.
+#[prebindgen]
+pub fn storage_put_slice(s: &mut Storage, payloads: &[Payload]) {
+    s.payloads = payloads.to_vec();
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Return a clone of the **whole** stored batch, or `None` if the storage is empty
-// /// (each `label` becoming a fresh owned `string_t *` the C caller must drop). A
-// /// returned `Some` is always non-empty (empty storage is `None`). [`storage_get`] is
-// /// the first-element case of this. Across the C ABI `Option<Vec<Payload>>` lowers to
-// /// `bool storage_get_vec(const storage_t *, payload_t **out, size_t *out_len)`; in
-// /// Kotlin it surfaces as a nullable `List<Payload>?`.
-// #[prebindgen]
-// pub fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> {
-//     if s.payloads.is_empty() {
-//         None
-//     } else {
-//         Some(s.payloads.clone())
-//     }
-// }
+/// Clone the stored batch, or return None when it is empty. Bindings expose
+/// generated row arrays in C and `List<Payload>?` in Kotlin.
+#[prebindgen]
+pub fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> {
+    if s.payloads.is_empty() {
+        None
+    } else {
+        Some(s.payloads.clone())
+    }
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Prepare a reusable [`PayloadVecHandler`] from a whole-batch callback `f`. Like

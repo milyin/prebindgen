@@ -2,6 +2,7 @@
 use super::*;
 use crate::group::validate_layout;
 use prebindgen_flat::{Conversion, Wire};
+use prebindgen_flat::{InputConversion, OutputConversion};
 
 /// Configured names for a generated handle class and its native destructor.
 #[derive(Clone, Debug)]
@@ -44,9 +45,23 @@ impl KotlinContext<'_> {
         Ok(format!("{}({value})", class.drop_function))
     }
 }
+/// A prepared local binding, evaluated before collecting handle locks.
+#[derive(Clone, Debug)]
+pub struct KotlinBinding {
+    /// Generated local name.
+    pub name: String,
+    /// Expression evaluated once to snapshot input collection structure.
+    pub expression: String,
+    /// Inactive expression when an enclosing optional/alternative suppresses it.
+    pub absent: String,
+}
 /// Prepared Kotlin input code; the writer orders these operations across slots.
 #[derive(Default)]
 pub struct KotlinInput {
+    /// Input snapshots evaluated once before locking; handle addresses stay deferred.
+    pub setup: Vec<KotlinBinding>,
+    /// Lists of handles to combine with individual locks.
+    pub lock_groups: Vec<String>,
     /// Public parameter declarations.
     pub parameters: Vec<String>,
     /// Expressions passed to native wires, in wire order.
@@ -57,7 +72,7 @@ pub struct KotlinInput {
     pub consumed: Vec<String>,
 }
 /// Kotlin result conversion and rollback code owned by the result slot.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct KotlinOutput {
     /// Expressions delivered to the caller, in result order.
     pub delivered: Vec<String>,
@@ -74,6 +89,8 @@ pub struct KotlinOutput {
 pub trait KotlinInputConversion:
     for<'a> Conversion<
     Wire = JniWire,
+    Chain = JniChain,
+    Branch = JniBranch,
     SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>,
 >
 {
@@ -84,19 +101,20 @@ pub trait KotlinInputConversion:
 pub trait KotlinOutputConversion:
     for<'a> Conversion<
     Wire = JniWire,
+    Chain = JniChain,
+    Branch = JniBranch,
     SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>,
-    WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>,
 >
 {
     /// Emit destination-side output conversion and rollback for this slot.
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput>;
 }
-/// Prepared JNI input, owning one tree used for Rust and Kotlin emission.
+/// Prepared JNI input, with a logical schema and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub struct JniInput {
     rust: InputPlan<JniWire>,
 }
-/// Prepared JNI output, owning one tree used for Rust and Kotlin emission.
+/// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub struct JniOutput {
     rust: OutputPlan<JniWire>,
@@ -113,12 +131,10 @@ impl From<OutputPlan<JniWire>> for JniOutput {
 }
 impl Conversion for JniInput {
     type Wire = JniWire;
-    type Group = JniGroup;
+    type Chain = JniChain;
+    type Branch = JniBranch;
     type SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, JniContext>;
-    type WireFragment<'a> = prebindgen_conversions::InputWireFragment;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<JniWire, JniGroup> {
-        &self.rust.layout
-    }
+
     fn code_fragment_slot(
         &self,
         mode: Self::SlotFragment<'_>,
@@ -126,23 +142,14 @@ impl Conversion for JniInput {
     ) -> Result<TokenStream> {
         self.rust.code_fragment_slot(mode, expected)
     }
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: Self::WireFragment<'_>,
-        expected: &syn::Type,
-    ) -> Result<TokenStream> {
-        self.rust.code_fragment_wire(pos, mode, expected)
-    }
 }
+
 impl Conversion for JniOutput {
     type Wire = JniWire;
-    type Group = JniGroup;
+    type Chain = JniChain;
+    type Branch = JniBranch;
     type SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, JniContext>;
-    type WireFragment<'a> = prebindgen_conversions::OutputWireFragment<'a, JniContext>;
-    fn layout(&self) -> &prebindgen_flat::WireLayout<JniWire, JniGroup> {
-        &self.rust.layout
-    }
+
     fn code_fragment_slot(
         &self,
         mode: Self::SlotFragment<'_>,
@@ -150,19 +157,13 @@ impl Conversion for JniOutput {
     ) -> Result<TokenStream> {
         self.rust.code_fragment_slot(mode, expected)
     }
-    fn code_fragment_wire(
-        &self,
-        pos: usize,
-        mode: Self::WireFragment<'_>,
-        expected: &syn::Type,
-    ) -> Result<TokenStream> {
-        self.rust.code_fragment_wire(pos, mode, expected)
-    }
 }
+
 impl KotlinInputConversion for JniInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
-        validate_layout(self.layout())?;
-        input_kotlin(self.layout().nodes(), context)
+        crate::sequence::validate_buffered(self.input_node())?;
+        validate_layout(self.input_node())?;
+        input_kotlin(self.input_node(), context)
     }
 }
 fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinInput> {
@@ -192,6 +193,7 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
                     format!("{n}?.raw ?: 0L"),
                 )
             }
+            JniWire::Rows { .. } => return Err("array carrier requires a sequence node".into()),
             _ => (w.kind.kotlin_type().into(), n.to_string()),
         };
         kt_params.push(format!("{n}: {kt}"));
@@ -200,14 +202,16 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
     Ok(KotlinInput {
         parameters: kt_params,
         arguments: kt_args,
+        setup: Vec::new(),
+        lock_groups: Vec::new(),
         locks,
         consumed,
     })
 }
 impl KotlinOutputConversion for JniOutput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
-        validate_layout(self.layout())?;
-        output_kotlin(self.layout().nodes(), context)
+        validate_layout(&self.output_outcomes().success)?;
+        output_kotlin(&self.output_outcomes().success, context)
     }
 }
 fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinOutput> {
@@ -230,6 +234,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
             }
             JniWire::Text { .. } => ("String".into(), format!("{result}[{i}] as String")),
             JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
+            JniWire::Rows { .. } => return Err("array carrier requires a sequence node".into()),
             JniWire::Selector { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
             JniWire::Enum { enum_type, .. } => (
                 enum_type.class_name.clone(),
@@ -253,7 +258,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
             materialize.push_str(&format!("            {output}{i} = {}\n", delivered[i]));
             delivered[i] = format!("requireNotNull({output}{i})");
             let drop = context.drop_handle(&handle.ty, &format!("{result}[{i}] as Long"))?;
-            cleanup.push_str(&format!("            try {{ if ({output}{i} != null) {output}{i}.close() else {drop} }} catch (cleanup: Throwable) {{ {suppress_cleanup} }}\n"));
+            cleanup.push_str(&format!("            try {{ val owner = {output}{i}; if (owner != null) owner.close() else {drop} }} catch (cleanup: Throwable) {{ {suppress_cleanup} }}\n"));
         }
     }
     Ok(KotlinOutput {
@@ -265,46 +270,96 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     })
 }
 
-pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, JniGroup>;
-pub(crate) fn leaf_wires(nodes: &[JniNode]) -> Vec<&Wire<JniWire>> {
-    let mut out = Vec::new();
-    for node in nodes {
-        match node {
-            JniNode::Wire(w) => out.push(w),
-            JniNode::Group { children, .. } => out.extend(children.iter()),
-        }
+pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>;
+pub(crate) fn leaf_wires(node: &JniNode) -> Vec<&Wire<JniWire>> {
+    crate::group::kotlin_result_fields(node).collect()
+}
+pub(crate) fn has_optional(node: &JniNode) -> bool {
+    match node {
+        JniNode::Leaf(_)
+        | JniNode::Chain {
+            meta: JniChain::Sequence(_),
+            ..
+        } => false,
+        JniNode::Chain {
+            meta: JniChain::Optional(_),
+            ..
+        } => true,
+        JniNode::Branch {
+            meta: JniBranch::Alternatives,
+            children: elements,
+            ..
+        } => elements.iter().any(has_optional),
+        JniNode::Branch {
+            meta: JniBranch::Group(JniGroup::Fields(Some(_))),
+            ..
+        } => false,
+        JniNode::Branch {
+            meta: JniBranch::Group(_),
+            children: elements,
+            ..
+        } => elements.iter().any(has_optional),
     }
-    out
 }
-pub(crate) fn has_optional(nodes: &[JniNode]) -> bool {
-    nodes.iter().any(|node| match node {
-        JniNode::Wire(_) => false,
-        JniNode::Group { metadata, children } => match metadata {
-            JniGroup::Optional(_) => true,
-            JniGroup::Fields(Some(_)) => false,
-            _ => has_optional(children.nodes()),
+pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
+    match node {
+        JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Branch {
+            meta: JniBranch::Alternatives,
+            children: elements,
+            controls,
+            ..
+        } => {
+            let mut out = input_leaves(&controls.iter().collect::<Vec<_>>(), context)?;
+            for arm in elements {
+                merge_input(&mut out, input_kotlin(arm, context)?);
+            }
+            Ok(out)
+        }
+        JniNode::Chain {
+            controls,
+            child: element,
+            meta: JniChain::Sequence(metadata),
+            ..
+        } => {
+            let [carrier] = controls.as_slice() else {
+                return Err("sequence requires one carrier control".into());
+            };
+            crate::sequence::input_list(carrier, metadata, element, context)
+        }
+        JniNode::Chain {
+            child: element,
+            meta: JniChain::Optional(metadata),
+            ..
+        } => optional::input_kotlin(element, metadata, context),
+        JniNode::Branch {
+            children: elements,
+            meta: JniBranch::Group(metadata),
+            ..
+        } => match metadata {
+            JniGroup::Fields(Some(d)) => data::input_kotlin(elements, d, context),
+            _ => input_components(elements, context),
         },
-    })
+    }
 }
-pub(crate) fn input_kotlin(nodes: &[JniNode], context: &KotlinContext<'_>) -> Result<KotlinInput> {
+pub(crate) fn input_components(
+    nodes: &[JniNode],
+    context: &KotlinContext<'_>,
+) -> Result<KotlinInput> {
     let mut out = KotlinInput::default();
     for node in nodes {
-        let c = match node {
-            JniNode::Wire(w) => input_leaves(&[w], context)?,
-            JniNode::Group { metadata, children } => match metadata {
-                JniGroup::Optional(o) => optional::input_kotlin(children.nodes(), o, context)?,
-                JniGroup::Fields(Some(d)) => data::input_kotlin(children.nodes(), d, context)?,
-                JniGroup::Fields(None) | JniGroup::Field(_) => {
-                    input_kotlin(children.nodes(), context)?
-                }
-            },
-        };
-        out.parameters.extend(c.parameters);
-        out.arguments.extend(c.arguments);
-        out.locks.extend(c.locks);
-        out.consumed.extend(c.consumed);
+        merge_input(&mut out, input_kotlin(node, context)?);
     }
     Ok(out)
+}
+
+fn merge_input(out: &mut KotlinInput, child: KotlinInput) {
+    out.parameters.extend(child.parameters);
+    out.arguments.extend(child.arguments);
+    out.setup.extend(child.setup);
+    out.lock_groups.extend(child.lock_groups);
+    out.locks.extend(child.locks);
+    out.consumed.extend(child.consumed);
 }
 pub(crate) fn remap_output(
     c: &mut KotlinOutput,
@@ -326,12 +381,45 @@ pub(crate) fn remap_output(
         }
     }
 }
-pub(crate) fn output_kotlin(
+pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
+    match node {
+        JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Branch {
+            meta: JniBranch::Alternatives,
+            ..
+        } => Err("native alternatives are input-only in the JNI adapter".into()),
+        JniNode::Chain {
+            child: element,
+            meta: JniChain::Sequence(metadata),
+            ..
+        } => match metadata {
+            JniSequence::Buffered => crate::sequence::output_list(element, context),
+            JniSequence::Callback => {
+                Err("callback sequence requires function-level callback delivery".into())
+            }
+        },
+        JniNode::Chain {
+            child: element,
+            meta: JniChain::Optional(metadata),
+            ..
+        } => optional::output_kotlin(element, metadata, context),
+        JniNode::Branch {
+            children: elements,
+            meta: JniBranch::Group(metadata),
+            ..
+        } => match metadata {
+            JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context),
+            _ => output_components(elements, context),
+        },
+    }
+}
+pub(crate) fn output_components(
     nodes: &[JniNode],
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    if nodes.iter().all(|n| matches!(n, JniNode::Wire(_))) {
-        return output_leaves(&leaf_wires(nodes), context);
+    if nodes.iter().all(|n| matches!(n, JniNode::Leaf(_))) {
+        let wires = nodes.iter().flat_map(leaf_wires).collect::<Vec<_>>();
+        return output_leaves(&wires, context);
     }
     let mut out = KotlinOutput::default();
     let mut offset = 0;
@@ -343,19 +431,8 @@ pub(crate) fn output_kotlin(
             output_prefix: &prefix,
             ..*context
         };
-        let (mut c, count) = match node {
-            JniNode::Wire(w) => (output_leaves(&[w], &ctx)?, 1),
-            JniNode::Group { metadata, children } => {
-                let c = match metadata {
-                    JniGroup::Optional(o) => optional::output_kotlin(children.nodes(), o, &ctx)?,
-                    JniGroup::Fields(Some(d)) => data::output_kotlin(children.nodes(), d, &ctx)?,
-                    JniGroup::Fields(None) | JniGroup::Field(_) => {
-                        output_kotlin(children.nodes(), &ctx)?
-                    }
-                };
-                (c, children.len())
-            }
-        };
+        let count = crate::group::kotlin_result_fields(node).len();
+        let mut c = output_kotlin(node, &ctx)?;
         remap_output(&mut c, &local, context.result, offset, count);
         out.delivered.extend(c.delivered);
         out.result_types.extend(c.result_types);
@@ -365,6 +442,28 @@ pub(crate) fn output_kotlin(
         offset += count;
     }
     Ok(out)
+}
+
+impl JniOutput {
+    /// Fields stored in the successful JNI result array, excluding status/error
+    /// framing. Sequence rows and visitor arguments have their own schemas.
+    pub fn result_packet_fields(&self) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
+        validate_layout(&self.rust.outcomes.success)?;
+        Ok(crate::group::result_packet_fields(
+            &self.rust.outcomes.success,
+        ))
+    }
+}
+
+impl prebindgen_flat::InputConversion for JniInput {
+    fn input_node(&self) -> &JniNode {
+        &self.rust.node
+    }
+}
+impl prebindgen_flat::OutputConversion for JniOutput {
+    fn output_outcomes(&self) -> &prebindgen_flat::Outcomes<JniNode> {
+        &self.rust.outcomes
+    }
 }
 
 #[cfg(test)]
@@ -397,7 +496,12 @@ mod tests {
                 &prebindgen_declarations::Condition::default(),
             )
             .unwrap();
-        let JniWire::Handle { condition, .. } = &mut plan.layout[0].kind else {
+        let JniWire::Handle { condition, .. } =
+            &mut prebindgen_flat::wire_definitions_mut(std::iter::once(&mut plan.node))
+                .next()
+                .expect("logical wire index out of range")
+                .kind
+        else {
             panic!()
         };
         *condition = "isEnabled() && count > 3".into();
@@ -406,11 +510,21 @@ mod tests {
         // A handle and an ordinary i64 expose identical transport information.
         let scalar = JniWire::scalar(Primitive::I64);
         assert_eq!(
-            prebindgen_flat::type_key(&input.wire(0).unwrap().kind.rust_type()),
+            prebindgen_flat::type_key(
+                &prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+                    .next()
+                    .unwrap()
+                    .kind
+                    .rust_type()
+            ),
             prebindgen_flat::type_key(&scalar.rust_type())
         );
         assert_eq!(
-            input.wire(0).unwrap().kind.kotlin_type(),
+            prebindgen_flat::wire_definitions(std::iter::once(input.input_node()))
+                .next()
+                .unwrap()
+                .kind
+                .kotlin_type(),
             scalar.kotlin_type()
         );
         let emitted = input.kotlin(&context).unwrap();

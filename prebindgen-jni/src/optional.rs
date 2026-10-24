@@ -3,7 +3,10 @@ use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
     // Prepared reference outputs are Option<String>/Option<Vec<u8>>. None
     // becomes a Java null at delivery; Some(empty) stays a non-null object.
-    if matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. }) {
+    if matches!(
+        w,
+        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+    ) {
         return Ok(if input {
             quote!(Default::default())
         } else {
@@ -36,7 +39,10 @@ pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Resu
 }
 pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
     if matches!(niche, Some(JniNiche::Null))
-        && matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. })
+        && matches!(
+            w,
+            JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+        )
     {
         return "null".into();
     }
@@ -45,37 +51,9 @@ pub(crate) fn default_kt(w: &JniWire, niche: Option<&JniNiche>) -> String {
             JniNiche::Null => 0,
             JniNiche::Integer(n) => *n,
         };
-        return if matches!(
-            w,
-            JniWire::Handle { .. }
-                | JniWire::Scalar {
-                    primitive: Primitive::U32
-                        | Primitive::I64
-                        | Primitive::U64
-                        | Primitive::Isize
-                        | Primitive::Usize,
-                    ..
-                }
-        ) {
-            format!("{v}L")
-        } else {
-            v.to_string()
-        };
+        return w.kotlin_integer(v);
     }
-    match w {
-        JniWire::Scalar { primitive: Primitive::Bool, .. } => "false",
-        JniWire::Scalar { primitive: Primitive::I8, .. } => "0.toByte()",
-        JniWire::Scalar { primitive: Primitive::I16, .. } => "0.toShort()",
-        JniWire::Handle { .. }
-        | JniWire::Scalar { primitive: Primitive::U32 | Primitive::I64 | Primitive::U64 | Primitive::Isize | Primitive::Usize, .. } => "0L",
-        JniWire::Scalar { primitive: Primitive::F32, .. } => "0.0f",
-        JniWire::Scalar { primitive: Primitive::F64, .. } => "0.0",
-        JniWire::Text { .. } | JniWire::Bytes { .. } | JniWire::Scalar { primitive: Primitive::I128 | Primitive::U128, .. } => {
-            "null"
-        }
-        _ => "0",
-    }
-    .into()
+    w.kotlin_default().into()
 }
 // Replace generated identifiers only, not substrings of other generated names.
 pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
@@ -98,12 +76,11 @@ pub(crate) fn replace(s: &str, from: &str, to: &str) -> String {
     out
 }
 pub(crate) fn input_kotlin(
-    children: &[kotlin::JniNode],
+    nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
-    let root = &o.presence.to_string();
-    let nodes = &children[usize::from(o.niche.is_none())..];
+    let root = &o.presence().to_string();
     let inner = kotlin::leaf_wires(nodes);
     let mut out = KotlinInput::default();
     let mut c = kotlin::input_kotlin(nodes, context)?;
@@ -119,6 +96,8 @@ pub(crate) fn input_kotlin(
             .iter_mut()
             .chain(c.locks.iter_mut())
             .chain(c.consumed.iter_mut())
+            .chain(c.lock_groups.iter_mut())
+            .chain(c.setup.iter_mut().map(|b| &mut b.expression))
         {
             *a = a
                 .replace(&format!("{name}?.raw ?: 0L"), &format!("{name}.raw"))
@@ -138,23 +117,22 @@ pub(crate) fn input_kotlin(
         .iter_mut()
         .chain(c.locks.iter_mut())
         .chain(c.consumed.iter_mut())
+        .chain(c.lock_groups.iter_mut())
+        .chain(c.setup.iter_mut().map(|b| &mut b.expression))
     {
         // Every payload expression below runs only in the present branch.
         *a = a.replace(&format!("{} == 1", root), "true");
         *a = replace(a, root, "1");
     }
-    if o.niche.is_none() {
+    if matches!(o, JniOptional::Flag(_)) {
         out.arguments.push(tag);
     }
     for (j, a) in c.arguments.into_iter().enumerate() {
-        let niche = o
-            .niche
-            .as_ref()
-            .filter(|_| inner[j].name == o.discriminator);
+        let niche = o.niche().filter(|_| inner[j].name == *o.discriminator());
         let default = default_kt(&inner[j].kind, niche);
         let a = match niche {
             Some(JniNiche::Integer(_)) => format!("run {{ val value = {a}; require(value != {default}) {{ \"invalid option payload\" }}; value }}"),
-            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+            Some(JniNiche::Null) if matches!(inner[j].kind, JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }) => {
                 // An explicit presence parameter must not silently become None
                 // when a nullable raw reference is passed for its discriminator.
                 format!("requireNotNull({a}) {{ \"invalid option payload\" }}")
@@ -164,6 +142,15 @@ pub(crate) fn input_kotlin(
         out.arguments
             .push(format!("if ({presence}) {a} else {default}"));
     }
+    out.setup.extend(c.setup.into_iter().map(|mut b| {
+        b.expression = format!("if ({presence}) ({}) else ({})", b.expression, b.absent);
+        b
+    }));
+    out.lock_groups.extend(
+        c.lock_groups
+            .into_iter()
+            .map(|s| format!("if ({presence}) ({s}) else kotlin.collections.emptyList()")),
+    );
     out.locks.extend(
         c.locks
             .into_iter()
@@ -177,17 +164,16 @@ pub(crate) fn input_kotlin(
     Ok(out)
 }
 pub(crate) fn output_kotlin(
-    children: &[kotlin::JniNode],
+    nodes: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     o: &JniOptional,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinOutput> {
-    let wires = kotlin::leaf_wires(children);
-    let flag = usize::from(o.niche.is_none());
-    let nodes = &children[flag..];
-    let p = if let Some(n) = &o.niche {
+    let wires = kotlin::leaf_wires(nodes);
+    let flag = usize::from(matches!(o, JniOptional::Flag(_)));
+    let p = if let Some(n) = o.niche() {
         let i = wires
             .iter()
-            .position(|w| w.name == o.discriminator)
+            .position(|w| w.name == *o.discriminator())
             .ok_or("missing optional discriminator")?;
         let absent = default_kt(&wires[i].kind, Some(n));
         format!("{}[{i}] != {absent}", context.result)
@@ -200,7 +186,7 @@ pub(crate) fn output_kotlin(
         ..*context
     };
     let mut c = kotlin::output_kotlin(nodes, &ctx)?;
-    kotlin::remap_output(&mut c, &local, context.result, flag, wires.len() - flag);
+    kotlin::remap_output(&mut c, &local, context.result, flag, wires.len());
     let mut out = KotlinOutput {
         output_locals: c.output_locals,
         ..Default::default()
@@ -231,7 +217,12 @@ impl JniNiche {
     /// Expression recognizing the present case without decoding the payload.
     pub(crate) fn present(&self, wire: &JniWire, value: TokenStream) -> TokenStream {
         match self {
-            Self::Null if matches!(wire, JniWire::Text { .. } | JniWire::Bytes { .. }) => {
+            Self::Null
+                if matches!(
+                    wire,
+                    JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
+                ) =>
+            {
                 quote!(!#value.is_null())
             }
             Self::Null => quote!((#value as usize) != 0),
