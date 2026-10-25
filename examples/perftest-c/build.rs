@@ -7,18 +7,16 @@ fn main() {
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
         .opaque_ptr("panic_output", pq!(CPanicOutput))
-        .function(
-            fun!(c_panic_output_new).expand_return(expand_return!(CPanicOutput).field_self_into()),
-        )
+        .function(fun!(c_panic_output_new).output(expand_return!(CPanicOutput).field_self_into()))
         .function(fun!(c_plain_panic))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
-        .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .opaque_error(syn::parse_quote!(ResultFailure), "result_error_message")
+        .opaque_error(syn::parse_quote!(StorageError), "storage_error_message")
         .error("result_error", pq!(CResultError))
         .error("panic_error", pq!(CPanicError))
         .error("rich_error", pq!(CRichError))
         .error("drop_error", pq!(CDropError))
-        .expand(expand_return!(CPanicOutput).field(fun!(c_panic_output_value)))
+        .output(expand_return!(CPanicOutput).field("c_panic_output_value"))
         .function(fun!(c_result_drop_panic))
         .function(fun!(c_result_error_drop))
         .function(fun!(c_result_panic_error))
@@ -28,35 +26,38 @@ fn main() {
         .function(fun!(c_result_structured))
         .function(fun!(c_result_bool))
         .function(
-            fun!(c_result_late_niche).expand_return(
-                expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)),
-            ),
+            fun!(c_result_late_niche)
+                .output(expand_return!(CResultPair).fields_into(fields!(c_result_pair_into))),
         )
         .function(fun!(c_result_resource_error))
-        .function(fun!(collection_construct_all).expand_param(
+        .function(fun!(collection_construct_all).input(
             "values",
-            expand_param!(CollectionItem).variant(fun!(collection_construct)),
+            expand_param!(CollectionItem).variant("collection_construct"),
         ))
         .panic()
-        .function(fun!(collection_make_items).expand_return(
-            expand_return!(CollectionItem).fields_into(fields!(collection_item_into)),
-        ))
+        .function(
+            fun!(collection_make_items)
+                .output(expand_return!(CollectionItem).fields_into(fields!(collection_item_into))),
+        )
         .panic()
-        .function(fun!(collection_bundle).expand_return(
-            expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into)),
-        ))
+        .function(
+            fun!(collection_bundle).output(
+                expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into)),
+            ),
+        )
         .panic()
         .function(fun!(collection_optional_handles).callback_return())
         .panic()
         .function(fun!(collection_nested_handles).callback_return())
         .panic()
-        .function(fun!(collection_numbers).expand_return(
-            expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view)),
-        ))
+        .function(
+            fun!(collection_numbers)
+                .output(expand_return!(CollectionNumbers).view(fields!(collection_numbers_view))),
+        )
         .panic()
-        .function(fun!(collection_resource_ids).expand_param(
+        .function(fun!(collection_resource_ids).input(
             "values",
-            expand_param!(OwnedResource).variant(fun!(collection_resource_clone)),
+            expand_param!(OwnedResource).variant("collection_resource_clone"),
         ))
         .panic()
         .function(fun!(collection_i64).callback_return())
@@ -87,33 +88,36 @@ fn main() {
         .function(fun!(collection_alias))
         .panic()
         .function(fun!(collection_result).callback_return())
-        .function(fun!(collection_try_construct_all).expand_param(
+        .function(fun!(collection_try_construct_all).input(
             "values",
-            expand_param!(CollectionItem).variant(fun!(collection_construct)),
+            expand_param!(CollectionItem).variant("collection_construct"),
         ))
-        .function(fun!(collection_try_make_items).expand_return(
-            expand_return!(CollectionItem).fields_into(fields!(collection_item_into)),
-        ))
+        .function(
+            fun!(collection_try_make_items)
+                .output(expand_return!(CollectionItem).fields_into(fields!(collection_item_into))),
+        )
         .error("collection_error", pq!(CollectionError))
         .function(fun!(collection_fail))
         .function(fun!(collection_result_optional).callback_return())
         .function(
             fun!(sequence_late_drop)
                 .callback_return_only()
-                .expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))),
+                .output(expand_return!(Vec<CPanicOutput>).field("sequence_late_view")),
         )
-        .function(fun!(sequence_scalars).callback_return_only().expand_return(
-            expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)),
-        ))
+        .function(
+            fun!(sequence_scalars).callback_return_only().output(
+                expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)),
+            ),
+        )
         .panic()
         .function(
-            fun!(sequence_parts).callback_return_only().expand_return(
-                expand_return!(SequencePart).fields_into(fields!(sequence_part_into)),
-            ),
+            fun!(sequence_parts)
+                .callback_return_only()
+                .output(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))),
         )
         .function(
             fun!(collection_late_drop)
-                .expand_return(expand_return!(CPanicOutput).field(fun!(collection_late_values))),
+                .output(expand_return!(CPanicOutput).field("collection_late_values")),
         )
         .function(fun!(storage_put_slice))
         .panic()
@@ -127,24 +131,22 @@ fn main() {
         .function(fun!(result_owned))
         .function(
             fun!(result_other)
-                .on_error(fun!(result_string_message))
-                .expand_return(expand_return!(i64).field_self()),
+                .on_error("result_string_message")
+                .output(expand_return!(i64).field_self()),
         )
         .function(fun!(storage_try_with_label))
         .function(fun!(result_error_drops))
         .panic()
         .enum_type("priority", pq!(Priority))
         .opaque_ptr("enum_payload", pq!(PayloadHandle))
-        .function(
-            fun!(enum_payload_new).expand_return(expand_return!(PayloadHandle).field_self_into()),
-        )
+        .function(fun!(enum_payload_new).output(expand_return!(PayloadHandle).field_self_into()))
         .panic()
         .function(fun!(payload_priority))
         .panic()
         .enum_type("code", pq!(SparseCode))
         .enum_type("enum_names", pq!(EnumNames))
-        .expand(expand_param!(EnumRecord).variant(fun!(enum_record_new)))
-        .expand(expand_return!(EnumRecord).fields_into(fields!(enum_record_into)))
+        .input(expand_param!(EnumRecord).variant("enum_record_new"))
+        .output(expand_return!(EnumRecord).fields_into(fields!(enum_record_into)))
         .function(fun!(priority_weight))
         .panic()
         .function(fun!(priority_or))
@@ -310,14 +312,10 @@ fn main() {
         .opaque_ptr("blob", pq!(BlobValue))
         .opaque_ptr("report", pq!(Report))
         .opaque_ptr("report_struct", pq!(ReportStruct))
-        .expand(
-            expand_param!(Report)
-                .variant_self()
-                .variant(fun!(report_new)),
-        )
-        .expand(
+        .input(expand_param!(Report).variant_self().variant("report_new"))
+        .output(
             expand_return!(Report)
-                .fields(fields!(report_to_struct))
+                .view(fields!(report_to_struct))
                 .field_self(),
         )
         .function(fun!(blob_value_new))
@@ -332,23 +330,19 @@ fn main() {
     cbindgen = cbindgen
         .opaque_ptr("summary", pq!(Summary))
         .opaque_ptr("unsigned", pq!(Unsigned))
-        .expand(
+        .output(
             expand_return!(Summary)
-                .field(fun!(summary_count))
-                .field(fun!(summary_total)),
+                .field("summary_count")
+                .field("summary_total"),
         )
-        .expand(
-            expand_param!(Summary)
-                .variant(fun!(summary_new))
-                .variant_self(),
-        )
-        .expand(
+        .input(expand_param!(Summary).variant("summary_new").variant_self())
+        .output(
             expand_return!(Stamp)
-                .field(fun!(stamp_secs))
-                .field(fun!(stamp_nanos)),
+                .field("stamp_secs")
+                .field("stamp_nanos"),
         )
-        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
-        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .output(expand_return!(Payload).view(fields!(payload_to_struct)))
+        .input(expand_param!(Payload).variant("payload_new"))
         .function(fun!(payload_new))
         .panic()
         .function(fun!(storage_with_payload))
@@ -379,12 +373,12 @@ fn main() {
         .function(fun!(archive_latest))
         .panic();
     cbindgen = cbindgen
-        .function(fun!(report_label).expand_param(
+        .function(fun!(report_label).input(
             "report",
-            expand_param!(Report).variant(fun!(report_from_summary)),
+            expand_param!(Report).variant("report_from_summary"),
         ))
         .panic()
-        .function(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self()))
+        .function(fun!(storage_summary_handle).output(expand_return!(Summary).field_self()))
         .panic();
     for f in [
         fun!(storage_len),
@@ -414,27 +408,27 @@ fn main() {
     }
     cbindgen = cbindgen
         .opaque_ptr("owned_resource", pq!(OwnedResource))
-        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .input(expand_param!(ResourceChoice).variant("resource_choice_new"))
         .opaque_ptr("niche_choice", pq!(NicheChoiceHandle))
-        .expand(
+        .input(
             expand_param!(NicheChoiceHandle)
-                .variant(fun!(niche_choice_new))
+                .variant("niche_choice_new")
                 .variant_self(),
         )
         .opaque_ptr("option_ctor", pq!(OptionCtor))
-        .expand(
+        .input(
             expand_param!(OptionCtor)
-                .variant(fun!(option_ctor_new))
+                .variant("option_ctor_new")
                 .variant_self(),
         )
         .opaque_ptr("option_choice", pq!(OptionChoice))
-        .expand(
+        .input(
             expand_param!(OptionChoice)
-                .variant(fun!(option_choice_new))
+                .variant("option_choice_new")
                 .variant_self(),
         )
-        .expand(expand_param!(OptionalFields).variant(fun!(optional_fields_new)))
-        .expand(expand_return!(OptionalFields).fields_into(fields!(optional_fields_into)));
+        .input(expand_param!(OptionalFields).variant("optional_fields_new"))
+        .output(expand_return!(OptionalFields).fields_into(fields!(optional_fields_into)));
     for f in [
         fun!(resource_choice_id),
         fun!(option_ctor_new),

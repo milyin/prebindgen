@@ -24,7 +24,7 @@ fn rejects_unknown_parameter_override() {
         .package(
             package!()
                 .class(ptr_class!(Key))
-                .fun(fun!(f).expand_param("missing", expand_param!(Key).variant_self())),
+                .fun(fun!(f).input("missing", expand_param!(Key).variant_self())),
         );
     assert!(fail(b).contains("unknown parameter"));
 }
@@ -33,7 +33,7 @@ fn rejects_recursive_expansion() {
     let b = JniGen::builder()
         .flat(flat("pub type Key=String;pub fn f(k:Key)->Key{}"))
         .set_package_prefix("test")
-        .expand(expand_param!(Key).variant(fun!(f)))
+        .input(expand_param!(Key).variant("f"))
         .package(package!().class(ptr_class!(Key)).fun(fun!(f)));
     assert!(fail(b).contains("recursive input"));
 }
@@ -85,7 +85,7 @@ fn data_classes_resolve_forward_declarations_and_keep_overrides() {
         .set_package_prefix("test")
         .package(package!().class(data_class!(Outer).name("Envelope"))
             .fun(fun!(echo))
-            .fun(fun!(make).expand_return(expand_return!(Outer).field(fun!(id)))))
+            .fun(fun!(make).output(expand_return!(Outer).field("id"))))
         .package(package!("model").class(data_class!(Inner)))
         .build().unwrap();
     assert!(generated.kotlin["test/Envelope.kt"].contains("val `inner`: test.model.Inner"));
@@ -205,7 +205,7 @@ fn explicit_data_expansion_replaces_a_configured_handle_slot() {
     for replace in [false, true] {
         let mut function = fun!(echo);
         if replace {
-            function = function.expand_param("value", expand_param!(Value).variant_self());
+            function = function.input("value", expand_param!(Value).variant_self());
         }
         let result = JniGen::builder()
             .flat(flat(
@@ -254,7 +254,7 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
         JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
-            .expand(expand_return!(Bundle).field_self_into())
+            .output(expand_return!(Bundle).field_self_into())
             .package(
                 package!()
                     .class(data_class!(Bundle))
@@ -267,17 +267,16 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
     assert!(generated.kotlin["test/Functions.kt"].contains(".close()"));
     assert!(!generated.rust.contains("Clone::clone"));
     assert!(fail(base().package(package!().fun(fun!(echo)))).contains("returns only"));
-    assert!(fail(base().package(package!().fun(
-        fun!(make).expand_return(expand_return!(Bundle).field_self_into().field_self_into())
-    )))
-    .contains("consume the same value twice"));
     assert!(fail(
-        base().package(
-            package!().fun(
-                fun!(outer).expand_return(expand_return!(Outer).fields(fields!(outer_fields)))
-            )
-        )
+        base()
+            .package(package!().fun(
+                fun!(make).output(expand_return!(Bundle).field_self_into().field_self_into())
+            ))
     )
+    .contains("consume the same value twice"));
+    assert!(fail(base().package(
+        package!().fun(fun!(outer).output(expand_return!(Outer).view(fields!(outer_fields))))
+    ))
     .contains("shared-reference occurrence"));
 }
 
@@ -301,8 +300,7 @@ fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
     ] {
         base()
             .package(
-                package!()
-                    .fun(fun!(make).expand_return(expand_return!(Outer).project_self(projection))),
+                package!().fun(fun!(make).output(expand_return!(Outer).project_self(projection))),
             )
             .build()
             .unwrap();
@@ -311,7 +309,7 @@ fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
         base().package(
             package!().fun(
                 fun!(make)
-                    .expand_return(expand_return!(Outer).project_self(
+                    .output(expand_return!(Outer).project_self(
                         Projection::owned().field("missing", Projection::borrowed())
                     ))
             )
@@ -321,7 +319,7 @@ fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
     assert!(fail(
         base().package(
             package!().fun(
-                fun!(make).expand_return(
+                fun!(make).output(
                     expand_return!(Outer)
                         .project_self(Projection::borrowed().field("point", Projection::owned()))
                 )
@@ -329,7 +327,7 @@ fn explicit_projection_checks_fields_and_never_moves_from_a_borrow() {
         )
     )
     .contains("cannot consume a shared-reference"));
-    assert!(fail(base().package(package!().fun(fun!(make).expand_return(
+    assert!(fail(base().package(package!().fun(fun!(make).output(
         expand_return!(Outer).project_self(Projection::owned().field(
             "point",
             Projection::owned().field(
@@ -367,7 +365,7 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
     assert!(kt.contains("if (result[1] == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
     let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
-    let d = prebindgen_declarations::Declarations::new(&flat, vec![]).unwrap();
+    let d = prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
     for (name, count) in [("h", 1), ("n", 2), ("ch2", 1), ("u2", 1)] {
         d.fill(
             &mut flat,
@@ -394,17 +392,18 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
 
 #[test]
 fn owned_optional_projection_cannot_move_a_reference_payload() {
-    let error =
-        fail(
-            JniGen::builder()
-                .flat(flat(
-                    "pub type Handle=String;pub fn view(x:&Handle)->Option<&Handle>{}",
-                ))
-                .set_package_prefix("test")
-                .package(package!().class(ptr_class!(Handle)).fun(
-                    fun!(view).expand_return(expand_return!(Option<&Handle>).field_self_into()),
-                )),
-        );
+    let error = fail(
+        JniGen::builder()
+            .flat(flat(
+                "pub type Handle=String;pub fn view(x:&Handle)->Option<&Handle>{}",
+            ))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Handle))
+                    .fun(fun!(view).output(expand_return!(Option<&Handle>).field_self_into())),
+            ),
+    );
     assert!(
         error.contains("owned projection cannot consume a reference payload"),
         "{error}"
@@ -436,15 +435,15 @@ fn optional_unannotated_fields_keep_outer_presence_in_both_directions() {
         Input::Leaf,
     ))])));
     bind_input(&mut source, &JniCodec, "echo", "value", &input, &()).unwrap();
-    let generated =
-        JniGen::builder()
-            .flat(source)
-            .set_package_prefix("test")
-            .package(package!().fun(
-                fun!(echo).expand_return(expand_return!(Wrapped).fields(fields!(wrapped_fields))),
-            ))
-            .build()
-            .unwrap();
+    let generated = JniGen::builder()
+        .flat(source)
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .fun(fun!(echo).output(expand_return!(Wrapped).view(fields!(wrapped_fields)))),
+        )
+        .build()
+        .unwrap();
     let kt = &generated.kotlin["test/Functions.kt"];
     assert!(kt.contains(": Boolean,"), "{kt}");
     assert!(kt.contains(": Long?"), "{kt}");
@@ -492,7 +491,9 @@ fn reference_and_presence_flag_niches_keep_nested_wire_counts_bounded() {
                 ty = format!("Option<{ty}>");
             }
             let mut source = flat(&format!("pub fn echo(x:{ty})->{ty}{{}}"));
-            let declarations = prebindgen_declarations::Declarations::new(&source, vec![]).unwrap();
+            let declarations =
+                prebindgen_declarations::Declarations::new(&source, vec![], vec![], vec![])
+                    .unwrap();
             declarations
                 .fill(&mut source, &JniCodec, &fun!(echo), &())
                 .unwrap();
@@ -585,7 +586,7 @@ fn result_callbacks_support_explicit_message_mapping_and_optional_throwing_defau
             .flat(flat(source))
             .set_package_prefix("test")
             .package(package!().fun(fun!(read)))
-            .error_mapper(syn::parse_quote!(E), fun!(message))
+            .error_mapper(syn::parse_quote!(E), "message")
     };
     let callback = builder().build().unwrap();
     assert!(callback.kotlin["test/Functions.kt"].contains("onError: test.EMessageHandler<Long>"));
@@ -653,9 +654,7 @@ fn explicit_collection_projection_cannot_move_borrowed_values() {
     let b = JniGen::builder()
         .flat(flat("pub fn f()->&Vec<i64> {}"))
         .set_package_prefix("test")
-        .package(
-            package!().fun(fun!(f).expand_return(expand_return!(&Vec<i64>).field_self_into())),
-        );
+        .package(package!().fun(fun!(f).output(expand_return!(&Vec<i64>).field_self_into())));
     assert!(fail(b).contains("cannot consume a borrowed collection"));
 }
 
@@ -664,7 +663,7 @@ fn result_errors_use_declared_typed_output_projections_without_a_mapper() {
     let generated = JniGen::builder()
         .flat(flat("pub struct E { pub code: i64, pub message: Option<String> } pub fn parts(e:E)->E{} pub fn read()->Result<i64,E>{} pub fn another()->Result<i64,E>{}"))
         .set_package_prefix("test")
-        .expand(expand_return!(E).fields_into(fields!(parts)))
+        .output(expand_return!(E).fields_into(fields!(parts)))
         .package(package!().fun(fun!(read)).fun(fun!(another)))
         .build().unwrap();
     let handler = &generated.kotlin["test/EHandler.kt"];
@@ -697,7 +696,7 @@ fn sequence_callback_variants_are_explicit_and_support_decomposed_elements() {
             package!().fun(
                 fun!(values)
                     .callback_return_only()
-                    .expand_return(expand_return!(Item).fields_into(fields!(parts))),
+                    .output(expand_return!(Item).fields_into(fields!(parts))),
             ),
         )
         .build()
@@ -738,6 +737,7 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
         &JniCodec,
         "values",
         &prebindgen_declarations::Output::Sequence {
+            delivery: prebindgen_declarations::SequenceDelivery::Value,
             element: Box::new(prebindgen_declarations::Output::Leaf),
             mode: None,
         },
@@ -758,10 +758,10 @@ fn callback_returns_do_not_guess_prebound_or_extra_output_projections() {
             .set_package_prefix("test")
             .package(
                 package!().fun(
-                    fun!(values).callback_return().expand_return(
+                    fun!(values).callback_return().output(
                         expand_return!(Option<Vec<i64>>)
-                            .field(fun!(number))
-                            .field(fun!(view))
+                            .field("number")
+                            .field("view")
                     )
                 )
             )
@@ -779,7 +779,7 @@ fn callback_return_uses_projected_sequence_presence_from_the_tree() {
             package!().fun(
                 fun!(read)
                     .callback_return_only()
-                    .expand_return(expand_return!(Batch).field(fun!(view))),
+                    .output(expand_return!(Batch).field("view")),
             ),
         )
         .build()
@@ -796,11 +796,13 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
     let mut flat=flat("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn parts(e:Failure)->Failure{} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
     let defaults = Declarations::new(
         &flat,
-        vec![expand_return!(Failure).fields_into(fields!(parts)).into()],
+        vec![],
+        vec![expand_return!(Failure).fields_into(fields!(parts))],
+        vec![],
     )
     .unwrap();
     let classes = BTreeMap::new();
-    let mut codec = data::DataCodec::new(&flat, &classes).unwrap();
+    let mut codec = data::DataCodec::new(&mut flat, &classes).unwrap();
     let decl = fun!(f).callback_return();
     let errors = errors::prepare(
         &mut flat,
@@ -868,16 +870,15 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
             .collect::<Vec<_>>()
     };
     let expected = shape(&output.output_outcomes().success);
-    let wire = sequence::callback_target(
+    sequence::callback_target(
         &(flat.function("f").unwrap().output_conversion().unwrap())
             .output_outcomes()
             .success,
     )
     .unwrap();
     let variant = defaults
-        .callback_variant(&mut flat, &decl, "f_fold")
+        .callback_variant(&mut flat, &codec, &decl, "f_fold", &())
         .unwrap();
-    codec.callback_wire = Some(wire);
     defaults.fill(&mut flat, &codec, &variant, &()).unwrap();
     assert_eq!(
         shape(
@@ -988,4 +989,62 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         .configure(|flat| install(flat, false))
         .package(package!().fun(fun!(echo)));
     assert!(fail(builder).contains("binding-failure schema"));
+}
+
+#[test]
+fn emission_reads_only_the_prepared_flat_and_shared_source_metadata() {
+    let prepared = JniGen::builder()
+        .flat(flat("pub enum E { A, B } pub struct R{pub e:E,pub text:Option<String>} pub fn echo(r:R)->Result<R,String>{}"))
+        .set_package_prefix("test")
+        .set_jni_native_init("// configured initializer")
+        .package(package!("model").class(enum_class!(E)).class(data_class!(R)).fun(fun!(echo)))
+        .prepare().unwrap();
+    assert!(prepared
+        .type_info(&syn::parse_quote!(crate::R))
+        .unwrap()
+        .metadata
+        .class
+        .is_some());
+    assert_eq!(
+        prepared.records["crate :: R"].fields[1]
+            .metadata
+            .kotlin_type,
+        "kotlin.String?"
+    );
+    let error = prepared
+        .function("echo")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap()
+        .error
+        .as_ref()
+        .unwrap();
+    let shared = &prepared
+        .type_info(&syn::parse_quote!(String))
+        .unwrap()
+        .metadata
+        .errors[&false];
+    assert!(std::rc::Rc::ptr_eq(error, shared));
+    let first = generate(&prepared).unwrap();
+    let second = generate(&prepared.clone()).unwrap();
+    assert_eq!(first.rust, second.rust);
+    assert_eq!(first.kotlin, second.kotlin);
+    assert!(first.kotlin["test/JNINative.kt"].contains("// configured initializer"));
+    assert!(first.kotlin.contains_key("test/model/R.kt"));
+}
+
+#[test]
+fn public_emission_rejects_invalid_settings_and_unplaced_bindings() {
+    let mut prepared = JniGen::builder()
+        .flat(flat("pub fn f()->i64{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(f)))
+        .prepare()
+        .unwrap();
+    prepared.metadata.package = "invalid-package".into();
+    assert!(generate(&prepared).is_err());
+    prepared.metadata.package = "test".into();
+    prepared.function_mut("f").unwrap().metadata = None;
+    assert!(generate(&prepared).is_err());
 }

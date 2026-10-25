@@ -4,9 +4,9 @@ use prebindgen_conversions::OutputFragment;
 use prebindgen_flat::OutputConversion;
 use prebindgen_flat::{Conversion, Function, TypeUse};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ErrorBinding {
-    helper: syn::Ident,
+    pub(crate) helper: syn::Ident,
     ty: syn::Type,
     pub output: JniOutput,
     pub handler: String,
@@ -38,9 +38,9 @@ pub(crate) fn prepare(
     classes: &BTreeMap<String, Class>,
     prefix: &str,
     seen: &mut BTreeSet<String>,
-) -> Result<BTreeMap<String, ErrorBinding>> {
+) -> Result<BTreeMap<String, std::rc::Rc<ErrorBinding>>> {
     let mut out = BTreeMap::new();
-    let mut cache: BTreeMap<(String, bool), ErrorBinding> = BTreeMap::new();
+    let mut cache: BTreeMap<(String, bool), std::rc::Rc<ErrorBinding>> = BTreeMap::new();
     let mut handlers: BTreeMap<(String, bool), String> = BTreeMap::new();
     for function in functions {
         let ret = flat.function(&function.name)?.ret.ty.clone();
@@ -66,7 +66,10 @@ pub(crate) fn prepare(
                 prebindgen_declarations::Output::Leaf,
             )
         } else {
-            (error.clone(), declarations.output_recipe(flat, error)?)
+            (
+                error.clone(),
+                declarations.output_recipe(flat, codec, error, &())?,
+            )
         };
         let helper = format_ident!("__pb_jni_error_{}", out.len());
         if flat.functions.contains_key(&helper.to_string()) {
@@ -75,6 +78,7 @@ pub(crate) fn prepare(
         flat.functions.insert(
             helper.to_string(),
             Function {
+                metadata: Default::default(),
                 name: helper.clone(),
                 path: syn::parse_quote!(#helper),
                 params: vec![],
@@ -90,9 +94,6 @@ pub(crate) fn prepare(
         let output = flat.functions.remove(&helper.to_string()).unwrap().ret.slot;
         result.map_err(|e| format!("JNI error `{}` in `{}`: {e}", key.0, function.name))?;
         let output = output.unwrap();
-        codec
-            .error_layouts
-            .insert(key.clone(), output.output_outcomes().success.clone());
         let handler = if let Some(handler) = handlers.get(&key) {
             handler.clone()
         } else {
@@ -117,7 +118,6 @@ pub(crate) fn prepare(
             handler
         };
         // Each function can have its own mapper; the helper converts the already mapped String.
-        codec.error_helpers.insert(key.clone(), helper.clone());
         let binding = ErrorBinding {
             helper,
             ty,
@@ -125,13 +125,18 @@ pub(crate) fn prepare(
             handler,
             exception,
         };
+        let binding = std::rc::Rc::new(binding);
+        flat.type_metadata_mut(error)?
+            .errors
+            .insert(mapped, binding.clone());
+        codec.errors.insert(key.clone(), binding.clone());
         cache.insert(key, binding.clone());
         out.insert(function.name.clone(), binding);
     }
     Ok(out)
 }
 
-pub(crate) fn emit(errors: &BTreeMap<String, ErrorBinding>) -> Result<TokenStream> {
+pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStream> {
     let mut code = TokenStream::new();
     let mut emitted = BTreeSet::new();
     for error in errors.values() {
@@ -188,7 +193,7 @@ pub(crate) fn interfaces(prefix: &str, files: &mut BTreeMap<String, String>) -> 
 }
 
 pub(crate) fn handler_files(
-    errors: &BTreeMap<String, ErrorBinding>,
+    errors: &BTreeMap<String, &ErrorBinding>,
     context: &KotlinContext<'_>,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {

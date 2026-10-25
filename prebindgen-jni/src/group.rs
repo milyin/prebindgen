@@ -342,8 +342,9 @@ pub(crate) fn argument_parameters(
 pub(crate) fn function_parameters<
     I: prebindgen_flat::InputConversion<Wire = JniWire, Chain = JniChain, Branch = JniBranch>,
     O: prebindgen_flat::Conversion,
+    M,
 >(
-    f: &prebindgen_flat::Function<I, O>,
+    f: &prebindgen_flat::Function<I, O, M>,
 ) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {

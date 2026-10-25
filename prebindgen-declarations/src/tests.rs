@@ -84,6 +84,7 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
+    type Metadata = ();
     fn binding_failure_layout(
         &self,
         extra: &Extra,
@@ -295,7 +296,12 @@ fn extra(name: &'static str) -> Extra {
     Extra { name, copy: false }
 }
 fn fill(flat: &mut Bindings<TestWire>, decl: &FunctionDecl) -> Result<()> {
-    Declarations::new(flat, vec![])?.fill(flat, &TEST_CODEC, decl, &Extra::default())
+    Declarations::new(flat, vec![], vec![], vec![])?.fill(
+        flat,
+        &TEST_CODEC,
+        decl,
+        &Extra::default(),
+    )
 }
 #[test]
 fn different_occurrences_have_different_converters() {
@@ -459,7 +465,7 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
     ] {
         let mut flat = parse(source);
         let function = fun!(read)
-            .expand_return(expand_return!(Payload).fields(fields!(parts).field(field, output)));
+            .output(expand_return!(Payload).view(fields!(parts).field_override(field, output)));
         assert!(fill(&mut flat, &function).unwrap_err().contains(message));
         let f = flat.function("read").unwrap();
         assert!(f.params[0].ty.slot.is_none());
@@ -488,10 +494,9 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     .unwrap();
     let declarations = Declarations::new(
         &flat,
-        vec![expand_param!(Payload)
-            .variant(fun!(make))
-            .variant_self()
-            .into()],
+        vec![expand_param!(Payload).variant("make").variant_self()],
+        vec![],
+        vec![],
     )
     .unwrap();
     declarations
@@ -513,7 +518,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
+            &fun!(foo).input("y", expand_param!(Payload).variant_self()),
             &extra("override"),
         )
         .unwrap();
@@ -546,8 +551,8 @@ fn declaration_compilation_is_atomic_even_when_output_fails() {
     fill(&mut flat, &fun!(foo)).unwrap();
     let before = format!("{flat:?}");
     let function = fun!(foo)
-        .expand_param("x", expand_param!(Payload).variant(fun!(make)))
-        .expand_return(expand_return!(Payload).field(fun!(make)));
+        .input("x", expand_param!(Payload).variant("make"))
+        .output(expand_return!(Payload).field("make"));
     assert!(fill(&mut flat, &function)
         .unwrap_err()
         .contains("must take exactly"));
@@ -605,13 +610,15 @@ fn field_defaults_follow_type_expansions() {
     let mut flat = parse("pub type Key=String; pub struct Payload { pub key: Key, pub data: Vec<u8> } pub fn parts(p: &Payload) -> Payload {} pub fn key_text(k: &Key) -> String {} pub fn read(p: Payload) -> Payload {}");
     Declarations::new(
         &flat,
-        vec![expand_return!(Key).field(fun!(key_text)).into()],
+        vec![],
+        vec![expand_return!(Key).field("key_text")],
+        vec![],
     )
     .unwrap()
     .fill(
         &mut flat,
         &TEST_CODEC,
-        &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
+        &fun!(read).output(expand_return!(Payload).view(fields!(parts))),
         &Extra::default(),
     )
     .unwrap();
@@ -654,10 +661,9 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let mut flat = parse("pub fn f(x:i64)->i64{}");
     let defaults = Declarations::new(
         &flat,
-        vec![
-            expand_param!(i64).variant_self().into(),
-            expand_return!(i64).field_self().into(),
-        ],
+        vec![expand_param!(i64).variant_self()],
+        vec![expand_return!(i64).field_self()],
+        vec![],
     )
     .unwrap();
     defaults
@@ -832,6 +838,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
 fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
     impl Codec for FinalizingCodec {
+        type Metadata = ();
         fn niche(&self, _: &TestWire) -> Option<()> {
             None
         }
@@ -1031,10 +1038,10 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         &Extra::default(),
     )
     .unwrap();
-    let declarations = Declarations::new(&direct, vec![]).unwrap();
-    let decl = FunctionDecl::new(syn::parse_quote!(take)).expand_param(
+    let declarations = Declarations::new(&direct, vec![], vec![], vec![]).unwrap();
+    let decl = FunctionDecl::new(syn::parse_quote!(take)).input(
         "p",
-        ExpandParamDecl::new(syn::parse_quote!(Pair)).variant(fun!(pair)),
+        Input::for_type(syn::parse_quote!(Pair), Input::Selector(vec![])).variant("pair"),
     );
     let mut flat = parse(source);
     assert_eq!(
@@ -1078,130 +1085,9 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     );
 }
 
-fn point_shapes() -> (Bindings<TestWire>, Representations<()>, RepresentationId) {
-    let flat = parse("pub struct Point { pub x:i64, pub y:i64 } pub fn point()->Point {}");
-    let id = RepresentationId("PointFields".into());
-    let mut shapes = Representations::default();
-    shapes
-        .insert(
-            id.clone(),
-            Representation {
-                source_type: syn::parse_quote!(crate::Point),
-                components: ["x", "y"]
-                    .into_iter()
-                    .map(|name| Component {
-                        path: ComponentPath(vec![ComponentSegment::Field(name.into())]),
-                        name: name.into(),
-                        source_fields: Some(vec![name.into()]),
-                        representation: None,
-                    })
-                    .collect(),
-                data: (),
-            },
-        )
-        .unwrap();
-    shapes.set_canonical(&id).unwrap();
-    (flat, shapes, id)
-}
-
-#[test]
-fn preparation_checks_representation_fields_references_and_mappings() {
-    let (mut flat, mut shapes, id) = point_shapes();
-    shapes.validate(&flat).unwrap();
-    bind_output(
-        &mut flat,
-        &TEST_CODEC,
-        "point",
-        &Output::fields([Output::Leaf, Output::Leaf]),
-        &Extra::default(),
-    )
-    .unwrap();
-    let wires = &flat
-        .function("point")
-        .unwrap()
-        .ret
-        .slot
-        .as_ref()
-        .unwrap()
-        .outcomes
-        .success;
-    let ty = syn::parse_quote!(crate::Point);
-    shapes
-        .validate_mapping(
-            &ty,
-            &id,
-            prebindgen_flat::wire_definitions(std::iter::once(wires))
-                .map(|w| (&w.name, &w.kind.component)),
-        )
-        .unwrap();
-    assert!(shapes
-        .validate_mapping(
-            &ty,
-            &id,
-            prebindgen_flat::wire_definitions(std::iter::once(wires))
-                .take(1)
-                .map(|w| (&w.name, &w.kind.component))
-        )
-        .unwrap_err()
-        .contains("has no wire"));
-    let mut bad_wires = wires.clone();
-    prebindgen_flat::wire_definitions_mut(std::iter::once(&mut bad_wires))
-        .next()
-        .expect("logical wire index out of range")
-        .kind
-        .component = ComponentPath(vec![ComponentSegment::Named("missing".into())]);
-    assert!(shapes
-        .validate_mapping(
-            &ty,
-            &id,
-            prebindgen_flat::wire_definitions(std::iter::once(&bad_wires))
-                .map(|w| (&w.name, &w.kind.component))
-        )
-        .unwrap_err()
-        .contains("no component"));
-    assert!(shapes
-        .validate_mapping(
-            &syn::parse_quote!(i64),
-            &id,
-            prebindgen_flat::wire_definitions(std::iter::once(wires))
-                .map(|w| (&w.name, &w.kind.component))
-        )
-        .unwrap_err()
-        .contains("does not match"));
-    let original = shapes.get(&id).unwrap().clone();
-    let mut bad = original.clone();
-    bad.components[0].source_fields = Some(vec!["missing".into()]);
-    shapes.insert(id.clone(), bad).unwrap();
-    assert!(shapes
-        .validate(&flat)
-        .unwrap_err()
-        .contains("unknown source field"));
-    let mut bad = original.clone();
-    bad.components[0].representation = Some(RepresentationId("MissingType".into()));
-    shapes.insert(id.clone(), bad).unwrap();
-    assert!(shapes
-        .validate(&flat)
-        .unwrap_err()
-        .contains("unknown representation"));
-    let mut bad = original.clone();
-    bad.components.push(bad.components[0].clone());
-    assert!(shapes
-        .insert(id.clone(), bad)
-        .unwrap_err()
-        .contains("duplicate component"));
-    let mut bad = original;
-    bad.components[0].representation = Some(id.clone());
-    shapes.insert(id, bad).unwrap();
-    assert!(shapes
-        .validate(&flat)
-        .unwrap_err()
-        .contains("incompatible source type"));
-}
-
 #[test]
 fn generation_needs_no_preparation_registry_or_record_lookup() {
-    let (mut flat, mut shapes, id) = point_shapes();
-    shapes.validate(&flat).unwrap();
+    let mut flat = parse("pub struct Point { pub x:i64, pub y:i64 } pub fn point()->Point {}");
     bind_output(
         &mut flat,
         &TEST_CODEC,
@@ -1219,23 +1105,6 @@ fn generation_needs_no_preparation_registry_or_record_lookup() {
     )
     .unwrap()
     .to_string();
-    let handle = RepresentationId("PointHandle".into());
-    shapes
-        .insert(
-            handle.clone(),
-            Representation {
-                source_type: syn::parse_quote!(crate::Point),
-                components: vec![],
-                data: (),
-            },
-        )
-        .unwrap();
-    shapes.set_canonical(&handle).unwrap();
-    assert_ne!(
-        shapes.canonical(&syn::parse_quote!(crate::Point)),
-        Some(&id)
-    );
-    drop(shapes);
     flat.records.clear();
     let call = flat.function("point").unwrap();
     assert_eq!(
@@ -1471,17 +1340,18 @@ fn owned_record_cleanup_covers_partial_conversion_and_failed_delivery() {
 #[test]
 fn consuming_field_accessors_validate_signatures_and_order_observers() {
     let mut flat = parse("pub struct Pair { pub first:i64, pub second:i64 } pub fn make()->Pair {} pub fn into_pair(value:Pair)->Pair {} pub fn copy_pair(value:&Pair)->Pair {} pub fn count(value:&Pair)->i64 {}");
-    let declarations = Declarations::new(&flat, vec![]).unwrap();
+    let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
     declarations
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(
+            &fun!(make).output(
                 expand_return!(Pair)
                     .fields_into(
-                        fields!(into_pair).field("first", expand_return!(i64).field_self_ref()),
+                        fields!(into_pair)
+                            .field_override("first", expand_return!(i64).field_self_ref()),
                     )
-                    .field(fun!(count)),
+                    .field("count"),
             ),
             &Extra::default(),
         )
@@ -1500,7 +1370,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(expand_return!(Pair).fields_into(fields!(copy_pair))),
+            &fun!(make).output(expand_return!(Pair).fields_into(fields!(copy_pair))),
             &Extra::default(),
         )
         .unwrap_err();
@@ -1512,7 +1382,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).expand_return(expand_return!(Pair).fields(fields!(into_pair))),
+            &fun!(make).output(expand_return!(Pair).view(fields!(into_pair))),
             &Extra::default(),
         )
         .unwrap_err();
@@ -1728,7 +1598,9 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
     let mut flat = parse("pub type E=String; pub fn message(e:&E)->String{} pub fn other(e:E)->String{} pub fn echo(x:i64)->Result<Option<i64>,E>{}");
     let defaults = Declarations::new(
         &flat,
-        vec![ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()],
+        vec![],
+        vec![],
+        vec![(syn::parse_quote!(E), "message".into())],
     )
     .unwrap();
     defaults
@@ -1744,7 +1616,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(echo).on_error(fun!(other)),
+            &fun!(echo).on_error("other"),
             &Extra::default(),
         )
         .unwrap();
@@ -1762,12 +1634,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
 
 #[test]
 fn invalid_result_policies_leave_all_function_slots_unchanged() {
-    for mapper in [
-        None,
-        Some(fun!(wrong)),
-        Some(fun!(message).name("renamed")),
-        Some(fun!(message).on_error(fun!(message))),
-    ] {
+    for mapper in [None, Some("wrong"), Some("missing")] {
         let mut flat = parse("pub type E=String; pub fn message(e:E)->String{} pub fn wrong(e:&mut E)->String{} pub fn f(x:i64)->Result<i64,E>{}");
         let mut decl = fun!(f);
         if let Some(mapper) = mapper {
@@ -1786,7 +1653,7 @@ fn invalid_result_policies_leave_all_function_slots_unchanged() {
     ] {
         let mut flat = parse(source);
         assert!(
-            fill(&mut flat, &fun!(f).on_error(fun!(message))).is_err(),
+            fill(&mut flat, &fun!(f).on_error("message")).is_err(),
             "{source}"
         );
     }
@@ -1823,15 +1690,23 @@ fn result_routing_rejects_nested_and_borrowed_data_occurrences() {
     }
     let mut flat =
         parse("pub fn message(e:String)->String{}pub fn f()->Result<Result<i64,String>,String>{}");
-    assert!(fill(&mut flat, &fun!(f).on_error(fun!(message)))
+    assert!(fill(&mut flat, &fun!(f).on_error("message"))
         .unwrap_err()
         .contains("outermost"));
-    for decl in [
-        expand_return!(Result<i64,String>).field_self().into(),
-        expand_param!(Result<i64,String>).variant_self().into(),
-    ] {
-        assert!(Declarations::new(&flat, vec![decl]).is_err());
-    }
+    assert!(Declarations::new(
+        &flat,
+        vec![],
+        vec![expand_return!(Result<i64,String>).field_self()],
+        vec![]
+    )
+    .is_err());
+    assert!(Declarations::new(
+        &flat,
+        vec![expand_param!(Result<i64,String>).variant_self()],
+        vec![],
+        vec![]
+    )
+    .is_err());
 }
 
 #[test]
@@ -1839,14 +1714,16 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     let flat = parse("pub type E=String;pub fn message(e:E)->String{}pub fn f()->Result<i64,E>{}");
     assert!(Declarations::new(
         &flat,
+        vec![],
+        vec![],
         vec![
-            ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into(),
-            ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()
+            (syn::parse_quote!(E), "message".into()),
+            (syn::parse_quote!(E), "message".into())
         ]
     )
     .is_err());
-    let expansions = vec![ErrorDecl::new(syn::parse_quote!(E), fun!(message)).into()];
-    let names = declarations::source_functions(&expansions, [&fun!(f).on_error(fun!(message))]);
+    let errors = vec![(syn::parse_quote!(E), "message".into())];
+    let names = declarations::source_functions(&[], &[], &errors, [&fun!(f).on_error("message")]);
     assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
 }
 
@@ -1968,6 +1845,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
             false,
             ProjectionMode::Owned,
             child.clone(),
+            SequenceDelivery::Value,
         )
         .unwrap_err()
         .contains("outermost"));
@@ -2174,4 +2052,86 @@ fn failed_metadata_construction_preserves_installed_conversions() {
             .to_string(),
         output_before
     );
+}
+
+#[test]
+fn resolved_flat_is_the_only_source_model_needed_by_compilation() {
+    let source = parse("pub struct R { pub n:i64 } pub fn make(n:i64)->R{} pub fn inspect(r:&R)->i64{} pub fn echo(r:Option<R>)->Option<R>{}")
+        .map_slots(|_, _| Ok(None::<()>), |_, _| Ok(None::<()>)).unwrap();
+    let defaults = Declarations::new(
+        &source,
+        vec![expand_param!(R).variant("make")],
+        vec![expand_return!(R).field("inspect")],
+        vec![],
+    )
+    .unwrap();
+    let resolved = defaults
+        .resolve(source, &TEST_CODEC, &[fun!(echo)], &Extra::default())
+        .unwrap();
+    drop(defaults);
+    let function = resolved.function("echo").unwrap();
+    let Input::Optional(child) = function.params[0].ty.slot.as_ref().unwrap() else {
+        panic!("expected resolved Option");
+    };
+    assert!(
+        matches!(child.as_ref(), Input::Constructor { function, args } if function == "make" && matches!(args.as_slice(), [Input::Leaf]))
+    );
+    let Output::Optional(child) = function.ret.slot.as_ref().unwrap() else {
+        panic!("expected resolved Option");
+    };
+    assert!(matches!(child.as_ref(), Output::Getter { function, .. } if function == "inspect"));
+    let compiled = compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
+    assert!(compiled.function("echo").unwrap().params[0]
+        .ty
+        .slot
+        .is_some());
+    assert!(compiled.function("echo").unwrap().ret.slot.is_some());
+    assert!(compiled.function("make").unwrap().ret.slot.is_none());
+}
+
+#[test]
+fn compilation_rejects_unresolved_instructions() {
+    let mut flat = parse("pub fn echo(x:i64)->i64{}")
+        .map_slots(|_, _| Ok(Some(Input::Auto)), |_, _| Ok(Some(Output::Auto)))
+        .unwrap();
+    assert!(compile(flat.clone(), &TEST_CODEC, &Extra::default()).is_err());
+    flat.function_mut("echo").unwrap().params[0].ty.slot = Some(Input::Leaf);
+    assert!(compile(flat, &TEST_CODEC, &Extra::default()).is_err());
+}
+
+#[test]
+fn callback_variant_selects_delivery_before_wires_exist() {
+    let mut flat = parse("pub fn f()->Option<Vec<i64>>{}");
+    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+    let variant = defaults
+        .callback_variant(
+            &mut flat,
+            &TEST_CODEC,
+            &fun!(f),
+            "f_fold",
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(flat.function("f_fold").unwrap().ret.slot.is_none());
+    let Some(Output::Optional(child)) = variant.ret else {
+        panic!("missing callback description")
+    };
+    assert!(matches!(
+        *child,
+        Output::Sequence {
+            delivery: SequenceDelivery::Callback,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn unresolved_combined_outputs_return_an_error_without_panicking() {
+    let flat = parse("pub fn f()->i64{}")
+        .map_slots(
+            |_, _| Ok(None::<Input>),
+            |_, _| Ok(Some(Output::Combine(vec![Output::Leaf, Output::Auto]))),
+        )
+        .unwrap();
+    assert!(compile(flat, &TEST_CODEC, &Extra::default()).is_err());
 }

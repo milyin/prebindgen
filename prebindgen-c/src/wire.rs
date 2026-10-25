@@ -16,7 +16,7 @@ pub enum CWire {
         /// Unprefixed C typedef name.
         name: String,
         /// Valid source variants and their integer representations.
-        mapping: Box<prebindgen_declarations::EnumMapping>,
+        mapping: std::rc::Rc<prebindgen_declarations::EnumMapping>,
         /// Next unused integer representation, or `None` when unavailable.
         next_integer_niche: Option<i32>,
     },
@@ -50,12 +50,13 @@ impl CWire {
     /// Describe an enum with its first unused negative value available.
     pub fn enumeration(
         name: impl Into<String>,
-        mapping: prebindgen_declarations::EnumMapping,
+        mapping: impl Into<std::rc::Rc<prebindgen_declarations::EnumMapping>>,
     ) -> Self {
+        let mapping = mapping.into();
         Self::Enum {
             name: name.into(),
             next_integer_niche: mapping.initial_niche(),
-            mapping: Box::new(mapping),
+            mapping,
         }
     }
     /// Describe a typed pointer with its null niche initially available.

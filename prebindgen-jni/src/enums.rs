@@ -49,10 +49,14 @@ pub struct JniEnum {
     pub variant_names: BTreeMap<String, String>,
 }
 impl JniEnum {
-    pub(crate) fn from_class<I, O>(flat: &Flat<I, O>, class: &Class) -> Result<Self> {
+    pub(crate) fn from_class<I, O, M: prebindgen_flat::Metadata>(
+        flat: &Flat<I, O, M>,
+        class: &Class,
+        key: &str,
+    ) -> Result<Self> {
         let source = flat
             .enums
-            .get(&type_key(&class.ty))
+            .get(key)
             .ok_or("enum_class requires a fieldless source enum")?;
         let mut variant_names = BTreeMap::new();
         for (source, name) in &class.variant_names {
@@ -124,14 +128,14 @@ impl JniEnum {
     pub(crate) fn decode_member(&self) -> String {
         self.member("fromWire")
     }
-    pub(crate) fn wire(&self) -> JniWire {
+    pub(crate) fn wire(self: &std::rc::Rc<Self>) -> JniWire {
         JniWire::Enum {
-            enum_type: Box::new(self.clone()),
+            enum_type: self.clone(),
             next_integer_niche: self.mapping.initial_niche(),
         }
     }
     pub(crate) fn input(
-        &self,
+        self: &std::rc::Rc<Self>,
         ty: &syn::Type,
         w: syn::Ident,
         v: syn::Ident,
@@ -139,7 +143,11 @@ impl JniEnum {
     ) -> Result<InputPlan<JniWire>> {
         prebindgen_declarations::enum_input(&self.mapping, ty, w, v, active, self.wire())
     }
-    pub(crate) fn output(&self, w: syn::Ident, v: TokenStream) -> OutputPlan<JniWire> {
+    pub(crate) fn output(
+        self: &std::rc::Rc<Self>,
+        w: syn::Ident,
+        v: TokenStream,
+    ) -> OutputPlan<JniWire> {
         prebindgen_declarations::enum_output(&self.mapping, w, v, self.wire())
     }
     pub(crate) fn render(&self, class: &Class) -> Result<String> {
@@ -218,7 +226,7 @@ mod tests {
             class_name: "test.E".into(),
             variant_names: BTreeMap::new(),
         };
-        let mut wire = e.wire();
+        let mut wire = std::rc::Rc::new(e).wire();
         assert_eq!(wire.available_niche(), Some(JniNiche::Integer(-3)));
         assert_eq!(
             optional::remaining(&wire, &JniNiche::Integer(8)),

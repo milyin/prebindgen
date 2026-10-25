@@ -273,3 +273,48 @@ fn declared_opaque_type_named_result_keeps_its_existing_meaning() {
     assert!(same_type(&f.params[0].ty.ty, &f.ret.ty));
     assert!(result_parts(&f.ret.ty).is_none());
 }
+
+#[test]
+fn stage_changes_preserve_metadata_on_each_source_owner() {
+    // The schema marker itself deliberately implements neither Clone nor Debug.
+    struct Schema;
+    impl Metadata for Schema {
+        type Module = String;
+        type Function = String;
+        type Type = String;
+        type Field = String;
+        type Variant = String;
+    }
+    let items =
+        syn::parse_file("pub struct R { pub x:i32 } pub enum E { A } pub fn echo(x:R)->R{}")
+            .unwrap()
+            .items;
+    let mut flat =
+        Flat::<(), (), Schema>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+    flat.metadata = "module".into();
+    flat.function_mut("echo").unwrap().metadata = "export".into();
+    flat.type_metadata_mut(&syn::parse_quote!(R))
+        .unwrap()
+        .clone_from(&"record".into());
+    flat.records.get_mut("crate :: R").unwrap().fields[0].metadata = "property".into();
+    flat.enums.get_mut("crate :: E").unwrap().variants[0].metadata = "constant".into();
+    let mut prepared = flat
+        .map_slots(|_, _| Ok(Some(1u8)), |_, _| Ok(Some(2u16)))
+        .unwrap();
+    prepared.function_mut("echo").unwrap().params[0].ty.slot = Some(3);
+    let copied = prepared.clone();
+    assert_eq!(copied.metadata, "module");
+    assert_eq!(copied.function("echo").unwrap().metadata, "export");
+    assert_eq!(
+        copied
+            .type_info(&syn::parse_quote!(crate::R))
+            .unwrap()
+            .metadata,
+        "record"
+    );
+    assert_eq!(copied.records["crate :: R"].fields[0].metadata, "property");
+    assert_eq!(copied.enums["crate :: E"].variants[0].metadata, "constant");
+    assert_eq!(copied.function("echo").unwrap().params[0].ty.slot, Some(3));
+    assert_eq!(copied.function("echo").unwrap().ret.slot, Some(2));
+    assert!(format!("{copied:?}").contains("property"));
+}

@@ -22,6 +22,8 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
         }
     }
 }
+mod metadata;
+pub use metadata::{CEnum, CFunction, CMetadata, CModule, CType};
 mod enums;
 mod errors;
 mod group;
@@ -35,7 +37,7 @@ mod emission;
 pub use emission::CContext;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, crate::CChain, crate::CBranch>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, crate::CChain, crate::CBranch>;
-type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>>;
+type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>, CMetadata>;
 /// Flat source model with C conversion data for wrapper emission.
 pub type Bindings = GenericBindings<CWire>;
 type Wire = GenericWire<CWire>;
@@ -64,6 +66,7 @@ use quote::{format_ident, quote};
 /// ```
 pub struct CCodec;
 impl Codec for CCodec {
+    type Metadata = CMetadata;
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
@@ -162,8 +165,16 @@ impl Codec for CCodec {
         _: syn::Ident,
         element: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
         values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
-        sequence::output(wire, length, element, values)
+        match delivery {
+            prebindgen_declarations::SequenceDelivery::Value => {
+                sequence::output(wire, length, element, values)
+            }
+            prebindgen_declarations::SequenceDelivery::Callback => {
+                sequence::callback_output(wire, values, element, length)
+            }
+        }
     }
     fn result_error(&self, _: &syn::Type, message: TokenStream, _: &()) -> Result<TokenStream> {
         let pointer = prebindgen_conversions::template_parameter("error_pointer");
@@ -232,16 +243,8 @@ impl Codec for CCodec {
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            let tag = quote::format_ident!("{w}_present");
-            let child = self.input_leaf(
-                inner,
-                &(),
-                quote::format_ident!("{w}_some"),
-                quote::format_ident!("{v}_some"),
-                &active.arm(tag.clone(), 1),
-            )?;
-            return prebindgen_declarations::optional_input(self, &(), tag, v, active, child);
+        if prebindgen_declarations::option_inner(ty).is_some() {
+            return Err("resolve Optional operations before leaf compilation".into());
         }
         let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
@@ -307,25 +310,8 @@ impl Codec for CCodec {
             let value = if borrowed { quote!(*#v) } else { v };
             return self.output_leaf(&reference.elem, &(), w, value, true);
         }
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            let tag = quote::format_ident!("{w}_present");
-            let payload = quote::format_ident!("{w}_payload");
-            let child = self.output_leaf(
-                inner,
-                &(),
-                quote::format_ident!("{w}_some"),
-                quote!(#payload),
-                borrowed,
-            )?;
-            return prebindgen_declarations::optional_output(
-                self,
-                &(),
-                tag,
-                payload,
-                v,
-                borrowed,
-                child,
-            );
+        if prebindgen_declarations::option_inner(ty).is_some() {
+            return Err("resolve Optional operations before leaf compilation".into());
         }
         match Value::of(ty) {
             Some(Value::Scalar(p)) => {
@@ -485,7 +471,9 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
-    expansions: Vec<prebindgen_declarations::ExpandDecl>,
+    inputs: Vec<prebindgen_declarations::Input>,
+    outputs: Vec<prebindgen_declarations::Output>,
+    error_mappers: Vec<(syn::Type, String)>,
     functions: Vec<prebindgen_declarations::FunctionDecl>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
@@ -499,7 +487,9 @@ impl Cbindgen {
         Self {
             flat: None,
             source: None,
-            expansions: Vec::new(),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            error_mappers: Vec::new(),
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
@@ -524,21 +514,21 @@ impl Cbindgen {
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn expand(mut self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
-        self.expansions.push(decl.into());
+    pub fn input(mut self, tree: prebindgen_declarations::Input) -> Self {
+        self.inputs.push(tree);
+        self
+    }
+    /// Register a type-wide direct output conversion tree.
+    pub fn output(mut self, tree: prebindgen_declarations::Output) -> Self {
+        self.outputs.push(tree);
         self
     }
     /// Select caller-owned C-string errors (`char **error`) for Result returns
     /// using `ty`, with a default source error-message mapper.
     /// The helper takes exactly E or &E and returns String. A function's
     /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
-    pub fn error_mapper(
-        mut self,
-        ty: syn::Type,
-        mapper: prebindgen_declarations::FunctionDecl,
-    ) -> Self {
-        self.expansions
-            .push(prebindgen_declarations::ErrorDecl::new(ty, mapper).into());
+    pub fn error_mapper(mut self, ty: syn::Type, mapper: impl Into<String>) -> Self {
+        self.error_mappers.push((ty, mapper.into()));
         self
     }
 
@@ -551,11 +541,7 @@ impl Cbindgen {
     }
     /// Deliver an opaque source error as a caller-owned C string through
     /// `char **error`. The mapper takes E or &E and returns String.
-    pub fn opaque_error(
-        self,
-        ty: syn::Type,
-        mapper: prebindgen_declarations::FunctionDecl,
-    ) -> Self {
+    pub fn opaque_error(self, ty: syn::Type, mapper: impl Into<String>) -> Self {
         self.error_mapper(ty, mapper)
     }
 
@@ -600,7 +586,9 @@ impl Cbindgen {
         Self {
             flat: Some(flat),
             source: None,
-            expansions: Vec::new(),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            error_mappers: Vec::new(),
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
@@ -638,19 +626,21 @@ impl Cbindgen {
         self.enums.push((name.into(), ty));
         self
     }
-    /// Resolve declarations, build converters and generate both output texts.
+    /// Resolve declarations and converters into a complete Flat model.
     ///
     /// Does not write files. Returns an error for conflicting sources, invalid or
     /// duplicate declarations, unsupported conversions, or missing opaque pointees.
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
-    pub fn build(mut self) -> Result<Generation> {
+    pub fn prepare(mut self) -> Result<Bindings> {
         prebindgen_declarations::ident(&self.prefix)?;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
             (None, Some(path)) => Flat::parse_selected(
                 prebindgen::Source::new(path).items_all(),
                 &prebindgen_declarations::declarations::source_functions(
-                    &self.expansions,
+                    &self.inputs,
+                    &self.outputs,
+                    &self.error_mappers,
                     &self.functions,
                 ),
                 &self
@@ -659,10 +649,7 @@ impl Cbindgen {
                     .chain(&self.enums)
                     .chain(&self.errors)
                     .map(|(_, ty)| ty.clone())
-                    .chain(self.expansions.iter().filter_map(|d| match d {
-                        prebindgen_declarations::ExpandDecl::Error(d) => Some(d.ty.clone()),
-                        _ => None,
-                    }))
+                    .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
                     .collect::<Vec<_>>(),
             )?,
             _ => return Err("supply exactly one source or flat model".into()),
@@ -680,7 +667,7 @@ impl Cbindgen {
                 .enums
                 .get(&key)
                 .ok_or("enum_type requires a fieldless enum declaration")?;
-            let mapping = prebindgen_declarations::EnumMapping::new(source)?;
+            let mapping = std::rc::Rc::new(prebindgen_declarations::EnumMapping::new(source)?);
             for (variant, _) in &mapping.variants {
                 prebindgen_declarations::ident(&format!(
                     "v_{}",
@@ -688,7 +675,9 @@ impl Cbindgen {
                 ))?;
             }
             flat.guards.extend(mapping.guards());
-            if enum_map.insert(key, (name, mapping)).is_some() {
+            let enumeration = std::rc::Rc::new(CEnum { name, mapping });
+            flat.type_info_mut(&ty)?.metadata.enumeration = Some(enumeration.clone());
+            if enum_map.insert(key, enumeration).is_some() {
                 return Err("duplicate C enum source type".into());
             }
         }
@@ -707,29 +696,37 @@ impl Cbindgen {
                 return Err("duplicate C error declaration".into());
             }
         }
-        for expansion in &self.expansions {
-            if let prebindgen_declarations::ExpandDecl::Error(error) = expansion {
-                if error_map
-                    .contains_key(&prebindgen_flat::type_key(&flat.resolve_type(&error.ty)?))
-                {
-                    return Err("structured C errors cannot also select a message mapper".into());
-                }
+        for (ty, _) in &self.error_mappers {
+            if error_map.contains_key(&prebindgen_flat::type_key(&flat.resolve_type(ty)?)) {
+                return Err("structured C errors cannot also select a message mapper".into());
             }
         }
         let mut codec = enums::EnumCodec {
             error_layouts: Default::default(),
-            callback_wire: None,
             enums: enum_map,
             errors: error_map,
         };
-        let declarations = prebindgen_declarations::Declarations::new(&flat, self.expansions)?;
+        let declarations = prebindgen_declarations::Declarations::new(
+            &flat,
+            self.inputs,
+            self.outputs,
+            self.error_mappers,
+        )?;
         let errors = errors::prepare(&mut flat, &codec, &declarations, self.errors)
             .map_err(|e| format!("C error preparation: {e}"))?;
         for error in &errors {
-            codec.error_layouts.insert(
-                prebindgen_flat::type_key(&error.ty),
-                error.plan.outcomes.success.clone(),
-            );
+            codec
+                .error_layouts
+                .insert(prebindgen_flat::type_key(&error.ty), error.clone());
+        }
+        let source_only = flat
+            .functions
+            .values()
+            .all(|f| f.ret.slot.is_none() && f.params.iter().all(|p| p.ty.slot.is_none()));
+        if source_only {
+            let source = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
+            let resolved = declarations.resolve(source, &codec, &self.functions, &())?;
+            flat = prebindgen_declarations::compile(resolved, &codec, &())?;
         }
         let mut callbacks = std::collections::BTreeSet::new();
         let mut names = std::collections::BTreeSet::new();
@@ -740,20 +737,21 @@ impl Cbindgen {
             if decl.foreign.is_some() {
                 return Err("C function renaming is outside this subset".into());
             }
-            declarations
-                .fill(&mut flat, &codec, &decl, &())
-                .map_err(|e| format!("{}: {e}", decl.name))?;
+            if !source_only {
+                declarations
+                    .fill(&mut flat, &codec, &decl, &())
+                    .map_err(|e| format!("{}: {e}", decl.name))?;
+            }
             if decl.callback_return.is_some() {
                 let name = format!("{}_each", decl.name);
-                let wire = sequence::callback_target(
+                sequence::callback_target(
                     &(flat.function(&decl.name)?.output_conversion()?)
                         .output_outcomes()
                         .success,
                 )?;
-                let variant = declarations.callback_variant(&mut flat, &decl, &name)?;
-                codec.callback_wire = Some(wire);
+                let variant =
+                    declarations.callback_variant(&mut flat, &codec, &decl, &name, &())?;
                 declarations.fill(&mut flat, &codec, &variant, &())?;
-                codec.callback_wire = None;
                 if self.panics.contains(&decl.name) {
                     self.panics.insert(name.clone());
                 }
@@ -796,13 +794,38 @@ impl Cbindgen {
                 return Err(format!("C function `{}` has a fallible binding conversion without Result; declare .panic() after .function(fun!({declaration})) to allow aborting", f.name));
             }
         }
-        generate(
-            flat,
-            &self.prefix,
-            pointers,
-            codec.enums.into_values().collect(),
-            errors,
-        )
+        flat.metadata.prefix = self.prefix;
+        for (order, (name, ty)) in pointers.into_iter().enumerate() {
+            let info = &mut flat.type_info_mut(&ty)?.metadata;
+            if info.pointer.replace(name).is_some() {
+                return Err("duplicate C opaque source type".into());
+            }
+            info.pointer_order = order;
+        }
+        for (order, error) in errors.into_iter().enumerate() {
+            let ty = error.ty.clone();
+            let info = &mut flat.type_info_mut(&ty)?.metadata;
+            info.error = Some(error);
+            info.error_order = order;
+        }
+        for f in flat.functions.values_mut() {
+            if f.ret.slot.is_some() {
+                f.metadata = Some(CFunction {
+                    abort_on_failure: self.panics.contains(&f.name.to_string()),
+                    requires_abort: f
+                        .params
+                        .iter()
+                        .filter_map(|p| p.ty.slot.as_ref())
+                        .any(|p| p.fallible || !p.resources.is_empty())
+                        || f.ret.slot.as_ref().is_some_and(|p| p.fallible),
+                });
+            }
+        }
+        Ok(flat)
+    }
+    /// Prepare a complete Flat model, then emit its C and Rust bindings.
+    pub fn build(self) -> Result<Generation> {
+        generate(&self.prepare()?)
     }
 }
 /// Generated Rust bindings and their corresponding C header.
@@ -828,7 +851,12 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
-fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)], context: &CContext) -> String {
+fn c_ty(
+    wire: &Wire,
+    prefix: &str,
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    context: &CContext,
+) -> String {
     match &wire.kind {
         CWire::Enum { name, .. } => format!("{prefix}_{name}"),
         CWire::Scalar { primitive: p, .. } => match p {
@@ -847,9 +875,10 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)], context: &C
             Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
         },
         CWire::Pointer { pointer: p, .. } => {
-            let (name, _) = pointers
-                .iter()
-                .find(|(_, ty)| prebindgen_flat::same_type(ty, &p.ty))
+            let name = pointers
+                .values()
+                .find(|t| prebindgen_flat::same_type(&t.ty, &p.ty))
+                .and_then(|t| t.metadata.pointer.as_ref())
                 .expect("validated pointer declaration");
             let qualifier = if !p.mutable { "const " } else { "" };
             format!("{qualifier}{prefix}_{name} *")
@@ -865,12 +894,12 @@ fn c_ty(wire: &Wire, prefix: &str, pointers: &[(String, syn::Type)], context: &C
 }
 fn validate_wire_declaration(
     wire: &Wire,
-    pointers: &[(String, syn::Type)],
-    enums: &[(String, prebindgen_declarations::EnumMapping)],
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    enums: &[(&String, &prebindgen_declarations::EnumMapping)],
 ) -> Result<()> {
     if let CWire::Enum { name, mapping, .. } = &wire.kind {
         if !enums.iter().any(|(declared, m)| {
-            declared == name
+            *declared == name
                 && prebindgen_flat::same_type(&m.ty, &mapping.ty)
                 && m.variants
                     .iter()
@@ -882,8 +911,8 @@ fn validate_wire_declaration(
     }
     if let CWire::Pointer { pointer, .. } = &wire.kind {
         if !pointers
-            .iter()
-            .any(|(_, ty)| prebindgen_flat::same_type(ty, &pointer.ty))
+            .values()
+            .any(|t| t.metadata.pointer.is_some() && prebindgen_flat::same_type(&t.ty, &pointer.ty))
         {
             return Err(format!(
                 "declare a C opaque pointer for `{}`",
@@ -894,7 +923,9 @@ fn validate_wire_declaration(
     Ok(())
 }
 
-fn generate<
+/// Emit C/Rust bindings using only the prepared Flat model.
+/// No builder, codec cache or separate declaration table is needed.
+pub fn generate<
     I: for<'a> prebindgen_flat::InputConversion<
         Wire = CWire,
         Chain = CChain,
@@ -908,12 +939,43 @@ fn generate<
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
     >,
 >(
-    flat: Flat<I, O>,
-    prefix: &str,
-    pointers: Vec<(String, syn::Type)>,
-    enums: Vec<(String, prebindgen_declarations::EnumMapping)>,
-    errors: Vec<errors::ErrorBinding>,
+    flat: &Flat<I, O, CMetadata>,
 ) -> Result<Generation> {
+    let prefix = &flat.metadata.prefix;
+    prebindgen_declarations::ident(prefix)?;
+    let pointers = &flat.types;
+    let enums = flat
+        .types
+        .values()
+        .filter_map(|t| t.metadata.enumeration.as_deref())
+        .map(|e| (&e.name, e.mapping.as_ref()))
+        .collect::<Vec<_>>();
+    let mut error_entries = flat
+        .types
+        .values()
+        .filter_map(|t| {
+            t.metadata
+                .error
+                .as_deref()
+                .map(|e| (t.metadata.error_order, e))
+        })
+        .collect::<Vec<_>>();
+    error_entries.sort_by_key(|(order, _)| *order);
+    let errors = error_entries
+        .into_iter()
+        .map(|(_, e)| e)
+        .collect::<Vec<_>>();
+    let mut pointer_entries = flat
+        .types
+        .values()
+        .filter_map(|t| {
+            t.metadata
+                .pointer
+                .as_ref()
+                .map(|name| (t.metadata.pointer_order, name, &t.ty))
+        })
+        .collect::<Vec<_>>();
+    pointer_entries.sort_by_key(|(order, _, _)| *order);
     let mut calls = Vec::new();
     let free = format_ident!("{prefix}_free_buffer");
     let free_error = format_ident!("{prefix}_free_error");
@@ -938,7 +1000,10 @@ fn generate<
             }
         }
     }
-    for (name, _) in &pointers {
+    for name in pointers
+        .values()
+        .filter_map(|t| t.metadata.pointer.as_ref())
+    {
         if !symbols.insert(format!("{prefix}_{name}")) {
             return Err("C enum and pointer names collide".into());
         }
@@ -949,6 +1014,19 @@ fn generate<
     for f in flat.functions.values() {
         if f.ret.slot.is_none() {
             continue;
+        }
+        let metadata = f
+            .metadata
+            .as_ref()
+            .ok_or_else(|| format!("bound C function `{}` has no export metadata", f.name))?;
+        if metadata.requires_abort
+            && !metadata.abort_on_failure
+            && prebindgen_flat::result_parts(&f.ret.ty).is_none()
+        {
+            return Err(format!(
+                "C function `{}` requires an explicit abort policy",
+                f.name
+            ));
         }
         for slot in f.params.iter().filter_map(|p| p.ty.slot.as_ref()) {
             sequence::validate_buffered(slot.input_node())?;
@@ -1054,7 +1132,7 @@ fn generate<
             all_wires.extend(crate::group::row_fields(element));
         }
         for wire in all_wires {
-            validate_wire_declaration(wire, &pointers, &enums)?;
+            validate_wire_declaration(wire, pointers, &enums)?;
         }
         calls.push((f, body, context));
     }
@@ -1094,7 +1172,7 @@ fn generate<
         }
     }
     header.push_str("/* Field paths below start at a source parameter or return and list their ABI values.\n * Optional groups below name their discriminator. Rules apply only in active\n * selector arms and present enclosing groups. Absent payload wires are ignored. */\n");
-    for (name, ty) in &pointers {
+    for (_, name, ty) in &pointer_entries {
         let drop = format_ident!("{prefix}_drop_{name}");
         tokens.extend(quote!{
             #[doc = "# Safety
@@ -1116,13 +1194,13 @@ The pointer must be null or a live allocation of the declared type returned by t
                 .iter()
                 .flat_map(|(_, element, _)| crate::group::row_fields(element)),
         ) {
-            validate_wire_declaration(wire, &pointers, &enums)?;
+            validate_wire_declaration(wire, pointers, &enums)?;
         }
     }
     errors::emit(
         &errors,
         prefix,
-        &pointers,
+        pointers,
         &mut symbols,
         &mut tokens,
         &mut header,
@@ -1148,7 +1226,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             &output_carriers,
             &context,
             prefix,
-            &pointers,
+            pointers,
             &mut symbols,
             &mut tokens,
             &mut header,
@@ -1201,7 +1279,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             let n = &w.name;
             let ty = w.kind.rust_type();
             params.push(quote!(#n:#ty));
-            cparams.push(format!("{} {n}", c_ty(w, prefix, &pointers, &context)));
+            cparams.push(format!("{} {n}", c_ty(w, prefix, pointers, &context)));
         }
         let body = if sequence::callback_delivery(
             &f.output_conversion()?.output_outcomes().success,
@@ -1218,7 +1296,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             fields.extend(
                 crate::group::callback_parameters(element)
                     .enumerate()
-                    .map(|(i, wire)| format!("{} v{i}", c_ty(wire, prefix, &pointers, &context))),
+                    .map(|(i, wire)| format!("{} v{i}", c_ty(wire, prefix, pointers, &context))),
             );
             cparams.push(format!("void (*callback)({})", fields.join(", ")));
             cparams.push("void *context".into());
@@ -1261,7 +1339,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 &body,
                 &context,
                 prefix,
-                &pointers,
+                pointers,
                 &errors,
                 consumes,
                 &comments,
@@ -1282,7 +1360,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 params.push(quote!(#pointer:*mut #ty));
                 cparams.push(format!(
                     "{} *{pointer}",
-                    c_ty(wire, prefix, &pointers, &context)
+                    c_ty(wire, prefix, pointers, &context)
                 ));
                 validate_outputs.extend(
                     quote!(if #pointer.is_null(){return Err("null success output".into());}),
@@ -1298,7 +1376,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 let ty = wire.rust_type();
                 (
                     quote!(->#ty),
-                    c_ty(wire, prefix, &pointers, &context),
+                    c_ty(wire, prefix, pointers, &context),
                     quote!(value.v0),
                 )
             }
@@ -1497,7 +1575,6 @@ mod generation_tests {
         let mut flat=error_model("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
         let ty = flat.resolve_type(&syn::parse_quote!(Failure)).unwrap();
         let mut codec = enums::EnumCodec {
-            callback_wire: None,
             enums: Default::default(),
             errors: std::collections::BTreeMap::from([(
                 prebindgen_flat::type_key(&ty),
@@ -1505,7 +1582,7 @@ mod generation_tests {
             )]),
             error_layouts: Default::default(),
         };
-        let declarations = Declarations::new(&flat, vec![]).unwrap();
+        let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
         let bindings = errors::prepare(
             &mut flat,
             &codec,
@@ -1513,10 +1590,9 @@ mod generation_tests {
             vec![("failure".into(), ty.clone())],
         )
         .unwrap();
-        codec.error_layouts.insert(
-            prebindgen_flat::type_key(&ty),
-            bindings[0].plan.outcomes.success.clone(),
-        );
+        codec
+            .error_layouts
+            .insert(prebindgen_flat::type_key(&ty), bindings[0].clone());
         let decl = fun!(f).callback_return();
         declarations.fill(&mut flat, &codec, &decl, &()).unwrap();
         let normal = flat.function("f").unwrap();
@@ -1578,16 +1654,15 @@ mod generation_tests {
         ))
         .map(|entry| entry.path)
         .collect::<Vec<_>>();
-        let wire = sequence::callback_target(
+        sequence::callback_target(
             &(flat.function("f").unwrap().output_conversion().unwrap())
                 .output_outcomes()
                 .success,
         )
         .unwrap();
         let variant = declarations
-            .callback_variant(&mut flat, &decl, "f_each")
+            .callback_variant(&mut flat, &codec, &decl, "f_each", &())
             .unwrap();
-        codec.callback_wire = Some(wire);
         declarations.fill(&mut flat, &codec, &variant, &()).unwrap();
         let callback = flat
             .function("f_each")
@@ -1627,10 +1702,10 @@ mod generation_tests {
         .unwrap();
         let result = Cbindgen::new(flat)
             .function(
-                fun!(values).callback_return().expand_return(
+                fun!(values).callback_return().output(
                     expand_return!(Option<Vec<i64>>)
-                        .field(fun!(number))
-                        .field(fun!(view)),
+                        .field("number")
+                        .field("view"),
                 ),
             )
             .panic()
@@ -1702,7 +1777,7 @@ mod generation_tests {
             .is_err());
         assert!(Cbindgen::new(error_model(source))
             .error("error", syn::parse_quote!(Error))
-            .error_mapper(syn::parse_quote!(Error), fun!(message))
+            .error_mapper(syn::parse_quote!(Error), "message")
             .function(fun!(f))
             .build()
             .err()
@@ -1773,6 +1848,7 @@ mod generation_tests {
     fn multiple_collection_observations_follow_the_actual_borrow() {
         use prebindgen_declarations::{bind_output, Output};
         let seq = || Output::Sequence {
+            delivery: prebindgen_declarations::SequenceDelivery::Value,
             element: Box::new(Output::Leaf),
             mode: None,
         };
@@ -1936,6 +2012,62 @@ mod generation_tests {
     }
 
     #[test]
+    fn public_emission_validates_abort_policy_and_module_settings() {
+        let flat = error_model("pub fn f(c:char)->char{}");
+        let mut prepared = Cbindgen::new(flat)
+            .function(prebindgen_declarations::fun!(f))
+            .panic()
+            .prepare()
+            .unwrap();
+        prepared
+            .function_mut("f")
+            .unwrap()
+            .metadata
+            .as_mut()
+            .unwrap()
+            .abort_on_failure = false;
+        assert!(generate(&prepared).err().unwrap().contains("abort policy"));
+        prepared
+            .function_mut("f")
+            .unwrap()
+            .metadata
+            .as_mut()
+            .unwrap()
+            .abort_on_failure = true;
+        prepared.metadata.prefix = "invalid-prefix".into();
+        assert!(generate(&prepared).is_err());
+        prepared.metadata.prefix = "test".into();
+        prepared.function_mut("f").unwrap().metadata = None;
+        assert!(generate(&prepared).is_err());
+    }
+
+    #[test]
+    fn emission_reads_only_the_prepared_flat() {
+        let source = syn::parse_file("pub enum E { A, B } pub fn echo(e:E)->E{}").unwrap();
+        let flat =
+            Bindings::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
+        let prepared = Cbindgen::new(flat)
+            .prefix("custom")
+            .enum_type("choice", syn::parse_quote!(E))
+            .function(prebindgen_declarations::fun!(echo))
+            .panic()
+            .prepare()
+            .unwrap();
+        assert!(prepared
+            .type_info(&syn::parse_quote!(crate::E))
+            .unwrap()
+            .metadata
+            .enumeration
+            .is_some());
+        let first = generate(&prepared).unwrap();
+        let second = generate(&prepared.clone()).unwrap();
+        assert_eq!(first.rust, second.rust);
+        assert_eq!(first.header, second.header);
+        assert!(first.header.contains("custom_choice"));
+        assert!(first.header.contains("custom_echo"));
+    }
+
+    #[test]
     fn rejects_invalid_pointer_names_during_preparation() {
         let source = syn::parse_file("pub type Handle = String;").unwrap();
         let flat = Bindings::parse(
@@ -1956,15 +2088,14 @@ mod generation_tests {
         use prebindgen_declarations::{fun, Declarations};
 
         let mut flat = error_model("pub fn message(e:i64)->String{} pub fn f()->Result<i64,i64>{}");
-        let declarations = Declarations::new(&flat, vec![]).unwrap();
+        let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
         declarations
-            .fill(&mut flat, &CCodec, &fun!(f).on_error(fun!(message)), &())
+            .fill(&mut flat, &CCodec, &fun!(f).on_error("message"), &())
             .unwrap();
         let output = flat.function_mut("f").unwrap().ret.slot.as_mut().unwrap();
         output.outcomes.binding_failure = None;
-        let error = generate(flat, "test", vec![], vec![], vec![])
-            .err()
-            .unwrap();
+        flat.function_mut("f").unwrap().metadata = Some(CFunction::default());
+        let error = generate(&flat).err().unwrap();
         assert!(error.contains("binding-failure schema"));
     }
 
@@ -2010,7 +2141,7 @@ mod generation_tests {
         }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));
         let source = syn::parse_file("pub fn noop() {}").unwrap();
-        let mut flat = Flat::<InputPlan<CWire>, CountedOutput>::parse(
+        let mut flat = Flat::<InputPlan<CWire>, CountedOutput, CMetadata>::parse(
             source
                 .items
                 .into_iter()
@@ -2019,7 +2150,9 @@ mod generation_tests {
         .unwrap();
         flat.function_mut("noop").unwrap().ret.slot =
             Some(CountedOutput(count.clone(), Default::default()));
-        let output = generate(flat, "test", vec![], vec![], vec![]).unwrap();
+        flat.metadata.prefix = "test".into();
+        flat.function_mut("noop").unwrap().metadata = Some(CFunction::default());
+        let output = generate(&flat).unwrap();
         assert!(output.header.contains("test_noop("));
         assert_eq!(count.get(), 1);
     }
@@ -2102,14 +2235,10 @@ mod abort_policy_tests {
     fn constructor_alternatives_retain_their_own_validation_policy() {
         let source="pub struct Number {pub value:i64} pub fn new(value:i64)->Number{} pub fn other(value:i64)->Number{} pub fn consume(value:Number){}";
         let bind = || {
-            Cbindgen::new(model(source)).function(
-                fun!(consume).expand_param(
-                    "value",
-                    expand_param!(Number)
-                        .variant(fun!(new))
-                        .variant(fun!(other)),
-                ),
-            )
+            Cbindgen::new(model(source)).function(fun!(consume).input(
+                "value",
+                expand_param!(Number).variant("new").variant("other"),
+            ))
         };
         assert!(bind().build().err().unwrap().contains(".panic()"));
         bind().panic().build().unwrap();

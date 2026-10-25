@@ -196,8 +196,8 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for OutputPlan<
 /// Generators choosing this helper use address alias checks and one shared
 /// acknowledgement. Other generators can compose their own request protocols.
 /// This is deliberately outside Flat: none of these phases are required by its traits.
-pub fn emit_call<I, O, C: 'static>(
-    function: &Function<I, O>,
+pub fn emit_call<I, O, C: 'static, M>(
+    function: &Function<I, O, M>,
     context: &C,
     source: &syn::Ident,
     result_type: &syn::Type,

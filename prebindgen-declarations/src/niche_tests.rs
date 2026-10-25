@@ -59,6 +59,7 @@ impl DomainAbi {
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
+    type Metadata = ();
     type Niche = Sentinel;
     type Chain = DomainGroup;
     type Branch = DomainGroup;

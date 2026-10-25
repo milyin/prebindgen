@@ -23,7 +23,7 @@ pub enum JniWire {
     /// A fieldless Rust enum carried as a checked JVM `int`.
     Enum {
         /// Valid source variants and generated Kotlin class information.
-        enum_type: Box<JniEnum>,
+        enum_type: std::rc::Rc<JniEnum>,
         /// Next unused integer representation, or `None` when unavailable.
         next_integer_niche: Option<i32>,
     },

@@ -4,6 +4,7 @@ use prebindgen_conversions::OutputFragment;
 use prebindgen_flat::Conversion;
 use prebindgen_flat::{Function, TypeUse};
 
+#[derive(Clone, Debug)]
 pub(crate) struct ErrorBinding {
     pub name: String,
     pub ty: syn::Type,
@@ -18,11 +19,11 @@ pub(crate) fn prepare(
     codec: &enums::EnumCodec,
     declarations: &prebindgen_declarations::Declarations,
     configured: Vec<(String, syn::Type)>,
-) -> Result<Vec<ErrorBinding>> {
+) -> Result<Vec<std::rc::Rc<ErrorBinding>>> {
     let mut out = Vec::new();
     for (name, ty) in configured {
         let ty = flat.resolve_type(&ty)?;
-        let recipe = declarations.owned_record_output(flat, &ty)?;
+        let recipe = declarations.owned_record_output(flat, codec, &ty, &())?;
         let id = helper(&name);
         if flat.functions.contains_key(&id.to_string()) {
             return Err("C error helper name collision".into());
@@ -30,6 +31,7 @@ pub(crate) fn prepare(
         flat.functions.insert(
             id.to_string(),
             Function {
+                metadata: Default::default(),
                 name: id.clone(),
                 path: syn::parse_quote!(#id),
                 params: vec![],
@@ -46,12 +48,14 @@ pub(crate) fn prepare(
         result?;
         let plan = function.ret.slot.unwrap();
         let fields = field_names(&plan.outcomes.success);
-        out.push(ErrorBinding {
+        let binding = std::rc::Rc::new(ErrorBinding {
             name,
             ty,
             plan,
             fields,
         });
+        flat.type_metadata_mut(&binding.ty)?.error = Some(binding.clone());
+        out.push(binding);
     }
     Ok(out)
 }
@@ -100,9 +104,9 @@ fn field_names(
 }
 
 pub(crate) fn emit(
-    errors: &[ErrorBinding],
+    errors: &[&ErrorBinding],
     prefix: &str,
-    pointers: &[(String, syn::Type)],
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,
@@ -278,8 +282,8 @@ pub(crate) fn result_function(
     body: &TokenStream,
     context: &CContext,
     prefix: &str,
-    pointers: &[(String, syn::Type)],
-    errors: &[ErrorBinding],
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
+    errors: &[&ErrorBinding],
     consumes: bool,
     comments: &str,
     tokens: &mut TokenStream,

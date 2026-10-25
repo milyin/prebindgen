@@ -8,9 +8,11 @@ conversions, and language adapters emit wrappers and foreign declarations.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Flat with empty conversion slots
-        ↓ prebindgen-declarations builds and attaches converters
-Flat<I: Conversion, O: Conversion>
+Flat<(), (), M> with source declarations and metadata
+        ↓ resolve language representations, defaults and explicit choices
+Flat<Input, Output, M> with resolved occurrence descriptions
+        ↓ compile explicit operations with the language codec
+Flat<I: Conversion, O: Conversion, M>
         (parameter slots: Option<I>; result slots: Option<O>)
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
@@ -19,17 +21,16 @@ Rust wrappers + C header / Kotlin files
 A conversion belongs to an occurrence, so two parameters of the same Rust type
 can have different input recipes. `Flat<I, O>` stores the two payload types in
 optional slots. Both can implement `Conversion` with distinct wire kinds and request enums; the model itself does
-not require that trait. Record declarations preserve Rust
-source structure. Named representation schemas describe logical components,
-source-field associations and adapter-specific type data `R`; wires refer to
-components by stable paths. Flat also preserves source names, locations and guards.
+not require that trait. Record declarations preserve Rust source structure; typed
+metadata on Flat owners records language representations and project choices.
+Flat also preserves source names, locations and guards.
 Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
 
 ## Examples migrated from main
 
 This branch replaces the generator engine while preserving source capture and
-source-reading support. The supported JniGen `build.rs` declarations keep their
-existing syntax. Import shared declaration types and macros directly from
+source-reading support. Class/package declarations keep their syntax; conversion declarations now accept
+direct `Input`/`Output` trees through `.input(...)` and `.output(...)`. Import shared declaration types and macros directly from
 `prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
@@ -79,10 +80,10 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_c
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
 The declaration layer also supports `expand_param!` constructor/identity variants,
-`expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
+`expand_return!` getter/identity outputs, `.view(fields!(...))` with per-field
 output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
-Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
+Report constructor/handle input variants and `.view(fields!(report_to_struct)).field_self()` output delivery.
 Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
 Supported fields are scalars, `String`, `Vec<u8>`, other declared data classes,
 and declared opaque handles. Records without handle fields support owned inputs
@@ -100,7 +101,7 @@ and display. Arrays remain mutable, and Kotlin's generated `copy()` is shallow.
 
 Explicit input/output expansions still override the default representation.
 A data-class leaf inside an expansion remains one Kotlin value; an explicit
-`.fields(...)` projection still delivers separate field outputs. The covertest
+`.view(...)` projection still delivers separate field outputs. The covertest
 uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test records, including nested values,
 selector alternatives, combined outputs, and package/class renaming.
 
@@ -120,8 +121,8 @@ Output ownership is explicit in the existing expansion hierarchy:
 The same declaration works as a type-wide default or a per-function replacement:
 
 ```rust,ignore
-.expand(expand_return!(ResourceBundle).field_self_into())
-.package(package!("resources").fun(fun!(resource_bundle_new).expand_return(
+.output(expand_return!(ResourceBundle).field_self_into())
+.package(package!("resources").fun(fun!(resource_bundle_new).output(
     expand_return!(ResourceBundle).project_self(
         Projection::owned().field("details", Projection::borrowed())))))
 ```
@@ -132,10 +133,10 @@ record contents. Legacy `field_self()` and unexpanded data-class outputs retain
 a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
 Type-wide expansions of field types do not rewrite a data class's properties.
 
-For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
+For separate field outputs, `.view(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
 and moves its returned record fields. Both support existing per-field expansion
-overrides through `.field("name", expand_return!(FieldType)...)` on `FieldsDecl`.
+overrides through `.field_override("name", expand_return!(FieldType)...)` on `fields!(getter)`.
 These fields use their type-wide defaults when not overridden.
 `fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
@@ -158,17 +159,47 @@ as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
 
-C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
+C uses `Cbindgen::builder().source(...)`, `.input(...)` / `.output(...)`, `.function(fun!(...))`,
 `.prefix(...)` and `.opaque_ptr(name, type)`. Opaque declarations generate distinct
 C pointer types and typed destructors. Its old naming and cbindgen postprocessing
 settings remain commented out in the example manifests.
 
 ## Preparation and generation APIs
 
+Builders prepare one binding model, then emit from that model:
+
+```text
+Source -> Flat<(), (), language metadata>
+       -> Flat<Input, Output, language metadata>   (resolve descriptions)
+       -> Flat<input conversion, output conversion, language metadata> (compile)
+       -> generated Rust and C/Kotlin              (emit)
+```
+
+`Input` and `Output` describe requested conversions directly. Type defaults use
+`Input::for_type` / `Output::for_type` (or `expand_param!` / `expand_return!`);
+function `.input(name, tree)` / `.output(tree)` overrides replace them.
+Resolution applies project choices and language representations, resolves source
+constructor/getter references, and expands optional, sequence and record operations.
+Compilation lowers those explicit operations into conversion slots. Sequence
+returns carry an explicit `SequenceDelivery::Value` or `Callback` choice; codecs
+receive that choice rather than inferring it from generated wire names. Both stages
+read source facts from the same `Flat`; the instruction trees reference declarations
+rather than copying records or signatures.
+
+`Cbindgen::prepare()` and `JniGenBuilder::prepare()` return the complete prepared
+`Flat`. The public `prebindgen_c::generate(&flat)` and
+`prebindgen_jni::generate(&flat)` read all settings, type declarations, function
+placement and conversions from that model. `build()` combines these steps.
+Temporary indexes used during preparation are discarded; emission needs no builder
+or separate configuration table.
+
 `prebindgen-flat` provides the source model and minimal conversion interfaces:
 
-- `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
-  Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
+- `Flat<I, O, M>` owns source declarations and binding metadata. `M: Metadata`
+  selects distinct payload types for the module, functions, types, fields and
+  enum variants; `M = ()` supports source-only inspection. Parameters hold
+  `Option<I>` and returns hold `Option<O>` for occurrence-specific conversions.
+  `map_slots` moves the source declarations and metadata into the next stage.
 - `Conversion::code_fragment_slot(mode, expected_type)` accepts the generator's
   own requests, including any element or branch context.
 - `InputConversion::input_node()` describes one input value.
@@ -275,29 +306,26 @@ occurrence's extra data.
 `prebindgen-conversions` owns reusable leaf implementations: `value`, `boxed`,
 `boxed::Storage` and `boxed::BoxedWire`. It depends on flat and does not depend
 on declarations. Adapters use its builders during preparation and its metadata
-during generation. Declarations uses conversions only in tests and examples;
-its production compiler accepts adapter-supplied codecs.
+during generation. The declaration compiler uses these shared conversion helpers and
+adapter-supplied codecs.
 
 `prebindgen-runtime` remains the execution-time support library. It acquires no
 `syn` or code-generation dependencies from this separation.
 
 ### Preparation declarations and resolved field mapping
 
-Representation choices belong to `prebindgen-declarations`. Its optional
-`Representations<R>` registry holds shape declarations, nested references and
-canonical defaults. Preparation clients validate these with `validate(&flat)`
-and can check an occurrence's wires with `validate_mapping`. They copy any
-selected adapter metadata into their own slot implementations. The standard
-recipe compiler resolves fields, constructors, selectors, getters and combined
-outputs directly, without creating a registry.
+Conversion choices are direct `Input` and `Output` descriptions. Resolution
+checks source fields, constructor/getter signatures and type defaults against
+`Flat`, then stores explicit operations in occurrence slots. Language declaration
+metadata belongs to the corresponding Flat type, function, field or variant.
+Compilation does not consult a separate representation registry. Custom `Codec`
+implementations select their metadata schema through `type Metadata = ...`; use
+`()` when no declaration metadata is required.
 
-`Flat<I, O>` contains no representation registry, and conversion traits contain
-no representation IDs. Generation never looks up declarations or defaults.
 A `Wire` exposes only a binding name and carrier description. It does not expose
 fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`
 and `Condition` belong to declarations. A codec can retain logical mappings in
-its private preparation metadata through `prefix_layout`; `validate_mapping`
-accepts explicit name/path pairs. The final converter emits the corresponding
+its private preparation metadata through `prefix_layout`. The final converter emits the corresponding
 projections or constructions itself. Wrapper writers never interpret these paths.
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
@@ -637,15 +665,15 @@ are inferred. For example, for a source function
 
 ```rust,ignore
 // C builder: return a caller-owned message through char **error.
-.opaque_error(syn::parse_quote!(Error), fun!(error_message))
+.opaque_error(syn::parse_quote!(Error), "error_message")
 .function(fun!(open_session))
 
 // JNI builder: project typed error fields, just as for ordinary outputs.
-.expand(expand_return!(Error).fields_into(fields!(error_into_parts)))
+.output(expand_return!(Error).fields_into(fields!(error_into_parts)))
 .package(package!().fun(fun!(open_session)))
 ```
 
-A function's `.on_error(fun!(another_message))` overrides the type-wide mapper.
+A function's `.on_error("another_message")` overrides the type-wide mapper.
 Mapper helpers are captured automatically but are not exported unless separately
 declared. Return expansions and their defaults apply to `T`, the success type.
 The success value can be an optional value, enum, record, or owned handle, using

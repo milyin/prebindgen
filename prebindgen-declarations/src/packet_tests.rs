@@ -125,6 +125,7 @@ struct CodecImpl {
     unknown_prepared_read: bool,
 }
 impl Codec for CodecImpl {
+    type Metadata = ();
     type Wire = Type;
     type Chain = PacketChain;
     type Branch = Metadata;
@@ -275,6 +276,7 @@ impl Codec for CodecImpl {
         _: syn::Ident,
         element: &prebindgen_flat::WireNode<Type, PacketChain, Metadata>,
         values: &[(syn::Ident, TokenStream)],
+        _delivery: crate::SequenceDelivery,
     ) -> Result<SequenceOutput<Type, PacketChain>> {
         assert_eq!(
             PointerLenAbi::row_fields(element).len(),
@@ -348,7 +350,7 @@ fn pointer_length_round_trip(reverse: bool) {
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let defaults = Declarations::new(&flat, vec![]).unwrap();
+    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
     defaults
         .fill(
             &mut flat,
@@ -438,7 +440,9 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         ..Default::default()
     };
     let recipe = Output::Sequence {
+        delivery: SequenceDelivery::Value,
         element: Box::new(Output::Sequence {
+            delivery: SequenceDelivery::Value,
             element: Box::new(Output::Leaf),
             mode: None,
         }),
