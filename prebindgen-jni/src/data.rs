@@ -442,9 +442,9 @@ impl Codec for DataCodec {
         &self,
         flat: &Flat<I, O, JniMetadata>,
         ty: &syn::Type,
-        tree: &Input,
+        tree: &Input<InputRequest>,
         _: &(),
-    ) -> Result<Option<Input>> {
+    ) -> Result<Option<Input<InputRequest>>> {
         if !matches!(tree, Input::Leaf) {
             return Ok(None);
         }
@@ -466,9 +466,9 @@ impl Codec for DataCodec {
         &self,
         flat: &Flat<I, O, JniMetadata>,
         ty: &syn::Type,
-        tree: &Output,
+        tree: &Output<OutputRequest>,
         _: &(),
-    ) -> Result<Option<Output>> {
+    ) -> Result<Option<Output<OutputRequest>>> {
         let policy = match tree {
             Output::Leaf => Projection::borrowed(),
             Output::Projected(p) => p.clone(),
@@ -863,6 +863,71 @@ mod group_tests {
     use super::*;
     use prebindgen_flat::Wire;
     use prebindgen_flat::WireNode;
+
+    #[test]
+    fn resolved_record_projection_survives_preparation_round_trip() {
+        let mut flat = Bindings::parse(
+            syn::parse_file("pub struct Record{pub n:i64}pub fn items()->Vec<Record>{}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let key = type_key(&flat.resolve_type(&syn::parse_quote!(Record)).unwrap());
+        let codec = DataCodec::new(
+            &mut flat,
+            &BTreeMap::from([(
+                key,
+                Class {
+                    pkg: "example".into(),
+                    name: "Record".into(),
+                    data: true,
+                    enumeration: false,
+                    has_handles: false,
+                    variant_names: vec![],
+                },
+            )]),
+        )
+        .unwrap();
+        let defaults =
+            prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+        let request = Output::Sequence {
+            delivery: prebindgen_declarations::SequenceDelivery::Callback,
+            mode: Some(ProjectionMode::Owned),
+            element: Box::new(Output::Projected(Projection::owned())),
+        };
+        let resolved = defaults
+            .resolve_output(
+                &flat,
+                &codec,
+                &flat.function("items").unwrap().ret.ty,
+                &request,
+                &(),
+            )
+            .unwrap();
+        assert!(
+            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:ProjectionMode::Owned,fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
+        );
+        let round_trip = defaults
+            .resolve_output(
+                &flat,
+                &codec,
+                &flat.function("items").unwrap().ret.ty,
+                &resolved.clone().into_preparation(),
+                &(),
+            )
+            .unwrap();
+        assert_eq!(format!("{resolved:?}"), format!("{round_trip:?}"));
+        prebindgen_declarations::bind_output(
+            &mut flat,
+            &codec,
+            "items",
+            &round_trip.into_preparation(),
+            &(),
+        )
+        .unwrap();
+    }
 
     fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
         WireNode::Branch {

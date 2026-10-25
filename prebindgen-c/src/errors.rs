@@ -23,7 +23,9 @@ pub(crate) fn prepare(
     let mut out = Vec::new();
     for (order, (name, ty)) in configured.into_iter().enumerate() {
         let ty = flat.resolve_type(&ty)?;
-        let recipe = declarations.owned_record_output(flat, codec, &ty, &())?;
+        let recipe = declarations
+            .owned_record_output(flat, codec, &ty, &())?
+            .into_preparation();
         let id = helper(&name);
         if flat.functions.contains_key(&id.to_string()) {
             return Err("C error helper name collision".into());

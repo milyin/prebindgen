@@ -2094,16 +2094,6 @@ fn resolved_flat_is_the_only_source_model_needed_by_compilation() {
 }
 
 #[test]
-fn compilation_rejects_unresolved_instructions() {
-    let mut flat = parse("pub fn echo(x:i64)->i64{}")
-        .map_slots(|_, _| Ok(Some(Input::Auto)), |_, _| Ok(Some(Output::Auto)))
-        .unwrap();
-    assert!(compile(flat.clone(), &TEST_CODEC, &Extra::default()).is_err());
-    flat.function_mut("echo").unwrap().params[0].ty.slot = Some(Input::Leaf);
-    assert!(compile(flat, &TEST_CODEC, &Extra::default()).is_err());
-}
-
-#[test]
 fn callback_variant_selects_delivery_before_wires_exist() {
     let mut flat = parse("pub fn f()->Option<Vec<i64>>{}");
     let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
@@ -2130,17 +2120,6 @@ fn callback_variant_selects_delivery_before_wires_exist() {
 }
 
 #[test]
-fn unresolved_combined_outputs_return_an_error_without_panicking() {
-    let flat = parse("pub fn f()->i64{}")
-        .map_slots(
-            |_, _| Ok(None::<Input>),
-            |_, _| Ok(Some(Output::Combine(vec![Output::Leaf, Output::Auto]))),
-        )
-        .unwrap();
-    assert!(compile(flat, &TEST_CODEC, &Extra::default()).is_err());
-}
-
-#[test]
 fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function() {
     let source = model()
         .map_slots(|_, _| Ok(None::<()>), |_, _| Ok(None::<()>))
@@ -2162,7 +2141,7 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
             &source
                 .resolve_type(&syn::parse_quote!(Vec<Payload>))
                 .unwrap(),
-            &Input::Auto,
+            &Input::auto(),
             &Extra::default(),
         )
         .unwrap();
@@ -2179,17 +2158,20 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .unwrap_err();
     assert!(error.starts_with("foo:"), "{error}");
 
-    let unresolved = parse("pub fn broken()->i64{}")
-        .map_slots(|_, _| Ok(None::<Input>), |_, _| Ok(Some(Output::Auto)))
+    let invalid = parse("pub fn broken()->i64{}")
+        .map_slots(
+            |_, _| Ok(None::<Input>),
+            |_, _| Ok(Some(Output::Optional(Box::new(Output::Leaf)))),
+        )
         .unwrap();
-    let error = compile(unresolved, &TEST_CODEC, &Extra::default()).unwrap_err();
+    let error = compile(invalid, &TEST_CODEC, &Extra::default()).unwrap_err();
     assert!(error.starts_with("broken:"), "{error}");
 }
 
 #[test]
 fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
     let mut model = parse("pub type Hidden=String;pub type Other=u32;pub struct Record{pub optional:Option<Hidden>,pub nested:Option<Vec<Option<Hidden>>>,pub visible:i64}pub fn parts(value:Record)->Record{}pub fn read()->Record{}");
-    let output: Output = expand_return!(Record)
+    let output: Output<OutputRequest> = expand_return!(Record)
         .fields_into(
             fields!(parts)
                 .field("optional", expand_return!(Hidden))
@@ -2203,7 +2185,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
         1
     );
     assert_eq!(plan.values.len(), 1);
-    let invalid: Output = expand_return!(Record)
+    let invalid: Output<OutputRequest> = expand_return!(Record)
         .fields_into(fields!(parts).field("optional", expand_return!(Other)))
         .into();
     assert!(bind_output(&mut model, &TEST_CODEC, "read", &invalid, &Extra::default()).is_err());
@@ -2213,7 +2195,7 @@ fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
 fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
     let model = parse("pub type T=String;pub fn length(value:&T)->i64{}");
     let defaults = Declarations::new(&model, vec![], vec![], vec![]).unwrap();
-    let tree: Output = expand_return!(T).field(fun!(length).name("size")).into();
+    let tree: Output<OutputRequest> = expand_return!(T).field(fun!(length).name("size")).into();
     let tree = defaults
         .resolve_output(
             &model,
@@ -2238,4 +2220,152 @@ fn helper_references_reject_binding_only_decorations() {
         || expand_return!(T).field(fun!(get).expand_return(expand_return!(i64).field_self()))
     )
     .is_err());
+}
+
+#[test]
+fn nested_requests_resolve_into_strict_schemas_before_compilation() {
+    let source = parse("pub type R=String;pub fn make(a:i32,b:Option<i64>)->R{}pub fn narrow(v:i16)->i64{}pub fn run(value:R)->i64{}")
+        .map_slots(|_,_|Ok(None::<()>),|_,_|Ok(None::<()>)).unwrap();
+    let defaults = Declarations::new(
+        &source,
+        vec![expand_param!(i64).variant(fun!(narrow)).into()],
+        vec![],
+        vec![],
+    )
+    .unwrap();
+    let requested: Input<InputRequest> = Input::constructor(
+        "make",
+        [Input::Leaf, Input::Optional(Box::new(Input::auto()))],
+    );
+    let resolved: Flat<Input, Output> = defaults
+        .resolve(
+            source,
+            &TEST_CODEC,
+            &[fun!(run).input("value", requested)],
+            &Extra::default(),
+        )
+        .unwrap();
+    let Input::Constructor { args, .. } = resolved.function("run").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap()
+    else {
+        panic!("constructor not resolved")
+    };
+    assert!(matches!(&args[0], Input::Leaf));
+    assert!(
+        matches!(&args[1],Input::Optional(child) if matches!(child.as_ref(),Input::Constructor {function,args} if function=="narrow"&&matches!(args.as_slice(),[Input::Leaf])))
+    );
+    compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
+}
+
+#[test]
+fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
+    let source=parse("pub type R=String;pub fn direct(v:i64)->R{}pub fn narrow(v:i16)->i64{}pub fn observe(r:&R)->i64{}pub fn sign(v:&i64)->i8{}pub fn run(value:R,count:i64)->R{}")
+        .map_slots(|_,_|Ok(None::<()>),|_,_|Ok(None::<()>)).unwrap();
+    let defaults = Declarations::new(
+        &source,
+        vec![expand_param!(i64).variant(fun!(narrow)).into()],
+        vec![expand_return!(i64).field(fun!(sign)).into()],
+        vec![],
+    )
+    .unwrap();
+    let input: Input = Input::constructor("direct", [Input::Leaf]);
+    let output: Output = Output::getter("observe", Output::Leaf);
+    let decl = fun!(run)
+        .input("value", input.into_preparation())
+        .output(output.into_preparation());
+    let resolved = defaults
+        .resolve(source, &TEST_CODEC, &[decl], &Extra::default())
+        .unwrap();
+    let run = resolved.function("run").unwrap();
+    assert!(
+        matches!(run.params[0].ty.slot.as_ref().unwrap(),Input::Constructor{function,args} if function=="direct"&&matches!(args.as_slice(),[Input::Leaf]))
+    );
+    assert!(
+        matches!(run.params[1].ty.slot.as_ref().unwrap(),Input::Constructor{function,..} if function=="narrow")
+    );
+    assert!(
+        matches!(run.ret.slot.as_ref().unwrap(),Output::Getter{function,output} if function=="observe"&&matches!(output.as_ref(),Output::Leaf))
+    );
+    compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
+}
+
+#[test]
+fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
+    let source = parse("pub type E=String;pub fn message(e:&E)->String{}pub fn sign(v:&i64)->i8{}pub fn run()->Result<Option<i64>,E>{}")
+        .map_slots(|_,_|Ok(None::<()>),|_,_|Ok(None::<()>)).unwrap();
+    let defaults = Declarations::new(
+        &source,
+        vec![],
+        vec![expand_return!(i64).field(fun!(sign)).into()],
+        vec![],
+    )
+    .unwrap();
+    let resolved = defaults
+        .resolve(
+            source,
+            &TEST_CODEC,
+            &[fun!(run)
+                .output(Output::Optional(Box::new(Output::auto())))
+                .on_error(fun!(message))],
+            &Extra::default(),
+        )
+        .unwrap();
+    let Output::Result { ok, error } = resolved.function("run").unwrap().ret.slot.as_ref().unwrap()
+    else {
+        panic!("missing Result")
+    };
+    assert_eq!(error.as_deref(), Some("message"));
+    assert!(
+        matches!(ok.as_ref(),Output::Optional(child) if matches!(child.as_ref(),Output::Getter {function,output} if function=="sign" && matches!(output.as_ref(),Output::Leaf)))
+    );
+    let compiled = compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
+    assert!(compiled
+        .function("run")
+        .unwrap()
+        .ret
+        .slot
+        .as_ref()
+        .unwrap()
+        .statements
+        .to_string()
+        .contains("message (&"));
+}
+
+#[test]
+fn resolved_omissions_and_sequence_policies_survive_preparation_round_trip() {
+    let source = parse("pub type Hidden=String;pub struct R{pub hidden:Option<Vec<Option<Hidden>>>,pub rows:Vec<i64>}pub fn read()->R{}");
+    let defaults = Declarations::new(&source, vec![], vec![], vec![]).unwrap();
+    let tree = Output::OwnedFields(vec![
+        Output::for_type(syn::parse_quote!(Hidden), Output::Discard),
+        Output::Sequence {
+            delivery: SequenceDelivery::Callback,
+            element: Box::new(Output::auto()),
+            mode: Some(ProjectionMode::Owned),
+        },
+    ]);
+    let resolved = defaults
+        .resolve_output(
+            &source,
+            &TEST_CODEC,
+            &source.function("read").unwrap().ret.ty,
+            &tree,
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(
+        matches!(&resolved,Output::OwnedFields(fields) if matches!(fields.as_slice(),[Output::Discard,Output::Sequence{delivery:SequenceDelivery::Callback,mode:Some(ProjectionMode::Owned),..}]))
+    );
+    let round_trip = defaults
+        .resolve_output(
+            &source,
+            &TEST_CODEC,
+            &source.function("read").unwrap().ret.ty,
+            &resolved.clone().into_preparation(),
+            &Extra::default(),
+        )
+        .unwrap();
+    assert_eq!(format!("{resolved:?}"), format!("{round_trip:?}"));
 }

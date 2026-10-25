@@ -30,7 +30,7 @@ mod group;
 mod sequence;
 use group::validate_layout;
 pub use group::{CBranch, CChain, CGroup, COptional};
-use prebindgen_declarations::Codec;
+use prebindgen_declarations::{Codec, InputRequest, OutputRequest};
 use prebindgen_flat::Wire as GenericWire;
 pub use sequence::CSequence;
 mod emission;
@@ -471,8 +471,8 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
-    inputs: Vec<prebindgen_declarations::Input>,
-    outputs: Vec<prebindgen_declarations::Output>,
+    inputs: Vec<prebindgen_declarations::Input<InputRequest>>,
+    outputs: Vec<prebindgen_declarations::Output<OutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
     functions: Vec<prebindgen_declarations::FunctionDecl>,
     prefix: String,
@@ -524,12 +524,15 @@ impl Cbindgen {
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input>) -> Self {
+    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input<InputRequest>>) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
-    pub fn output(mut self, tree: impl Into<prebindgen_declarations::Output>) -> Self {
+    pub fn output(
+        mut self,
+        tree: impl Into<prebindgen_declarations::Output<OutputRequest>>,
+    ) -> Self {
         self.outputs.push(tree.into());
         self
     }

@@ -63,7 +63,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub use prebindgen_declarations::{
     expand_param, expand_return, fields, fun, ErrorDecl, ExpandDecl, ExpandParamDecl,
-    ExpandReturnDecl, FieldsDecl, FunctionDecl, Input, Output,
+    ExpandReturnDecl, FieldsDecl, FunctionDecl, Input, InputRequest, Output, OutputRequest,
 };
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
@@ -206,8 +206,8 @@ pub struct JniGenBuilder {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
     items: Option<Vec<(syn::Item, prebindgen::SourceLocation)>>,
-    inputs: Vec<prebindgen_declarations::Input>,
-    outputs: Vec<prebindgen_declarations::Output>,
+    inputs: Vec<prebindgen_declarations::Input<InputRequest>>,
+    outputs: Vec<prebindgen_declarations::Output<OutputRequest>>,
     error_mappers: Vec<(syn::Type, String)>,
     prefix: String,
     init: String,
@@ -290,12 +290,15 @@ impl JniGenBuilder {
     ///
     /// Per-function overrides replace defaults. Duplicate declarations for the same
     /// type and direction are rejected during build.
-    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input>) -> Self {
+    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input<InputRequest>>) -> Self {
         self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
-    pub fn output(mut self, tree: impl Into<prebindgen_declarations::Output>) -> Self {
+    pub fn output(
+        mut self,
+        tree: impl Into<prebindgen_declarations::Output<OutputRequest>>,
+    ) -> Self {
         self.outputs.push(tree.into());
         self
     }

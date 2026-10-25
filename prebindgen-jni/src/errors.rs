@@ -68,7 +68,9 @@ pub(crate) fn prepare(
         } else {
             (
                 error.clone(),
-                declarations.output_recipe(flat, codec, error, &())?,
+                declarations
+                    .output_recipe(flat, codec, error, &())?
+                    .into_preparation(),
             )
         };
         let helper = format_ident!("__pb_jni_error_{}", out.len());

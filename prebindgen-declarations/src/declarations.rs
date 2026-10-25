@@ -1,7 +1,7 @@
 //! Direct Input/Output descriptions, defaults and function export choices.
 use crate::{
-    option_inner, result_parts, sequence_parts, Codec, Compiler, Condition, Input, Output,
-    ProjectionMode, SequenceDelivery,
+    option_inner, result_parts, sequence_parts, Codec, Compiler, Condition, Input, InputRequest,
+    Output, OutputRequest, ProjectionMode, SequenceDelivery,
 };
 use prebindgen_flat::{same_type, type_key, Flat, Result};
 use std::collections::BTreeMap;
@@ -31,17 +31,17 @@ macro_rules! fun {
 /// Values are the same Input/Output trees accepted by per-function overrides.
 /// This environment is discarded after prepared conversions have been installed.
 pub struct Declarations {
-    inputs: BTreeMap<String, Input>,
-    outputs: BTreeMap<String, Output>,
+    inputs: BTreeMap<String, Input<InputRequest>>,
+    outputs: BTreeMap<String, Output<OutputRequest>>,
     errors: BTreeMap<String, String>,
 }
-fn input_body(input: Input) -> Input {
+fn input_body(input: Input<InputRequest>) -> Input<InputRequest> {
     match input {
         Input::Selector(mut arms) if arms.len() == 1 => arms.remove(0),
         other => other,
     }
 }
-fn output_body(output: Output) -> Output {
+fn output_body(output: Output<OutputRequest>) -> Output<OutputRequest> {
     match output {
         Output::Combine(mut parts) if parts.len() == 1 => parts.remove(0),
         other => other,
@@ -53,8 +53,8 @@ impl Declarations {
     /// builders also convert directly into these trees with `.into()`.
     pub fn new<I, O, M: prebindgen_flat::Metadata>(
         flat: &Flat<I, O, M>,
-        inputs: Vec<Input>,
-        outputs: Vec<Output>,
+        inputs: Vec<Input<InputRequest>>,
+        outputs: Vec<Output<OutputRequest>>,
         errors: Vec<(syn::Type, String)>,
     ) -> Result<Self> {
         let mut out = Self {
@@ -63,7 +63,7 @@ impl Declarations {
             errors: BTreeMap::new(),
         };
         for input in inputs {
-            let Input::ForType { ty, input } = input else {
+            let Input::Request(InputRequest::ForType { ty, input }) = input else {
                 return Err("input defaults require a source type".into());
             };
             if crate::contains_result(&ty) {
@@ -75,7 +75,7 @@ impl Declarations {
             }
         }
         for output in outputs {
-            let Output::ForType { ty, output } = output else {
+            let Output::Request(OutputRequest::ForType { ty, output }) = output else {
                 return Err("output defaults require a source type".into());
             };
             if crate::contains_result(&ty) {
@@ -125,7 +125,9 @@ impl Declarations {
                             &flat,
                             codec,
                             &p.ty.ty,
-                            decl.params.get(&p.name.to_string()).unwrap_or(&Input::Auto),
+                            decl.params
+                                .get(&p.name.to_string())
+                                .unwrap_or(&Input::auto()),
                             extra,
                         )
                     })
@@ -162,7 +164,7 @@ impl Declarations {
             flat,
             codec,
             ty,
-            decl.ret.as_ref().unwrap_or(&Output::Auto),
+            decl.ret.as_ref().unwrap_or(&Output::auto()),
             extra,
         )?;
         fn select(output: &mut Output) -> usize {
@@ -198,7 +200,7 @@ impl Declarations {
         variant.name = name.into();
         variant.foreign = None;
         variant.callback_return = None;
-        variant.ret = Some(output);
+        variant.ret = Some(output.into_preparation());
         Ok(variant)
     }
     /// Resolve source-dependent operations, compile them, and atomically install one binding.
@@ -231,7 +233,7 @@ impl Declarations {
                     flat,
                     codec,
                     &p.ty.ty,
-                    explicit.unwrap_or(&Input::Auto),
+                    explicit.unwrap_or(&Input::auto()),
                     extra,
                 )?;
                 Some(Compiler::new(flat, codec, format!("p{index}")).input(
@@ -288,19 +290,13 @@ impl Declarations {
         decl: &FunctionDecl,
         extra: &C::Extra,
     ) -> Result<Output> {
-        let tree = if let Some((ok, error)) = result_parts(ty) {
+        let tree = if let Some((_, error)) = result_parts(ty) {
             Output::Result {
-                ok: Box::new(self.resolve_output(
-                    flat,
-                    codec,
-                    ok,
-                    decl.ret.as_ref().unwrap_or(&Output::Auto),
-                    extra,
-                )?),
+                ok: Box::new(decl.ret.clone().unwrap_or_else(Output::auto)),
                 error: self.error_mapper_for(decl, error).map(str::to_owned),
             }
         } else {
-            decl.ret.clone().unwrap_or(Output::Auto)
+            decl.ret.clone().unwrap_or_else(Output::auto)
         };
         self.resolve_output(flat, codec, ty, &tree, extra)
     }
@@ -326,10 +322,10 @@ impl Declarations {
             flat,
             codec,
             ty,
-            &Output::NamedFields {
+            &Output::Request(OutputRequest::NamedFields {
                 overrides: BTreeMap::new(),
                 mode: ProjectionMode::Owned,
-            },
+            }),
             extra,
         )
     }
@@ -341,7 +337,7 @@ impl Declarations {
         ty: &syn::Type,
         extra: &C::Extra,
     ) -> Result<Output> {
-        self.resolve_output(flat, codec, ty, &Output::Auto, extra)
+        self.resolve_output(flat, codec, ty, &Output::auto(), extra)
     }
     /// Resolve every input operation against canonical source declarations before compilation.
     pub fn resolve_input<C: Codec, I, O>(
@@ -349,7 +345,7 @@ impl Declarations {
         flat: &Flat<I, O, C::Metadata>,
         codec: &C,
         ty: &syn::Type,
-        tree: &Input,
+        tree: &Input<InputRequest>,
         extra: &C::Extra,
     ) -> Result<Input> {
         self.input(flat, codec, ty, tree, extra, &mut vec![])
@@ -359,15 +355,15 @@ impl Declarations {
         flat: &Flat<I, O, C::Metadata>,
         codec: &C,
         ty: &syn::Type,
-        tree: &Input,
+        tree: &Input<InputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<Input> {
-        let resolve = |ty: &syn::Type, tree: &Input, stack: &mut Vec<String>| {
+        let resolve = |ty: &syn::Type, tree: &Input<InputRequest>, stack: &mut Vec<String>| {
             self.input(flat, codec, ty, tree, extra, stack)
         };
         match tree {
-            Input::Auto => {
+            Input::Request(InputRequest::Auto) => {
                 let key = type_key(ty);
                 if let Some(tree) = self.inputs.get(&key) {
                     if stack.contains(&key) {
@@ -381,14 +377,14 @@ impl Declarations {
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Input::Optional(Box::new(resolve(
                         inner,
-                        &Input::Auto,
+                        &Input::auto(),
                         stack,
                     )?)));
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
-                        &Input::Auto,
+                        &Input::auto(),
                         stack,
                     )?)));
                 }
@@ -397,7 +393,7 @@ impl Declarations {
                 }
                 resolve(ty, &Input::Leaf, stack)
             }
-            Input::ForType { ty: target, input } => {
+            Input::Request(InputRequest::ForType { ty: target, input }) => {
                 let target = flat.resolve_type(target)?;
                 if same_type(ty, &target) {
                     return resolve(ty, &input_body((**input).clone()), stack);
@@ -421,7 +417,7 @@ impl Declarations {
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
-                        &Input::Auto,
+                        &Input::auto(),
                         stack,
                     )?)));
                 }
@@ -430,13 +426,13 @@ impl Declarations {
                 }
                 Ok(Input::Leaf)
             }
-            Input::Call(function) => {
+            Input::Request(InputRequest::Call(function)) => {
                 let f = flat.function(function)?;
                 resolve(
                     ty,
                     &Input::Constructor {
                         function: function.clone(),
-                        args: vec![Input::Auto; f.params.len()],
+                        args: vec![Input::auto(); f.params.len()],
                     },
                     stack,
                 )
@@ -514,7 +510,7 @@ impl Declarations {
         flat: &Flat<I, O, C::Metadata>,
         codec: &C,
         ty: &syn::Type,
-        tree: &Output,
+        tree: &Output<OutputRequest>,
         extra: &C::Extra,
     ) -> Result<Output> {
         self.output(flat, codec, ty, tree, extra, &mut vec![])
@@ -524,11 +520,11 @@ impl Declarations {
         flat: &Flat<I, O, C::Metadata>,
         codec: &C,
         ty: &syn::Type,
-        tree: &Output,
+        tree: &Output<OutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<Output> {
-        let resolve = |ty: &syn::Type, tree: &Output, stack: &mut Vec<String>| {
+        let resolve = |ty: &syn::Type, tree: &Output<OutputRequest>, stack: &mut Vec<String>| {
             self.output(flat, codec, ty, tree, extra, stack)
         };
         match tree {
@@ -537,7 +533,7 @@ impl Declarations {
                 name: name.clone(),
                 output: Box::new(resolve(ty, output, stack)?),
             }),
-            Output::Auto => {
+            Output::Request(OutputRequest::Auto) => {
                 let key = type_key(ty);
                 if let Some(tree) = self.outputs.get(&key) {
                     if stack.contains(&key) {
@@ -551,13 +547,13 @@ impl Declarations {
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Output::Optional(Box::new(resolve(
                         inner,
-                        &Output::Auto,
+                        &Output::auto(),
                         stack,
                     )?)));
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
                     return Ok(Output::Sequence {
-                        element: Box::new(resolve(element, &Output::Auto, stack)?),
+                        element: Box::new(resolve(element, &Output::auto(), stack)?),
                         mode: None,
                         delivery: SequenceDelivery::Value,
                     });
@@ -567,7 +563,7 @@ impl Declarations {
                 }
                 resolve(ty, &Output::Leaf, stack)
             }
-            Output::ForType { ty: target, output } => {
+            Output::Request(OutputRequest::ForType { ty: target, output }) => {
                 let target = flat.resolve_type(target)?;
                 if same_type(ty, &target) {
                     return resolve(ty, &output_body((**output).clone()), stack);
@@ -610,7 +606,7 @@ impl Declarations {
                         None
                     };
                     return Ok(Output::Sequence {
-                        element: Box::new(resolve(element, &Output::Auto, stack)?),
+                        element: Box::new(resolve(element, &Output::auto(), stack)?),
                         mode,
                         delivery: SequenceDelivery::Value,
                     });
@@ -618,7 +614,11 @@ impl Declarations {
                 if let Some(replacement) = codec.expand_output(flat, ty, tree, extra)? {
                     return resolve(ty, &replacement, stack);
                 }
-                Ok(tree.clone())
+                Ok(match tree {
+                    Output::Leaf => Output::Leaf,
+                    Output::Projected(policy) => Output::Projected(policy.clone()),
+                    _ => unreachable!(),
+                })
             }
             Output::Optional(child) => {
                 let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
@@ -637,7 +637,7 @@ impl Declarations {
                     delivery: *delivery,
                 })
             }
-            Output::NamedFields { overrides, mode } => {
+            Output::Request(OutputRequest::NamedFields { overrides, mode }) => {
                 let fields = &flat.record(ty)?.fields;
                 for name in overrides.keys() {
                     if !fields.iter().any(|f| f.name == name.as_str()) {
@@ -649,7 +649,9 @@ impl Declarations {
                     .map(|f| {
                         resolve(
                             &f.ty,
-                            overrides.get(&f.name.to_string()).unwrap_or(&Output::Auto),
+                            overrides
+                                .get(&f.name.to_string())
+                                .unwrap_or(&Output::auto()),
                             stack,
                         )
                     })
@@ -666,7 +668,15 @@ impl Declarations {
                 fields: children, ..
             } => {
                 if type_key(ty) == "()" && children.is_empty() {
-                    return Ok(tree.clone());
+                    return Ok(match tree {
+                        Output::Fields(_) => Output::Fields(vec![]),
+                        Output::OwnedFields(_) => Output::OwnedFields(vec![]),
+                        Output::Record { mode, .. } => Output::Record {
+                            fields: vec![],
+                            mode: *mode,
+                        },
+                        _ => unreachable!(),
+                    });
                 }
                 let fields = &flat.record(ty)?.fields;
                 if fields.len() != children.len() {
@@ -771,9 +781,9 @@ pub struct FunctionDecl {
     /// Explicit destination name; supported by JNI, currently rejected by C.
     pub foreign: Option<String>,
     /// Input expansion overrides keyed by source parameter name.
-    pub params: BTreeMap<String, Input>,
+    pub params: BTreeMap<String, Input<InputRequest>>,
     /// Result expansion override, replacing the type default.
-    pub ret: Option<Output>,
+    pub ret: Option<Output<OutputRequest>>,
     /// Source mapper for a top-level Result error; it takes E or &E and returns String.
     pub error: Option<String>,
 }
@@ -866,7 +876,7 @@ impl FunctionDecl {
     /// # Panics
     /// Panics if that parameter already has an override. Resolution checks that the
     /// parameter exists and the expansion type matches.
-    pub fn input(mut self, name: impl AsRef<str>, decl: impl Into<Input>) -> Self {
+    pub fn input(mut self, name: impl AsRef<str>, decl: impl Into<Input<InputRequest>>) -> Self {
         assert!(
             self.params
                 .insert(name.as_ref().into(), decl.into())
@@ -876,7 +886,18 @@ impl FunctionDecl {
         self
     }
     /// Replace the result expansion, including any previously assigned override.
-    pub fn output(mut self, decl: impl Into<Output>) -> Self {
+    ///
+    /// Raw structural nodes infer the preparation payload automatically. An explicitly
+    /// resolved tree must use [`Output::into_preparation`] before registration.
+    /// ```
+    /// use prebindgen_declarations::{fun,fields,expand_return,Input,Output};
+    /// let _ = fun!(run).input("x", Input::fields([])).output(Output::Leaf);
+    /// let _ = fields!(parts).field_override("hidden", Output::Discard);
+    /// let _ = expand_return!(Value).view(Output::getter("length", Output::Leaf));
+    /// let resolved: Output = Output::getter("length", Output::Leaf);
+    /// let _ = fun!(run).output(resolved.into_preparation());
+    /// ```
+    pub fn output(mut self, decl: impl Into<Output<OutputRequest>>) -> Self {
         self.ret = Some(decl.into());
         self
     }
@@ -895,21 +916,21 @@ impl From<String> for FunctionDecl {
 
 /// Collect referenced source helper functions directly from the conversion trees.
 pub fn source_functions<'a>(
-    inputs: &[Input],
-    outputs: &[Output],
+    inputs: &[Input<InputRequest>],
+    outputs: &[Output<OutputRequest>],
     errors: &[(syn::Type, String)],
     functions: impl IntoIterator<Item = &'a FunctionDecl>,
 ) -> Vec<String> {
-    fn input(tree: &Input, names: &mut Vec<String>) {
+    fn input(tree: &Input<InputRequest>, names: &mut Vec<String>) {
         match tree {
-            Input::Call(name) => names.push(name.clone()),
+            Input::Request(InputRequest::Call(name)) => names.push(name.clone()),
             Input::Constructor { function, args } => {
                 names.push(function.clone());
                 for child in args {
                     input(child, names);
                 }
             }
-            Input::ForType { input: child, .. }
+            Input::Request(InputRequest::ForType { input: child, .. })
             | Input::Optional(child)
             | Input::Sequence(child) => input(child, names),
             Input::Fields(children) | Input::Record(children) | Input::Selector(children) => {
@@ -917,10 +938,10 @@ pub fn source_functions<'a>(
                     input(child, names)
                 }
             }
-            Input::Leaf | Input::Auto => {}
+            Input::Leaf | Input::Request(InputRequest::Auto) => {}
         }
     }
-    fn output(tree: &Output, names: &mut Vec<String>) {
+    fn output(tree: &Output<OutputRequest>, names: &mut Vec<String>) {
         match tree {
             Output::Named { output: child, .. } => output(child, names),
             Output::Discard => {}
@@ -935,7 +956,7 @@ pub fn source_functions<'a>(
                 names.push(function.clone());
                 output(child, names);
             }
-            Output::ForType { output: child, .. }
+            Output::Request(OutputRequest::ForType { output: child, .. })
             | Output::Optional(child)
             | Output::Sequence { element: child, .. } => output(child, names),
             Output::Result { ok, error } => {
@@ -954,12 +975,12 @@ pub fn source_functions<'a>(
                     output(child, names)
                 }
             }
-            Output::NamedFields { overrides, .. } => {
+            Output::Request(OutputRequest::NamedFields { overrides, .. }) => {
                 for child in overrides.values() {
                     output(child, names)
                 }
             }
-            Output::Auto | Output::Leaf | Output::Projected(_) => {}
+            Output::Request(OutputRequest::Auto) | Output::Leaf | Output::Projected(_) => {}
         }
     }
     let mut names = vec![];

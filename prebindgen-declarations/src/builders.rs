@@ -1,5 +1,5 @@
 //! Production declaration syntax writing directly into conversion descriptions.
-use crate::{FunctionDecl, Input, Output, Projection};
+use crate::{FunctionDecl, Input, InputRequest, Output, OutputRequest, Projection};
 use std::collections::BTreeMap;
 
 /// Input alternatives for a source type, built directly as an [`Input`] tree.
@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 pub struct ExpandParamDecl {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    input: Input,
+    input: Input<InputRequest>,
 }
 impl ExpandParamDecl {
     /// Start an input declaration; add at least one alternative before use.
@@ -28,7 +28,7 @@ impl ExpandParamDecl {
         self
     }
 }
-impl From<ExpandParamDecl> for Input {
+impl From<ExpandParamDecl> for Input<InputRequest> {
     fn from(decl: ExpandParamDecl) -> Self {
         Input::for_type(decl.ty, decl.input)
     }
@@ -39,7 +39,7 @@ impl From<ExpandParamDecl> for Input {
 pub struct ExpandReturnDecl {
     /// Source type targeted by this default or occurrence override.
     pub ty: syn::Type,
-    output: Output,
+    output: Output<OutputRequest>,
 }
 impl ExpandReturnDecl {
     /// Start an output declaration; add views before registering a type default.
@@ -53,7 +53,7 @@ impl ExpandReturnDecl {
     pub fn field(mut self, function: impl Into<FunctionDecl>) -> Self {
         let function = function.into();
         let name = function.foreign.clone();
-        let getter = Output::getter(function.reference_name(true), Output::Auto);
+        let getter = Output::getter(function.reference_name(true), Output::auto());
         self.output = self.output.view(match name {
             Some(name) => Output::Named {
                 name,
@@ -68,7 +68,7 @@ impl ExpandReturnDecl {
         self.view(fields)
     }
     /// Append another explicit output view.
-    pub fn view(mut self, output: impl Into<Output>) -> Self {
+    pub fn view(mut self, output: impl Into<Output<OutputRequest>>) -> Self {
         self.output = self.output.view(output.into());
         self
     }
@@ -101,7 +101,7 @@ impl ExpandReturnDecl {
         self
     }
 }
-impl From<ExpandReturnDecl> for Output {
+impl From<ExpandReturnDecl> for Output<OutputRequest> {
     fn from(decl: ExpandReturnDecl) -> Self {
         Output::for_type(decl.ty, decl.output)
     }
@@ -112,7 +112,7 @@ impl From<ExpandReturnDecl> for Output {
 #[derive(Clone, Debug)]
 pub struct FieldsDecl {
     function: String,
-    overrides: BTreeMap<String, Output>,
+    overrides: BTreeMap<String, Output<OutputRequest>>,
 }
 impl FieldsDecl {
     /// Select a getter whose returned record supplies the fields.
@@ -129,10 +129,14 @@ impl FieldsDecl {
     }
     /// Set an explicit conversion tree for one field, with the same omission
     /// semantics as [`Self::field`] for an empty typed declaration.
-    pub fn field_override(mut self, name: impl Into<String>, output: impl Into<Output>) -> Self {
+    pub fn field_override(
+        mut self,
+        name: impl Into<String>,
+        output: impl Into<Output<OutputRequest>>,
+    ) -> Self {
         let output = match output.into() {
-            Output::ForType { ty, output } if matches!(output.as_ref(),Output::Combine(parts) if parts.is_empty()) => {
-                Output::for_type(ty, Output::Discard)
+            Output::Request(OutputRequest::ForType { ty, output }) if matches!(output.as_ref(),Output::Combine(parts) if parts.is_empty()) => {
+                Output::for_type(*ty, Output::Discard)
             }
             output => output,
         };
@@ -143,14 +147,14 @@ impl FieldsDecl {
         self
     }
 }
-impl From<FieldsDecl> for Output {
+impl From<FieldsDecl> for Output<OutputRequest> {
     fn from(fields: FieldsDecl) -> Self {
         Output::getter(
             fields.function,
-            Output::NamedFields {
+            Output::Request(OutputRequest::NamedFields {
                 overrides: fields.overrides,
                 mode: crate::ProjectionMode::Borrowed,
-            },
+            }),
         )
     }
 }

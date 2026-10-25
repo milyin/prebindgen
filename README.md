@@ -177,7 +177,11 @@ Source -> Flat<(), (), language metadata>
        -> generated Rust and C/Kotlin              (emit)
 ```
 
-`Input` and `Output` describe requested conversions directly. The production
+Preparation trees use `Input<InputRequest>` and `Output<OutputRequest>`: structural
+operations and pending choices share one tree. `Request` marks a choice that
+preparation must resolve: `Auto` selects a configured default, `Call` discovers
+constructor arguments, `ForType` applies a typed override, and `NamedFields`
+fills in source fields by name. The production
 `expand_param!`, `expand_return!`, and `fields!` builders write those trees;
 `.expand(...)` registers type defaults and function `.expand_param(name, ...)` /
 `.expand_return(...)` replace them. For example:
@@ -192,7 +196,7 @@ Source -> Flat<(), (), language metadata>
 
 `ExpandParamDecl`, `ExpandReturnDecl`, and `FieldsDecl` are typed builders over
 these same trees; there is no separate expansion tree to resolve later. They
-convert into `Input`/`Output` when registered. Explicit getter names stay in the
+convert into preparation trees when registered. Explicit getter names stay in the
 prepared wire metadata and label Kotlin build/fold callback parameters and
 domain-error callback arguments. Duplicate names are rejected during generation.
 C rejects named getter views; its return packet fields remain positional. Direct
@@ -200,9 +204,14 @@ C rejects named getter views; its return packet fields remain positional. Direct
 and `.output(...)` for custom preparation code.
 Resolution applies project choices and language representations, resolves source
 constructor/getter references, and expands optional, sequence and record operations.
-Compilation lowers those explicit operations into conversion slots. Sequence
-returns carry an explicit `SequenceDelivery::Value` or `Callback` choice; codecs
-receive that choice rather than inferring it from generated wire names. Both stages
+Resolution returns `Flat<Input, Output, M>`. Plain `Input` and `Output` use
+`Infallible` as the request payload, so pending choices cannot appear anywhere in
+these trees, including nested children. The compiler accepts only this resolved
+form and lowers its operations into conversion slots. An explicit subtree can be
+embedded in a preparation tree with `.into_preparation()`; source-dependent
+normalization still applies. Sequence returns carry an explicit
+`SequenceDelivery::Value` or `Callback` choice; codecs receive that choice rather
+than inferring it from generated wire names. Both stages
 read source facts from the same `Flat`; the instruction trees reference declarations
 rather than copying records or signatures.
 
@@ -314,8 +323,9 @@ stored plans nor template support.
 `prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
 `Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
 type for the prepared slots; it defaults to `()` in the alias for
-conversions that need no generator-specific settings. `bind_input` and `bind_output` compile one
-occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
+conversions that need no generator-specific settings. `bind_input` and `bind_output`
+resolve and compile one preparation tree (`Input<InputRequest>` or
+`Output<OutputRequest>`); `Declarations::fill` compiles defaults and explicit overrides for a
 function. `Codec::finish_input` and `finish_output` attach glue after recursive
 composition, during preparation only; the latter also runs for unit results.
 Failed compilation preserves existing slots. Existing converters survive
@@ -334,7 +344,7 @@ adapter-supplied codecs.
 
 ### Preparation declarations and resolved field mapping
 
-Conversion choices are direct `Input` and `Output` descriptions. Resolution
+Conversion choices are `Input<InputRequest>` and `Output<OutputRequest>` descriptions. Resolution
 checks source fields, constructor/getter signatures and type defaults against
 `Flat`, then stores explicit operations in occurrence slots. Language declaration
 metadata belongs to the corresponding Flat type, function, field or variant.

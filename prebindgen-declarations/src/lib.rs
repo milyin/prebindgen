@@ -15,6 +15,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 mod builders;
+mod request_conversion;
 pub use builders::{ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl};
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
@@ -62,54 +63,82 @@ pub enum SequenceDelivery {
     Callback,
 }
 
-/// A recipe for converting boundary inputs into one source argument.
+/// Resolved operations for converting boundary inputs into one source argument.
 ///
-/// Binding expands the recipe into wires and Rust conversion code.
+/// Preparation uses `Input<InputRequest>`; plain Input has no pending requests.
+/// [`Declarations::resolve_input`] removes requests using source declarations and defaults.
+/// An explicit subtree can be embedded in preparation with [`Input::into_preparation`].
+/// Compilation lowers the resolved operations into wires and Rust code.
+/// ```
+/// use prebindgen_declarations::{Input,InputRequest};
+/// let resolved: Input = Input::Constructor { function: "make".into(), args: vec![Input::Leaf] };
+/// let preparation: Input<InputRequest> = resolved.into_preparation();
+/// ```
+/// Requests are impossible in resolved nodes, including nested constructor arguments:
+/// ```compile_fail
+/// use prebindgen_declarations::{Input,InputRequest};
+/// let resolved: Input = Input::Constructor {
+///     function: "make".into(),
+///     args: vec![Input::Request(InputRequest::Auto)],
+/// };
+/// ```
 #[derive(Clone, Debug)]
-pub enum Input {
-    /// Resolve the registered default for this source occurrence during preparation.
-    Auto,
-    /// Apply a conversion to this source type, including inside Option/sequence wrappers.
-    ForType {
-        /// Source type targeted by this default or nested override.
-        ty: Type,
-        /// Conversion applied at the matching source occurrence.
-        input: Box<Input>,
-    },
-    /// Infer constructor argument conversions from its source signature.
-    Call(String),
+pub enum Input<P = std::convert::Infallible> {
+    /// A pending preparation instruction. The default payload is uninhabited,
+    /// so a resolved Input cannot contain this variant in safe Rust.
+    Request(P),
     /// Construct a foreign record value using its configured language representation.
-    Record(Vec<Input>),
+    Record(Vec<Input<P>>),
     /// Construct a collection by applying one recipe to every element.
-    Sequence(Box<Input>),
+    Sequence(Box<Input<P>>),
     /// Convert an optional payload, gating every conversion phase.
-    Optional(Box<Input>),
+    Optional(Box<Input<P>>),
     /// Convert the occurrence type itself with [`Codec::input_leaf`].
     Leaf,
     /// Construct a named record from children in field order; an empty list builds unit.
-    Fields(Vec<Input>),
+    Fields(Vec<Input<P>>),
     /// Call a source function after preparing its arguments with the child recipes.
     Constructor {
         /// Unqualified source function name; its result must match the occurrence type.
         function: String,
         /// Recipes in the constructor's parameter order.
-        args: Vec<Input>,
+        args: Vec<Input<P>>,
     },
     /// Choose an owned input using an `i32` arm index followed by all arms' wires.
     /// Inactive arms are neither validated nor acquired; indices are zero-based.
-    Selector(Vec<Input>),
+    Selector(Vec<Input<P>>),
 }
-impl Input {
+/// Source-dependent choices accepted only while preparing an input tree.
+#[derive(Clone, Debug)]
+pub enum InputRequest {
+    /// Select the configured default for this source occurrence.
+    Auto,
+    /// Apply a type-specific override, including inside optional/sequence sources.
+    ForType {
+        /// Source type targeted by the override.
+        ty: Box<Type>,
+        /// The requested conversion for that type.
+        input: Box<Input<InputRequest>>,
+    },
+    /// Infer a constructor's argument conversions from its source signature.
+    Call(String),
+}
+
+impl Input<InputRequest> {
+    /// Request this source type's configured default during preparation.
+    pub fn auto() -> Self {
+        Self::Request(InputRequest::Auto)
+    }
     /// Associate a conversion with a source type for a default or nested override.
     pub fn for_type(ty: Type, input: Self) -> Self {
-        Self::ForType {
-            ty,
+        Self::Request(InputRequest::ForType {
+            ty: Box::new(ty),
             input: Box::new(input),
-        }
+        })
     }
     /// Infer a source constructor's argument conversions from registered defaults.
     pub fn call(name: impl Into<String>) -> Self {
-        Self::Call(name.into())
+        Self::Request(InputRequest::Call(name.into()))
     }
     /// Add a constructor alternative to this conversion tree.
     pub fn variant(self, name: impl Into<String>) -> Self {
@@ -121,7 +150,9 @@ impl Input {
     }
     fn add_alternative(self, arm: Self) -> Self {
         match self {
-            Self::ForType { ty, input } => Self::for_type(ty, input.add_alternative(arm)),
+            Self::Request(InputRequest::ForType { ty, input }) => {
+                Self::for_type(*ty, input.add_alternative(arm))
+            }
             Self::Selector(mut arms) => {
                 arms.push(arm);
                 Self::Selector(arms)
@@ -130,12 +161,12 @@ impl Input {
         }
     }
 }
-impl Input {
+impl<P> Input<P> {
     /// Construct a record from field recipes, or unit from an empty list.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration
     /// order. Binding verifies the count against the record.
-    pub fn fields(fields: impl IntoIterator<Item = Input>) -> Self {
+    pub fn fields(fields: impl IntoIterator<Item = Input<P>>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
     /// Call a named source constructor with the supplied argument recipes.
@@ -148,7 +179,7 @@ impl Input {
     /// * `name` — unqualified name of a source function whose result type is the
     ///   input's type.
     /// * `args` — one recipe per parameter of that function, in order.
-    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input>) -> Self {
+    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input<P>>) -> Self {
         Self::Constructor {
             function: name.into(),
             args: args.into_iter().collect(),
@@ -162,16 +193,32 @@ impl Input {
     ///
     /// Requires at least one arm. Each arm retains its own wires; this does not
     /// merge equivalent wire parameters or generate destination-language overloads.
-    pub fn selector(arms: impl IntoIterator<Item = Input>) -> Self {
+    pub fn selector(arms: impl IntoIterator<Item = Input<P>>) -> Self {
         Self::Selector(arms.into_iter().collect())
     }
 }
-/// A result conversion recipe, interpreted together with its source type and codec input data.
+/// Resolved operations for converting a source result into boundary outputs.
+/// Preparation uses `Output<OutputRequest>`; plain Output permits no pending requests.
+/// [`Declarations::resolve_output`] resolves requests against source declarations and defaults.
+/// Use [`Output::into_preparation`] to embed an explicit subtree in preparation;
+/// source-dependent normalization still applies.
+///
+/// ```
+/// use prebindgen_declarations::{Output,OutputRequest};
+/// let resolved: Output = Output::Optional(Box::new(Output::Leaf));
+/// let preparation: Output<OutputRequest> = resolved.into_preparation();
+/// ```
+///
+/// Pending requests cannot be embedded inside a resolved output:
+/// ```compile_fail
+/// use prebindgen_declarations::{Output,OutputRequest};
+/// let resolved: Output = Output::Optional(Box::new(Output::Request(OutputRequest::Auto)));
+/// ```
 ///
 /// `Fields` observes fields; `OwnedFields` moves them. Explicit `Projected`
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
-pub enum Output {
+pub enum Output<P = std::convert::Infallible> {
     /// Omit this output value; source ownership still follows the enclosing operation.
     Discard,
     /// Give a converted view an explicit destination-language field name.
@@ -179,28 +226,15 @@ pub enum Output {
         /// Destination name of the delivered view.
         name: String,
         /// Conversion of that view.
-        output: Box<Output>,
+        output: Box<Output<P>>,
     },
-    /// Resolve the registered default for this source occurrence during preparation.
-    Auto,
-    /// Apply a conversion to this source type, including inside Option/sequence wrappers.
-    ForType {
-        /// Source type targeted by this default or nested override.
-        ty: Type,
-        /// Conversion applied at the matching source occurrence.
-        output: Box<Output>,
-    },
-    /// Resolve source fields by name, using defaults for unspecified fields.
-    NamedFields {
-        /// Per-field conversions; unspecified fields use registered defaults.
-        overrides: std::collections::BTreeMap<String, Output>,
-        /// Ownership of source-field decomposition.
-        mode: ProjectionMode,
-    },
+    /// A pending preparation instruction. Resolved Output uses an uninhabited
+    /// payload and therefore cannot contain a request.
+    Request(P),
     /// Deliver a configured foreign record value with explicit field conversions.
     Record {
         /// Explicit source-field conversions in declaration order.
-        fields: Vec<Output>,
+        fields: Vec<Output<P>>,
         /// Ownership of the foreign-record projection.
         mode: ProjectionMode,
     },
@@ -209,7 +243,7 @@ pub enum Output {
         /// Delivery selected before conversion compilation.
         delivery: SequenceDelivery,
         /// Element conversion, interpreted independently for each item.
-        element: Box<Output>,
+        element: Box<Output<P>>,
         /// `None` follows the occurrence's ownership: move owned values and observe
         /// borrowed values. `Some` explicitly selects and checks a projection policy.
         mode: Option<ProjectionMode>,
@@ -220,19 +254,19 @@ pub enum Output {
     /// The codec selects how that message reaches the destination's error channel.
     Result {
         /// Conversion of the owned success value.
-        ok: Box<Output>,
+        ok: Box<Output<P>>,
         /// Optional unqualified source message mapper. Without one, the codec
         /// must explicitly support the source error value itself.
         error: Option<String>,
     },
     /// Convert an optional payload without preparing absent values.
-    Optional(Box<Output>),
+    Optional(Box<Output<P>>),
     /// Convert the occurrence type itself with [`Codec::output_leaf`].
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
-    Fields(Vec<Output>),
+    Fields(Vec<Output<P>>),
     /// Move named fields into their output conversions.
-    OwnedFields(Vec<Output>),
+    OwnedFields(Vec<Output<P>>),
     /// Convert a leaf with an explicit ownership policy.
     Projected(Projection),
     /// Call a consuming accessor, then convert its owned result.
@@ -240,32 +274,59 @@ pub enum Output {
         /// Source accessor taking exactly the owned occurrence type.
         function: String,
         /// Conversion of its owned result.
-        output: Box<Output>,
+        output: Box<Output<P>>,
     },
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         /// Source getter taking exactly one shared reference to the current type.
         function: String,
         /// Conversion of the getter's owned result; borrowed results are unsupported.
-        output: Box<Output>,
+        output: Box<Output<P>>,
     },
     /// Produce several views of one value. At most one child may consume it.
     /// Observations run before consumption, while wire order follows this list.
-    Combine(Vec<Output>),
+    Combine(Vec<Output<P>>),
 }
-impl Output {
+/// Source-dependent choices accepted only while preparing an output tree.
+#[derive(Clone, Debug)]
+pub enum OutputRequest {
+    /// Select the configured output default for this source occurrence.
+    Auto,
+    /// Apply a type-specific override, including inside optional/sequence sources.
+    ForType {
+        /// Source type targeted by the override.
+        ty: Box<Type>,
+        /// Requested conversion for the matching type.
+        output: Box<Output<OutputRequest>>,
+    },
+    /// Resolve source record fields by name and fill unspecified conversions.
+    NamedFields {
+        /// Explicit conversions keyed by source field name.
+        overrides: std::collections::BTreeMap<String, Output<OutputRequest>>,
+        /// Ownership of field decomposition.
+        mode: ProjectionMode,
+    },
+}
+
+impl Output<OutputRequest> {
+    /// Request this source type's configured output default during preparation.
+    pub fn auto() -> Self {
+        Self::Request(OutputRequest::Auto)
+    }
     /// Associate a conversion with a source type for a default or nested override.
     pub fn for_type(ty: Type, output: Self) -> Self {
-        Self::ForType {
-            ty,
+        Self::Request(OutputRequest::ForType {
+            ty: Box::new(ty),
             output: Box::new(output),
-        }
+        })
     }
     /// Append another simultaneous output view.
     pub fn view(self, view: impl Into<Self>) -> Self {
         let view = view.into();
         match self {
-            Self::ForType { ty, output } => Self::for_type(ty, output.view(view)),
+            Self::Request(OutputRequest::ForType { ty, output }) => {
+                Self::for_type(*ty, output.view(view))
+            }
             Self::Combine(mut parts) => {
                 parts.push(view);
                 Self::Combine(parts)
@@ -275,7 +336,7 @@ impl Output {
     }
     /// Append a source getter whose result uses its registered conversion default.
     pub fn field(self, name: impl Into<String>) -> Self {
-        self.view(Self::getter(name, Self::Auto))
+        self.view(Self::getter(name, Self::auto()))
     }
     /// Append the direct codec representation, bypassing this type's expansion default.
     pub fn field_self(self) -> Self {
@@ -298,15 +359,15 @@ impl Output {
         let Self::Getter { function, output } = view else {
             panic!("fields_into requires a fields! accessor")
         };
-        let Self::NamedFields { overrides, .. } = *output else {
+        let Self::Request(OutputRequest::NamedFields { overrides, .. }) = *output else {
             panic!("fields_into requires named fields")
         };
         self.view(Self::Into {
             function,
-            output: Box::new(Self::NamedFields {
+            output: Box::new(Self::Request(OutputRequest::NamedFields {
                 overrides,
                 mode: ProjectionMode::Owned,
-            }),
+            })),
         })
     }
     /// Deprecated spelling of [`Self::fields_into`].
@@ -317,7 +378,7 @@ impl Output {
     /// Override one named source field, preserving defaults for its siblings.
     pub fn field_override(mut self, name: impl Into<String>, output: Self) -> Self {
         match &mut self {
-            Self::NamedFields { overrides, .. } => {
+            Self::Request(OutputRequest::NamedFields { overrides, .. }) => {
                 assert!(
                     overrides.insert(name.into(), output).is_none(),
                     "duplicate field override"
@@ -325,8 +386,8 @@ impl Output {
             }
             Self::Getter { output: inner, .. }
             | Self::Into { output: inner, .. }
-            | Self::ForType { output: inner, .. } => {
-                let old = std::mem::replace(inner, Box::new(Self::Auto));
+            | Self::Request(OutputRequest::ForType { output: inner, .. }) => {
+                let old = std::mem::replace(inner, Box::new(Self::auto()));
                 **inner = old.field_override(name, output);
             }
             _ => panic!("field override requires named field decomposition"),
@@ -334,11 +395,11 @@ impl Output {
         self
     }
 }
-impl Output {
+impl<P> Output<P> {
     /// Observe record fields in declaration order; use an empty list for unit.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration order.
-    pub fn fields(fields: impl IntoIterator<Item = Output>) -> Self {
+    pub fn fields(fields: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
     /// Observe a value through a source getter and convert the getter's result.
@@ -350,7 +411,7 @@ impl Output {
     ///
     /// * `name` — unqualified name of the source getter.
     /// * `output` — recipe for the getter's result.
-    pub fn getter(name: impl Into<String>, output: Output) -> Self {
+    pub fn getter(name: impl Into<String>, output: Output<P>) -> Self {
         Self::Getter {
             function: name.into(),
             output: Box::new(output),
@@ -361,9 +422,11 @@ impl Output {
     /// `parts` holds one recipe per view of the value; their wires appear in this
     /// order. Binding rejects an empty list or more than one consuming part. The
     /// framework uses [`Codec::consumes`] to order observations before a move.
-    pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
+    pub fn combine(parts: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
+}
+impl Output {
     fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C, borrowed: bool) -> bool {
         match self {
             Self::Sequence { mode, .. } => match mode {
@@ -380,12 +443,8 @@ impl Output {
             Self::Leaf => codec.consumes(ty, extra),
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
-            Self::Record { mode, .. } | Self::NamedFields { mode, .. } => {
-                *mode == ProjectionMode::Owned
-            }
-            // Child compilation reports unresolved operations as errors, including
-            // when Combine first checks whether any child consumes its input.
-            Self::Auto | Self::ForType { .. } => false,
+            Self::Record { mode, .. } => *mode == ProjectionMode::Owned,
+            Self::Request(never) => match *never {},
             Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec, borrowed)),
             _ => false,
         }
@@ -510,9 +569,9 @@ pub trait Codec {
         &self,
         _flat: &Flat<I, O, Self::Metadata>,
         _ty: &Type,
-        _tree: &Input,
+        _tree: &Input<InputRequest>,
         _extra: &Self::Extra,
-    ) -> Result<Option<Input>> {
+    ) -> Result<Option<Input<InputRequest>>> {
         Ok(None)
     }
     /// Source-aware output normalization, called before conversion compilation.
@@ -520,9 +579,9 @@ pub trait Codec {
         &self,
         _flat: &Flat<I, O, Self::Metadata>,
         _ty: &Type,
-        _tree: &Output,
+        _tree: &Output<OutputRequest>,
         _extra: &Self::Extra,
-    ) -> Result<Option<Output>> {
+    ) -> Result<Option<Output<OutputRequest>>> {
         Ok(None)
     }
     /// Annotate an already compiled foreign-record input; structural expansion is complete.
@@ -950,7 +1009,8 @@ pub type Bindings<W, C = (), N = (), B = (), M = ()> =
 /// * `codec` — the adapter's leaf conversions.
 /// * `function` — unqualified name of the source function.
 /// * `parameter` — name of the parameter, as written in the source.
-/// * `recipe` — how to build the argument from boundary inputs.
+/// * `recipe` — preparation tree describing how to build the argument from boundary inputs.
+///   To bind an already resolved [`Input`], pass `&resolved.into_preparation()`.
 /// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Input binding rejects output recipes:
@@ -966,7 +1026,7 @@ pub fn bind_input<C: Codec>(
     codec: &C,
     function: &str,
     parameter: &str,
-    recipe: &Input,
+    recipe: &Input<InputRequest>,
     extra: &C::Extra,
 ) -> Result<()> {
     let f = flat.function(function)?;
@@ -1002,7 +1062,8 @@ pub fn bind_input<C: Codec>(
 /// * `flat` — the model holding the function; the result's slot is replaced.
 /// * `codec` — the adapter's leaf conversions.
 /// * `function` — unqualified name of the source function.
-/// * `recipe` — how to deliver the result as boundary outputs.
+/// * `recipe` — preparation tree describing how to deliver the result as boundary outputs.
+///   To bind an already resolved [`Output`], pass `&resolved.into_preparation()`.
 /// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Output binding rejects input recipes:
@@ -1017,7 +1078,7 @@ pub fn bind_output<C: Codec>(
     flat: &mut Flat<C::Input, C::Output, C::Metadata>,
     codec: &C,
     function: &str,
-    recipe: &Output,
+    recipe: &Output<OutputRequest>,
     extra: &C::Extra,
 ) -> Result<()> {
     let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
@@ -1051,7 +1112,28 @@ fn finalize_output_schema<C: Codec>(
 /// Compile resolved Input/Output slots without consulting expansion defaults.
 /// Canonical source declarations and metadata stay in the same Flat as slots
 /// change type. Builders and default environments are not needed after resolution.
-/// Raw Auto/ForType/Call operations are rejected: resolve them before this stage.
+/// ```
+/// use prebindgen_declarations::{compile,Codec,Input,Output};
+/// use prebindgen_flat::Flat;
+/// fn resolved<C:Codec>(model:Flat<Input,Output,C::Metadata>,codec:&C,extra:&C::Extra) {
+///     compile(model,codec,extra).unwrap();
+/// }
+/// ```
+/// Pending request payloads do not type-check at this boundary:
+/// ```compile_fail
+/// use prebindgen_declarations::{compile,Codec,Input,InputRequest,Output};
+/// use prebindgen_flat::Flat;
+/// fn pending<C:Codec>(model:Flat<Input<InputRequest>,Output,C::Metadata>,codec:&C,extra:&C::Extra) {
+///     compile(model,codec,extra).unwrap();
+/// }
+/// ```
+/// ```compile_fail
+/// use prebindgen_declarations::{compile,Codec,Input,Output,OutputRequest};
+/// use prebindgen_flat::Flat;
+/// fn pending<C:Codec>(model:Flat<Input,Output<OutputRequest>,C::Metadata>,codec:&C,extra:&C::Extra) {
+///     compile(model,codec,extra).unwrap();
+/// }
+/// ```
 pub fn compile<C: Codec>(
     flat: Flat<Input, Output, C::Metadata>,
     codec: &C,
@@ -1203,9 +1285,7 @@ impl<'a, C: Codec, I, O> Compiler<'a, C, I, O> {
                     .unwrap_or_else(|| self.name());
                 return self.codec.input_leaf(ty, extra, w, var, active);
             }
-            Input::Auto | Input::ForType { .. } | Input::Call(_) => {
-                return Err("resolve Input operations before compilation".into())
-            }
+            Input::Request(never) => match *never {},
             Input::Fields(children) | Input::Record(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(InputPlan {
@@ -1529,9 +1609,7 @@ impl<'a, C: Codec, I, O> Compiler<'a, C, I, O> {
                 )?;
                 return optional_output(self.codec, extra, tag, payload, value, borrowed, child);
             }
-            Output::Auto | Output::ForType { .. } | Output::NamedFields { .. } => {
-                return Err("resolve Output operations before compilation".into())
-            }
+            Output::Request(never) => match *never {},
             Output::Leaf => {
                 let w = wire_name.cloned().unwrap_or_else(|| self.name());
                 return self.codec.output_leaf(ty, extra, w, value, borrowed);
