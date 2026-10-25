@@ -1,8 +1,8 @@
 //! JNI error channels reuse ordinary output conversions. User callbacks run in Kotlin.
 use super::*;
 use prebindgen_conversions::OutputFragment;
+use prebindgen_flat::Conversion;
 use prebindgen_flat::OutputConversion;
-use prebindgen_flat::{Conversion, Function, TypeUse};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorBinding {
@@ -10,16 +10,15 @@ pub(crate) struct ErrorBinding {
     ty: syn::Type,
     pub output: JniOutput,
     pub handler: String,
-    exception: Option<String>,
 }
 impl ErrorBinding {
-    pub fn throws(&self) -> String {
-        self.exception.as_ref().map_or_else(String::new, |class| {
+    pub fn throws(&self, exception: Option<&str>) -> String {
+        exception.map_or_else(String::new, |class| {
             format!("@kotlin.jvm.Throws({}::class)\n", class.replace('$', "."))
         })
     }
-    pub fn parameter(&self, ret: &str) -> String {
-        let default = self.exception.as_ref().map_or_else(String::new, |class| {
+    pub fn parameter(&self, ret: &str, exception: Option<&str>) -> String {
+        let default = exception.map_or_else(String::new, |class| {
             format!(
                 " = {} {{ message -> throw {}(message) }}",
                 self.handler,
@@ -30,35 +29,37 @@ impl ErrorBinding {
     }
 }
 
+/// Prepare each error once on its type and attach each function's selected binding.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &mut data::DataCodec,
+    codec: &data::DataCodec,
     declarations: &prebindgen_declarations::Declarations,
     functions: &[FunctionDecl],
-    classes: &BTreeMap<String, Class>,
-    prefix: &str,
-    seen: &mut BTreeSet<String>,
-) -> Result<BTreeMap<String, std::rc::Rc<ErrorBinding>>> {
-    let mut out = BTreeMap::new();
-    let mut cache: BTreeMap<(String, bool), std::rc::Rc<ErrorBinding>> = BTreeMap::new();
-    let mut handlers: BTreeMap<(String, bool), String> = BTreeMap::new();
+) -> Result<()> {
+    let mut result_count = 0usize;
     for function in functions {
         let ret = flat.function(&function.name)?.ret.ty.clone();
         let Some((_, error)) = prebindgen_flat::result_parts(&ret) else {
             continue;
         };
+        flat.type_metadata_mut(error)?;
         let mapped = declarations.error_mapper_for(function, error).is_some();
-        let key = (type_key(error), mapped);
-        if let Some(binding) = cache.get(&key) {
-            out.insert(function.name.clone(), binding.clone());
-            continue;
-        }
-        let exception = codec.error_classes.get(&key.0).cloned();
+        let mut helper_index = result_count;
+        result_count += 1;
+        let exception = flat.type_info(error)?.metadata.error_class.clone();
         if exception.is_some() && !mapped {
             return Err(
                 "error_class requires an explicit message mapper for its default Kotlin handler"
                     .into(),
             );
+        }
+        if let Some(binding) = flat.type_info(error)?.metadata.errors.get(&mapped).cloned() {
+            flat.function_mut(&function.name)?
+                .metadata
+                .as_mut()
+                .ok_or_else(|| format!("JNI function `{}` has no export metadata", function.name))?
+                .error = Some(binding);
+            continue;
         }
         let (ty, recipe) = if mapped {
             (
@@ -68,74 +69,64 @@ pub(crate) fn prepare(
         } else {
             (
                 error.clone(),
-                declarations
-                    .output_recipe(flat, codec, error, &())?
-                    .into_preparation(),
+                declarations.output_recipe(flat, codec, error, &())?,
             )
         };
-        let helper = format_ident!("__pb_jni_error_{}", out.len());
-        if flat.functions.contains_key(&helper.to_string()) {
-            return Err("JNI error helper name collision".into());
-        }
-        flat.functions.insert(
-            helper.to_string(),
-            Function {
-                metadata: Default::default(),
-                name: helper.clone(),
-                path: syn::parse_quote!(#helper),
-                params: vec![],
-                ret: TypeUse {
-                    ty: ty.clone(),
-                    slot: None,
-                },
-                location: Default::default(),
-            },
-        );
-        let result =
-            prebindgen_declarations::bind_output(flat, codec, &helper.to_string(), &recipe, &());
-        let output = flat.functions.remove(&helper.to_string()).unwrap().ret.slot;
-        result.map_err(|e| format!("JNI error `{}` in `{}`: {e}", key.0, function.name))?;
-        let output = output.unwrap();
-        let handler = if let Some(handler) = handlers.get(&key) {
-            handler.clone()
-        } else {
-            let short = if let syn::Type::Path(path) = error {
-                path.path.segments.last().unwrap().ident.to_string()
-            } else {
-                let mut name = camel(&function.name);
-                if let Some(first) = name.get_mut(..1) {
-                    first.make_ascii_uppercase();
-                }
-                format!("{name}Error")
-            };
-            let pkg = classes
-                .get(&key.0)
-                .map_or(prefix, |class| class.pkg.as_str());
-            let suffix = if mapped { "MessageHandler" } else { "Handler" };
-            let handler = format!("{pkg}.{short}{suffix}");
-            if !seen.insert(handler.clone()) {
-                return Err(format!("duplicate foreign name `{handler}`"));
+        let helper = loop {
+            let candidate = format_ident!("__pb_jni_error_{}", helper_index);
+            if !flat
+                .types
+                .values()
+                .any(|t| t.metadata.errors.values().any(|e| e.helper == candidate))
+            {
+                break candidate;
             }
-            handlers.insert(key.clone(), handler.clone());
-            handler
+            helper_index += 1;
         };
-        // Each function can have its own mapper; the helper converts the already mapped String.
-        let binding = ErrorBinding {
+        let output = prebindgen_declarations::compile_output_value(flat, codec, &ty, &recipe, &())
+            .map_err(|e| {
+                format!(
+                    "JNI error `{}` in `{}`: {e}",
+                    type_key(error),
+                    function.name
+                )
+            })?;
+        let short = if let syn::Type::Path(path) = error {
+            path.path.segments.last().unwrap().ident.to_string()
+        } else {
+            let mut name = camel(&function.name);
+            if let Some(first) = name.get_mut(..1) {
+                first.make_ascii_uppercase();
+            }
+            format!("{name}Error")
+        };
+        let pkg = flat
+            .type_info(error)?
+            .metadata
+            .class
+            .as_ref()
+            .map_or(flat.metadata.package.as_str(), |c| c.pkg.as_str());
+        let suffix = if mapped { "MessageHandler" } else { "Handler" };
+        let handler = format!("{pkg}.{short}{suffix}");
+        if foreign_name_exists(flat, &handler) {
+            return Err(format!("duplicate foreign name `{handler}`"));
+        }
+        let binding = std::rc::Rc::new(ErrorBinding {
             helper,
             ty,
             output,
             handler,
-            exception,
-        };
-        let binding = std::rc::Rc::new(binding);
+        });
         flat.type_metadata_mut(error)?
             .errors
             .insert(mapped, binding.clone());
-        codec.errors.insert(key.clone(), binding.clone());
-        cache.insert(key, binding.clone());
-        out.insert(function.name.clone(), binding);
+        flat.function_mut(&function.name)?
+            .metadata
+            .as_mut()
+            .ok_or_else(|| format!("JNI function `{}` has no export metadata", function.name))?
+            .error = Some(binding);
     }
-    Ok(out)
+    Ok(())
 }
 
 pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStream> {

@@ -2,21 +2,24 @@
 use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
-pub(crate) struct EnumCodec {
-    // These indexes share immutable declarations owned by Flat, not copied schemas.
-    pub(crate) error_layouts: std::collections::BTreeMap<String, std::rc::Rc<errors::ErrorBinding>>,
-    pub(crate) errors: std::collections::BTreeMap<String, String>,
-    pub(crate) enums: std::collections::BTreeMap<String, std::rc::Rc<CEnum>>,
-}
+/// C conversions read representation and error declarations from Flat.
+pub(crate) struct EnumCodec;
 impl EnumCodec {
-    fn mapping(&self, ty: &syn::Type) -> Option<(&str, &std::rc::Rc<EnumMapping>)> {
+    fn mapping<'a>(
+        &self,
+        flat: &'a Bindings,
+        ty: &syn::Type,
+    ) -> Option<(&'a str, &'a std::rc::Rc<EnumMapping>)> {
         let ty = if let syn::Type::Reference(r) = ty {
             &r.elem
         } else {
             ty
         };
-        self.enums
-            .get(&prebindgen_flat::type_key(ty))
+        flat.type_info(ty)
+            .ok()?
+            .metadata
+            .enumeration
+            .as_ref()
             .map(|e| (e.name.as_str(), &e.mapping))
     }
     fn wire(name: &str, mapping: &std::rc::Rc<EnumMapping>) -> CWire {
@@ -47,14 +50,19 @@ impl Codec for EnumCodec {
     }
     fn source_error_layout(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         mapped: bool,
         e: &(),
     ) -> Result<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>> {
-        if let Some(layout) = self.error_layouts.get(&prebindgen_flat::type_key(ty)) {
-            return Ok(layout.plan.outcomes.success.clone());
+        if let Some(layout) = flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.error.as_ref())
+        {
+            return Ok(layout.plan()?.outcomes.success.clone());
         }
-        CCodec.source_error_layout(ty, mapped, e)
+        CCodec.source_error_layout(flat, ty, mapped, e)
     }
     fn optional_metadata(
         &self,
@@ -105,12 +113,18 @@ impl Codec for EnumCodec {
     }
     fn result_error_value(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         value: TokenStream,
         message: Option<TokenStream>,
         extra: &(),
     ) -> Result<TokenStream> {
-        if let Some(name) = self.errors.get(&prebindgen_flat::type_key(ty)) {
+        if let Some(name) = flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.error.as_ref())
+            .map(|e| e.name.as_str())
+        {
             if message.is_some() {
                 return Err("structured C errors cannot also select a message mapper".into());
             }
@@ -121,16 +135,17 @@ impl Codec for EnumCodec {
                 quote!({unsafe {#helper(#value,#pointer,&mut #reported)}?;#reported=true;String::new()}),
             )
         } else {
-            CCodec.result_error_value(ty, value, message, extra)
+            CCodec.result_error_value(flat, ty, value, message, extra)
         }
     }
     fn result_error(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         message: TokenStream,
         extra: &(),
     ) -> Result<TokenStream> {
-        CCodec.result_error(ty, message, extra)
+        CCodec.result_error(flat, ty, message, extra)
     }
     fn niche(&self, w: &CWire) -> Option<CNiche> {
         CCodec.niche(w)
@@ -150,14 +165,15 @@ impl Codec for EnumCodec {
     fn selector(&self, e: &()) -> CWire {
         CCodec.selector(e)
     }
-    fn consumes(&self, ty: &syn::Type, e: &()) -> bool {
+    fn consumes(&self, flat: &prebindgen_flat::Flat<Self::Schema>, ty: &syn::Type, e: &()) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            return self.consumes(inner, e);
+            return self.consumes(flat, inner, e);
         }
-        self.mapping(ty).is_none() && CCodec.consumes(ty, e)
+        self.mapping(flat, ty).is_none() && CCodec.consumes(flat, ty, e)
     }
     fn input_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         e: &(),
         w: syn::Ident,
@@ -167,13 +183,14 @@ impl Codec for EnumCodec {
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
-        if let Some((name, m)) = self.mapping(ty) {
+        if let Some((name, m)) = self.mapping(flat, ty) {
             return prebindgen_declarations::enum_input(m, ty, w, v, active, Self::wire(name, m));
         }
-        CCodec.input_leaf(ty, e, w, v, active)
+        CCodec.input_leaf(flat, ty, e, w, v, active)
     }
     fn output_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         e: &(),
         w: syn::Ident,
@@ -183,7 +200,7 @@ impl Codec for EnumCodec {
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
-        if let Some((name, m)) = self.mapping(ty) {
+        if let Some((name, m)) = self.mapping(flat, ty) {
             if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
                 return Err("mutable-reference outputs are unsupported".into());
             }
@@ -194,7 +211,7 @@ impl Codec for EnumCodec {
                 Self::wire(name, m),
             ));
         }
-        CCodec.output_leaf(ty, e, w, v, borrowed)
+        CCodec.output_leaf(flat, ty, e, w, v, borrowed)
     }
 
     fn optional_niche(
@@ -244,6 +261,34 @@ mod tests {
                 .map(|i| (i, Default::default())),
         )
         .unwrap()
+    }
+    #[test]
+    fn codec_reads_enum_declarations_from_flat_after_creation() {
+        let codec = EnumCodec;
+        let mut model = flat("pub enum E { A, B }pub fn echo(x:E)->E{}");
+        let ty = model.resolve_type(&syn::parse_quote!(E)).unwrap();
+        let mapping =
+            std::rc::Rc::new(EnumMapping::new(model.enums.values().next().unwrap()).unwrap());
+        for name in ["first", "updated"] {
+            model.type_metadata_mut(&ty).unwrap().enumeration = Some(std::rc::Rc::new(CEnum {
+                name: name.into(),
+                mapping: mapping.clone(),
+            }));
+            let output = codec
+                .output_leaf(
+                    &model,
+                    &ty,
+                    &(),
+                    syn::parse_quote!(wire),
+                    quote!(value),
+                    false,
+                )
+                .unwrap();
+            let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
+                .next()
+                .unwrap();
+            assert!(matches!(&wire.kind,CWire::Enum{name:actual,..} if actual==name));
+        }
     }
     #[test]
     fn enum_declarations_emit_fixed_width_types_and_preserve_discriminants() {
@@ -322,17 +367,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping =
             std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
-        let codec = EnumCodec {
-            error_layouts: Default::default(),
-            errors: Default::default(),
-            enums: std::collections::BTreeMap::from([(
-                "crate :: E".into(),
-                std::rc::Rc::new(CEnum {
-                    name: "code".into(),
-                    mapping: mapping.clone(),
-                }),
-            )]),
-        };
+        let codec = EnumCodec;
         let wire = EnumCodec::wire("code", &mapping);
         assert!(matches!(wire.available_niche(), Some(CNiche::Integer(-3))));
         assert!(matches!(
@@ -347,6 +382,13 @@ mod tests {
                 quote!(#ty),
                 quote!(#ty)
             ));
+            model
+                .type_metadata_mut(&syn::parse_quote!(E))
+                .unwrap()
+                .enumeration = Some(std::rc::Rc::new(CEnum {
+                name: "code".into(),
+                mapping: mapping.clone(),
+            }));
             prebindgen_declarations::bind_input(
                 &mut model,
                 &codec,

@@ -219,8 +219,17 @@ rather than copying records or signatures.
 `Flat`. The public `prebindgen_c::generate(&flat)` and
 `prebindgen_jni::generate(&flat)` read all settings, type declarations, function
 placement and conversions from that model. `build()` combines these steps.
-Temporary indexes used during preparation are discarded; emission needs no builder
-or separate configuration table.
+Preparation attaches resolved module settings, class/enum declarations, error policies
+and function placement to Flat before compiling conversions. Source-aware `Codec`
+hooks receive `&Flat<Self::Schema>` and read these owners directly; C and JNI codecs
+keep no parallel representation tables. Error preparation fills type metadata and
+links each function to its selected error binding, returning only success or failure.
+`compile_output_value` compiles an error projection directly, without inserting a
+synthetic function into the source model.
+
+Unresolved declaration recipes are temporary preparation inputs. Validation sets,
+recursion markers and generated wrapper-local names are temporary working data.
+Emission needs no builder or separate configuration table.
 
 `prebindgen-flat` provides the source model and minimal conversion interfaces:
 
@@ -349,7 +358,8 @@ adapter-supplied codecs.
 
 Conversion choices are `Input<InputRequest>` and `Output<OutputRequest>` descriptions. Resolution
 checks source fields, constructor/getter signatures and type defaults against
-`Flat`, then stores explicit operations in occurrence slots. Language declaration
+`Flat`, producing temporary, request-free descriptions. Compilation then installs
+the resulting converters in occurrence slots. Language declaration
 metadata belongs to the corresponding Flat type, function, field or variant.
 Compilation does not consult a separate representation registry. Custom `Codec`
 implementations select the complete binding schema through `type Schema = ...`.

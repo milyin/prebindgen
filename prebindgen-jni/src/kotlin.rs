@@ -564,6 +564,7 @@ mod tests {
         // This condition is arbitrary Kotlin code, not a declaration selector path.
         let mut plan = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(incoming),
@@ -611,6 +612,7 @@ mod tests {
 
         let plan = JniCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(wire),

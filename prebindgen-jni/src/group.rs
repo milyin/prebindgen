@@ -711,6 +711,7 @@ mod tests {
     fn malformed_metadata_is_rejected_before_final_slots_are_installed() {
         let mut input = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -729,6 +730,7 @@ mod tests {
             .contains("direct child"));
         let mut output = JniCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -768,6 +770,7 @@ mod tests {
     fn incompatible_direct_wire_state_is_rejected_at_finalization() {
         let mut input = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i64),
                 &(),
                 syn::parse_quote!(wire),
@@ -788,6 +791,7 @@ mod tests {
             .contains("incompatible"));
         let mut output = JniCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i64),
                 &(),
                 syn::parse_quote!(wire),
@@ -890,6 +894,7 @@ mod abi_tests {
             Flat::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let mut input = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(raw),

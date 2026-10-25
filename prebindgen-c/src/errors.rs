@@ -2,66 +2,60 @@
 use super::*;
 use prebindgen_conversions::OutputFragment;
 use prebindgen_flat::Conversion;
-use prebindgen_flat::{Function, TypeUse};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ErrorBinding {
     pub name: String,
     pub ty: syn::Type,
-    pub plan: OutputPlan<CWire>,
+    pub plan: Option<OutputPlan<CWire>>,
     pub fields: Vec<String>,
 }
 pub(crate) fn helper(name: &str) -> syn::Ident {
     format_ident!("__pb_report_{name}")
 }
+impl ErrorBinding {
+    pub(crate) fn declared(name: String, ty: syn::Type) -> Self {
+        Self {
+            name,
+            ty,
+            plan: None,
+            fields: Vec::new(),
+        }
+    }
+    pub(crate) fn plan(&self) -> Result<&OutputPlan<CWire>> {
+        self.plan
+            .as_ref()
+            .ok_or_else(|| format!("C error `{}` has no prepared conversion", self.name))
+    }
+}
+/// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn prepare(
     flat: &mut Bindings,
     codec: &enums::EnumCodec,
     declarations: &prebindgen_declarations::Declarations,
-    configured: Vec<(String, syn::Type)>,
-) -> Result<Vec<std::rc::Rc<ErrorBinding>>> {
-    let mut out = Vec::new();
-    for (order, (name, ty)) in configured.into_iter().enumerate() {
-        let ty = flat.resolve_type(&ty)?;
-        let recipe = declarations
-            .owned_record_output(flat, codec, &ty, &())?
-            .into_preparation();
-        let id = helper(&name);
-        if flat.functions.contains_key(&id.to_string()) {
-            return Err("C error helper name collision".into());
-        }
-        flat.functions.insert(
-            id.to_string(),
-            Function {
-                metadata: Default::default(),
-                name: id.clone(),
-                path: syn::parse_quote!(#id),
-                params: vec![],
-                ret: TypeUse {
-                    ty: ty.clone(),
-                    slot: None,
-                },
-                location: Default::default(),
-            },
-        );
-        let result =
-            prebindgen_declarations::bind_output(flat, codec, &id.to_string(), &recipe, &());
-        let function = flat.functions.remove(&id.to_string()).unwrap();
-        result?;
-        let plan = function.ret.slot.unwrap();
+) -> Result<()> {
+    let mut types = flat
+        .types
+        .values()
+        .filter_map(|t| {
+            t.metadata
+                .error
+                .as_ref()
+                .filter(|e| e.plan.is_none())
+                .map(|e| (t.metadata.error_order, e.ty.clone()))
+        })
+        .collect::<Vec<_>>();
+    types.sort_by_key(|(order, _)| *order);
+    for (_, ty) in types {
+        let recipe = declarations.owned_record_output(flat, codec, &ty, &())?;
+        let plan = prebindgen_declarations::compile_output_value(flat, codec, &ty, &recipe, &())?;
         let fields = field_names(&plan.outcomes.success);
-        let binding = std::rc::Rc::new(ErrorBinding {
-            name,
-            ty,
-            plan,
-            fields,
-        });
-        let metadata = flat.type_metadata_mut(&binding.ty)?;
-        metadata.error = Some(binding.clone());
-        metadata.error_order = order;
-        out.push(binding);
+        let error = flat.type_metadata_mut(&ty)?.error.as_mut().unwrap();
+        let binding = std::rc::Rc::make_mut(error);
+        binding.plan = Some(plan);
+        binding.fields = fields;
     }
-    Ok(out)
+    Ok(())
 }
 
 fn field_names(
@@ -116,6 +110,7 @@ pub(crate) fn emit(
     header: &mut String,
 ) -> Result<()> {
     for error in errors {
+        let plan = error.plan()?;
         let name = &error.name;
         let c_name = format!("{prefix}_{name}");
         let drop_name = format_ident!("{prefix}_drop_{name}");
@@ -131,7 +126,7 @@ pub(crate) fn emit(
         let context = CContext {
             row_types: {
                 let mut schemas = Vec::new();
-                sequence::schemas(&error.plan.outcomes.success, &mut schemas);
+                sequence::schemas(&plan.outcomes.success, &mut schemas);
                 schemas
                     .into_iter()
                     .map(|(wire, _, _)| {
@@ -153,7 +148,7 @@ pub(crate) fn emit(
             read_buffer: syn::parse_quote!(__pb_read),
         };
         let mut schemas = Vec::new();
-        sequence::schemas(&error.plan.outcomes.success, &mut schemas);
+        sequence::schemas(&plan.outcomes.success, &mut schemas);
         let carriers = schemas
             .iter()
             .map(|(wire, _, _)| wire.name.to_string())
@@ -161,7 +156,7 @@ pub(crate) fn emit(
         sequence::emit_schemas(
             schemas, &carriers, &context, prefix, pointers, symbols, tokens, header,
         )?;
-        let commit = error.plan.code_fragment_slot(
+        let commit = plan.code_fragment_slot(
             OutputFragment::Commit {
                 context: &context,
                 source: &input,
@@ -170,7 +165,7 @@ pub(crate) fn emit(
         )?;
         let commit: syn::ExprBlock = syn::parse2(commit).map_err(|e| e.to_string())?;
         let commit = commit.block.stmts;
-        let deliver = error.plan.code_fragment_slot(
+        let deliver = plan.code_fragment_slot(
             OutputFragment::Deliver {
                 context: &context,
                 source: &input,
@@ -178,7 +173,7 @@ pub(crate) fn emit(
             },
             source_ty,
         )?;
-        let prepare = error.plan.code_fragment_slot(
+        let prepare = plan.code_fragment_slot(
             OutputFragment::Prepare {
                 context: &context,
                 source: &input,
@@ -189,14 +184,12 @@ pub(crate) fn emit(
         let mut fields = Vec::new();
         let mut drops = TokenStream::new();
         header.push_str("typedef struct {\n");
-        for (i, wire) in
-            crate::group::result_packet_fields(&error.plan.outcomes.success).enumerate()
-        {
+        for (i, wire) in crate::group::result_packet_fields(&plan.outcomes.success).enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
             fields.push(quote!(pub #field:#ty));
             let c_field = if error.fields.len()
-                == crate::group::result_packet_fields(&error.plan.outcomes.success).len()
+                == crate::group::result_packet_fields(&plan.outcomes.success).len()
             {
                 error.fields[i].trim_start_matches("r#").to_owned()
             } else {
@@ -208,7 +201,7 @@ pub(crate) fn emit(
                 c_ty(wire, prefix, pointers, &context)
             ));
         }
-        let values = crate::group::result_packet_fields(&error.plan.outcomes.success)
+        let values = crate::group::result_packet_fields(&plan.outcomes.success)
             .enumerate()
             .map(|(i, wire)| {
                 let field = format_ident!("v{i}");
@@ -236,7 +229,7 @@ pub(crate) fn emit(
             })
             .collect::<Vec<_>>();
         drops.extend(sequence::release(
-            &error.plan.outcomes.success,
+            &plan.outcomes.success,
             &values,
             &context,
             false,
@@ -246,10 +239,8 @@ pub(crate) fn emit(
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
-        let wires =
-            crate::group::result_packet_fields(&error.plan.outcomes.success).collect::<Vec<_>>();
-        let mut comments =
-            describe_groups(&error.plan.outcomes.success, &wires, true, &mut 0, "error");
+        let wires = crate::group::result_packet_fields(&plan.outcomes.success).collect::<Vec<_>>();
+        let mut comments = describe_groups(&plan.outcomes.success, &wires, true, &mut 0, "error");
         for i in (0..wires.len()).rev() {
             let field = if error.fields.len() == wires.len() {
                 error.fields[i].trim_start_matches("r#").to_owned()
