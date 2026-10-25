@@ -14,6 +14,8 @@ use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod builders;
+pub use builders::{ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl};
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
@@ -170,6 +172,15 @@ impl Input {
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
 pub enum Output {
+    /// Omit this output value; source ownership still follows the enclosing operation.
+    Discard,
+    /// Give a converted view an explicit destination-language field name.
+    Named {
+        /// Destination name of the delivered view.
+        name: String,
+        /// Conversion of that view.
+        output: Box<Output>,
+    },
     /// Resolve the registered default for this source occurrence during preparation.
     Auto,
     /// Apply a conversion to this source type, including inside Option/sequence wrappers.
@@ -251,7 +262,8 @@ impl Output {
         }
     }
     /// Append another simultaneous output view.
-    pub fn view(self, view: Self) -> Self {
+    pub fn view(self, view: impl Into<Self>) -> Self {
+        let view = view.into();
         match self {
             Self::ForType { ty, output } => Self::for_type(ty, output.view(view)),
             Self::Combine(mut parts) => {
@@ -361,6 +373,7 @@ impl Output {
                         && sequence_parts(ty).is_some_and(|(_, view)| view == SequenceView::Owned)
                 }
             },
+            Self::Named { output: child, .. } => child.consumes(ty, extra, codec, borrowed),
             Self::Optional(child) => {
                 child.consumes(option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
             }
@@ -468,8 +481,8 @@ impl Output {
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
 /// let defaults = Declarations::new(&flat,
-///     vec![expand_param!(i64).variant("from_i32")],
-///     vec![expand_return!(i64).field("to_i32").field_self()],
+///     vec![expand_param!(i64).variant("from_i32").into()],
+///     vec![expand_return!(i64).field("to_i32").field_self().into()],
 ///     vec![],
 /// )?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
@@ -545,6 +558,10 @@ pub trait Codec {
     /// retain an empty group when there are no arguments. Source
     /// record fields instead use [`Codec::fields_group`].
     fn group_metadata(&self) -> Self::Branch;
+    /// Preserve an explicitly named output view in the prepared wire tree.
+    fn named_output_group(&self, _name: &str) -> Result<Self::Branch> {
+        Err("named output views are unsupported by this codec".into())
+    }
     /// Describe an optional value in the adapter's own metadata format.
     /// `presence` is the normalized 0/1 binding used by payload conditions.
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
@@ -1450,6 +1467,16 @@ impl<'a, C: Codec, I, O> Compiler<'a, C, I, O> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Discard => return Ok(out),
+            Output::Named { name, output } => {
+                let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
+                plan.outcomes.success = WireNode::Branch {
+                    meta: self.codec.named_output_group(name)?,
+                    controls: vec![],
+                    children: vec![plan.outcomes.success],
+                };
+                return Ok(plan);
+            }
             Output::Sequence {
                 element,
                 mode,

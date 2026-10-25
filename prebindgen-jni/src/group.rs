@@ -24,6 +24,8 @@ pub enum JniBranch {
 pub enum JniGroup {
     /// Ordered conversion components, such as constructor arguments or output views.
     Values,
+    /// An explicitly named output view.
+    Named(String),
     /// Source record fields. JNI may associate the record with a Kotlin data class.
     Fields(Option<DataGroup>),
     /// One named source field.
@@ -290,6 +292,9 @@ pub(crate) fn validate_layout(
                     }
                 }
                 match metadata {
+                    JniGroup::Named(name) => {
+                        validate_name(name)?;
+                    }
                     JniGroup::Field(_) if !in_fields => {
                         return Err(
                             "named field must be a direct child of a field collection".into()

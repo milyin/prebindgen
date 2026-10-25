@@ -7,26 +7,20 @@ use prebindgen_flat::{same_type, type_key, Flat, Result};
 use std::collections::BTreeMap;
 
 #[macro_export]
-/// Start a typed input conversion tree; add direct or constructor alternatives.
-macro_rules! expand_param {($($ty:tt)+)=>{$crate::Input::for_type($crate::declarations::parse_type(stringify!($($ty)+)),$crate::Input::Selector(Vec::new()))};}
+/// Start a typed input declaration using the production builder API.
+macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
-/// Start a typed output conversion tree; append the requested views.
-macro_rules! expand_return {($($ty:tt)+)=>{$crate::Output::for_type($crate::declarations::parse_type(stringify!($($ty)+)),$crate::Output::Combine(Vec::new()))};}
+/// Start a typed output declaration using the production builder API.
+macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
-/// Decompose the named fields returned by a source getter, using field defaults.
+/// Decompose a source getter's returned record into named field views.
 macro_rules! fields {
     ($name:ident) => {
-        $crate::Output::getter(
-            stringify!($name),
-            $crate::Output::NamedFields {
-                overrides: std::collections::BTreeMap::new(),
-                mode: $crate::ProjectionMode::Borrowed,
-            },
-        )
+        $crate::FieldsDecl::new($crate::ident(stringify!($name)).expect("function identifier"))
     };
 }
 #[macro_export]
-/// Reference a source function to export and configure its conversions/placement.
+/// Reference a source function and configure its exported binding.
 macro_rules! fun {
     ($name:ident) => {
         $crate::FunctionDecl::new($crate::ident(stringify!($name)).expect("function identifier"))
@@ -55,8 +49,8 @@ fn output_body(output: Output) -> Output {
 }
 impl Declarations {
     /// Register typed Input/Output defaults and explicit error-message functions.
-    /// Typed trees are created by Input::for_type / Output::for_type, or the
-    /// expand_param! / expand_return! convenience macros; no parallel declaration AST exists.
+    /// Typed trees use Input::for_type / Output::for_type. Production declaration
+    /// builders also convert directly into these trees with `.into()`.
     pub fn new<I, O, M: prebindgen_flat::Metadata>(
         flat: &Flat<I, O, M>,
         inputs: Vec<Input>,
@@ -178,6 +172,7 @@ impl Declarations {
                     1
                 }
                 Output::Optional(child)
+                | Output::Named { output: child, .. }
                 | Output::Getter { output: child, .. }
                 | Output::Into { output: child, .. } => select(child),
                 Output::Combine(children)
@@ -537,6 +532,11 @@ impl Declarations {
             self.output(flat, codec, ty, tree, extra, stack)
         };
         match tree {
+            Output::Discard => Ok(Output::Discard),
+            Output::Named { name, output } => Ok(Output::Named {
+                name: name.clone(),
+                output: Box::new(resolve(ty, output, stack)?),
+            }),
             Output::Auto => {
                 let key = type_key(ty);
                 if let Some(tree) = self.outputs.get(&key) {
@@ -573,13 +573,23 @@ impl Declarations {
                     return resolve(ty, &output_body((**output).clone()), stack);
                 }
                 if let Some(inner) = option_inner(ty) {
-                    return Ok(Output::Optional(Box::new(resolve(inner, tree, stack)?)));
+                    let child = resolve(inner, tree, stack)?;
+                    return Ok(if matches!(child, Output::Discard) {
+                        Output::Discard
+                    } else {
+                        Output::Optional(Box::new(child))
+                    });
                 }
                 if let Some((element, _)) = sequence_parts(ty) {
-                    return Ok(Output::Sequence {
-                        element: Box::new(resolve(element, tree, stack)?),
-                        mode: None,
-                        delivery: SequenceDelivery::Value,
+                    let child = resolve(element, tree, stack)?;
+                    return Ok(if matches!(child, Output::Discard) {
+                        Output::Discard
+                    } else {
+                        Output::Sequence {
+                            element: Box::new(child),
+                            mode: None,
+                            delivery: SequenceDelivery::Value,
+                        }
                     });
                 }
                 Err("output expansion type does not match occurrence".into())
@@ -752,7 +762,7 @@ pub enum CallbackReturn {
 }
 
 /// A source callable to export, with optional destination name and occurrence overrides.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FunctionDecl {
     /// Also emit an explicit callback-delivery variant for a sequence return.
     pub callback_return: Option<CallbackReturn>,
@@ -781,6 +791,33 @@ impl FunctionDecl {
             error: None,
         }
     }
+    /// Extract an undecorated helper's source name, rejecting binding-only settings.
+    pub fn source_name(self) -> String {
+        self.reference_name(false)
+    }
+    /// Source reference used by constructor, getter and error-mapper declarations.
+    pub(crate) fn reference_name(self, allow_name: bool) -> String {
+        assert!(
+            self.params.is_empty()
+                && self.ret.is_none()
+                && self.error.is_none()
+                && self.callback_return.is_none(),
+            "conversion helpers only support their source name and getter name override"
+        );
+        assert!(
+            allow_name || self.foreign.is_none(),
+            "this helper reference does not support renaming"
+        );
+        self.name
+    }
+    /// Replace one parameter's default conversion using the production API.
+    pub fn expand_param(self, name: impl AsRef<str>, decl: crate::ExpandParamDecl) -> Self {
+        self.input(name, decl)
+    }
+    /// Replace this return's default conversion using the production API.
+    pub fn expand_return(self, decl: crate::ExpandReturnDecl) -> Self {
+        self.output(decl)
+    }
     /// Add callback delivery alongside the ordinary sequence return.
     ///
     /// C emits `<function>_each`, whose visitor receives each element's converted
@@ -808,8 +845,8 @@ impl FunctionDecl {
     /// source name is accepted; it is selected for capture but is not exported.
     /// The success value uses normal return defaults and `expand_return` overrides.
     /// Replaces any previously selected mapper. Non-Result returns reject this option.
-    pub fn on_error(mut self, mapper: impl Into<String>) -> Self {
-        self.error = Some(mapper.into());
+    pub fn on_error(mut self, mapper: impl Into<FunctionDecl>) -> Self {
+        self.error = Some(mapper.into().reference_name(false));
         self
     }
     /// Set a literal destination name, subject to adapter validation.
@@ -829,17 +866,30 @@ impl FunctionDecl {
     /// # Panics
     /// Panics if that parameter already has an override. Resolution checks that the
     /// parameter exists and the expansion type matches.
-    pub fn input(mut self, name: impl AsRef<str>, decl: Input) -> Self {
+    pub fn input(mut self, name: impl AsRef<str>, decl: impl Into<Input>) -> Self {
         assert!(
-            self.params.insert(name.as_ref().into(), decl).is_none(),
+            self.params
+                .insert(name.as_ref().into(), decl.into())
+                .is_none(),
             "duplicate parameter override"
         );
         self
     }
     /// Replace the result expansion, including any previously assigned override.
-    pub fn output(mut self, decl: Output) -> Self {
-        self.ret = Some(decl);
+    pub fn output(mut self, decl: impl Into<Output>) -> Self {
+        self.ret = Some(decl.into());
         self
+    }
+}
+
+impl From<&str> for FunctionDecl {
+    fn from(name: &str) -> Self {
+        Self::new(crate::ident(name).expect("source function identifier"))
+    }
+}
+impl From<String> for FunctionDecl {
+    fn from(name: String) -> Self {
+        Self::from(name.as_str())
     }
 }
 
@@ -872,6 +922,8 @@ pub fn source_functions<'a>(
     }
     fn output(tree: &Output, names: &mut Vec<String>) {
         match tree {
+            Output::Named { output: child, .. } => output(child, names),
+            Output::Discard => {}
             Output::Getter {
                 function,
                 output: child,

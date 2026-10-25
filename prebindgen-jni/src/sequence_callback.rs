@@ -108,13 +108,14 @@ pub(crate) fn fold(
     let child = kotlin::output_kotlin(element, &ctx)?;
     let present = format!("{}[{position}] != null", context.result);
     let raw = "__pb_rows";
-    let types = child.result_types.join(", ");
+    let types = child.callback_type_parameters()?;
     let args = child.delivered.join(", ");
     let failure = context.failure;
     Ok(Fold {
         parameter:format!("fold: (A, {types}) -> A"),
         discard:format!("fun __pb_discard({failure}: Throwable) {{ for (rawRow in __pb_rows) {{ val {row} = rawRow as kotlin.Array<*>\n{}\n{}\n}} }}\n",child.output_locals,child.cleanup),
         output:KotlinOutput {
+            result_names:vec![None],
             delivered:vec![if optional{"__pb_accumulator".into()}else{"__pb_accumulator as A".into()}],
             result_types:vec![if optional{"A?".into()}else{"A".into()}],
             output_locals:"var __pb_accumulator: A? = null\nvar __pb_processed = 0\nvar __pb_pending: ((Throwable) -> Unit)? = null\n".into(),

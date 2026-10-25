@@ -37,6 +37,10 @@ impl Codec for EnumCodec {
     type Context = CContext;
     type Input = InputPlan<CWire>;
     type Output = OutputPlan<CWire>;
+    fn named_output_group(&self, name: &str) -> Result<CBranch> {
+        CCodec.named_output_group(name)
+    }
+
     fn binding_failure_layout(
         &self,
         e: &(),

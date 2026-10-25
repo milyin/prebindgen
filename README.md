@@ -29,8 +29,8 @@ Wrapper writers use flat's generation API; recursive recipe resolution belongs t
 ## Examples migrated from main
 
 This branch replaces the generator engine while preserving source capture and
-source-reading support. Class/package declarations keep their syntax; conversion declarations now accept
-direct `Input`/`Output` trees through `.input(...)` and `.output(...)`. Import shared declaration types and macros directly from
+source-reading support. Class, package, and conversion declarations preserve the production builder API.
+Import shared declaration types and macros directly from
 `prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
@@ -80,10 +80,10 @@ JniGen supports `source(...)` or `items(...)`, `package!`, `ptr_class!`, `data_c
 `write_kotlin` returns the written paths. Settings may follow declarations.
 
 The declaration layer also supports `expand_param!` constructor/identity variants,
-`expand_return!` getter/identity outputs, `.view(fields!(...))` with per-field
+`expand_return!` getter/identity outputs, `.fields(fields!(...))` with per-field
 output overrides, and per-function overrides. These build converters directly
 in slots before generating wrappers. The migrated C and JNI examples exercise
-Report constructor/handle input variants and `.view(fields!(report_to_struct)).field_self()` output delivery.
+Report constructor/handle input variants and `.fields(fields!(report_to_struct)).field_self()` output delivery.
 Kotlin `data_class!(T)` emits a data class for a public named-field Rust record.
 Supported fields are scalars, `String`, `Vec<u8>`, other declared data classes,
 and declared opaque handles. Records without handle fields support owned inputs
@@ -121,8 +121,8 @@ Output ownership is explicit in the existing expansion hierarchy:
 The same declaration works as a type-wide default or a per-function replacement:
 
 ```rust,ignore
-.output(expand_return!(ResourceBundle).field_self_into())
-.package(package!("resources").fun(fun!(resource_bundle_new).output(
+.expand(expand_return!(ResourceBundle).field_self_into())
+.package(package!("resources").fun(fun!(resource_bundle_new).expand_return(
     expand_return!(ResourceBundle).project_self(
         Projection::owned().field("details", Projection::borrowed())))))
 ```
@@ -133,10 +133,12 @@ record contents. Legacy `field_self()` and unexpanded data-class outputs retain
 a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
 Type-wide expansions of field types do not rewrite a data class's properties.
 
-For separate field outputs, `.view(fields!(borrowed_getter))` remains available.
+For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
 and moves its returned record fields. Both support existing per-field expansion
-overrides through `.field_override("name", expand_return!(FieldType)...)` on `fields!(getter)`.
+overrides through `fields!(getter).field("name", expand_return!(FieldType)...)`.
+An empty field override, such as `.field("internal", expand_return!(Internal))`,
+explicitly omits that field while keeping its Rust cleanup.
 These fields use their type-wide defaults when not overridden.
 `fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
@@ -159,7 +161,7 @@ as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
 
-C uses `Cbindgen::builder().source(...)`, `.input(...)` / `.output(...)`, `.function(fun!(...))`,
+C uses `Cbindgen::builder().source(...)`, `.expand(...)`, `.function(fun!(...))`,
 `.prefix(...)` and `.opaque_ptr(name, type)`. Opaque declarations generate distinct
 C pointer types and typed destructors. Its old naming and cbindgen postprocessing
 settings remain commented out in the example manifests.
@@ -175,9 +177,27 @@ Source -> Flat<(), (), language metadata>
        -> generated Rust and C/Kotlin              (emit)
 ```
 
-`Input` and `Output` describe requested conversions directly. Type defaults use
-`Input::for_type` / `Output::for_type` (or `expand_param!` / `expand_return!`);
-function `.input(name, tree)` / `.output(tree)` overrides replace them.
+`Input` and `Output` describe requested conversions directly. The production
+`expand_param!`, `expand_return!`, and `fields!` builders write those trees;
+`.expand(...)` registers type defaults and function `.expand_param(name, ...)` /
+`.expand_return(...)` replace them. For example:
+
+```rust,ignore
+.expand(expand_param!(KeyExpr).variant(fun!(keyexpr_new)).variant_self())
+.expand(expand_return!(Error).field(fun!(error_message).name("message")))
+.package(package!().fun(fun!(echo)
+    .expand_param("key", expand_param!(KeyExpr).variant_self())
+    .expand_return(expand_return!(KeyExpr).field_self())))
+```
+
+`ExpandParamDecl`, `ExpandReturnDecl`, and `FieldsDecl` are typed builders over
+these same trees; there is no separate expansion tree to resolve later. They
+convert into `Input`/`Output` when registered. Explicit getter names stay in the
+prepared wire metadata and label Kotlin build/fold callback parameters and
+domain-error callback arguments. Duplicate names are rejected during generation.
+C rejects named getter views; its return packet fields remain positional. Direct
+`Input::for_type` / `Output::for_type` trees remain available through `.input(...)`
+and `.output(...)` for custom preparation code.
 Resolution applies project choices and language representations, resolves source
 constructor/getter references, and expands optional, sequence and record operations.
 Compilation lowers those explicit operations into conversion slots. Sequence
@@ -669,7 +689,7 @@ are inferred. For example, for a source function
 .function(fun!(open_session))
 
 // JNI builder: project typed error fields, just as for ordinary outputs.
-.output(expand_return!(Error).fields_into(fields!(error_into_parts)))
+.expand(expand_return!(Error).fields_into(fields!(error_into_parts)))
 .package(package!().fun(fun!(open_session)))
 ```
 

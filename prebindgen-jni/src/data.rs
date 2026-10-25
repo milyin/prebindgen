@@ -533,6 +533,10 @@ impl Codec for DataCodec {
         JniBranch::Group(JniGroup::Values)
     }
 
+    fn named_output_group(&self, name: &str) -> Result<JniBranch> {
+        JniCodec.named_output_group(name)
+    }
+
     fn optional_metadata(
         &self,
         presence: syn::Ident,
@@ -850,6 +854,7 @@ pub(crate) fn output_kotlin(
     }
     c.delivered = vec![format!("{}({})", d.class_name, c.delivered.join(", "))];
     c.result_types = vec![d.class_name.clone()];
+    c.result_names = vec![None];
     Ok(c)
 }
 

@@ -153,30 +153,30 @@ fn main() {
             assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
             Ok(())
         })
-        .input(expand_param!(Vec<i64>).variant_self())
-        .output(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
-        .output(expand_return!(ResultFailure).field("result_error_code"))
-        .error_mapper(syn::parse_quote!(StorageError), "storage_error_message")
+        .expand(expand_param!(Vec<i64>).variant_self())
+        .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
+        .expand(expand_return!(ResultFailure).field(fun!(result_error_code).name("code")))
+        .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error_class(syn::parse_quote!(StorageError), "java.lang.IllegalStateException")
-        .output(expand_return!(CDropError).fields_into(fields!(result_drop_error_into)))
-        .output(expand_return!(CPanicOutput).field("c_panic_output_value"))
-        .output(expand_return!(CResultError).fields_into(fields!(result_pair_error_into)))
-        .output(expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)))
-        .output(expand_return!(CResourceError).fields_into(fields!(result_resource_error_into)))
-        .output(expand_return!(CRichError).fields_into(fields!(result_rich_error_into)))
+        .expand(expand_return!(CDropError).fields_into(fields!(result_drop_error_into)))
+        .expand(expand_return!(CPanicOutput).field(fun!(c_panic_output_value)))
+        .expand(expand_return!(CResultError).fields_into(fields!(result_pair_error_into)))
+        .expand(expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)))
+        .expand(expand_return!(CResourceError).fields_into(fields!(result_resource_error_into)))
+        .expand(expand_return!(CRichError).fields_into(fields!(result_rich_error_into)))
         .package(package!("collections").class(data_class!(Payload))
             .class(data_class!(SequenceScalars))
             .fun(fun!(collection_scalars).callback_return())
             .fun(fun!(collection_u128).callback_return())
-            .fun(fun!(collection_construct_all).input("values",expand_param!(CollectionItem).variant("collection_construct")))
-.fun(fun!(collection_make_items).output(expand_return!(CollectionItem).fields_into(fields!(collection_item_into))))
-.fun(fun!(collection_bundle).output(expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into))))
+            .fun(fun!(collection_construct_all).expand_param("values",expand_param!(CollectionItem).variant(fun!(collection_construct))))
+.fun(fun!(collection_make_items).expand_return(expand_return!(CollectionItem).fields_into(fields!(collection_item_into))))
+.fun(fun!(collection_bundle).expand_return(expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into))))
 .fun(fun!(collection_optional_handles).callback_return())
 .fun(fun!(collection_nested_handles).callback_return())
-.fun(fun!(collection_numbers).output(expand_return!(CollectionNumbers).view(fields!(collection_numbers_view))))
-.fun(fun!(collection_resource_ids).input("values",expand_param!(OwnedResource).variant("collection_resource_clone")))
+.fun(fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view))))
+.fun(fun!(collection_resource_ids).expand_param("values",expand_param!(OwnedResource).variant(fun!(collection_resource_clone))))
 .fun(fun!(collection_i64).callback_return())
-            .fun(fun!(collection_text).input("values",expand_param!(Vec<String>).variant_self()).callback_return())
+            .fun(fun!(collection_text).expand_param("values",expand_param!(Vec<String>).variant_self()).callback_return())
             .fun(fun!(collection_bytes).callback_return())
             .fun(fun!(collection_nested).callback_return())
             .fun(fun!(collection_options).callback_return())
@@ -192,12 +192,12 @@ fn main() {
             .fun(fun!(collection_result).callback_return())
             .fun(fun!(collection_fail))
             .fun(fun!(collection_result_optional).callback_return())
-            .fun(fun!(sequence_late_drop).callback_return_only().output(expand_return!(Vec<CPanicOutput>).field("sequence_late_view")))
-            .fun(fun!(sequence_scalars).callback_return_only().output(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into))))
-            .fun(fun!(sequence_parts).callback_return_only().output(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))))
+            .fun(fun!(sequence_late_drop).callback_return_only().expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))))
+            .fun(fun!(sequence_scalars).callback_return_only().expand_return(expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into))))
+            .fun(fun!(sequence_parts).callback_return_only().expand_return(expand_return!(SequencePart).fields_into(fields!(sequence_part_into))))
 
-            .fun(fun!(storage_put_slice).input("payloads",expand_param!(Payload).variant_self()))
-            .fun(fun!(storage_get_vec).callback_return().output(expand_return!(Payload).field_self_into())))
+            .fun(fun!(storage_put_slice).expand_param("payloads",expand_param!(Payload).variant_self()))
+            .fun(fun!(storage_get_vec).callback_return().expand_return(expand_return!(Payload).field_self_into())))
         .package(package!("results")
             .fun(fun!(c_result_error_drop))
             .fun(fun!(c_result_late_niche))
@@ -209,24 +209,24 @@ fn main() {
             .fun(fun!(result_text))
             .fun(fun!(result_record))
             .fun(fun!(result_owned))
-            .fun(fun!(result_other).on_error("result_string_message").output(expand_return!(i64).field_self()))
+            .fun(fun!(result_other).on_error(fun!(result_string_message)).expand_return(expand_return!(i64).field_self()))
             .fun(fun!(storage_try_with_label))
             .fun(fun!(result_error_drops)))
         .package(package!("enums")
             .fun(fun!(enum_boundary_probe)).class(enum_class!(Priority))
             .class(ptr_class!(PayloadHandle).name("EnumPayload"))
-            .fun(fun!(enum_payload_new).output(expand_return!(PayloadHandle).field_self_into()))
+            .fun(fun!(enum_payload_new).expand_return(expand_return!(PayloadHandle).field_self_into()))
             .fun(fun!(payload_priority)).class(enum_class!(SparseCode).name("Code"))
             .class(enum_class!(EnumNames).variant_name("name","Name").variant_name("ordinal","Ordinal").variant_name("entries","Entries").variant_name("kotlin","Kotlin")).class(data_class!(EnumRecord))
             .fun(fun!(priority_weight)).fun(fun!(priority_or))
             .fun(fun!(sparse_echo)).fun(fun!(sparse_optional)).fun(fun!(sparse_nested))
             .fun(fun!(sparse_ref)).fun(fun!(sparse_borrowed)).fun(fun!(enum_record_echo)).fun(fun!(enum_names_echo)))
-        .input(expand_param!(TextNicheInput).variant("text_niche_input_new"))
-        .input(expand_param!(BytesNicheInput).variant("bytes_niche_input_new"))
-        .input(expand_param!(ResourceChoice).variant("resource_choice_new"))
-        .input(expand_param!(NicheChoiceHandle).variant("niche_choice_new").variant_self())
-        .input(expand_param!(OptionCtor).variant("option_ctor_new").variant_self())
-        .input(expand_param!(OptionChoice).variant("option_choice_new").variant_self())
+        .expand(expand_param!(TextNicheInput).variant(fun!(text_niche_input_new)))
+        .expand(expand_param!(BytesNicheInput).variant(fun!(bytes_niche_input_new)))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .expand(expand_param!(NicheChoiceHandle).variant(fun!(niche_choice_new)).variant_self())
+        .expand(expand_param!(OptionCtor).variant(fun!(option_ctor_new)).variant_self())
+        .expand(expand_param!(OptionChoice).variant(fun!(option_choice_new)).variant_self())
         .package(package!("options")
             .class(ptr_class!(NicheChoiceHandle)).fun(fun!(niche_choice_new)).fun(fun!(niche_choice_id))
             .fun(fun!(option_nested_u32))
@@ -234,14 +234,14 @@ fn main() {
             .fun(fun!(option_triple_i64)).fun(fun!(option_triple_unit))
             .fun(fun!(optional_text_input_len)).fun(fun!(optional_bytes_input_len))
             .fun(fun!(nested_niche_choice_id))
-            .fun(fun!(option_nested_projection_views).output(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .fun(fun!(option_nested_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
             .class(ptr_class!(OptionChoice))
             .class(ptr_class!(OptionCtor)).fun(fun!(option_ctor_new)).fun(fun!(option_ctor_id)).fun(fun!(option_nested_resource))
             .fun(fun!(option_choice_id))
             .fun(fun!(option_str_echo)).fun(fun!(option_slice_echo)).fun(fun!(option_str_len)).fun(fun!(option_slice_len)).fun(fun!(option_string_len)).fun(fun!(option_i64_ref))
             .fun(fun!(option_resource_pair)).fun(fun!(resource_choice_id))
-            .fun(fun!(optional_pair_new).output(expand_return!(OptionalPair).fields_into(fields!(optional_pair_into).field_override("present",expand_return!(OwnedResource).field_self_into()))))
-            .fun(fun!(option_projection_views).output(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
+            .fun(fun!(optional_pair_new).expand_return(expand_return!(OptionalPair).fields_into(fields!(optional_pair_into).field("present",expand_return!(OwnedResource).field_self_into()))))
+            .fun(fun!(option_projection_views).expand_return(expand_return!(ProjectionHandle).field_self_into().field_self_ref()))
             .class(data_class!(OptionalFields))
             .class(data_class!(OptionalBytes)).fun(fun!(optional_bytes_echo))
             .fun(fun!(option_resource_mut)).fun(fun!(option_projection_ref))
@@ -249,10 +249,10 @@ fn main() {
             .fun(fun!(option_i64)).fun(fun!(option_char)).fun(fun!(option_u8)).fun(fun!(option_bool))
             .fun(fun!(option_text)).fun(fun!(option_bytes)).fun(fun!(option_unit))
             .fun(fun!(option_nested)).fun(fun!(option_nested_char))
-            .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).input("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
+            .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
             .fun(fun!(optional_fields_echo))
-            .fun(fun!(optional_field_new).output(expand_return!(OptionalField).view(fields!(optional_field_fields))))
-            .fun(fun!(optional_resource_new).output(expand_return!(Option<OptionalResource>).field_self_into())))
+            .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
+            .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.
 .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
@@ -627,18 +627,18 @@ fn main() {
         // `(count, total)` vs `Summary` surface as distinct JVM signatures, so
         // functions may `.split_on_param(...)` it into typed overloads (see
         // `archive_store` / `storage_matches_summary` / `summary_prefer`).
-        .input(
+        .expand(
             expand_param!(Summary)
-                .variant("summary_new")
+                .variant(fun!(summary_new))
                 .variant_self(),
         )
 
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
-        .output(
+        .expand(
             expand_return!(Summary)
-                .field("summary_count")
-                .field("summary_total"),
+                .field(fun!(summary_count))
+                .field(fun!(summary_total)),
         )
 
         // `Report` default output DERIVED from its value form (#213): the
@@ -1234,23 +1234,23 @@ fn main() {
                 // Explicit identity declarations give text and bytes, like the defaults.
                 .fun(
                     fun!(text_echo)
-                        .input("s", expand_param!(String).variant_self())
-                        .output(expand_return!(String).field_self()),
+                        .expand_param("s", expand_param!(String).variant_self())
+                        .expand_return(expand_return!(String).field_self()),
                 )
                 .fun(
                     fun!(bytes_echo)
-                        .input("b", expand_param!(Vec<u8>).variant_self())
-                        .output(expand_return!(Vec<u8>).field_self()),
+                        .expand_param("b", expand_param!(Vec<u8>).variant_self())
+                        .expand_return(expand_return!(Vec<u8>).field_self()),
                 ),
         )
         // Report projects its supported Summary, Stamp and label fields.
         // Project those fields before handing ownership of the Report to Kotlin.
-        .output(expand_return!(Report).view(fields!(report_to_struct).field_override("origin", expand_return!(Stamp).field_self())).field_self())
-        .input(expand_param!(Report).variant_self().variant("report_new"))
+        .expand(expand_return!(Report).fields(fields!(report_to_struct).field("origin", expand_return!(Stamp).field_self())).field_self())
+        .expand(expand_param!(Report).variant_self().variant(fun!(report_new)))
         .package(package!().fun(fun!(report_new)).fun(fun!(report_into_struct)))
-        .output(expand_return!(Stamp).field("stamp_secs").field("stamp_nanos"))
-        .output(expand_return!(Payload).view(fields!(payload_to_struct)))
-        .input(expand_param!(Payload).variant("payload_new"))
+        .expand(expand_return!(Stamp).field(fun!(stamp_secs)).field(fun!(stamp_nanos)))
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
         .package(package!().fun(fun!(payload_new)).fun(fun!(storage_with_payload)).fun(fun!(summary_new)).fun(fun!(summary_total_raw)))
         .package(
             package!("primitives")
@@ -1273,51 +1273,63 @@ fn main() {
                 .fun(fun!(primitive_unit)),
         )
         .package(package!()
-            .fun(fun!(report_label).input("report", expand_param!(Report).variant("report_from_summary")))
-            .fun(fun!(report_relabel).input("report", expand_param!(Report).variant_self()))
+            .fun(fun!(report_label).expand_param("report", expand_param!(Report).variant(fun!(report_from_summary))))
+            .fun(fun!(report_relabel).expand_param("report", expand_param!(Report).variant_self()))
             .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
             .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
-            .fun(fun!(storage_summary_handle).output(expand_return!(Summary).field_self())))
-        .output(expand_return!(ProjectionPair).field_self_ref())
+            .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
+        .expand(expand_return!(ProjectionPair).field_self_ref())
         .package(package!("resources")
             .class(data_class!(ProjectionPair)).class(ptr_class!(ProjectionHandle))
             .fun(fun!(projection_pair_borrowed))
-            .fun(fun!(projection_pair_owned).output(expand_return!(ProjectionPair).field_self_into()))
-            .fun(fun!(projection_pair_mixed).output(expand_return!(ProjectionPair).project_self(
+            .fun(fun!(projection_pair_owned).expand_return(expand_return!(ProjectionPair).field_self_into()))
+            .fun(fun!(projection_pair_mixed).expand_return(expand_return!(ProjectionPair).project_self(
                 prebindgen_jni::Projection::owned().field("first", prebindgen_jni::Projection::borrowed()))))
-            .fun(fun!(projection_pair_views).output(expand_return!(ProjectionPair).field_self_into().field_self_ref()))
+            .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_ref()))
             .fun(fun!(projection_clones)).fun(fun!(projection_drops)))
-        .output(expand_return!(ResourceBundle).field_self_into())
+        .expand(expand_return!(ResourceBundle).field_self_into())
         .package(package!("resources")
             .class(data_class!(ResourceBundle))
             .class(data_class!(ResourcePair))
             .class(ptr_class!(OwnedResource))
-            .fun(fun!(resource_bundle_new).output(expand_return!(ResourceBundle).project_self(
+            .fun(fun!(resource_bundle_new).expand_return(expand_return!(ResourceBundle).project_self(
                 prebindgen_jni::Projection::owned().field("details", prebindgen_jni::Projection::borrowed()))))
             .fun(fun!(resource_bundle_default))
-            .fun(fun!(resource_bundle_fields).output(expand_return!(ResourceBundle).fields_into(
+            .fun(fun!(resource_bundle_fields).expand_return(expand_return!(ResourceBundle).fields_into(
                 fields!(resource_bundle_into)
-                    .field_override("pair", expand_return!(ResourcePair).field_self_into())
-                    .field_override("details", expand_return!(DataFloats).field_self_ref()))))
+                    .field("pair", expand_return!(ResourcePair).field_self_into())
+                    .field("details", expand_return!(DataFloats).field_self_ref()))))
+            .fun(fun!(api_record_new).expand_return(
+                expand_return!(ApiRecord).fields_into(
+                    fields!(api_record_into)
+                    .field("omitted", expand_return!(OwnedResource))
+                    .field("omitted_opt", expand_return!(OwnedResource))
+                    .field("omitted_vec", expand_return!(OwnedResource)))))
+            .fun(fun!(api_record_views).expand_return(expand_return!(ApiRecord)
+                .field(fun!(api_record_count).name("count"))
+                .field(fun!(api_record_label).name("label"))))
+            .fun(fun!(api_record_rows).callback_return_only().expand_return(expand_return!(ApiRecord)
+                .field(fun!(api_record_count).name("count"))
+                .field(fun!(api_record_label).name("label"))))
             .fun(fun!(owned_resource_id))
             .fun(fun!(owned_resource_drops)))
         .package(package!("resourceViews")
-            .fun(fun!(resource_bundle_views).output(
-                expand_return!(ResourceBundle).field_self_into().field("resource_bundle_label"))))
+            .fun(fun!(resource_bundle_views).expand_return(
+                expand_return!(ResourceBundle).field_self_into().field(fun!(resource_bundle_label)))))
         .package(package!("values")
             .class(data_class!(DataEnvelope).name("Envelope"))
             .class(data_class!(DataFloats))
                 .class(data_class!(DataPrimitives))
-                .fun(fun!(data_primitives_echo).input("value", expand_param!(DataPrimitives).variant_self().variant("data_primitives_zero")))
+                .fun(fun!(data_primitives_echo).expand_param("value", expand_param!(DataPrimitives).variant_self().variant(fun!(data_primitives_zero))))
                 .fun(fun!(data_primitives_zero))
             .fun(fun!(data_envelope_echo))
                 .fun(fun!(data_with_storage))
-                .fun(fun!(data_envelope_constructed).input("value", expand_param!(DataEnvelope).variant("data_envelope_from_blob")))
+                .fun(fun!(data_envelope_constructed).expand_param("value", expand_param!(DataEnvelope).variant(fun!(data_envelope_from_blob))))
             .fun(fun!(data_floats_echo))
-            .fun(fun!(blob_value_selected).input("value",
-                expand_param!(BlobValue).variant_self().variant("blob_value_new")))
-            .fun(fun!(blob_value_views).output(
-                expand_return!(BlobValue).field_self().field_self().field("blob_value_copy"))))
+            .fun(fun!(blob_value_selected).expand_param("value",
+                expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
+            .fun(fun!(blob_value_views).expand_return(
+                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

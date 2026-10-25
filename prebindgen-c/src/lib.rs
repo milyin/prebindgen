@@ -509,26 +509,40 @@ impl Cbindgen {
         self.source = Some(path.as_ref().to_owned());
         self
     }
+    /// Register an input/output default using the production declaration syntax.
+    /// The builder is consumed directly into its Input/Output tree.
+    pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
+        use prebindgen_declarations::ExpandDecl;
+        match decl.into() {
+            ExpandDecl::Param(decl) => self.input(decl),
+            ExpandDecl::Return(decl) => self.output(decl),
+            ExpandDecl::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
+        }
+    }
     /// Register a type-wide input or output expansion, built with `expand_param!`
     /// or `expand_return!`.
     ///
     /// Per-function overrides replace this default; duplicate defaults are rejected
     /// by [`Self::build`]. Registration order does not affect type lookup.
-    pub fn input(mut self, tree: prebindgen_declarations::Input) -> Self {
-        self.inputs.push(tree);
+    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input>) -> Self {
+        self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
-    pub fn output(mut self, tree: prebindgen_declarations::Output) -> Self {
-        self.outputs.push(tree);
+    pub fn output(mut self, tree: impl Into<prebindgen_declarations::Output>) -> Self {
+        self.outputs.push(tree.into());
         self
     }
     /// Select caller-owned C-string errors (`char **error`) for Result returns
     /// using `ty`, with a default source error-message mapper.
     /// The helper takes exactly E or &E and returns String. A function's
     /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
-    pub fn error_mapper(mut self, ty: syn::Type, mapper: impl Into<String>) -> Self {
-        self.error_mappers.push((ty, mapper.into()));
+    pub fn error_mapper(
+        mut self,
+        ty: syn::Type,
+        mapper: impl Into<prebindgen_declarations::FunctionDecl>,
+    ) -> Self {
+        self.error_mappers.push((ty, mapper.into().source_name()));
         self
     }
 
@@ -541,7 +555,11 @@ impl Cbindgen {
     }
     /// Deliver an opaque source error as a caller-owned C string through
     /// `char **error`. The mapper takes E or &E and returns String.
-    pub fn opaque_error(self, ty: syn::Type, mapper: impl Into<String>) -> Self {
+    pub fn opaque_error(
+        self,
+        ty: syn::Type,
+        mapper: impl Into<prebindgen_declarations::FunctionDecl>,
+    ) -> Self {
         self.error_mapper(ty, mapper)
     }
 
@@ -1699,10 +1717,10 @@ mod generation_tests {
         .unwrap();
         let result = Cbindgen::new(flat)
             .function(
-                fun!(values).callback_return().output(
+                fun!(values).callback_return().expand_return(
                     expand_return!(Option<Vec<i64>>)
-                        .field("number")
-                        .field("view"),
+                        .field(fun!(number))
+                        .field(fun!(view)),
                 ),
             )
             .panic()
@@ -1774,7 +1792,7 @@ mod generation_tests {
             .is_err());
         assert!(Cbindgen::new(error_model(source))
             .error("error", syn::parse_quote!(Error))
-            .error_mapper(syn::parse_quote!(Error), "message")
+            .error_mapper(syn::parse_quote!(Error), fun!(message))
             .function(fun!(f))
             .build()
             .err()
@@ -2116,7 +2134,7 @@ mod generation_tests {
         let mut flat = error_model("pub fn message(e:i64)->String{} pub fn f()->Result<i64,i64>{}");
         let declarations = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
         declarations
-            .fill(&mut flat, &CCodec, &fun!(f).on_error("message"), &())
+            .fill(&mut flat, &CCodec, &fun!(f).on_error(fun!(message)), &())
             .unwrap();
         let output = flat.function_mut("f").unwrap().ret.slot.as_mut().unwrap();
         output.outcomes.binding_failure = None;
@@ -2261,10 +2279,14 @@ mod abort_policy_tests {
     fn constructor_alternatives_retain_their_own_validation_policy() {
         let source="pub struct Number {pub value:i64} pub fn new(value:i64)->Number{} pub fn other(value:i64)->Number{} pub fn consume(value:Number){}";
         let bind = || {
-            Cbindgen::new(model(source)).function(fun!(consume).input(
-                "value",
-                expand_param!(Number).variant("new").variant("other"),
-            ))
+            Cbindgen::new(model(source)).function(
+                fun!(consume).expand_param(
+                    "value",
+                    expand_param!(Number)
+                        .variant(fun!(new))
+                        .variant(fun!(other)),
+                ),
+            )
         };
         assert!(bind().build().err().unwrap().contains(".panic()"));
         bind().panic().build().unwrap();

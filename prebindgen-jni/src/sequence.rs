@@ -200,6 +200,7 @@ pub(crate) fn output_list(
         None => (context.failure.to_owned(), String::new()),
     };
     Ok(KotlinOutput {
+        result_names:vec![None],
         delivered:vec![format!("requireNotNull({output})")],result_types:vec![format!("kotlin.collections.List<{ty}>")],
         output_locals:format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\nvar {actions}: kotlin.collections.MutableList<(kotlin.Throwable) -> kotlin.Unit>? = null\n"),
         materialize:format!("{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array<*>\n{}\n{actions}.add {{ {failure} -> {} }}\n{}\n{output}.add({value})\n}}\n",child.output_locals,child.cleanup,child.materialize),

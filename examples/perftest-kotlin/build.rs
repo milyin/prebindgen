@@ -181,8 +181,8 @@ fn main() {
 
     */
     let binding = binding
-        .input(expand_param!(Payload).variant("payload_new"))
-        .output(expand_return!(Payload).view(fields!(payload_to_struct)))
+        .expand(expand_param!(Payload).variant(fun!(payload_new)))
+        .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
         .package(
             package!()
                 .fun(fun!(payload_new))

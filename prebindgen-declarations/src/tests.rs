@@ -464,8 +464,9 @@ fn declarations_reject_unknown_or_mismatched_field_overrides() {
         ),
     ] {
         let mut flat = parse(source);
-        let function = fun!(read)
-            .output(expand_return!(Payload).view(fields!(parts).field_override(field, output)));
+        let function = fun!(read).expand_return(
+            expand_return!(Payload).fields(fields!(parts).field_override(field, output)),
+        );
         assert!(fill(&mut flat, &function).unwrap_err().contains(message));
         let f = flat.function("read").unwrap();
         assert!(f.params[0].ty.slot.is_none());
@@ -494,7 +495,10 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
     .unwrap();
     let declarations = Declarations::new(
         &flat,
-        vec![expand_param!(Payload).variant("make").variant_self()],
+        vec![expand_param!(Payload)
+            .variant(fun!(make))
+            .variant_self()
+            .into()],
         vec![],
         vec![],
     )
@@ -518,7 +522,7 @@ fn declarations_preserve_converters_and_replace_explicit_overrides() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(foo).input("y", expand_param!(Payload).variant_self()),
+            &fun!(foo).expand_param("y", expand_param!(Payload).variant_self()),
             &extra("override"),
         )
         .unwrap();
@@ -551,8 +555,8 @@ fn declaration_compilation_is_atomic_even_when_output_fails() {
     fill(&mut flat, &fun!(foo)).unwrap();
     let before = format!("{flat:?}");
     let function = fun!(foo)
-        .input("x", expand_param!(Payload).variant("make"))
-        .output(expand_return!(Payload).field("make"));
+        .expand_param("x", expand_param!(Payload).variant(fun!(make)))
+        .expand_return(expand_return!(Payload).field(fun!(make)));
     assert!(fill(&mut flat, &function)
         .unwrap_err()
         .contains("must take exactly"));
@@ -611,14 +615,14 @@ fn field_defaults_follow_type_expansions() {
     Declarations::new(
         &flat,
         vec![],
-        vec![expand_return!(Key).field("key_text")],
+        vec![expand_return!(Key).field(fun!(key_text)).into()],
         vec![],
     )
     .unwrap()
     .fill(
         &mut flat,
         &TEST_CODEC,
-        &fun!(read).output(expand_return!(Payload).view(fields!(parts))),
+        &fun!(read).expand_return(expand_return!(Payload).fields(fields!(parts))),
         &Extra::default(),
     )
     .unwrap();
@@ -661,8 +665,8 @@ fn explicit_scalar_identity_is_a_value_conversion() {
     let mut flat = parse("pub fn f(x:i64)->i64{}");
     let defaults = Declarations::new(
         &flat,
-        vec![expand_param!(i64).variant_self()],
-        vec![expand_return!(i64).field_self()],
+        vec![expand_param!(i64).variant_self().into()],
+        vec![expand_return!(i64).field_self().into()],
         vec![],
     )
     .unwrap();
@@ -1345,13 +1349,12 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).output(
+            &fun!(make).expand_return(
                 expand_return!(Pair)
                     .fields_into(
-                        fields!(into_pair)
-                            .field_override("first", expand_return!(i64).field_self_ref()),
+                        fields!(into_pair).field("first", expand_return!(i64).field_self_ref()),
                     )
-                    .field("count"),
+                    .field(fun!(count)),
             ),
             &Extra::default(),
         )
@@ -1370,7 +1373,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).output(expand_return!(Pair).fields_into(fields!(copy_pair))),
+            &fun!(make).expand_return(expand_return!(Pair).fields_into(fields!(copy_pair))),
             &Extra::default(),
         )
         .unwrap_err();
@@ -1382,7 +1385,7 @@ fn consuming_field_accessors_validate_signatures_and_order_observers() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(make).output(expand_return!(Pair).view(fields!(into_pair))),
+            &fun!(make).expand_return(expand_return!(Pair).fields(fields!(into_pair))),
             &Extra::default(),
         )
         .unwrap_err();
@@ -1616,7 +1619,7 @@ fn result_defaults_overrides_and_borrowed_error_mappers_reuse_success_plans() {
         .fill(
             &mut flat,
             &TEST_CODEC,
-            &fun!(echo).on_error("other"),
+            &fun!(echo).on_error(fun!(other)),
             &Extra::default(),
         )
         .unwrap();
@@ -1653,7 +1656,7 @@ fn invalid_result_policies_leave_all_function_slots_unchanged() {
     ] {
         let mut flat = parse(source);
         assert!(
-            fill(&mut flat, &fun!(f).on_error("message")).is_err(),
+            fill(&mut flat, &fun!(f).on_error(fun!(message))).is_err(),
             "{source}"
         );
     }
@@ -1690,19 +1693,19 @@ fn result_routing_rejects_nested_and_borrowed_data_occurrences() {
     }
     let mut flat =
         parse("pub fn message(e:String)->String{}pub fn f()->Result<Result<i64,String>,String>{}");
-    assert!(fill(&mut flat, &fun!(f).on_error("message"))
+    assert!(fill(&mut flat, &fun!(f).on_error(fun!(message)))
         .unwrap_err()
         .contains("outermost"));
     assert!(Declarations::new(
         &flat,
         vec![],
-        vec![expand_return!(Result<i64,String>).field_self()],
+        vec![expand_return!(Result<i64,String>).field_self().into()],
         vec![]
     )
     .is_err());
     assert!(Declarations::new(
         &flat,
-        vec![expand_param!(Result<i64,String>).variant_self()],
+        vec![expand_param!(Result<i64,String>).variant_self().into()],
         vec![],
         vec![]
     )
@@ -1723,7 +1726,8 @@ fn result_error_defaults_are_explicit_unique_and_selected_with_helpers() {
     )
     .is_err());
     let errors = vec![(syn::parse_quote!(E), "message".into())];
-    let names = declarations::source_functions(&[], &[], &errors, [&fun!(f).on_error("message")]);
+    let names =
+        declarations::source_functions(&[], &[], &errors, [&fun!(f).on_error(fun!(message))]);
     assert!(names.contains(&"f".into()) && names.contains(&"message".into()));
 }
 
@@ -2060,8 +2064,8 @@ fn resolved_flat_is_the_only_source_model_needed_by_compilation() {
         .map_slots(|_, _| Ok(None::<()>), |_, _| Ok(None::<()>)).unwrap();
     let defaults = Declarations::new(
         &source,
-        vec![expand_param!(R).variant("make")],
-        vec![expand_return!(R).field("inspect")],
+        vec![expand_param!(R).variant(fun!(make)).into()],
+        vec![expand_return!(R).field(fun!(inspect)).into()],
         vec![],
     )
     .unwrap();
@@ -2144,8 +2148,8 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
     let defaults = Declarations::new(
         &source,
         vec![
-            expand_param!(Payload).variant("make"),
-            expand_param!(Vec<Payload>).variant_self(),
+            expand_param!(Payload).variant(fun!(make)).into(),
+            expand_param!(Vec<Payload>).variant_self().into(),
         ],
         vec![],
         vec![],
@@ -2180,4 +2184,58 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
         .unwrap();
     let error = compile(unresolved, &TEST_CODEC, &Extra::default()).unwrap_err();
     assert!(error.starts_with("broken:"), "{error}");
+}
+
+#[test]
+fn omitted_typed_fields_drop_all_enclosing_option_and_sequence_wires() {
+    let mut model = parse("pub type Hidden=String;pub type Other=u32;pub struct Record{pub optional:Option<Hidden>,pub nested:Option<Vec<Option<Hidden>>>,pub visible:i64}pub fn parts(value:Record)->Record{}pub fn read()->Record{}");
+    let output: Output = expand_return!(Record)
+        .fields_into(
+            fields!(parts)
+                .field("optional", expand_return!(Hidden))
+                .field_override("nested", expand_return!(Hidden)),
+        )
+        .into();
+    bind_output(&mut model, &TEST_CODEC, "read", &output, &Extra::default()).unwrap();
+    let plan = model.function("read").unwrap().ret.slot.as_ref().unwrap();
+    assert_eq!(
+        prebindgen_flat::wire_definitions(std::iter::once(&plan.outcomes.success)).count(),
+        1
+    );
+    assert_eq!(plan.values.len(), 1);
+    let invalid: Output = expand_return!(Record)
+        .fields_into(fields!(parts).field("optional", expand_return!(Other)))
+        .into();
+    assert!(bind_output(&mut model, &TEST_CODEC, "read", &invalid, &Extra::default()).is_err());
+}
+
+#[test]
+fn named_getter_resolution_preserves_the_selected_name_in_the_tree() {
+    let model = parse("pub type T=String;pub fn length(value:&T)->i64{}");
+    let defaults = Declarations::new(&model, vec![], vec![], vec![]).unwrap();
+    let tree: Output = expand_return!(T).field(fun!(length).name("size")).into();
+    let tree = defaults
+        .resolve_output(
+            &model,
+            &TEST_CODEC,
+            &model.resolve_type(&syn::parse_quote!(T)).unwrap(),
+            &tree,
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(
+        matches!(tree,Output::Named {name,output} if name=="size" && matches!(output.as_ref(),Output::Getter {function,output} if function=="length"&&matches!(output.as_ref(),Output::Leaf)))
+    );
+}
+
+#[test]
+fn helper_references_reject_binding_only_decorations() {
+    assert!(
+        std::panic::catch_unwind(|| expand_param!(T).variant(fun!(make).name("renamed"))).is_err()
+    );
+    assert!(std::panic::catch_unwind(|| fun!(f).on_error(fun!(message).name("renamed"))).is_err());
+    assert!(std::panic::catch_unwind(
+        || expand_return!(T).field(fun!(get).expand_return(expand_return!(i64).field_self()))
+    )
+    .is_err());
 }

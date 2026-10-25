@@ -62,7 +62,8 @@ use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use prebindgen_declarations::{
-    expand_param, expand_return, fields, fun, FunctionDecl, Input, Output,
+    expand_param, expand_return, fields, fun, ErrorDecl, ExpandDecl, ExpandParamDecl,
+    ExpandReturnDecl, FieldsDecl, FunctionDecl, Input, Output,
 };
 /// A Kotlin owning handle class for one nonzero-sized source type.
 ///
@@ -275,25 +276,38 @@ impl JniGenBuilder {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register a type-wide input or output default, built with `expand_param!`
-    /// or `expand_return!`.
+    /// Register an input/output default using the production declaration syntax.
+    /// The builder is consumed directly into its Input/Output tree.
+    pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
+        use prebindgen_declarations::ExpandDecl;
+        match decl.into() {
+            ExpandDecl::Param(decl) => self.input(decl),
+            ExpandDecl::Return(decl) => self.output(decl),
+            ExpandDecl::Error(decl) => self.error_mapper(decl.ty, decl.mapper),
+        }
+    }
+    /// Register a type-wide explicit input tree, or a convertible input builder.
     ///
     /// Per-function overrides replace defaults. Duplicate declarations for the same
     /// type and direction are rejected during build.
-    pub fn input(mut self, tree: prebindgen_declarations::Input) -> Self {
-        self.inputs.push(tree);
+    pub fn input(mut self, tree: impl Into<prebindgen_declarations::Input>) -> Self {
+        self.inputs.push(tree.into());
         self
     }
     /// Register a type-wide direct output conversion tree.
-    pub fn output(mut self, tree: prebindgen_declarations::Output) -> Self {
-        self.outputs.push(tree);
+    pub fn output(mut self, tree: impl Into<prebindgen_declarations::Output>) -> Self {
+        self.outputs.push(tree.into());
         self
     }
     /// Select a default source error-message mapper for Result returns using `ty`.
     /// The helper takes exactly E or &E and returns String. A function's
     /// `on_error(...)` overrides this default. Duplicate resolved types are rejected.
-    pub fn error_mapper(mut self, ty: syn::Type, mapper: impl Into<String>) -> Self {
-        self.error_mappers.push((ty, mapper.into()));
+    pub fn error_mapper(
+        mut self,
+        ty: syn::Type,
+        mapper: impl Into<prebindgen_declarations::FunctionDecl>,
+    ) -> Self {
+        self.error_mappers.push((ty, mapper.into().source_name()));
         self
     }
 
@@ -585,6 +599,11 @@ impl Codec for JniCodec {
     type Branch = JniBranch;
     fn group_metadata(&self) -> JniBranch {
         JniBranch::Group(JniGroup::Values)
+    }
+
+    fn named_output_group(&self, name: &str) -> Result<JniBranch> {
+        validate_name(name)?;
+        Ok(JniBranch::Group(JniGroup::Named(name.into())))
     }
 
     fn binding_failure_layout(
@@ -1316,12 +1335,14 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .len(),
         );
+        let build_parameters = kotlin_output.callback_type_parameters()?;
         let KotlinOutput {
             delivered,
             result_types,
             output_locals,
             materialize,
             cleanup,
+            ..
         } = kotlin_output;
         if delivered.len() != result_types.len() {
             return Err("Kotlin output expression/type count differs".into());
@@ -1352,7 +1373,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             0 => ("", "Unit".into(), "Unit".into()),
             1 => ("", result_types[0].clone(), delivered[0].clone()),
             _ => {
-                kt_params.push(format!("build: ({}) -> R", result_types.join(", ")));
+                kt_params.push(format!("build: ({build_parameters}) -> R"));
                 (
                     "<R> ",
                     "R".into(),

@@ -23,6 +23,8 @@ private inline fun <reified T : Throwable> resultFailure(message: String, action
 }
 
 fun checkResults() {
+    // The getter's production .name("code") survives preparation into the handler API.
+    check(ResultFailureHandler<Long> { it }.run(code = 7L) == 7L)
     check(optionalTextInputLen(true, null, 0, onError = JniErrorHandler { 123L }) == 123L)
     val throwResult = ResultFailureHandler<Nothing> { code -> throw IOException("failure $code 世界") }
     val errorStart = resultErrorDrops()

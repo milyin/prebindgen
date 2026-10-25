@@ -36,6 +36,15 @@ fun checkOwnedRecords() {
     check(projectionClones() == cloneStart + 5uL)
     check(projectionDrops() == dropStart + 13uL)
 
+    // A production-style empty field override omits and drops a Rust-owned member.
+    val omittedBefore = ownedResourceDrops()
+    check(apiRecordNew() == 7L)
+    check(ownedResourceDrops() == omittedBefore + 3uL)
+    check(apiRecordViews { count, label -> check(label == "api record"); count } == 7L)
+    check(ownedResourceDrops() == omittedBefore + 6uL)
+    check(apiRecordRowsFold(0L) { sum, count, label -> check(label == "api record"); sum + count } == 14L)
+    check(ownedResourceDrops() == omittedBefore + 12uL)
+
     val before = ownedResourceDrops()
     val bundle = resourceBundleNew()
     check(bundle.label == "owned bundle")

@@ -2550,6 +2550,43 @@ impl Drop for OwnedResourceImpl {
 }
 #[prebindgen]
 pub type OwnedResource = OwnedResourceImpl;
+/// Production declaration API probe: an omitted non-cloneable field stays Rust-owned.
+#[prebindgen]
+pub struct ApiRecord {
+    pub count: i64,
+    pub omitted: OwnedResource,
+    pub omitted_opt: Option<OwnedResource>,
+    pub omitted_vec: Vec<OwnedResource>,
+}
+#[prebindgen]
+pub fn api_record_new() -> ApiRecord {
+    ApiRecord {
+        count: 7,
+        omitted: OwnedResourceImpl { id: 99 },
+        omitted_opt: Some(OwnedResourceImpl { id: 100 }),
+        omitted_vec: vec![OwnedResourceImpl { id: 101 }],
+    }
+}
+#[prebindgen]
+pub fn api_record_into(value: ApiRecord) -> ApiRecord {
+    value
+}
+#[prebindgen]
+pub fn api_record_count(value: &ApiRecord) -> i64 {
+    value.count
+}
+#[prebindgen]
+pub fn api_record_label(_value: &ApiRecord) -> String {
+    "api record".into()
+}
+#[prebindgen]
+pub fn api_record_views() -> ApiRecord {
+    api_record_new()
+}
+#[prebindgen]
+pub fn api_record_rows() -> Vec<ApiRecord> {
+    vec![api_record_new(), api_record_new()]
+}
 #[prebindgen]
 pub struct ResourcePair {
     pub first: OwnedResource,

@@ -221,13 +221,7 @@ pub(crate) fn handler_files(
                 error.handler
             ));
         }
-        let params = output
-            .result_types
-            .iter()
-            .enumerate()
-            .map(|(i, ty)| format!("v{i}: {ty}"))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let params = output.callback_parameter_declarations()?;
         let text = format!("package {pkg}\n\n/** Domain-error callback. Called after JNI and handle locks finish. Handle arguments are closed after run; call take() to retain an owner. */\npublic fun interface {name}<out R> {{ public fun run({params}): R }}\n");
         if files
             .insert(format!("{}/{}.kt", pkg.replace('.', "/"), name), text)
