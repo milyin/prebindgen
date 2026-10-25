@@ -72,7 +72,7 @@
 <a href=#72 id=72 data-nosnippet>72</a>/// Functions with entirely empty slots remain source-only helpers. This check
 <a href=#73 id=73 data-nosnippet>73</a>/// neither builds conversions nor changes the model. Adapters call it before
 <a href=#74 id=74 data-nosnippet>74</a>/// writing wrappers. It does not validate code fragments supplied directly by callers.
-<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub fn </span>validate_bindings&lt;I: Conversion, O: Conversion&gt;(flat: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Flat&lt;I, O&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub fn </span>validate_bindings&lt;M: <span class="kw">crate</span>::Schema&gt;(flat: <span class="kw-2">&amp;</span><span class="kw">crate</span>::Flat&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#76 id=76 data-nosnippet>76</a>    <span class="kw">for </span>f <span class="kw">in </span>flat.functions.values() {
 <a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">if </span>f.ret.slot.is_some() {
 <a href=#78 id=78 data-nosnippet>78</a>            <span class="kw">for </span>p <span class="kw">in </span><span class="kw-2">&amp;</span>f.params {
@@ -244,7 +244,7 @@
 <a href=#244 id=244 data-nosnippet>244</a>        syn::parse2(fragment).map_err(|error| <span class="macro">format!</span>(<span class="string">"expected a Rust expression: {error}"</span>))<span class="question-mark">?</span>;
 <a href=#245 id=245 data-nosnippet>245</a>    <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">let </span>#target: #expected_type = #expression;))
 <a href=#246 id=246 data-nosnippet>246</a>}
-<a href=#247 id=247 data-nosnippet>247</a><span class="kw">impl</span>&lt;I: Conversion, O: Conversion&gt; <span class="kw">crate</span>::Function&lt;I, O&gt; {
+<a href=#247 id=247 data-nosnippet>247</a><span class="kw">impl</span>&lt;I: Conversion, O: Conversion, M&gt; <span class="kw">crate</span>::Function&lt;I, O, M&gt; {
 <a href=#248 id=248 data-nosnippet>248</a>    <span class="doccomment">/// Filled input slots, preserving source parameter order and grouping.
 <a href=#249 id=249 data-nosnippet>249</a>    </span><span class="kw">pub fn </span>input_conversions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw-2">&amp;</span>I&gt;&gt; {
 <a href=#250 id=250 data-nosnippet>250</a>        <span class="self">self</span>.params

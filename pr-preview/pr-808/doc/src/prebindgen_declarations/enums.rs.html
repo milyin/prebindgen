@@ -16,7 +16,7 @@
 <a href=#16 id=16 data-nosnippet>16</a>}
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">impl </span>EnumMapping {
 <a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// Preserve the source discriminants in a checked `i32` mapping.
-<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="kw">pub fn </span>new(source: <span class="kw-2">&amp;</span>prebindgen_flat::FieldlessEnum) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="kw">pub fn </span>new&lt;M&gt;(source: <span class="kw-2">&amp;</span>prebindgen_flat::FieldlessEnum&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
 <a href=#20 id=20 data-nosnippet>20</a>        <span class="kw">fn </span>integer(e: <span class="kw-2">&amp;</span>syn::Expr) -&gt; <span class="prelude-ty">Result</span>&lt;i128&gt; {
 <a href=#21 id=21 data-nosnippet>21</a>            <span class="kw">match </span>e {
 <a href=#22 id=22 data-nosnippet>22</a>                syn::Expr::Lit(syn::ExprLit {
@@ -193,7 +193,7 @@
 <a href=#193 id=193 data-nosnippet>193</a></span><span class="kw">mod </span>tests {
 <a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 <a href=#195 id=195 data-nosnippet>195</a>    <span class="kw">fn </span>mapping(source: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;EnumMapping&gt; {
-<a href=#196 id=196 data-nosnippet>196</a>        <span class="kw">let </span>flat = Flat::&lt;(), ()&gt;::parse(
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="kw">let </span>flat = Flat::&lt;()&gt;::parse(
 <a href=#197 id=197 data-nosnippet>197</a>            syn::parse_file(source)
 <a href=#198 id=198 data-nosnippet>198</a>                .unwrap()
 <a href=#199 id=199 data-nosnippet>199</a>                .items

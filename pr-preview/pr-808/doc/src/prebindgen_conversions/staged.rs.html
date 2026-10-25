@@ -196,8 +196,8 @@
 <a href=#196 id=196 data-nosnippet>196</a>/// Generators choosing this helper use address alias checks and one shared
 <a href=#197 id=197 data-nosnippet>197</a>/// acknowledgement. Other generators can compose their own request protocols.
 <a href=#198 id=198 data-nosnippet>198</a>/// This is deliberately outside Flat: none of these phases are required by its traits.
-<a href=#199 id=199 data-nosnippet>199</a></span><span class="kw">pub fn </span>emit_call&lt;I, O, C: <span class="lifetime">'static</span>&gt;(
-<a href=#200 id=200 data-nosnippet>200</a>    function: <span class="kw-2">&amp;</span>Function&lt;I, O&gt;,
+<a href=#199 id=199 data-nosnippet>199</a></span><span class="kw">pub fn </span>emit_call&lt;I, O, C: <span class="lifetime">'static</span>, M&gt;(
+<a href=#200 id=200 data-nosnippet>200</a>    function: <span class="kw-2">&amp;</span>Function&lt;I, O, M&gt;,
 <a href=#201 id=201 data-nosnippet>201</a>    context: <span class="kw-2">&amp;</span>C,
 <a href=#202 id=202 data-nosnippet>202</a>    source: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#203 id=203 data-nosnippet>203</a>    result_type: <span class="kw-2">&amp;</span>syn::Type,
