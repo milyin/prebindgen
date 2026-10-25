@@ -802,12 +802,6 @@ impl Cbindgen {
             }
             info.pointer_order = order;
         }
-        for (order, error) in errors.into_iter().enumerate() {
-            let ty = error.ty.clone();
-            let info = &mut flat.type_info_mut(&ty)?.metadata;
-            info.error = Some(error);
-            info.error_order = order;
-        }
         for f in flat.functions.values_mut() {
             if f.ret.slot.is_some() {
                 f.metadata = Some(CFunction {
@@ -987,6 +981,7 @@ pub fn generate<
         format!("{prefix}_H"),
     ]);
     for (name, mapping) in &enums {
+        prebindgen_declarations::ident(name)?;
         if !symbols.insert(format!("{prefix}_{name}")) {
             return Err("duplicate C enum symbol".into());
         }
@@ -1004,6 +999,7 @@ pub fn generate<
         .values()
         .filter_map(|t| t.metadata.pointer.as_ref())
     {
+        prebindgen_declarations::ident(name)?;
         if !symbols.insert(format!("{prefix}_{name}")) {
             return Err("C enum and pointer names collide".into());
         }
@@ -1157,6 +1153,7 @@ pub fn generate<
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
     for (name, mapping) in &enums {
+        prebindgen_declarations::ident(name)?;
         header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
         for (variant, value) in &mapping.variants {
             let variant = variant.to_string();
@@ -2009,6 +2006,35 @@ mod generation_tests {
                     .name
             );
         }
+    }
+
+    #[test]
+    fn public_emission_rejects_invalid_c_type_names_without_panicking() {
+        let mut prepared = Cbindgen::new(error_model("pub type Handle=String;pub enum E{A,B}"))
+            .opaque_ptr("handle", syn::parse_quote!(Handle))
+            .enum_type("choice", syn::parse_quote!(E))
+            .prepare()
+            .unwrap();
+        prepared
+            .type_info_mut(&syn::parse_quote!(crate::Handle))
+            .unwrap()
+            .metadata
+            .pointer = Some("bad-name".into());
+        assert!(generate(&prepared).is_err());
+        prepared
+            .type_info_mut(&syn::parse_quote!(crate::Handle))
+            .unwrap()
+            .metadata
+            .pointer = Some("handle".into());
+        let enumeration = prepared
+            .type_info_mut(&syn::parse_quote!(crate::E))
+            .unwrap()
+            .metadata
+            .enumeration
+            .as_mut()
+            .unwrap();
+        std::rc::Rc::make_mut(enumeration).name = "bad-name".into();
+        assert!(generate(&prepared).is_err());
     }
 
     #[test]

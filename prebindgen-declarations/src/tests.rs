@@ -2135,3 +2135,49 @@ fn unresolved_combined_outputs_return_an_error_without_panicking() {
         .unwrap();
     assert!(compile(flat, &TEST_CODEC, &Extra::default()).is_err());
 }
+
+#[test]
+fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function() {
+    let source = model()
+        .map_slots(|_, _| Ok(None::<()>), |_, _| Ok(None::<()>))
+        .unwrap();
+    let defaults = Declarations::new(
+        &source,
+        vec![
+            expand_param!(Payload).variant("make"),
+            expand_param!(Vec<Payload>).variant_self(),
+        ],
+        vec![],
+        vec![],
+    )
+    .unwrap();
+    let resolved = defaults
+        .resolve_input(
+            &source,
+            &TEST_CODEC,
+            &source
+                .resolve_type(&syn::parse_quote!(Vec<Payload>))
+                .unwrap(),
+            &Input::Auto,
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(
+        matches!(resolved,Input::Sequence(child) if matches!(&*child,Input::Constructor {function,..} if function=="make"))
+    );
+    let error = defaults
+        .resolve(
+            source,
+            &TEST_CODEC,
+            &[fun!(foo).input("x", Input::call("missing"))],
+            &Extra::default(),
+        )
+        .unwrap_err();
+    assert!(error.starts_with("foo:"), "{error}");
+
+    let unresolved = parse("pub fn broken()->i64{}")
+        .map_slots(|_, _| Ok(None::<Input>), |_, _| Ok(Some(Output::Auto)))
+        .unwrap();
+    let error = compile(unresolved, &TEST_CODEC, &Extra::default()).unwrap_err();
+    assert!(error.starts_with("broken:"), "{error}");
+}

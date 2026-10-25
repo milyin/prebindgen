@@ -1045,34 +1045,38 @@ pub fn compile<C: Codec>(
         let Some(output) = &function.ret.slot else {
             continue;
         };
-        let mut inputs = Vec::new();
-        for (index, param) in function.params.iter().enumerate() {
-            let tree = param
-                .ty
-                .slot
-                .as_ref()
-                .ok_or_else(|| format!("missing resolved input `{}`", param.name))?;
-            let mut plan = Compiler::new(&flat, codec, format!("p{index}")).input(
-                &param.ty.ty,
-                tree,
+        let (inputs, output) = (|| -> Result<_> {
+            let mut inputs = Vec::new();
+            for (index, param) in function.params.iter().enumerate() {
+                let tree = param
+                    .ty
+                    .slot
+                    .as_ref()
+                    .ok_or_else(|| format!("missing resolved input `{}`", param.name))?;
+                let mut plan = Compiler::new(&flat, codec, format!("p{index}")).input(
+                    &param.ty.ty,
+                    tree,
+                    extra,
+                    &Condition::default(),
+                )?;
+                codec.finish_input(&mut plan, extra)?;
+                codec.validate_input(&plan)?;
+                inputs.push(plan.into());
+            }
+            let mut output = Compiler::new(&flat, codec, "ret".into()).output_root(
+                &function.ret.ty,
+                output,
                 extra,
-                &Condition::default(),
+                prebindgen_conversions::source_result_expr(),
+                false,
             )?;
-            codec.finish_input(&mut plan, extra)?;
-            codec.validate_input(&plan)?;
-            inputs.push(plan.into());
-        }
-        let mut output = Compiler::new(&flat, codec, "ret".into()).output_root(
-            &function.ret.ty,
-            output,
-            extra,
-            prebindgen_conversions::source_result_expr(),
-            false,
-        )?;
-        finalize_output_schema(codec, &mut output, extra)?;
-        codec.finish_output(&mut output, extra)?;
-        codec.validate_output(&output)?;
-        plans.insert(name.clone(), (inputs, output.into()));
+            finalize_output_schema(codec, &mut output, extra)?;
+            codec.finish_output(&mut output, extra)?;
+            codec.validate_output(&output)?;
+            Ok((inputs, output.into()))
+        })()
+        .map_err(|error| format!("{name}: {error}"))?;
+        plans.insert(name.clone(), (inputs, output));
     }
     let mut flat = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
     for (name, (inputs, output)) in plans {

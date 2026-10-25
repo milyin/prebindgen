@@ -9,6 +9,7 @@ fn main() {
         .opaque_ptr("panic_output", pq!(CPanicOutput))
         .function(fun!(c_panic_output_new).output(expand_return!(CPanicOutput).field_self_into()))
         .function(fun!(c_plain_panic))
+        .input(expand_param!(Vec<i64>).variant_self())
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .opaque_error(syn::parse_quote!(ResultFailure), "result_error_message")
         .opaque_error(syn::parse_quote!(StorageError), "storage_error_message")
@@ -62,7 +63,11 @@ fn main() {
         .panic()
         .function(fun!(collection_i64).callback_return())
         .panic()
-        .function(fun!(collection_text).callback_return())
+        .function(
+            fun!(collection_text)
+                .input("values", expand_param!(Vec<String>).variant_self())
+                .callback_return(),
+        )
         .panic()
         .function(fun!(collection_bytes).callback_return())
         .panic()

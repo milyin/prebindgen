@@ -21,7 +21,7 @@ pub(crate) fn prepare(
     configured: Vec<(String, syn::Type)>,
 ) -> Result<Vec<std::rc::Rc<ErrorBinding>>> {
     let mut out = Vec::new();
-    for (name, ty) in configured {
+    for (order, (name, ty)) in configured.into_iter().enumerate() {
         let ty = flat.resolve_type(&ty)?;
         let recipe = declarations.owned_record_output(flat, codec, &ty, &())?;
         let id = helper(&name);
@@ -54,7 +54,9 @@ pub(crate) fn prepare(
             plan,
             fields,
         });
-        flat.type_metadata_mut(&binding.ty)?.error = Some(binding.clone());
+        let metadata = flat.type_metadata_mut(&binding.ty)?;
+        metadata.error = Some(binding.clone());
+        metadata.error_order = order;
         out.push(binding);
     }
     Ok(out)

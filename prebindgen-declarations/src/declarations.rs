@@ -113,29 +113,33 @@ impl Declarations {
     ) -> Result<Flat<Input, Output, C::Metadata>> {
         let mut flat = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
         for decl in functions {
-            let source = flat.function(&decl.name)?;
-            for name in decl.params.keys() {
-                if !source.params.iter().any(|p| p.name == name.as_str()) {
-                    return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
+            let (inputs, output) = (|| -> Result<_> {
+                let source = flat.function(&decl.name)?;
+                for name in decl.params.keys() {
+                    if !source.params.iter().any(|p| p.name == name.as_str()) {
+                        return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
+                    }
                 }
-            }
-            if decl.error.is_some() && result_parts(&source.ret.ty).is_none() {
-                return Err("on_error requires a top-level Result<T, E> return".into());
-            }
-            let inputs = source
-                .params
-                .iter()
-                .map(|p| {
-                    self.resolve_input(
-                        &flat,
-                        codec,
-                        &p.ty.ty,
-                        decl.params.get(&p.name.to_string()).unwrap_or(&Input::Auto),
-                        extra,
-                    )
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let output = self.function_output(&flat, codec, &source.ret.ty, decl, extra)?;
+                if decl.error.is_some() && result_parts(&source.ret.ty).is_none() {
+                    return Err("on_error requires a top-level Result<T, E> return".into());
+                }
+                let inputs = source
+                    .params
+                    .iter()
+                    .map(|p| {
+                        self.resolve_input(
+                            &flat,
+                            codec,
+                            &p.ty.ty,
+                            decl.params.get(&p.name.to_string()).unwrap_or(&Input::Auto),
+                            extra,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let output = self.function_output(&flat, codec, &source.ret.ty, decl, extra)?;
+                Ok((inputs, output))
+            })()
+            .map_err(|error| format!("{}: {error}", decl.name))?;
             let target = flat.function_mut(&decl.name)?;
             for (param, input) in target.params.iter_mut().zip(inputs) {
                 param.ty.slot = Some(input);
@@ -416,6 +420,13 @@ impl Declarations {
                     return Ok(Input::Optional(Box::new(resolve(
                         inner,
                         &Input::Leaf,
+                        stack,
+                    )?)));
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    return Ok(Input::Sequence(Box::new(resolve(
+                        element,
+                        &Input::Auto,
                         stack,
                     )?)));
                 }

@@ -153,6 +153,7 @@ fn main() {
             assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
             Ok(())
         })
+        .input(expand_param!(Vec<i64>).variant_self())
         .output(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
         .output(expand_return!(ResultFailure).field("result_error_code"))
         .error_mapper(syn::parse_quote!(StorageError), "storage_error_message")
@@ -175,7 +176,7 @@ fn main() {
 .fun(fun!(collection_numbers).output(expand_return!(CollectionNumbers).view(fields!(collection_numbers_view))))
 .fun(fun!(collection_resource_ids).input("values",expand_param!(OwnedResource).variant("collection_resource_clone")))
 .fun(fun!(collection_i64).callback_return())
-            .fun(fun!(collection_text).callback_return())
+            .fun(fun!(collection_text).input("values",expand_param!(Vec<String>).variant_self()).callback_return())
             .fun(fun!(collection_bytes).callback_return())
             .fun(fun!(collection_nested).callback_return())
             .fun(fun!(collection_options).callback_return())
