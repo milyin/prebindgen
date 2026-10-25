@@ -125,6 +125,7 @@ struct CodecImpl {
     unknown_prepared_read: bool,
 }
 impl Codec for CodecImpl {
+    type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;
     type Chain = PacketChain;
     type Branch = Metadata;
@@ -170,8 +171,7 @@ impl Codec for CodecImpl {
     type Niche = ();
     type Context = ();
     type Extra = ();
-    type Input = CodecInput<Self>;
-    type Output = CodecOutput<Self>;
+
     fn optional_metadata(
         &self,
         _: syn::Ident,
@@ -204,11 +204,12 @@ impl Codec for CodecImpl {
             quote!(Default::default())
         })
     }
-    fn consumes(&self, _: &Type, _: &()) -> bool {
+    fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
     fn input_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         _: &(),
         w: syn::Ident,
@@ -219,6 +220,7 @@ impl Codec for CodecImpl {
     }
     fn output_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         _: &(),
         w: syn::Ident,
@@ -275,6 +277,7 @@ impl Codec for CodecImpl {
         _: syn::Ident,
         element: &prebindgen_flat::WireNode<Type, PacketChain, Metadata>,
         values: &[(syn::Ident, TokenStream)],
+        _delivery: crate::SequenceDelivery,
     ) -> Result<SequenceOutput<Type, PacketChain>> {
         assert_eq!(
             PointerLenAbi::row_fields(element).len(),
@@ -344,11 +347,11 @@ fn pointer_length_round_trip(reverse: bool) {
     use prebindgen_conversions::staged::emit_call;
     let source =
         syn::parse_file("pub fn echo(values:Option<Vec<i32>>)->Option<Vec<i32>>{} ").unwrap();
-    let mut flat = Flat::<CodecInput<CodecImpl>, CodecOutput<CodecImpl>>::parse(
+    let mut flat = Flat::<<CodecImpl as Codec>::Schema>::parse(
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
-    let defaults = Declarations::new(&flat, vec![]).unwrap();
+    let defaults = Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
     defaults
         .fill(
             &mut flat,
@@ -429,7 +432,7 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
     let source =
         syn::parse_file("pub fn output()->Vec<Vec<i32>>{} pub fn input(values:Vec<i32>){}")
             .unwrap();
-    let mut flat = Flat::<CodecInput<CodecImpl>, CodecOutput<CodecImpl>>::parse(
+    let mut flat = Flat::<<CodecImpl as Codec>::Schema>::parse(
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
@@ -438,7 +441,9 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         ..Default::default()
     };
     let recipe = Output::Sequence {
+        delivery: SequenceDelivery::Value,
         element: Box::new(Output::Sequence {
+            delivery: SequenceDelivery::Value,
             element: Box::new(Output::Leaf),
             mode: None,
         }),

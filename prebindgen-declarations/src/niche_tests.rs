@@ -59,6 +59,7 @@ impl DomainAbi {
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
+    type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
     type Niche = Sentinel;
     type Chain = DomainGroup;
     type Branch = DomainGroup;
@@ -137,8 +138,7 @@ impl Codec for DomainCodec {
     type Extra = ();
     type Context = ();
     type Wire = Domain;
-    type Input = InputPlan<Domain>;
-    type Output = OutputPlan<Domain>;
+
     fn selector(&self, _: &()) -> Domain {
         Domain {
             ty: syn::parse_quote!(i32),
@@ -148,11 +148,12 @@ impl Codec for DomainCodec {
             valid: quote!(true),
         }
     }
-    fn consumes(&self, _: &Type, _: &()) -> bool {
+    fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
     fn input_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _: &Type,
         _: &(),
         _: syn::Ident,
@@ -163,6 +164,7 @@ impl Codec for DomainCodec {
     }
     fn output_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _: &Type,
         _: &(),
         _: syn::Ident,

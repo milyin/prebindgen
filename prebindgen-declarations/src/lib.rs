@@ -9,11 +9,14 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_flat::WireNode;
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
+use prebindgen_flat::{Schema, WireNode};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
+mod builders;
+mod request_conversion;
+pub use builders::{ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl};
 mod enums;
 pub use enums::{enum_input, enum_output, EnumMapping};
 mod optional;
@@ -50,36 +53,120 @@ pub type CodecOutput<C> = OutputPlan<
     <C as Codec>::Branch,
 >;
 
-/// A recipe for converting boundary inputs into one source argument.
+/// How a sequence return reaches the foreign caller.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SequenceDelivery {
+    /// Return a collection value using the language adapter's array/buffer representation.
+    #[default]
+    Value,
+    /// Deliver each element through the function's sequence callback.
+    Callback,
+}
+
+/// Resolved operations for converting boundary inputs into one source argument.
 ///
-/// Binding expands the recipe into wires and Rust conversion code.
+/// Preparation uses `Input<InputRequest>`; plain Input has no pending requests.
+/// [`Declarations::resolve_input`] removes requests using source declarations and defaults.
+/// An explicit subtree can be embedded in preparation with [`Input::into_preparation`].
+/// Compilation lowers the resolved operations into wires and Rust code.
+/// ```
+/// use prebindgen_declarations::{Input,InputRequest};
+/// let resolved: Input = Input::Constructor { function: "make".into(), args: vec![Input::Leaf] };
+/// let preparation: Input<InputRequest> = resolved.into_preparation();
+/// ```
+/// Requests are impossible in resolved nodes, including nested constructor arguments:
+/// ```compile_fail
+/// use prebindgen_declarations::{Input,InputRequest};
+/// let resolved: Input = Input::Constructor {
+///     function: "make".into(),
+///     args: vec![Input::Request(InputRequest::Auto)],
+/// };
+/// ```
 #[derive(Clone, Debug)]
-pub enum Input {
+pub enum Input<P = std::convert::Infallible> {
+    /// A pending preparation instruction. The default payload is uninhabited,
+    /// so a resolved Input cannot contain this variant in safe Rust.
+    Request(P),
+    /// Construct a foreign record value using its configured language representation.
+    Record(Vec<Input<P>>),
     /// Construct a collection by applying one recipe to every element.
-    Sequence(Box<Input>),
+    Sequence(Box<Input<P>>),
     /// Convert an optional payload, gating every conversion phase.
-    Optional(Box<Input>),
+    Optional(Box<Input<P>>),
     /// Convert the occurrence type itself with [`Codec::input_leaf`].
     Leaf,
     /// Construct a named record from children in field order; an empty list builds unit.
-    Fields(Vec<Input>),
+    Fields(Vec<Input<P>>),
     /// Call a source function after preparing its arguments with the child recipes.
     Constructor {
         /// Unqualified source function name; its result must match the occurrence type.
         function: String,
         /// Recipes in the constructor's parameter order.
-        args: Vec<Input>,
+        args: Vec<Input<P>>,
     },
     /// Choose an owned input using an `i32` arm index followed by all arms' wires.
     /// Inactive arms are neither validated nor acquired; indices are zero-based.
-    Selector(Vec<Input>),
+    Selector(Vec<Input<P>>),
 }
-impl Input {
+/// Source-dependent choices accepted only while preparing an input tree.
+#[derive(Clone, Debug)]
+pub enum InputRequest {
+    /// Select the configured default for this source occurrence.
+    Auto,
+    /// Apply a type-specific override, including inside optional/sequence sources.
+    ForType {
+        /// Source type targeted by the override.
+        ty: Box<Type>,
+        /// The requested conversion for that type.
+        input: Box<Input<InputRequest>>,
+    },
+    /// Infer a constructor's argument conversions from its source signature.
+    Call(String),
+}
+
+impl Input<InputRequest> {
+    /// Request this source type's configured default during preparation.
+    pub fn auto() -> Self {
+        Self::Request(InputRequest::Auto)
+    }
+    /// Associate a conversion with a source type for a default or nested override.
+    pub fn for_type(ty: Type, input: Self) -> Self {
+        Self::Request(InputRequest::ForType {
+            ty: Box::new(ty),
+            input: Box::new(input),
+        })
+    }
+    /// Infer a source constructor's argument conversions from registered defaults.
+    pub fn call(name: impl Into<String>) -> Self {
+        Self::Request(InputRequest::Call(name.into()))
+    }
+    /// Add a constructor alternative to this conversion tree.
+    pub fn variant(self, name: impl Into<String>) -> Self {
+        self.add_alternative(Self::call(name))
+    }
+    /// Add a direct codec alternative, bypassing this type's expansion default.
+    pub fn variant_self(self) -> Self {
+        self.add_alternative(Self::Leaf)
+    }
+    fn add_alternative(self, arm: Self) -> Self {
+        match self {
+            Self::Request(InputRequest::ForType { ty, input }) => {
+                Self::for_type(*ty, input.add_alternative(arm))
+            }
+            Self::Selector(mut arms) => {
+                arms.push(arm);
+                Self::Selector(arms)
+            }
+            other => Self::Selector(vec![other, arm]),
+        }
+    }
+}
+impl<P> Input<P> {
     /// Construct a record from field recipes, or unit from an empty list.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration
     /// order. Binding verifies the count against the record.
-    pub fn fields(fields: impl IntoIterator<Item = Input>) -> Self {
+    pub fn fields(fields: impl IntoIterator<Item = Input<P>>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
     /// Call a named source constructor with the supplied argument recipes.
@@ -92,7 +179,7 @@ impl Input {
     /// * `name` — unqualified name of a source function whose result type is the
     ///   input's type.
     /// * `args` — one recipe per parameter of that function, in order.
-    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input>) -> Self {
+    pub fn constructor(name: impl Into<String>, args: impl IntoIterator<Item = Input<P>>) -> Self {
         Self::Constructor {
             function: name.into(),
             args: args.into_iter().collect(),
@@ -106,20 +193,57 @@ impl Input {
     ///
     /// Requires at least one arm. Each arm retains its own wires; this does not
     /// merge equivalent wire parameters or generate destination-language overloads.
-    pub fn selector(arms: impl IntoIterator<Item = Input>) -> Self {
+    pub fn selector(arms: impl IntoIterator<Item = Input<P>>) -> Self {
         Self::Selector(arms.into_iter().collect())
     }
 }
-/// A result conversion recipe, interpreted together with its source type and codec input data.
+/// Resolved operations for converting a source result into boundary outputs.
+/// Preparation uses `Output<OutputRequest>`; plain Output permits no pending requests.
+/// [`Declarations::resolve_output`] resolves requests against source declarations and defaults.
+/// Use [`Output::into_preparation`] to embed an explicit subtree in preparation;
+/// source-dependent normalization still applies.
+///
+/// ```
+/// use prebindgen_declarations::{Output,OutputRequest};
+/// let resolved: Output = Output::Optional(Box::new(Output::Leaf));
+/// let preparation: Output<OutputRequest> = resolved.into_preparation();
+/// ```
+///
+/// Pending requests cannot be embedded inside a resolved output:
+/// ```compile_fail
+/// use prebindgen_declarations::{Output,OutputRequest};
+/// let resolved: Output = Output::Optional(Box::new(Output::Request(OutputRequest::Auto)));
+/// ```
 ///
 /// `Fields` observes fields; `OwnedFields` moves them. Explicit `Projected`
 /// leaves select borrowed or owned conversion independently of type contents.
 #[derive(Clone, Debug)]
-pub enum Output {
+pub enum Output<P = std::convert::Infallible> {
+    /// Omit this output value; source ownership still follows the enclosing operation.
+    Discard,
+    /// Give a converted view an explicit destination-language field name.
+    Named {
+        /// Destination name of the delivered view.
+        name: String,
+        /// Conversion of that view.
+        output: Box<Output<P>>,
+    },
+    /// A pending preparation instruction. Resolved Output uses an uninhabited
+    /// payload and therefore cannot contain a request.
+    Request(P),
+    /// Deliver a configured foreign record value with explicit field conversions.
+    Record {
+        /// Explicit source-field conversions in declaration order.
+        fields: Vec<Output<P>>,
+        /// Ownership of the foreign-record projection.
+        mode: ProjectionMode,
+    },
     /// Convert collection elements using ordinary or explicitly selected ownership.
     Sequence {
+        /// Delivery selected before conversion compilation.
+        delivery: SequenceDelivery,
         /// Element conversion, interpreted independently for each item.
-        element: Box<Output>,
+        element: Box<Output<P>>,
         /// `None` follows the occurrence's ownership: move owned values and observe
         /// borrowed values. `Some` explicitly selects and checks a projection policy.
         mode: Option<ProjectionMode>,
@@ -130,19 +254,19 @@ pub enum Output {
     /// The codec selects how that message reaches the destination's error channel.
     Result {
         /// Conversion of the owned success value.
-        ok: Box<Output>,
+        ok: Box<Output<P>>,
         /// Optional unqualified source message mapper. Without one, the codec
         /// must explicitly support the source error value itself.
         error: Option<String>,
     },
     /// Convert an optional payload without preparing absent values.
-    Optional(Box<Output>),
+    Optional(Box<Output<P>>),
     /// Convert the occurrence type itself with [`Codec::output_leaf`].
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
-    Fields(Vec<Output>),
+    Fields(Vec<Output<P>>),
     /// Move named fields into their output conversions.
-    OwnedFields(Vec<Output>),
+    OwnedFields(Vec<Output<P>>),
     /// Convert a leaf with an explicit ownership policy.
     Projected(Projection),
     /// Call a consuming accessor, then convert its owned result.
@@ -150,24 +274,132 @@ pub enum Output {
         /// Source accessor taking exactly the owned occurrence type.
         function: String,
         /// Conversion of its owned result.
-        output: Box<Output>,
+        output: Box<Output<P>>,
     },
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         /// Source getter taking exactly one shared reference to the current type.
         function: String,
         /// Conversion of the getter's owned result; borrowed results are unsupported.
-        output: Box<Output>,
+        output: Box<Output<P>>,
     },
     /// Produce several views of one value. At most one child may consume it.
     /// Observations run before consumption, while wire order follows this list.
-    Combine(Vec<Output>),
+    Combine(Vec<Output<P>>),
 }
-impl Output {
+/// Source-dependent choices accepted only while preparing an output tree.
+#[derive(Clone, Debug)]
+pub enum OutputRequest {
+    /// Select the configured output default for this source occurrence.
+    Auto,
+    /// Apply a type-specific override, including inside optional/sequence sources.
+    ForType {
+        /// Source type targeted by the override.
+        ty: Box<Type>,
+        /// Requested conversion for the matching type.
+        output: Box<Output<OutputRequest>>,
+    },
+    /// Resolve source record fields by name and fill unspecified conversions.
+    NamedFields {
+        /// Explicit conversions keyed by source field name.
+        overrides: std::collections::BTreeMap<String, Output<OutputRequest>>,
+        /// Ownership of field decomposition.
+        mode: ProjectionMode,
+    },
+}
+
+impl Output<OutputRequest> {
+    /// Request this source type's configured output default during preparation.
+    pub fn auto() -> Self {
+        Self::Request(OutputRequest::Auto)
+    }
+    /// Associate a conversion with a source type for a default or nested override.
+    pub fn for_type(ty: Type, output: Self) -> Self {
+        Self::Request(OutputRequest::ForType {
+            ty: Box::new(ty),
+            output: Box::new(output),
+        })
+    }
+    /// Append another simultaneous output view.
+    pub fn view(self, view: impl Into<Self>) -> Self {
+        let view = view.into();
+        match self {
+            Self::Request(OutputRequest::ForType { ty, output }) => {
+                Self::for_type(*ty, output.view(view))
+            }
+            Self::Combine(mut parts) => {
+                parts.push(view);
+                Self::Combine(parts)
+            }
+            other => Self::Combine(vec![other, view]),
+        }
+    }
+    /// Append a source getter whose result uses its registered conversion default.
+    pub fn field(self, name: impl Into<String>) -> Self {
+        self.view(Self::getter(name, Self::auto()))
+    }
+    /// Append the direct codec representation, bypassing this type's expansion default.
+    pub fn field_self(self) -> Self {
+        self.view(Self::Leaf)
+    }
+    /// Append an explicit borrowed projection.
+    pub fn field_self_ref(self) -> Self {
+        self.project_self(Projection::borrowed())
+    }
+    /// Append an explicit owned projection.
+    pub fn field_self_into(self) -> Self {
+        self.project_self(Projection::owned())
+    }
+    /// Append a projection with explicit ownership and nested field policies.
+    pub fn project_self(self, policy: Projection) -> Self {
+        self.view(Self::Projected(policy))
+    }
+    /// Append a consuming accessor followed by owned field decomposition.
+    pub fn fields_into(self, view: Self) -> Self {
+        let Self::Getter { function, output } = view else {
+            panic!("fields_into requires a fields! accessor")
+        };
+        let Self::Request(OutputRequest::NamedFields { overrides, .. }) = *output else {
+            panic!("fields_into requires named fields")
+        };
+        self.view(Self::Into {
+            function,
+            output: Box::new(Self::Request(OutputRequest::NamedFields {
+                overrides,
+                mode: ProjectionMode::Owned,
+            })),
+        })
+    }
+    /// Deprecated spelling of [`Self::fields_into`].
+    #[deprecated(note = "use fields_into instead")]
+    pub fn fields_self_into(self, view: Self) -> Self {
+        self.fields_into(view)
+    }
+    /// Override one named source field, preserving defaults for its siblings.
+    pub fn field_override(mut self, name: impl Into<String>, output: Self) -> Self {
+        match &mut self {
+            Self::Request(OutputRequest::NamedFields { overrides, .. }) => {
+                assert!(
+                    overrides.insert(name.into(), output).is_none(),
+                    "duplicate field override"
+                );
+            }
+            Self::Getter { output: inner, .. }
+            | Self::Into { output: inner, .. }
+            | Self::Request(OutputRequest::ForType { output: inner, .. }) => {
+                let old = std::mem::replace(inner, Box::new(Self::auto()));
+                **inner = old.field_override(name, output);
+            }
+            _ => panic!("field override requires named field decomposition"),
+        }
+        self
+    }
+}
+impl<P> Output<P> {
     /// Observe record fields in declaration order; use an empty list for unit.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration order.
-    pub fn fields(fields: impl IntoIterator<Item = Output>) -> Self {
+    pub fn fields(fields: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Fields(fields.into_iter().collect())
     }
     /// Observe a value through a source getter and convert the getter's result.
@@ -179,7 +411,7 @@ impl Output {
     ///
     /// * `name` — unqualified name of the source getter.
     /// * `output` — recipe for the getter's result.
-    pub fn getter(name: impl Into<String>, output: Output) -> Self {
+    pub fn getter(name: impl Into<String>, output: Output<P>) -> Self {
         Self::Getter {
             function: name.into(),
             output: Box::new(output),
@@ -190,10 +422,19 @@ impl Output {
     /// `parts` holds one recipe per view of the value; their wires appear in this
     /// order. Binding rejects an empty list or more than one consuming part. The
     /// framework uses [`Codec::consumes`] to order observations before a move.
-    pub fn combine(parts: impl IntoIterator<Item = Output>) -> Self {
+    pub fn combine(parts: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
-    fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C, borrowed: bool) -> bool {
+}
+impl Output {
+    fn consumes<C: Codec>(
+        &self,
+        flat: &prebindgen_flat::Flat<C::Schema>,
+        ty: &Type,
+        extra: &C::Extra,
+        codec: &C,
+        borrowed: bool,
+    ) -> bool {
         match self {
             Self::Sequence { mode, .. } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
@@ -202,13 +443,18 @@ impl Output {
                         && sequence_parts(ty).is_some_and(|(_, view)| view == SequenceView::Owned)
                 }
             },
+            Self::Named { output: child, .. } => child.consumes(flat, ty, extra, codec, borrowed),
             Self::Optional(child) => {
-                child.consumes(option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
+                child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
             }
-            Self::Leaf => codec.consumes(ty, extra),
+            Self::Leaf => codec.consumes(flat, ty, extra),
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
-            Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec, borrowed)),
+            Self::Record { mode, .. } => *mode == ProjectionMode::Owned,
+            Self::Request(never) => match *never {},
+            Self::Combine(p) => p
+                .iter()
+                .any(|p| p.consumes(flat, ty, extra, codec, borrowed)),
             _ => false,
         }
     }
@@ -229,6 +475,11 @@ impl Output {
 /// locals until their infallible `commit` runs at the selected protocol's
 /// transfer point. Buffered delivery commits after all foreign delivery succeeds;
 /// an explicit visitor protocol can transfer each prepared element at callback entry.
+///
+/// Source-aware hooks receive the authoritative Flat model. Read configured type,
+/// field, function and module metadata there instead of retaining parallel indexes
+/// in the codec or passing copies through `Extra`. Pure wire-composition hooks need
+/// no model access. Unresolved recipes remain temporary preparation inputs.
 ///
 /// # Implementing a codec
 ///
@@ -258,14 +509,13 @@ impl Output {
 /// }
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
+///     type Schema = prebindgen_conversions::PlanSchema<Type>;
 ///     type Niche = ();
 ///     type Chain = ();
 ///     type Branch = ();
 ///     fn group_metadata(&self) {}
 ///     type Extra = ();
 ///     type Context = ();
-///     type Input = CodecInput<Self>;
-///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
 ///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: &[Wire<Type>]) -> Result<()> {Ok(())}
@@ -277,16 +527,16 @@ impl Output {
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
 ///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
 ///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
-///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
+///     fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool { false }
 ///     fn input_leaf(
-///         &self, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
+///         &self, _flat: &prebindgen_flat::Flat<Self::Schema>, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
 ///     ) -> Result<CodecInput<Self>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         let decode = quote!(#wire.clone());
 ///         value::input(ty, wire, var, &active.rust(), decode, carrier(kind))
 ///     }
 ///     fn output_leaf(
-///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
+///         &self, _flat: &prebindgen_flat::Flat<Self::Schema>, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
 ///     ) -> Result<CodecOutput<Self>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         value::output(ty, wire, v, borrowed, |v| v, carrier(kind))
@@ -301,10 +551,11 @@ impl Output {
 /// let mut flat = Bindings::<Type>::parse(
 ///     source.items.into_iter().map(|item| (item, Default::default())),
 /// )?;
-/// let defaults = Declarations::new(&flat, vec![
-///     expand_param!(i64).variant(fun!(from_i32)).into(),
-///     expand_return!(i64).field(fun!(to_i32)).field_self().into(),
-/// ])?;
+/// let defaults = Declarations::new(&flat,
+///     vec![expand_param!(i64).variant("from_i32").into()],
+///     vec![expand_return!(i64).field("to_i32").field_self().into()],
+///     vec![],
+/// )?;
 /// defaults.fill(&mut flat, &RustCarriers, &fun!(echo), &())?;
 /// let function = flat.function("echo")?;
 /// // Input: one constructor argument. Output: two projected values.
@@ -322,6 +573,55 @@ impl Output {
 /// ```
 #[allow(clippy::type_complexity)] // Explicit, independently typed metadata for each parent variant.
 pub trait Codec {
+    /// Fixed schema selecting final converters and declaration metadata before parsing.
+    type Schema: Schema<
+        Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
+        Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
+    >;
+    /// Source-aware input normalization, called only during tree preparation.
+    /// Return an explicit operation tree for a language-specific representation.
+    fn expand_input(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _tree: &Input<InputRequest>,
+        _extra: &Self::Extra,
+    ) -> Result<Option<Input<InputRequest>>> {
+        Ok(None)
+    }
+    /// Source-aware output normalization, called before conversion compilation.
+    fn expand_output(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _tree: &Output<OutputRequest>,
+        _extra: &Self::Extra,
+    ) -> Result<Option<Output<OutputRequest>>> {
+        Ok(None)
+    }
+    /// Annotate an already compiled foreign-record input; structural expansion is complete.
+    fn input_record_metadata(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        _ty: &Type,
+        _wire: &syn::Ident,
+        _active: &Condition,
+        _plan: &mut CodecInput<Self>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
+        Err("foreign record inputs are unsupported by this codec".into())
+    }
+    /// Annotate an already compiled foreign-record output with its selected representation.
+    fn output_record_metadata(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        _ty: &Type,
+        _wire: &syn::Ident,
+        _plan: &mut CodecOutput<Self>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
+        Err("foreign record outputs are unsupported by this codec".into())
+    }
     /// Adapter-owned description of an absent wire representation. Use `()` if unused.
     /// The shared compiler never interprets this metadata.
     type Niche: Clone;
@@ -334,6 +634,10 @@ pub trait Codec {
     /// retain an empty group when there are no arguments. Source
     /// record fields instead use [`Codec::fields_group`].
     fn group_metadata(&self) -> Self::Branch;
+    /// Preserve an explicitly named output view in the prepared wire tree.
+    fn named_output_group(&self, _name: &str) -> Result<Self::Branch> {
+        Err("named output views are unsupported by this codec".into())
+    }
     /// Describe an optional value in the adapter's own metadata format.
     /// `presence` is the normalized 0/1 binding used by payload conditions.
     /// `discriminator` names a descendant wire; `niche` is its reserved absent
@@ -365,10 +669,6 @@ pub trait Codec {
     type Extra;
     /// Context supplied by the language generator when emitting stored templates.
     type Context: prebindgen_conversions::TemplateContext + 'static;
-    /// Final self-contained input converter installed after preparation.
-    type Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>;
-    /// Final self-contained output converter installed after preparation.
-    type Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>;
     /// Complete description of one wire, including its type and adapter metadata.
     /// Grouping belongs to parent nodes; no wire kind contains child wires.
     type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
@@ -389,7 +689,12 @@ pub trait Codec {
     ///
     /// * `ty` — owned source type of the value being delivered.
     /// * `extra` — occurrence data of the conversion, as passed to [`bind_output`].
-    fn consumes(&self, ty: &Type, extra: &Self::Extra) -> bool;
+    fn consumes(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+    ) -> bool;
     /// Prepare a leaf input of source type `ty` using occurrence data `extra`.
     ///
     /// All fallible checks belong in [`InputPlan::validation`]; do not
@@ -410,6 +715,7 @@ pub trait Codec {
     ///   returned wire and resource, and guard validation and acquisition with it.
     fn input_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Self::Extra,
         wire: syn::Ident,
@@ -422,6 +728,7 @@ pub trait Codec {
     /// to `projection.mode`. The default supports leaves without field overrides.
     fn output_projected(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Self::Extra,
         wire: syn::Ident,
@@ -439,6 +746,7 @@ pub trait Codec {
             return Err("owned projection cannot consume a reference payload".into());
         }
         self.output_leaf(
+            flat,
             ty,
             extra,
             wire,
@@ -467,12 +775,13 @@ pub trait Codec {
     ) -> Result<SequenceInput<Self::Wire, Self::Chain>> {
         Err("collections are unsupported by this codec".into())
     }
-    /// Choose array output transport; store element values without publishing owners.
+    /// Implement the selected sequence delivery; stage elements without publishing owners.
     /// `begin` sees `length`; `enter` and `store` see each `index`.
     /// `wire` is a unique binding stem; metadata and `values` describe every
     /// outer value by binding name. Choose any additional names fresh
     /// against element and boundary values. `{wire}_source` and `{wire}_commits`
     /// are reserved for shared preparation locals.
+    #[allow(clippy::too_many_arguments)] // Explicit occurrence bindings and delivery policy.
     fn sequence_output(
         &self,
         _extra: &Self::Extra,
@@ -481,6 +790,7 @@ pub trait Codec {
         _index: syn::Ident,
         _element: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
         _values: &[(syn::Ident, TokenStream)],
+        _delivery: SequenceDelivery,
     ) -> Result<SequenceOutput<Self::Wire, Self::Chain>> {
         Err("collections are unsupported by this codec".into())
     }
@@ -491,12 +801,14 @@ pub trait Codec {
     /// and delegates to `result_error`.
     fn result_error_value(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         _value: TokenStream,
         message: Option<TokenStream>,
         extra: &Self::Extra,
     ) -> Result<TokenStream> {
         self.result_error(
+            flat,
             ty,
             message.ok_or_else(|| {
                 format!(
@@ -511,6 +823,7 @@ pub trait Codec {
     /// uses String; raw typed errors must provide their own declared projection.
     fn source_error_layout(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         mapped: bool,
         extra: &Self::Extra,
@@ -522,6 +835,7 @@ pub trait Codec {
             ));
         }
         let plan = self.output_leaf(
+            flat,
             &syn::parse_quote!(String),
             extra,
             format_ident!("source_error_message"),
@@ -543,6 +857,7 @@ pub trait Codec {
     /// before preparing success outputs. The default rejects unsupported routing.
     fn result_error(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _ty: &Type,
         _message: TokenStream,
         _extra: &Self::Extra,
@@ -671,6 +986,7 @@ pub trait Codec {
     ///   `value` is owned.
     fn output_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Self::Extra,
         wire: syn::Ident,
@@ -682,7 +998,7 @@ pub trait Codec {
 ///
 /// Unbound source helpers have `None` slots. Bound functions need `Some` for their
 /// result and every parameter; [`prebindgen_flat::validate_bindings`] checks this before emission.
-/// Record fields retain only names and source types. Recipes and [`Codec::Extra`]
+/// Record fields retain their canonical source information and metadata. Descriptions and [`Codec::Extra`]
 /// are construction inputs, not stored in this model.
 ///
 /// Output conversion data cannot be attached to an input position:
@@ -700,7 +1016,96 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W, C = (), N = (), B = ()> = Flat<InputPlan<W, C, N, B>, OutputPlan<W, C, N, B>>;
+pub type Bindings<W, C = (), N = (), B = ()> = Flat<prebindgen_conversions::PlanSchema<W, C, N, B>>;
+
+/// Compile a request-free description for one named source parameter.
+/// The model keeps its fixed schema; this returns a converter without modifying its slot.
+/// ```
+/// use prebindgen_declarations::{compile_input,Codec,Input};
+/// use prebindgen_flat::Flat;
+/// fn resolved<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_input(flat,codec,"f","x",&Input::Leaf,extra).unwrap();
+/// }
+/// ```
+/// ```compile_fail
+/// use prebindgen_declarations::{compile_input,Codec,Input};
+/// use prebindgen_flat::Flat;
+/// fn pending<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_input(flat,codec,"f","x",&Input::auto(),extra).unwrap();
+/// }
+/// ```
+pub fn compile_input<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    function: &str,
+    parameter: &str,
+    recipe: &Input,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Input> {
+    let f = flat.function(function)?;
+    let index = f
+        .params
+        .iter()
+        .position(|p| p.name == parameter)
+        .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
+    let mut plan = Compiler::new(flat, codec, format!("p{index}")).input(
+        &f.params[index].ty.ty,
+        recipe,
+        extra,
+        &Condition::default(),
+    )?;
+    codec.finish_input(&mut plan, extra)?;
+    codec.validate_input(&plan)?;
+    Ok(plan.into())
+}
+
+/// Compile a request-free description for one source result without modifying its slot.
+/// ```
+/// use prebindgen_declarations::{compile_output,Codec,Output};
+/// use prebindgen_flat::Flat;
+/// fn resolved<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_output(flat,codec,"f",&Output::Leaf,extra).unwrap();
+/// }
+/// ```
+/// ```compile_fail
+/// use prebindgen_declarations::{compile_output,Codec,Output};
+/// use prebindgen_flat::Flat;
+/// fn pending<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_output(flat,codec,"f",&Output::auto(),extra).unwrap();
+/// }
+/// ```
+pub fn compile_output<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    function: &str,
+    recipe: &Output,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Output> {
+    compile_output_value(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)
+}
+
+/// Compile the output conversion of a source value, such as a function result or an error.
+/// The description must be request-free. Reads binding declarations from Flat without
+/// introducing a synthetic source function or modifying an occurrence slot.
+pub fn compile_output_value<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Output,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Output> {
+    let mut plan = Compiler::new(flat, codec, "ret".into()).output_root(
+        ty,
+        recipe,
+        extra,
+        prebindgen_conversions::source_result_expr(),
+        false,
+    )?;
+    finalize_output_schema(codec, &mut plan, extra)?;
+    codec.finish_output(&mut plan, extra)?;
+    codec.validate_output(&plan)?;
+    Ok(plan.into())
+}
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -719,23 +1124,24 @@ pub type Bindings<W, C = (), N = (), B = ()> = Flat<InputPlan<W, C, N, B>, Outpu
 /// * `codec` — the adapter's leaf conversions.
 /// * `function` — unqualified name of the source function.
 /// * `parameter` — name of the parameter, as written in the source.
-/// * `recipe` — how to build the argument from boundary inputs.
+/// * `recipe` — preparation tree describing how to build the argument from boundary inputs.
+///   To bind an already resolved [`Input`], pass `&resolved.into_preparation()`.
 /// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Input binding rejects output recipes:
 /// ```compile_fail
 /// use prebindgen_declarations::{bind_input, Codec, Output};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: Codec>(flat: &mut Flat<C::Input, C::Output>, codec: &C, extra: &C::Extra) {
+/// fn wrong<C: Codec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
 ///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_input<C: Codec>(
-    flat: &mut Flat<C::Input, C::Output>,
+    flat: &mut Flat<C::Schema>,
     codec: &C,
     function: &str,
     parameter: &str,
-    recipe: &Input,
+    recipe: &Input<InputRequest>,
     extra: &C::Extra,
 ) -> Result<()> {
     let f = flat.function(function)?;
@@ -744,16 +1150,10 @@ pub fn bind_input<C: Codec>(
         .iter()
         .position(|p| p.name == parameter)
         .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
-    let mut conversion = Compiler::new(flat, codec, format!("p{index}")).input(
-        &f.params[index].ty.ty,
-        recipe,
-        extra,
-        &Condition::default(),
-    )?;
-
-    codec.finish_input(&mut conversion, extra)?;
-    codec.validate_input(&conversion)?;
-    flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
+    let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
+    let recipe = defaults.resolve_input(flat, codec, &f.params[index].ty.ty, recipe, extra)?;
+    let conversion = compile_input(flat, codec, function, parameter, &recipe, extra)?;
+    flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
     Ok(())
 }
 
@@ -769,35 +1169,30 @@ pub fn bind_input<C: Codec>(
 /// * `flat` — the model holding the function; the result's slot is replaced.
 /// * `codec` — the adapter's leaf conversions.
 /// * `function` — unqualified name of the source function.
-/// * `recipe` — how to deliver the result as boundary outputs.
+/// * `recipe` — preparation tree describing how to deliver the result as boundary outputs.
+///   To bind an already resolved [`Output`], pass `&resolved.into_preparation()`.
 /// * `extra` — occurrence data passed to every codec call for this conversion.
 ///
 /// Output binding rejects input recipes:
 /// ```compile_fail
 /// use prebindgen_declarations::{bind_output, Codec, Input};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: Codec>(flat: &mut Flat<C::Input, C::Output>, codec: &C, extra: &C::Extra) {
+/// fn wrong<C: Codec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_output<C: Codec>(
-    flat: &mut Flat<C::Input, C::Output>,
+    flat: &mut Flat<C::Schema>,
     codec: &C,
     function: &str,
-    recipe: &Output,
+    recipe: &Output<OutputRequest>,
     extra: &C::Extra,
 ) -> Result<()> {
-    let mut conversion = Compiler::new(flat, codec, "ret".into()).output_root(
-        &flat.function(function)?.ret.ty,
-        recipe,
-        extra,
-        prebindgen_conversions::source_result_expr(),
-        false,
-    )?;
-    finalize_output_schema(codec, &mut conversion, extra)?;
-    codec.finish_output(&mut conversion, extra)?;
-    codec.validate_output(&conversion)?;
-    flat.function_mut(function)?.ret.slot = Some(conversion.into());
+    let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
+    let recipe =
+        defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)?;
+    let conversion = compile_output(flat, codec, function, &recipe, extra)?;
+    flat.function_mut(function)?.ret.slot = Some(conversion);
     Ok(())
 }
 
@@ -813,13 +1208,13 @@ fn finalize_output_schema<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
-    flat: &'a Flat<C::Input, C::Output>,
+    flat: &'a Flat<C::Schema>,
     codec: &'a C,
     prefix: String,
     next: std::cell::Cell<usize>,
 }
 impl<'a, C: Codec> Compiler<'a, C> {
-    fn new(flat: &'a Flat<C::Input, C::Output>, codec: &'a C, prefix: String) -> Self {
+    fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             flat,
             codec,
@@ -848,10 +1243,22 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         active: &Condition,
     ) -> Result<CodecInput<C>> {
+        self.input_named(ty, recipe, extra, active, None)
+    }
+    fn input_named(
+        &self,
+        ty: &Type,
+        recipe: &Input,
+        extra: &C::Extra,
+        active: &Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<CodecInput<C>> {
         if contains_result(ty) {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());
         }
-        let var = self.name();
+        let var = names
+            .map(|(_, var)| var.clone())
+            .unwrap_or_else(|| self.name());
         let mut wires = Vec::new();
         let mut fallible = false;
         let mut validation = TokenStream::new();
@@ -874,15 +1281,30 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Input::Optional(inner) => {
                 let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
-                let tag = self.name();
-                let child = self.input(ty, inner, extra, &active.arm(tag.clone(), 1))?;
+                let tag = names
+                    .map(|(wire, _)| format_ident!("{wire}_present"))
+                    .unwrap_or_else(|| self.name());
+                let child = if let Some((wire, var)) = names {
+                    self.input_named(
+                        ty,
+                        inner,
+                        extra,
+                        &active.arm(tag.clone(), 1),
+                        Some((&format_ident!("{wire}_some"), &format_ident!("{var}_some"))),
+                    )?
+                } else {
+                    self.input(ty, inner, extra, &active.arm(tag.clone(), 1))?
+                };
                 return optional_input(self.codec, extra, tag, var, active, child);
             }
             Input::Leaf => {
-                let w = self.name();
-                return self.codec.input_leaf(ty, extra, w, var, active);
+                let w = names
+                    .map(|(wire, _)| wire.clone())
+                    .unwrap_or_else(|| self.name());
+                return self.codec.input_leaf(self.flat, ty, extra, w, var, active);
             }
-            Input::Fields(children) => {
+            Input::Request(never) => match *never {},
+            Input::Fields(children) | Input::Record(children) => {
                 if type_key(ty) == "()" && children.is_empty() {
                     return Ok(InputPlan {
                         fallible: false,
@@ -909,17 +1331,40 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         children.len()
                     ));
                 }
-                return record_input(
+                let grouped = matches!(recipe, Input::Record(_));
+                let wire =
+                    grouped.then(|| names.map(|(w, _)| w.clone()).unwrap_or_else(|| self.name()));
+                let mut plan = record_input(
                     self.codec,
                     ty,
-                    var,
-                    r.fields.iter().zip(children).map(|(field, child)| {
-                        Ok((
-                            field.name.clone(),
-                            self.input(&field.ty, child, extra, active)?,
-                        ))
-                    }),
-                );
+                    var.clone(),
+                    r.fields
+                        .iter()
+                        .zip(children)
+                        .enumerate()
+                        .map(|(index, (field, child))| {
+                            let plan = if let Some(wire) = &wire {
+                                self.input_named(
+                                    &field.ty,
+                                    child,
+                                    extra,
+                                    active,
+                                    Some((
+                                        &format_ident!("{wire}_f{index}"),
+                                        &format_ident!("{var}_f{index}"),
+                                    )),
+                                )?
+                            } else {
+                                self.input(&field.ty, child, extra, active)?
+                            };
+                            Ok((field.name.clone(), plan))
+                        }),
+                )?;
+                if let Some(wire) = wire {
+                    self.codec
+                        .input_record_metadata(self.flat, ty, &wire, active, &mut plan, extra)?;
+                }
+                return Ok(plan);
             }
             Input::Constructor { function, args } => {
                 let f = self.flat.function(function)?;
@@ -1059,9 +1504,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 None
             };
             let mapped_error = mapped.is_some();
-            let message =
-                self.codec
-                    .result_error_value(error_ty, quote!(#failure), mapped, extra)?;
+            let message = self.codec.result_error_value(
+                self.flat,
+                error_ty,
+                quote!(#failure),
+                mapped,
+                extra,
+            )?;
             let mut child = self.output(success_ty, ok, extra, quote!(#payload), false)?;
             let prepare = child.statements;
             child.statements = quote! {
@@ -1074,7 +1523,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
 
             let error = self
                 .codec
-                .source_error_layout(error_ty, mapped_error, extra)?;
+                .source_error_layout(self.flat, error_ty, mapped_error, extra)?;
             child.outcomes.source_error = Some(error);
             return Ok(child);
         }
@@ -1087,6 +1536,17 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
+    ) -> Result<CodecOutput<C>> {
+        self.output_named(ty, recipe, extra, value, borrowed, None)
+    }
+    fn output_named(
+        &self,
+        ty: &Type,
+        recipe: &Output,
+        extra: &C::Extra,
+        value: TokenStream,
+        borrowed: bool,
+        wire_name: Option<&syn::Ident>,
     ) -> Result<CodecOutput<C>> {
         if contains_result(ty) {
             return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
@@ -1109,7 +1569,21 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
-            Output::Sequence { element, mode } => {
+            Output::Discard => return Ok(out),
+            Output::Named { name, output } => {
+                let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
+                plan.outcomes.success = WireNode::Branch {
+                    meta: self.codec.named_output_group(name)?,
+                    controls: vec![],
+                    children: vec![plan.outcomes.success],
+                };
+                return Ok(plan);
+            }
+            Output::Sequence {
+                element,
+                mode,
+                delivery,
+            } => {
                 let (element_type, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection")?;
                 let mode = mode.unwrap_or_else(|| {
@@ -1132,7 +1606,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 )?;
                 return sequence::output(
                     self.codec, ty, extra, wire, payload, length, index, value, borrowed, mode,
-                    child,
+                    child, *delivery,
                 );
             }
             Output::Result { .. } => {
@@ -1140,14 +1614,29 @@ impl<'a, C: Codec> Compiler<'a, C> {
             }
             Output::Optional(inner) => {
                 let ty = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
-                let tag = self.name();
-                let payload = self.name();
-                let child = self.output(ty, inner, extra, quote!(#payload), borrowed)?;
+                let tag = wire_name
+                    .map(|w| format_ident!("{w}_present"))
+                    .unwrap_or_else(|| self.name());
+                let payload = wire_name
+                    .map(|w| format_ident!("{w}_payload"))
+                    .unwrap_or_else(|| self.name());
+                let child_wire = wire_name.map(|w| format_ident!("{w}_some"));
+                let child = self.output_named(
+                    ty,
+                    inner,
+                    extra,
+                    quote!(#payload),
+                    borrowed,
+                    child_wire.as_ref(),
+                )?;
                 return optional_output(self.codec, extra, tag, payload, value, borrowed, child);
             }
+            Output::Request(never) => match *never {},
             Output::Leaf => {
-                let w = self.name();
-                return self.codec.output_leaf(ty, extra, w, value, borrowed);
+                let w = wire_name.cloned().unwrap_or_else(|| self.name());
+                return self
+                    .codec
+                    .output_leaf(self.flat, ty, extra, w, value, borrowed);
             }
             Output::Projected(projection) => {
                 if borrowed && projection.mode == ProjectionMode::Owned {
@@ -1160,12 +1649,30 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 } else {
                     value
                 };
-                return self
-                    .codec
-                    .output_projected(ty, extra, self.name(), value, projection);
+                return self.codec.output_projected(
+                    self.flat,
+                    ty,
+                    extra,
+                    wire_name.cloned().unwrap_or_else(|| self.name()),
+                    value,
+                    projection,
+                );
             }
-            Output::Fields(children) | Output::OwnedFields(children) => {
-                let owned = matches!(recipe, Output::OwnedFields(_));
+            Output::Fields(children)
+            | Output::OwnedFields(children)
+            | Output::Record {
+                fields: children, ..
+            } => {
+                let grouped = matches!(recipe, Output::Record { .. });
+                let wire = grouped.then(|| wire_name.cloned().unwrap_or_else(|| self.name()));
+                let owned = matches!(
+                    recipe,
+                    Output::OwnedFields(_)
+                        | Output::Record {
+                            mode: ProjectionMode::Owned,
+                            ..
+                        }
+                );
                 if owned && borrowed {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
@@ -1183,25 +1690,42 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     return Err("wrong output field count".into());
                 }
                 let convert = |index: usize, value| {
-                    self.output(&r.fields[index].ty, &children[index], extra, value, !owned)
+                    let child_wire = wire.as_ref().map(|w| format_ident!("{w}_f{index}"));
+                    self.output_named(
+                        &r.fields[index].ty,
+                        &children[index],
+                        extra,
+                        value,
+                        !owned,
+                        child_wire.as_ref(),
+                    )
                 };
-                return if owned {
+                let var = wire
+                    .as_ref()
+                    .map(|w| format_ident!("{w}_record"))
+                    .unwrap_or_else(|| self.name());
+                let mut plan = if owned {
                     record_output_owned(
                         self.codec,
-                        self.name(),
+                        var,
                         value,
                         r.fields.iter().map(|f| f.name.clone()),
                         convert,
-                    )
+                    )?
                 } else {
                     record_output(
                         self.codec,
-                        self.name(),
+                        var,
                         value,
                         r.fields.iter().map(|f| f.name.clone()),
                         convert,
-                    )
+                    )?
                 };
+                if let Some(wire) = wire {
+                    self.codec
+                        .output_record_metadata(self.flat, ty, &wire, &mut plan, extra)?;
+                }
+                return Ok(plan);
             }
             Output::Getter { function, output } | Output::Into { function, output } => {
                 let consuming = matches!(recipe, Output::Into { .. });
@@ -1246,7 +1770,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 if parts
                     .iter()
-                    .filter(|p| p.consumes(ty, extra, self.codec, borrowed))
+                    .filter(|p| p.consumes(self.flat, ty, extra, self.codec, borrowed))
                     .count()
                     > 1
                 {
@@ -1254,7 +1778,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let mut bodies = Vec::new();
                 for (index, child) in parts.iter().enumerate() {
-                    let consuming = child.consumes(ty, extra, self.codec, borrowed);
+                    let consuming = child.consumes(self.flat, ty, extra, self.codec, borrowed);
                     let arg = if borrowed || consuming {
                         value.clone()
                     } else {
@@ -1314,10 +1838,7 @@ mod packet_tests;
 mod tests;
 
 pub mod declarations;
-pub use declarations::{
-    CallbackReturn, Declarations, ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
-    FieldsDecl, FunctionDecl,
-};
+pub use declarations::{CallbackReturn, Declarations, FunctionDecl};
 
 /// Parse one Rust identifier used by a declaration.
 ///
@@ -1325,9 +1846,6 @@ pub use declarations::{
 pub fn ident(name: &str) -> Result<syn::Ident> {
     syn::parse_str(name).map_err(|_| format!("invalid identifier `{name}`"))
 }
-
-mod representation;
-pub use representation::{Component, Representation, RepresentationId, Representations};
 
 fn merge_acknowledgement(
     target: &mut Option<TokenStream>,

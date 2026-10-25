@@ -29,8 +29,8 @@ LINK = re.compile(r"<a [^>]*>.*?</a>", re.S)
 # A type name where a signature uses a type: after `:`, `&`, `<`, `(`, `,`,
 # `=`, `->` or a keyword, on the same line. An enum variant's name starts its
 # own line and is not matched. An associated-type binding name (`Wire = ...`)
-# is not a use of a type with that name.
-TYPE_USE = re.compile(r"(?:[:&<(,=]|->|\bmut|\bimpl|\bdyn|\bfor)[ \t]*([A-Z][A-Za-z0-9_]+)\b(?![ \t]*=)")
+# or constraint name (`Input: ...`) is not a use of a type with that name.
+TYPE_USE = re.compile(r"(?:[:&<(,=]|->|\bmut|\bimpl|\bdyn|\bfor)[ \t]*([A-Z][A-Za-z0-9_]+)\b(?![ \t]*[=:])")
 
 
 def pages(doc, crate):

@@ -271,6 +271,7 @@ pub(crate) fn output<C: Codec>(
     borrowed: bool,
     mode: ProjectionMode,
     child: CodecOutput<C>,
+    delivery: crate::SequenceDelivery,
 ) -> Result<CodecOutput<C>> {
     let (element_type, view) =
         prebindgen_flat::sequence_parts(ty).ok_or("sequence recipe requires a collection")?;
@@ -298,6 +299,7 @@ pub(crate) fn output<C: Codec>(
         index.clone(),
         &child.outcomes.success,
         &child.values,
+        delivery,
     )?;
     let owner = format_ident!("{wire}_source");
     let commits = format_ident!("{wire}_commits");

@@ -340,8 +340,9 @@ pub(crate) fn argument_parameters(
 pub(crate) fn function_parameters<
     I: prebindgen_flat::InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
     O: prebindgen_flat::Conversion,
+    M,
 >(
-    f: &prebindgen_flat::Function<I, O>,
+    f: &prebindgen_flat::Function<I, O, M>,
 ) -> Result<std::vec::IntoIter<&Wire<CWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {
@@ -719,6 +720,7 @@ mod tests {
     fn malformed_metadata_is_rejected_before_final_slots_are_installed() {
         let mut input = CCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -737,6 +739,7 @@ mod tests {
             .contains("direct child"));
         let mut output = CCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -768,6 +771,7 @@ mod tests {
         ] {
             let mut plan = CCodec
                 .input_leaf(
+                    &Bindings::parse([]).unwrap(),
                     &syn::parse_quote!(i64),
                     &(),
                     syn::parse_quote!(wire),
@@ -785,6 +789,7 @@ mod tests {
                 .contains("incompatible"));
             let mut output = CCodec
                 .output_leaf(
+                    &Bindings::parse([]).unwrap(),
                     &syn::parse_quote!(i64),
                     &(),
                     syn::parse_quote!(wire),
@@ -811,7 +816,9 @@ mod tests {
         let CWire::Enum { mapping, .. } = &mut wire else {
             panic!()
         };
-        mapping.variants.push((syn::parse_quote!(D), 2));
+        std::rc::Rc::make_mut(mapping)
+            .variants
+            .push((syn::parse_quote!(D), 2));
         wire.clear_niche();
         assert!(wire.validate().is_err());
     }
@@ -875,6 +882,7 @@ mod abi_tests {
             Flat::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let mut input = CCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(raw),

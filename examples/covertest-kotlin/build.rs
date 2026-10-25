@@ -135,7 +135,7 @@ fn main() {
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             let mut probe = flat.clone();
-            let declarations = prebindgen_declarations::Declarations::new(&probe, vec![])?;
+            let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
             // Observe a clone so the production builder still installs its own codec.
             // Collections.kt exercises the separately generated production boundary.
@@ -153,8 +153,9 @@ fn main() {
             assert!(matches!(output.result_packet_fields()?.next().unwrap().kind, prebindgen_jni::JniWire::Rows { .. }));
             Ok(())
         })
+        .expand(expand_param!(Vec<i64>).variant_self())
         .expand(expand_return!(CollectionError).fields_into(fields!(collection_error_into)))
-        .expand(expand_return!(ResultFailure).field(fun!(result_error_code)))
+        .expand(expand_return!(ResultFailure).field(fun!(result_error_code).name("code")))
         .error_mapper(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error_class(syn::parse_quote!(StorageError), "java.lang.IllegalStateException")
         .expand(expand_return!(CDropError).fields_into(fields!(result_drop_error_into)))
@@ -175,7 +176,7 @@ fn main() {
 .fun(fun!(collection_numbers).expand_return(expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view))))
 .fun(fun!(collection_resource_ids).expand_param("values",expand_param!(OwnedResource).variant(fun!(collection_resource_clone))))
 .fun(fun!(collection_i64).callback_return())
-            .fun(fun!(collection_text).callback_return())
+            .fun(fun!(collection_text).expand_param("values",expand_param!(Vec<String>).variant_self()).callback_return())
             .fun(fun!(collection_bytes).callback_return())
             .fun(fun!(collection_nested).callback_return())
             .fun(fun!(collection_options).callback_return())
@@ -1298,6 +1299,18 @@ fn main() {
                 fields!(resource_bundle_into)
                     .field("pair", expand_return!(ResourcePair).field_self_into())
                     .field("details", expand_return!(DataFloats).field_self_ref()))))
+            .fun(fun!(api_record_new).expand_return(
+                expand_return!(ApiRecord).fields_into(
+                    fields!(api_record_into)
+                    .field("omitted", expand_return!(OwnedResource))
+                    .field("omitted_opt", expand_return!(OwnedResource))
+                    .field("omitted_vec", expand_return!(OwnedResource)))))
+            .fun(fun!(api_record_views).expand_return(expand_return!(ApiRecord)
+                .field(fun!(api_record_count).name("count"))
+                .field(fun!(api_record_label).name("label"))))
+            .fun(fun!(api_record_rows).callback_return_only().expand_return(expand_return!(ApiRecord)
+                .field(fun!(api_record_count).name("count"))
+                .field(fun!(api_record_label).name("label"))))
             .fun(fun!(owned_resource_id))
             .fun(fun!(owned_resource_drops)))
         .package(package!("resourceViews")

@@ -11,7 +11,18 @@ fn main() {
             fun!(c_panic_output_new).expand_return(expand_return!(CPanicOutput).field_self_into()),
         )
         .function(fun!(c_plain_panic))
+        .expand(expand_param!(Vec<i64>).variant_self())
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .function(
+            fun!(api_record_new).expand_return(
+                expand_return!(ApiRecord).fields_into(
+                    fields!(api_record_into)
+                        .field("omitted", expand_return!(OwnedResource))
+                        .field("omitted_opt", expand_return!(OwnedResource))
+                        .field("omitted_vec", expand_return!(OwnedResource)),
+                ),
+            ),
+        )
         .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
         .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
         .error("result_error", pq!(CResultError))
@@ -61,7 +72,11 @@ fn main() {
         .panic()
         .function(fun!(collection_i64).callback_return())
         .panic()
-        .function(fun!(collection_text).callback_return())
+        .function(
+            fun!(collection_text)
+                .expand_param("values", expand_param!(Vec<String>).variant_self())
+                .callback_return(),
+        )
         .panic()
         .function(fun!(collection_bytes).callback_return())
         .panic()

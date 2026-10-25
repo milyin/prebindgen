@@ -194,9 +194,12 @@ pub(crate) fn output_kotlin(
     if c.delivered.is_empty() || kotlin::has_optional(nodes) {
         out.delivered.push(p.clone());
         out.result_types.push("Boolean".into());
+        out.result_names.push(None);
     }
     out.materialize = format!("            if ({p}) {{\n{}            }}\n", c.materialize);
     out.cleanup = format!("            if ({p}) {{\n{}            }}\n", c.cleanup);
+    c.result_names.resize(c.result_types.len(), None);
+    out.result_names.extend(c.result_names);
     for (v, t) in c.delivered.into_iter().zip(c.result_types) {
         out.delivered.push(format!("if ({p}) {v} else null"));
         out.result_types

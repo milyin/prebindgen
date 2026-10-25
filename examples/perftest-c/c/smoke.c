@@ -568,6 +568,11 @@ static void check_results(void) {
     perftest_free_error(NULL);
 }
 int main(void) {
+    /* Empty typed field overrides omit plain, optional and vector resources. */
+    size_t omitted_before = perftest_owned_resource_drops();
+    assert(perftest_api_record_new() == 7);
+    assert(perftest_owned_resource_drops() == omitted_before + 3);
+
     check_collections();
     check_sequence_delivery();
     EXPECT_ABORT(perftest_c_plain_panic());

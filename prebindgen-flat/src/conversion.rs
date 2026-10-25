@@ -72,7 +72,7 @@ impl<W: WireKind> Wire<W> {
 /// Functions with entirely empty slots remain source-only helpers. This check
 /// neither builds conversions nor changes the model. Adapters call it before
 /// writing wrappers. It does not validate code fragments supplied directly by callers.
-pub fn validate_bindings<I: Conversion, O: Conversion>(flat: &crate::Flat<I, O>) -> Result<()> {
+pub fn validate_bindings<M: crate::Schema>(flat: &crate::Flat<M>) -> Result<()> {
     for f in flat.functions.values() {
         if f.ret.slot.is_some() {
             for p in &f.params {
@@ -244,7 +244,7 @@ pub fn bind_fragment(
         syn::parse2(fragment).map_err(|error| format!("expected a Rust expression: {error}"))?;
     Ok(quote!(let #target: #expected_type = #expression;))
 }
-impl<I: Conversion, O: Conversion> crate::Function<I, O> {
+impl<I: Conversion, O: Conversion, M> crate::Function<I, O, M> {
     /// Filled input slots, preserving source parameter order and grouping.
     pub fn input_conversions(&self) -> Result<Vec<&I>> {
         self.params

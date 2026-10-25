@@ -24,6 +24,8 @@ pub enum JniBranch {
 pub enum JniGroup {
     /// Ordered conversion components, such as constructor arguments or output views.
     Values,
+    /// An explicitly named output view.
+    Named(String),
     /// Source record fields. JNI may associate the record with a Kotlin data class.
     Fields(Option<DataGroup>),
     /// One named source field.
@@ -290,6 +292,9 @@ pub(crate) fn validate_layout(
                     }
                 }
                 match metadata {
+                    JniGroup::Named(name) => {
+                        validate_name(name)?;
+                    }
                     JniGroup::Field(_) if !in_fields => {
                         return Err(
                             "named field must be a direct child of a field collection".into()
@@ -342,8 +347,9 @@ pub(crate) fn argument_parameters(
 pub(crate) fn function_parameters<
     I: prebindgen_flat::InputConversion<Wire = JniWire, Chain = JniChain, Branch = JniBranch>,
     O: prebindgen_flat::Conversion,
+    M,
 >(
-    f: &prebindgen_flat::Function<I, O>,
+    f: &prebindgen_flat::Function<I, O, M>,
 ) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {
     let mut out = vec![];
     for input in f.input_conversions()? {
@@ -705,6 +711,7 @@ mod tests {
     fn malformed_metadata_is_rejected_before_final_slots_are_installed() {
         let mut input = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -723,6 +730,7 @@ mod tests {
             .contains("direct child"));
         let mut output = JniCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(wire),
@@ -762,6 +770,7 @@ mod tests {
     fn incompatible_direct_wire_state_is_rejected_at_finalization() {
         let mut input = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i64),
                 &(),
                 syn::parse_quote!(wire),
@@ -782,6 +791,7 @@ mod tests {
             .contains("incompatible"));
         let mut output = JniCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i64),
                 &(),
                 syn::parse_quote!(wire),
@@ -884,6 +894,7 @@ mod abi_tests {
             Flat::parse(source.items.into_iter().map(|i| (i, Default::default()))).unwrap();
         let mut input = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(i32),
                 &(),
                 syn::parse_quote!(raw),

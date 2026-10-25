@@ -78,6 +78,8 @@ pub struct KotlinOutput {
     pub delivered: Vec<String>,
     /// Public Kotlin result types.
     pub result_types: Vec<String>,
+    /// Explicit destination names, aligned with logical results; absent names use positional defaults.
+    pub result_names: Vec<Option<String>>,
     /// Declarations retaining partially materialized outputs.
     pub output_locals: String,
     /// Statements materializing outputs before delivery.
@@ -85,6 +87,63 @@ pub struct KotlinOutput {
     /// Rollback statements executed if materialization or delivery fails.
     pub cleanup: String,
 }
+impl KotlinOutput {
+    fn checked_names(&self) -> Result<Vec<String>> {
+        if self.result_names.len() > self.result_types.len() {
+            return Err("more output names than result values".into());
+        }
+        let mut seen = BTreeSet::new();
+        (0..self.result_types.len())
+            .map(|i| {
+                let name = self
+                    .result_names
+                    .get(i)
+                    .and_then(|name| name.clone())
+                    .unwrap_or_else(|| format!("v{i}"));
+                validate_name(&name)?;
+                if !seen.insert(name.clone()) {
+                    return Err(format!("duplicate output parameter name `{name}`"));
+                }
+                Ok(name)
+            })
+            .collect()
+    }
+    /// Render the parameters of a Kotlin build/fold function type, preserving explicit names.
+    pub fn callback_type_parameters(&self) -> Result<String> {
+        let names = self.checked_names()?;
+        Ok(self
+            .result_types
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| {
+                if self.result_names.get(i).is_some_and(|name| name.is_some()) {
+                    format!("`{}`: {ty}", names[i])
+                } else {
+                    ty.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", "))
+    }
+    /// Render named arguments for a generated callback interface method.
+    pub fn callback_parameter_declarations(&self) -> Result<String> {
+        let names = self.checked_names()?;
+        Ok(self
+            .result_types
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| {
+                if self.result_names.get(i).is_some_and(|name| name.is_some()) {
+                    format!("`{}`: {ty}", names[i])
+                } else {
+                    format!("{}: {ty}", names[i])
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", "))
+    }
+}
+
 /// Input conversion with opaque Kotlin-side emission.
 pub trait KotlinInputConversion:
     for<'a> Conversion<
@@ -262,6 +321,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
         }
     }
     Ok(KotlinOutput {
+        result_names: vec![None; result_types.len()],
         delivered,
         result_types,
         output_locals,
@@ -409,6 +469,19 @@ pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resu
             ..
         } => match metadata {
             JniGroup::Fields(Some(d)) => data::output_kotlin(elements, d, context),
+            JniGroup::Named(name) => {
+                let mut out = output_components(elements, context)?;
+                out.result_names = (0..out.result_types.len())
+                    .map(|i| {
+                        Some(if out.result_types.len() == 1 {
+                            name.clone()
+                        } else {
+                            format!("{name}{i}")
+                        })
+                    })
+                    .collect();
+                Ok(out)
+            }
             _ => output_components(elements, context),
         },
     }
@@ -434,6 +507,8 @@ pub(crate) fn output_components(
         let count = crate::group::kotlin_result_fields(node).len();
         let mut c = output_kotlin(node, &ctx)?;
         remap_output(&mut c, &local, context.result, offset, count);
+        c.result_names.resize(c.result_types.len(), None);
+        out.result_names.extend(c.result_names);
         out.delivered.extend(c.delivered);
         out.result_types.extend(c.result_types);
         out.output_locals.push_str(&c.output_locals);
@@ -489,6 +564,7 @@ mod tests {
         // This condition is arbitrary Kotlin code, not a declaration selector path.
         let mut plan = JniCodec
             .input_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(incoming),
@@ -536,6 +612,7 @@ mod tests {
 
         let plan = JniCodec
             .output_leaf(
+                &Bindings::parse([]).unwrap(),
                 &syn::parse_quote!(Counter),
                 &(),
                 syn::parse_quote!(wire),

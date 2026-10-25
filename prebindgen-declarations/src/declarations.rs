@@ -1,295 +1,145 @@
-//! Build-script declarations for input alternatives and output views.
-//! [`Declarations`] builds converters directly in boundary occurrence slots.
-
-use crate::{option_inner, result_parts, sequence_parts};
-use crate::{Codec, Compiler, Condition, Input, Output, Projection};
-use prebindgen_flat::{type_key, Flat, Result};
+//! Direct Input/Output descriptions, defaults and function export choices.
+use crate::{
+    option_inner, result_parts, sequence_parts, Codec, Compiler, Condition, Input, InputRequest,
+    Output, OutputRequest, ProjectionMode, Schema, SequenceDelivery,
+};
+use prebindgen_flat::{same_type, type_key, Flat, Result};
 use std::collections::BTreeMap;
 
-/// An ordered list of input representations for one source type.
-///
-/// One variant becomes a direct recipe; multiple variants become a selector.
-/// Constructor arguments recursively use the registered type defaults.
-#[derive(Clone)]
-pub struct ExpandParamDecl {
-    /// Source type to which this declaration applies, resolved against the flat model.
-    pub ty: syn::Type,
-    variants: Vec<Option<FunctionDecl>>,
-}
-impl ExpandParamDecl {
-    /// Start an input expansion with no variants. Add at least one before use.
-    pub fn new(ty: syn::Type) -> Self {
-        Self {
-            ty,
-            variants: Vec::new(),
-        }
-    }
-    /// Append a source constructor as an input alternative.
-    ///
-    /// Only the constructor name is supported here; renaming and per-function
-    /// overrides on this reference are rejected when resolving declarations.
-    pub fn variant(mut self, f: FunctionDecl) -> Self {
-        self.variants.push(Some(f));
-        self
-    }
-    /// Append the type itself as a leaf, converted by the adapter's codec.
-    ///
-    /// This bypasses recursive expansion of the same type.
-    pub fn variant_self(mut self) -> Self {
-        self.variants.push(None);
-        self
-    }
-}
-/// An ordered list of simultaneous output views for one source type.
-///
-/// One view becomes a direct recipe; multiple views become [`Output::Combine`].
-#[derive(Clone)]
-pub struct ExpandReturnDecl {
-    /// Source type whose result occurrences use this expansion.
-    pub ty: syn::Type,
-    fields: Vec<ReturnField>,
-}
-#[derive(Clone)]
-enum ReturnField {
-    Identity,
-    Projected(Projection),
-    IntoFields(FieldsDecl),
-    Getter(Box<FunctionDecl>),
-    Fields(FieldsDecl),
-}
-/// Project the named fields of a source getter's returned record.
-///
-/// The getter must accept a shared reference to the converted type. Fields use
-/// their type defaults unless overridden with [`Self::field`].
-#[derive(Clone)]
-pub struct FieldsDecl {
-    function: String,
-    overrides: BTreeMap<String, ExpandReturnDecl>,
-}
-impl FieldsDecl {
-    /// Select the source getter whose returned record will be projected.
-    ///
-    /// `function` is the getter's unqualified name.
-    pub fn new(function: syn::Ident) -> Self {
-        Self {
-            function: function.to_string(),
-            overrides: BTreeMap::new(),
-        }
-    }
-    /// Replace the output expansion for one named field of the returned record.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` — the field's name in the source record.
-    /// * `decl` — how to deliver that field instead of its type's default.
-    ///
-    /// # Panics
-    /// Panics if the same field is overridden twice. Unknown fields and mismatched
-    /// source types are rejected during declaration resolution.
-    pub fn field(mut self, name: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
-        assert!(
-            self.overrides.insert(name.as_ref().into(), decl).is_none(),
-            "duplicate field override"
-        );
-        self
-    }
-}
-impl ExpandReturnDecl {
-    /// Append the fields of a getter's returned record as output views.
-    pub fn fields(mut self, decl: FieldsDecl) -> Self {
-        self.fields.push(ReturnField::Fields(decl));
-        self
-    }
-    /// Consume the source accessor's receiver, then move its returned record fields.
-    /// The accessor must take `T`, not `&T`. Per-field expansions still override
-    /// type defaults. Nested data classes retain their borrowed default unless an
-    /// explicit field expansion or type default selects owned projection.
-    /// Observing sibling views run before this consuming view.
-    pub fn fields_into(mut self, decl: FieldsDecl) -> Self {
-        self.fields.push(ReturnField::IntoFields(decl));
-        self
-    }
-    /// Deprecated alias for [`Self::fields_into`].
-    #[deprecated(note = "use fields_into instead")]
-    pub fn fields_self_into(self, decl: FieldsDecl) -> Self {
-        self.fields_into(decl)
-    }
-    /// Append a leaf converted with explicit ownership and optional field policies.
-    pub fn project_self(mut self, projection: Projection) -> Self {
-        self.fields.push(ReturnField::Projected(projection));
-        self
-    }
-    /// Append a shared-reference view; record fields inherit this policy.
-    pub fn field_self_ref(self) -> Self {
-        self.project_self(Projection::borrowed())
-    }
-    /// Append an owned view; record fields inherit this policy.
-    pub fn field_self_into(self) -> Self {
-        self.project_self(Projection::owned())
-    }
-    /// Start an output expansion with no views. Add at least one before use.
-    pub fn new(ty: syn::Type) -> Self {
-        Self {
-            ty,
-            fields: Vec::new(),
-        }
-    }
-    /// Append a shared-borrow getter, recursively expanding its owned result.
-    ///
-    /// The reference supports only the source name, without renaming or overrides.
-    pub fn field(mut self, f: FunctionDecl) -> Self {
-        self.fields.push(ReturnField::Getter(Box::new(f)));
-        self
-    }
-    /// Append the value itself as a leaf, converted by the adapter's codec.
-    ///
-    /// Ownership follows the adapter default: JniGen data classes borrow, while
-    /// owning leaf conversions consume after observing other views.
-    pub fn field_self(mut self) -> Self {
-        self.fields.push(ReturnField::Identity);
-        self
-    }
-}
-/// Explicit default error-message mapper for one source error type.
-pub struct ErrorDecl {
-    /// Source error type, resolved against the flat model.
-    pub ty: syn::Type,
-    /// Source helper taking E or &E and returning String.
-    pub mapper: FunctionDecl,
-}
-impl ErrorDecl {
-    /// Declare a type-wide mapper; per-function `on_error` takes precedence.
-    pub fn new(ty: syn::Type, mapper: FunctionDecl) -> Self {
-        Self { ty, mapper }
-    }
-}
-impl From<ErrorDecl> for ExpandDecl {
-    fn from(value: ErrorDecl) -> Self {
-        Self::Error(Box::new(value))
-    }
-}
-/// A generator-wide conversion or error-mapping default, registered by source type.
-pub enum ExpandDecl {
-    /// Default error-message mapper for Result returns with this error type.
-    Error(Box<ErrorDecl>),
-    /// Default input alternatives.
-    Param(ExpandParamDecl),
-    /// Default simultaneous output views.
-    Return(ExpandReturnDecl),
-}
-impl From<ExpandParamDecl> for ExpandDecl {
-    fn from(d: ExpandParamDecl) -> Self {
-        Self::Param(d)
-    }
-}
-impl From<ExpandReturnDecl> for ExpandDecl {
-    fn from(d: ExpandReturnDecl) -> Self {
-        Self::Return(d)
-    }
-}
 #[macro_export]
-/// Create an [`ExpandParamDecl`] from Rust type syntax.
-///
-/// The tokens are parsed, not evaluated: the source type need not be in scope
-/// in `build.rs`. Invalid type syntax panics. See [`Declarations`] for resolution rules.
+/// Start a typed input declaration using the production builder API.
 macro_rules! expand_param {($($ty:tt)+)=>{$crate::ExpandParamDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
 #[macro_export]
-/// Create an [`ExpandReturnDecl`] from Rust type syntax.
-///
-/// Like [`expand_param!`], this does not require the source type to be in scope.
-/// Invalid type syntax panics.
+/// Start a typed output declaration using the production builder API.
 macro_rules! expand_return {($($ty:tt)+)=>{$crate::ExpandReturnDecl::new($crate::declarations::parse_type(stringify!($($ty)+)))};}
+#[macro_export]
+/// Decompose a source getter's returned record into named field views.
+macro_rules! fields {
+    ($name:ident) => {
+        $crate::FieldsDecl::new($crate::ident(stringify!($name)).expect("function identifier"))
+    };
+}
+#[macro_export]
+/// Reference a source function and configure its exported binding.
+macro_rules! fun {
+    ($name:ident) => {
+        $crate::FunctionDecl::new($crate::ident(stringify!($name)).expect("function identifier"))
+    };
+}
 
-/// Resolved type defaults used to build boundary converters.
-///
-/// Per-function overrides replace type defaults. Existing converters are preserved
-/// unless explicitly overridden. By default unit has no wires and every other
-/// type is a leaf, converted by the adapter's [`Codec`]. Recursive expansion
-/// cycles are rejected. Recipes are local to [`Self::fill`]; only compiled conversion
-/// data is attached to Flat. See [`Codec`] for a buildable example of constructor
-/// alternatives, combined outputs and manual overrides.
+/// Conversion defaults indexed by canonical Rust type during preparation.
+/// Values are the same Input/Output trees accepted by per-function overrides.
+/// This environment is discarded after prepared conversions have been installed.
 pub struct Declarations {
-    inputs: BTreeMap<String, ExpandParamDecl>,
-    outputs: BTreeMap<String, ExpandReturnDecl>,
-    errors: BTreeMap<String, FunctionDecl>,
+    inputs: BTreeMap<String, Input<InputRequest>>,
+    outputs: BTreeMap<String, Output<OutputRequest>>,
+    errors: BTreeMap<String, String>,
+}
+fn input_body(input: Input<InputRequest>) -> Input<InputRequest> {
+    match input {
+        Input::Selector(mut arms) if arms.len() == 1 => arms.remove(0),
+        other => other,
+    }
+}
+fn output_body(output: Output<OutputRequest>) -> Output<OutputRequest> {
+    match output {
+        Output::Combine(mut parts) if parts.len() == 1 => parts.remove(0),
+        other => other,
+    }
 }
 impl Declarations {
-    /// Index expansions by resolved source type.
-    ///
-    /// Returns an error for an unresolved type or duplicate declarations for the
-    /// same type and direction. Recipes are resolved later by [`Self::fill`].
-    ///
-    /// # Arguments
-    ///
-    /// * `flat` — the model in which each declaration's type is resolved.
-    /// * `decls` — type-wide defaults, at most one per type and direction.
-    pub fn new<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
-        flat: &Flat<I, O>,
-        decls: Vec<ExpandDecl>,
+    /// Register typed Input/Output defaults and explicit error-message functions.
+    /// Typed trees use Input::for_type / Output::for_type. Production declaration
+    /// builders also convert directly into these trees with `.into()`.
+    pub fn new<M: prebindgen_flat::Schema>(
+        flat: &Flat<M>,
+        inputs: Vec<Input<InputRequest>>,
+        outputs: Vec<Output<OutputRequest>>,
+        errors: Vec<(syn::Type, String)>,
     ) -> Result<Self> {
         let mut out = Self {
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
             errors: BTreeMap::new(),
         };
-        for d in decls {
-            match d {
-                ExpandDecl::Error(d) => {
-                    let key = type_key(&flat.resolve_type(&d.ty)?);
-                    let f = &d.mapper;
-                    if !f.params.is_empty()
-                        || f.ret.is_some()
-                        || f.foreign.is_some()
-                        || f.error.is_some()
-                        || f.callback_return.is_some()
-                    {
-                        return Err("error mapper references only support their source name".into());
-                    }
-                    if out.errors.insert(key, d.mapper).is_some() {
-                        return Err("duplicate error mapper for source type".into());
-                    }
-                }
-                ExpandDecl::Param(d) => {
-                    if crate::contains_result(&d.ty) {
-                        return Err("Result expansions are unsupported; configure the success type and an error mapper".into());
-                    }
-                    let key = type_key(&flat.resolve_type(&d.ty)?);
-                    if out.inputs.insert(key, d).is_some() {
-                        return Err("duplicate input expansion".into());
-                    }
-                }
-                ExpandDecl::Return(d) => {
-                    if crate::contains_result(&d.ty) {
-                        return Err("Result expansions are unsupported; configure the success type and an error mapper".into());
-                    }
-                    let key = type_key(&flat.resolve_type(&d.ty)?);
-                    if out.outputs.insert(key, d).is_some() {
-                        return Err("duplicate output expansion".into());
-                    }
-                }
+        for input in inputs {
+            let Input::Request(InputRequest::ForType { ty, input }) = input else {
+                return Err("input defaults require a source type".into());
+            };
+            if crate::contains_result(&ty) {
+                return Err("Result expansions are unsupported; configure success and error mapping separately".into());
+            }
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if out.inputs.insert(key, input_body(*input)).is_some() {
+                return Err("duplicate input expansion".into());
+            }
+        }
+        for output in outputs {
+            let Output::Request(OutputRequest::ForType { ty, output }) = output else {
+                return Err("output defaults require a source type".into());
+            };
+            if crate::contains_result(&ty) {
+                return Err("Result expansions are unsupported; configure success and error mapping separately".into());
+            }
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if out.outputs.insert(key, output_body(*output)).is_some() {
+                return Err("duplicate output expansion".into());
+            }
+        }
+        for (ty, function) in errors {
+            let key = type_key(&flat.resolve_type(&ty)?);
+            if out.errors.insert(key, function).is_some() {
+                return Err("duplicate error mapper for source type".into());
             }
         }
         Ok(out)
     }
-    /// Clone a declared sequence function for an additional delivery protocol.
-    ///
-    /// The original path, source types and input slots are preserved. The new
-    /// return slot is empty, so the adapter can fill it using its callback
-    /// delivery while retaining the same expansion declarations. The adapter
-    /// checks eligibility and selects the appropriate node before calling this helper.
-    pub fn callback_variant<I, O>(
+    /// Clone a source binding for a second explicit sequence delivery policy.
+    pub fn callback_variant<C: Codec>(
         &self,
-        flat: &mut Flat<I, O>,
+        flat: &mut Flat<C::Schema>,
+        codec: &C,
         decl: &FunctionDecl,
         name: &str,
+        extra: &C::Extra,
     ) -> Result<FunctionDecl>
     where
-        I: prebindgen_flat::Conversion + Clone,
-        O: prebindgen_flat::Conversion + Clone,
+        <C::Schema as Schema>::Input: Clone,
+        <C::Schema as Schema>::Output: Clone,
+        <C::Schema as prebindgen_flat::Schema>::Function: Clone,
     {
         let source = flat.function(&decl.name)?;
-        source.output_conversion()?;
-        let mut function = source.clone();
+        let ty = result_parts(&source.ret.ty).map_or(&source.ret.ty, |(ok, _)| ok);
+        let mut output = self.resolve_output(
+            flat,
+            codec,
+            ty,
+            decl.ret.as_ref().unwrap_or(&Output::auto()),
+            extra,
+        )?;
+        fn select(output: &mut Output) -> usize {
+            match output {
+                Output::Sequence { delivery, .. } => {
+                    *delivery = SequenceDelivery::Callback;
+                    1
+                }
+                Output::Optional(child)
+                | Output::Named { output: child, .. }
+                | Output::Getter { output: child, .. }
+                | Output::Into { output: child, .. } => select(child),
+                Output::Combine(children)
+                | Output::Fields(children)
+                | Output::OwnedFields(children)
+                | Output::Record {
+                    fields: children, ..
+                } => children.iter_mut().map(select).sum(),
+                _ => 0,
+            }
+        }
+        if select(&mut output) != 1 {
+            return Err("callback_return requires exactly one outer sequence".into());
+        }
+        let mut function = flat.function(&decl.name)?.clone();
         function.name = crate::ident(name)?;
         function.ret.slot = None;
         if flat.functions.contains_key(name) {
@@ -300,29 +150,24 @@ impl Declarations {
         variant.name = name.into();
         variant.foreign = None;
         variant.callback_return = None;
+        variant.ret = Some(output.into_preparation());
         Ok(variant)
     }
-    /// Build one function's input and output converters from its declarations.
-    ///
-    /// Existing converters are retained unless explicitly overridden. `extra` is
-    /// used for every converter built by this call; retained converters are untouched.
-    /// For different data at individual occurrences, use [`crate::bind_input`] and
-    /// [`crate::bind_output`] before filling defaults, or after applying overrides.
-    /// No construction data is retained for later overrides.
-    ///
-    /// Resolves and compiles all required conversions before modifying any slot.
-    /// An unknown parameter, recursive expansion, incompatible type or invalid
-    /// constructor/getter leaves the entire function unchanged.
-    ///
-    /// # Arguments
-    ///
-    /// * `flat` — the model holding the function; its slots receive the converters.
-    /// * `codec` — the adapter's leaf conversions.
-    /// * `decl` — the function to export, with its per-parameter and result overrides.
-    /// * `extra` — occurrence data passed to every codec call made by this fill.
+    /// Resolve source-dependent operations, compile them, and atomically install one binding.
+    /// Existing converters are preserved unless explicitly replaced.
     pub fn fill<C: Codec>(
         &self,
-        flat: &mut prebindgen_flat::Flat<C::Input, C::Output>,
+        flat: &mut Flat<C::Schema>,
+        codec: &C,
+        decl: &FunctionDecl,
+        extra: &C::Extra,
+    ) -> Result<()> {
+        self.fill_function(flat, codec, decl, extra)
+            .map_err(|error| format!("{}: {error}", decl.name))
+    }
+    fn fill_function<C: Codec>(
+        &self,
+        flat: &mut Flat<C::Schema>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,
@@ -333,22 +178,27 @@ impl Declarations {
             && decl.ret.is_none()
             && decl.error.is_none()
         {
-            return Err("callback_return cannot reconstruct a prebound output slot; supply an explicit expand_return override".into());
+            return Err("callback_return cannot reconstruct a prebound output slot; supply an explicit output override".into());
         }
-
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
-                return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
+                return Err(format!("unknown parameter `{name}`"));
             }
         }
-        let mut inputs = Vec::new();
+        let mut inputs = vec![];
         for (index, p) in source.params.iter().enumerate() {
             let explicit = decl.params.get(&p.name.to_string());
             inputs.push(if explicit.is_some() || p.ty.slot.is_none() {
-                let recipe = self.input(flat, &p.ty.ty, explicit, &mut Vec::new())?;
+                let tree = self.resolve_input(
+                    flat,
+                    codec,
+                    &p.ty.ty,
+                    explicit.unwrap_or(&Input::auto()),
+                    extra,
+                )?;
                 Some(Compiler::new(flat, codec, format!("p{index}")).input(
                     &p.ty.ty,
-                    &recipe,
+                    &tree,
                     extra,
                     &Condition::default(),
                 )?)
@@ -361,27 +211,10 @@ impl Declarations {
         }
         let mut output = if decl.ret.is_some() || decl.error.is_some() || source.ret.slot.is_none()
         {
-            let recipe = if let Some((ok, error_ty)) = result_parts(&source.ret.ty) {
-                let mapper = self.error_mapper_for(decl, error_ty);
-                if mapper.is_some_and(|mapper| {
-                    !mapper.params.is_empty()
-                        || mapper.ret.is_some()
-                        || mapper.foreign.is_some()
-                        || mapper.error.is_some()
-                        || mapper.callback_return.is_some()
-                }) {
-                    return Err("error mapper references only support their source name".into());
-                }
-                Output::Result {
-                    ok: Box::new(self.output(flat, ok, decl.ret.as_ref(), &mut Vec::new())?),
-                    error: mapper.map(|mapper| mapper.name.clone()),
-                }
-            } else {
-                self.output(flat, &source.ret.ty, decl.ret.as_ref(), &mut Vec::new())?
-            };
+            let tree = self.function_output(flat, codec, &source.ret.ty, decl, extra)?;
             Some(Compiler::new(flat, codec, "ret".into()).output_root(
                 &source.ret.ty,
-                &recipe,
+                &tree,
                 extra,
                 prebindgen_conversions::source_result_expr(),
                 false,
@@ -398,7 +231,6 @@ impl Declarations {
             codec.finish_output(output, extra)?;
             codec.validate_output(output)?;
         }
-        // Install slots only after every conversion has compiled successfully.
         let dest = flat.function_mut(&decl.name)?;
         for (p, input) in dest.params.iter_mut().zip(inputs) {
             if let Some(input) = input {
@@ -410,276 +242,483 @@ impl Declarations {
         }
         Ok(())
     }
-    fn input<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+    fn function_output<C: Codec>(
         &self,
-        flat: &Flat<I, O>,
+        flat: &Flat<C::Schema>,
+        codec: &C,
         ty: &syn::Type,
-        explicit: Option<&ExpandParamDecl>,
-        stack: &mut Vec<String>,
-    ) -> Result<Input> {
-        let key = type_key(ty);
-        if let (Some(inner), Some(decl)) = (option_inner(ty), explicit) {
-            if type_key(&flat.resolve_type(&decl.ty)?) != key {
-                return Ok(Input::Optional(Box::new(
-                    self.input(flat, inner, explicit, stack)?,
-                )));
+        decl: &FunctionDecl,
+        extra: &C::Extra,
+    ) -> Result<Output> {
+        let tree = if let Some((_, error)) = result_parts(ty) {
+            Output::Result {
+                ok: Box::new(decl.ret.clone().unwrap_or_else(Output::auto)),
+                error: self.error_mapper_for(decl, error).map(str::to_owned),
             }
-        }
-        if let (Some((element, _)), Some(decl)) = (sequence_parts(ty), explicit) {
-            if type_key(&flat.resolve_type(&decl.ty)?) != key {
-                return Ok(Input::Sequence(Box::new(
-                    self.input(flat, element, explicit, stack)?,
-                )));
-            }
-        }
-        let d = explicit.or_else(|| self.inputs.get(&key));
-        if let Some(d) = d {
-            if type_key(&flat.resolve_type(&d.ty)?) != key {
-                return Err("input expansion type does not match occurrence".into());
-            }
-            if stack.contains(&key) {
-                return Err(format!("recursive input expansion `{key}`"));
-            }
-            stack.push(key);
-            let mut arms = Vec::new();
-            for variant in &d.variants {
-                arms.push(match variant {
-                    None => if let Some((element,_))=sequence_parts(ty) {
-                        Input::Sequence(Box::new(self.input(flat,element,None,stack)?))
-                    } else { Input::Leaf },
-                    Some(f) => {
-                        if !f.params.is_empty() || f.ret.is_some() || f.foreign.is_some() || f.error.is_some() || f.callback_return.is_some() {
-                            return Err("constructor references only support their source name in this subset".into());
-                        }
-                        let func = flat.function(&f.name)?;
-                        let args = func.params.iter()
-                            .map(|p| self.input(flat, &p.ty.ty, None, stack))
-                            .collect::<Result<Vec<_>>>()?;
-                        Input::constructor(&f.name, args)
-                    }
-                });
-            }
-            stack.pop();
-            return match arms.len() {
-                0 => Err("empty input expansion".into()),
-                1 => Ok(arms.remove(0)),
-                _ => Ok(Input::selector(arms)),
-            };
-        }
-        if let Some(inner) = option_inner(ty) {
-            return Ok(Input::Optional(Box::new(
-                self.input(flat, inner, None, stack)?,
-            )));
-        }
-        if let Some((element, _)) = sequence_parts(ty) {
-            return Ok(Input::Sequence(Box::new(
-                self.input(flat, element, None, stack)?,
-            )));
-        }
-        let key = match ty {
-            syn::Type::Reference(r) => type_key(&r.elem),
-            _ => key,
-        };
-        Ok(if key == "()" {
-            Input::fields([])
         } else {
-            Input::Leaf
-        })
+            decl.ret.clone().unwrap_or_else(Output::auto)
+        };
+        self.resolve_output(flat, codec, ty, &tree, extra)
     }
-    /// Build a consuming projection of a declared record's fields, applying
-    /// the normal output declarations independently to every field.
-    pub fn owned_record_output<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
-        &self,
-        flat: &Flat<I, O>,
-        ty: &syn::Type,
-    ) -> Result<Output> {
-        let record = flat.record(ty)?;
-        Ok(Output::OwnedFields(
-            record
-                .fields
-                .iter()
-                .map(|field| self.output(flat, &field.ty, None, &mut Vec::new()))
-                .collect::<Result<Vec<_>>>()?,
-        ))
-    }
-    /// Resolve the declared output representation for an owned value, including
-    /// type-wide expansions. Adapters can reuse it for alternate output channels.
-    pub fn output_recipe<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
-        &self,
-        flat: &Flat<I, O>,
-        ty: &syn::Type,
-    ) -> Result<Output> {
-        self.output(flat, ty, None, &mut Vec::new())
-    }
-    /// Select the explicit message mapper for this function's Result error.
+    /// Select a function-specific or type-wide explicit error message mapper.
     pub fn error_mapper_for<'a>(
         &'a self,
-        declaration: &'a FunctionDecl,
+        decl: &'a FunctionDecl,
         ty: &syn::Type,
-    ) -> Option<&'a FunctionDecl> {
-        declaration
-            .error
+    ) -> Option<&'a str> {
+        decl.error
             .as_deref()
-            .or_else(|| self.errors.get(&type_key(ty)))
+            .or_else(|| self.errors.get(&type_key(ty)).map(String::as_str))
     }
-    fn output<I: prebindgen_flat::Conversion, O: prebindgen_flat::Conversion>(
+    /// Prepare owned source-field decomposition, retaining each field's conversion default.
+    pub fn owned_record_output<C: Codec>(
         &self,
-        flat: &Flat<I, O>,
+        flat: &Flat<C::Schema>,
+        codec: &C,
         ty: &syn::Type,
-        explicit: Option<&ExpandReturnDecl>,
+        extra: &C::Extra,
+    ) -> Result<Output> {
+        self.resolve_output(
+            flat,
+            codec,
+            ty,
+            &Output::Request(OutputRequest::NamedFields {
+                overrides: BTreeMap::new(),
+                mode: ProjectionMode::Owned,
+            }),
+            extra,
+        )
+    }
+    /// Resolve a type's default output tree, for example for a typed error channel.
+    pub fn output_recipe<C: Codec>(
+        &self,
+        flat: &Flat<C::Schema>,
+        codec: &C,
+        ty: &syn::Type,
+        extra: &C::Extra,
+    ) -> Result<Output> {
+        self.resolve_output(flat, codec, ty, &Output::auto(), extra)
+    }
+    /// Resolve every input operation against canonical source declarations before compilation.
+    pub fn resolve_input<C: Codec>(
+        &self,
+        flat: &Flat<C::Schema>,
+        codec: &C,
+        ty: &syn::Type,
+        tree: &Input<InputRequest>,
+        extra: &C::Extra,
+    ) -> Result<Input> {
+        self.input(flat, codec, ty, tree, extra, &mut vec![])
+    }
+    fn input<C: Codec>(
+        &self,
+        flat: &Flat<C::Schema>,
+        codec: &C,
+        ty: &syn::Type,
+        tree: &Input<InputRequest>,
+        extra: &C::Extra,
+        stack: &mut Vec<String>,
+    ) -> Result<Input> {
+        let resolve = |ty: &syn::Type, tree: &Input<InputRequest>, stack: &mut Vec<String>| {
+            self.input(flat, codec, ty, tree, extra, stack)
+        };
+        match tree {
+            Input::Request(InputRequest::Auto) => {
+                let key = type_key(ty);
+                if let Some(tree) = self.inputs.get(&key) {
+                    if stack.contains(&key) {
+                        return Err(format!("recursive input expansion `{key}`"));
+                    }
+                    stack.push(key);
+                    let result = resolve(ty, tree, stack);
+                    stack.pop();
+                    return result;
+                }
+                if let Some(inner) = option_inner(ty) {
+                    return Ok(Input::Optional(Box::new(resolve(
+                        inner,
+                        &Input::auto(),
+                        stack,
+                    )?)));
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    return Ok(Input::Sequence(Box::new(resolve(
+                        element,
+                        &Input::auto(),
+                        stack,
+                    )?)));
+                }
+                if type_key(ty) == "()" {
+                    return Ok(Input::Fields(vec![]));
+                }
+                resolve(ty, &Input::Leaf, stack)
+            }
+            Input::Request(InputRequest::ForType { ty: target, input }) => {
+                let target = flat.resolve_type(target)?;
+                if same_type(ty, &target) {
+                    return resolve(ty, &input_body((**input).clone()), stack);
+                }
+                if let Some(inner) = option_inner(ty) {
+                    return Ok(Input::Optional(Box::new(resolve(inner, tree, stack)?)));
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    return Ok(Input::Sequence(Box::new(resolve(element, tree, stack)?)));
+                }
+                Err("input expansion type does not match occurrence".into())
+            }
+            Input::Leaf => {
+                if let Some(inner) = option_inner(ty) {
+                    return Ok(Input::Optional(Box::new(resolve(
+                        inner,
+                        &Input::Leaf,
+                        stack,
+                    )?)));
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    return Ok(Input::Sequence(Box::new(resolve(
+                        element,
+                        &Input::auto(),
+                        stack,
+                    )?)));
+                }
+                if let Some(replacement) = codec.expand_input(flat, ty, tree, extra)? {
+                    return resolve(ty, &replacement, stack);
+                }
+                Ok(Input::Leaf)
+            }
+            Input::Request(InputRequest::Call(function)) => {
+                let f = flat.function(function)?;
+                resolve(
+                    ty,
+                    &Input::Constructor {
+                        function: function.clone(),
+                        args: vec![Input::auto(); f.params.len()],
+                    },
+                    stack,
+                )
+            }
+            Input::Constructor { function, args } => {
+                let f = flat.function(function)?;
+                if !same_type(&f.ret.ty, ty) {
+                    return Err(format!(
+                        "constructor `{function}` returns `{}`, expected `{}`",
+                        type_key(&f.ret.ty),
+                        type_key(ty)
+                    ));
+                }
+                if args.len() != f.params.len() {
+                    return Err(format!("constructor `{function}`: wrong argument count"));
+                }
+                Ok(Input::Constructor {
+                    function: function.clone(),
+                    args: f
+                        .params
+                        .iter()
+                        .zip(args)
+                        .map(|(p, child)| resolve(&p.ty.ty, child, stack))
+                        .collect::<Result<_>>()?,
+                })
+            }
+            Input::Optional(child) => {
+                let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
+                Ok(Input::Optional(Box::new(resolve(inner, child, stack)?)))
+            }
+            Input::Sequence(child) => {
+                let (element, _) =
+                    sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
+                Ok(Input::Sequence(Box::new(resolve(element, child, stack)?)))
+            }
+            Input::Fields(children) | Input::Record(children) => {
+                if type_key(ty) == "()" && children.is_empty() {
+                    return Ok(Input::Fields(vec![]));
+                }
+                let fields = &flat.record(ty)?.fields;
+                if fields.len() != children.len() {
+                    return Err(format!(
+                        "`{}`: expected {} field converters, got {}",
+                        type_key(ty),
+                        fields.len(),
+                        children.len()
+                    ));
+                }
+                let children = fields
+                    .iter()
+                    .zip(children)
+                    .map(|(f, c)| resolve(&f.ty, c, stack))
+                    .collect::<Result<_>>()?;
+                Ok(if matches!(tree, Input::Record(_)) {
+                    Input::Record(children)
+                } else {
+                    Input::Fields(children)
+                })
+            }
+            Input::Selector(arms) => {
+                if arms.is_empty() {
+                    return Err("an input selector needs at least one alternative".into());
+                }
+                Ok(Input::Selector(
+                    arms.iter()
+                        .map(|child| resolve(ty, child, stack))
+                        .collect::<Result<_>>()?,
+                ))
+            }
+        }
+    }
+    /// Resolve every output operation, source reference and ownership choice before compilation.
+    pub fn resolve_output<C: Codec>(
+        &self,
+        flat: &Flat<C::Schema>,
+        codec: &C,
+        ty: &syn::Type,
+        tree: &Output<OutputRequest>,
+        extra: &C::Extra,
+    ) -> Result<Output> {
+        self.output(flat, codec, ty, tree, extra, &mut vec![])
+    }
+    fn output<C: Codec>(
+        &self,
+        flat: &Flat<C::Schema>,
+        codec: &C,
+        ty: &syn::Type,
+        tree: &Output<OutputRequest>,
+        extra: &C::Extra,
         stack: &mut Vec<String>,
     ) -> Result<Output> {
-        let key = type_key(ty);
-        if let (Some(inner), Some(decl)) = (option_inner(ty), explicit) {
-            if type_key(&flat.resolve_type(&decl.ty)?) != key {
-                return Ok(Output::Optional(Box::new(
-                    self.output(flat, inner, explicit, stack)?,
-                )));
-            }
-        }
-        if let (Some((element, _view)), Some(decl)) = (sequence_parts(ty), explicit) {
-            if type_key(&flat.resolve_type(&decl.ty)?) != key {
-                return Ok(Output::Sequence {
-                    element: Box::new(self.output(flat, element, explicit, stack)?),
-                    mode: None,
-                });
-            }
-        }
-        let d = explicit.or_else(|| self.outputs.get(&key));
-        if let Some(d) = d {
-            if type_key(&flat.resolve_type(&d.ty)?) != key {
-                return Err("output expansion type does not match occurrence".into());
-            }
-            if stack.contains(&key) {
-                return Err(format!("recursive output expansion `{key}`"));
-            }
-            stack.push(key);
-            let mut parts = Vec::new();
-            for field in &d.fields {
-                parts.push(match field {
-                    ReturnField::Identity => {
-                        if let Some((element, _view)) = sequence_parts(ty) {
-                            Output::Sequence {
-                                element: Box::new(self.output(flat, element, None, stack)?),
-                                mode: None,
-                            }
-                        } else {
-                            Output::Leaf
-                        }
+        let resolve = |ty: &syn::Type, tree: &Output<OutputRequest>, stack: &mut Vec<String>| {
+            self.output(flat, codec, ty, tree, extra, stack)
+        };
+        match tree {
+            Output::Discard => Ok(Output::Discard),
+            Output::Named { name, output } => Ok(Output::Named {
+                name: name.clone(),
+                output: Box::new(resolve(ty, output, stack)?),
+            }),
+            Output::Request(OutputRequest::Auto) => {
+                let key = type_key(ty);
+                if let Some(tree) = self.outputs.get(&key) {
+                    if stack.contains(&key) {
+                        return Err(format!("recursive output expansion `{key}`"));
                     }
-                    ReturnField::Projected(p) => {
-                        if let Some((element, _)) = sequence_parts(ty) {
-                            if !p.fields.is_empty() {
-                                return Err(
-                                    "collection field projections belong on the element type"
-                                        .into(),
-                                );
-                            }
-                            Output::Sequence {
-                                element: Box::new(self.output(flat, element, None, stack)?),
-                                mode: Some(p.mode),
-                            }
-                        } else {
-                            Output::Projected(p.clone())
+                    stack.push(key);
+                    let result = resolve(ty, tree, stack);
+                    stack.pop();
+                    return result;
+                }
+                if let Some(inner) = option_inner(ty) {
+                    return Ok(Output::Optional(Box::new(resolve(
+                        inner,
+                        &Output::auto(),
+                        stack,
+                    )?)));
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    return Ok(Output::Sequence {
+                        element: Box::new(resolve(element, &Output::auto(), stack)?),
+                        mode: None,
+                        delivery: SequenceDelivery::Value,
+                    });
+                }
+                if type_key(ty) == "()" {
+                    return Ok(Output::Fields(vec![]));
+                }
+                resolve(ty, &Output::Leaf, stack)
+            }
+            Output::Request(OutputRequest::ForType { ty: target, output }) => {
+                let target = flat.resolve_type(target)?;
+                if same_type(ty, &target) {
+                    return resolve(ty, &output_body((**output).clone()), stack);
+                }
+                if let Some(inner) = option_inner(ty) {
+                    let child = resolve(inner, tree, stack)?;
+                    return Ok(if matches!(child, Output::Discard) {
+                        Output::Discard
+                    } else {
+                        Output::Optional(Box::new(child))
+                    });
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    let child = resolve(element, tree, stack)?;
+                    return Ok(if matches!(child, Output::Discard) {
+                        Output::Discard
+                    } else {
+                        Output::Sequence {
+                            element: Box::new(child),
+                            mode: None,
+                            delivery: SequenceDelivery::Value,
                         }
-                    }
-                    ReturnField::Getter(f) => {
-                        if !f.params.is_empty()
-                            || f.ret.is_some()
-                            || f.foreign.is_some()
-                            || f.error.is_some()
-                            || f.callback_return.is_some()
-                        {
+                    });
+                }
+                Err("output expansion type does not match occurrence".into())
+            }
+            Output::Leaf | Output::Projected(_) => {
+                if let Some(inner) = option_inner(ty) {
+                    return Ok(Output::Optional(Box::new(resolve(inner, tree, stack)?)));
+                }
+                if let Some((element, _)) = sequence_parts(ty) {
+                    let mode = if let Output::Projected(p) = tree {
+                        if !p.fields.is_empty() {
                             return Err(
-                                "getter references only support their source name in this subset"
-                                    .into(),
+                                "collection field projections belong on the element type".into()
                             );
                         }
-                        let func = flat.function(&f.name)?;
-                        Output::getter(&f.name, self.output(flat, &func.ret.ty, None, stack)?)
-                    }
-                    ReturnField::Fields(d) | ReturnField::IntoFields(d) => {
-                        let f = flat.function(&d.function)?;
-                        let record = flat.record(&f.ret.ty)?;
-                        for name in d.overrides.keys() {
-                            if !record.fields.iter().any(|p| p.name == name.as_str()) {
-                                return Err(format!("unknown output field `{name}`"));
-                            }
-                        }
-                        let children = record
-                            .fields
-                            .iter()
-                            .map(|p| {
-                                self.output(
-                                    flat,
-                                    &p.ty,
-                                    d.overrides.get(&p.name.to_string()),
-                                    stack,
-                                )
-                            })
-                            .collect::<Result<Vec<_>>>()?;
-                        if matches!(field, ReturnField::IntoFields(_)) {
-                            Output::Into {
-                                function: d.function.clone(),
-                                output: Box::new(Output::OwnedFields(children)),
-                            }
-                        } else {
-                            Output::getter(&d.function, Output::fields(children))
-                        }
-                    }
-                });
+                        Some(p.mode)
+                    } else {
+                        None
+                    };
+                    return Ok(Output::Sequence {
+                        element: Box::new(resolve(element, &Output::auto(), stack)?),
+                        mode,
+                        delivery: SequenceDelivery::Value,
+                    });
+                }
+                if let Some(replacement) = codec.expand_output(flat, ty, tree, extra)? {
+                    return resolve(ty, &replacement, stack);
+                }
+                Ok(match tree {
+                    Output::Leaf => Output::Leaf,
+                    Output::Projected(policy) => Output::Projected(policy.clone()),
+                    _ => unreachable!(),
+                })
             }
-            stack.pop();
-            return match parts.len() {
-                0 => Err("empty output expansion is outside this subset".into()),
-                1 => Ok(parts.remove(0)),
-                _ => Ok(Output::combine(parts)),
-            };
+            Output::Optional(child) => {
+                let inner = option_inner(ty).ok_or("optional recipe requires Option<T>")?;
+                Ok(Output::Optional(Box::new(resolve(inner, child, stack)?)))
+            }
+            Output::Sequence {
+                element,
+                mode,
+                delivery,
+            } => {
+                let (ty, _) =
+                    sequence_parts(ty).ok_or("sequence output requires a collection source")?;
+                Ok(Output::Sequence {
+                    element: Box::new(resolve(ty, element, stack)?),
+                    mode: *mode,
+                    delivery: *delivery,
+                })
+            }
+            Output::Request(OutputRequest::NamedFields { overrides, mode }) => {
+                let fields = &flat.record(ty)?.fields;
+                for name in overrides.keys() {
+                    if !fields.iter().any(|f| f.name == name.as_str()) {
+                        return Err(format!("unknown output field `{name}`"));
+                    }
+                }
+                let children = fields
+                    .iter()
+                    .map(|f| {
+                        resolve(
+                            &f.ty,
+                            overrides
+                                .get(&f.name.to_string())
+                                .unwrap_or(&Output::auto()),
+                            stack,
+                        )
+                    })
+                    .collect::<Result<_>>()?;
+                Ok(if *mode == ProjectionMode::Owned {
+                    Output::OwnedFields(children)
+                } else {
+                    Output::Fields(children)
+                })
+            }
+            Output::Fields(children)
+            | Output::OwnedFields(children)
+            | Output::Record {
+                fields: children, ..
+            } => {
+                if type_key(ty) == "()" && children.is_empty() {
+                    return Ok(match tree {
+                        Output::Fields(_) => Output::Fields(vec![]),
+                        Output::OwnedFields(_) => Output::OwnedFields(vec![]),
+                        Output::Record { mode, .. } => Output::Record {
+                            fields: vec![],
+                            mode: *mode,
+                        },
+                        _ => unreachable!(),
+                    });
+                }
+                let fields = &flat.record(ty)?.fields;
+                if fields.len() != children.len() {
+                    return Err("wrong output field count".into());
+                }
+                let children = fields
+                    .iter()
+                    .zip(children)
+                    .map(|(f, c)| resolve(&f.ty, c, stack))
+                    .collect::<Result<_>>()?;
+                Ok(match tree {
+                    Output::Fields(_) => Output::Fields(children),
+                    Output::OwnedFields(_) => Output::OwnedFields(children),
+                    Output::Record { mode, .. } => Output::Record {
+                        fields: children,
+                        mode: *mode,
+                    },
+                    _ => unreachable!(),
+                })
+            }
+            Output::Getter { function, output } | Output::Into { function, output } => {
+                let f = flat.function(function)?;
+                let expected = if matches!(tree, Output::Into { .. }) {
+                    ty.clone()
+                } else {
+                    syn::parse_quote!(&#ty)
+                };
+                if f.params.len() != 1 || !same_type(&f.params[0].ty.ty, &expected) {
+                    return Err(format!(
+                        "getter `{function}` must take exactly `{}`",
+                        type_key(&expected)
+                    ));
+                }
+                if matches!(f.ret.ty, syn::Type::Reference(_)) {
+                    return Err("borrowed getter results are outside this subset".into());
+                }
+                let output = Box::new(resolve(&f.ret.ty, output, stack)?);
+                Ok(if matches!(tree, Output::Into { .. }) {
+                    Output::Into {
+                        function: function.clone(),
+                        output,
+                    }
+                } else {
+                    Output::Getter {
+                        function: function.clone(),
+                        output,
+                    }
+                })
+            }
+            Output::Combine(parts) => {
+                if parts.is_empty() {
+                    return Err("an output combination needs at least one part".into());
+                }
+                Ok(Output::Combine(
+                    parts
+                        .iter()
+                        .map(|child| resolve(ty, child, stack))
+                        .collect::<Result<_>>()?,
+                ))
+            }
+            Output::Result { ok, error } => {
+                let (success, failure) =
+                    result_parts(ty).ok_or("Result recipe requires Result<T, E>")?;
+                if let Some(name) = error {
+                    let f = flat.function(name)?;
+                    let valid = f.params.len() == 1
+                        && (same_type(&f.params[0].ty.ty, failure)
+                            || matches!(&f.params[0].ty.ty,syn::Type::Reference(r) if r.mutability.is_none()&&same_type(&r.elem,failure)));
+                    if !valid || type_key(&f.ret.ty) != "String" {
+                        return Err(
+                            "Result error mapper must take exactly E or &E and return String"
+                                .into(),
+                        );
+                    }
+                }
+                Ok(Output::Result {
+                    ok: Box::new(resolve(success, ok, stack)?),
+                    error: error.clone(),
+                })
+            }
         }
-        if let Some(inner) = option_inner(ty) {
-            return Ok(Output::Optional(Box::new(
-                self.output(flat, inner, None, stack)?,
-            )));
-        }
-        if let Some((element, _view)) = sequence_parts(ty) {
-            return Ok(Output::Sequence {
-                element: Box::new(self.output(flat, element, None, stack)?),
-                mode: None,
-            });
-        }
-        Ok(if key == "()" {
-            Output::fields([])
-        } else {
-            Output::Leaf
-        })
     }
-}
-
-#[doc(hidden)]
-pub fn parse_type(s: &str) -> syn::Type {
-    syn::parse_str(s).expect("type syntax")
-}
-#[doc(hidden)]
-pub fn parse_ident(s: &str) -> syn::Ident {
-    syn::parse_str(s).expect("identifier syntax")
-}
-#[macro_export]
-/// Reference a source function by its unqualified Rust identifier.
-///
-/// Returns a [`FunctionDecl`]; the function need not be in `build.rs` scope.
-macro_rules! fun {
-    ($name:ident) => {
-        $crate::FunctionDecl::new($crate::declarations::parse_ident(stringify!($name)))
-    };
-}
-#[macro_export]
-/// Reference a source getter returning a record whose fields should be exposed.
-///
-/// Returns a [`FieldsDecl`] for use with [`ExpandReturnDecl::fields`].
-macro_rules! fields {
-    ($name:ident) => {
-        $crate::FieldsDecl::new($crate::declarations::parse_ident(stringify!($name)))
-    };
 }
 
 /// Which sequence return variants an adapter should expose.
@@ -693,7 +732,7 @@ pub enum CallbackReturn {
 }
 
 /// A source callable to export, with optional destination name and occurrence overrides.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FunctionDecl {
     /// Also emit an explicit callback-delivery variant for a sequence return.
     pub callback_return: Option<CallbackReturn>,
@@ -702,11 +741,11 @@ pub struct FunctionDecl {
     /// Explicit destination name; supported by JNI, currently rejected by C.
     pub foreign: Option<String>,
     /// Input expansion overrides keyed by source parameter name.
-    pub params: BTreeMap<String, ExpandParamDecl>,
+    pub params: BTreeMap<String, Input<InputRequest>>,
     /// Result expansion override, replacing the type default.
-    pub ret: Option<ExpandReturnDecl>,
+    pub ret: Option<Output<OutputRequest>>,
     /// Source mapper for a top-level Result error; it takes E or &E and returns String.
-    pub error: Option<Box<FunctionDecl>>,
+    pub error: Option<String>,
 }
 impl FunctionDecl {
     /// Reference a source function without overriding names or conversions.
@@ -721,6 +760,33 @@ impl FunctionDecl {
             ret: None,
             error: None,
         }
+    }
+    /// Extract an undecorated helper's source name, rejecting binding-only settings.
+    pub fn source_name(self) -> String {
+        self.reference_name(false)
+    }
+    /// Source reference used by constructor, getter and error-mapper declarations.
+    pub(crate) fn reference_name(self, allow_name: bool) -> String {
+        assert!(
+            self.params.is_empty()
+                && self.ret.is_none()
+                && self.error.is_none()
+                && self.callback_return.is_none(),
+            "conversion helpers only support their source name and getter name override"
+        );
+        assert!(
+            allow_name || self.foreign.is_none(),
+            "this helper reference does not support renaming"
+        );
+        self.name
+    }
+    /// Replace one parameter's default conversion using the production API.
+    pub fn expand_param(self, name: impl AsRef<str>, decl: crate::ExpandParamDecl) -> Self {
+        self.input(name, decl)
+    }
+    /// Replace this return's default conversion using the production API.
+    pub fn expand_return(self, decl: crate::ExpandReturnDecl) -> Self {
+        self.output(decl)
     }
     /// Add callback delivery alongside the ordinary sequence return.
     ///
@@ -749,8 +815,8 @@ impl FunctionDecl {
     /// source name is accepted; it is selected for capture but is not exported.
     /// The success value uses normal return defaults and `expand_return` overrides.
     /// Replaces any previously selected mapper. Non-Result returns reject this option.
-    pub fn on_error(mut self, mapper: FunctionDecl) -> Self {
-        self.error = Some(Box::new(mapper));
+    pub fn on_error(mut self, mapper: impl Into<FunctionDecl>) -> Self {
+        self.error = Some(mapper.into().reference_name(false));
         self
     }
     /// Set a literal destination name, subject to adapter validation.
@@ -770,76 +836,136 @@ impl FunctionDecl {
     /// # Panics
     /// Panics if that parameter already has an override. Resolution checks that the
     /// parameter exists and the expansion type matches.
-    pub fn expand_param(mut self, name: impl AsRef<str>, decl: ExpandParamDecl) -> Self {
+    pub fn input(mut self, name: impl AsRef<str>, decl: impl Into<Input<InputRequest>>) -> Self {
         assert!(
-            self.params.insert(name.as_ref().into(), decl).is_none(),
+            self.params
+                .insert(name.as_ref().into(), decl.into())
+                .is_none(),
             "duplicate parameter override"
         );
         self
     }
     /// Replace the result expansion, including any previously assigned override.
-    pub fn expand_return(mut self, decl: ExpandReturnDecl) -> Self {
-        self.ret = Some(decl);
+    ///
+    /// Raw structural nodes infer the preparation payload automatically. An explicitly
+    /// resolved tree must use [`Output::into_preparation`] before registration.
+    /// ```
+    /// use prebindgen_declarations::{fun,fields,expand_return,Input,Output};
+    /// let _ = fun!(run).input("x", Input::fields([])).output(Output::Leaf);
+    /// let _ = fields!(parts).field_override("hidden", Output::Discard);
+    /// let _ = expand_return!(Value).view(Output::getter("length", Output::Leaf));
+    /// let resolved: Output = Output::getter("length", Output::Leaf);
+    /// let _ = fun!(run).output(resolved.into_preparation());
+    /// ```
+    pub fn output(mut self, decl: impl Into<Output<OutputRequest>>) -> Self {
+        self.ret = Some(decl.into());
         self
     }
 }
 
-/// Collect source callable names referenced by bindings and nested expansions.
-///
-/// Used when selecting captured items before constructing a flat model. The
-/// returned list can contain duplicates; collecting names does not resolve or
-/// validate the recipes or export their helper functions.
-///
-/// # Arguments
-///
-/// * `expansions` — type-wide defaults; constructors, getters and error mappers are collected.
-/// * `functions` — exported functions; their names and those referenced by their
-///   overrides are collected.
+impl From<&str> for FunctionDecl {
+    fn from(name: &str) -> Self {
+        Self::new(crate::ident(name).expect("source function identifier"))
+    }
+}
+impl From<String> for FunctionDecl {
+    fn from(name: String) -> Self {
+        Self::from(name.as_str())
+    }
+}
+
+/// Collect referenced source helper functions directly from the conversion trees.
 pub fn source_functions<'a>(
-    expansions: &[ExpandDecl],
+    inputs: &[Input<InputRequest>],
+    outputs: &[Output<OutputRequest>],
+    errors: &[(syn::Type, String)],
     functions: impl IntoIterator<Item = &'a FunctionDecl>,
 ) -> Vec<String> {
-    fn input(d: &ExpandParamDecl, names: &mut Vec<String>) {
-        for f in d.variants.iter().flatten() {
-            function(f, names);
-        }
-    }
-    fn output(d: &ExpandReturnDecl, names: &mut Vec<String>) {
-        for field in &d.fields {
-            match field {
-                ReturnField::Identity | ReturnField::Projected(_) => {}
-                ReturnField::Getter(f) => function(f, names),
-                ReturnField::Fields(d) | ReturnField::IntoFields(d) => {
-                    names.push(d.function.clone());
-                    for d in d.overrides.values() {
-                        output(d, names);
-                    }
+    fn input(tree: &Input<InputRequest>, names: &mut Vec<String>) {
+        match tree {
+            Input::Request(InputRequest::Call(name)) => names.push(name.clone()),
+            Input::Constructor { function, args } => {
+                names.push(function.clone());
+                for child in args {
+                    input(child, names);
                 }
             }
+            Input::Request(InputRequest::ForType { input: child, .. })
+            | Input::Optional(child)
+            | Input::Sequence(child) => input(child, names),
+            Input::Fields(children) | Input::Record(children) | Input::Selector(children) => {
+                for child in children {
+                    input(child, names)
+                }
+            }
+            Input::Leaf | Input::Request(InputRequest::Auto) => {}
         }
     }
-    fn function(f: &FunctionDecl, names: &mut Vec<String>) {
-        names.push(f.name.clone());
-        if let Some(mapper) = &f.error {
-            function(mapper, names);
-        }
-        for d in f.params.values() {
-            input(d, names);
-        }
-        if let Some(d) = &f.ret {
-            output(d, names);
+    fn output(tree: &Output<OutputRequest>, names: &mut Vec<String>) {
+        match tree {
+            Output::Named { output: child, .. } => output(child, names),
+            Output::Discard => {}
+            Output::Getter {
+                function,
+                output: child,
+            }
+            | Output::Into {
+                function,
+                output: child,
+            } => {
+                names.push(function.clone());
+                output(child, names);
+            }
+            Output::Request(OutputRequest::ForType { output: child, .. })
+            | Output::Optional(child)
+            | Output::Sequence { element: child, .. } => output(child, names),
+            Output::Result { ok, error } => {
+                output(ok, names);
+                if let Some(name) = error {
+                    names.push(name.clone());
+                }
+            }
+            Output::Fields(children)
+            | Output::OwnedFields(children)
+            | Output::Record {
+                fields: children, ..
+            }
+            | Output::Combine(children) => {
+                for child in children {
+                    output(child, names)
+                }
+            }
+            Output::Request(OutputRequest::NamedFields { overrides, .. }) => {
+                for child in overrides.values() {
+                    output(child, names)
+                }
+            }
+            Output::Request(OutputRequest::Auto) | Output::Leaf | Output::Projected(_) => {}
         }
     }
-    let mut names = Vec::new();
+    let mut names = vec![];
+    for tree in inputs {
+        input(tree, &mut names)
+    }
+    for tree in outputs {
+        output(tree, &mut names)
+    }
+    names.extend(errors.iter().map(|(_, name)| name.clone()));
     for f in functions {
-        function(f, &mut names);
-    }
-    for d in expansions {
-        match d {
-            ExpandDecl::Error(d) => function(&d.mapper, &mut names),
-            ExpandDecl::Param(d) => input(d, &mut names),
-            ExpandDecl::Return(d) => output(d, &mut names),
+        names.push(f.name.clone());
+        for tree in f.params.values() {
+            input(tree, &mut names)
+        }
+        if let Some(tree) = &f.ret {
+            output(tree, &mut names)
+        }
+        if let Some(name) = &f.error {
+            names.push(name.clone())
         }
     }
     names
+}
+/// Parse source type syntax without requiring it to be in scope in build.rs.
+pub fn parse_type(text: &str) -> syn::Type {
+    syn::parse_str(text).expect("source type syntax")
 }

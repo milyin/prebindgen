@@ -131,7 +131,7 @@ pub(crate) fn emit_schemas(
     output_carriers: &std::collections::BTreeSet<String>,
     context: &CContext,
     prefix: &str,
-    pointers: &[(String, syn::Type)],
+    pointers: &std::collections::BTreeMap<String, prebindgen_flat::TypeInfo<CType>>,
     symbols: &mut std::collections::BTreeSet<String>,
     tokens: &mut TokenStream,
     header: &mut String,

@@ -8,28 +8,27 @@ conversions, and language adapters emit wrappers and foreign declarations.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Flat with empty conversion slots
-        ↓ prebindgen-declarations builds and attaches converters
-Flat<I: Conversion, O: Conversion>
-        (parameter slots: Option<I>; result slots: Option<O>)
+Flat<S: Schema> with source declarations, metadata and empty conversion slots
+        ↓ prepare each occurrence: resolve its description, compile its converter
+The same Flat<S> with completed parameter and result slots
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<I, O>` stores the two payload types in
-optional slots. Both can implement `Conversion` with distinct wire kinds and request enums; the model itself does
-not require that trait. Record declarations preserve Rust
-source structure. Named representation schemas describe logical components,
-source-field associations and adapter-specific type data `R`; wires refer to
-components by stable paths. Flat also preserves source names, locations and guards.
+can have different input recipes. `Schema::Input` and `Schema::Output` choose
+occurrence payload types once; their slots are optional until preparation fills them.
+Both payloads can implement `Conversion` with distinct wire kinds and request enums;
+the model itself does not require that trait. Record declarations preserve Rust source structure; typed
+metadata on Flat owners records language representations and project choices.
+Flat also preserves source names, locations and guards.
 Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
 
 ## Examples migrated from main
 
 This branch replaces the generator engine while preserving source capture and
-source-reading support. The supported JniGen `build.rs` declarations keep their
-existing syntax. Import shared declaration types and macros directly from
+source-reading support. Class, package, and conversion declarations preserve the production builder API.
+Import shared declaration types and macros directly from
 `prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
 The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
@@ -135,7 +134,9 @@ Type-wide expansions of field types do not rewrite a data class's properties.
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
 and moves its returned record fields. Both support existing per-field expansion
-overrides through `.field("name", expand_return!(FieldType)...)` on `FieldsDecl`.
+overrides through `fields!(getter).field("name", expand_return!(FieldType)...)`.
+An empty field override, such as `.field("internal", expand_return!(Internal))`,
+explicitly omits that field while keeping its Rust cleanup.
 These fields use their type-wide defaults when not overridden.
 `fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
@@ -165,10 +166,80 @@ settings remain commented out in the example manifests.
 
 ## Preparation and generation APIs
 
+Builders prepare one binding model, then emit from that model:
+
+```text
+Source -> Flat<CSchema> or Flat<JniSchema> with empty conversion slots
+       -> prepare converters into the same Flat
+       -> generate(&flat): Rust and C/Kotlin
+```
+
+Preparation trees use `Input<InputRequest>` and `Output<OutputRequest>`: structural
+operations and pending choices share one tree. `Request` marks a choice that
+preparation must resolve: `Auto` selects a configured default, `Call` discovers
+constructor arguments, `ForType` applies a typed override, and `NamedFields`
+fills in source fields by name. The production
+`expand_param!`, `expand_return!`, and `fields!` builders write those trees;
+`.expand(...)` registers type defaults and function `.expand_param(name, ...)` /
+`.expand_return(...)` replace them. For example:
+
+```rust,ignore
+.expand(expand_param!(KeyExpr).variant(fun!(keyexpr_new)).variant_self())
+.expand(expand_return!(Error).field(fun!(error_message).name("message")))
+.package(package!().fun(fun!(echo)
+    .expand_param("key", expand_param!(KeyExpr).variant_self())
+    .expand_return(expand_return!(KeyExpr).field_self())))
+```
+
+`ExpandParamDecl`, `ExpandReturnDecl`, and `FieldsDecl` are typed builders over
+these same trees; there is no separate expansion tree to resolve later. They
+convert into preparation trees when registered. Explicit getter names stay in the
+prepared wire metadata and label Kotlin build/fold callback parameters and
+domain-error callback arguments. Duplicate names are rejected during generation.
+C rejects named getter views; its return packet fields remain positional. Direct
+`Input::for_type` / `Output::for_type` trees remain available through `.input(...)`
+and `.output(...)` for custom preparation code.
+Resolution applies project choices and language representations, resolves source
+constructor/getter references, and expands optional, sequence and record operations.
+Resolution returns a temporary `Input` or `Output` for each occurrence. Plain
+`Input` and `Output` use
+`Infallible` as the request payload, so pending choices cannot appear anywhere in
+these trees, including nested children. `compile_input` and `compile_output` accept
+only this resolved form and return the final converter. `Declarations::fill` resolves,
+compiles and installs the converters atomically for one function; the Flat schema
+and its source declarations stay in place throughout. An explicit subtree can be
+embedded in a preparation tree with `.into_preparation()`; source-dependent
+normalization still applies. Sequence returns carry an explicit
+`SequenceDelivery::Value` or `Callback` choice; codecs receive that choice rather
+than inferring it from generated wire names. Both stages
+read source facts from the same `Flat`; the instruction trees reference declarations
+rather than copying records or signatures.
+
+`Cbindgen::prepare()` and `JniGenBuilder::prepare()` return the complete prepared
+`Flat`. The public `prebindgen_c::generate(&flat)` and
+`prebindgen_jni::generate(&flat)` read all settings, type declarations, function
+placement and conversions from that model. `build()` combines these steps.
+Preparation attaches resolved module settings, class/enum declarations, error policies
+and function placement to Flat before compiling conversions. Source-aware `Codec`
+hooks receive `&Flat<Self::Schema>` and read these owners directly; C and JNI codecs
+keep no parallel representation tables. Error preparation fills type metadata and
+links each function to its selected error binding, returning only success or failure.
+`compile_output_value` compiles an error projection directly, without inserting a
+synthetic function into the source model.
+
+Unresolved declaration recipes are temporary preparation inputs. Validation sets,
+recursion markers and generated wrapper-local names are temporary working data.
+Emission needs no builder or separate configuration table.
+
 `prebindgen-flat` provides the source model and minimal conversion interfaces:
 
-- `Flat<I, O>` stores `Option<I>` on parameters and `Option<O>` on results.
-  Payloads belong to the consumer; source-only inspection can use `Flat<(), ()>`.
+- `Flat<S>` owns source declarations and binding data. `S: Schema` selects the
+  input/output converter types together with metadata types for the module,
+  functions, source types, fields and enum variants. `S = ()` supports source-only
+  inspection. Parameters hold `Option<S::Input>` and returns `Option<S::Output>`.
+  `CSchema` and `JniSchema` choose their final converter types before parsing;
+  preparation fills the slots without changing the schema. `map_slots` transforms
+  values within an existing schema.
 - `Conversion::code_fragment_slot(mode, expected_type)` accepts the generator's
   own requests, including any element or branch context.
 - `InputConversion::input_node()` describes one input value.
@@ -261,10 +332,12 @@ return-value binding carried by output requests. Custom converters need neither
 stored plans nor template support.
 
 `prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
-`Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
+`Flat<prebindgen_conversions::PlanSchema<W, C>>`. `PlanSchema` selects the standard
+input/output plans and unit declaration metadata for simple codecs. `Codec::Context` selects the context
 type for the prepared slots; it defaults to `()` in the alias for
-conversions that need no generator-specific settings. `bind_input` and `bind_output` compile one
-occurrence; `Declarations::fill` compiles defaults and explicit overrides for a
+conversions that need no generator-specific settings. `bind_input` and `bind_output`
+resolve and compile one preparation tree (`Input<InputRequest>` or
+`Output<OutputRequest>`); `Declarations::fill` compiles defaults and explicit overrides for a
 function. `Codec::finish_input` and `finish_output` attach glue after recursive
 composition, during preparation only; the latter also runs for unit results.
 Failed compilation preserves existing slots. Existing converters survive
@@ -275,29 +348,28 @@ occurrence's extra data.
 `prebindgen-conversions` owns reusable leaf implementations: `value`, `boxed`,
 `boxed::Storage` and `boxed::BoxedWire`. It depends on flat and does not depend
 on declarations. Adapters use its builders during preparation and its metadata
-during generation. Declarations uses conversions only in tests and examples;
-its production compiler accepts adapter-supplied codecs.
+during generation. The declaration compiler uses these shared conversion helpers and
+adapter-supplied codecs.
 
 `prebindgen-runtime` remains the execution-time support library. It acquires no
 `syn` or code-generation dependencies from this separation.
 
 ### Preparation declarations and resolved field mapping
 
-Representation choices belong to `prebindgen-declarations`. Its optional
-`Representations<R>` registry holds shape declarations, nested references and
-canonical defaults. Preparation clients validate these with `validate(&flat)`
-and can check an occurrence's wires with `validate_mapping`. They copy any
-selected adapter metadata into their own slot implementations. The standard
-recipe compiler resolves fields, constructors, selectors, getters and combined
-outputs directly, without creating a registry.
+Conversion choices are `Input<InputRequest>` and `Output<OutputRequest>` descriptions. Resolution
+checks source fields, constructor/getter signatures and type defaults against
+`Flat`, producing temporary, request-free descriptions. Compilation then installs
+the resulting converters in occurrence slots. Language declaration
+metadata belongs to the corresponding Flat type, function, field or variant.
+Compilation does not consult a separate representation registry. Custom `Codec`
+implementations select the complete binding schema through `type Schema = ...`.
+`PlanSchema` supplies plan-based converters and unit declaration metadata; language
+adapters define schemas that also select their declaration metadata.
 
-`Flat<I, O>` contains no representation registry, and conversion traits contain
-no representation IDs. Generation never looks up declarations or defaults.
 A `Wire` exposes only a binding name and carrier description. It does not expose
 fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`
 and `Condition` belong to declarations. A codec can retain logical mappings in
-its private preparation metadata through `prefix_layout`; `validate_mapping`
-accepts explicit name/path pairs. The final converter emits the corresponding
+its private preparation metadata through `prefix_layout`. The final converter emits the corresponding
 projections or constructions itself. Wrapper writers never interpret these paths.
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
@@ -637,7 +709,7 @@ are inferred. For example, for a source function
 
 ```rust,ignore
 // C builder: return a caller-owned message through char **error.
-.opaque_error(syn::parse_quote!(Error), fun!(error_message))
+.opaque_error(syn::parse_quote!(Error), "error_message")
 .function(fun!(open_session))
 
 // JNI builder: project typed error fields, just as for ordinary outputs.
@@ -645,7 +717,7 @@ are inferred. For example, for a source function
 .package(package!().fun(fun!(open_session)))
 ```
 
-A function's `.on_error(fun!(another_message))` overrides the type-wide mapper.
+A function's `.on_error("another_message")` overrides the type-wide mapper.
 Mapper helpers are captured automatically but are not exported unless separately
 declared. Return expansions and their defaults apply to `T`, the success type.
 The success value can be an optional value, enum, record, or owned handle, using

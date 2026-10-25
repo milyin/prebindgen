@@ -3,7 +3,17 @@ use super::*;
 struct TestInput(u8);
 #[derive(Clone, Debug, PartialEq)]
 struct TestOutput(u32);
-fn parse(text: &str) -> Result<Flat<TestInput, TestOutput>> {
+struct TestSchema;
+impl Schema for TestSchema {
+    type Input = TestInput;
+    type Output = TestOutput;
+    type Module = ();
+    type Function = ();
+    type Type = ();
+    type Field = ();
+    type Variant = ();
+}
+fn parse(text: &str) -> Result<Flat<TestSchema>> {
     let items = syn::parse_file(text).unwrap().items;
     Flat::parse(items.into_iter().map(|i| {
         (
@@ -93,13 +103,12 @@ fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
             .into_iter()
             .map(|i| (i, Default::default()))
     };
-    let flat =
-        Flat::<TestInput, TestOutput>::parse_selected(items(), &["make".into()], &[]).unwrap();
+    let flat = Flat::<TestSchema>::parse_selected(items(), &["make".into()], &[]).unwrap();
     assert_eq!(flat.functions.len(), 1);
     assert!(flat.types.contains_key("Handle"));
     assert!(!flat.types.contains_key("Unsupported"));
     assert!(
-        Flat::<TestInput, TestOutput>::parse_selected(items(), &["bad".into()], &[])
+        Flat::<TestSchema>::parse_selected(items(), &["bad".into()], &[])
             .unwrap_err()
             .contains("fieldless enum")
     );
@@ -108,7 +117,7 @@ fn selected_sources_ignore_unbound_shapes_but_validate_reachable_ones() {
 #[test]
 fn selected_record_fields_retain_transitive_source_types() {
     let items = syn::parse_file("pub type Key = hidden::Key; pub struct Record { pub key: Key } pub fn read(r: &Record) -> String {} pub fn unrelated(x: Option<u64>) {}").unwrap().items;
-    let flat = Flat::<TestInput, TestOutput>::parse_selected(
+    let flat = Flat::<TestSchema>::parse_selected(
         items.into_iter().map(|i| (i, Default::default())),
         &["read".into()],
         &[],
@@ -150,7 +159,7 @@ fn named_object_size_is_checked_by_rust_layout() {
         ("pub fn no_result() {}", true),
     ] {
         let items = syn::parse_file(source).unwrap().items;
-        let flat = Flat::<TestInput, TestOutput>::parse(items.into_iter().filter_map(|i| {
+        let flat = Flat::<TestSchema>::parse(items.into_iter().filter_map(|i| {
             (!matches!(i, syn::Item::Mod(_))).then_some((
                 i,
                 SourceLocation {
@@ -272,4 +281,51 @@ fn declared_opaque_type_named_result_keeps_its_existing_meaning() {
     assert_eq!(type_key(&f.ret.ty), "source_crate :: Result");
     assert!(same_type(&f.params[0].ty.ty, &f.ret.ty));
     assert!(result_parts(&f.ret.ty).is_none());
+}
+
+#[test]
+fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
+    // The schema marker itself deliberately implements neither Clone nor Debug.
+    struct OwnerSchema;
+    impl Schema for OwnerSchema {
+        type Input = u8;
+        type Output = u16;
+        type Module = String;
+        type Function = String;
+        type Type = String;
+        type Field = String;
+        type Variant = String;
+    }
+    let items =
+        syn::parse_file("pub struct R { pub x:i32 } pub enum E { A } pub fn echo(x:R)->R{}")
+            .unwrap()
+            .items;
+    let mut flat =
+        Flat::<OwnerSchema>::parse(items.into_iter().map(|i| (i, Default::default()))).unwrap();
+    flat.metadata = "module".into();
+    flat.function_mut("echo").unwrap().metadata = "export".into();
+    flat.type_metadata_mut(&syn::parse_quote!(R))
+        .unwrap()
+        .clone_from(&"record".into());
+    flat.records.get_mut("crate :: R").unwrap().fields[0].metadata = "property".into();
+    flat.enums.get_mut("crate :: E").unwrap().variants[0].metadata = "constant".into();
+    let mut prepared = flat
+        .map_slots(|_, _| Ok(Some(1u8)), |_, _| Ok(Some(2u16)))
+        .unwrap();
+    prepared.function_mut("echo").unwrap().params[0].ty.slot = Some(3);
+    let copied = prepared.clone();
+    assert_eq!(copied.metadata, "module");
+    assert_eq!(copied.function("echo").unwrap().metadata, "export");
+    assert_eq!(
+        copied
+            .type_info(&syn::parse_quote!(crate::R))
+            .unwrap()
+            .metadata,
+        "record"
+    );
+    assert_eq!(copied.records["crate :: R"].fields[0].metadata, "property");
+    assert_eq!(copied.enums["crate :: E"].variants[0].metadata, "constant");
+    assert_eq!(copied.function("echo").unwrap().params[0].ty.slot, Some(3));
+    assert_eq!(copied.function("echo").unwrap().ret.slot, Some(2));
+    assert!(format!("{copied:?}").contains("property"));
 }

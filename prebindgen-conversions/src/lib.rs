@@ -20,6 +20,20 @@ pub use plan::*;
 pub mod staged;
 pub use staged::{InputFragment, OutputFragment};
 
+/// Schema for consumers storing the standard input/output plans and unit declaration metadata.
+/// Language generators with declaration metadata define their own fixed schema.
+#[allow(clippy::type_complexity)] // Keep wire, context and node metadata roles explicit.
+pub struct PlanSchema<W, C = (), N = (), B = ()>(std::marker::PhantomData<fn() -> (W, C, N, B)>);
+impl<W: prebindgen_flat::WireKind, C, N, B> prebindgen_flat::Schema for PlanSchema<W, C, N, B> {
+    type Input = InputPlan<W, C, N, B>;
+    type Output = OutputPlan<W, C, N, B>;
+    type Module = ();
+    type Function = ();
+    type Type = ();
+    type Field = ();
+    type Variant = ();
+}
+
 /// Check one adapter-selected namespace. The caller decides which values share
 /// a namespace; this helper knows nothing about tree shape or ABI placement.
 pub fn validate_wire_names<'a, W: prebindgen_flat::WireKind + 'a>(

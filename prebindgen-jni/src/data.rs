@@ -95,54 +95,16 @@ impl ClassDecl {
 /// syntax panics; unsupported record fields are diagnosed during build.
 macro_rules! data_class {($($ty:tt)+)=>{$crate::DataClassDecl::new($crate::__type(stringify!($($ty)+)))};}
 
-#[derive(Clone, Debug)]
-pub(crate) struct RecordShape {
-    ty: syn::Type,
-    pub(crate) fqn: String,
-    fields: Vec<DataField>,
-}
-#[derive(Clone, Debug)]
-struct DataField {
-    name: syn::Ident,
-    ty: syn::Type,
-    shape: Shape,
-}
-#[derive(Clone, Debug)]
-enum Shape {
-    Optional(Box<Shape>),
-    Value(Value),
-    Record(Rc<RecordShape>),
-    Handle(String),
-    Enum(Box<JniEnum>),
-}
-impl Shape {
-    fn is_bytes(&self) -> bool {
-        match self {
-            Self::Value(Value::Bytes) => true,
-            Self::Optional(s) => s.is_bytes(),
-            _ => false,
-        }
-    }
-    fn kotlin_type(&self) -> String {
-        match self {
-            Self::Optional(inner) => format!("{}?", inner.kotlin_type()),
-            Self::Value(Value::Scalar(Primitive::I128 | Primitive::U128)) => {
-                "java.math.BigInteger".into()
-            }
-            Self::Value(Value::Scalar(p)) => format!("kotlin.{}", scalar::kotlin(*p)),
-            Self::Value(Value::Text) => "kotlin.String".into(),
-            Self::Value(Value::Bytes) => "kotlin.ByteArray".into(),
-            Self::Record(r) => r.fqn.clone(),
-            Self::Handle(fqn) => fqn.clone(),
-            Self::Enum(e) => e.class_name.clone(),
-        }
-    }
-    fn slots(&self) -> usize {
-        match self {
-            Self::Value(Value::Scalar(p)) => JniWire::scalar(*p).parameter_slots(),
-            _ => 1,
-        }
-    }
+/// Prepared Kotlin property metadata stored on its source field.
+#[derive(Clone, Debug, Default)]
+pub struct JniField {
+    /// Destination property type, including nullability.
+    pub kotlin_type: String,
+    /// Whether Kotlin content-based byte-array operators are required.
+    pub bytes: bool,
+    /// Whether Kotlin floating-point comparison semantics are required.
+    pub floating: bool,
+    pub(crate) slots: usize,
 }
 /// Kotlin record information attached to a parent node in the wire tree.
 #[derive(Clone, Debug)]
@@ -152,329 +114,279 @@ pub struct DataGroup {
     pub(crate) condition: String,
 }
 
-pub(crate) struct DataCodec {
-    pub(crate) callback_wire: Option<syn::Ident>,
-    pub(crate) error_classes: BTreeMap<String, String>,
-    #[allow(clippy::type_complexity)]
-    // Cache value trees with independently typed parent metadata.
-    pub(crate) error_layouts: BTreeMap<
-        (String, bool),
-        prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
-    >,
-    pub(crate) error_helpers: BTreeMap<(String, bool), syn::Ident>,
-    records: BTreeMap<String, Rc<RecordShape>>,
-    pub(crate) enums: BTreeMap<String, JniEnum>,
+/// JNI conversions consult the declarations attached to Flat.
+pub(crate) struct DataCodec;
+/// Complete class and enum declarations already attached to their source types.
+pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
+    fn resolve(
+        flat: &mut Bindings,
+        key: &str,
+        stack: &mut Vec<String>,
+        resolved: &mut BTreeSet<String>,
+    ) -> Result<bool> {
+        if stack.iter().any(|k| k == key) {
+            return Err(format!("recursive data class `{key}`"));
+        }
+        if resolved.contains(key) {
+            let ty = syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?;
+            return Ok(flat
+                .type_info(&ty)?
+                .metadata
+                .class
+                .as_ref()
+                .unwrap()
+                .has_handles);
+        }
+        let record = flat
+            .records
+            .get(key)
+            .ok_or_else(|| format!("data class `{key}` requires a named-field record"))?;
+        let source_fields = record.fields.clone();
+        if record.fields.is_empty() {
+            return Err(format!("data class `{key}` must have at least one field"));
+        }
+        stack.push(key.into());
+        let mut fields = vec![];
+        let mut getters = BTreeSet::from(["getClass".to_string()]);
+        let mut has_handles = false;
+        for f in &source_fields {
+            let source_name = f.name.to_string();
+            let name = source_name.trim_start_matches("r#");
+            validate_name(name).map_err(|e| format!("data class `{key}` field `{name}`: {e}"))?;
+            let getter = if name.starts_with("is")
+                && name.len() > 2
+                && !name.as_bytes()[2].is_ascii_lowercase()
+            {
+                name.to_string()
+            } else {
+                format!("get{}{}", name[..1].to_ascii_uppercase(), &name[1..])
+            };
+            if !getters.insert(getter.clone()) {
+                return Err(format!(
+                    "data class `{key}` field `{name}` has a conflicting JVM getter `{getter}"
+                ));
+            }
+            let optional = prebindgen_declarations::option_inner(&f.ty);
+            let ty = optional.unwrap_or(&f.ty);
+            if optional
+                .and_then(prebindgen_declarations::option_inner)
+                .is_some()
+            {
+                return Err("nested Option data fields require an explicit expansion".into());
+            }
+            if matches!(ty, syn::Type::Reference(_)) {
+                return Err(format!(
+                    "data class `{key}` field `{name}` cannot be a reference"
+                ));
+            }
+            let field_key = type_key(ty);
+            let mut bytes = false;
+            let mut floating = false;
+            let mut slots = 1;
+            let mut kotlin_type = if let Some(value) = Value::of(ty) {
+                match value {
+                    Value::Scalar(p @ (Primitive::I128 | Primitive::U128)) => {
+                        slots = JniWire::scalar(p).parameter_slots();
+                        "java.math.BigInteger".into()
+                    }
+                    Value::Scalar(p) => {
+                        slots = JniWire::scalar(p).parameter_slots();
+                        floating = matches!(p, Primitive::F32 | Primitive::F64);
+                        format!("kotlin.{}", scalar::kotlin(p))
+                    }
+                    Value::Text => "kotlin.String".into(),
+                    Value::Bytes => {
+                        bytes = true;
+                        "kotlin.ByteArray".into()
+                    }
+                }
+            } else if let Some(child) = flat
+                .type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.class.clone())
+            {
+                if child.data {
+                    has_handles |= resolve(flat, &field_key, stack, resolved)?;
+                } else if !child.enumeration {
+                    has_handles = true;
+                }
+                child.fqn()
+            } else {
+                return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<u8>, declared data class, or declared handle"));
+            };
+            if optional.is_some() {
+                kotlin_type.push('?');
+                slots = 1;
+                floating = false;
+            }
+            fields.push(JniField {
+                kotlin_type,
+                bytes,
+                floating,
+                slots,
+            });
+        }
+        let slots = fields.iter().map(|f| f.slots).sum::<usize>() + fields.len().div_ceil(32) + 2;
+        if slots > 255 {
+            return Err(format!("data class `{key}` copy method needs {slots} JVM parameter slots; the limit is 255"));
+        }
+        stack.pop();
+        let record = flat.records.get_mut(key).unwrap();
+        for (field, metadata) in record.fields.iter_mut().zip(fields) {
+            field.metadata = metadata;
+        }
+        let ty = syn::parse_str::<syn::Type>(key).map_err(|e| e.to_string())?;
+        let class = flat.type_metadata_mut(&ty)?.class.as_mut().unwrap();
+        Rc::make_mut(class).has_handles = has_handles;
+        resolved.insert(key.into());
+        Ok(has_handles)
+    }
+    let mut resolved = BTreeSet::new();
+    let mut types = flat
+        .types
+        .values()
+        .filter(|t| t.metadata.class.is_some())
+        .map(|t| type_key(&t.ty))
+        .collect::<Vec<_>>();
+    types.sort();
+    for key in types {
+        let ty = syn::parse_str::<syn::Type>(&key).map_err(|e| e.to_string())?;
+        let class = flat
+            .type_info(&ty)?
+            .metadata
+            .class
+            .as_ref()
+            .unwrap()
+            .clone();
+        if class.data {
+            resolve(flat, &key, &mut Vec::new(), &mut resolved)?;
+        }
+        if class.enumeration && flat.type_info(&ty)?.metadata.enumeration.is_none() {
+            let enumeration = Rc::new(JniEnum::from_class(flat, &class, &key)?);
+            flat.guards.extend(enumeration.mapping.guards());
+            let info = flat.type_metadata_mut(&ty)?;
+            info.enumeration = Some(enumeration);
+            Rc::make_mut(info.class.as_mut().unwrap())
+                .variant_names
+                .clear();
+        }
+    }
+    Ok(())
 }
 impl DataCodec {
-    pub(crate) fn new<I, O>(flat: &Flat<I, O>, classes: &BTreeMap<String, Class>) -> Result<Self> {
-        fn resolve<I, O>(
-            flat: &Flat<I, O>,
-            classes: &BTreeMap<String, Class>,
-            key: &str,
-            stack: &mut Vec<String>,
-            records: &mut BTreeMap<String, Rc<RecordShape>>,
-        ) -> Result<Rc<RecordShape>> {
-            if stack.iter().any(|k| k == key) {
-                return Err(format!("recursive data class `{key}`"));
-            }
-            if let Some(r) = records.get(key) {
-                return Ok(r.clone());
-            }
-            let class = &classes[key];
-            let record = flat
-                .record(&class.ty)
-                .map_err(|_| format!("data class `{key}` requires a named-field record"))?;
-            if record.fields.is_empty() {
-                return Err(format!("data class `{key}` must have at least one field"));
-            }
-            stack.push(key.into());
-            let mut fields = Vec::new();
-            let mut getters = BTreeSet::from(["getClass".to_string()]);
-            for f in &record.fields {
-                let name = f.name.to_string();
-                let name = name.trim_start_matches("r#");
-                validate_name(name)
-                    .map_err(|e| format!("data class `{key}` field `{name}`: {e}"))?;
-                // Distinct Rust names such as `x` and `X` can generate the
-                // same JVM accessor even though Kotlin properties are distinct.
-                let getter = if name.starts_with("is")
-                    && name.len() > 2
-                    && !name.as_bytes()[2].is_ascii_lowercase()
-                {
-                    name.to_string()
-                } else {
-                    format!("get{}{}", name[..1].to_ascii_uppercase(), &name[1..])
-                };
-                if !getters.insert(getter.clone()) {
-                    return Err(format!(
-                        "data class `{key}` field `{name}` has a conflicting JVM getter `{getter}`"
-                    ));
-                }
-                let optional = prebindgen_declarations::option_inner(&f.ty);
-                let field_ty = optional.unwrap_or(&f.ty);
-                if optional
-                    .and_then(prebindgen_declarations::option_inner)
-                    .is_some()
-                {
-                    return Err("nested Option data fields require an explicit expansion".into());
-                }
-                let field_key = type_key(field_ty);
-                let shape = if matches!(field_ty, syn::Type::Reference(_)) {
-                    return Err(format!(
-                        "data class `{key}` field `{name}` cannot be a reference"
-                    ));
-                } else if let Some(value) = Value::of(field_ty) {
-                    Shape::Value(value)
-                } else if classes.get(&field_key).is_some_and(|c| c.data) {
-                    Shape::Record(resolve(flat, classes, &field_key, stack, records)?)
-                } else if let Some(class) = classes.get(&field_key).filter(|c| c.enumeration) {
-                    Shape::Enum(Box::new(JniEnum::from_class(flat, class)?))
-                } else if let Some(handle) = classes.get(&field_key) {
-                    Shape::Handle(handle.fqn())
-                } else {
-                    return Err(format!("data class `{key}` field `{name}` has unsupported type `{field_key}`; expected a scalar, String, Vec<u8>, declared data class, or declared handle"));
-                };
-                fields.push(DataField {
-                    name: f.name.clone(),
-                    ty: f.ty.clone(),
-                    shape: if optional.is_some() {
-                        Shape::Optional(Box::new(shape))
-                    } else {
-                        shape
-                    },
-                });
-            }
-            // Kotlin's generated copy$default also needs a receiver, default masks,
-            // and a marker. Check that method, not just the primary constructor.
-            let slots = fields.iter().map(|f| f.shape.slots()).sum::<usize>()
-                + fields.len().div_ceil(32)
-                + 2;
-            if slots > 255 {
-                return Err(format!("data class `{key}` copy method needs {slots} JVM parameter slots; the limit is 255"));
-            }
-            stack.pop();
-            let shape = Rc::new(RecordShape {
-                ty: class.ty.clone(),
-                fqn: class.fqn(),
-                fields,
-            });
-            records.insert(key.into(), shape.clone());
-            Ok(shape)
-        }
-        for (key, _) in classes.iter().filter(|(_, c)| c.enumeration) {
-            if !flat.enums.contains_key(key) {
-                return Err("enum_class requires a fieldless source enum".into());
-            }
-        }
-        let mut records = BTreeMap::new();
-        for (key, class) in classes {
-            if class.data {
-                resolve(flat, classes, key, &mut Vec::new(), &mut records)?;
-            }
-        }
-        let mut enums = BTreeMap::new();
-        for (key, class) in classes.iter().filter(|(_, c)| c.enumeration) {
-            enums.insert(key.clone(), JniEnum::from_class(flat, class)?);
-        }
-        Ok(Self {
-            records,
-            enums,
-            callback_wire: None,
-            error_classes: BTreeMap::new(),
-            error_helpers: BTreeMap::new(),
-            error_layouts: BTreeMap::new(),
-        })
-    }
-    fn enum_type(&self, ty: &syn::Type) -> Option<&JniEnum> {
+    fn enum_type<'a>(&self, flat: &'a Bindings, ty: &syn::Type) -> Option<&'a Rc<JniEnum>> {
         let ty = if let syn::Type::Reference(r) = ty {
             &r.elem
         } else {
             ty
         };
-        self.enums.get(&type_key(ty))
+        flat.type_info(ty).ok()?.metadata.enumeration.as_ref()
     }
-    fn record(&self, ty: &syn::Type) -> Result<Option<&Rc<RecordShape>>> {
+    fn source_record<'a>(
+        flat: &'a Flat<JniSchema>,
+        ty: &syn::Type,
+    ) -> Result<Option<&'a Rc<Class>>> {
         if let syn::Type::Reference(r) = ty {
-            if self.records.contains_key(&type_key(&r.elem)) {
+            if flat
+                .type_info(&r.elem)
+                .ok()
+                .and_then(|t| t.metadata.class.as_ref())
+                .is_some_and(|c| c.data)
+            {
                 return Err(format!(
                     "data class `{}` supports owned occurrences only",
                     type_key(&r.elem)
                 ));
             }
         }
-        Ok(self.records.get(&type_key(ty)))
+        Ok(flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.class.as_ref())
+            .filter(|c| c.data))
     }
-    pub(crate) fn render(&self, class: &Class) -> Result<String> {
-        let shape = &self.records[&type_key(&class.ty)];
-        let fields = shape
+}
+pub(crate) fn render_record(flat: &Bindings, class: &Class, ty: &syn::Type) -> Result<String> {
+    let record = flat.record(ty)?;
+    let fields = record
+        .fields
+        .iter()
+        .map(|f| {
+            format!(
+                "    public val `{}`: {}",
+                field_name(f),
+                f.metadata.kotlin_type
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n");
+    let lifecycle = if class.has_handles {
+        "/** Close each handle member explicitly. Copies share the same handle objects. */\n"
+    } else {
+        ""
+    };
+    let mut out = format!(
+        "package {}\n\n{lifecycle}public data class {}(\n{fields}\n)",
+        class.pkg, class.name
+    );
+    if record.fields.iter().any(|f| f.metadata.bytes) {
+        let equal = record
             .fields
             .iter()
             .map(|f| {
-                format!(
-                    "    public val `{}`: {}",
-                    field_name(f),
-                    f.shape.kotlin_type()
-                )
+                let n = field_name(f);
+                match &f.metadata {
+                    _ if f.metadata.bytes => {
+                        format!("this.`{n}`.contentEquals(other.`{n}`)")
+                    }
+                    _ if f.metadata.floating => {
+                        format!("this.`{n}`.compareTo(other.`{n}`) == 0")
+                    }
+                    _ => format!("this.`{n}` == other.`{n}`"),
+                }
             })
             .collect::<Vec<_>>()
-            .join(",\n");
-        let lifecycle = if shape.has_handles() {
-            "/** Close each handle member explicitly. Copies share the same handle objects. */\n"
-        } else {
-            ""
-        };
-        let mut out = format!(
-            "package {}\n\n{lifecycle}public data class {}(\n{fields}\n)",
-            class.pkg, class.name
-        );
-        if shape.fields.iter().any(|f| f.shape.is_bytes()) {
-            let equal = shape
-                .fields
-                .iter()
-                .map(|f| {
-                    let n = field_name(f);
-                    match f.shape {
-                        _ if f.shape.is_bytes() => {
-                            format!("this.`{n}`.contentEquals(other.`{n}`)")
-                        }
-                        Shape::Value(Value::Scalar(Primitive::F32 | Primitive::F64)) => {
-                            format!("this.`{n}`.compareTo(other.`{n}`) == 0")
-                        }
-                        _ => format!("this.`{n}` == other.`{n}`"),
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" &&\n            ");
-            let hashes = shape
-                .fields
-                .iter()
-                .map(|f| {
-                    let n = field_name(f);
-                    if f.shape.is_bytes() {
-                        format!("this.`{n}`.contentHashCode()")
-                    } else {
-                        format!("this.`{n}`.hashCode()")
-                    }
-                })
-                .collect::<Vec<_>>();
-            let mut hash = hashes[0].clone();
-            for h in &hashes[1..] {
-                hash = format!("31 * ({hash}) + {h}");
-            }
-            let display = shape
-                .fields
-                .iter()
-                .map(|f| {
-                    let n = field_name(f);
-                    let suffix = if f.shape.is_bytes() {
-                        ".contentToString()"
-                    } else {
-                        ""
-                    };
-                    format!("{n}=${{this.`{n}`{suffix}}}")
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            out.push_str(&format!(" {{\n    override fun equals(other: kotlin.Any?): kotlin.Boolean =\n        this === other || (other is {} &&\n            {equal})\n    override fun hashCode(): kotlin.Int = {hash}\n    override fun toString(): kotlin.String = \"{}({display})\"\n}}", class.name, class.name));
+            .join(" &&\n            ");
+        let hashes = record
+            .fields
+            .iter()
+            .map(|f| {
+                let n = field_name(f);
+                if f.metadata.bytes {
+                    format!("this.`{n}`.contentHashCode()")
+                } else {
+                    format!("this.`{n}`.hashCode()")
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut hash = hashes[0].clone();
+        for h in &hashes[1..] {
+            hash = format!("31 * ({hash}) + {h}");
         }
-        out.push('\n');
-        Ok(out)
+        let display = record
+            .fields
+            .iter()
+            .map(|f| {
+                let n = field_name(f);
+                let suffix = if f.metadata.bytes {
+                    ".contentToString()"
+                } else {
+                    ""
+                };
+                format!("{n}=${{this.`{n}`{suffix}}}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push_str(&format!(" {{\n    override fun equals(other: kotlin.Any?): kotlin.Boolean =\n        this === other || (other is {} &&\n            {equal})\n    override fun hashCode(): kotlin.Int = {hash}\n    override fun toString(): kotlin.String = \"{}({display})\"\n}}", class.name, class.name));
     }
+    out.push('\n');
+    Ok(out)
 }
-fn field_name(field: &DataField) -> String {
+fn field_name(field: &prebindgen_flat::Field<JniField>) -> String {
     field.name.to_string().trim_start_matches("r#").into()
 }
 
-impl RecordShape {
-    fn has_handles(&self) -> bool {
-        self.fields.iter().any(|f| match &f.shape {
-            Shape::Optional(s) => s.has_handles(),
-            Shape::Handle(_) => true,
-            Shape::Record(r) => r.has_handles(),
-            Shape::Value(_) | Shape::Enum(_) => false,
-        })
-    }
-
-    fn input(
-        &self,
-        w: &syn::Ident,
-        v: &syn::Ident,
-        active: &Condition,
-    ) -> Result<InputPlan<JniWire>> {
-        if self.has_handles() {
-            return Err(format!(
-                "data class `{}` contains handles and supports returns only",
-                self.fqn
-            ));
-        }
-        let mut plan = prebindgen_declarations::record_input(
-            &JniCodec,
-            &self.ty,
-            v.clone(),
-            self.fields.iter().enumerate().map(|(i, f)| {
-                let fw = format_ident!("{w}_f{i}");
-                let fv = format_ident!("{v}_f{i}");
-                let child = f.shape.input(&f.ty, &fw, &fv, active)?;
-                Ok((f.name.clone(), child))
-            }),
-        )?;
-        debug_assert!(
-            plan.acquire.is_empty() && plan.resources.is_empty() && plan.acknowledgement.is_none(),
-            "data fields must remain value-only"
-        );
-        self.mark(&mut plan.node, w.to_string(), kotlin_condition(active))?;
-        Ok(plan)
-    }
-    fn output(
-        &self,
-        w: &syn::Ident,
-        value: TokenStream,
-        projection: &Projection,
-    ) -> Result<OutputPlan<JniWire>> {
-        for name in projection.fields.keys() {
-            if !self.fields.iter().any(|f| field_name(f) == *name) {
-                return Err(format!(
-                    "data class `{}`: unknown projection field `{name}`",
-                    self.fqn
-                ));
-            }
-        }
-        let owned = projection.mode == ProjectionMode::Owned;
-        let inherited = projection.inherited();
-        let convert = |i: usize, field: TokenStream| {
-            let f = &self.fields[i];
-            let policy = projection.fields.get(&field_name(f)).unwrap_or(&inherited);
-            if !owned && policy.mode == ProjectionMode::Owned {
-                return Err(format!("data class `{}` field `{}`: owned projection cannot consume a shared-reference occurrence", self.fqn, field_name(f)));
-            }
-            let value = if owned && policy.mode == ProjectionMode::Borrowed {
-                quote!(&(#field))
-            } else {
-                field
-            };
-            let fw = format_ident!("{w}_f{i}");
-            f.shape.output(&f.ty, &fw, value, policy)
-        };
-        let mut plan = if owned {
-            prebindgen_declarations::record_output_owned(
-                &JniCodec,
-                format_ident!("{w}_record"),
-                value,
-                self.fields.iter().map(|f| f.name.clone()),
-                convert,
-            )
-        } else {
-            prebindgen_declarations::record_output(
-                &JniCodec,
-                format_ident!("{w}_record"),
-                value,
-                self.fields.iter().map(|f| f.name.clone()),
-                convert,
-            )
-        }?;
-        self.mark(&mut plan.outcomes.success, w.to_string(), "true".into())?;
-        Ok(plan)
-    }
+impl Class {
     fn mark(
         &self,
         layout: &mut prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
@@ -495,7 +407,7 @@ impl RecordShape {
         }
         *metadata = JniGroup::Fields(Some(DataGroup {
             root,
-            class_name: self.fqn.clone(),
+            class_name: self.fqn(),
             condition,
         }));
         *layout = nodes;
@@ -504,11 +416,106 @@ impl RecordShape {
 }
 
 impl Codec for DataCodec {
+    type Schema = JniSchema;
+    fn expand_input(
+        &self,
+        flat: &Flat<JniSchema>,
+        ty: &syn::Type,
+        tree: &Input<InputRequest>,
+        _: &(),
+    ) -> Result<Option<Input<InputRequest>>> {
+        if !matches!(tree, Input::Leaf) {
+            return Ok(None);
+        }
+        let Some(record) = Self::source_record(flat, ty)? else {
+            return Ok(None);
+        };
+        if record.has_handles {
+            return Err(format!(
+                "data class `{}` contains handles and supports returns only",
+                record.fqn()
+            ));
+        }
+        Ok(Some(Input::Record(vec![
+            Input::Leaf;
+            flat.record(ty)?.fields.len()
+        ])))
+    }
+    fn expand_output(
+        &self,
+        flat: &Flat<JniSchema>,
+        ty: &syn::Type,
+        tree: &Output<OutputRequest>,
+        _: &(),
+    ) -> Result<Option<Output<OutputRequest>>> {
+        let policy = match tree {
+            Output::Leaf => Projection::borrowed(),
+            Output::Projected(p) => p.clone(),
+            _ => return Ok(None),
+        };
+        let Some(record) = Self::source_record(flat, ty)? else {
+            return Ok(None);
+        };
+        let fields = &flat.record(ty)?.fields;
+        for name in policy.fields.keys() {
+            if !fields
+                .iter()
+                .any(|f| f.name.to_string().trim_start_matches("r#") == name)
+            {
+                return Err(format!(
+                    "data class `{}`: unknown projection field `{name}`",
+                    record.fqn()
+                ));
+            }
+        }
+        let inherited = policy.inherited();
+        let children = fields.iter().map(|field| {
+            let name = field.name.to_string();
+            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(&inherited);
+            if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
+                return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
+            }
+            Ok(Output::Projected(child.clone()))
+        }).collect::<Result<Vec<_>>>()?;
+        Ok(Some(Output::Record {
+            fields: children,
+            mode: policy.mode,
+        }))
+    }
+    fn input_record_metadata(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        wire: &syn::Ident,
+        active: &Condition,
+        plan: &mut InputPlan<JniWire>,
+        _: &(),
+    ) -> Result<()> {
+        Self::source_record(flat, ty)?
+            .ok_or("missing data-class representation")?
+            .mark(&mut plan.node, wire.to_string(), kotlin_condition(active))
+    }
+    fn output_record_metadata(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        wire: &syn::Ident,
+        plan: &mut OutputPlan<JniWire>,
+        _: &(),
+    ) -> Result<()> {
+        Self::source_record(flat, ty)?
+            .ok_or("missing data-class representation")?
+            .mark(&mut plan.outcomes.success, wire.to_string(), "true".into())
+    }
     type Niche = crate::optional::JniNiche;
     type Chain = JniChain;
     type Branch = JniBranch;
     fn group_metadata(&self) -> JniBranch {
         JniBranch::Group(JniGroup::Values)
+    }
+
+    fn named_output_group(&self, name: &str) -> Result<JniBranch> {
+        JniCodec.named_output_group(name)
     }
 
     fn optional_metadata(
@@ -535,8 +542,6 @@ impl Codec for DataCodec {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
-    type Input = JniInput;
-    type Output = JniOutput;
     fn sequence_input(
         &self,
         e: &(),
@@ -556,12 +561,9 @@ impl Codec for DataCodec {
         i: syn::Ident,
         element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniChain>> {
-        if self.callback_wire.as_ref() == Some(&w) {
-            crate::sequence_callback::transport(w, element, values)
-        } else {
-            JniCodec.sequence_output(e, w, n, i, element, values)
-        }
+        JniCodec.sequence_output(e, w, n, i, element, values, delivery)
     }
     fn binding_failure_layout(
         &self,
@@ -571,25 +573,32 @@ impl Codec for DataCodec {
     }
     fn source_error_layout(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         mapped: bool,
         _: &(),
     ) -> Result<prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>> {
-        self.error_layouts
-            .get(&(type_key(ty), mapped))
-            .cloned()
+        flat.type_info(ty)?
+            .metadata
+            .errors
+            .get(&mapped)
+            .map(|e| e.output.output_outcomes().success.clone())
             .ok_or_else(|| "missing logical JNI error projection".into())
     }
     fn result_error_value(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         value: TokenStream,
         message: Option<TokenStream>,
         _: &(),
     ) -> Result<TokenStream> {
-        let helper = self
-            .error_helpers
-            .get(&(type_key(ty), message.is_some()))
+        let helper = flat
+            .type_info(ty)?
+            .metadata
+            .errors
+            .get(&message.is_some())
+            .map(|e| &e.helper)
             .ok_or("missing declared JNI error output")?;
         let env = prebindgen_conversions::template_parameter("environment");
         let reported = prebindgen_conversions::template_parameter("domain_output");
@@ -624,20 +633,29 @@ impl Codec for DataCodec {
     fn selector(&self, extra: &()) -> JniWire {
         JniCodec.selector(extra)
     }
-    fn consumes(&self, ty: &syn::Type, extra: &()) -> bool {
+    fn consumes(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        extra: &(),
+    ) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            return self.consumes(inner, extra);
+            return self.consumes(flat, inner, extra);
         }
-        !self.records.contains_key(&type_key(ty))
-            && self.enum_type(ty).is_none()
-            && JniCodec.consumes(ty, extra)
+        !flat
+            .type_info(ty)
+            .ok()
+            .and_then(|t| t.metadata.class.as_ref())
+            .is_some_and(|c| c.data)
+            && self.enum_type(flat, ty).is_none()
+            && JniCodec.consumes(flat, ty, extra)
     }
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_input(plan, extra)
     }
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, extra: &()) -> Result<()> {
         JniCodec.finish_output(plan, extra)?;
-        if self.callback_wire.is_some() {
+        if sequence::callback_delivery(&plan.outcomes.success)? {
             let env = prebindgen_conversions::template_parameter("environment");
             plan.delivery.statements.extend(quote!(#env.set_boolean_array_region(&__pb_output_accepted,0,&[1]).map_err(|e|e.to_string())?;));
         }
@@ -645,95 +663,54 @@ impl Codec for DataCodec {
     }
     fn input_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         extra: &(),
         wire: syn::Ident,
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<JniWire>> {
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            let tag = format_ident!("{wire}_present");
-            let child = self.input_leaf(
-                inner,
-                extra,
-                format_ident!("{wire}_some"),
-                format_ident!("{var}_some"),
-                &active.arm(tag.clone(), 1),
-            )?;
-            return prebindgen_declarations::optional_input(self, extra, tag, var, active, child);
+        if Self::source_record(flat, ty)?.is_some() {
+            return Err("resolve the data-class Input::Record before leaf compilation".into());
         }
-        if let Some(e) = self.enum_type(ty) {
+        if let Some(e) = self.enum_type(flat, ty) {
             return e.input(ty, wire, var, active);
         }
-        let Some(record) = self.record(ty)? else {
-            return JniCodec.input_leaf(ty, extra, wire, var, active);
-        };
-        record.input(&wire, &var, active)
+        JniCodec.input_leaf(flat, ty, extra, wire, var, active)
     }
     fn output_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         extra: &(),
         wire: syn::Ident,
         value: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<JniWire>> {
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            let tag = format_ident!("{wire}_present");
-            let payload = format_ident!("{wire}_payload");
-            let child = self.output_leaf(
-                inner,
-                extra,
-                format_ident!("{wire}_some"),
-                quote!(#payload),
-                borrowed,
-            )?;
-            return prebindgen_declarations::optional_output(
-                self, extra, tag, payload, value, borrowed, child,
-            );
+        if Self::source_record(flat, ty)?.is_some() {
+            return Err("resolve the data-class Output::Record before leaf compilation".into());
         }
-        if let Some(e) = self.enum_type(ty) {
+        if let Some(e) = self.enum_type(flat, ty) {
             if matches!(ty,syn::Type::Reference(r) if r.mutability.is_some()) {
                 return Err("mutable-reference outputs are unsupported".into());
             }
             return Ok(e.output(wire, value));
         }
-        let Some(record) = self.record(ty)? else {
-            return JniCodec.output_leaf(ty, extra, wire, value, borrowed);
-        };
-        // The legacy data-class leaf remains a borrowed projection, regardless
-        // of its fields. Ownership transfer requires an explicit projection.
-        record.output(&wire, value, &Projection::borrowed())
+        JniCodec.output_leaf(flat, ty, extra, wire, value, borrowed)
     }
     fn output_projected(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         extra: &(),
         wire: syn::Ident,
         value: TokenStream,
         projection: &Projection,
     ) -> Result<OutputPlan<JniWire>> {
-        if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            let tag = format_ident!("{wire}_present");
-            let payload = format_ident!("{wire}_payload");
-            let child = self.output_projected(
-                inner,
-                extra,
-                format_ident!("{wire}_some"),
-                quote!(#payload),
-                projection,
-            )?;
-            return prebindgen_declarations::optional_output(
-                self,
-                extra,
-                tag,
-                payload,
-                value,
-                projection.mode == ProjectionMode::Borrowed,
-                child,
-            );
+        if Self::source_record(flat, ty)?.is_some() {
+            return Err("resolve data-class projections before leaf compilation".into());
         }
-        if let Some(e) = self.enum_type(ty) {
+        if let Some(e) = self.enum_type(flat, ty) {
             if projection.mode == ProjectionMode::Owned && matches!(ty, syn::Type::Reference(_)) {
                 return Err("owned projection cannot consume a reference payload".into());
             }
@@ -742,10 +719,7 @@ impl Codec for DataCodec {
             }
             return Ok(e.output(wire, value));
         }
-        let Some(record) = self.record(ty)? else {
-            return JniCodec.output_projected(ty, extra, wire, value, projection);
-        };
-        record.output(&wire, value, projection)
+        JniCodec.output_projected(flat, ty, extra, wire, value, projection)
     }
 
     fn optional_niche(
@@ -780,84 +754,6 @@ impl Codec for DataCodec {
     }
     fn validate_output(&self, plan: &prebindgen_declarations::CodecOutput<Self>) -> Result<()> {
         JniCodec.validate_output(plan)
-    }
-}
-
-impl Shape {
-    fn has_handles(&self) -> bool {
-        match self {
-            Self::Handle(_) => true,
-            Self::Record(r) => r.has_handles(),
-            Self::Optional(s) => s.has_handles(),
-            _ => false,
-        }
-    }
-    fn input(
-        &self,
-        ty: &syn::Type,
-        w: &syn::Ident,
-        v: &syn::Ident,
-        active: &Condition,
-    ) -> Result<InputPlan<JniWire>> {
-        match self {
-            Self::Optional(s) => {
-                let tag = format_ident!("{w}_present");
-                let child = s.input(
-                    prebindgen_declarations::option_inner(ty).unwrap(),
-                    &format_ident!("{w}_some"),
-                    &format_ident!("{v}_some"),
-                    &active.arm(tag.clone(), 1),
-                )?;
-                prebindgen_declarations::optional_input(
-                    &JniCodec,
-                    &(),
-                    tag,
-                    v.clone(),
-                    active,
-                    child,
-                )
-            }
-            Self::Record(r) => r.input(w, v, active),
-            Self::Enum(e) => e.input(ty, w.clone(), v.clone(), active),
-            _ => JniCodec.input_leaf(ty, &(), w.clone(), v.clone(), active),
-        }
-    }
-    fn output(
-        &self,
-        ty: &syn::Type,
-        w: &syn::Ident,
-        value: TokenStream,
-        policy: &Projection,
-    ) -> Result<OutputPlan<JniWire>> {
-        match self {
-            Self::Optional(s) => {
-                let tag = format_ident!("{w}_present");
-                let payload = format_ident!("{w}_payload");
-                let child = s.output(
-                    prebindgen_declarations::option_inner(ty).unwrap(),
-                    &format_ident!("{w}_some"),
-                    quote!(#payload),
-                    policy,
-                )?;
-                prebindgen_declarations::optional_output(
-                    &JniCodec,
-                    &(),
-                    tag,
-                    payload,
-                    value,
-                    policy.mode == ProjectionMode::Borrowed,
-                    child,
-                )
-            }
-            Self::Record(r) => r.output(w, value, policy),
-            Self::Enum(e) => {
-                if !policy.fields.is_empty() {
-                    return Err("enum values do not have projection fields".into());
-                }
-                Ok(e.output(w.clone(), value))
-            }
-            _ => JniCodec.output_projected(ty, &(), w.clone(), value, policy),
-        }
     }
 }
 
@@ -955,6 +851,7 @@ pub(crate) fn output_kotlin(
     }
     c.delivered = vec![format!("{}({})", d.class_name, c.delivered.join(", "))];
     c.result_types = vec![d.class_name.clone()];
+    c.result_names = vec![None];
     Ok(c)
 }
 
@@ -963,6 +860,103 @@ mod group_tests {
     use super::*;
     use prebindgen_flat::Wire;
     use prebindgen_flat::WireNode;
+
+    #[test]
+    fn codec_reads_current_enum_metadata_without_a_preparation_cache() {
+        let mut flat = Bindings::parse(
+            syn::parse_file("pub enum E{A,B}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap();
+        let ty = flat.resolve_type(&syn::parse_quote!(E)).unwrap();
+        let codec = DataCodec;
+        let mapping = Rc::new(
+            prebindgen_declarations::EnumMapping::new(flat.enums.values().next().unwrap()).unwrap(),
+        );
+        for name in ["example.First", "example.Updated"] {
+            flat.type_metadata_mut(&ty).unwrap().enumeration = Some(Rc::new(JniEnum {
+                mapping: (*mapping).clone(),
+                class_name: name.into(),
+                variant_names: BTreeMap::new(),
+            }));
+            let output = codec
+                .output_leaf(
+                    &flat,
+                    &ty,
+                    &(),
+                    syn::parse_quote!(wire),
+                    quote!(value),
+                    false,
+                )
+                .unwrap();
+            let wire = prebindgen_flat::wire_definitions(std::iter::once(&output.outcomes.success))
+                .next()
+                .unwrap();
+            assert!(matches!(&wire.kind,JniWire::Enum{enum_type,..} if enum_type.class_name==name));
+        }
+    }
+    #[test]
+    fn resolved_record_projection_survives_preparation_round_trip() {
+        let mut flat = Bindings::parse(
+            syn::parse_file("pub struct Record{pub n:i64}pub fn items()->Vec<Record>{}")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let ty = flat.resolve_type(&syn::parse_quote!(Record)).unwrap();
+        flat.type_metadata_mut(&ty).unwrap().class = Some(Rc::new(Class {
+            pkg: "example".into(),
+            name: "Record".into(),
+            data: true,
+            enumeration: false,
+            has_handles: false,
+            variant_names: vec![],
+        }));
+        prepare(&mut flat).unwrap();
+        let codec = DataCodec;
+        let defaults =
+            prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
+        let request = Output::Sequence {
+            delivery: prebindgen_declarations::SequenceDelivery::Callback,
+            mode: Some(ProjectionMode::Owned),
+            element: Box::new(Output::Projected(Projection::owned())),
+        };
+        let resolved = defaults
+            .resolve_output(
+                &flat,
+                &codec,
+                &flat.function("items").unwrap().ret.ty,
+                &request,
+                &(),
+            )
+            .unwrap();
+        assert!(
+            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:ProjectionMode::Owned,fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
+        );
+        let round_trip = defaults
+            .resolve_output(
+                &flat,
+                &codec,
+                &flat.function("items").unwrap().ret.ty,
+                &resolved.clone().into_preparation(),
+                &(),
+            )
+            .unwrap();
+        assert_eq!(format!("{resolved:?}"), format!("{round_trip:?}"));
+        prebindgen_declarations::bind_output(
+            &mut flat,
+            &codec,
+            "items",
+            &round_trip.into_preparation(),
+            &(),
+        )
+        .unwrap();
+    }
 
     fn record(root: &str) -> WireNode<JniWire, crate::JniChain, crate::JniBranch> {
         WireNode::Branch {

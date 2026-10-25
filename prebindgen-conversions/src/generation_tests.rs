@@ -3,7 +3,7 @@ use super::*;
 use crate::staged::emit_call;
 use prebindgen_flat::Result;
 use prebindgen_flat::{Conversion, Wire, WireKind};
-type Flat<I = InputPlan<syn::Type>, O = OutputPlan<syn::Type>> = prebindgen_flat::Flat<I, O>;
+type Flat<W = syn::Type, C = ()> = prebindgen_flat::Flat<crate::PlanSchema<W, C>>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -58,7 +58,7 @@ impl Output {
 #[test]
 fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { log(\"source\"); a+b }").unwrap();
-    let mut flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
+    let mut flat = Flat::<syn::Type>::parse(
         items
             .items
             .clone()
@@ -125,7 +125,7 @@ fn generated_call_enforces_order_across_validation_and_delivery_failures() {
     );
 }
 
-fn record_model() -> Flat<InputPlan<syn::Type>, OutputPlan<syn::Type>> {
+fn record_model() -> Flat {
     let items =
         syn::parse_file("pub struct Point { pub x:f64, pub y:f64 } pub fn point()->Point {}")
             .unwrap();
@@ -252,10 +252,8 @@ fn several_physical_wires_may_supply_one_component() {
 #[test]
 fn shared_acknowledgement_is_optional_and_conflicts_are_rejected() {
     let items = syn::parse_file("pub fn add(a:i32,b:i32)->i32 { a+b }").unwrap();
-    let mut flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
-        items.items.into_iter().map(|i| (i, Default::default())),
-    )
-    .unwrap();
+    let mut flat =
+        Flat::<syn::Type>::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
     let f = flat.function_mut("add").unwrap();
     f.params[0].ty.slot = Some(Input(0).plan());
     f.params[1].ty.slot = Some(Input(1).plan());
@@ -316,7 +314,7 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
         }
     }
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
-    let mut flat = Flat::<InputPlan<NonClone>, OutputPlan<NonClone>>::parse(
+    let mut flat = Flat::<NonClone>::parse(
         items
             .items
             .into_iter()
@@ -404,10 +402,8 @@ fn function_accessors_borrow_non_clone_wire_metadata() {
 #[test]
 fn emit_call_rejects_missing_input_and_result_slots() {
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x }").unwrap();
-    let mut flat = Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse(
-        items.items.into_iter().map(|i| (i, Default::default())),
-    )
-    .unwrap();
+    let mut flat =
+        Flat::<syn::Type>::parse(items.items.into_iter().map(|i| (i, Default::default()))).unwrap();
     let function = flat.function_mut("echo").unwrap();
     assert!(emit_call(
         function,
@@ -457,14 +453,13 @@ impl TemplateContext for TestContext {
 #[test]
 fn the_same_slots_execute_with_two_explicit_wrapper_environments() {
     let items = syn::parse_file("pub fn echo(x:i32)->i32 { x + 1 }").unwrap();
-    let mut flat =
-        Flat::<InputPlan<syn::Type, TestContext>, OutputPlan<syn::Type, TestContext>>::parse(
-            items
-                .items
-                .into_iter()
-                .map(|item| (item, Default::default())),
-        )
-        .unwrap();
+    let mut flat = Flat::<syn::Type, TestContext>::parse(
+        items
+            .items
+            .into_iter()
+            .map(|item| (item, Default::default())),
+    )
+    .unwrap();
     let env = template_parameter("runtime");
     let ack = template_parameter("accepted");
     let out = template_parameter("sink");
@@ -692,9 +687,7 @@ fn caller_targets_avoid_surrounding_bindings_and_keep_borrowed_storage_alive() {
             value.len()
         }
     );
-    let mut flat =
-        Flat::<InputPlan<syn::Type>, OutputPlan<syn::Type>>::parse([(item, Default::default())])
-            .unwrap();
+    let mut flat = Flat::<syn::Type>::parse([(item, Default::default())]).unwrap();
     let function = flat.function_mut("length").unwrap();
     function.params[0].ty.slot = Some(InputPlan {
         fallible: false,
