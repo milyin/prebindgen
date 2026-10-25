@@ -148,11 +148,12 @@ impl Codec for DomainCodec {
             valid: quote!(true),
         }
     }
-    fn consumes(&self, _: &Type, _: &()) -> bool {
+    fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool {
         false
     }
     fn input_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _: &Type,
         _: &(),
         _: syn::Ident,
@@ -163,6 +164,7 @@ impl Codec for DomainCodec {
     }
     fn output_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _: &Type,
         _: &(),
         _: syn::Ident,

@@ -97,7 +97,13 @@ impl Codec for TestCodec {
             }),
         )
     }
-    fn result_error(&self, _: &Type, message: TokenStream, _: &Extra) -> Result<TokenStream> {
+    fn result_error(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        _: &Type,
+        message: TokenStream,
+        _: &Extra,
+    ) -> Result<TokenStream> {
         Ok(message)
     }
     fn niche(&self, _: &TestWire) -> Option<()> {
@@ -205,11 +211,17 @@ impl Codec for TestCodec {
             component: Default::default(),
         }
     }
-    fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
+    fn consumes(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Extra,
+    ) -> bool {
         Value::of(ty).is_none() && !extra.copy
     }
     fn input_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Extra,
         w: syn::Ident,
@@ -245,6 +257,7 @@ impl Codec for TestCodec {
     }
     fn output_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Extra,
         w: syn::Ident,
@@ -929,18 +942,24 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         fn selector(&self, extra: &Extra) -> TestWire {
             TEST_CODEC.selector(extra)
         }
-        fn consumes(&self, ty: &Type, extra: &Extra) -> bool {
-            TEST_CODEC.consumes(ty, extra)
+        fn consumes(
+            &self,
+            flat: &prebindgen_flat::Flat<Self::Schema>,
+            ty: &Type,
+            extra: &Extra,
+        ) -> bool {
+            TEST_CODEC.consumes(flat, ty, extra)
         }
         fn input_leaf(
             &self,
+            flat: &prebindgen_flat::Flat<Self::Schema>,
             ty: &Type,
             extra: &Extra,
             w: syn::Ident,
             v: syn::Ident,
             active: &Condition,
         ) -> Result<InputPlan<TestWire>> {
-            let mut plan = TEST_CODEC.input_leaf(ty, extra, w.clone(), v, active)?;
+            let mut plan = TEST_CODEC.input_leaf(flat, ty, extra, w.clone(), v, active)?;
             plan.acknowledgement = Some(if extra.name == "conflict" {
                 quote!(ack(#w);)
             } else {
@@ -950,13 +969,14 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         }
         fn output_leaf(
             &self,
+            flat: &prebindgen_flat::Flat<Self::Schema>,
             ty: &Type,
             extra: &Extra,
             w: syn::Ident,
             v: TokenStream,
             borrowed: bool,
         ) -> Result<OutputPlan<TestWire>> {
-            TEST_CODEC.output_leaf(ty, extra, w, v, borrowed)
+            TEST_CODEC.output_leaf(flat, ty, extra, w, v, borrowed)
         }
         fn finish_input(&self, plan: &mut InputPlan<TestWire>, _: &Extra) -> Result<()> {
             assert_eq!(
@@ -1149,6 +1169,7 @@ fn shared_record_input_preserves_ownership_phases_and_rejects_conflicting_acknow
         let name = format_ident!("field{index}");
         let mut child = TEST_CODEC
             .input_leaf(
+                &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("wire{index}"),
@@ -1214,6 +1235,7 @@ fn shared_record_output_evaluates_once_preserves_commit_and_rejects_early_delive
             [format_ident!("x"), format_ident!("y")],
             |i, field| {
                 let mut child = TEST_CODEC.output_leaf(
+                    &parse(""),
                     &syn::parse_quote!(i64),
                     &Extra::default(),
                     format_ident!("wire{i}"),
@@ -1545,6 +1567,7 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
     let fields = names().into_iter().enumerate().map(|(i, name)| {
         TEST_CODEC
             .input_leaf(
+                &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("w{i}"),
@@ -1564,6 +1587,7 @@ fn record_helpers_check_source_field_names_without_reading_group_metadata() {
     for owned in [false, true] {
         let convert = |i, value| {
             TEST_CODEC.output_leaf(
+                &parse(""),
                 &syn::parse_quote!(i64),
                 &Extra::default(),
                 format_ident!("w{i}"),
@@ -1810,6 +1834,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
     for source_error in [false, true] {
         let mut child = TEST_CODEC
             .output_leaf(
+                &parse(""),
                 &syn::parse_quote!(i32),
                 &Extra::default(),
                 syn::parse_quote!(out),

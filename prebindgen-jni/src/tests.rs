@@ -804,20 +804,24 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         vec![],
     )
     .unwrap();
-    let classes = BTreeMap::new();
-    let mut codec = data::DataCodec::new(&mut flat, &classes).unwrap();
+    let codec = data::DataCodec;
     let decl = fun!(f).callback_return();
-    let errors = errors::prepare(
-        &mut flat,
-        &mut codec,
-        &defaults,
-        std::slice::from_ref(&decl),
-        &classes,
-        "test",
-        &mut BTreeSet::new(),
-    )
-    .unwrap();
-    assert_eq!(errors.len(), 1);
+    flat.metadata.package = "test".into();
+    flat.function_mut("f").unwrap().metadata = Some(JniFunction {
+        package: "test".into(),
+        name: "f".into(),
+        order: 0,
+        error: None,
+    });
+    errors::prepare(&mut flat, &codec, &defaults, std::slice::from_ref(&decl)).unwrap();
+    assert!(flat
+        .function("f")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap()
+        .error
+        .is_some());
     defaults.fill(&mut flat, &codec, &decl, &()).unwrap();
     let output = flat.function("f").unwrap().output_conversion().unwrap();
     let prebindgen_flat::Outcomes {
@@ -901,6 +905,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
 fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
     fn install(model: &mut Bindings, binding_failure: bool) -> Result<()> {
         let mut input = JniCodec.input_leaf(
+            &Bindings::parse([]).unwrap(),
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(native_input),
@@ -910,6 +915,7 @@ fn manual_jni_plans_share_one_tree_through_flat_and_configure() {
         JniCodec.finish_input(&mut input, &())?;
 
         let mut output = JniCodec.output_leaf(
+            &Bindings::parse([]).unwrap(),
             &syn::parse_quote!(i64),
             &(),
             syn::parse_quote!(native_output),
@@ -1133,4 +1139,237 @@ fn explicit_view_names_reach_builders_and_duplicate_parameters_are_rejected() {
         || JniGen::builder().error_mapper(syn::parse_quote!(E), fun!(text).name("renamed"))
     )
     .is_err());
+}
+
+#[test]
+fn preparation_uses_module_placement_and_error_selection_from_flat() {
+    use std::rc::Rc;
+    let source="pub type E=String;pub fn code(e:&E)->i64{}pub fn message(e:&E)->String{}pub fn rows()->Result<Vec<i64>,E>{}pub fn mapped()->Result<i64,E>{}";
+    let prepared = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("initial")
+        .expand(expand_return!(E).field(fun!(code)))
+        .package(
+            package!()
+                .fun(fun!(rows).callback_return_only())
+                .fun(fun!(mapped).on_error(fun!(message))),
+        )
+        .configure(|flat| {
+            assert_eq!(flat.metadata.package, "initial");
+            assert_eq!(
+                flat.function("rows")?.metadata.as_ref().unwrap().name,
+                "rows"
+            );
+            flat.metadata.package = "canonical".into();
+            flat.metadata.native_init = "/* canonical init */".into();
+            for f in flat.functions.values_mut() {
+                if let Some(m) = &mut f.metadata {
+                    m.package = "canonical".into();
+                }
+            }
+            flat.function_mut("mapped")?.metadata.as_mut().unwrap().name = "renamed".into();
+            Ok(())
+        })
+        .prepare()
+        .unwrap();
+    let ty = prepared.resolve_type(&syn::parse_quote!(E)).unwrap();
+    let errors = &prepared.type_info(&ty).unwrap().metadata.errors;
+    assert_eq!(errors.len(), 2);
+    let rows = prepared
+        .function("rows_fold")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap();
+    let mapped = prepared
+        .function("mapped")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap();
+    assert!(Rc::ptr_eq(rows.error.as_ref().unwrap(), &errors[&false]));
+    assert!(Rc::ptr_eq(mapped.error.as_ref().unwrap(), &errors[&true]));
+    assert!(!prepared
+        .functions
+        .keys()
+        .any(|name| name.starts_with("__pb_jni_error_")));
+    let generated = generate(&prepared).unwrap();
+    assert!(generated.kotlin["canonical/Functions.kt"].contains("`renamed`"));
+    assert!(generated.kotlin["canonical/Functions.kt"].contains("`rowsFold`"));
+    assert!(!generated.kotlin["canonical/Functions.kt"].contains("`rows`("));
+    assert!(generated.kotlin["canonical/JNINative.kt"].contains("canonical init"));
+    assert!(generated.kotlin.contains_key("canonical/EHandler.kt"));
+    assert!(generated
+        .kotlin
+        .contains_key("canonical/EMessageHandler.kt"));
+    assert!(!generated.kotlin.contains_key("initial/EHandler.kt"));
+}
+
+#[test]
+fn error_exception_policy_is_available_in_flat_before_preparation() {
+    let mut prepared = JniGen::builder()
+        .flat(flat(
+            "pub type E=String;pub fn message(e:&E)->String{}pub fn f()->Result<i64,E>{}",
+        ))
+        .set_package_prefix("test")
+        .error_class(syn::parse_quote!(E), "java.lang.IllegalStateException")
+        .package(package!().fun(fun!(f).on_error(fun!(message))))
+        .configure(|flat| {
+            let ty = flat.resolve_type(&syn::parse_quote!(E))?;
+            let metadata = flat.type_metadata_mut(&ty)?;
+            assert_eq!(
+                metadata.error_class.as_deref(),
+                Some("java.lang.IllegalStateException")
+            );
+            metadata.error_class = Some("java.lang.IllegalArgumentException".into());
+            Ok(())
+        })
+        .prepare()
+        .unwrap();
+    let generated = generate(&prepared).unwrap();
+    let function = &generated.kotlin["test/Functions.kt"];
+    assert!(function.contains("java.lang.IllegalArgumentException"));
+    assert!(!function.contains("java.lang.IllegalStateException"));
+    let ty = prepared.resolve_type(&syn::parse_quote!(E)).unwrap();
+    prepared.type_metadata_mut(&ty).unwrap().error_class =
+        Some("java.lang.RuntimeException".into());
+    let regenerated = generate(&prepared).unwrap();
+    assert!(regenerated.kotlin["test/Functions.kt"].contains("java.lang.RuntimeException"));
+    assert!(!regenerated.kotlin["test/Functions.kt"].contains("java.lang.IllegalArgumentException"));
+}
+
+#[test]
+fn configured_function_names_are_validated_from_flat() {
+    let error = JniGen::builder()
+        .flat(flat("pub fn first()->i64{}pub fn second()->i64{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(first)).fun(fun!(second)))
+        .configure(|flat| {
+            flat.function_mut("second")?.metadata.as_mut().unwrap().name = "first".into();
+            Ok(())
+        })
+        .prepare()
+        .err()
+        .unwrap();
+    assert!(error.contains("duplicate foreign function name"));
+}
+
+#[test]
+fn completing_flat_again_preserves_prepared_enum_overrides() {
+    let mut prepared = JniGen::builder()
+        .flat(flat("pub enum E{A,B}pub fn f(x:E)->E{}"))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(enum_class!(E).variant_name("A", "Renamed"))
+                .fun(fun!(f)),
+        )
+        .prepare()
+        .unwrap();
+    let before = generate(&prepared).unwrap();
+    let guard_count = prepared.guards.len();
+    data::prepare(&mut prepared).unwrap();
+    let after = generate(&prepared).unwrap();
+    assert_eq!(before.rust, after.rust);
+    assert_eq!(before.kotlin, after.kotlin);
+    assert_eq!(guard_count, prepared.guards.len());
+    assert!(after.kotlin["test/E.kt"].contains("Renamed"));
+}
+
+#[test]
+fn extending_prepared_flat_keeps_error_helpers_unique_and_existing_projections() {
+    let source="pub type E=String;pub type F=String;pub fn code(e:&E)->i64{}pub fn message(f:&F)->String{}pub fn first()->Result<i64,E>{}pub fn second()->Result<i64,F>{}";
+    let initial = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .expand(expand_return!(E).field(fun!(code)))
+        .package(package!().fun(fun!(first)))
+        .prepare()
+        .unwrap();
+    let original = initial
+        .function("first")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap()
+        .error
+        .as_ref()
+        .unwrap()
+        .clone();
+    let extended = JniGen::builder()
+        .flat(initial)
+        .set_package_prefix("test")
+        .expand(expand_return!(F).field(fun!(message)))
+        .package(package!().fun(fun!(second)))
+        .prepare()
+        .unwrap();
+    let first = extended
+        .function("first")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap()
+        .error
+        .as_ref()
+        .unwrap();
+    let second = extended
+        .function("second")
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap()
+        .error
+        .as_ref()
+        .unwrap();
+    assert!(std::rc::Rc::ptr_eq(first, &original));
+    assert_ne!(first.helper, second.helper);
+    let generated = generate(&extended).unwrap();
+    assert!(generated.kotlin["test/EHandler.kt"].contains("Long"));
+    assert!(generated.kotlin["test/FHandler.kt"].contains("String"));
+}
+
+#[test]
+fn clearing_declared_metadata_and_editing_invalid_package_return_errors() {
+    for source in ["pub fn f()->Result<i64,String>{}", "pub fn f()->Vec<i64>{}"] {
+        let result = std::panic::catch_unwind(|| {
+            JniGen::builder()
+                .flat(flat(source))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(f).callback_return()))
+                .configure(|flat| {
+                    flat.function_mut("f")?.metadata = None;
+                    Ok(())
+                })
+                .prepare()
+        });
+        let error = result
+            .expect("preparation must return an error, not panic")
+            .err()
+            .unwrap();
+        assert!(error.contains("has no export metadata"));
+    }
+    let error = JniGen::builder()
+        .flat(flat("pub fn f()->i64{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(f)))
+        .configure(|flat| {
+            flat.metadata.package = "bad package".into();
+            Ok(())
+        })
+        .prepare()
+        .err()
+        .unwrap();
+    assert!(error.contains("package"));
+}
+
+#[test]
+fn emission_rejects_placed_functions_with_missing_converters() {
+    let mut prepared = JniGen::builder()
+        .flat(flat("pub fn f()->i64{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(f)))
+        .prepare()
+        .unwrap();
+    prepared.function_mut("f").unwrap().ret.slot = None;
+    assert!(generate(&prepared).is_err());
 }

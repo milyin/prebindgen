@@ -38,4 +38,5 @@ pub struct JniType {
     pub(crate) class: Option<Rc<Class>>,
     pub(crate) enumeration: Option<Rc<JniEnum>>,
     pub(crate) errors: BTreeMap<bool, Rc<errors::ErrorBinding>>,
+    pub(crate) error_class: Option<String>,
 }

@@ -225,9 +225,16 @@ impl JniGenBuilder {
     ///
     /// Use this to attach converters with [`prebindgen_declarations::bind_input`] and
     /// [`prebindgen_declarations::bind_output`], using [`JniCodec`]. Callbacks run in
-    /// registration order; errors stop generation. Source selection has already happened, so references
-    /// introduced here must already exist in the model. Per-function declarations
-    /// can explicitly override the converters assigned by these callbacks.
+    /// registration order; errors stop generation. Source selection and registration
+    /// of module settings, class declarations, function placement and `error_class`
+    /// policies have already happened. Callbacks run before class completion, error
+    /// preparation and converter filling; their placement edits are revalidated.
+    /// References introduced here must already exist in the selected source model.
+    /// Per-function declarations can explicitly override converters assigned here.
+    ///
+    /// Class and function packages are fully qualified at registration. Changing
+    /// `flat.metadata.package` changes native infrastructure and the fallback error
+    /// handler package; it does not relocate already declared classes or functions.
     ///
     /// ```
     /// use prebindgen_jni::{Bindings, JniGen, JniCodec, fun, package};
@@ -389,26 +396,19 @@ impl JniGenBuilder {
             (None, None, Some(items)) => Flat::parse_selected(items, &references, &types)?,
             _ => return Err("supply exactly one source, item stream or flat model".into()),
         };
-        for configure in self.configure {
-            configure(&mut flat)?;
-        }
-        let defaults = prebindgen_declarations::Declarations::new(
-            &flat,
-            self.inputs,
-            self.outputs,
-            self.error_mappers,
-        )?;
         validate_package(&self.prefix)?;
-        let mut classes = BTreeMap::new();
-        let mut functions = Vec::new();
+        flat.metadata = JniModule {
+            package: self.prefix,
+            native_init: self.init,
+        };
         let mut declarations = Vec::new();
-        let mut seen = BTreeSet::new();
+        let mut class_types = BTreeSet::new();
         let mut bound = BTreeSet::new();
         for p in self.packages {
             let pkg = if p.name.is_empty() {
-                self.prefix.clone()
+                flat.metadata.package.clone()
             } else {
-                format!("{}.{}", self.prefix, p.name)
+                format!("{}.{}", flat.metadata.package, p.name)
             };
             validate_package(&pkg)?;
             for c in p.classes {
@@ -432,44 +432,39 @@ impl JniGenBuilder {
                 {
                     return Err("reserved generated class name".into());
                 }
-                let fqn = format!("{pkg}.{name}");
-                if !seen.insert(fqn.clone()) {
-                    return Err(format!("duplicate foreign name `{fqn}`"));
-                }
-                if classes
-                    .insert(
-                        type_key(&ty),
-                        Class {
-                            pkg: pkg.clone(),
-                            name,
-                            data: matches!(c, ClassDecl::Data(_)),
-                            enumeration: matches!(c, ClassDecl::Enum(_)),
-                            has_handles: false,
-                            variant_names: match c {
-                                ClassDecl::Enum(c) => c.variant_names,
-                                _ => Vec::new(),
-                            },
-                        },
-                    )
-                    .is_some()
-                {
+                if !class_types.insert(type_key(&ty)) {
                     return Err("duplicate class for source type".into());
                 }
+                let class = Class {
+                    pkg: pkg.clone(),
+                    name,
+                    data: matches!(c, ClassDecl::Data(_)),
+                    enumeration: matches!(c, ClassDecl::Enum(_)),
+                    has_handles: false,
+                    variant_names: match c {
+                        ClassDecl::Enum(c) => c.variant_names,
+                        _ => Vec::new(),
+                    },
+                };
+                let metadata = flat.type_metadata_mut(&ty)?;
+                metadata.class = Some(std::rc::Rc::new(class));
+                metadata.enumeration = None;
             }
             for f in p.functions {
-                declarations.push(f.clone());
-                let name = f.foreign.unwrap_or_else(|| camel(&f.name));
+                let name = f.foreign.clone().unwrap_or_else(|| camel(&f.name));
                 validate_name(&name)?;
-                if !seen.insert(format!("{pkg}.{name}")) {
-                    return Err("duplicate foreign function name".into());
-                }
                 if !bound.insert(f.name.clone()) {
                     return Err("binding one source function twice is outside this subset".into());
                 }
-                functions.push((f.name, pkg.clone(), name));
+                flat.function_mut(&f.name)?.metadata = Some(JniFunction {
+                    package: pkg.clone(),
+                    name,
+                    order: declarations.len(),
+                    error: None,
+                });
+                declarations.push(f);
             }
         }
-        let mut codec = data::DataCodec::new(&mut flat, &classes)?;
         for (ty, class) in self.error_classes {
             let mut parts = class.split('$');
             validate_package(parts.next().unwrap())?;
@@ -477,22 +472,38 @@ impl JniGenBuilder {
                 validate_name(nested)?;
             }
             let ty = flat.resolve_type(&ty)?;
-            if codec.error_classes.insert(type_key(&ty), class).is_some() {
+            if flat
+                .type_metadata_mut(&ty)?
+                .error_class
+                .replace(class)
+                .is_some()
+            {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        for enumeration in codec.enums.values() {
-            flat.guards.extend(enumeration.mapping.guards());
+        let codec = data::DataCodec;
+        for configure in self.configure {
+            configure(&mut flat)?;
         }
-        let mut errors = errors::prepare(
-            &mut flat,
-            &mut codec,
-            &defaults,
-            &declarations,
-            &classes,
-            &self.prefix,
-            &mut seen,
+        validate_package(&flat.metadata.package)?;
+        for declaration in &declarations {
+            if flat.function(&declaration.name)?.metadata.is_none() {
+                return Err(format!(
+                    "declared JNI function `{}` has no export metadata",
+                    declaration.name
+                ));
+            }
+        }
+        let defaults = prebindgen_declarations::Declarations::new(
+            &flat,
+            self.inputs,
+            self.outputs,
+            self.error_mappers,
         )?;
+        validate_declaration_names(&flat)?;
+        data::prepare(&mut flat)?;
+        errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
+        let mut next_order = declarations.len();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
@@ -509,25 +520,26 @@ impl JniGenBuilder {
                     &variant_name,
                     &(),
                 )?;
-                defaults.fill(&mut flat, &codec, &variant, &())?;
-                if let Some(error) = errors.get(&declaration.name).cloned() {
-                    errors.insert(variant_name.clone(), error);
-                }
-                let (_, pkg, name) = functions
-                    .iter()
-                    .find(|(source, _, _)| source == &declaration.name)
-                    .unwrap();
-                let (pkg, name) = (pkg.clone(), format!("{name}Fold"));
-                if !seen.insert(format!("{pkg}.{name}")) {
+                let mut placement = flat
+                    .function(&declaration.name)?
+                    .metadata
+                    .as_ref()
+                    .ok_or("callback source has no JNI export metadata")?
+                    .clone();
+                placement.name = format!("{}Fold", placement.name);
+                let foreign = format!("{}.{}", placement.package, placement.name);
+                if foreign_name_exists(&flat, &foreign) {
                     return Err("callback return foreign name collision".into());
                 }
-                functions.push((variant_name.clone(), pkg, name));
-                bound.insert(variant_name.clone());
+                placement.order = next_order;
+                next_order += 1;
+                flat.function_mut(&variant_name)?.metadata = Some(placement);
+                defaults.fill(&mut flat, &codec, &variant, &())?;
                 if declaration.callback_return
                     == Some(prebindgen_declarations::CallbackReturn::Only)
                 {
-                    functions.retain(|(source, _, _)| source != &declaration.name);
                     let original = flat.functions.get_mut(&declaration.name).unwrap();
+                    original.metadata = None;
                     original.ret.slot = None;
                     for param in &mut original.params {
                         param.ty.slot = None;
@@ -537,24 +549,11 @@ impl JniGenBuilder {
         }
         prebindgen_flat::validate_bindings(&flat)?;
         for (name, f) in &flat.functions {
-            if f.ret.slot.is_some() && !bound.contains(name) {
+            if f.ret.slot.is_some() && f.metadata.is_none() {
                 return Err(format!(
                     "configured function `{name}` has no Kotlin declaration"
                 ));
             }
-        }
-        flat.metadata = JniModule {
-            package: self.prefix,
-            native_init: self.init,
-        };
-        for (order, (source, pkg, name)) in functions.into_iter().enumerate() {
-            let error = errors.get(&source).cloned();
-            flat.function_mut(&source)?.metadata = Some(JniFunction {
-                package: pkg,
-                name,
-                order,
-                error,
-            });
         }
         Ok(flat)
     }
@@ -576,6 +575,41 @@ impl Class {
     fn fqn(&self) -> String {
         format!("{}.{}", self.pkg, self.name)
     }
+}
+/// Validate the declarations currently held by Flat, including configuration edits.
+fn validate_declaration_names(flat: &Bindings) -> Result<()> {
+    let mut names = BTreeSet::new();
+    for ty in flat.types.values() {
+        if let Some(class) = &ty.metadata.class {
+            validate_package(&class.pkg)?;
+            validate_name(&class.name)?;
+            let name = class.fqn();
+            if !names.insert(name.clone()) {
+                return Err(format!("duplicate foreign name `{name}`"));
+            }
+        }
+    }
+    for function in flat.functions.values() {
+        if let Some(m) = &function.metadata {
+            validate_package(&m.package)?;
+            validate_name(&m.name)?;
+            if !names.insert(format!("{}.{}", m.package, m.name)) {
+                return Err("duplicate foreign function name".into());
+            }
+        }
+    }
+    Ok(())
+}
+/// Check a prospective generated declaration against canonical class, function and handler names.
+fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
+    flat.types.values().any(|t| {
+        t.metadata.class.as_ref().is_some_and(|c| c.fqn() == name)
+            || t.metadata.errors.values().any(|e| e.handler == name)
+    }) || flat.functions.values().any(|f| {
+        f.metadata
+            .as_ref()
+            .is_some_and(|m| format!("{}.{}", m.package, m.name) == name)
+    })
 }
 /// Conversions and slot glue used by [`JniGen`].
 /// Prepared code explicitly references the emission context's JNI environment
@@ -729,14 +763,20 @@ impl Codec for JniCodec {
     fn selector(&self, _: &()) -> JniWire {
         JniWire::selector()
     }
-    fn consumes(&self, ty: &syn::Type, _: &()) -> bool {
+    fn consumes(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &syn::Type,
+        _: &(),
+    ) -> bool {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
-            return self.consumes(inner, &());
+            return self.consumes(_flat, inner, &());
         }
         Value::of(ty).is_none()
     }
     fn input_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         _: &(),
         w: syn::Ident,
@@ -775,6 +815,7 @@ impl Codec for JniCodec {
     }
     fn output_leaf(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &syn::Type,
         _: &(),
         w: syn::Ident,
@@ -791,6 +832,7 @@ impl Codec for JniCodec {
             match type_key(&reference.elem).as_str() {
                 "str" => {
                     return self.output_leaf(
+                        _flat,
                         &syn::parse_quote!(String),
                         &(),
                         w,
@@ -800,6 +842,7 @@ impl Codec for JniCodec {
                 }
                 "[u8]" => {
                     return self.output_leaf(
+                        _flat,
                         &syn::parse_quote!(Vec<u8>),
                         &(),
                         w,
@@ -810,7 +853,7 @@ impl Codec for JniCodec {
                 _ => {}
             }
             let value = if borrowed { quote!(*#v) } else { v };
-            return self.output_leaf(&reference.elem, &(), w, value, true);
+            return self.output_leaf(_flat, &reference.elem, &(), w, value, true);
         }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
@@ -1179,7 +1222,14 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             return Err("JNI native delivery requires a declared binding-failure schema".into());
         }
 
-        let throws = error.map_or_else(String::new, |error| error.throws());
+        let exception = if let Some((_, ty)) = prebindgen_flat::result_parts(&f.ret.ty) {
+            flat.type_info(ty)
+                .ok()
+                .and_then(|t| t.metadata.error_class.as_deref())
+        } else {
+            None
+        };
+        let throws = error.map_or_else(String::new, |error| error.throws(exception));
         let env = format_ident!("jni_environment");
         let ownership = format_ident!("ownership_accepted");
         let context = JniContext {
@@ -1406,7 +1456,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         };
         kt_params.push(format!("{binding_name}: {prefix}.JniErrorHandler<{ret}> = {prefix}.JniErrorHandler {{ message -> throw IllegalArgumentException(message) }}"));
         if let Some(error) = error {
-            kt_params.push(error.parameter(&ret));
+            kt_params.push(error.parameter(&ret, exception));
         }
         if let Some(build) = build {
             kt_params.push(build);

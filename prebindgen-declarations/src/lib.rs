@@ -427,7 +427,14 @@ impl<P> Output<P> {
     }
 }
 impl Output {
-    fn consumes<C: Codec>(&self, ty: &Type, extra: &C::Extra, codec: &C, borrowed: bool) -> bool {
+    fn consumes<C: Codec>(
+        &self,
+        flat: &prebindgen_flat::Flat<C::Schema>,
+        ty: &Type,
+        extra: &C::Extra,
+        codec: &C,
+        borrowed: bool,
+    ) -> bool {
         match self {
             Self::Sequence { mode, .. } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
@@ -436,16 +443,18 @@ impl Output {
                         && sequence_parts(ty).is_some_and(|(_, view)| view == SequenceView::Owned)
                 }
             },
-            Self::Named { output: child, .. } => child.consumes(ty, extra, codec, borrowed),
+            Self::Named { output: child, .. } => child.consumes(flat, ty, extra, codec, borrowed),
             Self::Optional(child) => {
-                child.consumes(option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
+                child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
             }
-            Self::Leaf => codec.consumes(ty, extra),
+            Self::Leaf => codec.consumes(flat, ty, extra),
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
             Self::Record { mode, .. } => *mode == ProjectionMode::Owned,
             Self::Request(never) => match *never {},
-            Self::Combine(p) => p.iter().any(|p| p.consumes(ty, extra, codec, borrowed)),
+            Self::Combine(p) => p
+                .iter()
+                .any(|p| p.consumes(flat, ty, extra, codec, borrowed)),
             _ => false,
         }
     }
@@ -466,6 +475,11 @@ impl Output {
 /// locals until their infallible `commit` runs at the selected protocol's
 /// transfer point. Buffered delivery commits after all foreign delivery succeeds;
 /// an explicit visitor protocol can transfer each prepared element at callback entry.
+///
+/// Source-aware hooks receive the authoritative Flat model. Read configured type,
+/// field, function and module metadata there instead of retaining parallel indexes
+/// in the codec or passing copies through `Extra`. Pure wire-composition hooks need
+/// no model access. Unresolved recipes remain temporary preparation inputs.
 ///
 /// # Implementing a codec
 ///
@@ -513,16 +527,16 @@ impl Output {
 ///     fn niche(&self, _: &Self::Wire) -> Option<()> { None }
 ///     fn set_niche(&self, _: &mut Self::Wire, _: Option<()>) {}
 ///     fn selector(&self, _: &()) -> Self::Wire { syn::parse_quote!(i32) }
-///     fn consumes(&self, _: &Type, _: &()) -> bool { false }
+///     fn consumes(&self, _flat: &prebindgen_flat::Flat<Self::Schema>, _: &Type, _: &()) -> bool { false }
 ///     fn input_leaf(
-///         &self, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
+///         &self, _flat: &prebindgen_flat::Flat<Self::Schema>, ty: &Type, _: &(), wire: Ident, var: Ident, active: &Condition,
 ///     ) -> Result<CodecInput<Self>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         let decode = quote!(#wire.clone());
 ///         value::input(ty, wire, var, &active.rust(), decode, carrier(kind))
 ///     }
 ///     fn output_leaf(
-///         &self, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
+///         &self, _flat: &prebindgen_flat::Flat<Self::Schema>, ty: &Type, _: &(), wire: Ident, v: TokenStream, borrowed: bool,
 ///     ) -> Result<CodecOutput<Self>> {
 ///         let kind = value::Value::of(ty).ok_or("only values cross this codec")?;
 ///         value::output(ty, wire, v, borrowed, |v| v, carrier(kind))
@@ -588,6 +602,7 @@ pub trait Codec {
     /// Annotate an already compiled foreign-record input; structural expansion is complete.
     fn input_record_metadata(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _ty: &Type,
         _wire: &syn::Ident,
         _active: &Condition,
@@ -599,6 +614,7 @@ pub trait Codec {
     /// Annotate an already compiled foreign-record output with its selected representation.
     fn output_record_metadata(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _ty: &Type,
         _wire: &syn::Ident,
         _plan: &mut CodecOutput<Self>,
@@ -673,7 +689,12 @@ pub trait Codec {
     ///
     /// * `ty` — owned source type of the value being delivered.
     /// * `extra` — occurrence data of the conversion, as passed to [`bind_output`].
-    fn consumes(&self, ty: &Type, extra: &Self::Extra) -> bool;
+    fn consumes(
+        &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+    ) -> bool;
     /// Prepare a leaf input of source type `ty` using occurrence data `extra`.
     ///
     /// All fallible checks belong in [`InputPlan::validation`]; do not
@@ -694,6 +715,7 @@ pub trait Codec {
     ///   returned wire and resource, and guard validation and acquisition with it.
     fn input_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Self::Extra,
         wire: syn::Ident,
@@ -706,6 +728,7 @@ pub trait Codec {
     /// to `projection.mode`. The default supports leaves without field overrides.
     fn output_projected(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Self::Extra,
         wire: syn::Ident,
@@ -723,6 +746,7 @@ pub trait Codec {
             return Err("owned projection cannot consume a reference payload".into());
         }
         self.output_leaf(
+            flat,
             ty,
             extra,
             wire,
@@ -777,12 +801,14 @@ pub trait Codec {
     /// and delegates to `result_error`.
     fn result_error_value(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         _value: TokenStream,
         message: Option<TokenStream>,
         extra: &Self::Extra,
     ) -> Result<TokenStream> {
         self.result_error(
+            flat,
             ty,
             message.ok_or_else(|| {
                 format!(
@@ -797,6 +823,7 @@ pub trait Codec {
     /// uses String; raw typed errors must provide their own declared projection.
     fn source_error_layout(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         mapped: bool,
         extra: &Self::Extra,
@@ -808,6 +835,7 @@ pub trait Codec {
             ));
         }
         let plan = self.output_leaf(
+            flat,
             &syn::parse_quote!(String),
             extra,
             format_ident!("source_error_message"),
@@ -829,6 +857,7 @@ pub trait Codec {
     /// before preparing success outputs. The default rejects unsupported routing.
     fn result_error(
         &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
         _ty: &Type,
         _message: TokenStream,
         _extra: &Self::Extra,
@@ -957,6 +986,7 @@ pub trait Codec {
     ///   `value` is owned.
     fn output_leaf(
         &self,
+        flat: &prebindgen_flat::Flat<Self::Schema>,
         ty: &Type,
         extra: &Self::Extra,
         wire: syn::Ident,
@@ -1051,8 +1081,21 @@ pub fn compile_output<C: Codec>(
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Output> {
+    compile_output_value(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)
+}
+
+/// Compile the output conversion of a source value, such as a function result or an error.
+/// The description must be request-free. Reads binding declarations from Flat without
+/// introducing a synthetic source function or modifying an occurrence slot.
+pub fn compile_output_value<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Output,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Output> {
     let mut plan = Compiler::new(flat, codec, "ret".into()).output_root(
-        &flat.function(function)?.ret.ty,
+        ty,
         recipe,
         extra,
         prebindgen_conversions::source_result_expr(),
@@ -1258,7 +1301,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
-                return self.codec.input_leaf(ty, extra, w, var, active);
+                return self.codec.input_leaf(self.flat, ty, extra, w, var, active);
             }
             Input::Request(never) => match *never {},
             Input::Fields(children) | Input::Record(children) => {
@@ -1319,7 +1362,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 )?;
                 if let Some(wire) = wire {
                     self.codec
-                        .input_record_metadata(ty, &wire, active, &mut plan, extra)?;
+                        .input_record_metadata(self.flat, ty, &wire, active, &mut plan, extra)?;
                 }
                 return Ok(plan);
             }
@@ -1461,9 +1504,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 None
             };
             let mapped_error = mapped.is_some();
-            let message =
-                self.codec
-                    .result_error_value(error_ty, quote!(#failure), mapped, extra)?;
+            let message = self.codec.result_error_value(
+                self.flat,
+                error_ty,
+                quote!(#failure),
+                mapped,
+                extra,
+            )?;
             let mut child = self.output(success_ty, ok, extra, quote!(#payload), false)?;
             let prepare = child.statements;
             child.statements = quote! {
@@ -1476,7 +1523,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
 
             let error = self
                 .codec
-                .source_error_layout(error_ty, mapped_error, extra)?;
+                .source_error_layout(self.flat, error_ty, mapped_error, extra)?;
             child.outcomes.source_error = Some(error);
             return Ok(child);
         }
@@ -1587,7 +1634,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Output::Request(never) => match *never {},
             Output::Leaf => {
                 let w = wire_name.cloned().unwrap_or_else(|| self.name());
-                return self.codec.output_leaf(ty, extra, w, value, borrowed);
+                return self
+                    .codec
+                    .output_leaf(self.flat, ty, extra, w, value, borrowed);
             }
             Output::Projected(projection) => {
                 if borrowed && projection.mode == ProjectionMode::Owned {
@@ -1601,6 +1650,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     value
                 };
                 return self.codec.output_projected(
+                    self.flat,
                     ty,
                     extra,
                     wire_name.cloned().unwrap_or_else(|| self.name()),
@@ -1673,7 +1723,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 };
                 if let Some(wire) = wire {
                     self.codec
-                        .output_record_metadata(ty, &wire, &mut plan, extra)?;
+                        .output_record_metadata(self.flat, ty, &wire, &mut plan, extra)?;
                 }
                 return Ok(plan);
             }
@@ -1720,7 +1770,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 if parts
                     .iter()
-                    .filter(|p| p.consumes(ty, extra, self.codec, borrowed))
+                    .filter(|p| p.consumes(self.flat, ty, extra, self.codec, borrowed))
                     .count()
                     > 1
                 {
@@ -1728,7 +1778,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 }
                 let mut bodies = Vec::new();
                 for (index, child) in parts.iter().enumerate() {
-                    let consuming = child.consumes(ty, extra, self.codec, borrowed);
+                    let consuming = child.consumes(self.flat, ty, extra, self.codec, borrowed);
                     let arg = if borrowed || consuming {
                         value.clone()
                     } else {
