@@ -7,7 +7,7 @@ use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, Wire
 
 pub use prebindgen_declarations::{Projection, ProjectionMode};
 mod metadata;
-pub use metadata::{JniFunction, JniMetadata, JniModule, JniType};
+pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
@@ -56,7 +56,7 @@ pub use kotlin::{
 ///     prebindgen_c::Cbindgen::new(flat);
 /// }
 /// ```
-pub type Bindings = Flat<JniInput, JniOutput, JniMetadata>;
+pub type Bindings = Flat<JniSchema>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::{BTreeMap, BTreeSet};
@@ -493,19 +493,8 @@ impl JniGenBuilder {
             &self.prefix,
             &mut seen,
         )?;
-        let source_only = flat
-            .functions
-            .values()
-            .all(|f| f.ret.slot.is_none() && f.params.iter().all(|p| p.ty.slot.is_none()));
-        if source_only {
-            let source = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
-            let resolved = defaults.resolve(source, &codec, &declarations, &())?;
-            flat = prebindgen_declarations::compile(resolved, &codec, &())?;
-        }
         for declaration in declarations {
-            if !source_only {
-                defaults.fill(&mut flat, &codec, &declaration, &())?;
-            }
+            defaults.fill(&mut flat, &codec, &declaration, &())?;
             if declaration.callback_return.is_some() {
                 let variant_name = format!("{}_fold", declaration.name);
                 sequence::callback_target(
@@ -596,7 +585,7 @@ impl Class {
 /// to fill [`Bindings`] manually.
 pub struct JniCodec;
 impl Codec for JniCodec {
-    type Metadata = JniMetadata;
+    type Schema = JniSchema;
     type Niche = crate::optional::JniNiche;
     type Chain = JniChain;
     type Branch = JniBranch;
@@ -645,8 +634,6 @@ impl Codec for JniCodec {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
-    type Input = JniInput;
-    type Output = JniOutput;
     fn finish_input(&self, plan: &mut InputPlan<JniWire>, _: &()) -> Result<()> {
         group::validate_layout(&plan.node)?;
         let env = prebindgen_conversions::template_parameter("environment");

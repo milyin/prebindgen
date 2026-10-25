@@ -49,8 +49,8 @@ pub struct JniEnum {
     pub variant_names: BTreeMap<String, String>,
 }
 impl JniEnum {
-    pub(crate) fn from_class<I, O, M: prebindgen_flat::Metadata>(
-        flat: &Flat<I, O, M>,
+    pub(crate) fn from_class<M: prebindgen_flat::Schema>(
+        flat: &Flat<M>,
         class: &Class,
         key: &str,
     ) -> Result<Self> {

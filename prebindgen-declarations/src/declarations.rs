@@ -1,7 +1,7 @@
 //! Direct Input/Output descriptions, defaults and function export choices.
 use crate::{
     option_inner, result_parts, sequence_parts, Codec, Compiler, Condition, Input, InputRequest,
-    Output, OutputRequest, ProjectionMode, SequenceDelivery,
+    Output, OutputRequest, ProjectionMode, Schema, SequenceDelivery,
 };
 use prebindgen_flat::{same_type, type_key, Flat, Result};
 use std::collections::BTreeMap;
@@ -51,8 +51,8 @@ impl Declarations {
     /// Register typed Input/Output defaults and explicit error-message functions.
     /// Typed trees use Input::for_type / Output::for_type. Production declaration
     /// builders also convert directly into these trees with `.into()`.
-    pub fn new<I, O, M: prebindgen_flat::Metadata>(
-        flat: &Flat<I, O, M>,
+    pub fn new<M: prebindgen_flat::Schema>(
+        flat: &Flat<M>,
         inputs: Vec<Input<InputRequest>>,
         outputs: Vec<Output<OutputRequest>>,
         errors: Vec<(syn::Type, String)>,
@@ -94,69 +94,19 @@ impl Declarations {
         }
         Ok(out)
     }
-    /// Resolve a source-only Flat into explicit Input/Output occurrence slots.
-    /// Source declarations and all metadata are moved into the returned model.
-    /// The descriptions contain resolved operations and refer to this model's
-    /// canonical declarations; no plans or wire encodings are generated here.
-    pub fn resolve<C: Codec>(
-        &self,
-        flat: Flat<(), (), C::Metadata>,
-        codec: &C,
-        functions: &[FunctionDecl],
-        extra: &C::Extra,
-    ) -> Result<Flat<Input, Output, C::Metadata>> {
-        let mut flat = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
-        for decl in functions {
-            let (inputs, output) = (|| -> Result<_> {
-                let source = flat.function(&decl.name)?;
-                for name in decl.params.keys() {
-                    if !source.params.iter().any(|p| p.name == name.as_str()) {
-                        return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
-                    }
-                }
-                if decl.error.is_some() && result_parts(&source.ret.ty).is_none() {
-                    return Err("on_error requires a top-level Result<T, E> return".into());
-                }
-                let inputs = source
-                    .params
-                    .iter()
-                    .map(|p| {
-                        self.resolve_input(
-                            &flat,
-                            codec,
-                            &p.ty.ty,
-                            decl.params
-                                .get(&p.name.to_string())
-                                .unwrap_or(&Input::auto()),
-                            extra,
-                        )
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let output = self.function_output(&flat, codec, &source.ret.ty, decl, extra)?;
-                Ok((inputs, output))
-            })()
-            .map_err(|error| format!("{}: {error}", decl.name))?;
-            let target = flat.function_mut(&decl.name)?;
-            for (param, input) in target.params.iter_mut().zip(inputs) {
-                param.ty.slot = Some(input);
-            }
-            target.ret.slot = Some(output);
-        }
-        Ok(flat)
-    }
     /// Clone a source binding for a second explicit sequence delivery policy.
     pub fn callback_variant<C: Codec>(
         &self,
-        flat: &mut Flat<C::Input, C::Output, C::Metadata>,
+        flat: &mut Flat<C::Schema>,
         codec: &C,
         decl: &FunctionDecl,
         name: &str,
         extra: &C::Extra,
     ) -> Result<FunctionDecl>
     where
-        C::Input: Clone,
-        C::Output: Clone,
-        <C::Metadata as prebindgen_flat::Metadata>::Function: Clone,
+        <C::Schema as Schema>::Input: Clone,
+        <C::Schema as Schema>::Output: Clone,
+        <C::Schema as prebindgen_flat::Schema>::Function: Clone,
     {
         let source = flat.function(&decl.name)?;
         let ty = result_parts(&source.ret.ty).map_or(&source.ret.ty, |(ok, _)| ok);
@@ -207,7 +157,17 @@ impl Declarations {
     /// Existing converters are preserved unless explicitly replaced.
     pub fn fill<C: Codec>(
         &self,
-        flat: &mut Flat<C::Input, C::Output, C::Metadata>,
+        flat: &mut Flat<C::Schema>,
+        codec: &C,
+        decl: &FunctionDecl,
+        extra: &C::Extra,
+    ) -> Result<()> {
+        self.fill_function(flat, codec, decl, extra)
+            .map_err(|error| format!("{}: {error}", decl.name))
+    }
+    fn fill_function<C: Codec>(
+        &self,
+        flat: &mut Flat<C::Schema>,
         codec: &C,
         decl: &FunctionDecl,
         extra: &C::Extra,
@@ -222,7 +182,7 @@ impl Declarations {
         }
         for name in decl.params.keys() {
             if !source.params.iter().any(|p| p.name == name.as_str()) {
-                return Err(format!("`{}`: unknown parameter `{name}`", decl.name));
+                return Err(format!("unknown parameter `{name}`"));
             }
         }
         let mut inputs = vec![];
@@ -282,9 +242,9 @@ impl Declarations {
         }
         Ok(())
     }
-    fn function_output<C: Codec, I, O>(
+    fn function_output<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         decl: &FunctionDecl,
@@ -311,9 +271,9 @@ impl Declarations {
             .or_else(|| self.errors.get(&type_key(ty)).map(String::as_str))
     }
     /// Prepare owned source-field decomposition, retaining each field's conversion default.
-    pub fn owned_record_output<C: Codec, I, O>(
+    pub fn owned_record_output<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         extra: &C::Extra,
@@ -330,9 +290,9 @@ impl Declarations {
         )
     }
     /// Resolve a type's default output tree, for example for a typed error channel.
-    pub fn output_recipe<C: Codec, I, O>(
+    pub fn output_recipe<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         extra: &C::Extra,
@@ -340,9 +300,9 @@ impl Declarations {
         self.resolve_output(flat, codec, ty, &Output::auto(), extra)
     }
     /// Resolve every input operation against canonical source declarations before compilation.
-    pub fn resolve_input<C: Codec, I, O>(
+    pub fn resolve_input<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         tree: &Input<InputRequest>,
@@ -350,9 +310,9 @@ impl Declarations {
     ) -> Result<Input> {
         self.input(flat, codec, ty, tree, extra, &mut vec![])
     }
-    fn input<C: Codec, I, O>(
+    fn input<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         tree: &Input<InputRequest>,
@@ -505,9 +465,9 @@ impl Declarations {
         }
     }
     /// Resolve every output operation, source reference and ownership choice before compilation.
-    pub fn resolve_output<C: Codec, I, O>(
+    pub fn resolve_output<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         tree: &Output<OutputRequest>,
@@ -515,9 +475,9 @@ impl Declarations {
     ) -> Result<Output> {
         self.output(flat, codec, ty, tree, extra, &mut vec![])
     }
-    fn output<C: Codec, I, O>(
+    fn output<C: Codec>(
         &self,
-        flat: &Flat<I, O, C::Metadata>,
+        flat: &Flat<C::Schema>,
         codec: &C,
         ty: &syn::Type,
         tree: &Output<OutputRequest>,

@@ -193,7 +193,7 @@ pub fn enum_output<W: prebindgen_flat::WireKind, C, N, B>(
 mod tests {
     use super::*;
     fn mapping(source: &str) -> Result<EnumMapping> {
-        let flat = Flat::<(), ()>::parse(
+        let flat = Flat::<()>::parse(
             syn::parse_file(source)
                 .unwrap()
                 .items

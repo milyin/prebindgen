@@ -9,8 +9,8 @@
 //! Reusable value and boxed-allocation leaves live in `prebindgen-conversions`.
 #![warn(missing_docs)]
 use prebindgen_conversions::{InputPlan, OutputPlan};
-use prebindgen_flat::WireNode;
 use prebindgen_flat::{same_type, type_key, Flat, Result, Wire};
+use prebindgen_flat::{Schema, WireNode};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
@@ -495,15 +495,13 @@ impl Output {
 /// }
 /// struct RustCarriers;
 /// impl Codec for RustCarriers {
-///     type Metadata = ();
+///     type Schema = prebindgen_conversions::PlanSchema<Type>;
 ///     type Niche = ();
 ///     type Chain = ();
 ///     type Branch = ();
 ///     fn group_metadata(&self) {}
 ///     type Extra = ();
 ///     type Context = ();
-///     type Input = CodecInput<Self>;
-///     type Output = CodecOutput<Self>;
 ///     type Wire = Type; // The Rust carrier type is the complete wire description.
 ///
 ///     fn optional_metadata(&self, _: Ident, _: Ident, _: Option<()>, _: &[Wire<Type>]) -> Result<()> {Ok(())}
@@ -561,13 +559,16 @@ impl Output {
 /// ```
 #[allow(clippy::type_complexity)] // Explicit, independently typed metadata for each parent variant.
 pub trait Codec {
-    /// Metadata schema carried by the source and prepared binding model.
-    type Metadata: prebindgen_flat::Metadata;
+    /// Fixed schema selecting final converters and declaration metadata before parsing.
+    type Schema: Schema<
+        Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
+        Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
+    >;
     /// Source-aware input normalization, called only during tree preparation.
     /// Return an explicit operation tree for a language-specific representation.
-    fn expand_input<I, O>(
+    fn expand_input(
         &self,
-        _flat: &Flat<I, O, Self::Metadata>,
+        _flat: &Flat<Self::Schema>,
         _ty: &Type,
         _tree: &Input<InputRequest>,
         _extra: &Self::Extra,
@@ -575,9 +576,9 @@ pub trait Codec {
         Ok(None)
     }
     /// Source-aware output normalization, called before conversion compilation.
-    fn expand_output<I, O>(
+    fn expand_output(
         &self,
-        _flat: &Flat<I, O, Self::Metadata>,
+        _flat: &Flat<Self::Schema>,
         _ty: &Type,
         _tree: &Output<OutputRequest>,
         _extra: &Self::Extra,
@@ -652,10 +653,6 @@ pub trait Codec {
     type Extra;
     /// Context supplied by the language generator when emitting stored templates.
     type Context: prebindgen_conversions::TemplateContext + 'static;
-    /// Final self-contained input converter installed after preparation.
-    type Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>;
-    /// Final self-contained output converter installed after preparation.
-    type Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>;
     /// Complete description of one wire, including its type and adapter metadata.
     /// Grouping belongs to parent nodes; no wire kind contains child wires.
     type Wire: prebindgen_flat::WireKind + Clone + std::fmt::Debug;
@@ -989,8 +986,83 @@ pub trait Codec {
 ///     flat.function_mut("foo").unwrap().params[0].ty.slot = Some(Input::Leaf);
 /// }
 /// ```
-pub type Bindings<W, C = (), N = (), B = (), M = ()> =
-    Flat<InputPlan<W, C, N, B>, OutputPlan<W, C, N, B>, M>;
+pub type Bindings<W, C = (), N = (), B = ()> = Flat<prebindgen_conversions::PlanSchema<W, C, N, B>>;
+
+/// Compile a request-free description for one named source parameter.
+/// The model keeps its fixed schema; this returns a converter without modifying its slot.
+/// ```
+/// use prebindgen_declarations::{compile_input,Codec,Input};
+/// use prebindgen_flat::Flat;
+/// fn resolved<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_input(flat,codec,"f","x",&Input::Leaf,extra).unwrap();
+/// }
+/// ```
+/// ```compile_fail
+/// use prebindgen_declarations::{compile_input,Codec,Input};
+/// use prebindgen_flat::Flat;
+/// fn pending<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_input(flat,codec,"f","x",&Input::auto(),extra).unwrap();
+/// }
+/// ```
+pub fn compile_input<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    function: &str,
+    parameter: &str,
+    recipe: &Input,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Input> {
+    let f = flat.function(function)?;
+    let index = f
+        .params
+        .iter()
+        .position(|p| p.name == parameter)
+        .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
+    let mut plan = Compiler::new(flat, codec, format!("p{index}")).input(
+        &f.params[index].ty.ty,
+        recipe,
+        extra,
+        &Condition::default(),
+    )?;
+    codec.finish_input(&mut plan, extra)?;
+    codec.validate_input(&plan)?;
+    Ok(plan.into())
+}
+
+/// Compile a request-free description for one source result without modifying its slot.
+/// ```
+/// use prebindgen_declarations::{compile_output,Codec,Output};
+/// use prebindgen_flat::Flat;
+/// fn resolved<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_output(flat,codec,"f",&Output::Leaf,extra).unwrap();
+/// }
+/// ```
+/// ```compile_fail
+/// use prebindgen_declarations::{compile_output,Codec,Output};
+/// use prebindgen_flat::Flat;
+/// fn pending<C:Codec>(flat:&Flat<C::Schema>,codec:&C,extra:&C::Extra) {
+///     compile_output(flat,codec,"f",&Output::auto(),extra).unwrap();
+/// }
+/// ```
+pub fn compile_output<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    function: &str,
+    recipe: &Output,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Output> {
+    let mut plan = Compiler::new(flat, codec, "ret".into()).output_root(
+        &flat.function(function)?.ret.ty,
+        recipe,
+        extra,
+        prebindgen_conversions::source_result_expr(),
+        false,
+    )?;
+    finalize_output_schema(codec, &mut plan, extra)?;
+    codec.finish_output(&mut plan, extra)?;
+    codec.validate_output(&plan)?;
+    Ok(plan.into())
+}
 
 /// Build and attach a converter to a named function parameter.
 ///
@@ -1017,12 +1089,12 @@ pub type Bindings<W, C = (), N = (), B = (), M = ()> =
 /// ```compile_fail
 /// use prebindgen_declarations::{bind_input, Codec, Output};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: Codec>(flat: &mut Flat<C::Input, C::Output, C::Metadata>, codec: &C, extra: &C::Extra) {
+/// fn wrong<C: Codec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
 ///     bind_input(flat, codec, "foo", "x", &Output::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_input<C: Codec>(
-    flat: &mut Flat<C::Input, C::Output, C::Metadata>,
+    flat: &mut Flat<C::Schema>,
     codec: &C,
     function: &str,
     parameter: &str,
@@ -1037,16 +1109,8 @@ pub fn bind_input<C: Codec>(
         .ok_or_else(|| format!("`{function}`: unknown parameter `{parameter}`"))?;
     let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
     let recipe = defaults.resolve_input(flat, codec, &f.params[index].ty.ty, recipe, extra)?;
-    let mut conversion = Compiler::new(flat, codec, format!("p{index}")).input(
-        &f.params[index].ty.ty,
-        &recipe,
-        extra,
-        &Condition::default(),
-    )?;
-
-    codec.finish_input(&mut conversion, extra)?;
-    codec.validate_input(&conversion)?;
-    flat.function_mut(function)?.params[index].ty.slot = Some(conversion.into());
+    let conversion = compile_input(flat, codec, function, parameter, &recipe, extra)?;
+    flat.function_mut(function)?.params[index].ty.slot = Some(conversion);
     Ok(())
 }
 
@@ -1070,12 +1134,12 @@ pub fn bind_input<C: Codec>(
 /// ```compile_fail
 /// use prebindgen_declarations::{bind_output, Codec, Input};
 /// use prebindgen_flat::Flat;
-/// fn wrong<C: Codec>(flat: &mut Flat<C::Input, C::Output, C::Metadata>, codec: &C, extra: &C::Extra) {
+/// fn wrong<C: Codec>(flat: &mut Flat<C::Schema>, codec: &C, extra: &C::Extra) {
 ///     bind_output(flat, codec, "foo", &Input::Leaf, extra).unwrap();
 /// }
 /// ```
 pub fn bind_output<C: Codec>(
-    flat: &mut Flat<C::Input, C::Output, C::Metadata>,
+    flat: &mut Flat<C::Schema>,
     codec: &C,
     function: &str,
     recipe: &Output<OutputRequest>,
@@ -1084,17 +1148,8 @@ pub fn bind_output<C: Codec>(
     let defaults = Declarations::new(flat, vec![], vec![], vec![])?;
     let recipe =
         defaults.resolve_output(flat, codec, &flat.function(function)?.ret.ty, recipe, extra)?;
-    let mut conversion = Compiler::new(flat, codec, "ret".into()).output_root(
-        &flat.function(function)?.ret.ty,
-        &recipe,
-        extra,
-        prebindgen_conversions::source_result_expr(),
-        false,
-    )?;
-    finalize_output_schema(codec, &mut conversion, extra)?;
-    codec.finish_output(&mut conversion, extra)?;
-    codec.validate_output(&conversion)?;
-    flat.function_mut(function)?.ret.slot = Some(conversion.into());
+    let conversion = compile_output(flat, codec, function, &recipe, extra)?;
+    flat.function_mut(function)?.ret.slot = Some(conversion);
     Ok(())
 }
 
@@ -1109,94 +1164,14 @@ fn finalize_output_schema<C: Codec>(
     codec.validate_output(plan)
 }
 
-/// Compile resolved Input/Output slots without consulting expansion defaults.
-/// Canonical source declarations and metadata stay in the same Flat as slots
-/// change type. Builders and default environments are not needed after resolution.
-/// ```
-/// use prebindgen_declarations::{compile,Codec,Input,Output};
-/// use prebindgen_flat::Flat;
-/// fn resolved<C:Codec>(model:Flat<Input,Output,C::Metadata>,codec:&C,extra:&C::Extra) {
-///     compile(model,codec,extra).unwrap();
-/// }
-/// ```
-/// Pending request payloads do not type-check at this boundary:
-/// ```compile_fail
-/// use prebindgen_declarations::{compile,Codec,Input,InputRequest,Output};
-/// use prebindgen_flat::Flat;
-/// fn pending<C:Codec>(model:Flat<Input<InputRequest>,Output,C::Metadata>,codec:&C,extra:&C::Extra) {
-///     compile(model,codec,extra).unwrap();
-/// }
-/// ```
-/// ```compile_fail
-/// use prebindgen_declarations::{compile,Codec,Input,Output,OutputRequest};
-/// use prebindgen_flat::Flat;
-/// fn pending<C:Codec>(model:Flat<Input,Output<OutputRequest>,C::Metadata>,codec:&C,extra:&C::Extra) {
-///     compile(model,codec,extra).unwrap();
-/// }
-/// ```
-pub fn compile<C: Codec>(
-    flat: Flat<Input, Output, C::Metadata>,
-    codec: &C,
-    extra: &C::Extra,
-) -> Result<Flat<C::Input, C::Output, C::Metadata>> {
-    let mut plans = std::collections::BTreeMap::new();
-    for (name, function) in &flat.functions {
-        let Some(output) = &function.ret.slot else {
-            continue;
-        };
-        let (inputs, output) = (|| -> Result<_> {
-            let mut inputs = Vec::new();
-            for (index, param) in function.params.iter().enumerate() {
-                let tree = param
-                    .ty
-                    .slot
-                    .as_ref()
-                    .ok_or_else(|| format!("missing resolved input `{}`", param.name))?;
-                let mut plan = Compiler::new(&flat, codec, format!("p{index}")).input(
-                    &param.ty.ty,
-                    tree,
-                    extra,
-                    &Condition::default(),
-                )?;
-                codec.finish_input(&mut plan, extra)?;
-                codec.validate_input(&plan)?;
-                inputs.push(plan.into());
-            }
-            let mut output = Compiler::new(&flat, codec, "ret".into()).output_root(
-                &function.ret.ty,
-                output,
-                extra,
-                prebindgen_conversions::source_result_expr(),
-                false,
-            )?;
-            finalize_output_schema(codec, &mut output, extra)?;
-            codec.finish_output(&mut output, extra)?;
-            codec.validate_output(&output)?;
-            Ok((inputs, output.into()))
-        })()
-        .map_err(|error| format!("{name}: {error}"))?;
-        plans.insert(name.clone(), (inputs, output));
-    }
-    let mut flat = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
-    for (name, (inputs, output)) in plans {
-        let function = flat.function_mut(&name)?;
-        for (param, input) in function.params.iter_mut().zip(inputs) {
-            param.ty.slot = Some(input);
-        }
-        function.ret.slot = Some(output);
-    }
-    prebindgen_flat::validate_bindings(&flat)?;
-    Ok(flat)
-}
-
-struct Compiler<'a, C: Codec, I = <C as Codec>::Input, O = <C as Codec>::Output> {
-    flat: &'a Flat<I, O, C::Metadata>,
+struct Compiler<'a, C: Codec> {
+    flat: &'a Flat<C::Schema>,
     codec: &'a C,
     prefix: String,
     next: std::cell::Cell<usize>,
 }
-impl<'a, C: Codec, I, O> Compiler<'a, C, I, O> {
-    fn new(flat: &'a Flat<I, O, C::Metadata>, codec: &'a C, prefix: String) -> Self {
+impl<'a, C: Codec> Compiler<'a, C> {
+    fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             flat,
             codec,

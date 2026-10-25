@@ -125,7 +125,7 @@ struct CodecImpl {
     unknown_prepared_read: bool,
 }
 impl Codec for CodecImpl {
-    type Metadata = ();
+    type Schema = prebindgen_conversions::PlanSchema<Type, (), PacketChain, Metadata>;
     type Wire = Type;
     type Chain = PacketChain;
     type Branch = Metadata;
@@ -171,8 +171,7 @@ impl Codec for CodecImpl {
     type Niche = ();
     type Context = ();
     type Extra = ();
-    type Input = CodecInput<Self>;
-    type Output = CodecOutput<Self>;
+
     fn optional_metadata(
         &self,
         _: syn::Ident,
@@ -346,7 +345,7 @@ fn pointer_length_round_trip(reverse: bool) {
     use prebindgen_conversions::staged::emit_call;
     let source =
         syn::parse_file("pub fn echo(values:Option<Vec<i32>>)->Option<Vec<i32>>{} ").unwrap();
-    let mut flat = Flat::<CodecInput<CodecImpl>, CodecOutput<CodecImpl>>::parse(
+    let mut flat = Flat::<<CodecImpl as Codec>::Schema>::parse(
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();
@@ -431,7 +430,7 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
     let source =
         syn::parse_file("pub fn output()->Vec<Vec<i32>>{} pub fn input(values:Vec<i32>){}")
             .unwrap();
-    let mut flat = Flat::<CodecInput<CodecImpl>, CodecOutput<CodecImpl>>::parse(
+    let mut flat = Flat::<<CodecImpl as Codec>::Schema>::parse(
         source.items.into_iter().map(|i| (i, Default::default())),
     )
     .unwrap();

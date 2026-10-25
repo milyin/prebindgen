@@ -59,7 +59,7 @@ impl DomainAbi {
 }
 struct DomainCodec;
 impl Codec for DomainCodec {
-    type Metadata = ();
+    type Schema = prebindgen_conversions::PlanSchema<Domain, (), DomainGroup, DomainGroup>;
     type Niche = Sentinel;
     type Chain = DomainGroup;
     type Branch = DomainGroup;
@@ -138,8 +138,7 @@ impl Codec for DomainCodec {
     type Extra = ();
     type Context = ();
     type Wire = Domain;
-    type Input = InputPlan<Domain>;
-    type Output = OutputPlan<Domain>;
+
     fn selector(&self, _: &()) -> Domain {
         Domain {
             ty: syn::parse_quote!(i32),

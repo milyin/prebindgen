@@ -2,7 +2,9 @@
 #![warn(missing_docs)]
 
 use prebindgen_conversions::value::Value;
-use prebindgen_flat::{Flat, OutputConversion, Primitive, Result, WireKind};
+use prebindgen_flat::{
+    Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
+};
 
 mod wire;
 pub use wire::CWire;
@@ -23,7 +25,7 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     }
 }
 mod metadata;
-pub use metadata::{CEnum, CFunction, CMetadata, CModule, CType};
+pub use metadata::{CEnum, CFunction, CModule, CSchema, CType};
 mod enums;
 mod errors;
 mod group;
@@ -37,9 +39,8 @@ mod emission;
 pub use emission::CContext;
 type InputPlan<W> = prebindgen_conversions::InputPlan<W, CContext, crate::CChain, crate::CBranch>;
 type OutputPlan<W> = prebindgen_conversions::OutputPlan<W, CContext, crate::CChain, crate::CBranch>;
-type GenericBindings<W> = Flat<InputPlan<W>, OutputPlan<W>, CMetadata>;
 /// Flat source model with C conversion data for wrapper emission.
-pub type Bindings = GenericBindings<CWire>;
+pub type Bindings = Flat<CSchema>;
 type Wire = GenericWire<CWire>;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -66,7 +67,7 @@ use quote::{format_ident, quote};
 /// ```
 pub struct CCodec;
 impl Codec for CCodec {
-    type Metadata = CMetadata;
+    type Schema = CSchema;
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
@@ -107,8 +108,6 @@ impl Codec for CCodec {
     type Extra = ();
     type Wire = CWire;
     type Context = CContext;
-    type Input = InputPlan<CWire>;
-    type Output = OutputPlan<CWire>;
     fn finish_input(&self, plan: &mut InputPlan<CWire>, _: &()) -> Result<()> {
         validate_layout(&plan.node)?;
         if plan
@@ -740,15 +739,6 @@ impl Cbindgen {
                 .error_layouts
                 .insert(prebindgen_flat::type_key(&error.ty), error.clone());
         }
-        let source_only = flat
-            .functions
-            .values()
-            .all(|f| f.ret.slot.is_none() && f.params.iter().all(|p| p.ty.slot.is_none()));
-        if source_only {
-            let source = flat.map_slots(|_, _| Ok(None), |_, _| Ok(None))?;
-            let resolved = declarations.resolve(source, &codec, &self.functions, &())?;
-            flat = prebindgen_declarations::compile(resolved, &codec, &())?;
-        }
         let mut callbacks = std::collections::BTreeSet::new();
         let mut names = std::collections::BTreeSet::new();
         for decl in self.functions {
@@ -758,11 +748,7 @@ impl Cbindgen {
             if decl.foreign.is_some() {
                 return Err("C function renaming is outside this subset".into());
             }
-            if !source_only {
-                declarations
-                    .fill(&mut flat, &codec, &decl, &())
-                    .map_err(|e| format!("{}: {e}", decl.name))?;
-            }
+            declarations.fill(&mut flat, &codec, &decl, &())?;
             if decl.callback_return.is_some() {
                 let name = format!("{}_each", decl.name);
                 sequence::callback_target(
@@ -940,22 +926,28 @@ fn validate_wire_declaration(
 
 /// Emit C/Rust bindings using only the prepared Flat model.
 /// No builder, codec cache or separate declaration table is needed.
-pub fn generate<
-    I: for<'a> prebindgen_flat::InputConversion<
+pub fn generate<S>(flat: &Flat<S>) -> Result<Generation>
+where
+    S: prebindgen_flat::Schema<
+        Module = CModule,
+        Function = Option<CFunction>,
+        Type = CType,
+        Field = (),
+        Variant = (),
+    >,
+    S::Input: for<'a> prebindgen_flat::InputConversion<
         Wire = CWire,
         Chain = CChain,
         Branch = CBranch,
         SlotFragment<'a> = prebindgen_conversions::InputFragment<'a, CContext>,
     >,
-    O: for<'a> prebindgen_flat::OutputConversion<
+    S::Output: for<'a> prebindgen_flat::OutputConversion<
         Wire = CWire,
         Chain = CChain,
         Branch = CBranch,
         SlotFragment<'a> = prebindgen_conversions::OutputFragment<'a, CContext>,
     >,
->(
-    flat: &Flat<I, O, CMetadata>,
-) -> Result<Generation> {
+{
     let prefix = &flat.metadata.prefix;
     prebindgen_declarations::ident(prefix)?;
     let pointers = &flat.types;
@@ -2186,9 +2178,19 @@ mod generation_tests {
                 &self.1
             }
         }
+        struct CountedSchema;
+        impl prebindgen_flat::Schema for CountedSchema {
+            type Input = InputPlan<CWire>;
+            type Output = CountedOutput;
+            type Module = CModule;
+            type Function = Option<CFunction>;
+            type Type = CType;
+            type Field = ();
+            type Variant = ();
+        }
         let count = std::rc::Rc::new(std::cell::Cell::new(0));
         let source = syn::parse_file("pub fn noop() {}").unwrap();
-        let mut flat = Flat::<InputPlan<CWire>, CountedOutput, CMetadata>::parse(
+        let mut flat = Flat::<CountedSchema>::parse(
             source
                 .items
                 .into_iter()

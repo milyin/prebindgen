@@ -24,7 +24,7 @@ impl EnumCodec {
     }
 }
 impl Codec for EnumCodec {
-    type Metadata = CMetadata;
+    type Schema = CSchema;
     type Wire = CWire;
     type Niche = CNiche;
     type Chain = CChain;
@@ -35,8 +35,6 @@ impl Codec for EnumCodec {
 
     type Extra = ();
     type Context = CContext;
-    type Input = InputPlan<CWire>;
-    type Output = OutputPlan<CWire>;
     fn named_output_group(&self, name: &str) -> Result<CBranch> {
         CCodec.named_output_group(name)
     }

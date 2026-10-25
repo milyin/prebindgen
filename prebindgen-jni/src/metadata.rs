@@ -3,8 +3,10 @@ use super::*;
 use std::rc::Rc;
 
 /// Metadata schema for a Kotlin/JNI binding model.
-pub struct JniMetadata;
-impl prebindgen_flat::Metadata for JniMetadata {
+pub struct JniSchema;
+impl prebindgen_flat::Schema for JniSchema {
+    type Input = JniInput;
+    type Output = JniOutput;
     type Module = JniModule;
     type Function = Option<JniFunction>;
     type Type = JniType;

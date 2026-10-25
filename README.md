@@ -8,20 +8,18 @@ conversions, and language adapters emit wrappers and foreign declarations.
 ```text
 #[prebindgen] source + build.rs declarations
         ↓ select declared functions, constructors, getters and referenced types
-Flat<(), (), M> with source declarations and metadata
-        ↓ resolve language representations, defaults and explicit choices
-Flat<Input, Output, M> with resolved occurrence descriptions
-        ↓ compile explicit operations with the language codec
-Flat<I: Conversion, O: Conversion, M>
-        (parameter slots: Option<I>; result slots: Option<O>)
+Flat<S: Schema> with source declarations, metadata and empty conversion slots
+        ↓ prepare each occurrence: resolve its description, compile its converter
+The same Flat<S> with completed parameter and result slots
         ↓ C or JNI wrapper writer
 Rust wrappers + C header / Kotlin files
 ```
 
 A conversion belongs to an occurrence, so two parameters of the same Rust type
-can have different input recipes. `Flat<I, O>` stores the two payload types in
-optional slots. Both can implement `Conversion` with distinct wire kinds and request enums; the model itself does
-not require that trait. Record declarations preserve Rust source structure; typed
+can have different input recipes. `Schema::Input` and `Schema::Output` choose
+occurrence payload types once; their slots are optional until preparation fills them.
+Both payloads can implement `Conversion` with distinct wire kinds and request enums;
+the model itself does not require that trait. Record declarations preserve Rust source structure; typed
 metadata on Flat owners records language representations and project choices.
 Flat also preserves source names, locations and guards.
 Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
@@ -171,10 +169,9 @@ settings remain commented out in the example manifests.
 Builders prepare one binding model, then emit from that model:
 
 ```text
-Source -> Flat<(), (), language metadata>
-       -> Flat<Input, Output, language metadata>   (resolve descriptions)
-       -> Flat<input conversion, output conversion, language metadata> (compile)
-       -> generated Rust and C/Kotlin              (emit)
+Source -> Flat<CSchema> or Flat<JniSchema> with empty conversion slots
+       -> prepare converters into the same Flat
+       -> generate(&flat): Rust and C/Kotlin
 ```
 
 Preparation trees use `Input<InputRequest>` and `Output<OutputRequest>`: structural
@@ -204,10 +201,13 @@ C rejects named getter views; its return packet fields remain positional. Direct
 and `.output(...)` for custom preparation code.
 Resolution applies project choices and language representations, resolves source
 constructor/getter references, and expands optional, sequence and record operations.
-Resolution returns `Flat<Input, Output, M>`. Plain `Input` and `Output` use
+Resolution returns a temporary `Input` or `Output` for each occurrence. Plain
+`Input` and `Output` use
 `Infallible` as the request payload, so pending choices cannot appear anywhere in
-these trees, including nested children. The compiler accepts only this resolved
-form and lowers its operations into conversion slots. An explicit subtree can be
+these trees, including nested children. `compile_input` and `compile_output` accept
+only this resolved form and return the final converter. `Declarations::fill` resolves,
+compiles and installs the converters atomically for one function; the Flat schema
+and its source declarations stay in place throughout. An explicit subtree can be
 embedded in a preparation tree with `.into_preparation()`; source-dependent
 normalization still applies. Sequence returns carry an explicit
 `SequenceDelivery::Value` or `Callback` choice; codecs receive that choice rather
@@ -224,11 +224,13 @@ or separate configuration table.
 
 `prebindgen-flat` provides the source model and minimal conversion interfaces:
 
-- `Flat<I, O, M>` owns source declarations and binding metadata. `M: Metadata`
-  selects distinct payload types for the module, functions, types, fields and
-  enum variants; `M = ()` supports source-only inspection. Parameters hold
-  `Option<I>` and returns hold `Option<O>` for occurrence-specific conversions.
-  `map_slots` moves the source declarations and metadata into the next stage.
+- `Flat<S>` owns source declarations and binding data. `S: Schema` selects the
+  input/output converter types together with metadata types for the module,
+  functions, source types, fields and enum variants. `S = ()` supports source-only
+  inspection. Parameters hold `Option<S::Input>` and returns `Option<S::Output>`.
+  `CSchema` and `JniSchema` choose their final converter types before parsing;
+  preparation fills the slots without changing the schema. `map_slots` transforms
+  values within an existing schema.
 - `Conversion::code_fragment_slot(mode, expected_type)` accepts the generator's
   own requests, including any element or branch context.
 - `InputConversion::input_node()` describes one input value.
@@ -321,7 +323,8 @@ return-value binding carried by output requests. Custom converters need neither
 stored plans nor template support.
 
 `prebindgen-declarations` prepares slots. Its `Bindings<W, C>` alias is
-`Flat<InputPlan<W, C>, OutputPlan<W, C>>`. `Codec::Context` selects the context
+`Flat<prebindgen_conversions::PlanSchema<W, C>>`. `PlanSchema` selects the standard
+input/output plans and unit declaration metadata for simple codecs. `Codec::Context` selects the context
 type for the prepared slots; it defaults to `()` in the alias for
 conversions that need no generator-specific settings. `bind_input` and `bind_output`
 resolve and compile one preparation tree (`Input<InputRequest>` or
@@ -349,8 +352,9 @@ checks source fields, constructor/getter signatures and type defaults against
 `Flat`, then stores explicit operations in occurrence slots. Language declaration
 metadata belongs to the corresponding Flat type, function, field or variant.
 Compilation does not consult a separate representation registry. Custom `Codec`
-implementations select their metadata schema through `type Metadata = ...`; use
-`()` when no declaration metadata is required.
+implementations select the complete binding schema through `type Schema = ...`.
+`PlanSchema` supplies plan-based converters and unit declaration metadata; language
+adapters define schemas that also select their declaration metadata.
 
 A `Wire` exposes only a binding name and carrier description. It does not expose
 fields, constructor arguments, alternatives or ownership meaning. `ComponentPath`

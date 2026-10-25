@@ -84,7 +84,7 @@ fn wire(kind: Kind, ty: &Type, extra: &Extra) -> TestWire {
 }
 #[allow(clippy::type_complexity)] // Keep the test codec metadata roles visible.
 impl Codec for TestCodec {
-    type Metadata = ();
+    type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
     fn binding_failure_layout(
         &self,
         extra: &Extra,
@@ -193,8 +193,6 @@ impl Codec for TestCodec {
     type Extra = Extra;
     type Wire = TestWire;
     type Context = ();
-    type Input = InputPlan<TestWire>;
-    type Output = OutputPlan<TestWire>;
 
     fn absent_value(&self, _: &TestWire, _: Option<&()>, _: bool) -> Result<TokenStream> {
         Ok(quote!(Default::default()))
@@ -842,7 +840,7 @@ fn record_projection_retains_field_mappings_in_prepared_flat() {
 fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
     struct FinalizingCodec;
     impl Codec for FinalizingCodec {
-        type Metadata = ();
+        type Schema = prebindgen_conversions::PlanSchema<TestWire, (), TestGroup, TestGroup>;
         fn niche(&self, _: &TestWire) -> Option<()> {
             None
         }
@@ -927,8 +925,6 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
         type Extra = Extra;
         type Wire = TestWire;
         type Context = ();
-        type Input = InputPlan<TestWire>;
-        type Output = OutputPlan<TestWire>;
 
         fn selector(&self, extra: &Extra) -> TestWire {
             TEST_CODEC.selector(extra)
@@ -1060,7 +1056,7 @@ fn finalization_runs_once_on_complete_slots_and_preserves_atomicity() {
                 }
             )
             .unwrap_err(),
-        "finalization failed"
+        "take: finalization failed"
     );
     assert!(flat.function("take").unwrap().params[0].ty.slot.is_none());
     assert!(flat.function("take").unwrap().ret.slot.is_none());
@@ -2059,9 +2055,8 @@ fn failed_metadata_construction_preserves_installed_conversions() {
 }
 
 #[test]
-fn resolved_flat_is_the_only_source_model_needed_by_compilation() {
-    let source = parse("pub struct R { pub n:i64 } pub fn make(n:i64)->R{} pub fn inspect(r:&R)->i64{} pub fn echo(r:Option<R>)->Option<R>{}")
-        .map_slots(|_, _| Ok(None::<()>), |_, _| Ok(None::<()>)).unwrap();
+fn preparation_fills_one_fixed_schema_and_emission_needs_no_defaults() {
+    let source = parse("pub struct R { pub n:i64 } pub fn make(n:i64)->R{} pub fn inspect(r:&R)->i64{} pub fn echo(r:Option<R>)->Option<R>{}");
     let defaults = Declarations::new(
         &source,
         vec![expand_param!(R).variant(fun!(make)).into()],
@@ -2069,28 +2064,40 @@ fn resolved_flat_is_the_only_source_model_needed_by_compilation() {
         vec![],
     )
     .unwrap();
-    let resolved = defaults
-        .resolve(source, &TEST_CODEC, &[fun!(echo)], &Extra::default())
+    let mut source = source;
+    let input = defaults
+        .resolve_input(
+            &source,
+            &TEST_CODEC,
+            &source.function("echo").unwrap().params[0].ty.ty,
+            &Input::auto(),
+            &Extra::default(),
+        )
+        .unwrap();
+    let output = defaults
+        .resolve_output(
+            &source,
+            &TEST_CODEC,
+            &source.function("echo").unwrap().ret.ty,
+            &Output::auto(),
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(
+        matches!(&input,Input::Optional(child) if matches!(child.as_ref(),Input::Constructor {function,..} if function=="make"))
+    );
+    assert!(
+        matches!(&output,Output::Optional(child) if matches!(child.as_ref(),Output::Getter {function,..} if function=="inspect"))
+    );
+    assert!(source.function("echo").unwrap().ret.slot.is_none());
+    defaults
+        .fill(&mut source, &TEST_CODEC, &fun!(echo), &Extra::default())
         .unwrap();
     drop(defaults);
-    let function = resolved.function("echo").unwrap();
-    let Input::Optional(child) = function.params[0].ty.slot.as_ref().unwrap() else {
-        panic!("expected resolved Option");
-    };
-    assert!(
-        matches!(child.as_ref(), Input::Constructor { function, args } if function == "make" && matches!(args.as_slice(), [Input::Leaf]))
-    );
-    let Output::Optional(child) = function.ret.slot.as_ref().unwrap() else {
-        panic!("expected resolved Option");
-    };
-    assert!(matches!(child.as_ref(), Output::Getter { function, .. } if function == "inspect"));
-    let compiled = compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
-    assert!(compiled.function("echo").unwrap().params[0]
-        .ty
-        .slot
-        .is_some());
-    assert!(compiled.function("echo").unwrap().ret.slot.is_some());
-    assert!(compiled.function("make").unwrap().ret.slot.is_none());
+    validate_bindings(&source).unwrap();
+    assert!(source.function("echo").unwrap().params[0].ty.slot.is_some());
+    assert!(source.function("echo").unwrap().ret.slot.is_some());
+    assert!(source.function("make").unwrap().ret.slot.is_none());
 }
 
 #[test]
@@ -2121,9 +2128,7 @@ fn callback_variant_selects_delivery_before_wires_exist() {
 
 #[test]
 fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function() {
-    let source = model()
-        .map_slots(|_, _| Ok(None::<()>), |_, _| Ok(None::<()>))
-        .unwrap();
+    let source = model();
     let defaults = Declarations::new(
         &source,
         vec![
@@ -2148,23 +2153,25 @@ fn sequence_identity_uses_element_defaults_and_staged_errors_name_the_function()
     assert!(
         matches!(resolved,Input::Sequence(child) if matches!(&*child,Input::Constructor {function,..} if function=="make"))
     );
+    let mut source = source;
     let error = defaults
-        .resolve(
-            source,
+        .fill(
+            &mut source,
             &TEST_CODEC,
-            &[fun!(foo).input("x", Input::call("missing"))],
+            &fun!(foo).input("x", Input::call("missing")),
             &Extra::default(),
         )
         .unwrap_err();
     assert!(error.starts_with("foo:"), "{error}");
-
-    let invalid = parse("pub fn broken()->i64{}")
-        .map_slots(
-            |_, _| Ok(None::<Input>),
-            |_, _| Ok(Some(Output::Optional(Box::new(Output::Leaf)))),
+    let mut invalid = parse("pub fn broken()->i64{}");
+    let error = defaults
+        .fill(
+            &mut invalid,
+            &TEST_CODEC,
+            &fun!(broken).output(Output::Optional(Box::new(Output::Leaf))),
+            &Extra::default(),
         )
-        .unwrap();
-    let error = compile(invalid, &TEST_CODEC, &Extra::default()).unwrap_err();
+        .unwrap_err();
     assert!(error.starts_with("broken:"), "{error}");
 }
 
@@ -2224,8 +2231,7 @@ fn helper_references_reject_binding_only_decorations() {
 
 #[test]
 fn nested_requests_resolve_into_strict_schemas_before_compilation() {
-    let source = parse("pub type R=String;pub fn make(a:i32,b:Option<i64>)->R{}pub fn narrow(v:i16)->i64{}pub fn run(value:R)->i64{}")
-        .map_slots(|_,_|Ok(None::<()>),|_,_|Ok(None::<()>)).unwrap();
+    let source = parse("pub type R=String;pub fn make(a:i32,b:Option<i64>)->R{}pub fn narrow(v:i16)->i64{}pub fn run(value:R)->i64{}");
     let defaults = Declarations::new(
         &source,
         vec![expand_param!(i64).variant(fun!(narrow)).into()],
@@ -2237,33 +2243,37 @@ fn nested_requests_resolve_into_strict_schemas_before_compilation() {
         "make",
         [Input::Leaf, Input::Optional(Box::new(Input::auto()))],
     );
-    let resolved: Flat<Input, Output> = defaults
-        .resolve(
-            source,
+    let resolved: Input = defaults
+        .resolve_input(
+            &source,
             &TEST_CODEC,
-            &[fun!(run).input("value", requested)],
+            &source.function("run").unwrap().params[0].ty.ty,
+            &requested,
             &Extra::default(),
         )
         .unwrap();
-    let Input::Constructor { args, .. } = resolved.function("run").unwrap().params[0]
-        .ty
-        .slot
-        .as_ref()
-        .unwrap()
-    else {
+    let Input::Constructor { args, .. } = &resolved else {
         panic!("constructor not resolved")
     };
     assert!(matches!(&args[0], Input::Leaf));
     assert!(
         matches!(&args[1],Input::Optional(child) if matches!(child.as_ref(),Input::Constructor {function,args} if function=="narrow"&&matches!(args.as_slice(),[Input::Leaf])))
     );
-    compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
+    compile_input(
+        &source,
+        &TEST_CODEC,
+        "run",
+        "value",
+        &resolved,
+        &Extra::default(),
+    )
+    .unwrap();
+    assert!(source.function("run").unwrap().params[0].ty.slot.is_none());
 }
 
 #[test]
 fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
-    let source=parse("pub type R=String;pub fn direct(v:i64)->R{}pub fn narrow(v:i16)->i64{}pub fn observe(r:&R)->i64{}pub fn sign(v:&i64)->i8{}pub fn run(value:R,count:i64)->R{}")
-        .map_slots(|_,_|Ok(None::<()>),|_,_|Ok(None::<()>)).unwrap();
+    let source=parse("pub type R=String;pub fn direct(v:i64)->R{}pub fn narrow(v:i16)->i64{}pub fn observe(r:&R)->i64{}pub fn sign(v:&i64)->i8{}pub fn run(value:R,count:i64)->R{}");
     let defaults = Declarations::new(
         &source,
         vec![expand_param!(i64).variant(fun!(narrow)).into()],
@@ -2276,26 +2286,50 @@ fn completed_subtrees_keep_explicit_choices_when_used_in_preparation() {
     let decl = fun!(run)
         .input("value", input.into_preparation())
         .output(output.into_preparation());
-    let resolved = defaults
-        .resolve(source, &TEST_CODEC, &[decl], &Extra::default())
+    let run = source.function("run").unwrap();
+    let input = defaults
+        .resolve_input(
+            &source,
+            &TEST_CODEC,
+            &run.params[0].ty.ty,
+            &decl.params["value"],
+            &Extra::default(),
+        )
         .unwrap();
-    let run = resolved.function("run").unwrap();
+    let count = defaults
+        .resolve_input(
+            &source,
+            &TEST_CODEC,
+            &run.params[1].ty.ty,
+            &Input::auto(),
+            &Extra::default(),
+        )
+        .unwrap();
+    let output = defaults
+        .resolve_output(
+            &source,
+            &TEST_CODEC,
+            &run.ret.ty,
+            decl.ret.as_ref().unwrap(),
+            &Extra::default(),
+        )
+        .unwrap();
     assert!(
-        matches!(run.params[0].ty.slot.as_ref().unwrap(),Input::Constructor{function,args} if function=="direct"&&matches!(args.as_slice(),[Input::Leaf]))
+        matches!(&input,Input::Constructor{function,args} if function=="direct"&&matches!(args.as_slice(),[Input::Leaf]))
     );
+    assert!(matches!(&count,Input::Constructor{function,..} if function=="narrow"));
     assert!(
-        matches!(run.params[1].ty.slot.as_ref().unwrap(),Input::Constructor{function,..} if function=="narrow")
+        matches!(&output,Output::Getter{function,output} if function=="observe"&&matches!(output.as_ref(),Output::Leaf))
     );
-    assert!(
-        matches!(run.ret.slot.as_ref().unwrap(),Output::Getter{function,output} if function=="observe"&&matches!(output.as_ref(),Output::Leaf))
-    );
-    compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
+    let mut source = source;
+    defaults
+        .fill(&mut source, &TEST_CODEC, &decl, &Extra::default())
+        .unwrap();
 }
 
 #[test]
 fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
-    let source = parse("pub type E=String;pub fn message(e:&E)->String{}pub fn sign(v:&i64)->i8{}pub fn run()->Result<Option<i64>,E>{}")
-        .map_slots(|_,_|Ok(None::<()>),|_,_|Ok(None::<()>)).unwrap();
+    let source = parse("pub type E=String;pub fn message(e:&E)->String{}pub fn sign(v:&i64)->i8{}pub fn run()->Result<Option<i64>,E>{}");
     let defaults = Declarations::new(
         &source,
         vec![],
@@ -2303,26 +2337,39 @@ fn result_resolution_consumes_nested_requests_and_preserves_error_mapper() {
         vec![],
     )
     .unwrap();
-    let resolved = defaults
-        .resolve(
-            source,
+    let request = Output::Result {
+        ok: Box::new(Output::Optional(Box::new(Output::auto()))),
+        error: Some("message".into()),
+    };
+    let resolved: Output = defaults
+        .resolve_output(
+            &source,
             &TEST_CODEC,
-            &[fun!(run)
-                .output(Output::Optional(Box::new(Output::auto())))
-                .on_error(fun!(message))],
+            &source.function("run").unwrap().ret.ty,
+            &request,
             &Extra::default(),
         )
         .unwrap();
-    let Output::Result { ok, error } = resolved.function("run").unwrap().ret.slot.as_ref().unwrap()
-    else {
+    let Output::Result { ok, error } = &resolved else {
         panic!("missing Result")
     };
     assert_eq!(error.as_deref(), Some("message"));
     assert!(
         matches!(ok.as_ref(),Output::Optional(child) if matches!(child.as_ref(),Output::Getter {function,output} if function=="sign" && matches!(output.as_ref(),Output::Leaf)))
     );
-    let compiled = compile(resolved, &TEST_CODEC, &Extra::default()).unwrap();
-    assert!(compiled
+    compile_output(&source, &TEST_CODEC, "run", &resolved, &Extra::default()).unwrap();
+    let mut source = source;
+    defaults
+        .fill(
+            &mut source,
+            &TEST_CODEC,
+            &fun!(run)
+                .output(Output::Optional(Box::new(Output::auto())))
+                .on_error(fun!(message)),
+            &Extra::default(),
+        )
+        .unwrap();
+    assert!(source
         .function("run")
         .unwrap()
         .ret

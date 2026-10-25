@@ -292,8 +292,8 @@ impl DataCodec {
         };
         self.enums.get(&type_key(ty))
     }
-    fn source_record<'a, I, O>(
-        flat: &'a Flat<I, O, JniMetadata>,
+    fn source_record<'a>(
+        flat: &'a Flat<JniSchema>,
         ty: &syn::Type,
     ) -> Result<Option<&'a Rc<Class>>> {
         if let syn::Type::Reference(r) = ty {
@@ -437,10 +437,10 @@ impl Class {
 }
 
 impl Codec for DataCodec {
-    type Metadata = JniMetadata;
-    fn expand_input<I, O>(
+    type Schema = JniSchema;
+    fn expand_input(
         &self,
-        flat: &Flat<I, O, JniMetadata>,
+        flat: &Flat<JniSchema>,
         ty: &syn::Type,
         tree: &Input<InputRequest>,
         _: &(),
@@ -462,9 +462,9 @@ impl Codec for DataCodec {
             flat.record(ty)?.fields.len()
         ])))
     }
-    fn expand_output<I, O>(
+    fn expand_output(
         &self,
-        flat: &Flat<I, O, JniMetadata>,
+        flat: &Flat<JniSchema>,
         ty: &syn::Type,
         tree: &Output<OutputRequest>,
         _: &(),
@@ -561,8 +561,6 @@ impl Codec for DataCodec {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
-    type Input = JniInput;
-    type Output = JniOutput;
     fn sequence_input(
         &self,
         e: &(),
