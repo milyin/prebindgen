@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CBranch","CChain","CGroup","CNiche","COptional","CSequence","CWire"],"fn":["generate"],"struct":["CCodec","CContext","CEnum","CFunction","CMetadata","CModule","CPointer","CType","Cbindgen","Generation"],"type":["Bindings"]};
