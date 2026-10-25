@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `prebindgen-declarations/src/builders.rs`."><title>builders.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-0c87338a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_declarations" data-themes="" data-resource-suffix="" data-rustdoc-version="1.99.1 (58cf8f9c3 2026-10-13)" data-channel="1.99.1" data-search-js="search-cf4fc35e.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">prebindgen_declarations/</div>builders.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Production declaration syntax writing directly into conversion descriptions.
-<a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">use crate</span>::{FunctionDecl, Input, Output, Projection};
+<a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">use crate</span>::{FunctionDecl, Input, InputRequest, Output, OutputRequest, Projection};
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::collections::BTreeMap;
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// Input alternatives for a source type, built directly as an [`Input`] tree.
@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub struct </span>ExpandParamDecl {
 <a href=#8 id=8 data-nosnippet>8</a>    <span class="doccomment">/// Source type targeted by this default or occurrence override.
 <a href=#9 id=9 data-nosnippet>9</a>    </span><span class="kw">pub </span>ty: syn::Type,
-<a href=#10 id=10 data-nosnippet>10</a>    input: Input,
+<a href=#10 id=10 data-nosnippet>10</a>    input: Input&lt;InputRequest&gt;,
 <a href=#11 id=11 data-nosnippet>11</a>}
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">impl </span>ExpandParamDecl {
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="doccomment">/// Start an input declaration; add at least one alternative before use.
@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a>        <span class="self">self
 <a href=#29 id=29 data-nosnippet>29</a>    </span>}
 <a href=#30 id=30 data-nosnippet>30</a>}
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">impl </span>From&lt;ExpandParamDecl&gt; <span class="kw">for </span>Input {
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">impl </span>From&lt;ExpandParamDecl&gt; <span class="kw">for </span>Input&lt;InputRequest&gt; {
 <a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">fn </span>from(decl: ExpandParamDecl) -&gt; <span class="self">Self </span>{
 <a href=#33 id=33 data-nosnippet>33</a>        Input::for_type(decl.ty, decl.input)
 <a href=#34 id=34 data-nosnippet>34</a>    }
@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub struct </span>ExpandReturnDecl {
 <a href=#40 id=40 data-nosnippet>40</a>    <span class="doccomment">/// Source type targeted by this default or occurrence override.
 <a href=#41 id=41 data-nosnippet>41</a>    </span><span class="kw">pub </span>ty: syn::Type,
-<a href=#42 id=42 data-nosnippet>42</a>    output: Output,
+<a href=#42 id=42 data-nosnippet>42</a>    output: Output&lt;OutputRequest&gt;,
 <a href=#43 id=43 data-nosnippet>43</a>}
 <a href=#44 id=44 data-nosnippet>44</a><span class="kw">impl </span>ExpandReturnDecl {
 <a href=#45 id=45 data-nosnippet>45</a>    <span class="doccomment">/// Start an output declaration; add views before registering a type default.
@@ -53,7 +53,7 @@
 <a href=#53 id=53 data-nosnippet>53</a>    </span><span class="kw">pub fn </span>field(<span class="kw-2">mut </span><span class="self">self</span>, function: <span class="kw">impl </span>Into&lt;FunctionDecl&gt;) -&gt; <span class="self">Self </span>{
 <a href=#54 id=54 data-nosnippet>54</a>        <span class="kw">let </span>function = function.into();
 <a href=#55 id=55 data-nosnippet>55</a>        <span class="kw">let </span>name = function.foreign.clone();
-<a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">let </span>getter = Output::getter(function.reference_name(<span class="bool-val">true</span>), Output::Auto);
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="kw">let </span>getter = Output::getter(function.reference_name(<span class="bool-val">true</span>), Output::auto());
 <a href=#57 id=57 data-nosnippet>57</a>        <span class="self">self</span>.output = <span class="self">self</span>.output.view(<span class="kw">match </span>name {
 <a href=#58 id=58 data-nosnippet>58</a>            <span class="prelude-val">Some</span>(name) =&gt; Output::Named {
 <a href=#59 id=59 data-nosnippet>59</a>                name,
@@ -68,7 +68,7 @@
 <a href=#68 id=68 data-nosnippet>68</a>        <span class="self">self</span>.view(fields)
 <a href=#69 id=69 data-nosnippet>69</a>    }
 <a href=#70 id=70 data-nosnippet>70</a>    <span class="doccomment">/// Append another explicit output view.
-<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">pub fn </span>view(<span class="kw-2">mut </span><span class="self">self</span>, output: <span class="kw">impl </span>Into&lt;Output&gt;) -&gt; <span class="self">Self </span>{
+<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">pub fn </span>view(<span class="kw-2">mut </span><span class="self">self</span>, output: <span class="kw">impl </span>Into&lt;Output&lt;OutputRequest&gt;&gt;) -&gt; <span class="self">Self </span>{
 <a href=#72 id=72 data-nosnippet>72</a>        <span class="self">self</span>.output = <span class="self">self</span>.output.view(output.into());
 <a href=#73 id=73 data-nosnippet>73</a>        <span class="self">self
 <a href=#74 id=74 data-nosnippet>74</a>    </span>}
@@ -101,7 +101,7 @@
 <a href=#101 id=101 data-nosnippet>101</a>        <span class="self">self
 <a href=#102 id=102 data-nosnippet>102</a>    </span>}
 <a href=#103 id=103 data-nosnippet>103</a>}
-<a href=#104 id=104 data-nosnippet>104</a><span class="kw">impl </span>From&lt;ExpandReturnDecl&gt; <span class="kw">for </span>Output {
+<a href=#104 id=104 data-nosnippet>104</a><span class="kw">impl </span>From&lt;ExpandReturnDecl&gt; <span class="kw">for </span>Output&lt;OutputRequest&gt; {
 <a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">fn </span>from(decl: ExpandReturnDecl) -&gt; <span class="self">Self </span>{
 <a href=#106 id=106 data-nosnippet>106</a>        Output::for_type(decl.ty, decl.output)
 <a href=#107 id=107 data-nosnippet>107</a>    }
@@ -112,7 +112,7 @@
 <a href=#112 id=112 data-nosnippet>112</a></span><span class="attr">#[derive(Clone, Debug)]
 <a href=#113 id=113 data-nosnippet>113</a></span><span class="kw">pub struct </span>FieldsDecl {
 <a href=#114 id=114 data-nosnippet>114</a>    function: String,
-<a href=#115 id=115 data-nosnippet>115</a>    overrides: BTreeMap&lt;String, Output&gt;,
+<a href=#115 id=115 data-nosnippet>115</a>    overrides: BTreeMap&lt;String, Output&lt;OutputRequest&gt;&gt;,
 <a href=#116 id=116 data-nosnippet>116</a>}
 <a href=#117 id=117 data-nosnippet>117</a><span class="kw">impl </span>FieldsDecl {
 <a href=#118 id=118 data-nosnippet>118</a>    <span class="doccomment">/// Select a getter whose returned record supplies the fields.
@@ -129,70 +129,74 @@
 <a href=#129 id=129 data-nosnippet>129</a>    }
 <a href=#130 id=130 data-nosnippet>130</a>    <span class="doccomment">/// Set an explicit conversion tree for one field, with the same omission
 <a href=#131 id=131 data-nosnippet>131</a>    /// semantics as [`Self::field`] for an empty typed declaration.
-<a href=#132 id=132 data-nosnippet>132</a>    </span><span class="kw">pub fn </span>field_override(<span class="kw-2">mut </span><span class="self">self</span>, name: <span class="kw">impl </span>Into&lt;String&gt;, output: <span class="kw">impl </span>Into&lt;Output&gt;) -&gt; <span class="self">Self </span>{
-<a href=#133 id=133 data-nosnippet>133</a>        <span class="kw">let </span>output = <span class="kw">match </span>output.into() {
-<a href=#134 id=134 data-nosnippet>134</a>            Output::ForType { ty, output } <span class="kw">if </span><span class="macro">matches!</span>(output.as_ref(),Output::Combine(parts) <span class="kw">if </span>parts.is_empty()) =&gt; {
-<a href=#135 id=135 data-nosnippet>135</a>                Output::for_type(ty, Output::Discard)
-<a href=#136 id=136 data-nosnippet>136</a>            }
-<a href=#137 id=137 data-nosnippet>137</a>            output =&gt; output,
-<a href=#138 id=138 data-nosnippet>138</a>        };
-<a href=#139 id=139 data-nosnippet>139</a>        <span class="macro">assert!</span>(
-<a href=#140 id=140 data-nosnippet>140</a>            <span class="self">self</span>.overrides.insert(name.into(), output).is_none(),
-<a href=#141 id=141 data-nosnippet>141</a>            <span class="string">"duplicate field override"
-<a href=#142 id=142 data-nosnippet>142</a>        </span>);
-<a href=#143 id=143 data-nosnippet>143</a>        <span class="self">self
-<a href=#144 id=144 data-nosnippet>144</a>    </span>}
-<a href=#145 id=145 data-nosnippet>145</a>}
-<a href=#146 id=146 data-nosnippet>146</a><span class="kw">impl </span>From&lt;FieldsDecl&gt; <span class="kw">for </span>Output {
-<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">fn </span>from(fields: FieldsDecl) -&gt; <span class="self">Self </span>{
-<a href=#148 id=148 data-nosnippet>148</a>        Output::getter(
-<a href=#149 id=149 data-nosnippet>149</a>            fields.function,
-<a href=#150 id=150 data-nosnippet>150</a>            Output::NamedFields {
-<a href=#151 id=151 data-nosnippet>151</a>                overrides: fields.overrides,
-<a href=#152 id=152 data-nosnippet>152</a>                mode: <span class="kw">crate</span>::ProjectionMode::Borrowed,
-<a href=#153 id=153 data-nosnippet>153</a>            },
-<a href=#154 id=154 data-nosnippet>154</a>        )
-<a href=#155 id=155 data-nosnippet>155</a>    }
-<a href=#156 id=156 data-nosnippet>156</a>}
-<a href=#157 id=157 data-nosnippet>157</a>
-<a href=#158 id=158 data-nosnippet>158</a><span class="doccomment">/// A type-wide source-error message mapping.
-<a href=#159 id=159 data-nosnippet>159</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#160 id=160 data-nosnippet>160</a></span><span class="kw">pub struct </span>ErrorDecl {
-<a href=#161 id=161 data-nosnippet>161</a>    <span class="doccomment">/// Source error type.
-<a href=#162 id=162 data-nosnippet>162</a>    </span><span class="kw">pub </span>ty: syn::Type,
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// Source helper taking E or &amp;E and returning String.
-<a href=#164 id=164 data-nosnippet>164</a>    </span><span class="kw">pub </span>mapper: FunctionDecl,
-<a href=#165 id=165 data-nosnippet>165</a>}
-<a href=#166 id=166 data-nosnippet>166</a><span class="kw">impl </span>ErrorDecl {
-<a href=#167 id=167 data-nosnippet>167</a>    <span class="doccomment">/// Select the source helper for this error type.
-<a href=#168 id=168 data-nosnippet>168</a>    </span><span class="kw">pub fn </span>new(ty: syn::Type, mapper: FunctionDecl) -&gt; <span class="self">Self </span>{
-<a href=#169 id=169 data-nosnippet>169</a>        <span class="self">Self </span>{ ty, mapper }
-<a href=#170 id=170 data-nosnippet>170</a>    }
-<a href=#171 id=171 data-nosnippet>171</a>}
-<a href=#172 id=172 data-nosnippet>172</a><span class="doccomment">/// A type-wide input, output, or error-mapping declaration.
-<a href=#173 id=173 data-nosnippet>173</a>/// Generators immediately consume these builders into their conversion trees.
-<a href=#174 id=174 data-nosnippet>174</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#175 id=175 data-nosnippet>175</a></span><span class="kw">pub enum </span>ExpandDecl {
-<a href=#176 id=176 data-nosnippet>176</a>    <span class="doccomment">/// Input alternatives.
-<a href=#177 id=177 data-nosnippet>177</a>    </span>Param(ExpandParamDecl),
-<a href=#178 id=178 data-nosnippet>178</a>    <span class="doccomment">/// Simultaneous output views.
-<a href=#179 id=179 data-nosnippet>179</a>    </span>Return(ExpandReturnDecl),
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="doccomment">/// A source-error message mapping.
-<a href=#181 id=181 data-nosnippet>181</a>    </span>Error(Box&lt;ErrorDecl&gt;),
-<a href=#182 id=182 data-nosnippet>182</a>}
-<a href=#183 id=183 data-nosnippet>183</a><span class="kw">impl </span>From&lt;ExpandParamDecl&gt; <span class="kw">for </span>ExpandDecl {
-<a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">fn </span>from(value: ExpandParamDecl) -&gt; <span class="self">Self </span>{
-<a href=#185 id=185 data-nosnippet>185</a>        <span class="self">Self</span>::Param(value)
-<a href=#186 id=186 data-nosnippet>186</a>    }
-<a href=#187 id=187 data-nosnippet>187</a>}
-<a href=#188 id=188 data-nosnippet>188</a><span class="kw">impl </span>From&lt;ExpandReturnDecl&gt; <span class="kw">for </span>ExpandDecl {
-<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">fn </span>from(value: ExpandReturnDecl) -&gt; <span class="self">Self </span>{
-<a href=#190 id=190 data-nosnippet>190</a>        <span class="self">Self</span>::Return(value)
-<a href=#191 id=191 data-nosnippet>191</a>    }
-<a href=#192 id=192 data-nosnippet>192</a>}
-<a href=#193 id=193 data-nosnippet>193</a><span class="kw">impl </span>From&lt;ErrorDecl&gt; <span class="kw">for </span>ExpandDecl {
-<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">fn </span>from(value: ErrorDecl) -&gt; <span class="self">Self </span>{
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="self">Self</span>::Error(Box::new(value))
-<a href=#196 id=196 data-nosnippet>196</a>    }
-<a href=#197 id=197 data-nosnippet>197</a>}
+<a href=#132 id=132 data-nosnippet>132</a>    </span><span class="kw">pub fn </span>field_override(
+<a href=#133 id=133 data-nosnippet>133</a>        <span class="kw-2">mut </span><span class="self">self</span>,
+<a href=#134 id=134 data-nosnippet>134</a>        name: <span class="kw">impl </span>Into&lt;String&gt;,
+<a href=#135 id=135 data-nosnippet>135</a>        output: <span class="kw">impl </span>Into&lt;Output&lt;OutputRequest&gt;&gt;,
+<a href=#136 id=136 data-nosnippet>136</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="kw">let </span>output = <span class="kw">match </span>output.into() {
+<a href=#138 id=138 data-nosnippet>138</a>            Output::Request(OutputRequest::ForType { ty, output }) <span class="kw">if </span><span class="macro">matches!</span>(output.as_ref(),Output::Combine(parts) <span class="kw">if </span>parts.is_empty()) =&gt; {
+<a href=#139 id=139 data-nosnippet>139</a>                Output::for_type(<span class="kw-2">*</span>ty, Output::Discard)
+<a href=#140 id=140 data-nosnippet>140</a>            }
+<a href=#141 id=141 data-nosnippet>141</a>            output =&gt; output,
+<a href=#142 id=142 data-nosnippet>142</a>        };
+<a href=#143 id=143 data-nosnippet>143</a>        <span class="macro">assert!</span>(
+<a href=#144 id=144 data-nosnippet>144</a>            <span class="self">self</span>.overrides.insert(name.into(), output).is_none(),
+<a href=#145 id=145 data-nosnippet>145</a>            <span class="string">"duplicate field override"
+<a href=#146 id=146 data-nosnippet>146</a>        </span>);
+<a href=#147 id=147 data-nosnippet>147</a>        <span class="self">self
+<a href=#148 id=148 data-nosnippet>148</a>    </span>}
+<a href=#149 id=149 data-nosnippet>149</a>}
+<a href=#150 id=150 data-nosnippet>150</a><span class="kw">impl </span>From&lt;FieldsDecl&gt; <span class="kw">for </span>Output&lt;OutputRequest&gt; {
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">fn </span>from(fields: FieldsDecl) -&gt; <span class="self">Self </span>{
+<a href=#152 id=152 data-nosnippet>152</a>        Output::getter(
+<a href=#153 id=153 data-nosnippet>153</a>            fields.function,
+<a href=#154 id=154 data-nosnippet>154</a>            Output::Request(OutputRequest::NamedFields {
+<a href=#155 id=155 data-nosnippet>155</a>                overrides: fields.overrides,
+<a href=#156 id=156 data-nosnippet>156</a>                mode: <span class="kw">crate</span>::ProjectionMode::Borrowed,
+<a href=#157 id=157 data-nosnippet>157</a>            }),
+<a href=#158 id=158 data-nosnippet>158</a>        )
+<a href=#159 id=159 data-nosnippet>159</a>    }
+<a href=#160 id=160 data-nosnippet>160</a>}
+<a href=#161 id=161 data-nosnippet>161</a>
+<a href=#162 id=162 data-nosnippet>162</a><span class="doccomment">/// A type-wide source-error message mapping.
+<a href=#163 id=163 data-nosnippet>163</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#164 id=164 data-nosnippet>164</a></span><span class="kw">pub struct </span>ErrorDecl {
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="doccomment">/// Source error type.
+<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">pub </span>ty: syn::Type,
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="doccomment">/// Source helper taking E or &amp;E and returning String.
+<a href=#168 id=168 data-nosnippet>168</a>    </span><span class="kw">pub </span>mapper: FunctionDecl,
+<a href=#169 id=169 data-nosnippet>169</a>}
+<a href=#170 id=170 data-nosnippet>170</a><span class="kw">impl </span>ErrorDecl {
+<a href=#171 id=171 data-nosnippet>171</a>    <span class="doccomment">/// Select the source helper for this error type.
+<a href=#172 id=172 data-nosnippet>172</a>    </span><span class="kw">pub fn </span>new(ty: syn::Type, mapper: FunctionDecl) -&gt; <span class="self">Self </span>{
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="self">Self </span>{ ty, mapper }
+<a href=#174 id=174 data-nosnippet>174</a>    }
+<a href=#175 id=175 data-nosnippet>175</a>}
+<a href=#176 id=176 data-nosnippet>176</a><span class="doccomment">/// A type-wide input, output, or error-mapping declaration.
+<a href=#177 id=177 data-nosnippet>177</a>/// Generators immediately consume these builders into their conversion trees.
+<a href=#178 id=178 data-nosnippet>178</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">pub enum </span>ExpandDecl {
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="doccomment">/// Input alternatives.
+<a href=#181 id=181 data-nosnippet>181</a>    </span>Param(ExpandParamDecl),
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="doccomment">/// Simultaneous output views.
+<a href=#183 id=183 data-nosnippet>183</a>    </span>Return(ExpandReturnDecl),
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="doccomment">/// A source-error message mapping.
+<a href=#185 id=185 data-nosnippet>185</a>    </span>Error(Box&lt;ErrorDecl&gt;),
+<a href=#186 id=186 data-nosnippet>186</a>}
+<a href=#187 id=187 data-nosnippet>187</a><span class="kw">impl </span>From&lt;ExpandParamDecl&gt; <span class="kw">for </span>ExpandDecl {
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">fn </span>from(value: ExpandParamDecl) -&gt; <span class="self">Self </span>{
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="self">Self</span>::Param(value)
+<a href=#190 id=190 data-nosnippet>190</a>    }
+<a href=#191 id=191 data-nosnippet>191</a>}
+<a href=#192 id=192 data-nosnippet>192</a><span class="kw">impl </span>From&lt;ExpandReturnDecl&gt; <span class="kw">for </span>ExpandDecl {
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="kw">fn </span>from(value: ExpandReturnDecl) -&gt; <span class="self">Self </span>{
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="self">Self</span>::Return(value)
+<a href=#195 id=195 data-nosnippet>195</a>    }
+<a href=#196 id=196 data-nosnippet>196</a>}
+<a href=#197 id=197 data-nosnippet>197</a><span class="kw">impl </span>From&lt;ErrorDecl&gt; <span class="kw">for </span>ExpandDecl {
+<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">fn </span>from(value: ErrorDecl) -&gt; <span class="self">Self </span>{
+<a href=#199 id=199 data-nosnippet>199</a>        <span class="self">Self</span>::Error(Box::new(value))
+<a href=#200 id=200 data-nosnippet>200</a>    }
+<a href=#201 id=201 data-nosnippet>201</a>}
 </code></pre></div></section></main></body></html>
