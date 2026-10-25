@@ -221,42 +221,36 @@
 <a href=#221 id=221 data-nosnippet>221</a>                error.handler
 <a href=#222 id=222 data-nosnippet>222</a>            ));
 <a href=#223 id=223 data-nosnippet>223</a>        }
-<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">let </span>params = output
-<a href=#225 id=225 data-nosnippet>225</a>            .result_types
-<a href=#226 id=226 data-nosnippet>226</a>            .iter()
-<a href=#227 id=227 data-nosnippet>227</a>            .enumerate()
-<a href=#228 id=228 data-nosnippet>228</a>            .map(|(i, ty)| <span class="macro">format!</span>(<span class="string">"v{i}: {ty}"</span>))
-<a href=#229 id=229 data-nosnippet>229</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#230 id=230 data-nosnippet>230</a>            .join(<span class="string">", "</span>);
-<a href=#231 id=231 data-nosnippet>231</a>        <span class="kw">let </span>text = <span class="macro">format!</span>(<span class="string">"package {pkg}\n\n/** Domain-error callback. Called after JNI and handle locks finish. Handle arguments are closed after run; call take() to retain an owner. */\npublic fun interface {name}&lt;out R&gt; {{ public fun run({params}): R }}\n"</span>);
-<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">if </span>files
-<a href=#233 id=233 data-nosnippet>233</a>            .insert(<span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), name), text)
-<a href=#234 id=234 data-nosnippet>234</a>            .is_some()
-<a href=#235 id=235 data-nosnippet>235</a>        {
-<a href=#236 id=236 data-nosnippet>236</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin error interface collision"</span>.into());
-<a href=#237 id=237 data-nosnippet>237</a>        }
-<a href=#238 id=238 data-nosnippet>238</a>    }
-<a href=#239 id=239 data-nosnippet>239</a>    <span class="prelude-val">Ok</span>(())
-<a href=#240 id=240 data-nosnippet>240</a>}
-<a href=#241 id=241 data-nosnippet>241</a>
-<a href=#242 id=242 data-nosnippet>242</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>delivery(error: <span class="kw-2">&amp;</span>ErrorBinding, context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">let </span>context = KotlinContext {
-<a href=#244 id=244 data-nosnippet>244</a>        cleanup_failure: <span class="prelude-val">Some</span>(<span class="string">"cleanupFailure"</span>),
-<a href=#245 id=245 data-nosnippet>245</a>        ..<span class="kw-2">*</span>context
-<a href=#246 id=246 data-nosnippet>246</a>    };
-<a href=#247 id=247 data-nosnippet>247</a>    <span class="kw">let </span><span class="kw-2">mut </span>output = error.output.kotlin(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
-<a href=#248 id=248 data-nosnippet>248</a>    kotlin::remap_output(
-<a href=#249 id=249 data-nosnippet>249</a>        <span class="kw-2">&amp;mut </span>output,
-<a href=#250 id=250 data-nosnippet>250</a>        context.result,
-<a href=#251 id=251 data-nosnippet>251</a>        context.result,
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="number">1</span>,
-<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>error.output.output_outcomes().success).len(),
-<a href=#254 id=254 data-nosnippet>254</a>    );
-<a href=#255 id=255 data-nosnippet>255</a>    <span class="kw">let </span>call = <span class="macro">format!</span>(<span class="string">"onError.run({})"</span>, output.delivered.join(<span class="string">", "</span>));
-<a href=#256 id=256 data-nosnippet>256</a>    <span class="kw">if </span>output.cleanup.is_empty() {
-<a href=#257 id=257 data-nosnippet>257</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\n{call}"</span>, output.materialize));
-<a href=#258 id=258 data-nosnippet>258</a>    }
-<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">let </span>cleanup = output.cleanup;
-<a href=#260 id=260 data-nosnippet>260</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\nvar cleanupFailure: Throwable? = null\nvar callbackFailed = false\ntry {{\n{}\n{call}\n}} catch (failure: Throwable) {{ callbackFailed = true; cleanupFailure = failure; throw failure }} finally {{\n{cleanup}\nif (!callbackFailed) cleanupFailure?.let {{ throw it }}\n}}"</span>, output.output_locals, output.materialize))
-<a href=#261 id=261 data-nosnippet>261</a>}
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">let </span>params = output.callback_parameter_declarations()<span class="question-mark">?</span>;
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span>text = <span class="macro">format!</span>(<span class="string">"package {pkg}\n\n/** Domain-error callback. Called after JNI and handle locks finish. Handle arguments are closed after run; call take() to retain an owner. */\npublic fun interface {name}&lt;out R&gt; {{ public fun run({params}): R }}\n"</span>);
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">if </span>files
+<a href=#227 id=227 data-nosnippet>227</a>            .insert(<span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), name), text)
+<a href=#228 id=228 data-nosnippet>228</a>            .is_some()
+<a href=#229 id=229 data-nosnippet>229</a>        {
+<a href=#230 id=230 data-nosnippet>230</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin error interface collision"</span>.into());
+<a href=#231 id=231 data-nosnippet>231</a>        }
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="prelude-val">Ok</span>(())
+<a href=#234 id=234 data-nosnippet>234</a>}
+<a href=#235 id=235 data-nosnippet>235</a>
+<a href=#236 id=236 data-nosnippet>236</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>delivery(error: <span class="kw-2">&amp;</span>ErrorBinding, context: <span class="kw-2">&amp;</span>KotlinContext&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">let </span>context = KotlinContext {
+<a href=#238 id=238 data-nosnippet>238</a>        cleanup_failure: <span class="prelude-val">Some</span>(<span class="string">"cleanupFailure"</span>),
+<a href=#239 id=239 data-nosnippet>239</a>        ..<span class="kw-2">*</span>context
+<a href=#240 id=240 data-nosnippet>240</a>    };
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">let </span><span class="kw-2">mut </span>output = error.output.kotlin(<span class="kw-2">&amp;</span>context)<span class="question-mark">?</span>;
+<a href=#242 id=242 data-nosnippet>242</a>    kotlin::remap_output(
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw-2">&amp;mut </span>output,
+<a href=#244 id=244 data-nosnippet>244</a>        context.result,
+<a href=#245 id=245 data-nosnippet>245</a>        context.result,
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="number">1</span>,
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>error.output.output_outcomes().success).len(),
+<a href=#248 id=248 data-nosnippet>248</a>    );
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="kw">let </span>call = <span class="macro">format!</span>(<span class="string">"onError.run({})"</span>, output.delivered.join(<span class="string">", "</span>));
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">if </span>output.cleanup.is_empty() {
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\n{call}"</span>, output.materialize));
+<a href=#252 id=252 data-nosnippet>252</a>    }
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">let </span>cleanup = output.cleanup;
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\nvar cleanupFailure: Throwable? = null\nvar callbackFailed = false\ntry {{\n{}\n{call}\n}} catch (failure: Throwable) {{ callbackFailed = true; cleanupFailure = failure; throw failure }} finally {{\n{cleanup}\nif (!callbackFailed) cleanupFailure?.let {{ throw it }}\n}}"</span>, output.output_locals, output.materialize))
+<a href=#255 id=255 data-nosnippet>255</a>}
 </code></pre></div></section></main></body></html>
