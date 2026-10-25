@@ -101,7 +101,7 @@ and display. Arrays remain mutable, and Kotlin's generated `copy()` is shallow.
 
 Explicit input/output expansions still override the default representation.
 A data-class leaf inside an expansion remains one Kotlin value; an explicit
-`.view(...)` projection still delivers separate field outputs. The covertest
+`.fields(...)` projection still delivers separate field outputs. The covertest
 uses data classes for `BlobValue`, `Unsigned`, `Stamp`, and additional test records, including nested values,
 selector alternatives, combined outputs, and package/class renaming.
 

@@ -51,10 +51,10 @@
 //! | `constant!(N).fun(fun!(…))`           | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
 //! | `constant!(N).with(ty!, path!)`       | `val COVER_VERSION` from binding-local `crate::cover_version()` |
 //! | `constant!(N).expr(ty!, expr!)`       | `COVER_BANNER` = binding-defined `format!` expression |
-//! | per-fn `.input(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
-//! | per-fn `.output(…)` identity-only | `storage_summary_handle` (raw handle return) |
-//! | per-fn `.input(name, …)` variants | `storage_expect_summary` |
-//! | per-fn `.output(…)` fields+self | `storage_summary_full` |
+//! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
+//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` (raw handle return) |
+//! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
+//! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
 //! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
