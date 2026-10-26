@@ -78,7 +78,7 @@ impl JvmType {
             Self::Text => "row_text",
             Self::Bytes => "row_bytes",
             Self::Rows => "row_rows",
-            Self::Object => unreachable!("callback objects are not collection element carriers"),
+            Self::Object => unreachable!("callback objects use the direct reference reader"),
         }
     }
 }
@@ -157,12 +157,11 @@ impl JniWire {
     /// Reference fields preserve Java null for optional/inactive values. The
     /// caller supplies the `environment` template parameter and owns local refs.
     pub fn read_array_element(&self, array: &TokenStream, index: usize) -> TokenStream {
-        if matches!(self, Self::Callback { .. }) {
-            return quote!({
-                return Err("callback objects cannot be collection elements".into());
-            });
-        }
         let env = prebindgen_conversions::template_parameter("environment");
+        if matches!(self, Self::Callback { .. }) {
+            // The input converter retains this object before the row frame closes.
+            return quote!(#env.get_object_array_element(&(#array), #index as i32).map_err(|e|e.to_string()));
+        }
         let reader = format_ident!("{}", self.jvm_type().reader());
         let convert = matches!(self.jvm_type(), JvmType::Boolean).then(|| quote!(.map(u8::from)));
         quote!(::prebindgen_jni_runtime::#reader(&mut #env, &(#array), #index)#convert)

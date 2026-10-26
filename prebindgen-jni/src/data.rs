@@ -115,7 +115,14 @@ pub struct DataGroup {
 }
 
 /// JNI conversions consult the declarations attached to Flat.
-pub(crate) struct DataCodec;
+#[derive(Default)]
+pub(crate) struct DataCodec<'a> {
+    // Preparation-only defaults: emitted callback slots retain their own output plans.
+    pub(crate) callbacks: Option<(
+        &'a prebindgen_declarations::Declarations,
+        &'a BTreeSet<String>,
+    )>,
+}
 /// Complete class and enum declarations already attached to their source types.
 pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
     fn resolve(
@@ -273,7 +280,7 @@ pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
     }
     Ok(())
 }
-impl DataCodec {
+impl DataCodec<'_> {
     fn enum_type<'a>(&self, flat: &'a Bindings, ty: &syn::Type) -> Option<&'a Rc<JniEnum>> {
         let ty = if let syn::Type::Reference(r) = ty {
             &r.elem
@@ -415,7 +422,7 @@ impl Class {
     }
 }
 
-impl Codec for DataCodec {
+impl Codec for DataCodec<'_> {
     type Schema = JniSchema;
     fn expand_input(
         &self,
@@ -670,6 +677,12 @@ impl Codec for DataCodec {
         var: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<JniWire>> {
+        if prebindgen_flat::callback_signature(ty)?.is_some() {
+            let (defaults, outputs) = self
+                .callbacks
+                .ok_or("source callback parameters require adapter callback preparation")?;
+            return callback::input(flat, defaults, outputs, ty, wire, var, active);
+        }
         if Self::source_record(flat, ty)?.is_some() {
             return Err("resolve the data-class Input::Record before leaf compilation".into());
         }
@@ -872,7 +885,7 @@ mod group_tests {
         )
         .unwrap();
         let ty = flat.resolve_type(&syn::parse_quote!(E)).unwrap();
-        let codec = DataCodec;
+        let codec = DataCodec::default();
         let mapping = Rc::new(
             prebindgen_declarations::EnumMapping::new(flat.enums.values().next().unwrap()).unwrap(),
         );
@@ -918,7 +931,7 @@ mod group_tests {
             variant_names: vec![],
         }));
         prepare(&mut flat).unwrap();
-        let codec = DataCodec;
+        let codec = DataCodec::default();
         let defaults =
             prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();
         let request = Output::Sequence {

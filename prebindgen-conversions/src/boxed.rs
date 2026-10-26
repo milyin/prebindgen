@@ -92,6 +92,9 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
     active: &TokenStream,
     wire_kind: impl FnOnce(BoxedWire) -> W,
 ) -> Result<InputPlan<W, C, N, B>> {
+    if prebindgen_flat::callback_signature(ty)?.is_some() {
+        return Err("source callback parameters require adapter callback preparation".into());
+    }
     let (target, access) = match ty {
         syn::Type::Reference(r) => (
             &*r.elem,

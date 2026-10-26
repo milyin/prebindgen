@@ -38,6 +38,7 @@ pub(crate) fn declared_outputs(
         })
         .collect()
 }
+/// Preserve direct callback slots while constructors compile their own occurrences.
 pub(crate) fn prepare(
     flat: &mut Bindings,
     defaults: &Declarations,
@@ -47,101 +48,118 @@ pub(crate) fn prepare(
     for declaration in functions {
         let params = flat.function(&declaration.name)?.params.clone();
         for (index, parameter) in params.into_iter().enumerate() {
-            let Some(signature) = callback_signature(&parameter.ty.ty)? else {
+            if callback_signature(&parameter.ty.ty)?.is_none() {
                 continue;
-            };
+            }
             if declaration.params.contains_key(&parameter.name.to_string()) {
                 return Err("source callback parameters use their argument output expansions, not expand_param".into());
             }
             if parameter.ty.slot.is_some() {
                 continue;
             }
-            let name = if signature.arguments.is_empty() {
-                "VoidCallback".into()
-            } else {
-                format!(
-                    "{}Callback",
-                    signature
-                        .arguments
-                        .iter()
-                        .map(subject_name)
-                        .collect::<Vec<_>>()
-                        .join("")
-                )
-            };
-            validate_name(&name)?;
-            let package = signature
-                .arguments
-                .first()
-                .and_then(|ty| {
-                    flat.type_info(subject_type(ty))
-                        .ok()?
-                        .metadata
-                        .class
-                        .as_ref()
-                        .map(|c| c.pkg.clone())
-                })
-                .unwrap_or_else(|| flat.metadata.package.clone());
-            if foreign_name_exists(flat, &format!("{package}.{name}")) {
-                return Err("duplicate foreign callback interface name".into());
-            }
-            let mut arguments = vec![];
-            for (i, source_type) in signature.arguments.into_iter().enumerate() {
-                let binding = format_ident!("callback_source_{i}");
-                let (ty, borrowed) = match &source_type {
-                    syn::Type::Reference(r) if r.mutability.is_none() => match &*r.elem {
-                        syn::Type::Slice(_) => (source_type.clone(), false),
-                        syn::Type::Path(p) if p.path.is_ident("str") => {
-                            (source_type.clone(), false)
-                        }
-                        ty => (ty.clone(), true),
-                    },
-                    syn::Type::Reference(_) => {
-                        return Err("mutable callback arguments are unsupported".into())
-                    }
-                    _ => (source_type.clone(), false),
-                };
-                let value = quote!(#binding);
-                if contains_result(&ty) {
-                    return Err(
-                        "Result-valued callback arguments require an explicit value representation"
-                            .into(),
-                    );
-                }
-                let recipe = defaults.output_recipe(flat, &data::DataCodec, &ty, &())?;
-                let scoped = !explicit_outputs.contains(&type_key(&ty))
-                    && !explicit_outputs.contains(&type_key(subject_type(&ty)));
-                let output = prebindgen_declarations::compile_callback_argument(
-                    flat,
-                    &data::DataCodec,
-                    &ty,
-                    &recipe,
-                    i,
-                    borrowed,
-                    &(),
-                )?;
-                sequence::validate_buffered(&output.output_outcomes().success)?;
-                reject_sequence_handles(&output.output_outcomes().success, false)?;
-                arguments.push(Argument {
-                    source_type,
-                    value,
-                    output,
-                    scoped,
-                });
-            }
-            let callback = Rc::new(JniCallback {
-                package,
-                harness_package: flat.metadata.package.clone(),
-                name,
-                arguments,
-            });
-            let wire = format_ident!("p{index}_callback");
-            let var = format_ident!("p{index}_callback_value");
-            let plan = callback.input(wire, var)?;
+            let plan = input(
+                flat,
+                defaults,
+                explicit_outputs,
+                &parameter.ty.ty,
+                format_ident!("p{index}_callback"),
+                format_ident!("p{index}_callback_value"),
+                &prebindgen_declarations::Condition::default(),
+            )?;
             flat.function_mut(&declaration.name)?.params[index].ty.slot = Some(plan.into());
         }
     }
     Ok(())
+}
+
+/// Compile one callback occurrence, including a source constructor's argument.
+pub(crate) fn input(
+    flat: &Bindings,
+    defaults: &Declarations,
+    explicit_outputs: &BTreeSet<String>,
+    ty: &syn::Type,
+    wire: syn::Ident,
+    var: syn::Ident,
+    active: &prebindgen_declarations::Condition,
+) -> Result<InputPlan<JniWire>> {
+    let signature = callback_signature(ty)?.ok_or("expected source callback")?;
+    let name = if signature.arguments.is_empty() {
+        "VoidCallback".into()
+    } else {
+        format!(
+            "{}Callback",
+            signature
+                .arguments
+                .iter()
+                .map(subject_name)
+                .collect::<Vec<_>>()
+                .join("")
+        )
+    };
+    validate_name(&name)?;
+    let package = signature
+        .arguments
+        .first()
+        .and_then(|ty| {
+            flat.type_info(subject_type(ty))
+                .ok()?
+                .metadata
+                .class
+                .as_ref()
+                .map(|c| c.pkg.clone())
+        })
+        .unwrap_or_else(|| flat.metadata.package.clone());
+    if foreign_name_exists(flat, &format!("{package}.{name}")) {
+        return Err("duplicate foreign callback interface name".into());
+    }
+    let mut arguments = vec![];
+    for (i, source_type) in signature.arguments.into_iter().enumerate() {
+        let binding = format_ident!("callback_source_{i}");
+        let (ty, borrowed) = match &source_type {
+            syn::Type::Reference(r) if r.mutability.is_none() => match &*r.elem {
+                syn::Type::Slice(_) => (source_type.clone(), false),
+                syn::Type::Path(p) if p.path.is_ident("str") => (source_type.clone(), false),
+                ty => (ty.clone(), true),
+            },
+            syn::Type::Reference(_) => {
+                return Err("mutable callback arguments are unsupported".into())
+            }
+            _ => (source_type.clone(), false),
+        };
+        let value = quote!(#binding);
+        if contains_result(&ty) {
+            return Err(
+                "Result-valued callback arguments require an explicit value representation".into(),
+            );
+        }
+        let recipe = defaults.output_recipe(flat, &data::DataCodec::default(), &ty, &())?;
+        let scoped = !explicit_outputs.contains(&type_key(&ty))
+            && !explicit_outputs.contains(&type_key(subject_type(&ty)));
+        let output = prebindgen_declarations::compile_callback_argument(
+            flat,
+            &data::DataCodec::default(),
+            &ty,
+            &recipe,
+            i,
+            borrowed,
+            &(),
+        )?;
+        sequence::validate_buffered(&output.output_outcomes().success)?;
+        reject_sequence_handles(&output.output_outcomes().success, false)?;
+        arguments.push(Argument {
+            source_type,
+            value,
+            output,
+            scoped,
+        });
+    }
+    let callback = Rc::new(JniCallback {
+        package,
+        harness_package: flat.metadata.package.clone(),
+        name,
+        arguments,
+    });
+    callback.input(wire, var, active)
 }
 impl JniCallback {
     pub(crate) fn fqn(&self) -> String {
@@ -157,7 +175,12 @@ impl JniCallback {
         })
     }
 
-    fn input(self: &Rc<Self>, wire: syn::Ident, var: syn::Ident) -> Result<InputPlan<JniWire>> {
+    fn input(
+        self: &Rc<Self>,
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniWire>> {
         prebindgen_conversions::validate_wire_names(self.arguments.iter().flat_map(|arg| {
             prebindgen_flat::wire_definitions(std::iter::once(
                 &arg.output.output_outcomes().success,
@@ -256,6 +279,19 @@ impl JniCallback {
                 &syn::parse_quote!(::prebindgen_runtime::Result<()>),
             )?;
         }
+        let (registration, activate) = if active.0.is_empty() {
+            (
+                quote!(let #retained = ::prebindgen_jni_runtime::Callback::new(&mut #env, &#wire, #descriptor)?;),
+                quote!(),
+            )
+        } else {
+            let condition = active.rust();
+            (
+                quote!(let #retained = if #condition {Some(::prebindgen_jni_runtime::Callback::new(&mut #env, &#wire, #descriptor)?)} else {None};),
+                // Optional/selector construction executes only on its validated active path.
+                quote!(let #retained = #retained.expect("validated active callback");),
+            )
+        };
         Ok(InputPlan {
             fallible: true,
             context: Default::default(),
@@ -268,8 +304,8 @@ impl JniCallback {
             acknowledgement: None,
             acquire: quote!(),
             resources: vec![],
-            validation: quote!(let #retained = ::prebindgen_jni_runtime::Callback::new(&mut #env, &#wire, #descriptor)?;),
-            statements: quote!(#[allow(unused_mut)] let #var = move |#(#params),*| {
+            validation: registration,
+            statements: quote!(#activate #[allow(unused_mut)] let #var = move |#(#params),*| {
                 #retained.with_env(#capacity, |#environment| { let mut #environment = #environment; #source_bindings #invoke });
             };),
             argument: quote!(#var),
@@ -494,15 +530,4 @@ fn argument_local(name: &str, ty: &str) -> String {
         Some(default) => format!("        var {name}: {ty} = {default}\n"),
         None => format!("        lateinit var {name}: {ty}\n"),
     }
-}
-
-pub(crate) fn validate_input(node: &kotlin::JniNode) -> Result<()> {
-    let has_callback = prebindgen_flat::wire_definitions(std::iter::once(node))
-        .any(|w| matches!(w.kind, JniWire::Callback { .. }));
-    if has_callback
-        && !matches!(node, WireNode::Leaf(wires) if wires.len()==1 && matches!(wires[0].kind,JniWire::Callback{..}))
-    {
-        return Err("callback objects must occupy a direct input slot".into());
-    }
-    Ok(())
 }
