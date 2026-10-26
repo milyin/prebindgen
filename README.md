@@ -595,7 +595,7 @@ supported. Inputs snapshot list structure once before choosing locks, then read
 handle addresses while all active handles are locked. Handle locking uses
 reentrant monitor acquisition in address order, matching production `main`. JNI
 validates row shapes and active field types, using local reference frames per
-row. Native failure before ownership acknowledgement leaves input handles live;
+row. Native failure before input ownership acknowledgement leaves input handles live;
 after acknowledgement Kotlin marks every selected handle consumed. Prepared
 outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.

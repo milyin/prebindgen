@@ -23,10 +23,12 @@ reported `dirty` flag identifies measurements of uncommitted work.
 ## Reference measurement
 
 Kotlin 2.1.0, OpenJDK 11.0.29, rustc 1.98.0, Linux, release Rust, fixed
-256 MiB JVM heap; three JVMs per variant, with the defaults above. Variants ran
-in rotating order after all builds completed.
+256 MiB JVM heap; three JVMs per variant, with the defaults above. Variants were manually run
+in rotating order after all builds completed; `run.py` measures one checkout at
+a time. The main native artifact was built previously from the verified commit
+below; the Kotlin driver was freshly compiled for all variants.
 
-| Callback payload | `main` | #823 before | This PR |
+| Callback payload | `main` | #823 before | Updated #826 |
 | --- | ---: | ---: | ---: |
 | One `i64` | 183 ns | 270 ns | 200 ns |
 | Borrowed two-field record | 184 ns | 272 ns | 212 ns |
@@ -34,5 +36,6 @@ in rotating order after all builds completed.
 
 The baseline trees are `main` at `5e149f869` and PR #823 at `94f9eab1b`
 (the latter has the same sources as merged #825 at `02314df44`). The updated
-column measures this PR's implementation before committing the benchmark report.
+column measures the runtime implementation committed in `4c3fcd44b`, tested
+before committing the benchmark report.
 The remaining gap to `main` is not attributed to an isolated component.

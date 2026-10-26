@@ -9,7 +9,7 @@
   "main_commit": "5e149f869710dfb71162c5af854c20e3ccb44cef",
   "parent_tree_commit": "94f9eab1b1fb8bee9d93f40b1681004565d18aad",
   "parent_measured_checkout": "02314df4484a4ea730c3cc30670e70a652df4334",
-  "updated": "this PR implementation, measured before committing the report",
+  "updated": "runtime implementation committed in 4c3fcd44bd1f339bc064b2df3b4b5e8330008030, measured before committing the report",
   "iterations": 200000,
   "warmup_batches": 10,
   "measured_batches": 9,
@@ -299,5 +299,6 @@
         238.85084
       ]
     }
-  }
+  },
+  "orchestration": "manual rotating order after all builds; previously built main native artifact, freshly compiled identical Kotlin driver for every variant"
 }
