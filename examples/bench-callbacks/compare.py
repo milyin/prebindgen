@@ -34,9 +34,14 @@ if output.exists():
 output.mkdir(parents=True)
 
 def artifacts(directory):
+    libraries = [directory / "target/release" / name for name in
+                 ("libcallback_bench.so", "libcallback_bench.dylib", "callback_bench.dll")]
+    libraries = [library for library in libraries if library.is_file()]
+    if len(libraries) != 1:
+        raise RuntimeError(f"expected one native callback library in {directory}")
     return {
         "jar_sha256": hashlib.sha256((directory / "bench.jar").read_bytes()).hexdigest(),
-        "native_sha256": hashlib.sha256((directory / "target/release/libcallback_bench.so").read_bytes()).hexdigest(),
+        "native_sha256": hashlib.sha256(libraries[0].read_bytes()).hexdigest(),
     }
 
 sources = {}
