@@ -1,5 +1,8 @@
 //! Panic containment and pointer validation for foreign adapters.
 #![warn(missing_docs)]
+mod callback;
+pub use callback::CallbackReturnAllocations;
+
 /// Runtime failure represented as a message for the adapter's error channel.
 pub type Result<T> = std::result::Result<T, String>;
 

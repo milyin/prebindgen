@@ -166,6 +166,44 @@ impl JniWire {
         let convert = matches!(self.jvm_type(), JvmType::Boolean).then(|| quote!(.map(u8::from)));
         quote!(::prebindgen_jni_runtime::#reader(&mut #env, &(#array), #index)#convert)
     }
+    pub(crate) fn callback_return_type(&self) -> TokenStream {
+        let ty = match self.jvm_type() {
+            JvmType::Boolean => "Boolean",
+            JvmType::Byte => "Byte",
+            JvmType::Short => "Short",
+            JvmType::Int => "Int",
+            JvmType::Long => "Long",
+            JvmType::Float => "Float",
+            JvmType::Double => "Double",
+            _ => return quote!(::prebindgen_jni_runtime::jni::signature::ReturnType::Object),
+        };
+        let ty = format_ident!("{ty}");
+        quote!(::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::#ty))
+    }
+    pub(crate) fn read_callback_return(&self, value: &syn::Ident) -> TokenStream {
+        let method = match self.jvm_type() {
+            JvmType::Boolean => return quote!(u8::from(#value.z().map_err(|e| e.to_string())?)),
+            JvmType::Byte => "b",
+            JvmType::Short => "s",
+            JvmType::Int => "i",
+            JvmType::Long => "j",
+            JvmType::Float => "f",
+            JvmType::Double => "d",
+            JvmType::Text => {
+                return quote!(::prebindgen_jni_runtime::jni::objects::JString::from(#value.l().map_err(|e| e.to_string())?))
+            }
+            JvmType::Bytes => {
+                return quote!(::prebindgen_jni_runtime::jni::objects::JByteArray::from(#value.l().map_err(|e| e.to_string())?))
+            }
+            JvmType::Rows => {
+                return quote!(::prebindgen_jni_runtime::jni::objects::JObjectArray::from(#value.l().map_err(|e| e.to_string())?))
+            }
+            JvmType::Object => "l",
+        };
+        let method = format_ident!("{method}");
+        quote!(#value.#method().map_err(|e| e.to_string())?)
+    }
+
     /// Generate a Java object expression from a prepared output, boxing primitives.
     ///
     /// This accepts the representation in `OutputPlan::values`, not a native

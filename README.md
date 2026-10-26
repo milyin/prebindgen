@@ -699,8 +699,9 @@ element-wise sequences by these declarations.
 
 ## Retained JNI source callbacks
 
-JNI binds direct function parameters of the form `impl Fn(...) + Send + Sync + 'static`
-with a unit result. `Send`, `Sync`, and `'static` bounds may be omitted. The generated
+JNI binds direct function parameters of the form
+`impl Fn(...) -> R + Send + Sync + 'static`. Omitting `-> R` means `()`.
+`Send`, `Sync`, and `'static` bounds may be omitted. The generated
 Kotlin parameter uses a typed `fun interface`; ordinary `.fun(fun!(...))` declarations
 select these functions without extra callback configuration.
 
@@ -750,8 +751,10 @@ Kotlin bridge without a per-invocation acknowledgement array or native rollback
 registry. If invocation fails before bridge entry (for example,
 JVM stack exhaustion), committed handles may leak.
 
-Kotlin exceptions from callbacks are described, cleared and reported on stderr.
-They do not escape into Rust or poison later invocations. The invocation uses the
+Callbacks returning `()` report Kotlin exceptions on stderr and let Rust continue.
+Callbacks returning a value raise a Rust panic on failure, as described below.
+In both cases callback-created JVM exceptions are described and cleared, so later
+invocations can run. The invocation uses the
 checked JNI call without additional exception probes on the successful path. The
 invoking thread must have no pending JVM exception before entering the callback.
 Registration errors use the function's ordinary binding-error callback.
@@ -784,14 +787,96 @@ If Rust cannot finish converting the arguments, it drops the allocations prepare
 so far and skips that callback invocation. If Kotlin cannot construct the complete
 argument list, it closes the delivered handles without calling user code.
 
-Mutable references, callback return values, `Result`
-arguments, callbacks taking callable-signature arguments, explicit higher-ranked
-bounds, and `FnMut`/`FnOnce` are rejected.
-Callbacks are accepted as direct parameters of exported source functions or input
-constructors. C callback inputs
-remain unsupported and fail during preparation. The covertest exercises retained
-and concurrent callbacks, output ownership, reentry, exception containment, and
-release of JVM captures under `-Xcheck:jni`.
+Mutable arguments, `Result` arguments, callbacks taking callable-signature arguments,
+explicit higher-ranked bounds, and `FnMut`/`FnOnce` are rejected. Callbacks are accepted
+as direct parameters of exported source functions or input constructors. The covertest
+exercises retained and concurrent callbacks, output ownership, reentry, exception
+containment, and release of JVM captures under `-Xcheck:jni`.
+
+### Values returned by callbacks
+
+A callback can return a value to its Rust caller:
+
+```rust,ignore
+#[prebindgen]
+pub fn evaluate(callback: impl Fn(i64) -> i64 + Send + Sync + 'static) -> i64 {
+    callback(21)
+}
+```
+
+The generated Kotlin call is `evaluate({ value -> value * 2 })`, which returns `42`.
+Its callback interface has `run(value: Long): Long`; the generated parameter name
+may differ. Interfaces for callbacks returning values include the return type in
+their names, such as `i64Toi64Callback`.
+
+The returned value uses the same conversion as an argument passed from Kotlin to
+Rust. Type-wide `expand_param!(R)` declarations therefore also apply to callback
+results of type `R`. Scalars, strings, bytes, enums, optionals, collections, owned
+handles and data classes without handle fields are supported. The conversion must
+expose one Kotlin value. Borrowed results and `Result` values are unsupported by
+the adapters; Flat can still represent those signatures for other consumers.
+
+Returning an owning handle gives Rust ownership of its value and marks the Kotlin
+wrapper consumed. Kotlin must not close or use that wrapper afterward. To return
+a handle that the bridge would otherwise close after the callback, return
+`handle.take()`. Handle addresses collected before validation are reclaimed if
+return validation or construction fails. A VM failure while Rust reads the raw JNI result can
+prevent cleanup of handle addresses it has not yet read, just as failure to enter
+a callback can lose its arguments.
+
+Values with a JVM primitive representation return directly in that type. Multiple
+native fields travel in an object array. Unit callbacks keep their existing invocation path.
+If a callback returning a value throws, or conversion fails, the trampoline raises
+a Rust panic after leaving its JNI frame and clearing the JVM exception. The
+synchronous generated JNI boundary catches the panic and uses its binding-error
+handler. A retained callback invoked on a Rust worker thread unwinds that thread
+unless Rust catches the panic; `panic=abort` terminates the process. No substitute
+return value or `Default` implementation is required.
+
+## Retained C source callbacks
+
+The C adapter also accepts `impl Fn(...) -> R` parameters, including callbacks
+selected through input constructors. Declare their source functions with
+`.function(fun!(evaluate)).panic()` for a non-`Result` function such as the example
+above. The ordinary C error policy handles invalid callback registration.
+
+For the Rust parameter `evaluate(callback: ...)`, the header provides a
+`pb_evaluate_callback` type (`pb` is the configured prefix):
+
+```c
+static int64_t twice(void *context, int64_t value) {
+    (void)context;
+    return value * 2;
+}
+int64_t answer = pb_evaluate((pb_evaluate_callback){ .run = twice });
+```
+
+The callback value contains `run`, `context` and an optional `drop(context)`.
+Rust retains the context with the closure and calls `drop` once when the last
+owner of that closure is released. Input ownership transfers only after validation;
+`Result` wrappers report acceptance through their existing `ownership` flag.
+The context must stay live until then, and callback functions and context access
+must support the threads permitted by the Rust signature.
+
+Rust-to-C callback arguments use ordinary output conversions. The C callback owns
+any delivered handles, buffers and row allocations, and releases them with the
+generated typed destructors, buffer freer and row-storage freer. Values returned
+from C use ordinary input conversions: one native field is returned directly;
+multiple fields use a generated result structure. The header also provides
+`pb_evaluate_callback_return` and collection argument aliases where applicable.
+Owned handle results move into Rust; returned byte buffers and row storage are
+borrowed while Rust copies or converts them.
+
+For callbacks returning buffers or rows, an optional `release_result(context,
+result)` function runs after decoding, including on conversion failure. It can free
+storage allocated by the C callback. It must not free handles moved into Rust.
+Without this function, returned storage must remain valid throughout decoding;
+concurrent invocations must not overwrite storage another invocation is using.
+C callback return-conversion failures raise a Rust panic on the invoking thread.
+A synchronous `Result` export reports the failure through its C error output; a
+non-`Result` export configured with `.panic()` aborts. Rust may catch the panic
+before either boundary is reached. An uncaught worker-thread panic unwinds the
+worker; `panic=abort` terminates the process.
 
 ## Result returns
 

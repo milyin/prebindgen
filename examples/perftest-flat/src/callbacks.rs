@@ -1,4 +1,5 @@
 //! Retained source callbacks exercised by the Kotlin/JNI covertest.
+use crate::CallbackReturnResource;
 use crate::Priority;
 use prebindgen_proc_macro::prebindgen;
 use std::sync::{
@@ -662,4 +663,14 @@ pub fn callback_rows_unique_error(
             label: "still cleaned".into(),
         },
     ]);
+}
+
+#[prebindgen]
+pub fn callback_row_return_cleanup_failure(
+    callback: impl Fn(Vec<CallbackUniqueRow>) -> CallbackReturnResource + Send + Sync + 'static,
+) {
+    drop(callback(vec![CallbackUniqueRow {
+        resource: CallbackUniqueResourceImpl(callback_row_resource_new(777)),
+        label: "drop failure".into(),
+    }]));
 }

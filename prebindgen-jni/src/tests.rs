@@ -266,7 +266,8 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
     assert!(generated.kotlin["test/Inner.kt"].contains("test.Handle"));
     assert!(generated.kotlin["test/Functions.kt"].contains(".close()"));
     assert!(!generated.rust.contains("Clone::clone"));
-    assert!(fail(base().package(package!().fun(fun!(echo)))).contains("returns only"));
+    assert!(fail(base().package(package!().fun(fun!(echo))))
+        .contains("cannot be passed into Rust as a record"));
     assert!(fail(base().package(package!().fun(
         fun!(make).expand_return(expand_return!(Bundle).field_self_into().field_self_into())
     )))
@@ -1425,19 +1426,6 @@ fn callback_rejections_are_preparation_errors() {
             .package(package!().fun(fun!(f).expand_param("cb", expand_param!(i64).variant_self()))),
     );
     assert!(error.contains("argument output expansions"), "{error}");
-    let source = syn::parse_file("pub fn f(cb:impl Fn()) {}").unwrap();
-    let model = prebindgen_c::Bindings::parse(
-        source
-            .items
-            .into_iter()
-            .map(|item| (item, Default::default())),
-    )
-    .unwrap();
-    let error = match prebindgen_c::Cbindgen::new(model).function(fun!(f)).build() {
-        Ok(_) => panic!("C source callbacks require an explicit callback protocol"),
-        Err(error) => error,
-    };
-    assert!(error.contains("adapter callback preparation"), "{error}");
 }
 
 #[test]
@@ -1544,7 +1532,7 @@ fn callback_constructor_can_also_be_exported_and_selected_in_alternatives() {
 }
 
 #[test]
-fn c_rejects_callbacks_in_direct_and_constructor_parameters() {
+fn c_supports_callbacks_in_direct_and_constructor_parameters() {
     for constructor in [false, true] {
         let source = syn::parse_file("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}").unwrap();
         let model = prebindgen_c::Bindings::parse(
@@ -1559,14 +1547,16 @@ fn c_rejects_callbacks_in_direct_and_constructor_parameters() {
         } else {
             fun!(make)
         };
-        let error = match prebindgen_c::Cbindgen::new(model)
+        let generated = prebindgen_c::Cbindgen::new(model)
+            .opaque_ptr("handler", syn::parse_quote!(Handler))
             .function(declaration)
+            .panic()
             .build()
-        {
-            Ok(_) => panic!("C requires its own callback protocol"),
-            Err(error) => error,
-        };
-        assert!(error.contains("adapter callback preparation"), "{error}");
+            .unwrap();
+        assert!(generated
+            .header
+            .contains("(*run)(void *context, int64_t arg0)"));
+        syn::parse_file(&generated.rust).unwrap();
     }
 }
 
@@ -1627,4 +1617,52 @@ fn callbacks_accept_handle_containing_sequence_arguments() {
     assert!(generated.kotlin["test/HandleVecCallback.kt"]
         .contains("kotlin.collections.List<test.rows.Handle>"));
     syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn callbacks_return_typed_values_and_keep_unit_interfaces() {
+    let generated=JniGen::builder().flat(flat("pub fn unit(cb:impl Fn(i64)) {} pub fn number(cb:impl Fn(i64)->i64)->i64{} pub fn flag(cb:impl Fn(i64)->bool)->bool{} pub fn zero(cb:impl Fn()->String)->String{}"))
+        .set_package_prefix("test").package(package!().fun(fun!(unit)).fun(fun!(number)).fun(fun!(flag)).fun(fun!(zero))).build().unwrap();
+    assert!(generated.kotlin["test/i64Callback.kt"].contains("public fun run(`arg0_0`: Long)"));
+    assert!(generated.kotlin["test/i64Toi64Callback.kt"].contains(": Long"));
+    assert!(generated.kotlin["test/i64ToboolCallback.kt"].contains(": Boolean"));
+    assert!(generated.kotlin["test/VoidToStringCallback.kt"].contains("run(): String?"));
+    assert!(generated.rust.contains("invoke_return"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+#[test]
+fn callback_returns_reject_borrows_and_unrepresented_results_in_preparation() {
+    for (source, message) in [
+        ("pub fn f(cb:impl Fn(&i64)->&i64) {}", "must be owned"),
+        (
+            "pub fn f(cb:impl Fn()->Result<i64,String>) {}",
+            "Result inputs",
+        ),
+    ] {
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(source))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(f))),
+        );
+        assert!(error.contains(message), "{error}");
+    }
+}
+
+#[test]
+fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
+    let source = syn::parse_file("pub fn f(cb:impl Fn(i64)->i64)->i64{}").unwrap();
+    let model = prebindgen_c::Bindings::parse(
+        source
+            .items
+            .into_iter()
+            .map(|item| (item, Default::default())),
+    )
+    .unwrap();
+    let error = prebindgen_c::Cbindgen::new(model)
+        .function(fun!(f))
+        .build()
+        .err()
+        .expect("non-Result callback binding needs explicit panic policy");
+    assert!(error.contains("declare .panic()"), "{error}");
 }

@@ -440,7 +440,7 @@ impl Codec for DataCodec<'_> {
         };
         if record.has_handles {
             return Err(format!(
-                "data class `{}` contains handles and supports returns only",
+                "data class `{}` contains handles and cannot be passed into Rust as a record",
                 record.fqn()
             ));
         }
