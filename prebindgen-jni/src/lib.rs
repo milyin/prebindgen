@@ -1475,28 +1475,30 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         }
         let call = if locks.is_empty() && lock_groups.is_empty() {
             call
-        } else {
-            if lock_groups.is_empty() && locks.len() <= 3 {
-                // Evaluate and validate each expression before taking any monitor.
-                let names = (0..locks.len())
-                    .map(|i| format!("handle{i}"))
-                    .collect::<Vec<_>>();
-                let locals = names.iter().zip(&locks).map(|(name, value)| format!("val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; ")).collect::<String>();
-                format!(
-                    "run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}",
-                    names.join(", ")
-                )
-            } else {
-                let mut all_locks = if locks.is_empty() {
-                    "kotlin.collections.emptyList<Nothing>()".to_string()
-                } else {
-                    format!("listOfNotNull({})", locks.join(", "))
-                };
-                for group in lock_groups {
-                    all_locks = format!("({all_locks} + ({group}))");
-                }
-                format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
+        } else if lock_groups.is_empty() && locks.len() <= 3 {
+            use std::fmt::Write as _;
+            // Evaluate and validate each expression before taking any monitor.
+            let names = (0..locks.len())
+                .map(|i| format!("handle{i}"))
+                .collect::<Vec<_>>();
+            let mut locals = String::new();
+            for (name, value) in names.iter().zip(&locks) {
+                write!(locals, "val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; ").expect("writing to a String");
             }
+            format!(
+                "run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}",
+                names.join(", ")
+            )
+        } else {
+            let mut all_locks = if locks.is_empty() {
+                "kotlin.collections.emptyList<Nothing>()".to_string()
+            } else {
+                format!("listOfNotNull({})", locks.join(", "))
+            };
+            for group in lock_groups {
+                all_locks = format!("({all_locks} + ({group}))");
+            }
+            format!("run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}")
         };
         let call = if callback {
             format!("try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}")
