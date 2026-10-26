@@ -32,10 +32,16 @@ python3 examples/bench-callbacks/compare.py \
   --output /tmp/callback-comparison
 ```
 
-The comparison starts three fresh JVMs per variant, rotating variant order in
-each round. It checks callback result totals, saves every timing sample, and
-records the build metadata and artifact hashes. The output directory must be new.
-Use the same Kotlin compiler, Rust toolchain and build profile for both builds.
+The comparison runs two complete rotations of the variant order: with two
+variants, each runs in four fresh JVMs and goes first twice. An explicit `--jvms`
+count must be a multiple of the variant count. Each JVM contributes its median;
+the report gives the median and range of those JVM medians, plus every raw batch.
+It checks callback result totals, saves failure logs, records artifact hashes,
+and rejects files modified during measurement. The output directory must be new.
+
+Prepare both artifacts with the current `run.py`. The comparison requires matching
+Rust/Kotlin compilers, release profiles and recorded profile environment settings.
+The `dirty` flag remains recorded so experiments on uncommitted code are visible.
 
 ## Reference measurement
 
