@@ -1290,8 +1290,8 @@
 <a href=#1290 id=1290 data-nosnippet>1290</a>        active: <span class="kw-2">&amp;</span>Condition,
 <a href=#1291 id=1291 data-nosnippet>1291</a>        names: <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span>syn::Ident, <span class="kw-2">&amp;</span>syn::Ident)&gt;,
 <a href=#1292 id=1292 data-nosnippet>1292</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CodecInput&lt;C&gt;&gt; {
-<a href=#1293 id=1293 data-nosnippet>1293</a>        <span class="kw">if </span>prebindgen_flat::callback_signature(ty)<span class="question-mark">?</span>.is_some() {
-<a href=#1294 id=1294 data-nosnippet>1294</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"source callback parameters require adapter callback preparation"</span>.into());
+<a href=#1293 id=1293 data-nosnippet>1293</a>        <span class="kw">if </span>prebindgen_flat::callback_signature(ty)<span class="question-mark">?</span>.is_some() &amp;&amp; !<span class="macro">matches!</span>(recipe, Input::Leaf) {
+<a href=#1294 id=1294 data-nosnippet>1294</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"source callback parameters only support leaf inputs"</span>.into());
 <a href=#1295 id=1295 data-nosnippet>1295</a>        }
 <a href=#1296 id=1296 data-nosnippet>1296</a>        <span class="kw">if </span>contains_result(ty) {
 <a href=#1297 id=1297 data-nosnippet>1297</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Result inputs require an explicit data representation; error routing is output-only"</span>.into());

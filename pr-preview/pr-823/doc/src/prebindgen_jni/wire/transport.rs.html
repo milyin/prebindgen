@@ -78,7 +78,7 @@
 <a href=#78 id=78 data-nosnippet>78</a>            <span class="self">Self</span>::Text =&gt; <span class="string">"row_text"</span>,
 <a href=#79 id=79 data-nosnippet>79</a>            <span class="self">Self</span>::Bytes =&gt; <span class="string">"row_bytes"</span>,
 <a href=#80 id=80 data-nosnippet>80</a>            <span class="self">Self</span>::Rows =&gt; <span class="string">"row_rows"</span>,
-<a href=#81 id=81 data-nosnippet>81</a>            <span class="self">Self</span>::Object =&gt; <span class="macro">unreachable!</span>(<span class="string">"callback objects are not collection element carriers"</span>),
+<a href=#81 id=81 data-nosnippet>81</a>            <span class="self">Self</span>::Object =&gt; <span class="macro">unreachable!</span>(<span class="string">"callback objects use the direct reference reader"</span>),
 <a href=#82 id=82 data-nosnippet>82</a>        }
 <a href=#83 id=83 data-nosnippet>83</a>    }
 <a href=#84 id=84 data-nosnippet>84</a>}
@@ -157,140 +157,139 @@
 <a href=#157 id=157 data-nosnippet>157</a>    /// Reference fields preserve Java null for optional/inactive values. The
 <a href=#158 id=158 data-nosnippet>158</a>    /// caller supplies the `environment` template parameter and owns local refs.
 <a href=#159 id=159 data-nosnippet>159</a>    </span><span class="kw">pub fn </span>read_array_element(<span class="kw-2">&amp;</span><span class="self">self</span>, array: <span class="kw-2">&amp;</span>TokenStream, index: usize) -&gt; TokenStream {
-<a href=#160 id=160 data-nosnippet>160</a>        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Callback { .. }) {
-<a href=#161 id=161 data-nosnippet>161</a>            <span class="kw">return </span><span class="macro">quote!</span>({
-<a href=#162 id=162 data-nosnippet>162</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"callback objects cannot be collection elements"</span>.into());
-<a href=#163 id=163 data-nosnippet>163</a>            });
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Callback { .. }) {
+<a href=#162 id=162 data-nosnippet>162</a>            <span class="comment">// The input converter retains this object before the row frame closes.
+<a href=#163 id=163 data-nosnippet>163</a>            </span><span class="kw">return </span><span class="macro">quote!</span>(#env.get_object_array_element(<span class="kw-2">&amp;</span>(#array), #index <span class="kw">as </span>i32).map_err(|e|e.to_string()));
 <a href=#164 id=164 data-nosnippet>164</a>        }
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
-<a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">let </span>reader = <span class="macro">format_ident!</span>(<span class="string">"{}"</span>, <span class="self">self</span>.jvm_type().reader());
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span>convert = <span class="macro">matches!</span>(<span class="self">self</span>.jvm_type(), JvmType::Boolean).then(|| <span class="macro">quote!</span>(.map(u8::from)));
-<a href=#168 id=168 data-nosnippet>168</a>        <span class="macro">quote!</span>(::prebindgen_jni_runtime::#reader(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>(#array), #index)#convert)
-<a href=#169 id=169 data-nosnippet>169</a>    }
-<a href=#170 id=170 data-nosnippet>170</a>    <span class="doccomment">/// Generate a Java object expression from a prepared output, boxing primitives.
-<a href=#171 id=171 data-nosnippet>171</a>    ///
-<a href=#172 id=172 data-nosnippet>172</a>    /// This accepts the representation in `OutputPlan::values`, not a native
-<a href=#173 id=173 data-nosnippet>173</a>    /// input: text/bytes are optional Rust payloads, i128/u128 are encoded bytes,
-<a href=#174 id=174 data-nosnippet>174</a>    /// handles are allocation pointers, and rows are optional JNI arrays.
-<a href=#175 id=175 data-nosnippet>175</a>    /// The expression can fail through `?`, uses the `environment` template
-<a href=#176 id=176 data-nosnippet>176</a>    /// parameter, and returns a local reference owned by the caller's frame.
-<a href=#177 id=177 data-nosnippet>177</a>    /// It does not commit any ownership transfer.
-<a href=#178 id=178 data-nosnippet>178</a>    </span><span class="kw">pub fn </span>output_object(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream {
-<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
-<a href=#180 id=180 data-nosnippet>180</a>        <span class="kw">let </span>(class, variant) = <span class="kw">match </span><span class="self">self</span>.jvm_type() {
-<a href=#181 id=181 data-nosnippet>181</a>            JvmType::Boolean =&gt; (<span class="string">"Boolean"</span>, <span class="string">"Bool"</span>),
-<a href=#182 id=182 data-nosnippet>182</a>            JvmType::Byte =&gt; (<span class="string">"Byte"</span>, <span class="string">"Byte"</span>),
-<a href=#183 id=183 data-nosnippet>183</a>            JvmType::Short =&gt; (<span class="string">"Short"</span>, <span class="string">"Short"</span>),
-<a href=#184 id=184 data-nosnippet>184</a>            JvmType::Int =&gt; (<span class="string">"Integer"</span>, <span class="string">"Int"</span>),
-<a href=#185 id=185 data-nosnippet>185</a>            JvmType::Long =&gt; (<span class="string">"Long"</span>, <span class="string">"Long"</span>),
-<a href=#186 id=186 data-nosnippet>186</a>            JvmType::Float =&gt; (<span class="string">"Float"</span>, <span class="string">"Float"</span>),
-<a href=#187 id=187 data-nosnippet>187</a>            JvmType::Double =&gt; (<span class="string">"Double"</span>, <span class="string">"Double"</span>),
-<a href=#188 id=188 data-nosnippet>188</a>            JvmType::Text =&gt; {
-<a href=#189 id=189 data-nosnippet>189</a>                <span class="kw">return </span><span class="macro">quote!</span>(<span class="kw">match </span>(#value).as_ref(){<span class="prelude-val">Some</span>(value)=&gt;::prebindgen_jni_runtime::text_object(<span class="kw-2">&amp;mut </span>#env,value)<span class="question-mark">?</span>,<span class="prelude-val">None</span>=&gt;::prebindgen_jni_runtime::jni::objects::JObject::null()})
-<a href=#190 id=190 data-nosnippet>190</a>            }
-<a href=#191 id=191 data-nosnippet>191</a>            JvmType::Bytes <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Scalar { .. }) =&gt; {
-<a href=#192 id=192 data-nosnippet>192</a>                <span class="kw">return </span><span class="macro">quote!</span>(::prebindgen_jni_runtime::bytes_object(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>(#value))<span class="question-mark">?</span>)
-<a href=#193 id=193 data-nosnippet>193</a>            }
-<a href=#194 id=194 data-nosnippet>194</a>            JvmType::Bytes =&gt; {
-<a href=#195 id=195 data-nosnippet>195</a>                <span class="kw">return </span><span class="macro">quote!</span>(<span class="kw">match </span>(#value).as_ref(){<span class="prelude-val">Some</span>(value)=&gt;::prebindgen_jni_runtime::bytes_object(<span class="kw-2">&amp;mut </span>#env,value)<span class="question-mark">?</span>,<span class="prelude-val">None</span>=&gt;::prebindgen_jni_runtime::jni::objects::JObject::null()})
-<a href=#196 id=196 data-nosnippet>196</a>            }
-<a href=#197 id=197 data-nosnippet>197</a>            JvmType::Object =&gt; {
-<a href=#198 id=198 data-nosnippet>198</a>                <span class="kw">return </span><span class="macro">quote!</span>(#env.new_local_ref(<span class="kw-2">&amp;</span>(#value)).map_err(|e|e.to_string())<span class="question-mark">?</span>)
-<a href=#199 id=199 data-nosnippet>199</a>            }
-<a href=#200 id=200 data-nosnippet>200</a>            JvmType::Rows =&gt; {
-<a href=#201 id=201 data-nosnippet>201</a>                <span class="kw">return </span><span class="macro">quote!</span>(<span class="kw">match </span>(#value).as_ref(){<span class="prelude-val">Some</span>(value)=&gt;#env.new_local_ref(value).map_err(|e|e.to_string())<span class="question-mark">?</span>,<span class="prelude-val">None</span>=&gt;::prebindgen_jni_runtime::jni::objects::JObject::null()})
-<a href=#202 id=202 data-nosnippet>202</a>            }
-<a href=#203 id=203 data-nosnippet>203</a>        };
-<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">let </span>signature = <span class="macro">format!</span>(<span class="string">"({})Ljava/lang/{class};"</span>, <span class="self">self</span>.jvm_descriptor());
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>class = <span class="macro">format!</span>(<span class="string">"java/lang/{class}"</span>);
-<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>variant = <span class="macro">format_ident!</span>(<span class="string">"{variant}"</span>);
-<a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">let </span>value = <span class="self">self</span>.output_scalar(value);
-<a href=#208 id=208 data-nosnippet>208</a>        <span class="macro">quote!</span>(#env.call_static_method(#class,<span class="string">"valueOf"</span>,#signature,<span class="kw-2">&amp;</span>[::prebindgen_jni_runtime::jni::objects::JValue::#variant(#value)]).and_then(|v|v.l()).map_err(|e|e.to_string())<span class="question-mark">?</span>)
-<a href=#209 id=209 data-nosnippet>209</a>    }
-<a href=#210 id=210 data-nosnippet>210</a>    <span class="kw">fn </span>output_scalar(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream {
-<a href=#211 id=211 data-nosnippet>211</a>        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Handle { .. }) {
-<a href=#212 id=212 data-nosnippet>212</a>            <span class="macro">quote!</span>((#value) <span class="kw">as </span>i64)
-<a href=#213 id=213 data-nosnippet>213</a>        } <span class="kw">else </span>{
-<a href=#214 id=214 data-nosnippet>214</a>            value.clone()
-<a href=#215 id=215 data-nosnippet>215</a>        }
-<a href=#216 id=216 data-nosnippet>216</a>    }
-<a href=#217 id=217 data-nosnippet>217</a>    <span class="doccomment">/// Generate one JNI method argument from the same prepared output as
-<a href=#218 id=218 data-nosnippet>218</a>    /// [`Self::output_object`], leaving JVM primitives unboxed.
-<a href=#219 id=219 data-nosnippet>219</a>    ///
-<a href=#220 id=220 data-nosnippet>220</a>    /// `local` must be a fresh identifier for this argument's Java object.
-<a href=#221 id=221 data-nosnippet>221</a>    /// Emit the returned statements before its value and keep references alive
-<a href=#222 id=222 data-nosnippet>222</a>    /// through the invocation. The caller supplies `environment`, validates the
-<a href=#223 id=223 data-nosnippet>223</a>    /// method signature, and commits ownership only after successful delivery.
-<a href=#224 id=224 data-nosnippet>224</a>    /// A custom generator can render both fragments with its [`JniContext`]:
-<a href=#225 id=225 data-nosnippet>225</a>    ///
-<a href=#226 id=226 data-nosnippet>226</a>    /// ```
-<a href=#227 id=227 data-nosnippet>227</a>    /// use prebindgen_conversions::TemplateContext;
-<a href=#228 id=228 data-nosnippet>228</a>    /// use prebindgen_jni::{JniContext, JniWire};
-<a href=#229 id=229 data-nosnippet>229</a>    /// use quote::quote;
-<a href=#230 id=230 data-nosnippet>230</a>    /// let context = JniContext {
-<a href=#231 id=231 data-nosnippet>231</a>    ///     environment: syn::parse_quote!(env),
-<a href=#232 id=232 data-nosnippet>232</a>    ///     acknowledgement: syn::parse_quote!(accepted),
-<a href=#233 id=233 data-nosnippet>233</a>    ///     domain_output: syn::parse_quote!(domain_output),
-<a href=#234 id=234 data-nosnippet>234</a>    ///     is_domain_error: false,
-<a href=#235 id=235 data-nosnippet>235</a>    ///     output_committed: quote!(),
-<a href=#236 id=236 data-nosnippet>236</a>    /// };
-<a href=#237 id=237 data-nosnippet>237</a>    /// let argument = JniWire::text().output_argument(
-<a href=#238 id=238 data-nosnippet>238</a>    ///     &amp;quote!(prepared_text), &amp;syn::parse_quote!(java_text));
-<a href=#239 id=239 data-nosnippet>239</a>    /// let statements = context.render(&amp;argument.statements)?;
-<a href=#240 id=240 data-nosnippet>240</a>    /// let value = context.render(&amp;argument.value)?;
-<a href=#241 id=241 data-nosnippet>241</a>    /// // Emit statements, invoke with value, then release the local frame.
-<a href=#242 id=242 data-nosnippet>242</a>    /// # assert!(!statements.to_string().contains("__prebindgen_emit"));
-<a href=#243 id=243 data-nosnippet>243</a>    /// # assert!(!value.to_string().contains("__prebindgen_emit"));
-<a href=#244 id=244 data-nosnippet>244</a>    /// # Ok::&lt;(), String&gt;(())
-<a href=#245 id=245 data-nosnippet>245</a>    /// ```
-<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="kw">pub fn </span>output_argument(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>TokenStream, local: <span class="kw-2">&amp;</span>syn::Ident) -&gt; JniArgument {
-<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">let </span>member = <span class="kw">match </span><span class="self">self</span>.jvm_type() {
-<a href=#248 id=248 data-nosnippet>248</a>            JvmType::Boolean =&gt; <span class="string">"z"</span>,
-<a href=#249 id=249 data-nosnippet>249</a>            JvmType::Byte =&gt; <span class="string">"b"</span>,
-<a href=#250 id=250 data-nosnippet>250</a>            JvmType::Short =&gt; <span class="string">"s"</span>,
-<a href=#251 id=251 data-nosnippet>251</a>            JvmType::Int =&gt; <span class="string">"i"</span>,
-<a href=#252 id=252 data-nosnippet>252</a>            JvmType::Long =&gt; <span class="string">"j"</span>,
-<a href=#253 id=253 data-nosnippet>253</a>            JvmType::Float =&gt; <span class="string">"f"</span>,
-<a href=#254 id=254 data-nosnippet>254</a>            JvmType::Double =&gt; <span class="string">"d"</span>,
-<a href=#255 id=255 data-nosnippet>255</a>            JvmType::Text | JvmType::Bytes | JvmType::Rows | JvmType::Object =&gt; {
-<a href=#256 id=256 data-nosnippet>256</a>                <span class="kw">let </span>object = <span class="self">self</span>.output_object(value);
-<a href=#257 id=257 data-nosnippet>257</a>                <span class="kw">return </span>JniArgument {
-<a href=#258 id=258 data-nosnippet>258</a>                    statements: <span class="macro">quote!</span>(<span class="kw">let </span>#local=#object;),
-<a href=#259 id=259 data-nosnippet>259</a>                    value: <span class="macro">quote!</span>(::prebindgen_jni_runtime::jni::sys::jvalue { l:#local.as_raw() }),
-<a href=#260 id=260 data-nosnippet>260</a>                };
-<a href=#261 id=261 data-nosnippet>261</a>            }
-<a href=#262 id=262 data-nosnippet>262</a>        };
-<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">let </span>member = <span class="macro">format_ident!</span>(<span class="string">"{member}"</span>);
-<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw">let </span>value = <span class="self">self</span>.output_scalar(value);
-<a href=#265 id=265 data-nosnippet>265</a>        JniArgument {
-<a href=#266 id=266 data-nosnippet>266</a>            statements: TokenStream::new(),
-<a href=#267 id=267 data-nosnippet>267</a>            value: <span class="macro">quote!</span>(::prebindgen_jni_runtime::jni::sys::jvalue { #member:#value }),
-<a href=#268 id=268 data-nosnippet>268</a>        }
-<a href=#269 id=269 data-nosnippet>269</a>    }
-<a href=#270 id=270 data-nosnippet>270</a>}
-<a href=#271 id=271 data-nosnippet>271</a><span class="kw">impl </span>WireKind <span class="kw">for </span>JniWire {
-<a href=#272 id=272 data-nosnippet>272</a>    <span class="kw">fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
-<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">match </span><span class="self">self</span>.jvm_type() {
-<a href=#274 id=274 data-nosnippet>274</a>            JvmType::Boolean =&gt; <span class="macro">syn::parse_quote!</span>(u8),
-<a href=#275 id=275 data-nosnippet>275</a>            JvmType::Byte =&gt; <span class="macro">syn::parse_quote!</span>(i8),
-<a href=#276 id=276 data-nosnippet>276</a>            JvmType::Short =&gt; <span class="macro">syn::parse_quote!</span>(i16),
-<a href=#277 id=277 data-nosnippet>277</a>            JvmType::Int =&gt; <span class="macro">syn::parse_quote!</span>(i32),
-<a href=#278 id=278 data-nosnippet>278</a>            JvmType::Long =&gt; <span class="macro">syn::parse_quote!</span>(i64),
-<a href=#279 id=279 data-nosnippet>279</a>            JvmType::Float =&gt; <span class="macro">syn::parse_quote!</span>(f32),
-<a href=#280 id=280 data-nosnippet>280</a>            JvmType::Double =&gt; <span class="macro">syn::parse_quote!</span>(f64),
-<a href=#281 id=281 data-nosnippet>281</a>            JvmType::Text =&gt; {
-<a href=#282 id=282 data-nosnippet>282</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JString&lt;<span class="lifetime">'local</span>&gt;)
-<a href=#283 id=283 data-nosnippet>283</a>            }
-<a href=#284 id=284 data-nosnippet>284</a>            JvmType::Bytes =&gt; {
-<a href=#285 id=285 data-nosnippet>285</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JByteArray&lt;<span class="lifetime">'local</span>&gt;)
-<a href=#286 id=286 data-nosnippet>286</a>            }
-<a href=#287 id=287 data-nosnippet>287</a>            JvmType::Object =&gt; {
-<a href=#288 id=288 data-nosnippet>288</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JObject&lt;<span class="lifetime">'local</span>&gt;)
-<a href=#289 id=289 data-nosnippet>289</a>            }
-<a href=#290 id=290 data-nosnippet>290</a>            JvmType::Rows =&gt; {
-<a href=#291 id=291 data-nosnippet>291</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JObjectArray&lt;<span class="lifetime">'local</span>&gt;)
-<a href=#292 id=292 data-nosnippet>292</a>            }
-<a href=#293 id=293 data-nosnippet>293</a>        }
-<a href=#294 id=294 data-nosnippet>294</a>    }
-<a href=#295 id=295 data-nosnippet>295</a>}
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span>reader = <span class="macro">format_ident!</span>(<span class="string">"{}"</span>, <span class="self">self</span>.jvm_type().reader());
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">let </span>convert = <span class="macro">matches!</span>(<span class="self">self</span>.jvm_type(), JvmType::Boolean).then(|| <span class="macro">quote!</span>(.map(u8::from)));
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="macro">quote!</span>(::prebindgen_jni_runtime::#reader(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>(#array), #index)#convert)
+<a href=#168 id=168 data-nosnippet>168</a>    }
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// Generate a Java object expression from a prepared output, boxing primitives.
+<a href=#170 id=170 data-nosnippet>170</a>    ///
+<a href=#171 id=171 data-nosnippet>171</a>    /// This accepts the representation in `OutputPlan::values`, not a native
+<a href=#172 id=172 data-nosnippet>172</a>    /// input: text/bytes are optional Rust payloads, i128/u128 are encoded bytes,
+<a href=#173 id=173 data-nosnippet>173</a>    /// handles are allocation pointers, and rows are optional JNI arrays.
+<a href=#174 id=174 data-nosnippet>174</a>    /// The expression can fail through `?`, uses the `environment` template
+<a href=#175 id=175 data-nosnippet>175</a>    /// parameter, and returns a local reference owned by the caller's frame.
+<a href=#176 id=176 data-nosnippet>176</a>    /// It does not commit any ownership transfer.
+<a href=#177 id=177 data-nosnippet>177</a>    </span><span class="kw">pub fn </span>output_object(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream {
+<a href=#178 id=178 data-nosnippet>178</a>        <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">let </span>(class, variant) = <span class="kw">match </span><span class="self">self</span>.jvm_type() {
+<a href=#180 id=180 data-nosnippet>180</a>            JvmType::Boolean =&gt; (<span class="string">"Boolean"</span>, <span class="string">"Bool"</span>),
+<a href=#181 id=181 data-nosnippet>181</a>            JvmType::Byte =&gt; (<span class="string">"Byte"</span>, <span class="string">"Byte"</span>),
+<a href=#182 id=182 data-nosnippet>182</a>            JvmType::Short =&gt; (<span class="string">"Short"</span>, <span class="string">"Short"</span>),
+<a href=#183 id=183 data-nosnippet>183</a>            JvmType::Int =&gt; (<span class="string">"Integer"</span>, <span class="string">"Int"</span>),
+<a href=#184 id=184 data-nosnippet>184</a>            JvmType::Long =&gt; (<span class="string">"Long"</span>, <span class="string">"Long"</span>),
+<a href=#185 id=185 data-nosnippet>185</a>            JvmType::Float =&gt; (<span class="string">"Float"</span>, <span class="string">"Float"</span>),
+<a href=#186 id=186 data-nosnippet>186</a>            JvmType::Double =&gt; (<span class="string">"Double"</span>, <span class="string">"Double"</span>),
+<a href=#187 id=187 data-nosnippet>187</a>            JvmType::Text =&gt; {
+<a href=#188 id=188 data-nosnippet>188</a>                <span class="kw">return </span><span class="macro">quote!</span>(<span class="kw">match </span>(#value).as_ref(){<span class="prelude-val">Some</span>(value)=&gt;::prebindgen_jni_runtime::text_object(<span class="kw-2">&amp;mut </span>#env,value)<span class="question-mark">?</span>,<span class="prelude-val">None</span>=&gt;::prebindgen_jni_runtime::jni::objects::JObject::null()})
+<a href=#189 id=189 data-nosnippet>189</a>            }
+<a href=#190 id=190 data-nosnippet>190</a>            JvmType::Bytes <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Scalar { .. }) =&gt; {
+<a href=#191 id=191 data-nosnippet>191</a>                <span class="kw">return </span><span class="macro">quote!</span>(::prebindgen_jni_runtime::bytes_object(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>(#value))<span class="question-mark">?</span>)
+<a href=#192 id=192 data-nosnippet>192</a>            }
+<a href=#193 id=193 data-nosnippet>193</a>            JvmType::Bytes =&gt; {
+<a href=#194 id=194 data-nosnippet>194</a>                <span class="kw">return </span><span class="macro">quote!</span>(<span class="kw">match </span>(#value).as_ref(){<span class="prelude-val">Some</span>(value)=&gt;::prebindgen_jni_runtime::bytes_object(<span class="kw-2">&amp;mut </span>#env,value)<span class="question-mark">?</span>,<span class="prelude-val">None</span>=&gt;::prebindgen_jni_runtime::jni::objects::JObject::null()})
+<a href=#195 id=195 data-nosnippet>195</a>            }
+<a href=#196 id=196 data-nosnippet>196</a>            JvmType::Object =&gt; {
+<a href=#197 id=197 data-nosnippet>197</a>                <span class="kw">return </span><span class="macro">quote!</span>(#env.new_local_ref(<span class="kw-2">&amp;</span>(#value)).map_err(|e|e.to_string())<span class="question-mark">?</span>)
+<a href=#198 id=198 data-nosnippet>198</a>            }
+<a href=#199 id=199 data-nosnippet>199</a>            JvmType::Rows =&gt; {
+<a href=#200 id=200 data-nosnippet>200</a>                <span class="kw">return </span><span class="macro">quote!</span>(<span class="kw">match </span>(#value).as_ref(){<span class="prelude-val">Some</span>(value)=&gt;#env.new_local_ref(value).map_err(|e|e.to_string())<span class="question-mark">?</span>,<span class="prelude-val">None</span>=&gt;::prebindgen_jni_runtime::jni::objects::JObject::null()})
+<a href=#201 id=201 data-nosnippet>201</a>            }
+<a href=#202 id=202 data-nosnippet>202</a>        };
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">let </span>signature = <span class="macro">format!</span>(<span class="string">"({})Ljava/lang/{class};"</span>, <span class="self">self</span>.jvm_descriptor());
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">let </span>class = <span class="macro">format!</span>(<span class="string">"java/lang/{class}"</span>);
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>variant = <span class="macro">format_ident!</span>(<span class="string">"{variant}"</span>);
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>value = <span class="self">self</span>.output_scalar(value);
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="macro">quote!</span>(#env.call_static_method(#class,<span class="string">"valueOf"</span>,#signature,<span class="kw-2">&amp;</span>[::prebindgen_jni_runtime::jni::objects::JValue::#variant(#value)]).and_then(|v|v.l()).map_err(|e|e.to_string())<span class="question-mark">?</span>)
+<a href=#208 id=208 data-nosnippet>208</a>    }
+<a href=#209 id=209 data-nosnippet>209</a>    <span class="kw">fn </span>output_scalar(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; TokenStream {
+<a href=#210 id=210 data-nosnippet>210</a>        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Handle { .. }) {
+<a href=#211 id=211 data-nosnippet>211</a>            <span class="macro">quote!</span>((#value) <span class="kw">as </span>i64)
+<a href=#212 id=212 data-nosnippet>212</a>        } <span class="kw">else </span>{
+<a href=#213 id=213 data-nosnippet>213</a>            value.clone()
+<a href=#214 id=214 data-nosnippet>214</a>        }
+<a href=#215 id=215 data-nosnippet>215</a>    }
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="doccomment">/// Generate one JNI method argument from the same prepared output as
+<a href=#217 id=217 data-nosnippet>217</a>    /// [`Self::output_object`], leaving JVM primitives unboxed.
+<a href=#218 id=218 data-nosnippet>218</a>    ///
+<a href=#219 id=219 data-nosnippet>219</a>    /// `local` must be a fresh identifier for this argument's Java object.
+<a href=#220 id=220 data-nosnippet>220</a>    /// Emit the returned statements before its value and keep references alive
+<a href=#221 id=221 data-nosnippet>221</a>    /// through the invocation. The caller supplies `environment`, validates the
+<a href=#222 id=222 data-nosnippet>222</a>    /// method signature, and commits ownership only after successful delivery.
+<a href=#223 id=223 data-nosnippet>223</a>    /// A custom generator can render both fragments with its [`JniContext`]:
+<a href=#224 id=224 data-nosnippet>224</a>    ///
+<a href=#225 id=225 data-nosnippet>225</a>    /// ```
+<a href=#226 id=226 data-nosnippet>226</a>    /// use prebindgen_conversions::TemplateContext;
+<a href=#227 id=227 data-nosnippet>227</a>    /// use prebindgen_jni::{JniContext, JniWire};
+<a href=#228 id=228 data-nosnippet>228</a>    /// use quote::quote;
+<a href=#229 id=229 data-nosnippet>229</a>    /// let context = JniContext {
+<a href=#230 id=230 data-nosnippet>230</a>    ///     environment: syn::parse_quote!(env),
+<a href=#231 id=231 data-nosnippet>231</a>    ///     acknowledgement: syn::parse_quote!(accepted),
+<a href=#232 id=232 data-nosnippet>232</a>    ///     domain_output: syn::parse_quote!(domain_output),
+<a href=#233 id=233 data-nosnippet>233</a>    ///     is_domain_error: false,
+<a href=#234 id=234 data-nosnippet>234</a>    ///     output_committed: quote!(),
+<a href=#235 id=235 data-nosnippet>235</a>    /// };
+<a href=#236 id=236 data-nosnippet>236</a>    /// let argument = JniWire::text().output_argument(
+<a href=#237 id=237 data-nosnippet>237</a>    ///     &amp;quote!(prepared_text), &amp;syn::parse_quote!(java_text));
+<a href=#238 id=238 data-nosnippet>238</a>    /// let statements = context.render(&amp;argument.statements)?;
+<a href=#239 id=239 data-nosnippet>239</a>    /// let value = context.render(&amp;argument.value)?;
+<a href=#240 id=240 data-nosnippet>240</a>    /// // Emit statements, invoke with value, then release the local frame.
+<a href=#241 id=241 data-nosnippet>241</a>    /// # assert!(!statements.to_string().contains("__prebindgen_emit"));
+<a href=#242 id=242 data-nosnippet>242</a>    /// # assert!(!value.to_string().contains("__prebindgen_emit"));
+<a href=#243 id=243 data-nosnippet>243</a>    /// # Ok::&lt;(), String&gt;(())
+<a href=#244 id=244 data-nosnippet>244</a>    /// ```
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">pub fn </span>output_argument(<span class="kw-2">&amp;</span><span class="self">self</span>, value: <span class="kw-2">&amp;</span>TokenStream, local: <span class="kw-2">&amp;</span>syn::Ident) -&gt; JniArgument {
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="kw">let </span>member = <span class="kw">match </span><span class="self">self</span>.jvm_type() {
+<a href=#247 id=247 data-nosnippet>247</a>            JvmType::Boolean =&gt; <span class="string">"z"</span>,
+<a href=#248 id=248 data-nosnippet>248</a>            JvmType::Byte =&gt; <span class="string">"b"</span>,
+<a href=#249 id=249 data-nosnippet>249</a>            JvmType::Short =&gt; <span class="string">"s"</span>,
+<a href=#250 id=250 data-nosnippet>250</a>            JvmType::Int =&gt; <span class="string">"i"</span>,
+<a href=#251 id=251 data-nosnippet>251</a>            JvmType::Long =&gt; <span class="string">"j"</span>,
+<a href=#252 id=252 data-nosnippet>252</a>            JvmType::Float =&gt; <span class="string">"f"</span>,
+<a href=#253 id=253 data-nosnippet>253</a>            JvmType::Double =&gt; <span class="string">"d"</span>,
+<a href=#254 id=254 data-nosnippet>254</a>            JvmType::Text | JvmType::Bytes | JvmType::Rows | JvmType::Object =&gt; {
+<a href=#255 id=255 data-nosnippet>255</a>                <span class="kw">let </span>object = <span class="self">self</span>.output_object(value);
+<a href=#256 id=256 data-nosnippet>256</a>                <span class="kw">return </span>JniArgument {
+<a href=#257 id=257 data-nosnippet>257</a>                    statements: <span class="macro">quote!</span>(<span class="kw">let </span>#local=#object;),
+<a href=#258 id=258 data-nosnippet>258</a>                    value: <span class="macro">quote!</span>(::prebindgen_jni_runtime::jni::sys::jvalue { l:#local.as_raw() }),
+<a href=#259 id=259 data-nosnippet>259</a>                };
+<a href=#260 id=260 data-nosnippet>260</a>            }
+<a href=#261 id=261 data-nosnippet>261</a>        };
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span>member = <span class="macro">format_ident!</span>(<span class="string">"{member}"</span>);
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">let </span>value = <span class="self">self</span>.output_scalar(value);
+<a href=#264 id=264 data-nosnippet>264</a>        JniArgument {
+<a href=#265 id=265 data-nosnippet>265</a>            statements: TokenStream::new(),
+<a href=#266 id=266 data-nosnippet>266</a>            value: <span class="macro">quote!</span>(::prebindgen_jni_runtime::jni::sys::jvalue { #member:#value }),
+<a href=#267 id=267 data-nosnippet>267</a>        }
+<a href=#268 id=268 data-nosnippet>268</a>    }
+<a href=#269 id=269 data-nosnippet>269</a>}
+<a href=#270 id=270 data-nosnippet>270</a><span class="kw">impl </span>WireKind <span class="kw">for </span>JniWire {
+<a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">fn </span>rust_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; syn::Type {
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">match </span><span class="self">self</span>.jvm_type() {
+<a href=#273 id=273 data-nosnippet>273</a>            JvmType::Boolean =&gt; <span class="macro">syn::parse_quote!</span>(u8),
+<a href=#274 id=274 data-nosnippet>274</a>            JvmType::Byte =&gt; <span class="macro">syn::parse_quote!</span>(i8),
+<a href=#275 id=275 data-nosnippet>275</a>            JvmType::Short =&gt; <span class="macro">syn::parse_quote!</span>(i16),
+<a href=#276 id=276 data-nosnippet>276</a>            JvmType::Int =&gt; <span class="macro">syn::parse_quote!</span>(i32),
+<a href=#277 id=277 data-nosnippet>277</a>            JvmType::Long =&gt; <span class="macro">syn::parse_quote!</span>(i64),
+<a href=#278 id=278 data-nosnippet>278</a>            JvmType::Float =&gt; <span class="macro">syn::parse_quote!</span>(f32),
+<a href=#279 id=279 data-nosnippet>279</a>            JvmType::Double =&gt; <span class="macro">syn::parse_quote!</span>(f64),
+<a href=#280 id=280 data-nosnippet>280</a>            JvmType::Text =&gt; {
+<a href=#281 id=281 data-nosnippet>281</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JString&lt;<span class="lifetime">'local</span>&gt;)
+<a href=#282 id=282 data-nosnippet>282</a>            }
+<a href=#283 id=283 data-nosnippet>283</a>            JvmType::Bytes =&gt; {
+<a href=#284 id=284 data-nosnippet>284</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JByteArray&lt;<span class="lifetime">'local</span>&gt;)
+<a href=#285 id=285 data-nosnippet>285</a>            }
+<a href=#286 id=286 data-nosnippet>286</a>            JvmType::Object =&gt; {
+<a href=#287 id=287 data-nosnippet>287</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JObject&lt;<span class="lifetime">'local</span>&gt;)
+<a href=#288 id=288 data-nosnippet>288</a>            }
+<a href=#289 id=289 data-nosnippet>289</a>            JvmType::Rows =&gt; {
+<a href=#290 id=290 data-nosnippet>290</a>                <span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::objects::JObjectArray&lt;<span class="lifetime">'local</span>&gt;)
+<a href=#291 id=291 data-nosnippet>291</a>            }
+<a href=#292 id=292 data-nosnippet>292</a>        }
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>}
 </code></pre></div></section></main></body></html>
