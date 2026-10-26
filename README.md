@@ -59,7 +59,7 @@ unsupported shapes remain active behind that selection.
 
 The old foreign performance drivers require the commented bindings and have
 been removed. Full coverage clients are replaced with focused C and Kotlin smoke
-clients exercising the active declarations; this branch makes no performance or
+clients exercising the active declarations; these examples make no performance or
 full downstream compatibility claim. Generated artifacts remain under `OUT_DIR`.
 
 Named flat objects must have nonzero Rust size, including opaque aliases and
@@ -177,7 +177,7 @@ Preparation trees use `Input<InputRequest>` and `Output<OutputRequest>`: structu
 operations and pending choices share one tree. `Request` marks a choice that
 preparation must resolve: `Auto` selects a configured default, `Call` discovers
 constructor arguments, `ForType` applies a typed override, and `NamedFields`
-fills in source fields by name. The production
+fills in source fields by name. The
 `expand_param!`, `expand_return!`, and `fields!` builders write those trees;
 `.expand(...)` registers type defaults and function `.expand_param(name, ...)` /
 `.expand_return(...)` replace them. For example:

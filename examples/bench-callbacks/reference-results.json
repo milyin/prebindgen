@@ -6,7 +6,7 @@
     "jvm_heap": "256 MiB",
     "build": "cargo build --release --offline"
   },
-  "main_commit": "5e149f869710dfb71162c5af854c20e3ccb44cef",
+  "baseline_commit": "5e149f869710dfb71162c5af854c20e3ccb44cef",
   "parent_tree_commit": "94f9eab1b1fb8bee9d93f40b1681004565d18aad",
   "parent_measured_checkout": "02314df4484a4ea730c3cc30670e70a652df4334",
   "updated": "runtime implementation committed in 4c3fcd44bd1f339bc064b2df3b4b5e8330008030, measured before committing the report",
@@ -16,23 +16,23 @@
   "jvms_per_variant": 3,
   "median_ns_per_callback": {
     "scalar": {
-      "main": 182.544195,
+      "5e149f869": 182.544195,
       "parent": 269.77069,
       "updated": 199.777445
     },
     "record": {
-      "main": 183.987345,
+      "5e149f869": 183.987345,
       "parent": 272.40189,
       "updated": 211.91929
     },
     "owned": {
-      "main": 220.34574,
+      "5e149f869": 220.34574,
       "parent": 507.995135,
       "updated": 231.336845
     }
   },
   "samples": {
-    "main": {
+    "5e149f869": {
       "scalar": [
         321.096785,
         221.55319,
@@ -300,5 +300,5 @@
       ]
     }
   },
-  "orchestration": "manual rotating order after all builds; previously built main native artifact, freshly compiled identical Kotlin driver for every variant"
+  "orchestration": "manual rotating order after all builds; previously built 5e149f869 native artifact, freshly compiled identical Kotlin driver for every variant"
 }

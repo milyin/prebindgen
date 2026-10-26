@@ -1,4 +1,4 @@
-//! Retained JVM callbacks with the production invocation and ownership contract.
+//! Retained JVM callbacks and argument ownership transfer.
 use crate::LocalFrame;
 use jni::{
     objects::{GlobalRef, JMethodID, JObject},
@@ -60,8 +60,8 @@ impl Callback {
 
     /// Invoke the cached method. Committed argument handles are Kotlin-owned.
     ///
-    /// Like production, there is no per-invocation acceptance handshake. Kotlin
-    /// cleans up handles after entry; failure to enter the bridge can leak them.
+    /// Argument ownership transfers without a per-invocation acceptance handshake.
+    /// Kotlin cleans up handles after entry; failure to enter the bridge can leak them.
     ///
     /// # Safety
     /// `arguments` must match the descriptor passed to [`Self::new`], with live

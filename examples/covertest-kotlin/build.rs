@@ -1,7 +1,7 @@
 //! Active coverage: primitives, strings/bytes, owned handles, selectors and field outputs.
 //! The original coverage inventory below includes features now commented out.
 //!
-//! Migrated from main. Unsupported declarations remain commented below.
+//! Unsupported declarations remain commented below.
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
 //! separate `prebindgen-jni` crate's `JniGenBuilder` adapter — exercising **every**
 //! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
@@ -177,8 +177,8 @@ fn main() {
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
-            // Observe a clone so the production builder still installs its own codec.
-            // Collections.kt exercises the separately generated production boundary.
+            // Observe a clone so the builder still installs its own codec.
+            // Collections.kt exercises the separately generated JNI boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;
             let Outcomes { success, source_error: None, binding_failure: Some(_) } = output.output_outcomes() else {
                 return Err("collection probe must declare success and binding failure only".into());

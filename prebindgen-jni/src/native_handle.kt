@@ -19,7 +19,7 @@ public abstract class NativeHandle internal constructor(raw: Long) : AutoCloseab
 
 internal class HandleValidationFailure(message: String) : IllegalStateException(message)
 
-// Like main, monitors serialize threads and allow same-thread reentry. Callers
+// Monitors serialize threads and allow same-thread reentry. Callers
 // must respect Rust borrows and must not close or move a value still in use.
 internal inline fun <R> withHandleLocks(handle: NativeHandle?, body: () -> R): R =
     if (handle == null) body() else synchronized(handle) { body() }

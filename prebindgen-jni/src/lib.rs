@@ -286,7 +286,7 @@ impl JniGenBuilder {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register an input/output default using the production declaration syntax.
+    /// Register an input/output default using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
     pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
         use prebindgen_declarations::ExpandDecl;

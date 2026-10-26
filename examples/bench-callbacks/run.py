@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Release JNI callback microbenchmark, usable against main or the rebuilt API."""
+"""Release JNI callback microbenchmark with a selectable generator checkout."""
 import argparse
 import json
 import os
