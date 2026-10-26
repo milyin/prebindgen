@@ -70,12 +70,17 @@ jar = output / "bench.jar"
 subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "CallbackBench.kt"), "-include-runtime", "-d", str(jar)], check=True)
 samples = {case: [] for case in ("scalar", "record", "owned")}
 for trial in range(args.jvms):
-    result = subprocess.run(["java", "-Xms256m", "-Xmx256m", f"-Djava.library.path={output / 'target/release'}", "-jar", str(jar), str(args.iterations), str(args.warmup), str(args.batches)], text=True, capture_output=True, check=True)
+    result = subprocess.run(["java", "-Xms256m", "-Xmx256m", f"-Djava.library.path={output / 'target/release'}", "-jar", str(jar), str(args.iterations), str(args.warmup), str(args.batches)], text=True, capture_output=True)
     (output / f"run-{trial}.log").write_text(result.stdout + result.stderr)
+    result.check_returncode()
     for line in result.stdout.splitlines():
         if line.startswith("BENCH,"):
             _, case, count, nanos = line.split(",")
             samples[case].append(int(nanos) / int(count))
+    expected = (args.warmup + args.batches) * (args.iterations * (args.iterations - 1) // 2 + args.iterations ** 2 + args.iterations)
+    expected = (expected + 2 ** 63) % (2 ** 64) - 2 ** 63
+    if f"SINK,{expected}" not in result.stdout.splitlines():
+        raise RuntimeError("callback results differ from the expected batch totals")
     for case in samples:
         if len(samples[case]) != (trial + 1) * args.batches:
             raise RuntimeError(f"incomplete measurements for {case}")
@@ -84,6 +89,8 @@ report = {
     "checkout": str(checkout),
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=checkout, text=True).strip(),
     "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=checkout)),
+    "profile": "release",
+    "profile_environment": {key: value for key, value in os.environ.items() if key.startswith("CARGO_PROFILE_RELEASE_") or key in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")},
     "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
     "java": subprocess.run(["java", "-version"], capture_output=True, text=True, check=True).stderr.strip(),
     "kotlin": subprocess.run([os.environ.get("KOTLINC", "kotlinc"), "-version"], capture_output=True, text=True, check=True).stderr.strip(),
