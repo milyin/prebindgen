@@ -1625,9 +1625,10 @@ fn shared_handle_inputs_request_shared_native_access() {
         .package(package!().class(ptr_class!(Handle)).fun(fun!(read)).fun(fun!(write)).fun(fun!(take)))
         .build().unwrap();
     let kotlin = &generated.kotlin["test/Functions.kt"];
-    assert_eq!(
-        kotlin.matches("sharedNativeAccess()").count(),
-        1,
-        "{kotlin}"
-    );
+    for (name, shared) in [("read", true), ("write", false), ("take", false)] {
+        let declaration = format!("public fun `{name}`(");
+        let body = kotlin.split_once(&declaration).unwrap().1;
+        let body = body.split("\npublic fun ").next().unwrap();
+        assert_eq!(body.contains(".sharedNativeAccess()"), shared, "{body}");
+    }
 }
