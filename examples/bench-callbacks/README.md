@@ -61,3 +61,39 @@ The columns identify the measured source commits. `94f9eab1b` has the same
 source tree as `02314df44`. The `4c3fcd44b` implementation was measured before
 committing the benchmark report. Differences between these measurements are not
 attributed to an isolated component.
+
+## Callback runtime inlining measurement
+
+The source change adds inlining hints to callback invocation and local-frame
+operations. The compiler can optimize these operations at their call sites;
+callback ownership, exception handling and local-reference cleanup are unchanged.
+
+Both prepared builds used rustc 1.98.0, Kotlin 2.1.0, OpenJDK 11.0.29, the release
+profile and no profile environment overrides. The baseline is `51f9bfa29`;
+`110537870` includes the inlining change. Both source trees were clean at build
+time. No builds ran during the comparisons.
+
+```sh
+python3 examples/bench-callbacks/compare.py \
+  --variant before=/tmp/callback-before \
+  --variant after=/tmp/callback-after \
+  --output /tmp/callback-inlining-comparison --jvms 8
+```
+
+The confirmation used eight fresh JVMs per variant, with ten warmup and nine
+measured batches of 200,000 callbacks per case. Each JVM contributes its median;
+the table reports the median of those eight JVM medians:
+
+| Callback payload | `51f9bfa29` ns | `110537870` ns | Time reduction |
+| --- | ---: | ---: | ---: |
+| One `i64` | 204.4 | 191.3 | 6.4% |
+| Borrowed two-field record | 213.4 | 187.2 | 12.3% |
+| Owned handle, automatically closed | 234.9 | 220.4 | 6.1% |
+
+[inlining-results.json](inlining-results.json) preserves the initial four-JVM run
+and the eight-JVM confirmation, including every sample, JVM medians/ranges, build
+metadata and artifact hashes. An unusually slow JVM occurred in the initial run;
+the confirmation checks whether its result persists with more independent JVMs.
+Scalar and record reductions were approximately 6–7% and 12% in both comparisons.
+Handle estimates varied from 2% to 6%, with overlapping JVM ranges. These noisy
+microbenchmarks do not establish a network throughput gain.
