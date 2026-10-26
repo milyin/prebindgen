@@ -759,21 +759,30 @@ Registration errors use the function's ordinary binding-error callback.
 Callbacks support scalar, string, byte, record, optional, enum and buffered
 sequence argument conversions, including declared projections. Vectors and borrowed
 slices can contain records with handles, including nested records, optional fields
-and nested collections. Default callback arguments close every contained handle
-after `run`, including when it throws; `take()` retains individual owners.
+and nested collections.
 
-A generator-wide output expansion of the collection argument type, such as
-`expand_return!(Vec<Row>).field_self_into()`, transfers the collection's produced
-handles to the callback author. Element-only expansions do not change the enclosing
-collection's scope. A `Vec<Row>` expansion also does not change the scope of
-`&[Row]` arguments. Use an owned row expansion, such as
-`expand_return!(Row).field_self_into()`, to move non-`Clone` fields from owned rows;
-borrowed slices require an appropriate borrowed conversion, such as cloning the
-handle fields. An owned-only row expansion cannot also convert borrowed slices of
-the same row type; use a conversion supporting both uses or separate row types.
-Kotlin reconstruction failure reclaims completed rows, the current
-partial row and unread rows before user code runs. Native conversion failure before
-commit drops the prepared resources without invoking the callback.
+For a callback taking `Vec<Row>`, where `Row` contains native handles:
+
+| Output declaration | How handle fields reach Kotlin | Who closes the Kotlin handles |
+| --- | --- | --- |
+| No output expansion for `Row` or `Vec<Row>` | Clone the fields; their types must implement `Clone`. | The generated bridge closes them after `run`, including when it throws. |
+| `expand_return!(Row).field_self_into()` | Move the fields out of each owned row; `Clone` is unnecessary. | The generated bridge still closes them after `run`. |
+| `expand_return!(Vec<Row>).field_self_into()` | Move the fields out of the owned rows. | The callback implementation must close them, even if `run` throws. |
+
+When the bridge closes handles automatically, call `handle.take()` during the
+callback to keep one. Use the owning wrapper returned by `take()` and close it
+when finished. These output declarations apply to every matching callback in the
+generator, as well as ordinary function returns.
+
+A callback taking `&[Row]` borrows the Rust rows, so their fields cannot be moved
+out. The default conversion clones handle fields and the bridge closes those
+clones after `run`; the original Rust rows remain untouched. A declaration for
+`Vec<Row>` does not change this behavior. The moving `Row` conversion in the table
+requires owned rows and cannot also serve borrowed slices of that row type.
+
+If Rust cannot finish converting the arguments, it drops the allocations prepared
+so far and skips that callback invocation. If Kotlin cannot construct the complete
+argument list, it closes the delivered handles without calling user code.
 
 Mutable references, callback return values, `Result`
 arguments, callbacks taking callable-signature arguments, explicit higher-ranked
