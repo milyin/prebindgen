@@ -1590,3 +1590,29 @@ fn callback_constructor_rejects_a_selector_for_the_callable_itself() {
         "{error}"
     );
 }
+
+#[test]
+fn wrapped_callable_source_types_are_rejected_before_callback_preparation() {
+    for callback in ["Option<impl Fn(i64)>", "Vec<impl Fn(i64)>"] {
+        for constructor in [false, true] {
+            let source = syn::parse_file(&format!("pub type Handler=String; pub fn make(cb:{callback})->Handler{{}} pub fn use_handler(value:Handler){{}}" )).unwrap();
+            let declaration = if constructor {
+                fun!(use_handler).expand_param("value", expand_param!(Handler).variant(fun!(make)))
+            } else {
+                fun!(make)
+            };
+            let error = fail(
+                JniGen::builder()
+                    .items(
+                        source
+                            .items
+                            .into_iter()
+                            .map(|item| (item, Default::default())),
+                    )
+                    .set_package_prefix("test")
+                    .package(package!().class(ptr_class!(Handler)).fun(declaration)),
+            );
+            assert!(error.contains("unsupported source type"), "{error}");
+        }
+    }
+}

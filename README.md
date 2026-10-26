@@ -758,7 +758,8 @@ Callbacks currently support scalar, string, byte, record, optional, enum and buf
 sequence argument conversions, including declared projections. Handle-containing
 sequence arguments are rejected because their per-element ownership requires an
 additional handoff protocol. Mutable references, callback return values, `Result`
-arguments, nested callbacks, higher-ranked bounds, and `FnMut`/`FnOnce` are rejected.
+arguments, callbacks taking callable-signature arguments, explicit higher-ranked
+bounds, and `FnMut`/`FnOnce` are rejected.
 Callbacks are accepted as direct parameters of exported source functions or input
 constructors. C callback inputs
 remain unsupported and fail during preparation. The covertest exercises retained

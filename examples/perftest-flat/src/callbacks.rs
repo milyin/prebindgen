@@ -239,6 +239,10 @@ pub fn callback_constructor_mixed(
     (handler.0)(67);
 }
 #[prebindgen]
+pub fn callback_constructor_set_fire(callbacks: CallbackSet) {
+    callback_set_fire(&callbacks, 2);
+}
+#[prebindgen]
 pub fn callback_constructor_selected(handler: CallbackConstructor, value: i64) {
     callback_constructor_fire(handler, value);
 }

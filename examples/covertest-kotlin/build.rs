@@ -146,6 +146,7 @@ fn main() {
             .fun(fun!(callback_constructor_new)).fun(fun!(callback_constructor_fire))
             .fun(fun!(callback_constructor_owned_fire).expand_param("handler",expand_param!(CallbackConstructor).variant(fun!(callback_constructor_owned))))
             .fun(fun!(callback_constructor_pair)).fun(fun!(callback_constructor_mixed))
+            .fun(fun!(callback_constructor_set_fire).expand_param("callbacks",expand_param!(CallbackSet).variant(fun!(callback_set_new))))
             .fun(fun!(callback_constructor_nested))
             .fun(fun!(callback_constructor_spawn))
             .fun(fun!(callback_constructor_run))

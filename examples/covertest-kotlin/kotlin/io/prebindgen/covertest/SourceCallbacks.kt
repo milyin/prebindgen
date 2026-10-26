@@ -74,6 +74,10 @@ private fun checkConstructorCallbacks() {
     callbackConstructorPair({ first.add(it); Unit }, { second.add(it); Unit })
     callbackConstructorMixed({ first.add(it); Unit }, { second.add(it); Unit })
     verify(first == listOf(31L, 61L) && second == listOf(37L, 67L))
+    val indexes = mutableListOf<Long>()
+    var emptyCalls = 0
+    callbackConstructorSetFire({ index, record -> indexes.add(index); verify(record.number == index + 10) }, { emptyCalls++; Unit })
+    verify(indexes == listOf(0L, 1L) && emptyCalls == 2)
     var nested = 0L
     callbackConstructorNested({ nested = it })
     verify(nested == 43L)
@@ -86,13 +90,15 @@ private fun checkConstructorCallbacks() {
     verify(!raw.isClosed && value == 17L && constructed == 11L)
     callbackConstructorSelected(1, null, raw, 13)
     verify(raw.isClosed && value == 13L)
-    val untouched = callbackConstructorNew({ error("unused handler") })
+    var untouchedValue = 0L
+    val untouched = callbackConstructorNew({ untouchedValue = it })
     try {
         callbackConstructorSelected(0, null, untouched, 15)
         error("expected active null callback rejection")
     } catch (_: IllegalArgumentException) { }
-    verify(!untouched.isClosed)
-    untouched.close()
+    verify(!untouched.isClosed && untouchedValue == 0L)
+    callbackConstructorSelected(1, null, untouched, 15)
+    verify(untouched.isClosed && untouchedValue == 15L)
 
     verify(!callbackConstructorOptional(null))
     var optional = 0L
