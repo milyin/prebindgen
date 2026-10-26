@@ -18,8 +18,8 @@ and clear JVM exceptions so subsequent invocations remain usable.</p>
     env: &amp;mut JNIEnv&lt;'_&gt;,
     arguments: &amp;[<a class="union" href="https://docs.rs/jni-sys/0.3.0/jni_sys/union.jvalue.html" title="union jni_sys::jvalue">jvalue</a>],
 ) -&gt; <a class="type" href="../prebindgen_runtime/type.Result.html" title="type prebindgen_runtime::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.99.1/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Invoke the cached method. Committed argument handles are Kotlin-owned.</p>
-<p>Like production, there is no per-invocation acceptance handshake. Kotlin
-cleans up handles after entry; failure to enter the bridge can leak them.</p>
+<p>Argument ownership transfers without a per-invocation acceptance handshake.
+Kotlin cleans up handles after entry; failure to enter the bridge can leak them.</p>
 <h5 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h5>
 <p><code>arguments</code> must match the descriptor passed to <a href="struct.Callback.html#method.new" title="associated function prebindgen_jni_runtime::Callback::new"><code>Self::new</code></a>, with live
 references in <code>env</code>. The environment must have no pending JVM exception.</p>
