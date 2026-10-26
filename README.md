@@ -820,9 +820,9 @@ Returning an owning handle gives Rust ownership of its value and marks the Kotli
 wrapper consumed. Kotlin must not close or use that wrapper afterward. To return
 a handle that the bridge would otherwise close after the callback, return
 `handle.take()`. Handle addresses collected before validation are reclaimed if
-return validation or construction fails. A VM failure while Rust reads the raw JNI result can
-prevent cleanup of handle addresses it has not yet read, just as failure to enter
-a callback can lose its arguments.
+return validation or construction fails. A VM failure while completing the JNI handoff or reading
+its raw result can strand handles that Rust has not yet received, just as failure
+to enter a callback can lose its arguments.
 
 Values with a JVM primitive representation return directly in that type. Multiple
 native fields travel in an object array. Unit callbacks keep their existing invocation path.
