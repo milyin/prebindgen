@@ -7,7 +7,8 @@ use std::rc::Rc;
 ///
 /// Supports owned public named-field records containing scalars, `String`,
 /// `Vec<u8>`, other declared data classes, declared opaque handles, and optional fields.
-/// Records containing handles (including nested ones) support returns only.
+/// Records containing handles (including nested ones) support output positions,
+/// including returns and callback arguments; they remain unsupported as inputs.
 /// Output ownership is declared with `expand_return!`: `field_self_ref()` borrows
 /// and `field_self_into()` moves, recursively. `project_self(Projection)` allows
 /// field overrides. Legacy `field_self()` and unexpanded outputs keep a fixed

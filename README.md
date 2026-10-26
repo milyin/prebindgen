@@ -756,10 +756,24 @@ checked JNI call without additional exception probes on the successful path. The
 invoking thread must have no pending JVM exception before entering the callback.
 Registration errors use the function's ordinary binding-error callback.
 
-Callbacks currently support scalar, string, byte, record, optional, enum and buffered
-sequence argument conversions, including declared projections. Handle-containing
-sequence arguments are rejected because their per-element ownership requires an
-additional handoff protocol. Mutable references, callback return values, `Result`
+Callbacks support scalar, string, byte, record, optional, enum and buffered
+sequence argument conversions, including declared projections. Vectors and borrowed
+slices can contain records with handles, including nested records, optional fields
+and nested collections. Default callback arguments close every contained handle
+after `run`, including when it throws; `take()` retains individual owners.
+
+An output expansion of the collection argument type, such as
+`expand_return!(Vec<Row>).field_self_into()`, transfers the collection's produced
+handles to the callback author. Element-only expansions do not change the enclosing
+collection's scope. A `Vec<Row>` expansion also does not change the scope of
+`&[Row]` arguments. Use an owned row expansion, such as
+`expand_return!(Row).field_self_into()`, to move non-`Clone` fields from owned rows;
+borrowed slices require an appropriate borrowed conversion, such as cloning the
+handle fields. Kotlin reconstruction failure reclaims completed rows, the current
+partial row and unread rows before user code runs. Native conversion failure before
+commit drops the prepared resources without invoking the callback.
+
+Mutable references, callback return values, `Result`
 arguments, callbacks taking callable-signature arguments, explicit higher-ranked
 bounds, and `FnMut`/`FnOnce` are rejected.
 Callbacks are accepted as direct parameters of exported source functions or input
