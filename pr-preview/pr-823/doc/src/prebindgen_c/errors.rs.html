@@ -31,7 +31,7 @@
 <a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// Fill the conversions of error declarations already attached to their source types.
 <a href=#32 id=32 data-nosnippet>32</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>prepare(
 <a href=#33 id=33 data-nosnippet>33</a>    flat: <span class="kw-2">&amp;mut </span>Bindings,
-<a href=#34 id=34 data-nosnippet>34</a>    codec: <span class="kw-2">&amp;</span>enums::EnumCodec,
+<a href=#34 id=34 data-nosnippet>34</a>    codec: <span class="kw-2">&amp;</span>enums::EnumCodec&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#35 id=35 data-nosnippet>35</a>    declarations: <span class="kw-2">&amp;</span>prebindgen_declarations::Declarations,
 <a href=#36 id=36 data-nosnippet>36</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#37 id=37 data-nosnippet>37</a>    <span class="kw">let </span><span class="kw-2">mut </span>types = flat

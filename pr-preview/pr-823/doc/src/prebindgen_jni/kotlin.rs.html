@@ -171,7 +171,7 @@
 <a href=#171 id=171 data-nosnippet>171</a><span class="doccomment">/// Prepared JNI input, with a logical schema and a native plan shared by Rust/Kotlin emission.
 <a href=#172 id=172 data-nosnippet>172</a></span><span class="attr">#[derive(Clone, Debug)]
 <a href=#173 id=173 data-nosnippet>173</a></span><span class="kw">pub struct </span>JniInput {
-<a href=#174 id=174 data-nosnippet>174</a>    rust: InputPlan&lt;JniWire&gt;,
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) rust: InputPlan&lt;JniWire&gt;,
 <a href=#175 id=175 data-nosnippet>175</a>}
 <a href=#176 id=176 data-nosnippet>176</a><span class="doccomment">/// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 <a href=#177 id=177 data-nosnippet>177</a></span><span class="attr">#[derive(Clone, Debug)]
