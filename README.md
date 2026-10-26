@@ -694,9 +694,9 @@ returns the initial accumulator. With a nullable accumulator type, a null final
 accumulator and None both return null. Result errors use callbacks returning the same
 accumulator type, and do not invoke the folder.
 
-Sequence-valued arguments of source callbacks remain part of future general
-callback support. Byte-buffer returns keep their existing transport and are not
-selected as element-wise sequences by these declarations.
+Retained source callbacks, including buffered sequence arguments, are described
+below. Byte-buffer returns keep their existing transport and are not selected as
+element-wise sequences by these declarations.
 
 ## Retained JNI source callbacks
 
@@ -704,6 +704,15 @@ JNI binds direct function parameters of the form `impl Fn(...) + Send + Sync + '
 with a unit result. `Send`, `Sync`, and `'static` bounds may be omitted. The generated
 Kotlin parameter uses a typed `fun interface`; ordinary `.fun(fun!(...))` declarations
 select these functions without extra callback configuration.
+
+Callbacks also work in source constructors selected by input expansions. For a
+constructor `handler_new(callback: impl Fn(Sample)) -> Handler`, declaring
+`expand_param!(Handler).variant(fun!(handler_new))` lets a bound function taking
+`Handler` receive the generated callback interface instead. The constructor does
+not need its own `.fun(...)` declaration. Nested constructors, selector alternatives,
+optional inputs and collections reuse the same callback conversion. Inactive
+alternatives do not register callbacks; a later argument validation failure releases
+any callback captures already retained while preparing that input.
 
 ```rust,ignore
 #[prebindgen]
@@ -750,7 +759,8 @@ sequence argument conversions, including declared projections. Handle-containing
 sequence arguments are rejected because their per-element ownership requires an
 additional handoff protocol. Mutable references, callback return values, `Result`
 arguments, nested callbacks, higher-ranked bounds, and `FnMut`/`FnOnce` are rejected.
-Callbacks are accepted only as direct source function parameters. C callback inputs
+Callbacks are accepted as direct parameters of exported source functions or input
+constructors. C callback inputs
 remain unsupported and fail during preparation. The covertest exercises retained
 and concurrent callbacks, output ownership, reentry, exception containment, and
 release of JVM captures under `-Xcheck:jni`.

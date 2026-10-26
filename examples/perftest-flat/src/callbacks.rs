@@ -194,3 +194,106 @@ pub fn callback_primitives(
 pub fn callback_enums(callback: impl Fn(Priority, Option<Priority>) + Send + Sync + 'static) {
     callback(Priority::High, Some(Priority::Low));
 }
+
+#[prebindgen]
+pub type CallbackConstructor = CallbackConstructorImpl;
+pub struct CallbackConstructorImpl(Arc<dyn Fn(i64) + Send + Sync>);
+#[prebindgen]
+pub fn callback_constructor_new(
+    callback: impl Fn(i64) + Send + Sync + 'static,
+) -> CallbackConstructor {
+    CallbackConstructorImpl(Arc::new(callback))
+}
+/// A binding-only constructor: used by an expansion, without its own Kotlin function.
+#[prebindgen]
+pub fn callback_constructor_from(
+    callback: impl Fn(i64) + Send + Sync + 'static,
+) -> CallbackConstructor {
+    callback_constructor_new(callback)
+}
+#[prebindgen]
+pub fn callback_constructor_owned(
+    callback: impl Fn(CallbackOwned) + Send + Sync + 'static,
+) -> CallbackConstructor {
+    callback_constructor_new(move |value| callback(CallbackOwnedImpl(value)))
+}
+#[prebindgen]
+pub fn callback_constructor_owned_fire(handler: CallbackConstructor, value: i64) {
+    callback_constructor_fire(handler, value);
+}
+#[prebindgen]
+pub fn callback_constructor_fire(handler: CallbackConstructor, value: i64) {
+    (handler.0)(value);
+}
+#[prebindgen]
+pub fn callback_constructor_pair(first: CallbackConstructor, second: CallbackConstructor) {
+    (first.0)(31);
+    (second.0)(37);
+}
+#[prebindgen]
+pub fn callback_constructor_mixed(
+    direct: impl Fn(i64) + Send + Sync + 'static,
+    handler: CallbackConstructor,
+) {
+    direct(61);
+    (handler.0)(67);
+}
+#[prebindgen]
+pub fn callback_constructor_selected(handler: CallbackConstructor, value: i64) {
+    callback_constructor_fire(handler, value);
+}
+#[prebindgen]
+pub fn callback_constructor_optional(handler: Option<CallbackConstructor>) -> bool {
+    if let Some(handler) = handler {
+        (handler.0)(41);
+        true
+    } else {
+        false
+    }
+}
+#[prebindgen]
+pub fn callback_constructor_list(handlers: Vec<CallbackConstructor>) {
+    for (index, handler) in handlers.into_iter().enumerate() {
+        (handler.0)(50 + index as i64);
+    }
+}
+#[prebindgen]
+pub type CallbackConstructorEnvelope = CallbackConstructorEnvelopeImpl;
+pub struct CallbackConstructorEnvelopeImpl(CallbackConstructor);
+#[prebindgen]
+pub fn callback_constructor_wrap(handler: CallbackConstructor) -> CallbackConstructorEnvelope {
+    CallbackConstructorEnvelopeImpl(handler)
+}
+#[prebindgen]
+pub fn callback_constructor_nested(envelope: CallbackConstructorEnvelope) {
+    let CallbackConstructorEnvelopeImpl(handler) = envelope;
+    (handler.0)(43);
+}
+#[prebindgen]
+pub type CallbackConstructorJob = CallbackConstructorJobImpl;
+pub struct CallbackConstructorJobImpl {
+    start: std::sync::mpsc::Sender<()>,
+    thread: std::thread::JoinHandle<()>,
+}
+#[prebindgen]
+pub fn callback_constructor_spawn(
+    handler: CallbackConstructor,
+    value: i64,
+) -> CallbackConstructorJob {
+    let (start, ready) = std::sync::mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        if ready.recv().is_ok() {
+            (handler.0)(value);
+        }
+    });
+    CallbackConstructorJobImpl { start, thread }
+}
+#[prebindgen]
+pub fn callback_constructor_run(job: CallbackConstructorJob) {
+    job.start.send(()).unwrap();
+    job.thread.join().unwrap();
+}
+#[prebindgen]
+pub fn callback_constructor_checked(handler: CallbackConstructor, value: char) {
+    (handler.0)(value as i64);
+}

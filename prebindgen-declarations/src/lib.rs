@@ -1290,8 +1290,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<CodecInput<C>> {
-        if prebindgen_flat::callback_signature(ty)?.is_some() {
-            return Err("source callback parameters require adapter callback preparation".into());
+        if prebindgen_flat::callback_signature(ty)?.is_some() && !matches!(recipe, Input::Leaf) {
+            return Err("source callback parameters only support leaf inputs".into());
         }
         if contains_result(ty) {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());

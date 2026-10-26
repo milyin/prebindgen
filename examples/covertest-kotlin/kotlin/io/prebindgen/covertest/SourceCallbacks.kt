@@ -37,7 +37,98 @@ private fun requireCollected(weak: WeakReference<Any>) {
     error("native callback retained its JVM capture after close")
 }
 
+private fun capturedConstructorJob(): Triple<CallbackConstructorJob, WeakReference<Any>, AtomicInteger> {
+    val marker = Any()
+    val caller = Thread.currentThread()
+    val calls = AtomicInteger()
+    val job = callbackConstructorSpawn({ value ->
+        calls.incrementAndGet()
+        marker.hashCode()
+        verify(value == 59L && Thread.currentThread() !== caller)
+    }, 59)
+    return Triple(job, WeakReference(marker), calls)
+}
+
+private fun failedConstructorCapture(collection: Boolean): WeakReference<Any> {
+    val marker = Any()
+    val weak = WeakReference(marker)
+    val calls = AtomicInteger()
+    val callback = i64Callback { marker.hashCode(); calls.incrementAndGet(); Unit }
+    try {
+        if (collection) callbackConstructorList(listOf(callback, null))
+        else callbackConstructorChecked(callback, 0x110000)
+        error("expected constructor argument rejection")
+    } catch (failure: IllegalArgumentException) {
+        verify(failure.message == if (collection) "null callback" else "invalid Unicode scalar")
+    }
+    verify(calls.get() == 0)
+    return weak
+}
+
+private fun checkConstructorCallbacks() {
+    var value = 0L
+    callbackConstructorFire({ value = it }, 17)
+    verify(value == 17L)
+    val first = mutableListOf<Long>()
+    val second = mutableListOf<Long>()
+    callbackConstructorPair({ first.add(it); Unit }, { second.add(it); Unit })
+    callbackConstructorMixed({ first.add(it); Unit }, { second.add(it); Unit })
+    verify(first == listOf(31L, 61L) && second == listOf(37L, 67L))
+    var nested = 0L
+    callbackConstructorNested({ nested = it })
+    verify(nested == 43L)
+
+    // The ignored callback is null in the raw-handle arm; the ignored handle
+    // remains owned by Kotlin when the callback constructor is selected.
+    val raw = callbackConstructorNew({ value = it })
+    var constructed = 0L
+    callbackConstructorSelected(0, { constructed = it }, raw, 11)
+    verify(!raw.isClosed && value == 17L && constructed == 11L)
+    callbackConstructorSelected(1, null, raw, 13)
+    verify(raw.isClosed && value == 13L)
+    val untouched = callbackConstructorNew({ error("unused handler") })
+    try {
+        callbackConstructorSelected(0, null, untouched, 15)
+        error("expected active null callback rejection")
+    } catch (_: IllegalArgumentException) { }
+    verify(!untouched.isClosed)
+    untouched.close()
+
+    verify(!callbackConstructorOptional(null))
+    var optional = 0L
+    verify(callbackConstructorOptional({ optional = it }))
+    verify(optional == 41L)
+    val rows = mutableListOf<Long>()
+    callbackConstructorList(listOf(i64Callback { rows.add(it); Unit }, i64Callback { rows.add(it); Unit }))
+    verify(rows == listOf(50L, 51L))
+    callbackConstructorList(emptyList())
+
+    var owned: CallbackOwned? = null
+    val drops = callbackOwnedDrops()
+    callbackConstructorOwnedFire({ handle -> verify(callbackOwnedId(handle) == 67L); owned = handle }, 67)
+    verify(checkNotNull(owned).isClosed && callbackOwnedDrops() == drops + 1UL)
+    callbackConstructorOwnedFire({ handle -> owned = handle.take() }, 71)
+    verify(callbackOwnedId(owned) == 71L && callbackOwnedDrops() == drops + 1UL)
+    owned!!.close()
+    callbackConstructorOwnedFire({ handle -> owned = handle; throw IllegalStateException("expected constructor callback failure") }, 73)
+    verify(checkNotNull(owned).isClosed && callbackOwnedDrops() == drops + 3UL)
+
+    val (job, weak, calls) = capturedConstructorJob()
+    System.gc()
+    verify(weak.get() != null)
+    callbackConstructorRun(job)
+    verify(job.isClosed && calls.get() == 1)
+    requireCollected(weak)
+    val (abandoned, abandonedWeak, abandonedCalls) = capturedConstructorJob()
+    abandoned.close()
+    requireCollected(abandonedWeak)
+    verify(abandonedCalls.get() == 0)
+    requireCollected(failedConstructorCapture(false))
+    requireCollected(failedConstructorCapture(true))
+}
+
 fun checkSourceCallbacks() {
+    checkConstructorCallbacks()
     callbackScalars({ a, b -> verify(a == 17L && b == 29L) })
     callbackEnums({ value, optional ->
         verify(value == io.prebindgen.covertest.enums.Priority.High)

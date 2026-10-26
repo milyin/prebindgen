@@ -804,7 +804,7 @@ fn logical_outcomes_keep_typed_errors_and_match_both_jni_sequence_deliveries() {
         vec![],
     )
     .unwrap();
-    let codec = data::DataCodec;
+    let codec = data::DataCodec::default();
     let decl = fun!(f).callback_return();
     flat.metadata.package = "test".into();
     flat.function_mut("f").unwrap().metadata = Some(JniFunction {
@@ -1504,4 +1504,89 @@ fn callback_signature_limit_includes_handle_acknowledgement() {
             .build();
         assert_eq!(result.is_ok(), accepted);
     }
+}
+
+#[test]
+fn callback_constructor_is_resolved_without_exporting_the_helper() {
+    let source = "pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){} pub fn pair(first:Handler,second:Handler){} pub fn unused(cb:impl Fn(Vec<Handler>)){}";
+    let prepared = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .expand(expand_param!(Handler).variant(fun!(make)))
+        .package(
+            package!()
+                .class(ptr_class!(Handler))
+                .fun(fun!(use_handler))
+                .fun(fun!(pair)),
+        )
+        .prepare()
+        .expect("callback-taking helpers must compose with input defaults");
+    assert!(prepared.function("make").unwrap().metadata.is_none());
+    let generated = generate(&prepared).unwrap();
+    assert!(generated.kotlin.contains_key("test/i64Callback.kt"));
+    assert!(!generated.kotlin["test/Functions.kt"].contains("`make`("));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn callback_constructor_can_also_be_exported_and_selected_in_alternatives() {
+    let prepared = JniGen::builder()
+        .flat(flat("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handler)).fun(fun!(make)).fun(
+            fun!(use_handler).expand_param("value",expand_param!(Handler).variant(fun!(make)).variant_self()),
+        ))
+        .prepare()
+        .expect("callback conversion must have a fresh occurrence in each constructor");
+    let generated = generate(&prepared).unwrap();
+    assert_eq!(
+        generated
+            .kotlin
+            .keys()
+            .filter(|p| p.ends_with("i64Callback.kt"))
+            .count(),
+        1
+    );
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn c_rejects_callbacks_in_direct_and_constructor_parameters() {
+    for constructor in [false, true] {
+        let source = syn::parse_file("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}").unwrap();
+        let model = prebindgen_c::Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let declaration = if constructor {
+            fun!(use_handler).expand_param("value", expand_param!(Handler).variant(fun!(make)))
+        } else {
+            fun!(make)
+        };
+        let error = match prebindgen_c::Cbindgen::new(model)
+            .function(declaration)
+            .build()
+        {
+            Ok(_) => panic!("C requires its own callback protocol"),
+            Err(error) => error,
+        };
+        assert!(error.contains("adapter callback preparation"), "{error}");
+    }
+}
+
+#[test]
+fn callback_constructor_rejects_a_selector_for_the_callable_itself() {
+    let recipe: Input<InputRequest> =
+        Input::constructor("make", [Input::selector([Input::Leaf, Input::Leaf])]);
+    let error = fail(JniGen::builder()
+        .flat(flat("pub type Handler=String; pub fn make(cb:impl Fn(i64))->Handler{} pub fn use_handler(value:Handler){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handler)).fun(fun!(use_handler).input("value", recipe))));
+    assert!(
+        error.contains("callback parameters only support leaf inputs"),
+        "{error}"
+    );
 }

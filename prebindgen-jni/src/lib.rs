@@ -485,7 +485,7 @@ impl JniGenBuilder {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        let codec = data::DataCodec;
+        let codec = data::DataCodec::default();
         for configure in self.configure {
             configure(&mut flat)?;
         }
@@ -509,6 +509,9 @@ impl JniGenBuilder {
         data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
         callback::prepare(&mut flat, &defaults, &declarations, &output_defaults)?;
+        let codec = data::DataCodec {
+            callbacks: Some((&defaults, &output_defaults)),
+        };
         let mut next_order = declarations.len();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
@@ -916,7 +919,6 @@ impl Codec for JniCodec {
         crate::group::retire_niches(payload, reservation)
     }
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
-        callback::validate_input(&plan.node)?;
         sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
     }

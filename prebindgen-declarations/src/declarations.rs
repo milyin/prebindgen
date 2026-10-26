@@ -308,9 +308,6 @@ impl Declarations {
         tree: &Input<InputRequest>,
         extra: &C::Extra,
     ) -> Result<Input> {
-        if prebindgen_flat::callback_signature(ty)?.is_some() {
-            return Err("source callback parameters require adapter callback preparation".into());
-        }
         self.input(flat, codec, ty, tree, extra, &mut vec![])
     }
     fn input<C: Codec>(

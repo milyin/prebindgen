@@ -220,7 +220,6 @@ impl Conversion for JniOutput {
 
 impl KotlinInputConversion for JniInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
-        crate::callback::validate_input(self.input_node())?;
         crate::sequence::validate_buffered(self.input_node())?;
         validate_layout(self.input_node())?;
         input_kotlin(self.input_node(), context)
