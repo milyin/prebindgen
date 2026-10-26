@@ -20,6 +20,23 @@ and automatic cleanup are timed; registration and the outer JNI wrapper are not.
 These are callback-boundary costs, not network throughput measurements. The
 reported `dirty` flag identifies measurements of uncommitted work.
 
+## Comparing two prepared builds
+
+Prepare each checkout in a separate output directory with `run.py`, then compare
+those artifacts after all builds have completed:
+
+```sh
+python3 examples/bench-callbacks/compare.py \
+  --variant before=/tmp/callback-before \
+  --variant after=/tmp/callback-after \
+  --output /tmp/callback-comparison
+```
+
+The comparison starts three fresh JVMs per variant, rotating variant order in
+each round. It checks callback result totals, saves every timing sample, and
+records the build metadata and artifact hashes. The output directory must be new.
+Use the same Kotlin compiler, Rust toolchain and build profile for both builds.
+
 ## Reference measurement
 
 Kotlin 2.1.0, OpenJDK 11.0.29, rustc 1.98.0, Linux, release Rust, fixed

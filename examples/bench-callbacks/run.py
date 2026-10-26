@@ -76,6 +76,10 @@ for trial in range(args.jvms):
         if line.startswith("BENCH,"):
             _, case, count, nanos = line.split(",")
             samples[case].append(int(nanos) / int(count))
+    expected = (args.warmup + args.batches) * (args.iterations * (args.iterations - 1) // 2 + args.iterations ** 2 + args.iterations)
+    expected = (expected + 2 ** 63) % (2 ** 64) - 2 ** 63
+    if f"SINK,{expected}" not in result.stdout.splitlines():
+        raise RuntimeError("callback results differ from the expected batch totals")
     for case in samples:
         if len(samples[case]) != (trial + 1) * args.batches:
             raise RuntimeError(f"incomplete measurements for {case}")
