@@ -773,21 +773,15 @@ fn argument_local(name: &str, ty: &str) -> String {
     let default = if ty.ends_with('?') {
         Some("null")
     } else {
-        match ty.strip_prefix("kotlin.").unwrap_or(ty) {
-            "Boolean" => Some("false"),
-            "Byte" => Some("0.toByte()"),
-            "Short" => Some("0.toShort()"),
-            "Int" => Some("0"),
-            "Long" => Some("0L"),
+        let kotlin_type = ty.strip_prefix("kotlin.").unwrap_or(ty);
+        crate::wire::jvm::primitive_local_default(kotlin_type).or(match kotlin_type {
             "UByte" => Some("0.toUByte()"),
             "UShort" => Some("0.toUShort()"),
             "UInt" => Some("0U"),
             "ULong" => Some("0UL"),
-            "Float" => Some("0.0f"),
-            "Double" => Some("0.0"),
             "Char" => Some("'\\u0000'"),
             _ => None,
-        }
+        })
     };
     match default {
         Some(default) => format!("        var {name}: {ty} = {default}\n"),

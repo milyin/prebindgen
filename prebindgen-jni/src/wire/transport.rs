@@ -1,4 +1,5 @@
 //! JNI representation and code generation for individual wire values.
+use super::jvm::JvmType;
 use super::*;
 
 /// Code preparing one JNI method argument from a prepared output value.
@@ -15,73 +16,6 @@ pub struct JniArgument {
     pub value: TokenStream,
 }
 
-// Derived from JniWire, never stored alongside it. This is only the JVM
-// representation: enums and selectors are Int, handles are Long, and Rust
-// i128/u128 use ByteArray. Rust domains and niche state remain on JniWire.
-#[derive(Clone, Copy)]
-enum JvmType {
-    Object,
-    Boolean,
-    Byte,
-    Short,
-    Int,
-    Long,
-    Float,
-    Double,
-    Text,
-    Bytes,
-    Rows,
-}
-impl JvmType {
-    fn descriptor(self) -> &'static str {
-        match self {
-            Self::Boolean => "Z",
-            Self::Byte => "B",
-            Self::Short => "S",
-            Self::Int => "I",
-            Self::Long => "J",
-            Self::Float => "F",
-            Self::Double => "D",
-            Self::Text => "Ljava/lang/String;",
-            Self::Bytes => "[B",
-            Self::Rows => "[Ljava/lang/Object;",
-            Self::Object => "Ljava/lang/Object;",
-        }
-    }
-    fn kotlin_type(self) -> &'static str {
-        match self {
-            Self::Boolean => "Boolean",
-            Self::Byte => "Byte",
-            Self::Short => "Short",
-            Self::Int => "Int",
-            Self::Long => "Long",
-            Self::Float => "Float",
-            Self::Double => "Double",
-            Self::Text => "String?",
-            Self::Bytes => "ByteArray?",
-            Self::Rows => "Array<Any?>?",
-            Self::Object => "Any?",
-        }
-    }
-    fn is_reference(self) -> bool {
-        matches!(self, Self::Text | Self::Bytes | Self::Rows | Self::Object)
-    }
-    fn reader(self) -> &'static str {
-        match self {
-            Self::Boolean => "row_bool",
-            Self::Byte => "row_i8",
-            Self::Short => "row_i16",
-            Self::Int => "row_i32",
-            Self::Long => "row_i64",
-            Self::Float => "row_f32",
-            Self::Double => "row_f64",
-            Self::Text => "row_text",
-            Self::Bytes => "row_bytes",
-            Self::Rows => "row_rows",
-            Self::Object => unreachable!("callback objects use the direct reference reader"),
-        }
-    }
-}
 impl JniWire {
     fn jvm_type(&self) -> JvmType {
         match self {
@@ -117,11 +51,7 @@ impl JniWire {
     }
     /// JVM argument slots occupied by this value (`long` and `double` occupy two).
     pub fn parameter_slots(&self) -> usize {
-        if matches!(self.jvm_type(), JvmType::Long | JvmType::Double) {
-            2
-        } else {
-            1
-        }
+        self.jvm_type().parameter_slots()
     }
     /// Whether the native input is a JNI reference rather than a copyable scalar.
     ///
@@ -132,16 +62,7 @@ impl JniWire {
     }
     /// Kotlin placeholder for an inactive wire, without selecting an option niche.
     pub fn kotlin_default(&self) -> &'static str {
-        match self.jvm_type() {
-            JvmType::Boolean => "false",
-            JvmType::Byte => "0.toByte()",
-            JvmType::Short => "0.toShort()",
-            JvmType::Int => "0",
-            JvmType::Long => "0L",
-            JvmType::Float => "0.0f",
-            JvmType::Double => "0.0",
-            JvmType::Text | JvmType::Bytes | JvmType::Rows | JvmType::Object => "null",
-        }
+        self.jvm_type().kotlin_default()
     }
     pub(crate) fn kotlin_integer(&self, value: i64) -> String {
         if matches!(self.jvm_type(), JvmType::Long) {
@@ -157,51 +78,13 @@ impl JniWire {
     /// Reference fields preserve Java null for optional/inactive values. The
     /// caller supplies the `environment` template parameter and owns local refs.
     pub fn read_array_element(&self, array: &TokenStream, index: usize) -> TokenStream {
-        let env = prebindgen_conversions::template_parameter("environment");
-        if matches!(self, Self::Callback { .. }) {
-            // The input converter retains this object before the row frame closes.
-            return quote!(#env.get_object_array_element(&(#array), #index as i32).map_err(|e|e.to_string()));
-        }
-        let reader = format_ident!("{}", self.jvm_type().reader());
-        let convert = matches!(self.jvm_type(), JvmType::Boolean).then(|| quote!(.map(u8::from)));
-        quote!(::prebindgen_jni_runtime::#reader(&mut #env, &(#array), #index)#convert)
+        self.jvm_type().read_array_element(array, index)
     }
     pub(crate) fn callback_return_type(&self) -> TokenStream {
-        let ty = match self.jvm_type() {
-            JvmType::Boolean => "Boolean",
-            JvmType::Byte => "Byte",
-            JvmType::Short => "Short",
-            JvmType::Int => "Int",
-            JvmType::Long => "Long",
-            JvmType::Float => "Float",
-            JvmType::Double => "Double",
-            _ => return quote!(::prebindgen_jni_runtime::jni::signature::ReturnType::Object),
-        };
-        let ty = format_ident!("{ty}");
-        quote!(::prebindgen_jni_runtime::jni::signature::ReturnType::Primitive(::prebindgen_jni_runtime::jni::signature::Primitive::#ty))
+        self.jvm_type().return_type()
     }
     pub(crate) fn read_callback_return(&self, value: &syn::Ident) -> TokenStream {
-        let method = match self.jvm_type() {
-            JvmType::Boolean => return quote!(u8::from(#value.z().map_err(|e| e.to_string())?)),
-            JvmType::Byte => "b",
-            JvmType::Short => "s",
-            JvmType::Int => "i",
-            JvmType::Long => "j",
-            JvmType::Float => "f",
-            JvmType::Double => "d",
-            JvmType::Text => {
-                return quote!(::prebindgen_jni_runtime::jni::objects::JString::from(#value.l().map_err(|e| e.to_string())?))
-            }
-            JvmType::Bytes => {
-                return quote!(::prebindgen_jni_runtime::jni::objects::JByteArray::from(#value.l().map_err(|e| e.to_string())?))
-            }
-            JvmType::Rows => {
-                return quote!(::prebindgen_jni_runtime::jni::objects::JObjectArray::from(#value.l().map_err(|e| e.to_string())?))
-            }
-            JvmType::Object => "l",
-        };
-        let method = format_ident!("{method}");
-        quote!(#value.#method().map_err(|e| e.to_string())?)
+        self.jvm_type().read_return(value)
     }
 
     /// Generate a Java object expression from a prepared output, boxing primitives.
@@ -214,35 +97,25 @@ impl JniWire {
     /// It does not commit any ownership transfer.
     pub fn output_object(&self, value: &TokenStream) -> TokenStream {
         let env = prebindgen_conversions::template_parameter("environment");
-        let (class, variant) = match self.jvm_type() {
-            JvmType::Boolean => ("Boolean", "Bool"),
-            JvmType::Byte => ("Byte", "Byte"),
-            JvmType::Short => ("Short", "Short"),
-            JvmType::Int => ("Integer", "Int"),
-            JvmType::Long => ("Long", "Long"),
-            JvmType::Float => ("Float", "Float"),
-            JvmType::Double => ("Double", "Double"),
+        if let Some(boxed) = self.jvm_type().boxed_output(&self.output_scalar(value)) {
+            return boxed;
+        }
+        match self.jvm_type() {
             JvmType::Text => {
-                return quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::text_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
+                quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::text_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
             }
             JvmType::Bytes if matches!(self, Self::Scalar { .. }) => {
-                return quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &(#value))?)
+                quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &(#value))?)
             }
             JvmType::Bytes => {
-                return quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::bytes_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
+                quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::bytes_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
             }
-            JvmType::Object => {
-                return quote!(#env.new_local_ref(&(#value)).map_err(|e|e.to_string())?)
-            }
+            JvmType::Object => quote!(#env.new_local_ref(&(#value)).map_err(|e|e.to_string())?),
             JvmType::Rows => {
-                return quote!(match (#value).as_ref(){Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
+                quote!(match (#value).as_ref(){Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
             }
-        };
-        let signature = format!("({})Ljava/lang/{class};", self.jvm_descriptor());
-        let class = format!("java/lang/{class}");
-        let variant = format_ident!("{variant}");
-        let value = self.output_scalar(value);
-        quote!(#env.call_static_method(#class,"valueOf",#signature,&[::prebindgen_jni_runtime::jni::objects::JValue::#variant(#value)]).and_then(|v|v.l()).map_err(|e|e.to_string())?)
+            _ => unreachable!("JVM primitives use their declared boxing conversion"),
+        }
     }
     fn output_scalar(&self, value: &TokenStream) -> TokenStream {
         if matches!(self, Self::Handle { .. }) {
@@ -281,52 +154,21 @@ impl JniWire {
     /// # Ok::<(), String>(())
     /// ```
     pub fn output_argument(&self, value: &TokenStream, local: &syn::Ident) -> JniArgument {
-        let member = match self.jvm_type() {
-            JvmType::Boolean => "z",
-            JvmType::Byte => "b",
-            JvmType::Short => "s",
-            JvmType::Int => "i",
-            JvmType::Long => "j",
-            JvmType::Float => "f",
-            JvmType::Double => "d",
-            JvmType::Text | JvmType::Bytes | JvmType::Rows | JvmType::Object => {
-                let object = self.output_object(value);
-                return JniArgument {
-                    statements: quote!(let #local=#object;),
-                    value: quote!(::prebindgen_jni_runtime::jni::sys::jvalue { l:#local.as_raw() }),
-                };
-            }
+        let member = format_ident!("{}", self.jvm_type().value_member());
+        let (statements, value) = if self.is_reference() {
+            let object = self.output_object(value);
+            (quote!(let #local=#object;), quote!(#local.as_raw()))
+        } else {
+            (TokenStream::new(), self.output_scalar(value))
         };
-        let member = format_ident!("{member}");
-        let value = self.output_scalar(value);
         JniArgument {
-            statements: TokenStream::new(),
+            statements,
             value: quote!(::prebindgen_jni_runtime::jni::sys::jvalue { #member:#value }),
         }
     }
 }
 impl WireKind for JniWire {
     fn rust_type(&self) -> syn::Type {
-        match self.jvm_type() {
-            JvmType::Boolean => syn::parse_quote!(u8),
-            JvmType::Byte => syn::parse_quote!(i8),
-            JvmType::Short => syn::parse_quote!(i16),
-            JvmType::Int => syn::parse_quote!(i32),
-            JvmType::Long => syn::parse_quote!(i64),
-            JvmType::Float => syn::parse_quote!(f32),
-            JvmType::Double => syn::parse_quote!(f64),
-            JvmType::Text => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JString<'local>)
-            }
-            JvmType::Bytes => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
-            }
-            JvmType::Object => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JObject<'local>)
-            }
-            JvmType::Rows => {
-                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>)
-            }
-        }
+        self.jvm_type().rust_type()
     }
 }
