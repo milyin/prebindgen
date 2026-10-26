@@ -1,5 +1,6 @@
 //! One JNI boundary value and its remaining niche availability.
 use super::*;
+pub(crate) mod jvm;
 mod transport;
 pub use transport::JniArgument;
 

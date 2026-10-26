@@ -1097,6 +1097,28 @@ pub fn compile_output_value<C: Codec>(
     compile_output_at(flat, codec, ty, recipe, extra, "ret".into(), false)
 }
 
+/// Compile the foreign-to-Rust value returned by a source callback.
+///
+/// Uses the adapter's ordinary input conversions with an independent local namespace.
+/// The request-free recipe comes from the binding's type-wide input declarations.
+pub fn compile_callback_return<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Input,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Input> {
+    let mut plan = Compiler::new(flat, codec, "callback_return".into()).input(
+        ty,
+        recipe,
+        extra,
+        &Condition::default(),
+    )?;
+    codec.finish_input(&mut plan, extra)?;
+    codec.validate_input(&plan)?;
+    Ok(plan.into())
+}
+
 /// Compile one Rust-to-foreign callback argument with independent local names.
 ///
 /// `index` is its position in the callback signature. The adapter supplies callback

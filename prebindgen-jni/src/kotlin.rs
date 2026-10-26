@@ -171,7 +171,7 @@ pub trait KotlinOutputConversion:
 /// Prepared JNI input, with a logical schema and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub struct JniInput {
-    rust: InputPlan<JniWire>,
+    pub(crate) rust: InputPlan<JniWire>,
 }
 /// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]

@@ -1,23 +1,25 @@
-//! Source signatures of retained, unit-returning callbacks.
+//! Source signatures of retained callbacks.
 use crate::{Result, Type};
 
-/// Arguments passed by Rust to an `impl Fn(...)` source parameter.
+/// Arguments and return type of an `impl Fn(...) -> R` source parameter.
 #[derive(Clone, Debug)]
 pub struct CallbackSignature {
     /// Source argument types, in invocation order.
     pub arguments: Vec<Type>,
+    /// Value returned by the callback; omitted returns are represented as `()`.
+    pub return_type: Type,
 }
 
-/// Read a unit-returning `impl Fn(...)` callback, or return `None` for other types.
+/// Read an `impl Fn(...) -> R` callback, or return `None` for other types.
 ///
 /// Only `Fn`, optional `Send`/`Sync`, and an optional `'static` bound are accepted.
-/// Callback return values, higher-ranked bounds, and other callable traits require
-/// a different foreign invocation contract and are rejected.
+/// Higher-ranked bounds and other callable traits are rejected. Adapters decide
+/// which argument and return conversions their foreign invocation supports.
 pub fn callback_signature(ty: &Type) -> Result<Option<CallbackSignature>> {
     let Type::ImplTrait(callback) = ty else {
         return Ok(None);
     };
-    let mut arguments = None;
+    let mut signature = None;
     for bound in &callback.bounds {
         match bound {
             syn::TypeParamBound::Lifetime(lifetime) if lifetime.ident == "static" => {}
@@ -45,20 +47,26 @@ pub fn callback_signature(ty: &Type) -> Result<Option<CallbackSignature>> {
                     return Err("unsupported callback trait bound".into());
                 }
                 match (name.as_str(), &short.arguments) {
-                    ("Fn", syn::PathArguments::Parenthesized(signature)) if arguments.is_none() => {
-                        if !matches!(&signature.output, syn::ReturnType::Default)
-                            && !matches!(&signature.output, syn::ReturnType::Type(_, ty) if matches!(&**ty, Type::Tuple(t) if t.elems.is_empty()))
-                        { return Err("callbacks must return unit".into()); }
-                        arguments = Some(signature.inputs.iter().cloned().collect());
+                    ("Fn", syn::PathArguments::Parenthesized(call)) if signature.is_none() => {
+                        signature = Some(CallbackSignature {
+                            arguments: call.inputs.iter().cloned().collect(),
+                            return_type: match &call.output {
+                                syn::ReturnType::Default => syn::parse_quote!(()),
+                                syn::ReturnType::Type(_, ty) => (**ty).clone(),
+                            },
+                        });
                     }
                     ("Send" | "Sync", syn::PathArguments::None) => {}
-                    _ => return Err("only unit-returning Fn callbacks with Send, Sync and 'static bounds are supported".into()),
+                    _ => {
+                        return Err(
+                            "only Fn callbacks with Send, Sync and 'static bounds are supported"
+                                .into(),
+                        )
+                    }
                 }
             }
             _ => return Err("unsupported callback lifetime or higher-ranked bound".into()),
         }
     }
-    Ok(Some(CallbackSignature {
-        arguments: arguments.ok_or("callback requires Fn(...)")?,
-    }))
+    Ok(Some(signature.ok_or("callback requires Fn(...)")?))
 }

@@ -13,6 +13,7 @@ private fun expectInvalid(action: () -> Unit) {
 
 // Exercises the active subset of the migrated source and build declarations.
 fun main() {
+    checkCallbackReturns()
     checkSourceCallbacks()
     checkCallbackHandleCollections()
     checkSharedCallbackReentry()

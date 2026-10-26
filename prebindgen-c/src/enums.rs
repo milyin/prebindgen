@@ -3,8 +3,13 @@ use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
 
 /// C conversions read representation and error declarations from Flat.
-pub(crate) struct EnumCodec;
-impl EnumCodec {
+#[derive(Default)]
+pub(crate) struct EnumCodec<'a> {
+    pub(crate) callbacks: Option<&'a prebindgen_declarations::Declarations>,
+    pub(crate) return_owners:
+        Option<&'a std::cell::RefCell<std::collections::BTreeMap<String, syn::Type>>>,
+}
+impl EnumCodec<'_> {
     fn mapping<'a>(
         &self,
         flat: &'a Bindings,
@@ -26,7 +31,7 @@ impl EnumCodec {
         CWire::enumeration(name, mapping.clone())
     }
 }
-impl Codec for EnumCodec {
+impl Codec for EnumCodec<'_> {
     type Schema = CSchema;
     type Wire = CWire;
     type Niche = CNiche;
@@ -180,13 +185,34 @@ impl Codec for EnumCodec {
         v: syn::Ident,
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
+        if prebindgen_flat::callback_signature(ty)?.is_some() {
+            return callback::input(
+                flat,
+                self.callbacks
+                    .ok_or("source callbacks require adapter callback preparation")?,
+                ty,
+                w,
+                v,
+                active,
+            );
+        }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
         if let Some((name, m)) = self.mapping(flat, ty) {
             return prebindgen_declarations::enum_input(m, ty, w, v, active, Self::wire(name, m));
         }
-        CCodec.input_leaf(flat, ty, e, w, v, active)
+        let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
+        if plan
+            .resources
+            .iter()
+            .any(|resource| resource.access == prebindgen_conversions::Access::Move)
+        {
+            if let Some(owners) = self.return_owners {
+                owners.borrow_mut().insert(w.to_string(), ty.clone());
+            }
+        }
+        Ok(plan)
     }
     fn output_leaf(
         &self,
@@ -264,7 +290,7 @@ mod tests {
     }
     #[test]
     fn codec_reads_enum_declarations_from_flat_after_creation() {
-        let codec = EnumCodec;
+        let codec = EnumCodec::default();
         let mut model = flat("pub enum E { A, B }pub fn echo(x:E)->E{}");
         let ty = model.resolve_type(&syn::parse_quote!(E)).unwrap();
         let mapping =
@@ -367,7 +393,7 @@ mod tests {
         let source = flat("pub enum E { A = -2, B, C = 0, D = 7 }");
         let mapping =
             std::rc::Rc::new(EnumMapping::new(source.enums.values().next().unwrap()).unwrap());
-        let codec = EnumCodec;
+        let codec = EnumCodec::default();
         let wire = EnumCodec::wire("code", &mapping);
         assert!(matches!(wire.available_niche(), Some(CNiche::Integer(-3))));
         assert!(matches!(

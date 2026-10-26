@@ -59,6 +59,51 @@ impl Callback {
         }
     }
 
+    /// Run a callback returning an owned Rust value inside its JNI local frame.
+    ///
+    /// Failures are returned after any pending callback exception is reported and
+    /// cleared. The source trampoline decides how to propagate the missing result.
+    #[inline]
+    pub fn with_env_result<R>(
+        &self,
+        capacity: i32,
+        call: impl FnOnce(&mut JNIEnv<'_>) -> Result<R>,
+    ) -> Result<R> {
+        boundary(|| {
+            let mut env = self
+                .vm
+                .attach_current_thread_as_daemon()
+                .map_err(|e| e.to_string())?;
+            let result = boundary(|| {
+                let frame = unsafe { LocalFrame::new(&env, capacity) }?;
+                let result = call(&mut env);
+                drop(frame);
+                result
+            });
+            if result.is_err() {
+                let _ = env.exception_describe();
+                let _ = env.exception_clear();
+            }
+            result
+        })
+    }
+
+    /// Invoke a cached non-unit method and keep its result in the caller's frame.
+    ///
+    /// # Safety
+    /// Arguments and `return_type` must match the descriptor passed to [`Self::new`].
+    /// References must be live in `env`, which must have no pending JVM exception.
+    #[inline]
+    pub unsafe fn invoke_return<'local>(
+        &self,
+        env: &mut JNIEnv<'local>,
+        return_type: jni::signature::ReturnType,
+        arguments: &[jni::sys::jvalue],
+    ) -> Result<jni::objects::JValueOwned<'local>> {
+        env.call_method_unchecked(&self.object, self.method, return_type, arguments)
+            .map_err(|e| e.to_string())
+    }
+
     /// Invoke the cached method. Committed argument handles are Kotlin-owned.
     ///
     /// Argument ownership transfers without a per-invocation acceptance handshake.
