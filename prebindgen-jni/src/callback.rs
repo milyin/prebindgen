@@ -144,7 +144,6 @@ pub(crate) fn input(
             &(),
         )?;
         sequence::validate_buffered(&output.output_outcomes().success)?;
-        reject_sequence_handles(&output.output_outcomes().success, false)?;
         arguments.push(Argument {
             source_type,
             value,
@@ -329,12 +328,12 @@ impl JniCallback {
                 delivered.push(name);
             }
         }
-        let reconstruction = format!("try {{\n{materialize}        }} catch (failure: Throwable) {{\n{cleanup}            callbackCleanupFailure?.let {{ failure.addSuppressed(it) }}\n            throw failure\n        }}");
+        let reconstruction = format!("try {{\n{materialize}        }} catch (failure: Throwable) {{\n{cleanup}            callbackCleanupFailure?.let {{ if (failure !== it) failure.addSuppressed(it) }}\n            throw failure\n        }}");
         let call = format!("{parameter}.run({})", delivered.join(", "));
         let body = if scoped_cleanup.is_empty() {
             format!("{reconstruction}\n        {call}")
         } else {
-            format!("var callbackFailure: Throwable? = null\n        var callbackReady = false\n        try {{\n            {reconstruction}\n            callbackReady = true\n            {call}\n        }} catch (failure: Throwable) {{\n            callbackFailure = failure\n            throw failure\n        }} finally {{\n            if (callbackReady) {{\n{scoped_cleanup}                callbackCleanupFailure?.let {{ cleanup -> if (callbackFailure == null) throw cleanup else callbackFailure.addSuppressed(cleanup) }}\n            }}\n        }}")
+            format!("var callbackFailure: Throwable? = null\n        var callbackReady = false\n        try {{\n            {reconstruction}\n            callbackReady = true\n            {call}\n        }} catch (failure: Throwable) {{\n            callbackFailure = failure\n            throw failure\n        }} finally {{\n            if (callbackReady) {{\n{scoped_cleanup}                callbackCleanupFailure?.let {{ cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }}\n            }}\n        }}")
         };
         Ok(format!("if ({parameter} == null) null else object {{\n    @Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\", \"USELESS_CAST\", \"VARIABLE_WITH_REDUNDANT_INITIALIZER\")\n    fun run({}) {{\n{locals}        {body}\n    }}\n}}", raw.join(", ")))
     }
@@ -434,29 +433,6 @@ fn contains_result(ty: &syn::Type) -> bool {
         || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, _)| contains_result(ty))
         || matches!(ty,syn::Type::Reference(r) if contains_result(&r.elem))
 }
-fn reject_sequence_handles(node: &kotlin::JniNode, repeated: bool) -> Result<()> {
-    match node {
-        WireNode::Leaf(wires) => {
-            if repeated
-                && wires
-                    .iter()
-                    .any(|w| matches!(w.kind, JniWire::Handle { .. }))
-            {
-                return Err("handle-containing sequence callback arguments are unsupported".into());
-            }
-        }
-        WireNode::Chain { meta, child, .. } => {
-            reject_sequence_handles(child, repeated || matches!(meta, JniChain::Sequence(_)))?
-        }
-        WireNode::Branch { children, .. } => {
-            for child in children {
-                reject_sequence_handles(child, repeated)?;
-            }
-        }
-    }
-    Ok(())
-}
-
 fn argument_local(name: &str, ty: &str) -> String {
     let default = if ty.ends_with('?') {
         Some("null")

@@ -279,12 +279,7 @@ impl KotlinOutputConversion for JniOutput {
 }
 fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinOutput> {
     let result = context.result;
-    let suppress_cleanup = match context.cleanup_failure {
-        Some(target) => format!(
-            "if ({target} == null) {target} = cleanup else {target}!!.addSuppressed(cleanup)"
-        ),
-        None => format!("{}.addSuppressed(cleanup)", context.failure),
-    };
+    let suppress_cleanup = record_cleanup_failure(context, "cleanup");
     let output = context.output_prefix;
     let mut delivered = Vec::new();
     let mut result_types = Vec::new();
@@ -333,6 +328,16 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
         materialize,
         cleanup,
     })
+}
+
+/// Record a cleanup error without replacing the delivery exception or suppressing itself.
+pub(crate) fn record_cleanup_failure(context: &KotlinContext<'_>, error: &str) -> String {
+    match context.cleanup_failure {
+        Some(target) => format!(
+            "if ({target} == null) {target} = {error} else if ({target} !== {error}) {target}!!.addSuppressed({error})"
+        ),
+        None => format!("if ({} !== {error}) {}.addSuppressed({error})", context.failure, context.failure),
+    }
 }
 
 pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>;

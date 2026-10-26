@@ -756,10 +756,35 @@ checked JNI call without additional exception probes on the successful path. The
 invoking thread must have no pending JVM exception before entering the callback.
 Registration errors use the function's ordinary binding-error callback.
 
-Callbacks currently support scalar, string, byte, record, optional, enum and buffered
-sequence argument conversions, including declared projections. Handle-containing
-sequence arguments are rejected because their per-element ownership requires an
-additional handoff protocol. Mutable references, callback return values, `Result`
+Callbacks support scalar, string, byte, record, optional, enum and buffered
+sequence argument conversions, including declared projections. Vectors and borrowed
+slices can contain records with handles, including nested records, optional fields
+and nested collections.
+
+For a callback taking `Vec<Row>`, where `Row` contains native handles:
+
+| Output declaration | How handle fields reach Kotlin | Who closes the Kotlin handles |
+| --- | --- | --- |
+| No output expansion for `Row` or `Vec<Row>` | Clone the fields; their types must implement `Clone`. | The generated bridge closes them after `run`, including when it throws. |
+| `expand_return!(Row).field_self_into()` | Move the fields out of each owned row; `Clone` is unnecessary. | The generated bridge still closes them after `run`. |
+| `expand_return!(Vec<Row>).field_self_into()` | Move the fields out of the owned rows. | The callback implementation must close them, even if `run` throws. |
+
+When the bridge closes handles automatically, call `handle.take()` during the
+callback to keep one. Use the owning wrapper returned by `take()` and close it
+when finished. These output declarations apply to every matching callback in the
+generator, as well as ordinary function returns.
+
+A callback taking `&[Row]` borrows the Rust rows, so their fields cannot be moved
+out. The default conversion clones handle fields and the bridge closes those
+clones after `run`; the original Rust rows remain untouched. A declaration for
+`Vec<Row>` does not change this behavior. The moving `Row` conversion in the table
+requires owned rows and cannot also serve borrowed slices of that row type.
+
+If Rust cannot finish converting the arguments, it drops the allocations prepared
+so far and skips that callback invocation. If Kotlin cannot construct the complete
+argument list, it closes the delivered handles without calling user code.
+
+Mutable references, callback return values, `Result`
 arguments, callbacks taking callable-signature arguments, explicit higher-ranked
 bounds, and `FnMut`/`FnOnce` are rejected.
 Callbacks are accepted as direct parameters of exported source functions or input

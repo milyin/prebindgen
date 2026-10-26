@@ -1407,21 +1407,14 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
 fn callback_rejections_are_preparation_errors() {
     for (source, message) in [
         (
-            "pub type Item=String; pub fn f(cb:impl Fn(Vec<Item>)) {}",
-            "handle-containing sequence",
-        ),
-        (
             "pub fn f(cb:impl Fn(Result<i64,String>)) {}",
             "Result-valued callback",
         ),
         ("pub fn f(cb:impl Fn(&mut i64)) {}", "mutable callback"),
     ] {
-        let mut builder = JniGen::builder()
+        let builder = JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test");
-        if source.contains("type Item") {
-            builder = builder.package(package!().class(ptr_class!(Item)));
-        }
         let error = fail(builder.package(package!().fun(fun!(f))));
         assert!(error.contains(message), "{error}");
     }
@@ -1615,4 +1608,23 @@ fn wrapped_callable_source_types_are_rejected_before_callback_preparation() {
             assert!(error.contains("unsupported source type"), "{error}");
         }
     }
+}
+
+#[test]
+fn callbacks_accept_handle_containing_sequence_arguments() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String; pub struct Row { pub handle:Handle, pub optional:Option<Handle>, pub label:String } pub fn owned(cb:impl Fn(Vec<Row>)){} pub fn borrowed(cb:impl Fn(&[Row])){} pub fn nested(cb:impl Fn(Option<Vec<Option<Row>>>)){} pub fn handles(cb:impl Fn(Vec<Handle>)){}"))
+        .set_package_prefix("test")
+        .package(package!("rows").class(ptr_class!(Handle)).class(data_class!(Row)))
+        .package(package!().fun(fun!(owned)).fun(fun!(borrowed)).fun(fun!(nested)).fun(fun!(handles)))
+        .build().unwrap();
+    assert!(generated.kotlin["test/RowVecCallback.kt"]
+        .contains("kotlin.collections.List<test.rows.Row>"));
+    assert!(generated.kotlin["test/RowListCallback.kt"]
+        .contains("kotlin.collections.List<test.rows.Row>"));
+    assert!(generated.kotlin["test/OptionalOptionalRowVecCallback.kt"]
+        .contains("kotlin.collections.List<test.rows.Row?>?"));
+    assert!(generated.kotlin["test/HandleVecCallback.kt"]
+        .contains("kotlin.collections.List<test.rows.Handle>"));
+    syn::parse_file(&generated.rust).unwrap();
 }

@@ -178,7 +178,7 @@ pub(crate) fn output_list(
     let failure = format!("{}failure", context.output_prefix);
     let ctx = KotlinContext {
         failure: &failure,
-        cleanup_failure: None,
+        cleanup_failure: Some(&failure),
         result: &row,
         output_prefix: &prefix,
         ..*context
@@ -192,19 +192,36 @@ pub(crate) fn output_list(
     let raw = format!("({}[0] as kotlin.Array<*>)", context.result);
     let output = format!("{}list", context.output_prefix);
     let actions = format!("{}cleanups", context.output_prefix);
-    let (failure_value, finish_cleanup) = match context.cleanup_failure {
-        Some(target) => (
-            format!("{target} ?: kotlin.RuntimeException(\"collection cleanup failed\")"),
-            format!("if ({target} == null && {failure}.suppressed.isNotEmpty()) {{ {target} = {failure}.suppressed.first(); {failure}.suppressed.drop(1).forEach {{ {target}!!.addSuppressed(it) }} }}"),
-        ),
-        None => (context.failure.to_owned(), String::new()),
+    let initial = format!("{}initialFailure", context.output_prefix);
+    let action = format!("{}cleanupAction", context.output_prefix);
+    let raw_row = format!("{}rawRow", context.output_prefix);
+    let index = format!("{}index", context.output_prefix);
+    let cleanup = format!("{}cleanupError", context.output_prefix);
+    let record_row_failure = kotlin::record_cleanup_failure(&ctx, &cleanup);
+    let record_outer_failure = kotlin::record_cleanup_failure(context, &cleanup);
+    let current_failure = context.cleanup_failure.unwrap_or(context.failure);
+    let run_action = if let Some(target) = context.cleanup_failure {
+        format!("{target} = {action}({target})")
+    } else {
+        format!("{action}({current_failure})")
     };
+    let finish_row = context
+        .cleanup_failure
+        .map(|target| format!("{target} = {failure}"))
+        .unwrap_or_default();
     Ok(KotlinOutput {
-        result_names:vec![None],
-        delivered:vec![format!("requireNotNull({output})")],result_types:vec![format!("kotlin.collections.List<{ty}>")],
-        output_locals:format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\nvar {actions}: kotlin.collections.MutableList<(kotlin.Throwable) -> kotlin.Unit>? = null\n"),
-        materialize:format!("{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor (rawRow in {raw}) {{\nval {row} = rawRow as kotlin.Array<*>\n{}\n{actions}.add {{ {failure} -> {} }}\n{}\n{output}.add({value})\n}}\n",child.output_locals,child.cleanup,child.materialize),
-        cleanup:format!("val {failure} = {failure_value}\n{actions}?.forEach {{ it({failure}) }}\nfor (index in ({actions}?.size ?: 0) until {raw}.size) {{\nval {row} = {raw}[index] as kotlin.Array<*>\n{}\n{}\n}}\n{finish_cleanup}\n",child.output_locals,child.cleanup),
+        result_names: vec![None],
+        delivered: vec![format!("requireNotNull({output})")],
+        result_types: vec![format!("kotlin.collections.List<{ty}>")],
+        output_locals: format!("var {output}: kotlin.collections.MutableList<{ty}>? = null\nvar {actions}: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null\n"),
+        materialize: format!(
+            "{actions} = kotlin.collections.mutableListOf()\n{output} = kotlin.collections.mutableListOf()\nfor ({raw_row} in {raw}) {{\nval {row} = {raw_row} as kotlin.Array<*>\n{}\n{actions}.add {{ {initial} -> var {failure} = {initial}; try {{ {} }} catch ({cleanup}: Throwable) {{ {record_row_failure} }}; {failure} }}\n{}\n{output}.add({value})\n}}\n",
+            child.output_locals, child.cleanup, child.materialize
+        ),
+        cleanup: format!(
+            "try {{\nfor ({action} in {actions}.orEmpty()) {{ try {{ {run_action} }} catch ({cleanup}: Throwable) {{ {record_outer_failure} }} }}\nfor ({index} in ({actions}?.size ?: 0) until {raw}.size) {{\nvar {failure}: kotlin.Throwable? = {current_failure}\ntry {{ val {row} = {raw}[{index}] as kotlin.Array<*>\n{}\n{}\n}} catch ({cleanup}: Throwable) {{ {record_row_failure} }}\n{finish_row}\n}}\n}} catch ({cleanup}: Throwable) {{ {record_outer_failure} }}\n",
+            child.output_locals, child.cleanup
+        ),
     })
 }
 

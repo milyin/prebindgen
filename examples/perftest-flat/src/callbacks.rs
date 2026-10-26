@@ -407,3 +407,259 @@ pub fn callback_reentry_constructed(
     callback();
     value.0.into_inner()
 }
+
+static ROW_RESOURCE_LIVE: AtomicUsize = AtomicUsize::new(0);
+static ROW_RESOURCE_DROPS: AtomicUsize = AtomicUsize::new(0);
+#[prebindgen]
+pub type CallbackRowResource = CallbackRowResourceImpl;
+pub struct CallbackRowResourceImpl(i64);
+impl Clone for CallbackRowResourceImpl {
+    fn clone(&self) -> Self {
+        assert!(self.0 >= 0, "callback row clone failure");
+        callback_row_resource_new(self.0)
+    }
+}
+impl Drop for CallbackRowResourceImpl {
+    fn drop(&mut self) {
+        ROW_RESOURCE_LIVE.fetch_sub(1, Ordering::SeqCst);
+        ROW_RESOURCE_DROPS.fetch_add(1, Ordering::SeqCst);
+        assert_ne!(self.0, 777, "expected callback row drop failure");
+    }
+}
+#[prebindgen]
+pub fn callback_row_resource_new(id: i64) -> CallbackRowResource {
+    ROW_RESOURCE_LIVE.fetch_add(1, Ordering::SeqCst);
+    CallbackRowResourceImpl(id)
+}
+#[prebindgen]
+pub fn callback_row_resource_id(value: &CallbackRowResource) -> i64 {
+    value.0
+}
+#[prebindgen]
+pub fn callback_row_resource_live() -> i64 {
+    ROW_RESOURCE_LIVE.load(Ordering::SeqCst) as i64
+}
+#[prebindgen]
+pub fn callback_row_resource_drops() -> i64 {
+    ROW_RESOURCE_DROPS.load(Ordering::SeqCst) as i64
+}
+#[prebindgen]
+pub fn callback_row_resource_hold(
+    _value: &CallbackRowResource,
+    callback: impl Fn() + Send + Sync + 'static,
+) {
+    callback();
+}
+#[prebindgen]
+pub struct CallbackRow {
+    pub first: CallbackRowResource,
+    pub label: String,
+    pub second: CallbackRowResource,
+}
+fn callback_row(index: i64) -> CallbackRow {
+    CallbackRow {
+        first: callback_row_resource_new(index * 10 + 1),
+        label: format!("row{index}"),
+        second: callback_row_resource_new(index * 10 + 2),
+    }
+}
+#[prebindgen]
+pub fn callback_rows_owned(callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static) {
+    callback((0..3).map(callback_row).collect());
+}
+#[prebindgen]
+pub fn callback_rows_borrowed(callback: impl Fn(&[CallbackRow]) + Send + Sync + 'static) {
+    let rows = (0..3).map(callback_row).collect::<Vec<_>>();
+    callback(&rows);
+    // The callback only borrows these original Rust records.
+    assert_eq!(rows[1].second.0, 12);
+}
+#[prebindgen]
+pub fn callback_rows_optional(
+    callback: impl Fn(Option<Vec<Option<CallbackRow>>>) + Send + Sync + 'static,
+    mode: i32,
+) {
+    callback(match mode {
+        0 => None,
+        1 => Some(vec![]),
+        _ => Some(vec![Some(callback_row(0)), None, Some(callback_row(1))]),
+    });
+}
+#[prebindgen]
+pub struct CallbackRowDetail {
+    pub resource: Option<CallbackRowResource>,
+    pub note: String,
+}
+#[prebindgen]
+pub struct CallbackNestedRow {
+    pub row: CallbackRow,
+    pub detail: Option<CallbackRowDetail>,
+}
+#[prebindgen]
+pub fn callback_rows_nested(
+    callback: impl Fn(Vec<Vec<Option<CallbackNestedRow>>>) + Send + Sync + 'static,
+) {
+    callback(vec![
+        vec![
+            Some(CallbackNestedRow {
+                row: callback_row(0),
+                detail: Some(CallbackRowDetail {
+                    resource: Some(callback_row_resource_new(90)),
+                    note: "present".into(),
+                }),
+            }),
+            None,
+        ],
+        vec![],
+        vec![
+            Some(CallbackNestedRow {
+                row: callback_row(1),
+                detail: None,
+            }),
+            Some(CallbackNestedRow {
+                row: callback_row(2),
+                detail: Some(CallbackRowDetail {
+                    resource: None,
+                    note: "absent".into(),
+                }),
+            }),
+        ],
+    ]);
+}
+#[prebindgen]
+pub fn callback_rows_pair(
+    callback: impl Fn(Vec<CallbackRow>, Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    callback(
+        vec![callback_row(1)],
+        vec![callback_row(2), callback_row(3)],
+    );
+}
+#[prebindgen]
+pub fn callback_row_handles(callback: impl Fn(Vec<CallbackRowResource>) + Send + Sync + 'static) {
+    callback(vec![
+        callback_row_resource_new(71),
+        callback_row_resource_new(72),
+    ]);
+}
+#[prebindgen]
+pub struct CallbackTransferredRow {
+    pub first: CallbackRowResource,
+    pub label: String,
+    pub second: CallbackRowResource,
+}
+#[prebindgen]
+pub fn callback_rows_transferred(
+    callback: impl Fn(Vec<CallbackTransferredRow>) + Send + Sync + 'static,
+) {
+    callback(
+        (0..3)
+            .map(|i| CallbackTransferredRow {
+                first: callback_row_resource_new(i * 10 + 1),
+                label: format!("row{i}"),
+                second: callback_row_resource_new(i * 10 + 2),
+            })
+            .collect(),
+    );
+}
+#[prebindgen]
+pub fn callback_rows_conversion_failure(
+    callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    let mut rows = (0..3).map(callback_row).collect::<Vec<_>>();
+    rows[1].second.0 = -1;
+    callback(rows);
+    callback(vec![callback_row(4)]);
+}
+#[prebindgen]
+pub fn callback_rows_spawn(
+    callback: impl Fn(Vec<CallbackRow>) + Send + Sync + 'static,
+    count: i64,
+) -> CallbackJob {
+    let callback = Arc::new(callback);
+    CallbackJobImpl(std::thread::spawn(move || {
+        std::thread::scope(|scope| {
+            for _ in 0..2 {
+                let callback = callback.clone();
+                scope.spawn(move || {
+                    for _ in 0..count {
+                        callback(vec![callback_row(0), callback_row(1)]);
+                    }
+                });
+            }
+        });
+    }))
+}
+#[prebindgen]
+pub fn callback_row_job_finished(job: &CallbackJob) -> bool {
+    job.0.is_finished()
+}
+#[prebindgen]
+pub fn callback_rows_transferred_pair(
+    callback: impl Fn(Vec<CallbackTransferredRow>, Vec<CallbackRow>) + Send + Sync + 'static,
+) {
+    callback(
+        vec![CallbackTransferredRow {
+            first: callback_row_resource_new(81),
+            label: "transferred".into(),
+            second: callback_row_resource_new(82),
+        }],
+        vec![callback_row(1), callback_row(2)],
+    );
+}
+
+#[prebindgen]
+pub type CallbackUniqueResource = CallbackUniqueResourceImpl;
+// Deliberately not Clone: an owned row expansion must move this value.
+pub struct CallbackUniqueResourceImpl(CallbackRowResource);
+#[prebindgen]
+pub fn callback_unique_resource_id(value: &CallbackUniqueResource) -> i64 {
+    callback_row_resource_id(&value.0)
+}
+#[prebindgen]
+pub struct CallbackUniqueRow {
+    pub resource: CallbackUniqueResource,
+    pub label: String,
+}
+#[prebindgen]
+pub fn callback_rows_unique(callback: impl Fn(Vec<CallbackUniqueRow>) + Send + Sync + 'static) {
+    callback(vec![
+        CallbackUniqueRow {
+            resource: CallbackUniqueResourceImpl(callback_row_resource_new(101)),
+            label: "first".into(),
+        },
+        CallbackUniqueRow {
+            resource: CallbackUniqueResourceImpl(callback_row_resource_new(102)),
+            label: "second".into(),
+        },
+    ]);
+}
+
+#[prebindgen]
+pub struct CallbackObservedRow {
+    pub resource: CallbackRowResource,
+    pub label: String,
+}
+#[prebindgen]
+pub fn callback_rows_ref(callback: impl Fn(Vec<CallbackObservedRow>) + Send + Sync + 'static) {
+    callback(vec![CallbackObservedRow {
+        resource: callback_row_resource_new(111),
+        label: "observed".into(),
+    }]);
+}
+
+#[prebindgen]
+pub fn callback_rows_unique_error(
+    callback: impl Fn(Vec<CallbackUniqueRow>) + Send + Sync + 'static,
+) {
+    callback(vec![
+        CallbackUniqueRow {
+            resource: CallbackUniqueResourceImpl(callback_row_resource_new(777)),
+            label: "drop failure".into(),
+        },
+        CallbackUniqueRow {
+            resource: CallbackUniqueResourceImpl(callback_row_resource_new(102)),
+            label: "still cleaned".into(),
+        },
+    ]);
+}
