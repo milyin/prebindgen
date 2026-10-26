@@ -270,7 +270,16 @@ impl JniCallback {
         if slots > 254 {
             return Err("source callback exceeds JVM parameter limit".into());
         }
-        let capacity = i32::try_from(values.len() + 16).map_err(|_| "too many callback fields")?;
+        let return_references =
+            self.return_value
+                .as_ref()
+                .map_or(0, |result| match result.fields().as_slice() {
+                    [] => 0,
+                    [field] => usize::from(field.kind.is_reference()),
+                    fields => fields.len() + 1,
+                });
+        let capacity = i32::try_from(values.len() + return_references + 16)
+            .map_err(|_| "too many callback fields")?;
         let call = if let Some(result) = &self.return_value {
             result.rust_invoke(&context, &retained, &environment)?
         } else {

@@ -202,12 +202,17 @@ impl Codec for EnumCodec<'_> {
         if let Some((name, m)) = self.mapping(flat, ty) {
             return prebindgen_declarations::enum_input(m, ty, w, v, active, Self::wire(name, m));
         }
-        if !matches!(ty, syn::Type::Reference(_)) && Value::of(ty).is_none() {
+        let plan = CCodec.input_leaf(flat, ty, e, w.clone(), v, active)?;
+        if plan
+            .resources
+            .iter()
+            .any(|resource| resource.access == prebindgen_conversions::Access::Move)
+        {
             if let Some(owners) = self.return_owners {
                 owners.borrow_mut().insert(w.to_string(), ty.clone());
             }
         }
-        CCodec.input_leaf(flat, ty, e, w, v, active)
+        Ok(plan)
     }
     fn output_leaf(
         &self,
