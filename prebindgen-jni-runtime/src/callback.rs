@@ -35,6 +35,7 @@ impl Callback {
     ///
     /// Callback failures have no live declaring-call error handler. Report them
     /// and clear JVM exceptions so subsequent invocations remain usable.
+    #[inline]
     pub fn with_env(&self, capacity: i32, call: impl FnOnce(&mut JNIEnv<'_>) -> Result<()>) {
         let result = boundary(|| {
             let mut env = self
@@ -66,6 +67,7 @@ impl Callback {
     /// # Safety
     /// `arguments` must match the descriptor passed to [`Self::new`], with live
     /// references in `env`. The environment must have no pending JVM exception.
+    #[inline]
     pub unsafe fn invoke(
         &self,
         env: &mut JNIEnv<'_>,
