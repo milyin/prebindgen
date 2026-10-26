@@ -69,7 +69,7 @@ impl Declarations {
             if crate::contains_result(&ty) {
                 return Err("Result expansions are unsupported; configure success and error mapping separately".into());
             }
-            let key = type_key(&flat.resolve_type(&ty)?);
+            let key = type_key(&crate::callback::input_type(flat, &ty)?);
             if out.inputs.insert(key, input_body(*input)).is_some() {
                 return Err("duplicate input expansion".into());
             }
@@ -196,12 +196,14 @@ impl Declarations {
                     explicit.unwrap_or(&Input::auto()),
                     extra,
                 )?;
-                Some(Compiler::new(flat, codec, format!("p{index}")).input(
-                    &p.ty.ty,
-                    &tree,
-                    extra,
-                    &Condition::default(),
-                )?)
+                let compiler = Compiler::new(flat, codec, format!("p{index}"));
+                // Keep direct callback parameter names stable while using the
+                // same conversion resolution as constructor occurrences.
+                let callback_wire = quote::format_ident!("p{index}_callback");
+                let callback_value = quote::format_ident!("p{index}_callback_value");
+                let names = matches!(&tree, Input::Callback(_))
+                    .then_some((&callback_wire, &callback_value));
+                Some(compiler.input_named(&p.ty.ty, &tree, extra, &Condition::default(), names)?)
             } else {
                 None
             });
@@ -324,7 +326,7 @@ impl Declarations {
         };
         match tree {
             Input::Request(InputRequest::Auto) => {
-                let key = type_key(ty);
+                let key = crate::callback::input_key(flat, ty)?;
                 if let Some(tree) = self.inputs.get(&key) {
                     if stack.contains(&key) {
                         return Err(format!("recursive input expansion `{key}`"));
@@ -354,8 +356,8 @@ impl Declarations {
                 resolve(ty, &Input::Leaf, stack)
             }
             Input::Request(InputRequest::ForType { ty: target, input }) => {
-                let target = flat.resolve_type(target)?;
-                if same_type(ty, &target) {
+                let target = crate::callback::input_type(flat, target)?;
+                if crate::callback::input_key(flat, ty)? == type_key(&target) {
                     return resolve(ty, &input_body((**input).clone()), stack);
                 }
                 if let Some(inner) = option_inner(ty) {
@@ -367,6 +369,15 @@ impl Declarations {
                 Err("input expansion type does not match occurrence".into())
             }
             Input::Leaf => {
+                if prebindgen_flat::callback_signature(ty)?.is_some() {
+                    return resolve(
+                        ty,
+                        &Input::Request(InputRequest::Callback(Box::new(
+                            crate::CallbackDecl::new(ty.clone()),
+                        ))),
+                        stack,
+                    );
+                }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Input::Optional(Box::new(resolve(
                         inner,
@@ -385,6 +396,89 @@ impl Declarations {
                     return resolve(ty, &replacement, stack);
                 }
                 Ok(Input::Leaf)
+            }
+            Input::Callback(callback) => {
+                callback.validate_for(flat, ty)?;
+                Ok(Input::Callback(callback.clone()))
+            }
+            Input::Request(InputRequest::Callback(declaration)) => {
+                let canonical = crate::callback::input_type(flat, ty)?;
+                if !same_type(
+                    &canonical,
+                    &crate::callback::input_type(flat, &declaration.ty)?,
+                ) {
+                    return Err("callback declaration type does not match occurrence".into());
+                }
+                let recursion_key = format!("callback:{}", type_key(&canonical));
+                if stack.contains(&recursion_key) {
+                    return Err("recursive callback conversion".into());
+                }
+                stack.push(recursion_key);
+                let result = (|| {
+                    let signature = prebindgen_flat::callback_signature(&canonical)?
+                        .ok_or("callback declaration requires impl Fn(...) -> R")?;
+                    let mut selected = match self.inputs.get(&type_key(&canonical)) {
+                        Some(Input::Request(InputRequest::Callback(default))) => {
+                            (**default).clone()
+                        }
+                        _ => crate::CallbackDecl::new(canonical.clone()),
+                    };
+                    if declaration.foreign.is_some() {
+                        selected.foreign = declaration.foreign.clone();
+                    }
+                    if declaration.namespace.is_some() {
+                        selected.namespace = declaration.namespace.clone();
+                    }
+                    selected.params.extend(declaration.params.clone());
+                    if declaration.ret.is_some() {
+                        selected.ret = declaration.ret.clone();
+                    }
+                    if selected
+                        .params
+                        .keys()
+                        .any(|&i| i >= signature.arguments.len())
+                    {
+                        return Err("callback parameter override index is out of range".into());
+                    }
+                    let mut arguments = Vec::with_capacity(signature.arguments.len());
+                    for (index, source) in signature.arguments.iter().enumerate() {
+                        // References expose the referred value, except the borrowed
+                        // string/slice views handled by ordinary output conversions.
+                        let ty = match source {
+                            syn::Type::Reference(reference) if reference.mutability.is_none() => {
+                                match reference.elem.as_ref() {
+                                    syn::Type::Slice(_) => source,
+                                    syn::Type::Path(path) if path.path.is_ident("str") => source,
+                                    payload => payload,
+                                }
+                            }
+                            _ => source,
+                        };
+                        arguments.push(self.resolve_output(
+                            flat,
+                            codec,
+                            ty,
+                            selected.params.get(&index).unwrap_or(&Output::auto()),
+                            extra,
+                        )?);
+                    }
+                    let ret = resolve(
+                        &signature.return_type,
+                        selected.ret.as_ref().unwrap_or(&Input::auto()),
+                        stack,
+                    )?;
+                    Ok(Input::Callback(Box::new(crate::CallbackInput {
+                        ty: canonical,
+                        foreign: selected.foreign,
+                        namespace: selected.namespace,
+                        arguments,
+                        return_value: Box::new(ret),
+                        explicit_arguments: selected.params.keys().copied().collect(),
+                        explicit_return: selected.ret.is_some(),
+                    })))
+                })();
+                stack.pop();
+                result
             }
             Input::Request(InputRequest::Call(function)) => {
                 let f = flat.function(function)?;
@@ -781,7 +875,7 @@ impl FunctionDecl {
         self.name
     }
     /// Replace one parameter's default conversion using the production API.
-    pub fn expand_param(self, name: impl AsRef<str>, decl: crate::ExpandParamDecl) -> Self {
+    pub fn expand_param(self, name: impl AsRef<str>, decl: impl Into<Input<InputRequest>>) -> Self {
         self.input(name, decl)
     }
     /// Replace this return's default conversion using the production API.
@@ -883,6 +977,20 @@ pub fn source_functions<'a>(
 ) -> Vec<String> {
     fn input(tree: &Input<InputRequest>, names: &mut Vec<String>) {
         match tree {
+            Input::Callback(callback) => {
+                for tree in &callback.arguments {
+                    output(&tree.clone().into_preparation(), names);
+                }
+                input(&(*callback.return_value).clone().into_preparation(), names);
+            }
+            Input::Request(InputRequest::Callback(declaration)) => {
+                for tree in declaration.params.values() {
+                    output(tree, names);
+                }
+                if let Some(tree) = &declaration.ret {
+                    input(tree, names);
+                }
+            }
             Input::Request(InputRequest::Call(name)) => names.push(name.clone()),
             Input::Constructor { function, args } => {
                 names.push(function.clone());

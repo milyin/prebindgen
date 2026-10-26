@@ -6,13 +6,15 @@
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
-pub use prebindgen_declarations::{Projection, ProjectionMode};
+pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
 mod metadata;
 pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
 mod callback;
+#[cfg(test)]
+mod callback_tests;
 mod optional;
 mod sequence;
 mod sequence_callback;
@@ -375,7 +377,21 @@ impl JniGenBuilder {
     /// recipes, undeclared handle types and signatures exceeding JVM parameter limits.
     /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
     /// respective compilers when consuming the generated output.
-    pub fn prepare(self) -> Result<Bindings> {
+    pub fn prepare(mut self) -> Result<Bindings> {
+        for package in &self.packages {
+            let namespace = if package.name.is_empty() {
+                self.prefix.clone()
+            } else {
+                format!("{}.{}", self.prefix, package.name)
+            };
+            for class in &package.classes {
+                if let ClassDecl::Callback(declaration) = class {
+                    let mut declaration = declaration.clone();
+                    declaration.namespace = Some(namespace.clone());
+                    self.inputs.push(declaration.into());
+                }
+            }
+        }
         let references = prebindgen_declarations::declarations::source_functions(
             &self.inputs,
             &self.outputs,
@@ -403,10 +419,12 @@ impl JniGenBuilder {
         flat.metadata = JniModule {
             package: self.prefix,
             native_init: self.init,
+            callbacks: Vec::new(),
         };
         let mut declarations = Vec::new();
         let mut class_types = BTreeSet::new();
         let mut bound = BTreeSet::new();
+        let mut callback_types = vec![];
         for p in self.packages {
             let pkg = if p.name.is_empty() {
                 flat.metadata.package.clone()
@@ -415,6 +433,10 @@ impl JniGenBuilder {
             };
             validate_package(&pkg)?;
             for c in p.classes {
+                if let ClassDecl::Callback(declaration) = c {
+                    callback_types.push(declaration.ty);
+                    continue;
+                }
                 let ty = flat.resolve_type(c.ty())?;
                 let name = match c.name() {
                     Some(n) => n.clone(),
@@ -423,18 +445,7 @@ impl JniGenBuilder {
                         _ => return Err("class needs a name".into()),
                     },
                 };
-                validate_name(&name)?;
-                if [
-                    "JNINative",
-                    "Functions",
-                    "NativeHandle",
-                    "JniErrorHandler",
-                    "HandleValidationFailure",
-                ]
-                .contains(&name.as_str())
-                {
-                    return Err("reserved generated class name".into());
-                }
+                validate_class_name(&name)?;
                 if !class_types.insert(type_key(&ty)) {
                     return Err("duplicate class for source type".into());
                 }
@@ -507,10 +518,25 @@ impl JniGenBuilder {
         validate_declaration_names(&flat)?;
         data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
-        callback::prepare(&mut flat, &defaults, &declarations, &output_defaults)?;
         let codec = data::DataCodec {
-            callbacks: Some((&defaults, &output_defaults)),
+            callback_outputs: Some(&output_defaults),
         };
+        for ty in callback_types {
+            let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;
+            let Input::Callback(configuration) = recipe else {
+                return Err("callback declaration requires a callback conversion".into());
+            };
+            let plan = callback::input(
+                &flat,
+                &configuration,
+                &output_defaults,
+                &configuration.ty,
+                format_ident!("declared_callback"),
+                format_ident!("declared_callback_value"),
+                &Default::default(),
+            )?;
+            flat.metadata.callbacks.push(plan.into());
+        }
         let mut next_order = declarations.len();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
@@ -1002,6 +1028,21 @@ impl JniGen {
         }
         Ok(written)
     }
+}
+fn validate_class_name(name: &str) -> Result<()> {
+    validate_name(name)?;
+    if [
+        "JNINative",
+        "Functions",
+        "NativeHandle",
+        "JniErrorHandler",
+        "HandleValidationFailure",
+    ]
+    .contains(&name)
+    {
+        return Err("reserved generated class name".into());
+    }
+    Ok(())
 }
 fn validate_name(s: &str) -> Result<()> {
     if s.is_empty()

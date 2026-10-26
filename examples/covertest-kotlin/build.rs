@@ -128,10 +128,45 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 */
 use prebindgen_declarations::{expand_param, expand_return, fields, fun};
-use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
+use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .expand(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
+        .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
+        .package(package!("callbackconfig")
+            .class(callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                .name("ConfiguredHandler")
+                .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_number).name("number")))
+                .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_flag))))
+            .class(callback!(impl Fn(bool) -> i16).name("UnusedHandler"))
+            .class(callback!(impl Fn(CallbackConfigValue) -> i64).name("TypeDefaultHandler"))
+            .class(ptr_class!(CallbackConfigHandler))
+            .fun(fun!(callback_config_default))
+            .fun(fun!(callback_config_type_default))
+            .fun(fun!(callback_config_argument).expand_param("callback",
+                callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("FlagArgumentHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_config_return).expand_param("callback",
+                callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("NumberReturnHandler")
+                    .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))))
+            .fun(fun!(callback_config_pair)
+                .expand_param("first", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue))
+                .expand_param("second", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("FlagArgumentHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_config_nested).expand_param("handlers",
+                Input::for_type(syn::parse_quote!(CallbackConfigHandler), Input::constructor("callback_config_handler", [
+                    callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                        .name("NestedHandler")
+                        .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))
+                        .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
+                        .into()
+                ]))))
+            .fun(fun!(callback_config_optional).expand_param("handler", expand_param!(CallbackConfigHandler).variant(fun!(callback_config_handler))))
+            .fun(fun!(callback_config_ordinary)))
         .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
         .expand(expand_param!(CallbackConstructorEnvelope).variant(fun!(callback_constructor_wrap)))
         .expand(expand_return!(CallbackTransferred).field_self_into())

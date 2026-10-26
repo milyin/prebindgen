@@ -1,7 +1,7 @@
 //! Preparation and emission of retained source callbacks.
 use super::*;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_declarations::{Declarations, OutputRequest};
+use prebindgen_declarations::OutputRequest;
 use prebindgen_flat::{callback_signature, InputConversion, Wire, WireNode};
 use std::rc::Rc;
 
@@ -44,44 +44,10 @@ pub(crate) fn declared_outputs(
         })
         .collect()
 }
-/// Preserve direct callback slots while constructors compile their own occurrences.
-pub(crate) fn prepare(
-    flat: &mut Bindings,
-    defaults: &Declarations,
-    functions: &[FunctionDecl],
-    explicit_outputs: &BTreeSet<String>,
-) -> Result<()> {
-    for declaration in functions {
-        let params = flat.function(&declaration.name)?.params.clone();
-        for (index, parameter) in params.into_iter().enumerate() {
-            if callback_signature(&parameter.ty.ty)?.is_none() {
-                continue;
-            }
-            if declaration.params.contains_key(&parameter.name.to_string()) {
-                return Err("source callback parameters use their argument output expansions, not expand_param".into());
-            }
-            if parameter.ty.slot.is_some() {
-                continue;
-            }
-            let plan = input(
-                flat,
-                defaults,
-                explicit_outputs,
-                &parameter.ty.ty,
-                format_ident!("p{index}_callback"),
-                format_ident!("p{index}_callback_value"),
-                &prebindgen_declarations::Condition::default(),
-            )?;
-            flat.function_mut(&declaration.name)?.params[index].ty.slot = Some(plan.into());
-        }
-    }
-    Ok(())
-}
-
 /// Compile one callback occurrence, including a source constructor's argument.
 pub(crate) fn input(
     flat: &Bindings,
-    defaults: &Declarations,
+    configuration: &prebindgen_declarations::CallbackInput,
     explicit_outputs: &BTreeSet<String>,
     ty: &syn::Type,
     wire: syn::Ident,
@@ -90,6 +56,11 @@ pub(crate) fn input(
 ) -> Result<InputPlan<JniWire>> {
     let signature = callback_signature(ty)?.ok_or("expected source callback")?;
     let returns_unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
+    if returns_unit
+        && !matches!(configuration.return_value.as_ref(), Input::Fields(fields) if fields.is_empty())
+    {
+        return Err("unit callback returns require an empty unit input representation".into());
+    }
     let mut name = if signature.arguments.is_empty() {
         "VoidCallback".into()
     } else {
@@ -110,19 +81,28 @@ pub(crate) fn input(
             subject_name(&signature.return_type)
         );
     }
-    validate_name(&name)?;
-    let package = signature
-        .arguments
-        .first()
-        .and_then(|ty| {
-            flat.type_info(subject_type(ty))
-                .ok()?
-                .metadata
-                .class
-                .as_ref()
-                .map(|c| c.pkg.clone())
-        })
-        .unwrap_or_else(|| flat.metadata.package.clone());
+    if let Some(selected) = &configuration.foreign {
+        name = selected.clone();
+    }
+    validate_class_name(&name)?;
+    let package = configuration.namespace.clone().unwrap_or_else(|| {
+        signature
+            .arguments
+            .first()
+            .and_then(|ty| {
+                flat.type_info(subject_type(ty))
+                    .ok()?
+                    .metadata
+                    .class
+                    .as_ref()
+                    .map(|c| c.pkg.clone())
+            })
+            .unwrap_or_else(|| flat.metadata.package.clone())
+    });
+    validate_package(&package)?;
+    if configuration.arguments.len() != signature.arguments.len() {
+        return Err("prepared callback has the wrong argument count".into());
+    }
     if foreign_name_exists(flat, &format!("{package}.{name}")) {
         return Err("duplicate foreign callback interface name".into());
     }
@@ -135,13 +115,11 @@ pub(crate) fn input(
             );
         }
         let codec = data::DataCodec::default();
-        let recipe =
-            defaults.resolve_input(flat, &codec, &signature.return_type, &Input::auto(), &())?;
         let input = prebindgen_declarations::compile_callback_return(
             flat,
             &codec,
             &signature.return_type,
-            &recipe,
+            &configuration.return_value,
             &(),
         )?;
         Some(CallbackReturn {
@@ -170,14 +148,15 @@ pub(crate) fn input(
                 "Result-valued callback arguments require an explicit value representation".into(),
             );
         }
-        let recipe = defaults.output_recipe(flat, &data::DataCodec::default(), &ty, &())?;
-        let scoped = !explicit_outputs.contains(&type_key(&ty))
+        let recipe = &configuration.arguments[i];
+        let scoped = !configuration.explicit_arguments.contains(&i)
+            && !explicit_outputs.contains(&type_key(&ty))
             && !explicit_outputs.contains(&type_key(subject_type(&ty)));
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
             &data::DataCodec::default(),
             &ty,
-            &recipe,
+            recipe,
             i,
             borrowed,
             &(),
@@ -673,64 +652,88 @@ pub(crate) fn files(
     classes: &BTreeMap<String, KotlinClass>,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
+    let mut ownership_by_name = BTreeMap::new();
+    let mut wires = Vec::new();
+    for input in &flat.metadata.callbacks {
+        wires.extend(prebindgen_flat::wire_definitions(std::iter::once(
+            input.input_node(),
+        )));
+    }
     for function in flat.functions.values().filter(|f| f.metadata.is_some()) {
-        for wire in function.input_wire_definitions()? {
-            let JniWire::Callback { callback } = &wire.kind else {
-                continue;
-            };
-            let context = KotlinContext {
-                classes,
-                result: "parts",
-                failure: "failure",
-                cleanup_failure: None,
-                output_prefix: "output",
-            };
-            let mut params = vec![];
-            let mut names = BTreeSet::new();
-            for (i, arg) in callback.arguments.iter().enumerate() {
-                let output = arg.output.kotlin(&context)?;
-                output.callback_parameter_declarations()?;
-                for (j, ty) in output.result_types.iter().enumerate() {
-                    let mut name = output
-                        .result_names
-                        .get(j)
-                        .and_then(|n| n.clone())
-                        .unwrap_or_else(|| format!("arg{i}_{j}"));
-                    while !names.insert(name.clone()) {
-                        name.push('_');
-                    }
-                    params.push(format!("`{name}`: {ty}"));
+        wires.extend(function.input_wire_definitions()?);
+    }
+    for wire in wires {
+        let JniWire::Callback { callback } = &wire.kind else {
+            continue;
+        };
+        let context = KotlinContext {
+            classes,
+            result: "parts",
+            failure: "failure",
+            cleanup_failure: None,
+            output_prefix: "output",
+        };
+        let mut params = vec![];
+        let mut names = BTreeSet::new();
+        for (i, arg) in callback.arguments.iter().enumerate() {
+            let output = arg.output.kotlin(&context)?;
+            output.callback_parameter_declarations()?;
+            for (j, ty) in output.result_types.iter().enumerate() {
+                let mut name = output
+                    .result_names
+                    .get(j)
+                    .and_then(|n| n.clone())
+                    .unwrap_or_else(|| format!("arg{i}_{j}"));
+                while !names.insert(name.clone()) {
+                    name.push('_');
                 }
+                params.push(format!("`{name}`: {ty}"));
             }
-            let return_type = callback
-                .return_value
-                .as_ref()
-                .map(|r| r.kotlin_type(&context).map(|ty| format!(": {ty}")))
-                .transpose()?
-                .unwrap_or_default();
-            let contract = if let Some(result) = &callback.return_value {
-                let ownership = if result.input.kotlin(&context)?.consumed.is_empty() {
-                    ""
-                } else {
-                    " Returned handles transfer ownership to Rust."
-                };
-                format!(" Failure to invoke or convert the returned value raises a Rust panic on the invoking thread; an uncaught worker panic terminates that worker.{ownership}")
+        }
+        let return_type = callback
+            .return_value
+            .as_ref()
+            .map(|r| r.kotlin_type(&context).map(|ty| format!(": {ty}")))
+            .transpose()?
+            .unwrap_or_default();
+        let contract = if let Some(result) = &callback.return_value {
+            let ownership = if result.input.kotlin(&context)?.consumed.is_empty() {
+                ""
             } else {
-                String::new()
+                " Returned handles transfer ownership to Rust."
             };
-            let text = format!("package {}\n\n/** Invoked by Rust, possibly from a native worker thread.{contract} */\npublic fun interface {} {{\n    public fun run({}){return_type}\n}}\n", callback.package, callback.name, params.join(", "));
-            let path = format!(
-                "{}/{}.kt",
-                callback.package.replace('.', "/"),
-                callback.name
-            );
-            if let Some(existing) = files.get(&path) {
-                if existing != &text {
-                    return Err("callback interface signature collision".into());
-                }
-            } else {
-                files.insert(path, text);
+            format!(" Failure to invoke or convert the returned value raises a Rust panic on the invoking thread; an uncaught worker panic terminates that worker.{ownership}")
+        } else {
+            String::new()
+        };
+        let ownership = callback
+            .arguments
+            .iter()
+            .map(|arg| {
+                let handles = prebindgen_flat::wire_definitions(std::iter::once(
+                    &arg.output.output_outcomes().success,
+                ))
+                .any(|wire| matches!(wire.kind, JniWire::Handle { .. }));
+                handles && !arg.scoped
+            })
+            .collect::<Vec<_>>();
+        if let Some(previous) = ownership_by_name.insert(callback.fqn(), ownership.clone()) {
+            if previous != ownership {
+                return Err("callback interface ownership collision; use callback!(...).name(...) for a distinct interface".into());
             }
+        }
+        let text = format!("package {}\n\n/** Invoked by Rust, possibly from a native worker thread.{contract} */\npublic fun interface {} {{\n    public fun run({}){return_type}\n}}\n", callback.package, callback.name, params.join(", "));
+        let path = format!(
+            "{}/{}.kt",
+            callback.package.replace('.', "/"),
+            callback.name
+        );
+        if let Some(existing) = files.get(&path) {
+            if existing != &text {
+                return Err("callback interface signature collision; use callback!(...).name(...) for a distinct interface".into());
+            }
+        } else {
+            files.insert(path, text);
         }
     }
     Ok(())
