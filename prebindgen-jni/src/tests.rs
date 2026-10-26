@@ -1448,7 +1448,7 @@ fn callback_rejections_are_preparation_errors() {
 }
 
 #[test]
-fn callback_instance_signature_counts_receiver_and_acknowledgement_slots() {
+fn callback_instance_signature_counts_receiver_slots() {
     for (count, accepted) in [(127, true), (128, false)] {
         let args = std::iter::repeat_n("i64", count)
             .collect::<Vec<_>>()
@@ -1491,8 +1491,8 @@ fn callback_signature_markers_distinguish_options_and_sequence_elements() {
     }
 }
 #[test]
-fn callback_signature_limit_includes_handle_acknowledgement() {
-    for (count, accepted) in [(125, true), (126, false)] {
+fn callback_signature_limit_counts_handle_slots() {
+    for (count, accepted) in [(126, true), (127, false)] {
         let scalars = std::iter::repeat_n("i64", count)
             .collect::<Vec<_>>()
             .join(",");

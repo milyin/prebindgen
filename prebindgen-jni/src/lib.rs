@@ -286,7 +286,7 @@ impl JniGenBuilder {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register an input/output default using the production declaration syntax.
+    /// Register an input/output default using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
     pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
         use prebindgen_declarations::ExpandDecl;
@@ -430,7 +430,6 @@ impl JniGenBuilder {
                     "NativeHandle",
                     "JniErrorHandler",
                     "HandleValidationFailure",
-                    "CallbackHandleBusyException",
                 ]
                 .contains(&name.as_str())
                 {
@@ -1170,7 +1169,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = lock.run {{ lockForNativeAccess(); try {{ check(activeCalls == 0) {{ \"handle is in native use\" }}; check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }} finally {{ unlock() }} }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     let kotlin_classes = classes
@@ -1476,6 +1475,20 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         }
         let call = if locks.is_empty() && lock_groups.is_empty() {
             call
+        } else if lock_groups.is_empty() && locks.len() <= 3 {
+            use std::fmt::Write as _;
+            // Evaluate and validate each expression before taking any monitor.
+            let names = (0..locks.len())
+                .map(|i| format!("handle{i}"))
+                .collect::<Vec<_>>();
+            let mut locals = String::new();
+            for (name, value) in names.iter().zip(&locks) {
+                write!(locals, "val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; ").expect("writing to a String");
+            }
+            format!(
+                "run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}",
+                names.join(", ")
+            )
         } else {
             let mut all_locks = if locks.is_empty() {
                 "kotlin.collections.emptyList<Nothing>()".to_string()

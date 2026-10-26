@@ -169,6 +169,18 @@ fun checkOptions() {
     try {optionProjectionViews(true) { _, _ -> error("delivery") }} catch (e: IllegalStateException) {check(e.message == "delivery");check(e.suppressed.isEmpty())}
     check(io.prebindgen.covertest.resources.projectionDrops() == viewDrops + 2uL)
     check(optionResourcePair(null, null) == 0L)
+    // A later closed input must not consume an earlier valid move input.
+    val livePair = checkNotNull(optionResourceNew(true))
+    val closedPair = checkNotNull(optionResourceNew(true))
+    closedPair.close()
+    val beforeClosedPair = ownedResourceDrops()
+    for ((first, second) in listOf(livePair to closedPair, closedPair to livePair)) {
+        try { optionResourcePair(first, second); error("closed owner accepted") }
+        catch (_: IllegalArgumentException) { }
+        check(!livePair.isClosed && optionResourceId(livePair) == 77L)
+        check(ownedResourceDrops() == beforeClosedPair)
+    }
+    livePair.close()
     check(optionCtorId(0,null,null) == -10L)
     check(optionCtorId(0,7,null) == 7L)
     val ctor = optionCtorNew(null)

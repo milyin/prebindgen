@@ -14,7 +14,7 @@ use prebindgen_runtime::Result;
 mod sequence;
 pub use sequence::*;
 mod callback;
-pub use callback::{Callback, CallbackOutputs};
+pub use callback::Callback;
 
 /// Copy the Java string `value` into an owned Rust string. JNI failures become messages.
 pub fn text(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Result<String> {
