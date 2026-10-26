@@ -253,7 +253,7 @@ fun checkSourceCallbacks() {
     callbackOwnedBorrow(original, { _ ->
         expectCallbackRejection { original.close() }
         expectCallbackRejection { original.take() }
-        expectCallbackRejection { callbackOwnedId(original) }
+        verify(callbackOwnedId(original) == 55L)
         verify(!original.isClosed)
     })
     val beforeRejected = callbackOwnedDrops()

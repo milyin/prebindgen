@@ -66,7 +66,8 @@ pub struct KotlinInput {
     pub parameters: Vec<String>,
     /// Expressions passed to native wires, in wire order.
     pub arguments: Vec<String>,
-    /// Handle expressions to lock for the duration of the native call.
+    /// Native-handle access expressions to lock during the native call.
+    /// Plain handles request exclusive access; shared borrows carry an internal marker.
     pub locks: Vec<String>,
     /// Statements run after native ownership acknowledgement, including on failure.
     pub consumed: Vec<String>,
@@ -245,8 +246,13 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
             JniWire::Handle {
                 handle, condition, ..
             } => {
+                let shared = if handle.access == Access::Shared {
+                    ".sharedNativeAccess()"
+                } else {
+                    ""
+                };
                 locks.push(format!(
-                    "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
+                    "if ({condition}) requireNotNull({n}) {{ \"null handle\" }}{shared} else null"
                 ));
                 if handle.access == Access::Move {
                     consumed.push(format!("if ({condition}) {n}!!.markConsumed()"));

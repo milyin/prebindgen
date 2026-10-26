@@ -1616,3 +1616,18 @@ fn wrapped_callable_source_types_are_rejected_before_callback_preparation() {
         }
     }
 }
+
+#[test]
+fn shared_handle_inputs_request_shared_native_access() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String; pub fn read(value:&Handle){} pub fn write(value:&mut Handle){} pub fn take(value:Handle){}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(read)).fun(fun!(write)).fun(fun!(take)))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert_eq!(
+        kotlin.matches("sharedNativeAccess()").count(),
+        1,
+        "{kotlin}"
+    );
+}

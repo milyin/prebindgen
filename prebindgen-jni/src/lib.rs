@@ -431,6 +431,7 @@ impl JniGenBuilder {
                     "JniErrorHandler",
                     "HandleValidationFailure",
                     "CallbackHandleBusyException",
+                    "SharedNativeAccess",
                 ]
                 .contains(&name.as_str())
                 {

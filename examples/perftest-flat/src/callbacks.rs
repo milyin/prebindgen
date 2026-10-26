@@ -301,3 +301,109 @@ pub fn callback_constructor_run(job: CallbackConstructorJob) {
 pub fn callback_constructor_checked(handler: CallbackConstructor, value: char) {
     (handler.0)(value as i64);
 }
+
+/// Send but not Sync: JNI must continue serializing access between threads.
+#[prebindgen]
+pub type CallbackReentry = CallbackReentryImpl;
+pub struct CallbackReentryImpl(std::cell::RefCell<i64>);
+#[prebindgen]
+pub fn callback_reentry_new(value: i64) -> CallbackReentry {
+    CallbackReentryImpl(std::cell::RefCell::new(value))
+}
+#[prebindgen]
+pub fn callback_reentry_read(value: &CallbackReentry) -> i64 {
+    *value.0.borrow()
+}
+#[prebindgen]
+pub fn callback_reentry_write(value: &mut CallbackReentry, new_value: i64) {
+    *value.0.get_mut() = new_value;
+}
+#[prebindgen]
+pub fn callback_reentry_take(value: CallbackReentry) -> i64 {
+    value.0.into_inner()
+}
+#[prebindgen]
+pub fn callback_reentry_shared(
+    value: &CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    let borrow = value.0.borrow();
+    callback();
+    *borrow
+}
+#[prebindgen]
+pub fn callback_reentry_exclusive(
+    value: &mut CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    let borrow = value.0.get_mut();
+    callback();
+    *borrow += 1;
+    *borrow
+}
+#[prebindgen]
+pub fn callback_reentry_consuming(
+    value: CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    callback();
+    value.0.into_inner()
+}
+#[prebindgen]
+pub fn callback_reentry_pair(
+    first: &CallbackReentry,
+    second: &CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    let a = first.0.borrow();
+    let b = second.0.borrow();
+    callback();
+    *a + *b
+}
+#[prebindgen]
+pub fn callback_reentry_mixed(
+    first: &CallbackReentry,
+    second: &mut CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    let a = first.0.borrow();
+    let b = second.0.get_mut();
+    callback();
+    *b += 1;
+    *a + *b
+}
+#[prebindgen]
+pub fn callback_reentry_worker(
+    value: &CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    let borrow = value.0.borrow();
+    std::thread::spawn(callback).join().unwrap();
+    *borrow
+}
+// Does not touch RefCell: a broken lock test can detect overlap without racing it.
+#[prebindgen]
+pub fn callback_reentry_probe(_value: &CallbackReentry) -> i64 {
+    1
+}
+#[prebindgen]
+pub fn callback_reentry_optional(
+    value: Option<&CallbackReentry>,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    let borrow = value.map(|value| value.0.borrow());
+    callback();
+    borrow.as_deref().copied().unwrap_or(-1)
+}
+#[prebindgen]
+pub fn callback_reentry_clone(value: &CallbackReentry) -> CallbackReentry {
+    callback_reentry_new(*value.0.borrow())
+}
+#[prebindgen]
+pub fn callback_reentry_constructed(
+    value: CallbackReentry,
+    callback: impl Fn() + Send + Sync + 'static,
+) -> i64 {
+    callback();
+    value.0.into_inner()
+}

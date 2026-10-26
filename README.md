@@ -732,8 +732,13 @@ from native worker threads. Each invocation attaches its thread as needed and us
 an explicit local-reference frame. Dropping the last Rust closure releases its JVM
 capture. User callbacks run synchronously on the invoking thread, including during
 a native call; applications must account for reentrancy and their source library's
-threading contract. A callback cannot reenter, close or take a handle already
-in native use; such access is rejected to preserve Rust borrows. Callback code
+threading contract. A synchronous callback can reenter a handle on the same thread
+when both native calls borrow it as `&T`. Mutable borrows, moves, `close()` and
+`take()` remain rejected while a native call uses that handle. Access from other
+threads stays serialized, even for shared borrows, so handles still need only
+`Send`, not `Sync`. Source methods must tolerate shared reentry: an exclusive
+interior lock held across the callback can cause a nested shared call to deadlock
+or panic, where the previous blanket guard rejected the call. Callback code
 waits up to 100 ms for a handle locked by another thread, then throws the public
 `CallbackHandleBusyException`. This allows brief contention without an unbounded
 lock cycle when a caller is waiting for the callback. Independent handles remain

@@ -7,14 +7,21 @@ public abstract class NativeHandle internal constructor(raw: Long) : AutoCloseab
     internal val address: Long = raw
     internal val lock = java.util.concurrent.locks.ReentrantLock()
     @Volatile internal var activeCalls: Int = 0
+        private set
+    private var activeExclusive: Boolean = false
+    internal fun sharedNativeAccess(): SharedNativeAccess = SharedNativeAccess(this)
     public val isClosed: Boolean get() = raw == 0L || raw and 1L != 0L
     internal fun markConsumed() { raw = raw or 1L }
     // A synchronous callback must not close/move a value borrowed by its caller,
     // or block on a handle whose owner may be waiting for that callback.
-    internal fun lockForNativeAccess() {
+    internal fun lockForNativeAccess(shared: Boolean = false) {
         if (nativeCallbackDepth.get() > 0) {
-            if (lock.isHeldByCurrentThread && activeCalls != 0) {
+            if (lock.isHeldByCurrentThread && activeCalls != 0 && (!shared || activeExclusive)) {
                 throw HandleValidationFailure("callback cannot reenter a handle already in native use")
+            }
+            if (lock.isHeldByCurrentThread) {
+                lock.lock()
+                return
             }
             val acquired = try { lock.tryLock(100, java.util.concurrent.TimeUnit.MILLISECONDS) }
                 catch (failure: InterruptedException) {
@@ -25,6 +32,18 @@ public abstract class NativeHandle internal constructor(raw: Long) : AutoCloseab
         } else {
             lock.lock()
         }
+    }
+    internal fun beginNativeCall(shared: Boolean) {
+        if (isClosed) throw HandleValidationFailure("closed or consumed handle")
+        if (activeCalls != 0 && (!shared || activeExclusive)) {
+            throw HandleValidationFailure("handle already in incompatible native use")
+        }
+        activeCalls++
+        if (!shared) activeExclusive = true
+    }
+    internal fun endNativeCall() {
+        activeCalls--
+        if (activeCalls == 0) activeExclusive = false
     }
     protected abstract fun freeNative(raw: Long)
     final override fun close() {
@@ -52,24 +71,58 @@ internal inline fun <R> withNativeCallback(body: () -> R): R {
     try { return body() } finally { nativeCallbackDepth.set(prior) }
 }
 
-// One order for all parameters, including selected constructor arguments.
-// Generated constructors are internal: one Kotlin owner exists per allocation.
-internal fun <R> withHandleLocks(handles: List<NativeHandle>, body: () -> R): R {
-    val ordered = handles.distinct().sortedBy { it.address }
-    var acquired = 0
+/** A shared Rust borrow; plain NativeHandle requests remain exclusive. */
+internal class SharedNativeAccess(val handle: NativeHandle)
+
+private fun nativeAccessHandle(access: Any): NativeHandle = when (access) {
+    is SharedNativeAccess -> access.handle
+    is NativeHandle -> access
+    else -> throw HandleValidationFailure("invalid native handle access")
+}
+
+private inline fun <R> withOneHandleLock(access: Any, body: () -> R): R {
+    val handle = nativeAccessHandle(access)
+    val shared = access is SharedNativeAccess
+    handle.lockForNativeAccess(shared)
     var reserved = false
     try {
-        for (handle in ordered) {
-            handle.lockForNativeAccess()
-            acquired++
-        }
-        if (ordered.any { it.isClosed }) throw HandleValidationFailure("closed or consumed handle")
-        if (ordered.any { it.activeCalls != 0 }) throw HandleValidationFailure("handle already in native use")
-        for (handle in ordered) handle.activeCalls++
+        handle.beginNativeCall(shared)
         reserved = true
         return body()
     } finally {
-        if (reserved) for (handle in ordered) handle.activeCalls--
+        if (reserved) handle.endNativeCall()
+        handle.lock.unlock()
+    }
+}
+
+// Merge access modes before locking: any move or mutable borrow is exclusive.
+// All requests are still serialized between threads, including Send-only types.
+internal fun <R> withHandleLocks(handles: List<Any>, body: () -> R): R {
+    if (handles.isEmpty()) return body()
+    if (handles.size == 1) return withOneHandleLock(handles[0], body)
+    val shared = java.util.IdentityHashMap<NativeHandle, Boolean>(handles.size)
+    for (access in handles) {
+        val handle = nativeAccessHandle(access)
+        // Reject consumed owners before sorting aliases sharing the old address.
+        if (handle.isClosed) throw HandleValidationFailure("closed or consumed handle")
+        val read = access is SharedNativeAccess
+        shared[handle] = shared[handle]?.let { it && read } ?: read
+    }
+    val ordered = shared.keys.sortedBy { it.address }
+    var acquired = 0
+    var reserved = 0
+    try {
+        for (handle in ordered) {
+            handle.lockForNativeAccess(shared[handle]!!)
+            acquired++
+        }
+        for (handle in ordered) {
+            handle.beginNativeCall(shared[handle]!!)
+            reserved++
+        }
+        return body()
+    } finally {
+        for (index in reserved - 1 downTo 0) ordered[index].endNativeCall()
         for (index in acquired - 1 downTo 0) ordered[index].lock.unlock()
     }
 }
