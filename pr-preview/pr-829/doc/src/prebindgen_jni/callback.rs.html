@@ -773,25 +773,19 @@
 <a href=#773 id=773 data-nosnippet>773</a>    <span class="kw">let </span>default = <span class="kw">if </span>ty.ends_with(<span class="string">'?'</span>) {
 <a href=#774 id=774 data-nosnippet>774</a>        <span class="prelude-val">Some</span>(<span class="string">"null"</span>)
 <a href=#775 id=775 data-nosnippet>775</a>    } <span class="kw">else </span>{
-<a href=#776 id=776 data-nosnippet>776</a>        <span class="kw">match </span>ty.strip_prefix(<span class="string">"kotlin."</span>).unwrap_or(ty) {
-<a href=#777 id=777 data-nosnippet>777</a>            <span class="string">"Boolean" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"false"</span>),
-<a href=#778 id=778 data-nosnippet>778</a>            <span class="string">"Byte" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toByte()"</span>),
-<a href=#779 id=779 data-nosnippet>779</a>            <span class="string">"Short" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toShort()"</span>),
-<a href=#780 id=780 data-nosnippet>780</a>            <span class="string">"Int" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0"</span>),
-<a href=#781 id=781 data-nosnippet>781</a>            <span class="string">"Long" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0L"</span>),
-<a href=#782 id=782 data-nosnippet>782</a>            <span class="string">"UByte" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUByte()"</span>),
-<a href=#783 id=783 data-nosnippet>783</a>            <span class="string">"UShort" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUShort()"</span>),
-<a href=#784 id=784 data-nosnippet>784</a>            <span class="string">"UInt" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0U"</span>),
-<a href=#785 id=785 data-nosnippet>785</a>            <span class="string">"ULong" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0UL"</span>),
-<a href=#786 id=786 data-nosnippet>786</a>            <span class="string">"Float" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.0f"</span>),
-<a href=#787 id=787 data-nosnippet>787</a>            <span class="string">"Double" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.0"</span>),
-<a href=#788 id=788 data-nosnippet>788</a>            <span class="string">"Char" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"'\\u0000'"</span>),
-<a href=#789 id=789 data-nosnippet>789</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#790 id=790 data-nosnippet>790</a>        }
-<a href=#791 id=791 data-nosnippet>791</a>    };
-<a href=#792 id=792 data-nosnippet>792</a>    <span class="kw">match </span>default {
-<a href=#793 id=793 data-nosnippet>793</a>        <span class="prelude-val">Some</span>(default) =&gt; <span class="macro">format!</span>(<span class="string">"        var {name}: {ty} = {default}\n"</span>),
-<a href=#794 id=794 data-nosnippet>794</a>        <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"        lateinit var {name}: {ty}\n"</span>),
-<a href=#795 id=795 data-nosnippet>795</a>    }
-<a href=#796 id=796 data-nosnippet>796</a>}
+<a href=#776 id=776 data-nosnippet>776</a>        <span class="kw">let </span>kotlin_type = ty.strip_prefix(<span class="string">"kotlin."</span>).unwrap_or(ty);
+<a href=#777 id=777 data-nosnippet>777</a>        <span class="kw">crate</span>::wire::jvm::primitive_local_default(kotlin_type).or(<span class="kw">match </span>kotlin_type {
+<a href=#778 id=778 data-nosnippet>778</a>            <span class="string">"UByte" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUByte()"</span>),
+<a href=#779 id=779 data-nosnippet>779</a>            <span class="string">"UShort" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0.toUShort()"</span>),
+<a href=#780 id=780 data-nosnippet>780</a>            <span class="string">"UInt" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0U"</span>),
+<a href=#781 id=781 data-nosnippet>781</a>            <span class="string">"ULong" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"0UL"</span>),
+<a href=#782 id=782 data-nosnippet>782</a>            <span class="string">"Char" </span>=&gt; <span class="prelude-val">Some</span>(<span class="string">"'\\u0000'"</span>),
+<a href=#783 id=783 data-nosnippet>783</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#784 id=784 data-nosnippet>784</a>        })
+<a href=#785 id=785 data-nosnippet>785</a>    };
+<a href=#786 id=786 data-nosnippet>786</a>    <span class="kw">match </span>default {
+<a href=#787 id=787 data-nosnippet>787</a>        <span class="prelude-val">Some</span>(default) =&gt; <span class="macro">format!</span>(<span class="string">"        var {name}: {ty} = {default}\n"</span>),
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"        lateinit var {name}: {ty}\n"</span>),
+<a href=#789 id=789 data-nosnippet>789</a>    }
+<a href=#790 id=790 data-nosnippet>790</a>}
 </code></pre></div></section></main></body></html>
