@@ -553,7 +553,7 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 Further JNI object-array ABI optimization remains separate work.
 
-Source callback parameters, data-carrying enums, maps/sets, mutable text/byte views, methods,
+C source callback parameters, data-carrying enums, maps/sets, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
 
@@ -697,6 +697,63 @@ accumulator type, and do not invoke the folder.
 Sequence-valued arguments of source callbacks remain part of future general
 callback support. Byte-buffer returns keep their existing transport and are not
 selected as element-wise sequences by these declarations.
+
+## Retained JNI source callbacks
+
+JNI binds direct function parameters of the form `impl Fn(...) + Send + Sync + 'static`
+with a unit result. `Send`, `Sync`, and `'static` bounds may be omitted. The generated
+Kotlin parameter uses a typed `fun interface`; ordinary `.fun(fun!(...))` declarations
+select these functions without extra callback configuration.
+
+```rust,ignore
+#[prebindgen]
+pub fn subscribe(callback: impl Fn(Sample) + Send + Sync + 'static) -> Subscription { /* ... */ }
+```
+
+Callback arguments use their type-wide output expansions and declared data/enum
+representations. Public interfaces retain source type names (`SampleCallback`),
+even when a Kotlin class is renamed, and live in the first argument type's package.
+Zero-argument callbacks share `VoidCallback` in the root package. Identical public
+signatures share an interface; conflicting signatures with the same derived name
+are diagnosed. Input-side `expand_param` overrides on callbacks are rejected.
+
+Registration retains a JVM global reference and caches the bridge method. Rust
+closures can retain that reference beyond registration and invoke it concurrently
+from native worker threads. Each invocation attaches its thread as needed and uses
+an explicit local-reference frame. Dropping the last Rust closure releases its JVM
+capture. User callbacks run synchronously on the invoking thread, including during
+a native call; applications must account for reentrancy and their source library's
+threading contract. A callback cannot reenter, close or take a handle already
+in native use; such access is rejected to preserve Rust borrows. Callback code
+waits up to 100 ms for a handle locked by another thread, then throws the public
+`CallbackHandleBusyException`. This allows brief contention without an unbounded
+lock cycle when a caller is waiting for the callback. Independent handles remain
+usable from callback code.
+
+Borrowed arguments are observed through their output conversions. Unexpanded opaque
+handle arguments are closed after `run`, including when it throws; `take()` retains
+a separate owning Kotlin wrapper. Explicit output expansions of the callback argument type (or its optional payload)
+transfer their handles to the user. Field-type defaults do not rewrite a data
+class's properties; the containing argument's expansion controls that record. Once reconstruction succeeds, those handles stay user-owned even if
+`run` throws. Reconstruction failure reclaims all unpublished argument handles.
+Native output ownership commits before the upcall; an entry acknowledgement keeps a
+native rollback guard responsible if Kotlin never accepts the allocations.
+
+Kotlin exceptions from callbacks are described, cleared and reported on stderr,
+following the production no-throw upcall contract. They do not escape into Rust or
+poison later invocations. If an enclosing native call already has a JVM exception
+pending, the callback is skipped and that exception is preserved. Registration
+errors still use the function's ordinary binding-error callback.
+
+Callbacks currently support scalar, string, byte, record, optional, enum and buffered
+sequence argument conversions, including declared projections. Handle-containing
+sequence arguments are rejected because their per-element ownership requires an
+additional handoff protocol. Mutable references, callback return values, `Result`
+arguments, nested callbacks, higher-ranked bounds, and `FnMut`/`FnOnce` are rejected.
+Callbacks are accepted only as direct source function parameters. C callback inputs
+remain unsupported and fail during preparation. The covertest exercises retained
+and concurrent callbacks, output ownership, reentry, exception containment, and
+release of JVM captures under `-Xcheck:jni`.
 
 ## Result returns
 

@@ -1,6 +1,7 @@
 //! Generate Rust/JNI wrappers and Kotlin bindings from conversion slots.
 //! Supported declarations include `package!`, `ptr_class!`, `data_class!`, `fun!`,
-//! expansion declarations, `.name()`, source selection, package prefix and native initialization.
+//! expansion declarations, retained `impl Fn` inputs, `.name()`, source selection,
+//! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
@@ -11,9 +12,11 @@ pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
+mod callback;
 mod optional;
 mod sequence;
 mod sequence_callback;
+pub use callback::JniCallback;
 pub use optional::JniNiche;
 mod group;
 mod scalar;
@@ -427,6 +430,7 @@ impl JniGenBuilder {
                     "NativeHandle",
                     "JniErrorHandler",
                     "HandleValidationFailure",
+                    "CallbackHandleBusyException",
                 ]
                 .contains(&name.as_str())
                 {
@@ -494,6 +498,7 @@ impl JniGenBuilder {
                 ));
             }
         }
+        let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
@@ -503,6 +508,7 @@ impl JniGenBuilder {
         validate_declaration_names(&flat)?;
         data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
+        callback::prepare(&mut flat, &defaults, &declarations, &output_defaults)?;
         let mut next_order = declarations.len();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
@@ -910,6 +916,7 @@ impl Codec for JniCodec {
         crate::group::retire_niches(payload, reservation)
     }
     fn validate_input(&self, plan: &prebindgen_declarations::CodecInput<Self>) -> Result<()> {
+        callback::validate_input(&plan.node)?;
         sequence::validate_buffered(&plan.node)?;
         crate::group::validate_layout(&plan.node)
     }
@@ -1161,7 +1168,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = lock.run {{ lock(); try {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }} finally {{ unlock() }} }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = lock.run {{ lockForNativeAccess(); try {{ check(activeCalls == 0) {{ \"handle is in native use\" }}; check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }} finally {{ unlock() }} }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     let kotlin_classes = classes
@@ -1177,6 +1184,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             )
         })
         .collect();
+    callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,
         &KotlinContext {

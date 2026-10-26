@@ -329,3 +329,32 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     assert_eq!(copied.function("echo").unwrap().ret.slot, Some(2));
     assert!(format!("{copied:?}").contains("property"));
 }
+
+#[test]
+fn callback_parameters_qualify_arguments_without_admitting_other_impl_traits() {
+    let flat = parse("pub type Item=String; pub fn f(cb: impl Fn(&Item, Option<Item>) -> () + Send + Sync + 'static) {}").unwrap();
+    let callback = callback_signature(&flat.function("f").unwrap().params[0].ty.ty)
+        .unwrap()
+        .unwrap();
+    assert_eq!(type_key(&callback.arguments[0]), "& source_crate :: Item");
+    assert_eq!(
+        type_key(&callback.arguments[1]),
+        "Option < source_crate :: Item >"
+    );
+    assert!(flat.resolve_type(&syn::parse_quote!(impl Fn())).is_err());
+    for source in [
+        "pub fn f(cb: impl FnMut()) {}",
+        "pub fn f(cb: impl FnOnce()) {}",
+        "pub fn f(cb: impl Fn() -> i64) {}",
+        "pub fn f(cb: impl for<'a> Fn(&'a str)) {}",
+        "pub fn f(cb: impl std::ops::Fn() + other::Send) {}",
+        "pub fn f(cb: impl Iterator<Item=i64>) {}",
+        "pub fn f(cb: Option<impl Fn()>) {}",
+        "pub fn f() -> impl Fn() {}",
+        "pub struct Record { pub callback: impl Fn() }",
+        "pub fn f(cb: impl Fn(Option<impl Fn()>)) {}",
+    ] {
+        assert!(parse(source).is_err(), "{source}");
+    }
+    assert!(parse("pub fn f(cb: impl std::ops::Fn() + core::marker::Send) {}").is_ok());
+}

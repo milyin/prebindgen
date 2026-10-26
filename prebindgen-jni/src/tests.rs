@@ -1373,3 +1373,135 @@ fn emission_rejects_placed_functions_with_missing_converters() {
     prepared.function_mut("f").unwrap().ret.slot = None;
     assert!(generate(&prepared).is_err());
 }
+
+#[test]
+fn retained_callback_names_follow_source_types_and_prepared_placement() {
+    let model = flat("pub type Original=String; pub fn first(cb: impl Fn(Original) + Send + Sync + 'static) {} pub fn second(cb: impl Fn(&Original)) {} pub fn empty(cb: impl Fn()) {}");
+    let prepared = JniGen::builder()
+        .flat(model)
+        .set_package_prefix("example")
+        .package(package!("values").class(ptr_class!(Original).name("Renamed")))
+        .package(
+            package!("calls")
+                .fun(fun!(first))
+                .fun(fun!(second))
+                .fun(fun!(empty)),
+        )
+        .prepare()
+        .unwrap();
+    let output = generate(&prepared).unwrap();
+    assert!(
+        output.kotlin["example/values/OriginalCallback.kt"]
+            .contains("arg0_0: example.values.Renamed")
+            || output.kotlin["example/values/OriginalCallback.kt"]
+                .contains("`arg0_0`: example.values.Renamed")
+    );
+    assert!(output.kotlin["example/VoidCallback.kt"].contains("public fun run()"));
+    assert!(
+        output.kotlin["example/calls/Functions.kt"].contains("example.values.OriginalCallback?")
+    );
+    syn::parse_file(&output.rust).unwrap();
+}
+
+#[test]
+fn callback_rejections_are_preparation_errors() {
+    for (source, message) in [
+        (
+            "pub type Item=String; pub fn f(cb:impl Fn(Vec<Item>)) {}",
+            "handle-containing sequence",
+        ),
+        (
+            "pub fn f(cb:impl Fn(Result<i64,String>)) {}",
+            "Result-valued callback",
+        ),
+        ("pub fn f(cb:impl Fn(&mut i64)) {}", "mutable callback"),
+    ] {
+        let mut builder = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test");
+        if source.contains("type Item") {
+            builder = builder.package(package!().class(ptr_class!(Item)));
+        }
+        let error = fail(builder.package(package!().fun(fun!(f))));
+        assert!(error.contains(message), "{error}");
+    }
+    let error = fail(
+        JniGen::builder()
+            .flat(flat("pub fn f(cb:impl Fn()) {}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(f).expand_param("cb", expand_param!(i64).variant_self()))),
+    );
+    assert!(error.contains("argument output expansions"), "{error}");
+    let source = syn::parse_file("pub fn f(cb:impl Fn()) {}").unwrap();
+    let model = prebindgen_c::Bindings::parse(
+        source
+            .items
+            .into_iter()
+            .map(|item| (item, Default::default())),
+    )
+    .unwrap();
+    let error = match prebindgen_c::Cbindgen::new(model).function(fun!(f)).build() {
+        Ok(_) => panic!("C source callbacks require an explicit callback protocol"),
+        Err(error) => error,
+    };
+    assert!(error.contains("adapter callback preparation"), "{error}");
+}
+
+#[test]
+fn callback_instance_signature_counts_receiver_and_acknowledgement_slots() {
+    for (count, accepted) in [(127, true), (128, false)] {
+        let args = std::iter::repeat_n("i64", count)
+            .collect::<Vec<_>>()
+            .join(",");
+        let source = format!("pub fn f(cb: impl Fn({args})) {{}}");
+        let result = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(f)))
+            .build();
+        assert_eq!(result.is_ok(), accepted);
+        if let Err(error) = result {
+            assert!(error.contains("callback exceeds JVM parameter limit"));
+        }
+    }
+}
+
+#[test]
+fn callback_signature_markers_distinguish_options_and_sequence_elements() {
+    let source = "pub fn a(cb:impl Fn(i64)){} pub fn b(cb:impl Fn(Option<i64>)){} pub fn c(cb:impl Fn(Vec<i64>)){} pub fn d(cb:impl Fn(Vec<String>)){}";
+    let output = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .fun(fun!(a))
+                .fun(fun!(b))
+                .fun(fun!(c))
+                .fun(fun!(d)),
+        )
+        .build()
+        .unwrap();
+    for name in [
+        "i64Callback",
+        "Optionali64Callback",
+        "i64VecCallback",
+        "StringVecCallback",
+    ] {
+        assert!(output.kotlin.contains_key(&format!("test/{name}.kt")));
+    }
+}
+#[test]
+fn callback_signature_limit_includes_handle_acknowledgement() {
+    for (count, accepted) in [(125, true), (126, false)] {
+        let scalars = std::iter::repeat_n("i64", count)
+            .collect::<Vec<_>>()
+            .join(",");
+        let source = format!("pub type Handle=String; pub fn f(cb:impl Fn(Handle,{scalars})) {{}}");
+        let result = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(f)))
+            .build();
+        assert_eq!(result.is_ok(), accepted);
+    }
+}

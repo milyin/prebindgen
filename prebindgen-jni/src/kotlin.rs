@@ -176,7 +176,7 @@ pub struct JniInput {
 /// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub struct JniOutput {
-    rust: OutputPlan<JniWire>,
+    pub(crate) rust: OutputPlan<JniWire>,
 }
 impl From<InputPlan<JniWire>> for JniInput {
     fn from(rust: InputPlan<JniWire>) -> Self {
@@ -220,6 +220,7 @@ impl Conversion for JniOutput {
 
 impl KotlinInputConversion for JniInput {
     fn kotlin(&self, context: &KotlinContext<'_>) -> Result<KotlinInput> {
+        crate::callback::validate_input(self.input_node())?;
         crate::sequence::validate_buffered(self.input_node())?;
         validate_layout(self.input_node())?;
         input_kotlin(self.input_node(), context)
@@ -233,6 +234,10 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
     for w in wires {
         let n = &w.name;
         let (kt, arg) = match &w.kind {
+            JniWire::Callback { callback } => (
+                format!("{}?", callback.fqn()),
+                callback.adapter(&n.to_string(), context)?,
+            ),
             JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
             JniWire::Enum { enum_type, .. } => (
                 enum_type.class_name.clone(),
@@ -286,6 +291,7 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     let mut result_types = Vec::new();
     for (i, w) in wires.iter().enumerate() {
         let (kt, decode) = match &w.kind {
+            JniWire::Callback { .. } => return Err("callback objects are input-only".into()),
             JniWire::Scalar { primitive: p, .. } => scalar::output_kotlin(*p, i, result),
             JniWire::Handle { handle, .. } => {
                 let c = context.class_name(&handle.ty)?;

@@ -132,6 +132,23 @@ use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .expand(expand_return!(CallbackTransferred).field_self_into())
+        .expand(expand_return!(CallbackProjected).field(fun!(callback_projected_id).name("id")).field_self_into())
+        .package(package!("callbacks")
+            .class(data_class!(CallbackRecord)).class(data_class!(CallbackEnvelope))
+            .class(ptr_class!(CallbackSet)).class(ptr_class!(CallbackJob))
+            .class(ptr_class!(CallbackOwned)).class(ptr_class!(CallbackTransferred))
+            .class(ptr_class!(CallbackProjected))
+            .fun(fun!(callback_set_new)).fun(fun!(callback_set_fire))
+            .fun(fun!(callback_set_spawn)).fun(fun!(callback_job_join))
+            .fun(fun!(callback_owned_new)).fun(fun!(callback_owned_id)).fun(fun!(callback_owned_drops))
+            .fun(fun!(callback_owned_fire)).fun(fun!(callback_owned_borrow))
+            .fun(fun!(callback_transferred_id)).fun(fun!(callback_transferred_drops))
+            .fun(fun!(callback_transferred_fire)).fun(fun!(callback_projection_fire))
+            .fun(fun!(callback_projected_id)).fun(fun!(callback_preflight))
+            .fun(fun!(callback_scalars)).fun(fun!(callback_texts))
+            .fun(fun!(callback_optional_owned)).fun(fun!(callback_envelope)).fun(fun!(callback_primitives))
+            .fun(fun!(callback_enums)))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             let mut probe = flat.clone();

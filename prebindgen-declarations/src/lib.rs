@@ -1094,12 +1094,49 @@ pub fn compile_output_value<C: Codec>(
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Output> {
-    let mut plan = Compiler::new(flat, codec, "ret".into()).output_root(
+    compile_output_at(flat, codec, ty, recipe, extra, "ret".into(), false)
+}
+
+/// Compile one Rust-to-foreign callback argument with independent local names.
+///
+/// `index` is its position in the callback signature. The adapter supplies callback
+/// delivery instead of the ordinary function-result packet; the same resolved
+/// projection and ownership operations prepare the value in either position.
+pub fn compile_callback_argument<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Output,
+    index: usize,
+    borrowed: bool,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Output> {
+    compile_output_at(
+        flat,
+        codec,
+        ty,
+        recipe,
+        extra,
+        format!("callback_arg_{index}"),
+        borrowed,
+    )
+}
+
+fn compile_output_at<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Output,
+    extra: &C::Extra,
+    prefix: String,
+    borrowed: bool,
+) -> Result<<C::Schema as Schema>::Output> {
+    let mut plan = Compiler::new(flat, codec, prefix).output_root(
         ty,
         recipe,
         extra,
         prebindgen_conversions::source_result_expr(),
-        false,
+        borrowed,
     )?;
     finalize_output_schema(codec, &mut plan, extra)?;
     codec.finish_output(&mut plan, extra)?;
@@ -1253,6 +1290,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<CodecInput<C>> {
+        if prebindgen_flat::callback_signature(ty)?.is_some() {
+            return Err("source callback parameters require adapter callback preparation".into());
+        }
         if contains_result(ty) {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());
         }

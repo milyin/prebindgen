@@ -11,6 +11,11 @@ pub use transport::JniArgument;
 /// check updates.
 #[derive(Clone, Debug)]
 pub enum JniWire {
+    /// A retained callback object with its independently prepared argument boundary.
+    Callback {
+        /// Signature and output conversions used when Rust invokes this callback.
+        callback: std::rc::Rc<crate::JniCallback>,
+    },
     /// One JNI object-array carrier. Buffered sequences store raw rows here;
     /// callback delivery uses an empty array as its present marker. The
     /// sequence container owns the element layout in both cases.
@@ -99,6 +104,7 @@ impl JniWire {
     /// This reads stored state rather than recomputing the initial niche.
     pub fn available_niche(&self) -> Option<JniNiche> {
         match self {
+            Self::Callback { .. } => None,
             Self::Scalar {
                 next_integer_niche, ..
             } => next_integer_niche.map(JniNiche::Integer),
@@ -178,6 +184,7 @@ impl JniWire {
     /// Disable niche availability, including for conditionally active payloads.
     pub fn clear_niche(&mut self) {
         match self {
+            Self::Callback { .. } => {}
             Self::Scalar {
                 next_integer_niche, ..
             } => *next_integer_niche = None,

@@ -20,6 +20,7 @@ pub struct JniArgument {
 // i128/u128 use ByteArray. Rust domains and niche state remain on JniWire.
 #[derive(Clone, Copy)]
 enum JvmType {
+    Object,
     Boolean,
     Byte,
     Short,
@@ -44,6 +45,7 @@ impl JvmType {
             Self::Text => "Ljava/lang/String;",
             Self::Bytes => "[B",
             Self::Rows => "[Ljava/lang/Object;",
+            Self::Object => "Ljava/lang/Object;",
         }
     }
     fn kotlin_type(self) -> &'static str {
@@ -58,10 +60,11 @@ impl JvmType {
             Self::Text => "String?",
             Self::Bytes => "ByteArray?",
             Self::Rows => "Array<Any?>?",
+            Self::Object => "Any?",
         }
     }
     fn is_reference(self) -> bool {
-        matches!(self, Self::Text | Self::Bytes | Self::Rows)
+        matches!(self, Self::Text | Self::Bytes | Self::Rows | Self::Object)
     }
     fn reader(self) -> &'static str {
         match self {
@@ -75,6 +78,7 @@ impl JvmType {
             Self::Text => "row_text",
             Self::Bytes => "row_bytes",
             Self::Rows => "row_rows",
+            Self::Object => unreachable!("callback objects are not collection element carriers"),
         }
     }
 }
@@ -100,6 +104,7 @@ impl JniWire {
             Self::Text { .. } => JvmType::Text,
             Self::Bytes { .. } => JvmType::Bytes,
             Self::Rows { .. } => JvmType::Rows,
+            Self::Callback { .. } => JvmType::Object,
         }
     }
     /// JVM field descriptor used in method signatures, independent of Kotlin spelling.
@@ -135,7 +140,7 @@ impl JniWire {
             JvmType::Long => "0L",
             JvmType::Float => "0.0f",
             JvmType::Double => "0.0",
-            JvmType::Text | JvmType::Bytes | JvmType::Rows => "null",
+            JvmType::Text | JvmType::Bytes | JvmType::Rows | JvmType::Object => "null",
         }
     }
     pub(crate) fn kotlin_integer(&self, value: i64) -> String {
@@ -152,6 +157,11 @@ impl JniWire {
     /// Reference fields preserve Java null for optional/inactive values. The
     /// caller supplies the `environment` template parameter and owns local refs.
     pub fn read_array_element(&self, array: &TokenStream, index: usize) -> TokenStream {
+        if matches!(self, Self::Callback { .. }) {
+            return quote!({
+                return Err("callback objects cannot be collection elements".into());
+            });
+        }
         let env = prebindgen_conversions::template_parameter("environment");
         let reader = format_ident!("{}", self.jvm_type().reader());
         let convert = matches!(self.jvm_type(), JvmType::Boolean).then(|| quote!(.map(u8::from)));
@@ -183,6 +193,9 @@ impl JniWire {
             }
             JvmType::Bytes => {
                 return quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::bytes_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
+            }
+            JvmType::Object => {
+                return quote!(#env.new_local_ref(&(#value)).map_err(|e|e.to_string())?)
             }
             JvmType::Rows => {
                 return quote!(match (#value).as_ref(){Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
@@ -239,7 +252,7 @@ impl JniWire {
             JvmType::Long => "j",
             JvmType::Float => "f",
             JvmType::Double => "d",
-            JvmType::Text | JvmType::Bytes | JvmType::Rows => {
+            JvmType::Text | JvmType::Bytes | JvmType::Rows | JvmType::Object => {
                 let object = self.output_object(value);
                 return JniArgument {
                     statements: quote!(let #local=#object;),
@@ -270,6 +283,9 @@ impl WireKind for JniWire {
             }
             JvmType::Bytes => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>)
+            }
+            JvmType::Object => {
+                syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JObject<'local>)
             }
             JvmType::Rows => {
                 syn::parse_quote!(::prebindgen_jni_runtime::jni::objects::JObjectArray<'local>)
