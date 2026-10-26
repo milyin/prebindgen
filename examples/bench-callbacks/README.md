@@ -94,6 +94,8 @@ the table reports the median of those eight JVM medians:
 and the eight-JVM confirmation, including every sample, JVM medians/ranges, build
 metadata and artifact hashes. An unusually slow JVM occurred in the initial run;
 the confirmation checks whether its result persists with more independent JVMs.
-Scalar and record reductions were approximately 6–7% and 12% in both comparisons.
-Handle estimates varied from 2% to 6%, with overlapping JVM ranges. These noisy
-microbenchmarks do not establish a network throughput gain.
+Slow JVMs also occurred in both variants during confirmation, so the outlier was
+not confined to the optimized build. Scalar and record median reductions were
+approximately 6–7% and 12% in both comparisons; handle estimates varied from 2%
+to 6%. JVM ranges overlap in every case. These noisy microbenchmarks do not
+establish a network throughput gain.
