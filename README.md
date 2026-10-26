@@ -762,14 +762,16 @@ slices can contain records with handles, including nested records, optional fiel
 and nested collections. Default callback arguments close every contained handle
 after `run`, including when it throws; `take()` retains individual owners.
 
-An output expansion of the collection argument type, such as
+A generator-wide output expansion of the collection argument type, such as
 `expand_return!(Vec<Row>).field_self_into()`, transfers the collection's produced
 handles to the callback author. Element-only expansions do not change the enclosing
 collection's scope. A `Vec<Row>` expansion also does not change the scope of
 `&[Row]` arguments. Use an owned row expansion, such as
 `expand_return!(Row).field_self_into()`, to move non-`Clone` fields from owned rows;
 borrowed slices require an appropriate borrowed conversion, such as cloning the
-handle fields. Kotlin reconstruction failure reclaims completed rows, the current
+handle fields. An owned-only row expansion cannot also convert borrowed slices of
+the same row type; use a conversion supporting both uses or separate row types.
+Kotlin reconstruction failure reclaims completed rows, the current
 partial row and unread rows before user code runs. Native conversion failure before
 commit drops the prepared resources without invoking the callback.
 
