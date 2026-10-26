@@ -633,6 +633,9 @@ impl<M: Schema> Flat<M> {
                         for argument in &mut signature.inputs {
                             *argument = self.resolve_type(argument)?;
                         }
+                        if let syn::ReturnType::Type(_, output) = &mut signature.output {
+                            **output = self.resolve_type(output)?;
+                        }
                     }
                 }
             }
