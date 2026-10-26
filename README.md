@@ -24,15 +24,14 @@ metadata on Flat owners records language representations and project choices.
 Flat also preserves source names, locations and guards.
 Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
 
-## Examples migrated from main
+## Examples
 
-This branch replaces the generator engine while preserving source capture and
-source-reading support. Class, package, and conversion declarations preserve the production builder API.
+The generator supports source capture and source reading. Class, package, and
+conversion declarations use the builder API.
 Import shared declaration types and macros directly from
 `prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
-The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
-been removed. All eight Rust example crates from `main` are in the workspace.
+The workspace contains eight Rust example crates.
 Unsupported declarations, record fields and matching constructor arguments are
 commented in the flat sources and `build.rs` files as the checklist for future
 work. The retained records demonstrate the supported shapes of the real examples.
@@ -530,7 +529,7 @@ fails. Invalid inputs or conversion failures then abort at the C boundary; sourc
 and destructor panics also abort. Use `Result<T, E>` when the caller needs to
 recover from an error. Error messages use the explicit Result error output.
 
-**JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
+**JNI owns handle semantics.** A Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
 or consumed state. A JNI-specific wrapper guarantees the alignment needed for
 that bit. Native objects require `Send` because Kotlin can transfer them between
@@ -593,7 +592,7 @@ must expose exactly one Kotlin input/output value; declare a data class to wrap
 multiple fields. General collection fields inside data classes are not yet
 supported. Inputs snapshot list structure once before choosing locks, then read
 handle addresses while all active handles are locked. Handle locking uses
-reentrant monitor acquisition in address order, matching production `main`. JNI
+reentrant monitor acquisition in address order. JNI
 validates row shapes and active field types, using local reference frames per
 row. Native failure before input ownership acknowledgement leaves input handles live;
 after acknowledgement Kotlin marks every selected handle consumed. Prepared
@@ -731,7 +730,7 @@ closures can retain that reference beyond registration and invoke it concurrentl
 from native worker threads. Each invocation attaches its thread as needed and uses
 an explicit local-reference frame. Dropping the last Rust closure releases its JVM
 capture. User callbacks run synchronously on the invoking thread, including during
-an outer native call. Like production `main`, generated handles use reentrant JVM
+an outer native call. Generated handles use reentrant JVM
 monitors: native calls, `close()` and `take()` serialize between threads, and the
 same thread can reenter a monitor. There is no callback-depth tracking, active-borrow
 reservation or callback-specific lock timeout. Callers must respect Rust borrows:
@@ -748,15 +747,14 @@ class's properties; the containing argument's expansion controls that record. On
 `run` throws. Reconstruction failure reclaims all unpublished argument handles.
 Native output ownership commits immediately before the upcall and transfers to the
 Kotlin bridge without a per-invocation acknowledgement array or native rollback
-registry, matching `main`. If invocation fails before bridge entry (for example,
+registry. If invocation fails before bridge entry (for example,
 JVM stack exhaustion), committed handles may leak.
 
-Kotlin exceptions from callbacks are described, cleared and reported on stderr,
-following the production no-throw upcall contract. They do not escape into Rust or
-poison later invocations. The invocation uses the checked JNI call without
-additional exception probes on the successful path. As with `main`, the invoking thread must have no pending JVM
-exception before entering the callback. Registration errors still use the
-function's ordinary binding-error callback.
+Kotlin exceptions from callbacks are described, cleared and reported on stderr.
+They do not escape into Rust or poison later invocations. The invocation uses the
+checked JNI call without additional exception probes on the successful path. The
+invoking thread must have no pending JVM exception before entering the callback.
+Registration errors use the function's ordinary binding-error callback.
 
 Callbacks currently support scalar, string, byte, record, optional, enum and buffered
 sequence argument conversions, including declared projections. Handle-containing
@@ -832,9 +830,8 @@ ownership and error output storage must be pairwise disjoint. This explicit
 flag reports whether Rust accepted ownership before returning a Result failure.
 Non-Result calls need no ownership flag because failures abort the process.
 
-JNI follows the production adapter's callback model. `Err(E)` is converted
-through the ordinary output declarations for `E`, including `expand_return!`,
-data/enum classes and explicit borrowed/owned projections. The generated
+JNI converts `Err(E)` through the ordinary output declarations for `E`, including
+`expand_return!`, data/enum classes and explicit borrowed/owned projections. The generated
 `<Error>Handler<R>.run(...)` receives these typed values. A message mapper is an
 explicit alternative that generates `<Error>MessageHandler<R>` with one String
 parameter. Neither representation is selected from the error's field contents.
