@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">mod </span>sequence;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub use </span>sequence::<span class="kw-2">*</span>;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">mod </span>callback;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub use </span>callback::{Callback, CallbackOutputs};
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub use </span>callback::Callback;
 <a href=#18 id=18 data-nosnippet>18</a>
 <a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// Copy the Java string `value` into an owned Rust string. JNI failures become messages.
 <a href=#20 id=20 data-nosnippet>20</a></span><span class="kw">pub fn </span>text(env: <span class="kw-2">&amp;mut </span>JNIEnv&lt;<span class="lifetime">'_</span>&gt;, value: <span class="kw-2">&amp;</span>JString&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
