@@ -11,10 +11,6 @@ fun checkSharedCallbackReentry() {
     fun inside(body: () -> Unit) {
         try { body() } catch (t: Throwable) { failure.compareAndSet(null, t) }
     }
-    fun rejected(body: () -> Unit) {
-        val t = try { body(); null } catch (t: Throwable) { t }
-        check(t is HandleValidationFailure || t is IllegalArgumentException) { "expected rejected native access: $t" }
-    }
     val value = callbackReentryNew(10)
     val other = callbackReentryNew(20)
     var calls = 0
@@ -24,10 +20,6 @@ fun checkSharedCallbackReentry() {
         check(callbackReentryShared(value, { inside {
             calls++
             check(callbackReentryRead(value) == 10L)
-            rejected { callbackReentryWrite(value, 99) }
-            rejected { callbackReentryTake(value) }
-            rejected { value.close() }
-            rejected { value.take() }
         } }) == 10L)
     } }) == 10L)
     check(calls == 2)
@@ -35,24 +27,20 @@ fun checkSharedCallbackReentry() {
         calls++
         check(callbackReentryRead(value) == 10L)
     } }) == 20L)
-    check(calls == 3)
+    // The callback may read the shared input, but must respect the other &mut borrow.
     check(callbackReentryMixed(value, other, { inside {
         calls++
         check(callbackReentryRead(value) == 10L)
-        rejected { callbackReentryRead(other) }
-        rejected { callbackReentryWrite(other, 77) }
     } }) == 31L)
     check(calls == 4 && callbackReentryRead(other) == 21L)
-    rejected { callbackReentryMixed(value, value, { calls++ }) }
-    check(calls == 4 && callbackReentryRead(value) == 10L)
+    val aliasFailure = try { callbackReentryMixed(value, value, { calls++ }); null }
+        catch (t: IllegalArgumentException) { t }
+    check(aliasFailure != null && calls == 4)
+    // Exclusive and consuming calls can safely use a different handle in callbacks.
     check(callbackReentryExclusive(value, { inside {
         calls++
-        rejected { callbackReentryRead(value) }
-        rejected { callbackReentryWrite(value, 77) }
-        rejected { value.close() }
-        rejected { value.take() }
+        check(callbackReentryRead(other) == 21L)
     } }) == 11L)
-    check(calls == 5)
     check(callbackReentryOptional(value, { inside { calls++; check(callbackReentryRead(value) == 11L) } }) == 11L)
     check(callbackReentryOptional(null, { inside { calls++; check(callbackReentryRead(value) == 11L) } }) == -1L)
     check(callbackReentryConstructed(value, { inside { calls++; check(callbackReentryRead(value) == 11L) } }) == 11L)
@@ -69,22 +57,6 @@ fun checkSharedCallbackReentry() {
         } finally { Thread.interrupted() }
     } }) == 11L)
     check(interruptedCalls == 1)
-
-    // Legacy/custom lock expressions containing plain handles stay exclusive.
-    withHandleLocks(listOf(value)) { withNativeCallback {
-        rejected { callbackReentryRead(value) }
-    } }
-    // Any exclusive request dominates repeated shared requests for the same handle.
-    withHandleLocks(listOf(value.sharedNativeAccess(), value)) { withNativeCallback {
-        rejected { callbackReentryRead(value) }
-    } }
-    // Failure after reserving an earlier handle must restore its counters.
-    val early = if (value.address < other.address) value else other
-    val late = if (early === value) other else value
-    withHandleLocks(listOf(late)) {
-        rejected { callbackReentryPair(early, late, {}) }
-    }
-    check(callbackReentryRead(value) == 11L && callbackReentryRead(other) == 21L)
     var throwCalls = 0
     check(callbackReentryShared(value, {
         inside { throwCalls++; check(callbackReentryRead(value) == 11L) }
@@ -94,14 +66,13 @@ fun checkSharedCallbackReentry() {
     callbackReentryWrite(value, 12)
     check(callbackReentryRead(value) == 12L)
 
-    // A native worker cannot share this Send-but-not-Sync value concurrently.
     val workerCalls = AtomicInteger()
     check(callbackReentryWorker(value, { inside {
-        val t = try { callbackReentryProbe(value); null } catch (t: Throwable) { t }
-        check(t is CallbackHandleBusyException)
+        check(callbackReentryRead(other) == 21L)
         workerCalls.incrementAndGet()
     } }) == 12L)
-    check(calls == 8 && workerCalls.get() == 1)
+    check(workerCalls.get() == 1)
+    // Shared borrows still serialize across threads for Send-but-not-Sync types.
     val entered = CountDownLatch(1)
     val release = CountDownLatch(1)
     val finished = CountDownLatch(1)
@@ -120,19 +91,17 @@ fun checkSharedCallbackReentry() {
     }.also { it.start() }
     try {
         check(attempted.await(5, TimeUnit.SECONDS))
-        check(!finished.await(100, TimeUnit.MILLISECONDS))
+        check(!finished.await(150, TimeUnit.MILLISECONDS))
     } finally { release.countDown() }
     owner.join(5000); reader.join(5000)
     check(!owner.isAlive && !reader.isAlive && finished.count == 0L)
     val moved = callbackReentryNew(33)
     check(callbackReentryConsuming(moved, { inside {
         calls++
-        rejected { callbackReentryRead(moved) }
-        rejected { moved.close() }
-        rejected { moved.take() }
+        check(callbackReentryRead(value) == 12L)
     } }) == 33L)
     check(calls == 9 && moved.isClosed)
     value.close(); other.close()
     failure.get()?.let { throw it }
-    println("shared callback reentry PASS: shared reads, exclusive/move guards, aliases, Send-only serialization")
+    println("shared callback reentry PASS: monitor reentry, aliases, Send-only serialization")
 }

@@ -1448,7 +1448,7 @@ fn callback_rejections_are_preparation_errors() {
 }
 
 #[test]
-fn callback_instance_signature_counts_receiver_and_acknowledgement_slots() {
+fn callback_instance_signature_counts_receiver_slots() {
     for (count, accepted) in [(127, true), (128, false)] {
         let args = std::iter::repeat_n("i64", count)
             .collect::<Vec<_>>()
@@ -1491,8 +1491,8 @@ fn callback_signature_markers_distinguish_options_and_sequence_elements() {
     }
 }
 #[test]
-fn callback_signature_limit_includes_handle_acknowledgement() {
-    for (count, accepted) in [(125, true), (126, false)] {
+fn callback_signature_limit_counts_handle_slots() {
+    for (count, accepted) in [(126, true), (127, false)] {
         let scalars = std::iter::repeat_n("i64", count)
             .collect::<Vec<_>>()
             .join(",");
@@ -1614,21 +1614,5 @@ fn wrapped_callable_source_types_are_rejected_before_callback_preparation() {
             );
             assert!(error.contains("unsupported source type"), "{error}");
         }
-    }
-}
-
-#[test]
-fn shared_handle_inputs_request_shared_native_access() {
-    let generated = JniGen::builder()
-        .flat(flat("pub type Handle=String; pub fn read(value:&Handle){} pub fn write(value:&mut Handle){} pub fn take(value:Handle){}"))
-        .set_package_prefix("test")
-        .package(package!().class(ptr_class!(Handle)).fun(fun!(read)).fun(fun!(write)).fun(fun!(take)))
-        .build().unwrap();
-    let kotlin = &generated.kotlin["test/Functions.kt"];
-    for (name, shared) in [("read", true), ("write", false), ("take", false)] {
-        let declaration = format!("public fun `{name}`(");
-        let body = kotlin.split_once(&declaration).unwrap().1;
-        let body = body.split("\npublic fun ").next().unwrap();
-        assert_eq!(body.contains(".sharedNativeAccess()"), shared, "{body}");
     }
 }

@@ -13,7 +13,6 @@ use std::rc::Rc;
 #[derive(Clone, Debug)]
 pub struct JniCallback {
     package: String,
-    harness_package: String,
     name: String,
     arguments: Vec<Argument>,
 }
@@ -155,7 +154,6 @@ pub(crate) fn input(
     }
     let callback = Rc::new(JniCallback {
         package,
-        harness_package: flat.metadata.package.clone(),
         name,
         arguments,
     });
@@ -164,15 +162,6 @@ pub(crate) fn input(
 impl JniCallback {
     pub(crate) fn fqn(&self) -> String {
         format!("{}.{}", self.package, self.name)
-    }
-
-    fn owns_handles(&self) -> bool {
-        self.arguments.iter().any(|arg| {
-            prebindgen_flat::wire_definitions(std::iter::once(
-                &arg.output.output_outcomes().success,
-            ))
-            .any(|w| matches!(w.kind, JniWire::Handle { .. }))
-        })
     }
 
     fn input(
@@ -196,22 +185,14 @@ impl JniCallback {
             is_domain_error: false,
             output_committed: quote!(),
         };
-        let owns_handles = self.owns_handles();
-        let mut descriptor = String::from(if owns_handles { "([Z" } else { "(" });
+        let mut descriptor = String::from("(");
         let mut encode = TokenStream::new();
-        let mut rollback = TokenStream::new();
         let mut commits = TokenStream::new();
-        let mut values = if owns_handles {
-            vec![quote!(::prebindgen_jni_runtime::jni::sys::jvalue {
-                l: accepted.as_raw()
-            })]
-        } else {
-            vec![]
-        };
+        let mut values = vec![];
         let mut source_bindings = TokenStream::new();
         let mut prepares = vec![];
         let mut params = vec![];
-        let mut slots = usize::from(owns_handles);
+        let mut slots = 0;
         for (index, argument) in self.arguments.iter().enumerate() {
             let source = format_ident!("callback_value_{index}");
             let param = format_ident!("callback_source_{index}");
@@ -229,11 +210,6 @@ impl JniCallback {
                 let code = field.kind.output_argument(value, &local);
                 encode.extend(render(&context, &code.statements, &source)?);
                 values.push(render(&context, &code.value, &source)?);
-                if let JniWire::Handle { handle, .. } = &field.kind {
-                    let ty = &handle.ty;
-                    let pointer = render(&context, value, &source)?;
-                    rollback.extend(quote!(unsafe { outputs.push::<#ty>((#pointer) as i64); }));
-                }
             }
             commits.extend(argument.output.code_fragment_slot(
                 OutputFragment::Commit {
@@ -249,25 +225,11 @@ impl JniCallback {
             return Err("source callback exceeds JVM parameter limit".into());
         }
         let capacity = i32::try_from(values.len() + 16).map_err(|_| "too many callback fields")?;
-        let acknowledgement = if owns_handles {
-            quote!(let accepted = #environment.new_boolean_array(1).map_err(|e|e.to_string())?;)
-        } else {
-            quote!()
-        };
-        let accepted = if owns_handles {
-            quote!(Some(&accepted))
-        } else {
-            quote!(None)
-        };
         let mut invoke = quote!({
-            #acknowledgement
-            let mut outputs = ::prebindgen_jni_runtime::CallbackOutputs::new();
             #encode
-            #rollback
             let arguments = [#(#values),*];
             #commits
-            outputs.arm();
-            unsafe { #retained.invoke(#environment, #accepted, &arguments, &mut outputs) }
+            unsafe { #retained.invoke(#environment, &arguments) }
         });
         for (argument, source) in prepares.into_iter().rev() {
             invoke = argument.output.code_fragment_slot(
@@ -313,11 +275,7 @@ impl JniCallback {
     }
 
     pub(crate) fn adapter(&self, parameter: &str, context: &KotlinContext<'_>) -> Result<String> {
-        let mut raw = if self.owns_handles() {
-            vec!["accepted: BooleanArray".into()]
-        } else {
-            vec![]
-        };
+        let mut raw = vec![];
         let mut outputs = vec![];
         let mut offset = 0;
         for (index, argument) in self.arguments.iter().enumerate() {
@@ -378,14 +336,7 @@ impl JniCallback {
         } else {
             format!("var callbackFailure: Throwable? = null\n        var callbackReady = false\n        try {{\n            {reconstruction}\n            callbackReady = true\n            {call}\n        }} catch (failure: Throwable) {{\n            callbackFailure = failure\n            throw failure\n        }} finally {{\n            if (callbackReady) {{\n{scoped_cleanup}                callbackCleanupFailure?.let {{ cleanup -> if (callbackFailure == null) throw cleanup else callbackFailure.addSuppressed(cleanup) }}\n            }}\n        }}")
         };
-        // The entry assignment cannot allocate: native rollback remains armed
-        // until the bridge has taken responsibility for every raw argument.
-        let acknowledgement = if self.owns_handles() {
-            "accepted[0] = true"
-        } else {
-            ""
-        };
-        Ok(format!("if ({parameter} == null) null else object {{\n    @Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\", \"USELESS_CAST\", \"VARIABLE_WITH_REDUNDANT_INITIALIZER\")\n    fun run({}) = {}.withNativeCallback {{\n        {acknowledgement}\n{locals}        {body}\n    }}\n}}", raw.join(", "), self.harness_package))
+        Ok(format!("if ({parameter} == null) null else object {{\n    @Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\", \"USELESS_CAST\", \"VARIABLE_WITH_REDUNDANT_INITIALIZER\")\n    fun run({}) {{\n{locals}        {body}\n    }}\n}}", raw.join(", ")))
     }
 }
 fn render(context: &JniContext, code: &TokenStream, source: &syn::Ident) -> Result<TokenStream> {

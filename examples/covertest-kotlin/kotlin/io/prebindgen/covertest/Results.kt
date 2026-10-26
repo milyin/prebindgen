@@ -78,7 +78,7 @@ fun checkResults() {
         onBindingError = JniErrorHandler { check(it?.contains("null") == true); fallback }) === fallback)
     val closed = checkNotNull(optionResourceNew(true)); closed.close()
     check(resultOwned(closed, 0, 65, onError = throwResult,
-        onBindingError = JniErrorHandler { check(it == "closed or consumed handle"); fallback }) === fallback)
+        onBindingError = JniErrorHandler { check(it == "null or misaligned allocation pointer"); fallback }) === fallback)
     fallback.close()
     val borrowed = checkNotNull(optionResourceNew(true))
     check(resultOwned(borrowed, 0, 0xd800, onError = throwResult,

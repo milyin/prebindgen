@@ -592,8 +592,8 @@ through object arrays. Each element
 must expose exactly one Kotlin input/output value; declare a data class to wrap
 multiple fields. General collection fields inside data classes are not yet
 supported. Inputs snapshot list structure once before choosing locks, then read
-handle addresses while all active handles are locked. Handle locking uses an
-iterative acquisition loop so list length does not add JVM stack frames. JNI
+handle addresses while all active handles are locked. Handle locking uses
+reentrant monitor acquisition in address order, matching production `main`. JNI
 validates row shapes and active field types, using local reference frames per
 row. Native failure before ownership acknowledgement leaves input handles live;
 after acknowledgement Kotlin marks every selected handle consumed. Prepared
@@ -731,18 +731,14 @@ closures can retain that reference beyond registration and invoke it concurrentl
 from native worker threads. Each invocation attaches its thread as needed and uses
 an explicit local-reference frame. Dropping the last Rust closure releases its JVM
 capture. User callbacks run synchronously on the invoking thread, including during
-a native call; applications must account for reentrancy and their source library's
-threading contract. A synchronous callback can reenter a handle on the same thread
-when both native calls borrow it as `&T`. Mutable borrows, moves, `close()` and
-`take()` remain rejected while a native call uses that handle. Access from other
-threads stays serialized, even for shared borrows, so handles still need only
-`Send`, not `Sync`. Source methods must tolerate shared reentry: an exclusive
-interior lock held across the callback can cause a nested shared call to deadlock
-or panic, where the previous blanket guard rejected the call. Callback code
-waits up to 100 ms for a handle locked by another thread, then throws the public
-`CallbackHandleBusyException`. This allows brief contention without an unbounded
-lock cycle when a caller is waiting for the callback. Independent handles remain
-usable from callback code.
+an outer native call. Like production `main`, generated handles use reentrant JVM
+monitors: native calls, `close()` and `take()` serialize between threads, and the
+same thread can reenter a monitor. There is no callback-depth tracking, active-borrow
+reservation or callback-specific lock timeout. Callers must respect Rust borrows:
+a callback must not close or consume a value still used by its caller, or create
+conflicting mutable/shared references. Applications must avoid lock cycles when a
+native caller waits for a callback on another thread. Source interior locks can
+also deadlock or panic on reentry.
 
 Borrowed arguments are observed through their output conversions. Unexpanded opaque
 handle arguments are closed after `run`, including when it throws; `take()` retains
@@ -750,14 +746,17 @@ a separate owning Kotlin wrapper. Explicit output expansions of the callback arg
 transfer their handles to the user. Field-type defaults do not rewrite a data
 class's properties; the containing argument's expansion controls that record. Once reconstruction succeeds, those handles stay user-owned even if
 `run` throws. Reconstruction failure reclaims all unpublished argument handles.
-Native output ownership commits before the upcall; an entry acknowledgement keeps a
-native rollback guard responsible if Kotlin never accepts the allocations.
+Native output ownership commits immediately before the upcall and transfers to the
+Kotlin bridge without a per-invocation acknowledgement array or native rollback
+registry, matching `main`. If invocation fails before bridge entry (for example,
+JVM stack exhaustion), committed handles may leak.
 
 Kotlin exceptions from callbacks are described, cleared and reported on stderr,
 following the production no-throw upcall contract. They do not escape into Rust or
-poison later invocations. If an enclosing native call already has a JVM exception
-pending, the callback is skipped and that exception is preserved. Registration
-errors still use the function's ordinary binding-error callback.
+poison later invocations. The invocation uses the checked JNI call without
+additional exception probes on the successful path. As with `main`, the invoking thread must have no pending JVM
+exception before entering the callback. Registration errors still use the
+function's ordinary binding-error callback.
 
 Callbacks currently support scalar, string, byte, record, optional, enum and buffered
 sequence argument conversions, including declared projections. Handle-containing

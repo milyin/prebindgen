@@ -14,12 +14,6 @@ private fun verify(condition: Boolean) {
         throw failure
     }
 }
-private fun expectCallbackRejection(action: () -> Unit) {
-    val rejected = try { action(); false }
-        catch (_: IllegalStateException) { true }
-        catch (_: IllegalArgumentException) { true }
-    verify(rejected)
-}
 
 private fun capturedCallback(): Pair<CallbackSet, WeakReference<Any>> {
     val marker = Any()
@@ -184,7 +178,7 @@ fun checkSourceCallbacks() {
     verify(throwingCalls.get() == 8)
     throwing.close()
 
-    // A callback must not wait on a native borrower running on another thread.
+    // Callback callers use the same blocking monitors as ordinary callers.
     val entered = java.util.concurrent.CountDownLatch(1)
     val release = java.util.concurrent.CountDownLatch(1)
     val busy = callbackSetNew({ _, _ ->
@@ -200,16 +194,24 @@ fun checkSourceCallbacks() {
         catch (failure: Throwable) { ordinaryFailure.set(failure) }
         finally { ordinaryFinished.countDown() }
     }.also { it.start() }
+    val callbackEntered = java.util.concurrent.CountDownLatch(1)
+    val callbackFinished = java.util.concurrent.CountDownLatch(1)
+    val callbackCaller = Thread {
+        try { callbackOwnedFire({ _ ->
+            callbackEntered.countDown()
+            callbackSetFire(busy, 0)
+        }) } catch (failure: Throwable) { ordinaryFailure.set(failure) }
+        finally { callbackFinished.countDown() }
+    }.also { it.start() }
     try {
-        callbackOwnedFire({ _ ->
-            val failure = try { callbackSetFire(busy, 0); null } catch (failure: Throwable) { failure }
-            verify(failure is CallbackHandleBusyException)
-        })
+        verify(callbackEntered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        verify(!callbackFinished.await(150, java.util.concurrent.TimeUnit.MILLISECONDS))
         verify(ordinaryFinished.count == 1L)
     } finally { release.countDown() }
     borrower.join(5000)
     ordinary.join(5000)
-    verify(!borrower.isAlive && !ordinary.isAlive && ordinaryFailure.get() == null)
+    callbackCaller.join(5000)
+    verify(!borrower.isAlive && !ordinary.isAlive && !callbackCaller.isAlive && ordinaryFailure.get() == null)
     busy.close()
 
     val (captured, weak) = capturedCallback()
@@ -249,13 +251,8 @@ fun checkSourceCallbacks() {
         verify(callbackOwnedId(value) == 55L)
     })
     verify(checkNotNull(escaped).isClosed && !original.isClosed)
-    // Reentry cannot invalidate a Rust borrow or wait for a handle owned by its caller.
-    callbackOwnedBorrow(original, { _ ->
-        expectCallbackRejection { original.close() }
-        expectCallbackRejection { original.take() }
-        verify(callbackOwnedId(original) == 55L)
-        verify(!original.isClosed)
-    })
+    // Reentrant monitors allow compatible shared reads; callers respect Rust borrows.
+    callbackOwnedBorrow(original, { _ -> verify(callbackOwnedId(original) == 55L) })
     val beforeRejected = callbackOwnedDrops()
     try { callbackPreflight(original, null); error("expected null callback rejection") }
     catch (_: IllegalArgumentException) { }
@@ -283,25 +280,6 @@ fun checkSourceCallbacks() {
     verify(callbackProjectedId(projected) == 9L)
     projected!!.close()
 
-    var pendingRan = false
-    try {
-        SourceCallbackRuntimeProbe.pending(object { fun run() { pendingRan = true } })
-        error("expected original pending exception")
-    } catch (failure: java.io.IOException) { verify(failure.message == "outer exception") }
-    verify(!pendingRan)
-    verify(SourceCallbackRuntimeProbe.rejected(object {
-        @Suppress("UNUSED_PARAMETER")
-        fun run(accepted: BooleanArray, pointer: Long) { throw IllegalStateException("before acceptance") }
-    }) == 1L)
-    verify(SourceCallbackRuntimeProbe.rejected(object {
-        @Suppress("UNUSED_PARAMETER")
-        fun run(accepted: BooleanArray, pointer: Long) { }
-    }) == 1L)
     callbackAssertionFailure.get()?.let { throw it }
-    println("source callbacks PASS: retained captures, native threads, typed arguments, ownership, reentry guards and exceptions")
-}
-
-private object SourceCallbackRuntimeProbe {
-    @JvmStatic external fun pending(callback: Any)
-    @JvmStatic external fun rejected(callback: Any): Long
+    println("source callbacks PASS: retained captures, native threads, typed arguments, ownership, monitor reentry and exceptions")
 }
