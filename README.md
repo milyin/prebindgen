@@ -139,6 +139,21 @@ explicitly omits that field while keeping its Rust cleanup.
 These fields use their type-wide defaults when not overridden.
 `fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
+Getters used by output expansions may return shared values such as `&Child`,
+`&str`, `&[Row]`, `Option<&Child>` or `&Option<Child>`. A borrowed getter result
+uses the referent's output defaults, so nested getters and record projections
+work without cloning the owner or an intermediate object. Text and fields are
+copied as required by the foreign representation; a handle leaf clones its
+referent into an independent owning allocation and requires `Clone`. Borrowed
+results cannot satisfy an owned projection. Each getter runs once per configured
+view, and its output conversion finishes before another view moves the owner.
+These rules also apply to output projections of callback arguments.
+
+Plain reference returns keep their existing direct representation unless an
+expansion is selected explicitly. For example, a function returning `&Child` can
+use `.expand_return(expand_return!(Child).field(fun!(child_name)))` to deliver a
+borrowed name instead of a cloned child handle.
+
 A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
 and duplicate consuming views are rejected. Observing getters run before consuming
 views regardless of declaration order. Rust checks `Clone` requirements and rejects

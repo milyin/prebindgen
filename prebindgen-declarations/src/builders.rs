@@ -50,6 +50,7 @@ impl ExpandReturnDecl {
         }
     }
     /// Append a getter view. An explicit `.name()` labels the delivered view.
+    /// Shared results are observed or cloned before another view moves the owner.
     pub fn field(mut self, function: impl Into<FunctionDecl>) -> Self {
         let function = function.into();
         let name = function.foreign.clone();

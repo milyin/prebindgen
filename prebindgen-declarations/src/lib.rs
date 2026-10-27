@@ -35,6 +35,21 @@ fn contains_result(ty: &Type) -> bool {
         || sequence_parts(ty).is_some_and(|(ty, _)| contains_result(ty))
         || matches!(ty, Type::Reference(r) if contains_result(&r.elem))
 }
+// Sized shared outputs use the referent's ordinary recipe, with borrowing
+// carried by the compiler. Keep unsized string/slice views as their own types:
+// adapters and sequence transport already understand those reference shapes.
+fn output_referent(ty: &Type) -> Option<&Type> {
+    match ty {
+        Type::Reference(r)
+            if r.mutability.is_none()
+                && !matches!(r.elem.as_ref(), Type::Slice(_))
+                && !matches!(r.elem.as_ref(), Type::Path(p) if p.path.is_ident("str")) =>
+        {
+            Some(&r.elem)
+        }
+        _ => None,
+    }
+}
 mod projection;
 pub use projection::{Projection, ProjectionMode};
 mod record;
@@ -275,18 +290,20 @@ pub enum Output<P = std::convert::Infallible> {
     OwnedFields(Vec<Output<P>>),
     /// Convert a leaf with an explicit ownership policy.
     Projected(Projection),
-    /// Call a consuming accessor, then convert its owned result.
+    /// Call a consuming accessor, then convert its result.
     Into {
         /// Source accessor taking exactly the owned occurrence type.
         function: String,
-        /// Conversion of its owned result.
+        /// Conversion of its result, retaining any shared-reference ownership.
         output: Box<Output<P>>,
     },
     /// A shared-borrow accessor, followed by the output conversion of its result.
     Getter {
         /// Source getter taking exactly one shared reference to the current type.
         function: String,
-        /// Conversion of the getter's owned result; borrowed results are unsupported.
+        /// Conversion of the getter's result. Shared results retain their borrow
+        /// while being observed or cloned; they cannot satisfy an owned projection.
+        /// Rust checks `Clone` when a borrowed opaque leaf becomes an owning handle.
         output: Box<Output<P>>,
     },
     /// Produce several views of one value. At most one child may consume it.
@@ -453,7 +470,9 @@ impl Output {
             Self::Optional(child) => {
                 child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
             }
-            Self::Leaf => codec.consumes(flat, ty, extra),
+            Self::Leaf => {
+                !borrowed && output_referent(ty).is_none() && codec.consumes(flat, ty, extra)
+            }
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
             Self::Record { mode, .. } => *mode == ProjectionMode::Owned,
@@ -1643,6 +1662,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
         borrowed: bool,
         wire_name: Option<&syn::Ident>,
     ) -> Result<CodecOutput<C>> {
+        if let Some(referent) = output_referent(ty) {
+            if matches!(recipe, Output::Projected(p) if p.mode == ProjectionMode::Owned) {
+                return Err("owned projection cannot consume a reference payload".into());
+            }
+            let value = if borrowed { quote!(*(#value)) } else { value };
+            return self.output_named(referent, recipe, extra, value, true, wire_name);
+        }
         if contains_result(ty) {
             return Err("Result error routing is supported only at the outermost return with an explicit mapper".into());
         }
@@ -1841,8 +1867,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                         type_key(&expected)
                     ));
                 }
-                if matches!(f.ret.ty, Type::Reference(_)) {
-                    return Err("borrowed getter results are outside this subset".into());
+                if matches!(&f.ret.ty, Type::Reference(r) if r.mutability.is_some()) {
+                    return Err("mutable-reference getter results are unsupported".into());
                 }
                 let v = self.name();
                 let path = &f.path;
