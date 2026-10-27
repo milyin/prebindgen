@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["boundary","validate_pointer","validate_slice"],"struct":["CallbackReturnAllocations"],"type":["Result"]};
