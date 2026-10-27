@@ -117,13 +117,186 @@ fn local_result_and_nested_constructor_overrides_inherit_arguments() {
 }
 
 #[test]
-fn callback_only_declarations_select_helpers_and_emit_interfaces() {
+fn callback_declarations_match_unexported_source_functions() {
     let output = builder()
         .package(package!("handlers").class(declaration()))
         .build()
         .unwrap();
     assert!(output.kotlin.contains_key("example/handlers/Handler.kt"));
     assert!(!output.kotlin.keys().any(|name| name.ends_with("Value.kt")));
+}
+
+#[test]
+fn unmatched_callback_declarations_report_the_name_and_signature() {
+    for declaration in [
+        callback!(impl Fn(i64) -> bool),
+        callback!(impl Fn(Value) -> Value),
+        callback!(impl Fn(Value, i64) -> i64),
+    ] {
+        let result =
+            error(builder().package(package!("handlers").class(declaration.name("TypoHandler"))));
+        assert!(
+            result.contains("callback declaration `TypoHandler`"),
+            "{result}"
+        );
+        assert!(
+            result.contains("does not match any source function parameter"),
+            "{result}"
+        );
+        assert!(result.contains("impl Fn"), "{result}");
+    }
+    let source = syn::parse_file("").unwrap();
+    let result = error(
+        JniGen::builder()
+            .items(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .set_package_prefix("example")
+            .package(package!().class(callback!(impl Fn()).name("Missing"))),
+    );
+    assert!(
+        result.contains("callback declaration `Missing`"),
+        "{result}"
+    );
+}
+
+#[test]
+fn matching_unexported_callbacks_do_not_force_validation_of_unselected_functions() {
+    let source = syn::parse_file("pub fn unbound(cb:impl Fn(i64), ignored:*const i64){}").unwrap();
+    let output = JniGen::builder()
+        .items(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("example")
+        .package(package!("handlers").class(callback!(impl Fn(i64) -> ()).name("Handler")))
+        .build()
+        .unwrap();
+    assert!(output.kotlin.contains_key("example/handlers/Handler.kt"));
+    assert!(!output.rust.contains("crate::unbound"));
+}
+
+#[test]
+fn generic_type_parameters_do_not_match_concrete_types_with_the_same_name() {
+    let source = syn::parse_file("pub type T=String; pub fn generic<T>(cb:impl Fn(T)){}").unwrap();
+    let result = error(
+        JniGen::builder()
+            .items(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, Default::default())),
+            )
+            .set_package_prefix("example")
+            .package(package!().class(callback!(impl Fn(T)).name("ConcreteHandler"))),
+    );
+    assert!(
+        result.contains("does not match any source function parameter"),
+        "{result}"
+    );
+}
+
+#[test]
+fn callback_source_matching_preserves_opaque_alias_identity() {
+    for use_flat in [false, true] {
+        for alias_signature in [false, true] {
+            let source =
+                syn::parse_file("pub type Id=i64; pub fn unbound(cb:impl Fn(Id)){}").unwrap();
+            let builder = JniGen::builder().set_package_prefix("example");
+            let builder = if use_flat {
+                builder.flat(
+                    Bindings::parse(
+                        source
+                            .items
+                            .into_iter()
+                            .map(|item| (item, Default::default())),
+                    )
+                    .unwrap(),
+                )
+            } else {
+                builder.items(
+                    source
+                        .items
+                        .into_iter()
+                        .map(|item| (item, Default::default())),
+                )
+            };
+            let declaration = if alias_signature {
+                callback!(impl Fn(Id))
+            } else {
+                callback!(impl Fn(i64))
+            };
+            let result = builder
+                .package(
+                    package!()
+                        .class(ptr_class!(Id))
+                        .class(declaration.name("Handler")),
+                )
+                .build();
+            if alias_signature {
+                assert!(result.unwrap().kotlin.contains_key("example/Handler.kt"));
+            } else {
+                assert!(result
+                    .err()
+                    .unwrap()
+                    .contains("does not match any source function parameter"));
+            }
+        }
+    }
+}
+
+#[test]
+fn callback_source_matching_works_with_flat_models_and_constructor_helpers() {
+    for present in [false, true] {
+        let source = if present {
+            "pub fn unbound(cb:impl Fn(i64)+Send+Sync+'static){}"
+        } else {
+            ""
+        };
+        let source = syn::parse_file(source).unwrap();
+        let flat = Bindings::parse(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .unwrap();
+        let result = JniGen::builder()
+            .flat(flat)
+            .set_package_prefix("example")
+            .package(package!().class(callback!(impl Fn(i64) -> ()).name("Handler")))
+            .build();
+        assert_eq!(result.is_ok(), present);
+        if !present {
+            assert!(result
+                .err()
+                .unwrap()
+                .contains("does not match any source function parameter"));
+        }
+    }
+    let source = syn::parse_file("pub type Handler=String; pub fn make(cb:impl Fn(i64)+Send)->Handler{} pub fn run(handler:Handler){}").unwrap();
+    let output = JniGen::builder()
+        .items(
+            source
+                .items
+                .into_iter()
+                .map(|item| (item, Default::default())),
+        )
+        .set_package_prefix("example")
+        .package(
+            package!()
+                .class(ptr_class!(Handler))
+                .class(callback!(impl Fn(i64)).name("ConstructorCallback"))
+                .fun(fun!(run).expand_param("handler", expand_param!(Handler).variant(fun!(make)))),
+        )
+        .build()
+        .unwrap();
+    assert!(output.kotlin.contains_key("example/ConstructorCallback.kt"));
 }
 
 #[test]

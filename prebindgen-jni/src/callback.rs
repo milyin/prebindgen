@@ -30,6 +30,65 @@ struct Argument {
     output: JniOutput,
     scoped: bool,
 }
+/// Retain source callback occurrences before filtering to exported functions/helpers.
+pub(crate) fn source_parameters(
+    items: &[(syn::Item, prebindgen::SourceLocation)],
+) -> Vec<syn::Type> {
+    items
+        .iter()
+        .filter_map(|(item, _)| match item {
+            // Generic parameters introduce a different type scope; they are not
+            // concrete callback occurrences in the supported flat source model.
+            syn::Item::Fn(function) if function.sig.generics.params.is_empty() => Some(function),
+            _ => None,
+        })
+        .flat_map(|function| &function.sig.inputs)
+        .filter_map(|parameter| match parameter {
+            syn::FnArg::Typed(parameter)
+                if matches!(parameter.ty.as_ref(), syn::Type::ImplTrait(_)) =>
+            {
+                Some((*parameter.ty).clone())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A declaration configures a source occurrence, rather than inventing a signature.
+pub(crate) fn validate_source_occurrence(
+    flat: &Bindings,
+    declaration: &prebindgen_declarations::CallbackInput,
+    sources: &[syn::Type],
+) -> Result<()> {
+    let expected = callback_signature(&declaration.ty)?
+        .ok_or("callback declaration requires impl Fn(...) -> R")?;
+    let matches = sources.iter().any(|source| {
+        let Ok(Some(actual)) = callback_signature(source) else {
+            return false;
+        };
+        actual.arguments.len() == expected.arguments.len()
+            && actual
+                .arguments
+                .iter()
+                .zip(&expected.arguments)
+                .all(|(actual, expected)| {
+                    flat.resolve_type(actual)
+                        .is_ok_and(|actual| prebindgen_flat::same_type(&actual, expected))
+                })
+            && flat
+                .resolve_type(&actual.return_type)
+                .is_ok_and(|actual| prebindgen_flat::same_type(&actual, &expected.return_type))
+    });
+    if !matches {
+        let name = declaration.foreign.as_deref().unwrap_or("<unnamed>");
+        return Err(format!(
+            "callback declaration `{name}` for `{}` does not match any source function parameter; check the callback argument and return types",
+            type_key(&declaration.ty)
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn declared_outputs(
     flat: &Bindings,
     outputs: &[Output<OutputRequest>],

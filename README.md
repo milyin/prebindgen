@@ -743,7 +743,11 @@ conversions such as `expand_return!`. The callback's result enters Rust, so
 `.expand_return(...)` accepts input conversions such as `expand_param!`.
 Argument indices start at zero: `Fn` signatures have no parameter names.
 The declaration above emits `handlers.PacketHandler` in the configured package
-prefix, including when no exported function uses the interface.
+prefix, including when no exported function uses the interface. Its callback
+signature must occur in a parameter of a supplied nongeneric source function; a
+declaration with no matching occurrence is a generation error. Unexported source functions
+and constructor helpers count as occurrences. Matching uses the same normalized
+argument and return types as callback defaults.
 
 Override a particular callback through the ordinary function parameter API:
 

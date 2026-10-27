@@ -405,14 +405,17 @@ impl JniGenBuilder {
             .chain(self.error_classes.iter().map(|(ty, _)| ty.clone()))
             .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
             .collect();
-        let mut flat = match (self.flat, self.source, self.items) {
-            (Some(flat), None, None) => flat,
-            (None, Some(path), None) => Flat::parse_selected(
-                prebindgen::Source::new(path).items_all(),
-                &references,
-                &types,
-            )?,
-            (None, None, Some(items)) => Flat::parse_selected(items, &references, &types)?,
+        let (mut flat, mut callback_sources) = match (self.flat, self.source, self.items) {
+            (Some(flat), None, None) => (flat, Vec::new()),
+            (None, source, items) => {
+                let items = match (source, items) {
+                    (Some(path), None) => prebindgen::Source::new(path).items_all().collect(),
+                    (None, Some(items)) => items,
+                    _ => return Err("supply exactly one source, item stream or flat model".into()),
+                };
+                let callbacks = callback::source_parameters(&items);
+                (Flat::parse_selected(items, &references, &types)?, callbacks)
+            }
             _ => return Err("supply exactly one source, item stream or flat model".into()),
         };
         validate_package(&self.prefix)?;
@@ -499,6 +502,13 @@ impl JniGenBuilder {
         for configure in self.configure {
             configure(&mut flat)?;
         }
+        callback_sources.extend(
+            flat.functions
+                .values()
+                .flat_map(|function| &function.params)
+                .filter(|parameter| matches!(&parameter.ty.ty, syn::Type::ImplTrait(_)))
+                .map(|parameter| parameter.ty.ty.clone()),
+        );
         validate_package(&flat.metadata.package)?;
         for declaration in &declarations {
             if flat.function(&declaration.name)?.metadata.is_none() {
@@ -526,6 +536,7 @@ impl JniGenBuilder {
             let Input::Callback(configuration) = recipe else {
                 return Err("callback declaration requires a callback conversion".into());
             };
+            callback::validate_source_occurrence(&flat, &configuration, &callback_sources)?;
             let plan = callback::input(
                 &flat,
                 &configuration,

@@ -32,6 +32,11 @@ pub fn callback_config_default(
 pub fn callback_config_type_default(callback: impl Fn(CallbackConfigValue) -> i64) -> i64 {
     callback(ConfigValue(21))
 }
+// The signature can be declared without exporting this function to JNI.
+#[prebindgen]
+pub fn callback_config_unbound(callback: impl Fn(bool) -> i16) -> i16 {
+    callback(true)
+}
 #[prebindgen]
 pub fn callback_config_argument(
     callback: impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue,
