@@ -14,7 +14,7 @@
 // * [`Priority`] — a `#[repr(i32)]` enum (→ Kotlin `enum class`).
 // * [`Stamp`] — a small `Copy` value crossing as its scalar fields (→ Kotlin
 //   `data class`); `Vec<Stamp>` surfaces as `List<Stamp>`.
-// * [`StorageError`] — the `E` of a fallible `Result` (→ the `onError` channel).
+// * [`StorageError`] — the `E` of a fallible `Result` (explicit message mapping).
 // * [`Summary`] — an opaque handle whose fields decompose at the boundary
 //   (→ flatten-input / flatten-output).
 // * [`Millis`] — a newtype crossing as a plain `Long` via a custom
@@ -45,18 +45,14 @@ mod handles {
         pub(super) total: f64,
     }
 
-    // Disabled: the reduced Archive is zero-sized; flat objects must have nonzero size.
-    // #[derive(Default)]
-    // pub struct Archive {
-    //     // Unsupported field/value:         pub(super) latest: Option<Summary>,
-    //     // A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-    //     // — the return shape whose encoder must match on the value behind the
-    //     // reference rather than moving it.
-    //     // Unsupported field/value:         pub(super) reading: Reading,
-    //     // The same, optional, for the `Option<&Reading>` shape.
-    //     // Unsupported field/value:         pub(super) fallback: Option<Reading>,
-    // }
-    //
+    #[derive(Default)]
+    pub struct Archive {
+        pub(super) latest: Option<Summary>,
+        // Unsupported: sum-valued archive fields.
+        // pub(super) reading: Reading,
+        // pub(super) fallback: Option<Reading>,
+    }
+
     // Disabled: unsupported by the current binding subset
     // pub struct Ledger {
     //         pub(super) filed: Option<Report>,
@@ -100,12 +96,10 @@ mod handles {
     //         pub(super) value: i64,
     //     }
 
-    // Disabled: unsupported by the current binding subset
-    // #[derive(Debug)]
-    //
-    //     pub struct StorageError {
-    //         pub(super) message: String,
-    //     }
+    #[derive(Debug)]
+    pub struct StorageError {
+        pub(super) message: String,
+    }
 
     // Disabled: unsupported by the current binding subset
     // pub struct StorageHandler(pub(super) Box<dyn Fn(Storage) + Send + Sync>);
@@ -119,50 +113,46 @@ use crate::{Payload, Storage};
 // Priority — a primitive-repr enum (→ Kotlin `enum class`, jint wire).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Coarse importance bucket derived from a payload's `value`. A C-like
-// /// `#[repr(i32)]` enum with explicit discriminants, mapped by the binding to a
-// /// Kotlin `enum class` (and a C enum).
-// #[prebindgen]
-// #[repr(i32)]
-// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-// pub enum Priority {
-//     Low = 0,
-//     Normal = 1,
-//     High = 2,
-// }
+/// Coarse importance bucket derived from a payload's `value`. A C-like
+/// `#[repr(i32)]` enum with explicit discriminants, mapped by the binding to a
+/// Kotlin `enum class` and named C integer constants.
+#[prebindgen]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Priority {
+    Low = 0,
+    Normal = 1,
+    High = 2,
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Classify a payload by magnitude of its `value` (enum **return**).
-// #[prebindgen]
-// pub fn payload_priority(p: &Payload) -> Priority {
-//     let v = p.value.abs();
-//     if v < 10.0 {
-//         Priority::Low
-//     } else if v < 100.0 {
-//         Priority::High
-//     } else {
-//         Priority::Normal
-//     }
-// }
+/// Classify a payload by magnitude of its `value` (enum **return**).
+#[prebindgen]
+pub fn payload_priority(p: &PayloadHandle) -> Priority {
+    let v = p.value.abs();
+    if v < 10.0 {
+        Priority::Low
+    } else if v < 100.0 {
+        Priority::High
+    } else {
+        Priority::Normal
+    }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Numeric weight of a priority (enum **by-value parameter**).
-// #[prebindgen]
-// pub fn priority_weight(p: Priority) -> i32 {
-//     match p {
-//         Priority::Low => 1,
-//         Priority::Normal => 5,
-//         Priority::High => 10,
-//     }
-// }
+/// Numeric weight of a priority (enum **by-value parameter**).
+#[prebindgen]
+pub fn priority_weight(p: Priority) -> i32 {
+    match p {
+        Priority::Low => 1,
+        Priority::Normal => 5,
+        Priority::High => 10,
+    }
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Resolve an optional priority against a fallback (`Option<enum>` parameter).
-// #[prebindgen]
-// pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
-//     p.unwrap_or(fallback)
-// }
+/// Resolve an optional priority against a fallback (`Option<enum>` parameter).
+#[prebindgen]
+pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
+    p.unwrap_or(fallback)
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
@@ -589,44 +579,38 @@ pub fn stamp_nanos(s: &Stamp) -> i64 {
 // }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// StorageError — the `E` of a fallible `Result` (→ the `onError` channel).
+// StorageError — the `E` of a fallible `Result` (explicit message mapping).
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Disabled: unsupported by the current binding subset
-// /// Failure value for the fallible storage constructor. Never crosses as a
-// /// value: the binding peels the `Result`, renders the message through
-// /// [`storage_error_message`], and delivers it to the caller's `onError`.
-// #[prebindgen]
-// pub type StorageError = handles::StorageError;
+/// Failure value for the fallible storage constructor. Never crosses as a
+/// value: the binding routes it through the explicitly selected message mapper.
+#[prebindgen]
+pub type StorageError = handles::StorageError;
 
-// Disabled: unsupported by the current binding subset
-// /// Render a [`StorageError`] as its message (the error's flatten-output
-// /// **accessor**, fed to `onError`).
-// #[prebindgen]
-// pub fn storage_error_message(e: &StorageError) -> String {
-//     e.message.clone()
-// }
+/// Borrow a source error to produce its destination error message.
+#[prebindgen]
+pub fn storage_error_message(e: &StorageError) -> String {
+    e.message.clone()
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Build a storage seeded with a single labelled payload, **failing** on an
-// /// empty label (`Result<T, E>` routing + a `&str` input).
-// #[prebindgen]
-// pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
-//     if label.is_empty() {
-//         return Err(StorageError {
-//             message: "label must not be empty".to_string(),
-//         });
-//     }
-//     Ok(Storage {
-//         payloads: vec![Payload {
-//             id: 0,
-//             seq: 0,
-//             value: 0.0,
-//             flag: false,
-//             label: Some(Box::new(label.to_string())),
-//         }],
-//     })
-// }
+/// Validate a label and build storage with one payload, **failing** on an
+/// empty label (`Result<T, E>` routing + a `&str` input).
+#[prebindgen]
+pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
+    if label.is_empty() {
+        return Err(StorageError {
+            message: "label must not be empty".to_string(),
+        });
+    }
+    Ok(Storage {
+        payloads: vec![Payload {
+            id: 0,
+            seq: 0,
+            value: 0.0,
+            flag: false,
+        }],
+    })
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Build a storage stamped with `s`, **failing** on a non-positive `secs` (a
@@ -1417,7 +1401,7 @@ pub struct Unsigned {
     pub short: u16,
     pub int: u32,
     pub long: u64,
-    // Unsupported: pub maybe_long: Option<u64>,
+    pub maybe_long: Option<u64>,
 }
 
 // Round-trip direct unsigned parameters through an unsigned data-class
@@ -1428,32 +1412,29 @@ pub fn unsigned_round_trip(
     short: u16,
     int: u32,
     long: u64,
-    // Unsupported: maybe_long: Option<u64>,
+    maybe_long: Option<u64>,
 ) -> Unsigned {
     Unsigned {
         byte,
         short,
         int,
         long,
-        // Unsupported: maybe_long,
+        maybe_long,
     }
 }
 
-// Disabled: unsupported by the current binding subset
-// /// Direct nullable `u64` projection in both directions.
-// #[prebindgen]
-// pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
-//     value
-// }
+/// Direct nullable `u64` projection in both directions.
+#[prebindgen]
+pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
+    value
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Read the optional `u64` field through the flattened data-class input ABI.
-// /// With no natural niche it crosses as `(present, raw Long)`, never a boxed
-// /// `java.lang.Long`/`JObject`.
-// #[prebindgen]
-// pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
-//     value.maybe_long
-// }
+/// Read the optional `u64` field through a borrowed opaque handle in C.
+/// JNI binding remains disabled until borrowed data-class inputs are supported.
+#[prebindgen]
+pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
+    value.maybe_long
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Deliver a `u64` through the generated typed/raw callback twin.
@@ -1548,9 +1529,8 @@ pub fn unsigned_round_trip(
 // **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 // zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 // owned handle (the JVM keeps its handle past the call).
-// Disabled: the reduced Archive is zero-sized.
-// #[prebindgen]
-// pub type Archive = handles::Archive;
+#[prebindgen]
+pub type Archive = handles::Archive;
 
 // Disabled: unsupported by the current binding subset
 // impl Default for Archive {
@@ -1563,19 +1543,17 @@ pub fn unsigned_round_trip(
 //     }
 // }
 
-// Disabled: the reduced Archive is zero-sized.
 // Create an empty archive.
-// #[prebindgen]
-// pub fn archive_new() -> Archive {
-//     Archive::default()
-// }
+#[prebindgen]
+pub fn archive_new() -> Archive {
+    Archive::default()
+}
 
-// Disabled: unsupported by the current binding subset
-// /// Store a summary, consuming it (owned-handle input).
-// #[prebindgen]
-// pub fn archive_store(a: &mut Archive, s: Summary) {
-//     a.latest = Some(s);
-// }
+/// Store a summary, consuming it (owned-handle input).
+#[prebindgen]
+pub fn archive_store(a: &mut Archive, s: Summary) {
+    a.latest = Some(s);
+}
 
 // Disabled: unsupported by the current binding subset
 // /// Store the `which` alternative as the archive's own reading, and the same one
@@ -1607,13 +1585,12 @@ pub fn unsigned_round_trip(
 //     a.fallback.as_ref()
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
-// /// empty, otherwise cloned into a fresh owned handle by the JVM binding).
-// #[prebindgen]
-// pub fn archive_latest(a: &Archive) -> Option<&Summary> {
-//     a.latest.as_ref()
-// }
+/// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
+/// empty, otherwise cloned into a fresh owned handle by the JVM binding).
+#[prebindgen]
+pub fn archive_latest(a: &Archive) -> Option<&Summary> {
+    a.latest.as_ref()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Misc coverage shapes: 3-handle call, Vec<String> return, Option<data-class>
@@ -1638,18 +1615,17 @@ pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
 //         .collect()
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
-// #[prebindgen]
-// pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
-//     match p {
-//         Some(p) => {
-//             s.payloads.push(p);
-//             true
-//         }
-//         None => false,
-//     }
-// }
+/// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
+#[prebindgen]
+pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
+    match p {
+        Some(p) => {
+            s.payloads.push(p);
+            true
+        }
+        None => false,
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
@@ -1955,13 +1931,11 @@ pub fn report_into_struct(r: Report) -> ReportStruct {
 //     Box::new(note)
 // }
 
-// Disabled: unsupported by the current binding subset
-// /// The same crossing with nothing wrapped — the control the wrapped form must
-// /// match, since the model says the two signatures are the same type.
-// #[prebindgen]
-// pub fn plain_note_echo(note: Option<String>) -> Option<String> {
-//     note
-// }
+/// Round-trip an optional string without transparent wrappers.
+#[prebindgen]
+pub fn plain_note_echo(note: Option<String>) -> Option<String> {
+    note
+}
 
 // Disabled: unsupported by the current binding subset
 // /// A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
@@ -2450,4 +2424,1265 @@ pub fn report_from_summary(summary: Summary, label: &str) -> Report {
 #[prebindgen]
 pub fn report_label(report: Report) -> String {
     report.label
+}
+
+// A value-only record for the replacement engine's data-class boundary coverage.
+// No Clone derive: the output conversion observes individual fields.
+#[prebindgen]
+pub struct DataEnvelope {
+    pub label: String,
+    pub blob: BlobValue,
+    pub unsigned: Unsigned,
+    pub enabled: bool,
+    pub code: char,
+    pub signed: i128,
+    pub wide: u128,
+}
+#[prebindgen]
+pub fn data_envelope_echo(value: DataEnvelope) -> DataEnvelope {
+    value
+}
+#[prebindgen]
+pub fn blob_value_selected(value: BlobValue) -> BlobValue {
+    value
+}
+#[prebindgen]
+pub fn blob_value_views(value: BlobValue) -> BlobValue {
+    value
+}
+
+// These floats exercise data-class equality semantics when byte fields require
+// generated content-based equals/hashCode (NaN and signed zero in particular).
+#[prebindgen]
+pub struct DataFloats {
+    pub bytes: Vec<u8>,
+    pub f: f32,
+    pub d: f64,
+}
+#[prebindgen]
+pub fn data_floats_echo(value: DataFloats) -> DataFloats {
+    value
+}
+
+#[prebindgen]
+pub struct DataPrimitives {
+    pub i8v: i8,
+    pub i16v: i16,
+    pub i32v: i32,
+    pub i64v: i64,
+    pub i128v: i128,
+    pub isizev: isize,
+    pub u8v: u8,
+    pub u16v: u16,
+    pub u32v: u32,
+    pub u64v: u64,
+    pub u128v: u128,
+    pub usizev: usize,
+    pub f32v: f32,
+    pub f64v: f64,
+    pub boolv: bool,
+    pub charv: char,
+}
+#[prebindgen]
+pub fn data_primitives_echo(value: DataPrimitives) -> DataPrimitives {
+    value
+}
+#[prebindgen]
+pub fn data_primitives_zero() -> DataPrimitives {
+    DataPrimitives {
+        i8v: 0,
+        i16v: 0,
+        i32v: 0,
+        i64v: 0,
+        i128v: 0,
+        isizev: 0,
+        u8v: 0,
+        u16v: 0,
+        u32v: 0,
+        u64v: 0,
+        u128v: 0,
+        usizev: 0,
+        f32v: 0.0,
+        f64v: 0.0,
+        boolv: false,
+        charv: '\0',
+    }
+}
+
+#[prebindgen]
+pub fn data_with_storage(storage: Storage, value: DataEnvelope) -> Storage {
+    drop(value);
+    storage
+}
+#[prebindgen]
+pub fn data_envelope_from_blob(blob: BlobValue) -> DataEnvelope {
+    DataEnvelope {
+        label: "from blob".into(),
+        blob,
+        unsigned: unsigned_round_trip(1, 2, 3, 4, None),
+        enabled: true,
+        code: 'x',
+        signed: -1,
+        wide: 1,
+    }
+}
+#[prebindgen]
+pub fn data_envelope_constructed(value: DataEnvelope) -> DataEnvelope {
+    value
+}
+
+#[prebindgen]
+pub fn blob_value_copy(value: &BlobValue) -> BlobValue {
+    value.clone()
+}
+
+static OWNED_RESOURCE_DROPS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Non-cloneable resource used to verify owned record returns.
+pub struct OwnedResourceImpl {
+    id: i64,
+}
+impl Drop for OwnedResourceImpl {
+    fn drop(&mut self) {
+        OWNED_RESOURCE_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type OwnedResource = OwnedResourceImpl;
+/// Production declaration API probe: an omitted non-cloneable field stays Rust-owned.
+#[prebindgen]
+pub struct ApiRecord {
+    pub count: i64,
+    pub omitted: OwnedResource,
+    pub omitted_opt: Option<OwnedResource>,
+    pub omitted_vec: Vec<OwnedResource>,
+}
+#[prebindgen]
+pub fn api_record_new() -> ApiRecord {
+    ApiRecord {
+        count: 7,
+        omitted: OwnedResourceImpl { id: 99 },
+        omitted_opt: Some(OwnedResourceImpl { id: 100 }),
+        omitted_vec: vec![OwnedResourceImpl { id: 101 }],
+    }
+}
+#[prebindgen]
+pub fn api_record_into(value: ApiRecord) -> ApiRecord {
+    value
+}
+#[prebindgen]
+pub fn api_record_count(value: &ApiRecord) -> i64 {
+    value.count
+}
+#[prebindgen]
+pub fn api_record_label(_value: &ApiRecord) -> String {
+    "api record".into()
+}
+#[prebindgen]
+pub fn api_record_views() -> ApiRecord {
+    api_record_new()
+}
+#[prebindgen]
+pub fn api_record_rows() -> Vec<ApiRecord> {
+    vec![api_record_new(), api_record_new()]
+}
+#[prebindgen]
+pub struct ResourcePair {
+    pub first: OwnedResource,
+    pub second: OwnedResource,
+}
+#[prebindgen]
+pub struct ResourceBundle {
+    pub label: String,
+    pub pair: ResourcePair,
+    pub tail: OwnedResource,
+    pub details: DataFloats,
+}
+#[prebindgen]
+pub fn resource_bundle_new() -> ResourceBundle {
+    ResourceBundle {
+        label: "owned bundle".into(),
+        pair: ResourcePair {
+            first: OwnedResourceImpl { id: 1 },
+            second: OwnedResourceImpl { id: 2 },
+        },
+        tail: OwnedResourceImpl { id: 3 },
+        details: DataFloats {
+            bytes: vec![1, 2, 3],
+            f: 1.5,
+            d: 2.5,
+        },
+    }
+}
+#[prebindgen]
+pub fn resource_bundle_label(value: &ResourceBundle) -> String {
+    value.label.clone()
+}
+#[prebindgen]
+pub fn owned_resource_id(value: &OwnedResource) -> i64 {
+    value.id
+}
+#[prebindgen]
+pub fn owned_resource_drops() -> usize {
+    OWNED_RESOURCE_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn resource_bundle_views() -> ResourceBundle {
+    resource_bundle_new()
+}
+#[prebindgen]
+pub fn resource_bundle_default() -> ResourceBundle {
+    resource_bundle_new()
+}
+#[prebindgen]
+pub fn resource_bundle_fields() -> ResourceBundle {
+    resource_bundle_new()
+}
+#[prebindgen]
+pub fn resource_bundle_into(value: ResourceBundle) -> ResourceBundle {
+    value
+}
+
+static PROJECTION_CLONES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static PROJECTION_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub struct ProjectionHandleImpl(i64);
+impl Clone for ProjectionHandleImpl {
+    fn clone(&self) -> Self {
+        PROJECTION_CLONES.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self(self.0)
+    }
+}
+impl Drop for ProjectionHandleImpl {
+    fn drop(&mut self) {
+        PROJECTION_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type ProjectionHandle = ProjectionHandleImpl;
+#[prebindgen]
+pub struct ProjectionPair {
+    pub first: ProjectionHandle,
+    pub second: ProjectionHandle,
+}
+#[prebindgen]
+pub fn projection_pair_borrowed() -> ProjectionPair {
+    ProjectionPair {
+        first: ProjectionHandleImpl(1),
+        second: ProjectionHandleImpl(2),
+    }
+}
+#[prebindgen]
+pub fn projection_pair_owned() -> ProjectionPair {
+    projection_pair_borrowed()
+}
+#[prebindgen]
+pub fn projection_pair_mixed() -> ProjectionPair {
+    projection_pair_borrowed()
+}
+#[prebindgen]
+pub fn projection_clones() -> usize {
+    PROJECTION_CLONES.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn projection_drops() -> usize {
+    PROJECTION_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn projection_pair_views() -> ProjectionPair {
+    projection_pair_borrowed()
+}
+
+// Option boundary fixtures shared by C and JNI.
+#[prebindgen]
+pub fn option_i64(value: Option<i64>) -> Option<i64> {
+    value
+}
+#[prebindgen]
+pub fn option_char(value: Option<char>) -> Option<char> {
+    value
+}
+#[prebindgen]
+pub fn option_u8(value: Option<u8>) -> Option<u8> {
+    value
+}
+#[prebindgen]
+pub fn option_bool(value: Option<bool>) -> Option<bool> {
+    value
+}
+#[prebindgen]
+pub fn option_text(value: Option<String>) -> Option<String> {
+    value
+}
+#[prebindgen]
+pub fn option_bytes(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
+    value
+}
+#[prebindgen]
+pub fn option_unit(value: Option<()>) -> Option<()> {
+    value
+}
+#[prebindgen]
+pub fn option_nested(value: Option<Option<i64>>) -> Option<Option<i64>> {
+    value
+}
+#[prebindgen]
+pub fn option_nested_char(value: Option<Option<char>>) -> Option<Option<char>> {
+    value
+}
+#[prebindgen]
+pub fn option_resource_new(present: bool) -> Option<OwnedResource> {
+    present.then(|| OwnedResourceImpl { id: 77 })
+}
+#[prebindgen]
+pub fn option_resource_echo(value: Option<OwnedResource>, valid: char) -> Option<OwnedResource> {
+    let _ = valid;
+    value
+}
+#[prebindgen]
+pub fn option_resource_id(value: Option<&OwnedResource>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+#[prebindgen]
+pub struct OptionalFields {
+    pub count: Option<i64>,
+    pub text: Option<String>,
+    pub letter: Option<char>,
+}
+#[prebindgen]
+pub fn optional_fields_new(
+    count: Option<i64>,
+    text: Option<String>,
+    letter: Option<char>,
+) -> OptionalFields {
+    OptionalFields {
+        count,
+        text,
+        letter,
+    }
+}
+#[prebindgen]
+pub fn optional_fields_into(value: OptionalFields) -> OptionalFields {
+    value
+}
+#[prebindgen]
+pub fn optional_fields_echo(value: Option<OptionalFields>) -> Option<OptionalFields> {
+    value
+}
+#[prebindgen]
+pub struct OptionalResource {
+    pub resource: Option<OwnedResource>,
+    pub details: Option<OptionalFields>,
+}
+#[prebindgen]
+pub fn optional_resource_new(present: bool) -> Option<OptionalResource> {
+    Some(OptionalResource {
+        resource: option_resource_new(present),
+        details: present.then(|| optional_fields_new(Some(9), None, Some('é'))),
+    })
+}
+#[prebindgen]
+pub fn option_str_len(value: Option<&str>) -> Option<usize> {
+    value.map(str::len)
+}
+#[prebindgen]
+pub fn option_slice_len(value: Option<&[u8]>) -> Option<usize> {
+    value.map(<[u8]>::len)
+}
+#[prebindgen]
+pub fn option_string_len(value: Option<&String>) -> Option<usize> {
+    value.map(String::len)
+}
+#[prebindgen]
+pub fn option_i64_ref(value: Option<&i64>) -> Option<i64> {
+    value.copied()
+}
+#[prebindgen]
+pub fn option_projection_views(present: bool) -> Option<ProjectionHandle> {
+    present.then(|| ProjectionHandleImpl(99))
+}
+#[prebindgen]
+pub struct OptionChoice {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn option_choice_new(id: i64) -> OptionChoice {
+    OptionChoice { id }
+}
+#[prebindgen]
+pub fn option_choice_id(value: Option<OptionChoice>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+#[prebindgen]
+pub fn option_resource_pair(first: Option<OwnedResource>, second: Option<OwnedResource>) -> i64 {
+    first.map_or(0, |v| v.id) + second.map_or(0, |v| v.id)
+}
+#[prebindgen]
+pub struct OptionalBytes {
+    pub data: Option<Vec<u8>>,
+}
+#[prebindgen]
+pub fn optional_bytes_echo(value: OptionalBytes) -> OptionalBytes {
+    value
+}
+#[prebindgen]
+pub fn option_resource_mut(value: Option<&mut OwnedResource>) -> i64 {
+    value.map_or(-1, |v| {
+        v.id += 1;
+        v.id
+    })
+}
+#[prebindgen]
+pub fn option_projection_ref(value: &ProjectionHandle, present: bool) -> Option<&ProjectionHandle> {
+    present.then_some(value)
+}
+#[prebindgen]
+pub struct OptionalPair {
+    pub absent: Option<OwnedResource>,
+    pub present: Option<OwnedResource>,
+}
+#[prebindgen]
+pub fn optional_pair_new() -> OptionalPair {
+    OptionalPair {
+        absent: None,
+        present: option_resource_new(true),
+    }
+}
+#[prebindgen]
+pub fn optional_pair_into(value: OptionalPair) -> OptionalPair {
+    value
+}
+#[prebindgen]
+pub fn option_str_echo(value: Option<&str>) -> Option<&str> {
+    value
+}
+#[prebindgen]
+pub fn option_slice_echo(value: Option<&[u8]>) -> Option<&[u8]> {
+    value
+}
+#[prebindgen]
+pub fn option_nested_resource(
+    value: Option<Option<OwnedResource>>,
+) -> Option<Option<OwnedResource>> {
+    value
+}
+#[prebindgen]
+pub struct OptionCtor {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn option_ctor_new(value: Option<i64>) -> OptionCtor {
+    OptionCtor {
+        id: value.unwrap_or(-10),
+    }
+}
+#[prebindgen]
+pub fn option_ctor_id(value: OptionCtor) -> i64 {
+    value.id
+}
+#[prebindgen]
+pub struct ResourceChoice {
+    pub id: i64,
+}
+#[prebindgen]
+pub fn resource_choice_new(resource: OwnedResource, offset: i64) -> ResourceChoice {
+    ResourceChoice {
+        id: resource.id + offset,
+    }
+}
+#[prebindgen]
+pub fn resource_choice_id(value: Option<ResourceChoice>) -> i64 {
+    value.map_or(-1, |v| v.id)
+}
+
+/// Two nested absence states share unused negative values in JNI's widened wire.
+#[prebindgen]
+pub fn option_nested_u32(value: Option<Option<u32>>) -> Option<Option<u32>> {
+    value
+}
+
+pub struct NicheChoice {
+    value: Option<char>,
+}
+#[prebindgen]
+pub type NicheChoiceHandle = NicheChoice;
+#[prebindgen]
+pub fn niche_choice_new(value: Option<char>) -> NicheChoiceHandle {
+    NicheChoice { value }
+}
+#[prebindgen]
+pub fn niche_choice_id(value: Option<NicheChoiceHandle>) -> i64 {
+    value
+        .map(|v| v.value.map(|c| c as i64).unwrap_or(-1))
+        .unwrap_or(-2)
+}
+/// Two handle views must not donate the same null representation to two layers.
+#[prebindgen]
+pub fn option_nested_projection_views(
+    outer: bool,
+    inner: bool,
+) -> Option<Option<ProjectionHandle>> {
+    outer.then(|| option_projection_views(inner))
+}
+
+/// A single nullable field, kept distinct from absence of the whole record.
+#[prebindgen]
+pub struct OptionalField {
+    pub value: Option<i64>,
+}
+#[prebindgen]
+pub fn optional_field_new(present: bool, value: Option<i64>) -> Option<OptionalField> {
+    present.then_some(OptionalField { value })
+}
+#[prebindgen]
+pub fn optional_field_fields(value: &OptionalField) -> OptionalField {
+    OptionalField { value: value.value }
+}
+
+// Nullable references exhaust null once, then share a presence flag's negative
+// values across further option layers. Full-domain scalars start with that flag.
+#[prebindgen]
+pub fn option_triple_text(value: Option<Option<Option<String>>>) -> Option<Option<Option<String>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_bytes(
+    value: Option<Option<Option<Vec<u8>>>>,
+) -> Option<Option<Option<Vec<u8>>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_i64(value: Option<Option<Option<i64>>>) -> Option<Option<Option<i64>>> {
+    value
+}
+#[prebindgen]
+pub fn option_triple_unit(value: Option<Option<Option<()>>>) -> Option<Option<Option<()>>> {
+    value
+}
+#[prebindgen]
+pub fn nested_niche_choice_id(value: Option<Option<NicheChoiceHandle>>) -> i64 {
+    value.map(niche_choice_id).unwrap_or(-3)
+}
+
+// Multi-parameter constructors keep an explicit outer presence argument in
+// Kotlin. A null discriminator must not override a caller's present=true.
+#[prebindgen]
+pub struct TextNicheInput {
+    pub text: String,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn text_niche_input_new(text: String, number: i64) -> TextNicheInput {
+    TextNicheInput { text, number }
+}
+#[prebindgen]
+pub fn optional_text_input_len(value: Option<TextNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.text.len() as i64 + v.number)
+}
+#[prebindgen]
+pub struct BytesNicheInput {
+    pub bytes: Vec<u8>,
+    pub number: i64,
+}
+#[prebindgen]
+pub fn bytes_niche_input_new(bytes: Vec<u8>, number: i64) -> BytesNicheInput {
+    BytesNicheInput { bytes, number }
+}
+#[prebindgen]
+pub fn optional_bytes_input_len(value: Option<BytesNicheInput>) -> i64 {
+    value.map_or(-1, |v| v.bytes.len() as i64 + v.number)
+}
+
+// Sparse discriminants include the default option sentinel and force each
+// adapter to find unused representations rather than assuming -1 is invalid.
+#[prebindgen]
+#[repr(i32)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum SparseCode {
+    Bottom = -2147483648,
+    MinusTwo = -2,
+    MinusOne,
+    Zero,
+    Seven = 7,
+    Eight,
+    Top = 2147483647,
+}
+#[prebindgen]
+pub fn sparse_echo(value: SparseCode) -> SparseCode {
+    value
+}
+#[prebindgen]
+pub fn sparse_optional(value: Option<SparseCode>) -> Option<SparseCode> {
+    value
+}
+#[prebindgen]
+pub fn sparse_nested(value: Option<Option<SparseCode>>) -> Option<Option<SparseCode>> {
+    value
+}
+#[prebindgen]
+pub fn sparse_ref(value: &SparseCode) -> i32 {
+    match value {
+        SparseCode::Bottom => i32::MIN,
+        SparseCode::MinusTwo => -2,
+        SparseCode::MinusOne => -1,
+        SparseCode::Zero => 0,
+        SparseCode::Seven => 7,
+        SparseCode::Eight => 8,
+        SparseCode::Top => i32::MAX,
+    }
+}
+#[prebindgen]
+pub fn sparse_borrowed(value: &SparseCode) -> &SparseCode {
+    value
+}
+#[prebindgen]
+pub struct EnumRecord {
+    pub priority: Priority,
+    pub code: Option<SparseCode>,
+}
+#[prebindgen]
+pub fn enum_record_echo(value: EnumRecord) -> EnumRecord {
+    value
+}
+// Generated Kotlin infrastructure names must not steal source variant names.
+#[prebindgen]
+#[repr(i32)]
+#[allow(non_camel_case_types)]
+pub enum EnumNames {
+    Companion = 4,
+    wireValue = 9,
+    fromWire = 12,
+    r#type = 14,
+    when = 16,
+    name = 20,
+    ordinal = 21,
+    entries = 22,
+    value = 24,
+    kotlin = 25,
+}
+#[prebindgen]
+pub fn enum_names_echo(entry: EnumNames) -> EnumNames {
+    entry
+}
+
+#[prebindgen]
+pub fn enum_record_new(priority: Priority, code: Option<SparseCode>) -> EnumRecord {
+    EnumRecord { priority, code }
+}
+#[prebindgen]
+pub fn enum_record_into(value: EnumRecord) -> EnumRecord {
+    value
+}
+
+#[prebindgen]
+pub fn enum_boundary_probe(
+    bytes: &[u8],
+    value: Option<Option<SparseCode>>,
+    text: &str,
+) -> Option<Option<SparseCode>> {
+    let _ = (bytes, text);
+    value
+}
+
+/// Explicit handle surface for Payload, alongside its collection data-class surface.
+#[prebindgen]
+pub type PayloadHandle = Payload;
+#[prebindgen]
+pub fn enum_payload_new(value: f64) -> PayloadHandle {
+    Payload {
+        id: 0,
+        seq: 0,
+        value,
+        flag: false,
+    }
+}
+
+// Result errors are source values, never inferred from their fields.
+static RESULT_ERROR_DROPS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+pub struct ResultFailureImpl {
+    code: i64,
+}
+impl Drop for ResultFailureImpl {
+    fn drop(&mut self) {
+        RESULT_ERROR_DROPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[prebindgen]
+pub type ResultFailure = ResultFailureImpl;
+#[prebindgen]
+pub fn result_error_message(error: ResultFailure) -> String {
+    assert_ne!(error.code, 99, "error mapper panic");
+    format!("failure {} 世界", error.code)
+}
+#[prebindgen]
+pub fn result_drop_error_into(error: CDropError) -> CDropError {
+    error
+}
+#[prebindgen]
+pub fn result_pair_error_into(error: CResultError) -> CResultError {
+    error
+}
+/// Typed error projection; errors keep their source domain instead of becoming strings.
+#[prebindgen]
+pub fn result_error_code(error: &ResultFailure) -> i64 {
+    assert_ne!(error.code, 99, "error getter panic");
+    error.code
+}
+#[prebindgen]
+pub fn result_resource_error_into(error: CResourceError) -> CResourceError {
+    error
+}
+#[prebindgen]
+pub fn result_rich_error_into(error: CRichError) -> CRichError {
+    error
+}
+#[prebindgen]
+pub fn result_error_drops() -> usize {
+    RESULT_ERROR_DROPS.load(std::sync::atomic::Ordering::SeqCst)
+}
+#[prebindgen]
+pub fn result_scalar(value: i64) -> Result<i64, ResultFailure> {
+    if value < 0 {
+        Err(ResultFailureImpl { code: value })
+    } else {
+        Ok(value)
+    }
+}
+#[prebindgen]
+pub fn result_unit(succeed: bool) -> Result<(), ResultFailure> {
+    if succeed {
+        Ok(())
+    } else {
+        Err(ResultFailureImpl { code: 1 })
+    }
+}
+#[prebindgen]
+pub fn result_optional(mode: i32) -> Result<Option<SparseCode>, ResultFailure> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(SparseCode::Seven)),
+        _ => Err(ResultFailureImpl { code: 2 }),
+    }
+}
+#[prebindgen]
+pub fn result_text(succeed: bool) -> Result<String, ResultFailure> {
+    if succeed {
+        Ok("héllo 世界".into())
+    } else {
+        Err(ResultFailureImpl { code: 3 })
+    }
+}
+#[prebindgen]
+pub fn result_record(succeed: bool) -> Result<EnumRecord, ResultFailure> {
+    if succeed {
+        Ok(EnumRecord {
+            priority: Priority::High,
+            code: Some(SparseCode::MinusOne),
+        })
+    } else {
+        Err(ResultFailureImpl { code: 4 })
+    }
+}
+#[prebindgen]
+pub fn result_owned(
+    value: OwnedResource,
+    mode: i32,
+    valid: char,
+) -> Result<OwnedResource, ResultFailure> {
+    let _ = valid;
+    match mode {
+        0 => Ok(value),
+        2 => panic!("source Result function panic"),
+        3 => Err(ResultFailureImpl { code: 99 }),
+        _ => Err(ResultFailureImpl { code: 5 }),
+    }
+}
+#[prebindgen]
+pub fn result_string_message(error: String) -> String {
+    error
+}
+#[prebindgen]
+pub fn result_other(succeed: bool) -> Result<i64, String> {
+    if succeed {
+        Ok(42)
+    } else {
+        Err("other error".into())
+    }
+}
+
+/// A structured error remains a structured value at the C boundary.
+#[prebindgen]
+pub struct CResultError {
+    pub code: i64,
+    pub message: String,
+}
+impl From<String> for CResultError {
+    fn from(message: String) -> Self {
+        Self { code: -1, message }
+    }
+}
+#[prebindgen]
+pub fn c_result_structured(text: &str, mode: i32) -> Result<i64, CResultError> {
+    match mode {
+        0 => Ok(text.len() as i64),
+        1 => Err(CResultError {
+            code: 7,
+            message: "source 世界\0details".into(),
+        }),
+        _ => panic!("structured source panic"),
+    }
+}
+#[prebindgen]
+pub struct CResourceError {
+    pub resource: OwnedResource,
+    pub message: String,
+}
+impl From<String> for CResourceError {
+    fn from(message: String) -> Self {
+        Self {
+            resource: OwnedResourceImpl { id: 0 },
+            message,
+        }
+    }
+}
+#[prebindgen]
+pub fn c_result_resource_error(fail: bool) -> Result<(), CResourceError> {
+    if fail {
+        Err(CResourceError {
+            resource: OwnedResourceImpl { id: 91 },
+            message: "resource error".into(),
+        })
+    } else {
+        Ok(())
+    }
+}
+#[prebindgen]
+pub struct CResultPair {
+    pub number: i64,
+    pub character: char,
+}
+#[prebindgen]
+pub fn c_result_late_niche(fail: bool) -> Result<CResultPair, CResultError> {
+    if fail {
+        Err(CResultError {
+            code: 8,
+            message: "late niche".into(),
+        })
+    } else {
+        Ok(CResultPair {
+            number: 42,
+            character: 'A',
+        })
+    }
+}
+#[prebindgen]
+pub fn c_result_pair_into(value: CResultPair) -> CResultPair {
+    value
+}
+#[prebindgen]
+pub fn c_result_bool(fail: bool) -> Result<bool, CResultError> {
+    if fail {
+        Err(CResultError {
+            code: 9,
+            message: "bool error".into(),
+        })
+    } else {
+        Ok(false)
+    }
+}
+#[prebindgen]
+pub struct CPanicError {
+    pub message: String,
+}
+impl From<String> for CPanicError {
+    fn from(_: String) -> Self {
+        panic!("error constructor panic")
+    }
+}
+#[prebindgen]
+pub fn c_result_panic_error() -> Result<(), CPanicError> {
+    panic!("source panic before error constructor")
+}
+#[prebindgen]
+pub struct CRichError {
+    pub kind: SparseCode,
+    pub message: Option<String>,
+}
+impl From<String> for CRichError {
+    fn from(message: String) -> Self {
+        Self {
+            kind: SparseCode::MinusOne,
+            message: Some(message),
+        }
+    }
+}
+#[prebindgen]
+pub fn c_result_rich_error(present: bool) -> Result<(), CRichError> {
+    Err(CRichError {
+        kind: SparseCode::Seven,
+        message: present.then(|| "rich error".into()),
+    })
+}
+#[prebindgen]
+pub fn c_result_optional_handle(mode: i32) -> Result<Option<OwnedResource>, CResultError> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(OwnedResourceImpl { id: 77 })),
+        _ => Err(CResultError {
+            code: 10,
+            message: "optional handle error".into(),
+        }),
+    }
+}
+
+pub struct CPanicOutputImpl {
+    _marker: u8,
+}
+impl Drop for CPanicOutputImpl {
+    fn drop(&mut self) {
+        panic!("late output source drop panic")
+    }
+}
+#[prebindgen]
+pub type CPanicOutput = CPanicOutputImpl;
+#[prebindgen]
+pub fn c_panic_output_value(_value: &CPanicOutput) -> OwnedResource {
+    OwnedResourceImpl { id: 12 }
+}
+#[prebindgen]
+pub fn c_result_drop_panic() -> Result<CPanicOutput, CResultError> {
+    Ok(CPanicOutputImpl { _marker: 1 })
+}
+#[prebindgen]
+pub struct CDropError {
+    pub resource: CPanicOutput,
+}
+impl From<String> for CDropError {
+    fn from(_: String) -> Self {
+        Self {
+            resource: CPanicOutputImpl { _marker: 1 },
+        }
+    }
+}
+#[prebindgen]
+pub fn c_result_error_drop() -> Result<(), CDropError> {
+    Err(CDropError {
+        resource: CPanicOutputImpl { _marker: 1 },
+    })
+}
+
+/// Exercises a void destructor whose source Drop panics.
+#[prebindgen]
+pub fn c_panic_output_new() -> CPanicOutput {
+    CPanicOutputImpl { _marker: 1 }
+}
+/// Source panics abort even when ordinary binding conversions are infallible.
+#[prebindgen]
+pub fn c_plain_panic() -> i64 {
+    panic!("non-Result source panic")
+}
+
+// Runtime-sized collections exercise the same element recipes as scalar calls.
+#[prebindgen]
+pub fn collection_i64(values: Vec<i64>) -> Vec<i64> {
+    values
+}
+#[prebindgen]
+pub fn collection_text(values: Vec<String>) -> Vec<String> {
+    values
+}
+#[prebindgen]
+pub fn collection_bytes(values: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    values
+}
+#[prebindgen]
+pub fn collection_nested(values: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
+    values
+}
+#[prebindgen]
+pub fn collection_options(values: Vec<Option<i64>>, tag: i16) -> Vec<Option<i64>> {
+    let _ = tag;
+    values
+}
+#[prebindgen]
+pub fn collection_optional(values: Option<Vec<i64>>) -> Option<Vec<i64>> {
+    values
+}
+#[prebindgen]
+pub fn collection_optional_items(values: Option<Vec<Option<i64>>>) -> Option<Vec<Option<i64>>> {
+    values
+}
+#[prebindgen]
+pub fn collection_enum(values: Vec<SparseCode>) -> Vec<SparseCode> {
+    values
+}
+#[prebindgen]
+pub fn collection_probe(values: Vec<char>, tag: &str) -> Vec<char> {
+    let _ = tag;
+    values
+}
+#[prebindgen]
+pub fn collection_borrow(values: &Vec<i64>) -> &[i64] {
+    values.as_slice()
+}
+#[prebindgen]
+pub fn collection_slice(values: &[i64]) -> Vec<i64> {
+    values.to_vec()
+}
+#[prebindgen]
+pub fn collection_resource_new(id: i64) -> OwnedResource {
+    OwnedResourceImpl { id }
+}
+#[prebindgen]
+pub fn collection_handles(
+    values: Vec<OwnedResource>,
+    valid: char,
+    mode: i32,
+) -> Result<Vec<OwnedResource>, ResultFailure> {
+    let _ = valid;
+    match mode {
+        0 => Ok(values),
+        1 => Err(ResultFailureImpl { code: 6 }),
+        _ => panic!("collection source panic"),
+    }
+}
+#[prebindgen]
+pub fn collection_alias(values: Vec<OwnedResource>, other: &OwnedResource) -> i64 {
+    values.iter().map(|v| v.id).sum::<i64>() + other.id
+}
+#[prebindgen]
+pub fn collection_result(values: Vec<i64>, succeed: bool) -> Result<Vec<i64>, ResultFailure> {
+    if succeed {
+        Ok(values)
+    } else {
+        Err(ResultFailureImpl { code: 7 })
+    }
+}
+
+#[prebindgen]
+pub struct CollectionItem {
+    pub resource: OwnedResource,
+}
+#[prebindgen]
+pub fn collection_construct(resource: OwnedResource) -> CollectionItem {
+    assert_ne!(resource.id, 2, "collection constructor panic");
+    CollectionItem { resource }
+}
+#[prebindgen]
+pub fn collection_construct_all(values: Vec<CollectionItem>) -> i64 {
+    values.iter().map(|v| v.resource.id).sum()
+}
+#[prebindgen]
+pub fn collection_make_items() -> Vec<CollectionItem> {
+    (1..=3)
+        .map(|id| CollectionItem {
+            resource: OwnedResourceImpl { id },
+        })
+        .collect()
+}
+#[prebindgen]
+pub fn collection_item_into(value: CollectionItem) -> CollectionItem {
+    assert_ne!(value.resource.id, 2, "collection projection panic");
+    value
+}
+
+#[prebindgen]
+pub struct CollectionBundle {
+    pub values: Vec<OwnedResource>,
+    pub tag: i64,
+}
+#[prebindgen]
+pub fn collection_bundle() -> CollectionBundle {
+    CollectionBundle {
+        values: (1..=3).map(|id| OwnedResourceImpl { id }).collect(),
+        tag: 42,
+    }
+}
+#[prebindgen]
+pub fn collection_bundle_into(value: CollectionBundle) -> CollectionBundle {
+    value
+}
+
+#[prebindgen]
+pub fn collection_optional_handles(
+    values: Option<Vec<OwnedResource>>,
+) -> Option<Vec<OwnedResource>> {
+    values
+}
+#[prebindgen]
+pub fn collection_nested_handles(values: Vec<Vec<OwnedResource>>) -> Vec<Vec<OwnedResource>> {
+    values
+}
+
+#[prebindgen]
+pub struct CollectionNumbers {
+    pub values: Vec<i64>,
+    pub tag: i64,
+}
+#[prebindgen]
+pub fn collection_numbers() -> CollectionNumbers {
+    CollectionNumbers {
+        values: vec![7, 9],
+        tag: 42,
+    }
+}
+#[prebindgen]
+pub fn collection_numbers_view(value: &CollectionNumbers) -> CollectionNumbers {
+    CollectionNumbers {
+        values: value.values.clone(),
+        tag: value.tag,
+    }
+}
+
+#[prebindgen]
+pub fn collection_resource_clone(value: &OwnedResource) -> OwnedResource {
+    OwnedResourceImpl { id: value.id }
+}
+#[prebindgen]
+pub fn collection_resource_ids(values: &[OwnedResource]) -> Vec<i64> {
+    values.iter().map(|v| v.id).collect()
+}
+
+// Result wrappers let C callers observe conversion failures without aborting.
+#[prebindgen]
+pub fn collection_try_construct_all(values: Vec<CollectionItem>) -> Result<i64, ResultFailure> {
+    Ok(collection_construct_all(values))
+}
+#[prebindgen]
+pub fn collection_try_make_items() -> Result<Vec<CollectionItem>, ResultFailure> {
+    Ok(collection_make_items())
+}
+#[prebindgen]
+pub struct CollectionError {
+    pub resources: Vec<OwnedResource>,
+    pub codes: Vec<Vec<i64>>,
+}
+impl From<String> for CollectionError {
+    fn from(_: String) -> Self {
+        Self {
+            resources: vec![],
+            codes: vec![],
+        }
+    }
+}
+#[prebindgen]
+pub fn collection_error_into(value: CollectionError) -> CollectionError {
+    value
+}
+#[prebindgen]
+pub fn collection_fail() -> Result<(), CollectionError> {
+    Err(CollectionError {
+        resources: vec![OwnedResourceImpl { id: 71 }, OwnedResourceImpl { id: 72 }],
+        codes: vec![vec![7, 9], vec![]],
+    })
+}
+
+#[prebindgen]
+pub fn collection_late_values(_value: &CPanicOutput) -> Vec<Vec<OwnedResource>> {
+    vec![
+        vec![OwnedResourceImpl { id: 81 }],
+        vec![OwnedResourceImpl { id: 82 }],
+    ]
+}
+#[prebindgen]
+pub fn collection_late_drop() -> Result<CPanicOutput, CResultError> {
+    Ok(CPanicOutputImpl { _marker: 1 })
+}
+
+#[prebindgen]
+pub struct SequencePart {
+    pub number: i64,
+    pub text: String,
+    pub resource: OwnedResource,
+}
+#[prebindgen]
+pub fn sequence_part_into(value: SequencePart) -> SequencePart {
+    assert_ne!(value.number, -2, "sequence element projection panic");
+    value
+}
+#[prebindgen]
+pub fn sequence_parts(mode: i32) -> Result<Vec<SequencePart>, ResultFailure> {
+    if mode == 1 {
+        return Err(ResultFailureImpl { code: 7 });
+    }
+    Ok((1..=3)
+        .map(|id| SequencePart {
+            number: if mode == 2 && id == 2 { -2 } else { id },
+            text: format!("part {id} 世界"),
+            resource: OwnedResourceImpl { id },
+        })
+        .collect())
+}
+
+#[prebindgen]
+pub struct SequenceScalars {
+    pub flag: bool,
+    pub byte: i8,
+    pub short: i16,
+    pub number: i32,
+    pub long: i64,
+    pub float: f32,
+    pub double: f64,
+    pub wide: i128,
+    pub text: Option<String>,
+}
+#[prebindgen]
+pub fn sequence_scalars_into(value: SequenceScalars) -> SequenceScalars {
+    value
+}
+#[prebindgen]
+pub fn collection_scalars(values: Vec<SequenceScalars>, _tag: f64) -> Vec<SequenceScalars> {
+    values
+}
+#[prebindgen]
+pub fn collection_u128(values: Vec<u128>) -> Vec<u128> {
+    values
+}
+#[prebindgen]
+pub fn sequence_scalars() -> Vec<SequenceScalars> {
+    vec![
+        SequenceScalars {
+            flag: true,
+            byte: -7,
+            short: -1234,
+            number: -123456,
+            long: i64::MIN,
+            float: 1.25,
+            double: -2.5,
+            wide: i128::MIN,
+            text: Some("世界".into()),
+        },
+        SequenceScalars {
+            flag: false,
+            byte: 7,
+            short: 1234,
+            number: 123456,
+            long: i64::MAX,
+            float: -1.25,
+            double: 2.5,
+            wide: i128::MAX,
+            text: None,
+        },
+    ]
+}
+
+#[prebindgen]
+pub fn sequence_late_drop() -> Result<Vec<CPanicOutput>, ResultFailure> {
+    Ok(vec![CPanicOutputImpl { _marker: 1 }])
+}
+#[prebindgen]
+pub fn sequence_late_view(_source: &Vec<CPanicOutput>) -> Vec<OwnedResource> {
+    vec![OwnedResourceImpl { id: 81 }, OwnedResourceImpl { id: 82 }]
+}
+
+#[prebindgen]
+pub fn collection_result_optional(
+    values: Vec<OwnedResource>,
+    mode: i32,
+) -> Result<Option<Vec<OwnedResource>>, ResultFailure> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(values)),
+        _ => Err(ResultFailureImpl { code: 7 }),
+    }
 }

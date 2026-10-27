@@ -11,6 +11,6 @@ konst.workspace = true
 example-flat = {path = "../example-flat"}
 [build-dependencies]
 prebindgen-c.workspace = true
-prebindgen-registry.workspace = true
+prebindgen-declarations.workspace = true
 syn.workspace = true
 example-flat = {path = "../example-flat"}

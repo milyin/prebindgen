@@ -1,0 +1,15 @@
+[package]
+name = "prebindgen-conversions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+prebindgen-flat.workspace = true
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -4,38 +4,14 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use Primitive::*;
 
-pub fn rust_type(p: Primitive) -> TokenStream {
-    match p {
-        Bool => quote!(u8),
-        I8 => quote!(i8),
-        I16 => quote!(i16),
-        U8 | U16 | I32 | Char => quote!(i32),
-        U32 | U64 | I64 | Isize | Usize => quote!(i64),
-        F32 => quote!(f32),
-        F64 => quote!(f64),
-        I128 | U128 => quote!(::prebindgen_jni_runtime::jni::objects::JByteArray<'local>),
-    }
-}
-pub fn raw_kotlin(p: Primitive) -> &'static str {
-    match p {
-        Bool => "Boolean",
-        I8 => "Byte",
-        I16 => "Short",
-        U8 | U16 | I32 | Char => "Int",
-        U32 | U64 | I64 | Isize | Usize => "Long",
-        F32 => "Float",
-        F64 => "Double",
-        I128 | U128 => "ByteArray?",
-    }
-}
 pub fn kotlin(p: Primitive) -> &'static str {
     match p {
         U64 | Usize => "ULong",
         I128 | U128 => "java.math.BigInteger",
-        _ => raw_kotlin(p),
+        _ => crate::JniWire::scalar(p).kotlin_type(),
     }
 }
-pub fn input(p: Primitive, name: &syn::Ident) -> (String, String) {
+pub fn input(p: Primitive, name: &str) -> (String, String) {
     match p {
         U64 | Usize => (kotlin(p).into(), format!("{name}.toLong()")),
         I128 | U128 => (format!("{}?", kotlin(p)), format!("{name}?.toByteArray()")),
@@ -43,6 +19,7 @@ pub fn input(p: Primitive, name: &syn::Ident) -> (String, String) {
     }
 }
 pub fn decode(p: Primitive, w: &syn::Ident) -> TokenStream {
+    let env = prebindgen_conversions::template_parameter("environment");
     let ty = p.rust_type();
     match p {
         Bool => quote!(#w != 0),
@@ -54,8 +31,8 @@ pub fn decode(p: Primitive, w: &syn::Ident) -> TokenStream {
         }
         U64 => quote!(#w as u64),
         Usize => quote!(usize::try_from(#w as u64).map_err(|_| "usize input out of range")?),
-        I128 => quote!(::prebindgen_jni_runtime::signed128(&mut env, &#w)?),
-        U128 => quote!(::prebindgen_jni_runtime::unsigned128(&mut env, &#w)?),
+        I128 => quote!(::prebindgen_jni_runtime::signed128(&mut #env, &#w)?),
+        U128 => quote!(::prebindgen_jni_runtime::unsigned128(&mut #env, &#w)?),
         _ => quote!(#w),
     }
 }
@@ -68,36 +45,12 @@ pub fn encode(p: Primitive, v: TokenStream) -> TokenStream {
         _ => v,
     }
 }
-pub fn output(p: Primitive, v: &TokenStream, index: usize) -> (TokenStream, String, String) {
+pub fn output_kotlin(p: Primitive, index: usize, result: &str) -> (String, String) {
     let decode = match p {
-        U64 | Usize => format!("(result[{index}] as Long).toULong()"),
-        I128 => format!("java.math.BigInteger(result[{index}] as ByteArray)"),
-        U128 => format!("java.math.BigInteger(1, result[{index}] as ByteArray)"),
-        _ => format!("result[{index}] as {}", kotlin(p)),
+        U64 | Usize => format!("({result}[{index}] as Long).toULong()"),
+        I128 => format!("java.math.BigInteger({result}[{index}] as ByteArray)"),
+        U128 => format!("java.math.BigInteger(1, {result}[{index}] as ByteArray)"),
+        _ => format!("{result}[{index}] as {}", kotlin(p)),
     };
-    let encode = if matches!(p, I128 | U128) {
-        quote!(::prebindgen_jni_runtime::bytes_object(&mut env, &#v)?)
-    } else {
-        let (class, signature, value) = match p {
-            Bool => ("Boolean", "Z", quote!(Bool(#v))),
-            I8 => ("Byte", "B", quote!(Byte(#v))),
-            I16 => ("Short", "S", quote!(Short(#v))),
-            I32 | U8 | U16 | Char => ("Integer", "I", quote!(Int(#v))),
-            I64 | U32 | U64 | Isize | Usize => ("Long", "J", quote!(Long(#v))),
-            F32 => ("Float", "F", quote!(Float(#v))),
-            F64 => ("Double", "D", quote!(Double(#v))),
-            _ => unreachable!(),
-        };
-        let signature = format!("({signature})Ljava/lang/{class};");
-        let class = format!("java/lang/{class}");
-        quote!(env.call_static_method(#class, "valueOf", #signature, &[::prebindgen_jni_runtime::jni::objects::JValue::#value]).and_then(|v| v.l()).map_err(|e| e.to_string())?)
-    };
-    (encode, kotlin(p).into(), decode)
-}
-pub fn parameter_slots(p: Primitive) -> usize {
-    if matches!(p, I64 | U32 | U64 | Isize | Usize | F64) {
-        2
-    } else {
-        1
-    }
+    (kotlin(p).into(), decode)
 }

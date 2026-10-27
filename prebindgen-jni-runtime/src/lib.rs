@@ -1,4 +1,4 @@
-//! String, byte, integer and allocation operations used by generated JNI bindings.
+//! Values, allocations and retained callbacks used by generated JNI bindings.
 //!
 //! Functions that take `env` use it for the JNI calls they make; generated code
 //! passes the environment of the native call it is running in. Objects they
@@ -10,6 +10,11 @@ use jni::{
     JNIEnv,
 };
 use prebindgen_runtime::Result;
+
+mod sequence;
+pub use sequence::*;
+mod callback;
+pub use callback::Callback;
 
 /// Copy the Java string `value` into an owned Rust string. JNI failures become messages.
 pub fn text(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Result<String> {
@@ -60,6 +65,32 @@ pub fn array<'a>(env: &mut JNIEnv<'a>, len: usize) -> Result<JObjectArray<'a>> {
     let len = i32::try_from(len).map_err(|_| "too many results")?;
     env.new_object_array(len, "java/lang/Object", JObject::null())
         .map_err(|e| e.to_string())
+}
+/// Mark a converted output array as a typed domain error before ownership commit.
+/// Slot zero is reserved for the channel: null means success, Boolean.TRUE
+/// means domain error, and a String means binding failure. Success needs no
+/// extra allocation or tag boxing; every payload starts at slot one.
+pub fn mark_domain_packet(env: &mut JNIEnv<'_>, packet: &JObjectArray<'_>) -> Result<()> {
+    let tag = env
+        .get_static_field("java/lang/Boolean", "TRUE", "Ljava/lang/Boolean;")
+        .and_then(|v| v.l())
+        .map_err(|e| e.to_string())?;
+    env.set_object_array_element(packet, 0, &tag)
+        .map_err(|e| e.to_string())?;
+    env.delete_local_ref(tag).map_err(|e| e.to_string())?;
+    Ok(())
+}
+/// Deliver a binding failure as data, preserving any already pending JVM exception.
+pub fn binding_packet<'a>(env: &mut JNIEnv<'a>, message: &str) -> Result<JObjectArray<'a>> {
+    if env.exception_check().map_err(|e| e.to_string())? {
+        return Err(message.to_owned());
+    }
+    let packet = array(env, 1)?;
+    let text = text_object(env, message)?;
+    env.set_object_array_element(&packet, 0, &text)
+        .map_err(|e| e.to_string())?;
+    env.delete_local_ref(text).map_err(|e| e.to_string())?;
+    Ok(packet)
 }
 /// Raise `IllegalArgumentException` with `message` unless a JVM exception is
 /// already pending.

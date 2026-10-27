@@ -28,8 +28,9 @@ SIGNATURE = re.compile(
 LINK = re.compile(r"<a [^>]*>.*?</a>", re.S)
 # A type name where a signature uses a type: after `:`, `&`, `<`, `(`, `,`,
 # `=`, `->` or a keyword, on the same line. An enum variant's name starts its
-# own line and is not matched.
-TYPE_USE = re.compile(r"(?:[:&<(,=]|->|\bmut|\bimpl|\bdyn|\bfor)[ \t]*([A-Z][A-Za-z0-9_]+)\b")
+# own line and is not matched. An associated-type binding name (`Wire = ...`)
+# or constraint name (`Input: ...`) is not a use of a type with that name.
+TYPE_USE = re.compile(r"(?:[:&<(,=]|->|\bmut|\bimpl|\bdyn|\bfor)[ \t]*([A-Z][A-Za-z0-9_]+)\b(?![ \t]*[=:])")
 
 
 def pages(doc, crate):
@@ -57,9 +58,25 @@ def main():
         for f in pages(doc, c):
             rel = os.path.relpath(f, doc)
             text = open(f, encoding="utf-8").read()
-            for path in sorted(set(RAW_PATH.findall(text))):
+            # rustdoc copies these links verbatim from itertools 0.14 and
+            # tracing 0.1's blanket implementations. They are dependency docs,
+            # not workspace links. Exempt only the known inherited references;
+            # the same broken references in an item's own docs still fail.
+            own_docs, _, inherited = text.partition('<h2 id="blanket-implementations"')
+            dependency_links = {
+                "Itertools::chunk_by", "Itertools::merge", "Itertools::tree_reduce",
+                "crate::Span", "super::Span::current()", "super::Subscriber",
+            }
+            dependency_literals = {"[<code>Span</code>]", "[<code>WithDispatch</code>]"}
+            unresolved = set(RAW_PATH.findall(own_docs)) | (
+                set(RAW_PATH.findall(inherited)) - dependency_links
+            )
+            for path in sorted(unresolved):
                 problems.append(f"{rel}: the path `{path}` did not resolve")
-            for lit in sorted(set(LITERAL.findall(text))):
+            literals = set(LITERAL.findall(own_docs)) | (
+                set(LITERAL.findall(inherited)) - dependency_literals
+            )
+            for lit in sorted(literals):
                 problems.append(f"{rel}: link text left unlinked: {html.unescape(lit)}")
             own = ITEM_PAGE.match(os.path.basename(f))
             own = own.group(1) if own else None

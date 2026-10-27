@@ -10,7 +10,12 @@ prebindgen-runtime.workspace = true
 prebindgen-jni-runtime.workspace = true
 konst.workspace = true
 perftest-flat = {path = "../perftest-flat"}
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
 [build-dependencies]
+syn.workspace = true
+prebindgen-flat.workspace = true
+prebindgen-conversions.workspace = true
 prebindgen-jni.workspace = true
-prebindgen-registry.workspace = true
+prebindgen-declarations.workspace = true
 perftest-flat = {path = "../perftest-flat"}

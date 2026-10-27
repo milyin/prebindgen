@@ -1,12 +1,273 @@
 //! Migrated from main; unsupported declarations remain commented in place.
-use prebindgen_registry::{expand_param, expand_return, fields, fun};
+use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use syn::parse_quote as pq;
 
 fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .opaque_ptr("panic_output", pq!(CPanicOutput))
+        .function(
+            fun!(c_panic_output_new).expand_return(expand_return!(CPanicOutput).field_self_into()),
+        )
+        .function(fun!(c_plain_panic))
+        .expand(expand_param!(Vec<i64>).variant_self())
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .opaque_error(pq!(String), fun!(callback_return_error_message))
+        .enum_type("callback_return_choice", pq!(CallbackReturnChoice))
+        .opaque_ptr("callback_return_resource", pq!(CallbackReturnResource))
+        .opaque_ptr("callback_return_job", pq!(CallbackReturnJob))
+        .opaque_ptr("callback_return_handler", pq!(CallbackReturnHandler))
+        .function(fun!(callback_return_i8))
+        .panic()
+        .function(fun!(callback_return_i16))
+        .panic()
+        .function(fun!(callback_return_f32))
+        .panic()
+        .function(fun!(callback_return_u128))
+        .panic()
+        .function(fun!(callback_return_i64))
+        .panic()
+        .function(fun!(callback_return_zero))
+        .panic()
+        .function(fun!(callback_return_bool))
+        .panic()
+        .function(fun!(callback_return_char))
+        .panic()
+        .function(fun!(callback_return_float))
+        .panic()
+        .function(fun!(callback_return_unsigned))
+        .panic()
+        .function(fun!(callback_return_wide))
+        .panic()
+        .function(fun!(callback_return_text))
+        .panic()
+        .function(fun!(callback_return_bytes))
+        .panic()
+        .function(fun!(callback_return_optional))
+        .panic()
+        .function(fun!(callback_return_vector))
+        .panic()
+        .function(fun!(callback_return_enum))
+        .panic()
+        .function(fun!(callback_return_resource_new))
+        .panic()
+        .function(fun!(callback_return_resource_live))
+        .panic()
+        .function(fun!(callback_return_owned))
+        .panic()
+        .function(fun!(callback_return_owned_optional))
+        .panic()
+        .function(fun!(callback_return_owned_vector))
+        .panic()
+        .function(fun!(callback_return_spawn))
+        .panic()
+        .function(fun!(callback_return_join))
+        .panic()
+        .function(fun!(callback_return_handler_new))
+        .function(fun!(callback_return_handler_call))
+        .panic()
+        .function(fun!(callback_return_catch))
+        .panic()
+        .function(fun!(callback_return_handler_many).expand_param(
+            "handlers",
+            expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)),
+        ))
+        .panic()
+        .function(fun!(callback_return_char_catch))
+        .panic()
+        .function(fun!(callback_return_owned_vector_catch))
+        .panic()
+        .function(fun!(callback_return_unit))
+        .panic()
+        .function(fun!(callback_return_handler_value).expand_param(
+            "handler",
+            expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)),
+        ))
+        .panic()
+        .expand(expand_param!(CallbackReturnRecord).variant(fun!(callback_return_record_new)))
+        .expand(
+            expand_return!(CallbackReturnRecord).fields_into(fields!(callback_return_record_into)),
+        )
+        .function(fun!(callback_return_record))
+        .panic()
+        .expand(expand_param!(CallbackReturnPair).variant(fun!(callback_return_pair_new)))
+        .expand(
+            expand_param!(CallbackReturnBorrowedPair)
+                .variant(fun!(callback_return_borrowed_pair_new)),
+        )
+        .function(fun!(callback_return_borrowed_pair_catch))
+        .panic()
+        .function(fun!(callback_return_resource_id))
+        .panic()
+        .function(fun!(callback_return_c_result))
+        .function(fun!(callback_return_pair_catch))
+        .panic()
+        .function(
+            fun!(api_record_new).expand_return(
+                expand_return!(ApiRecord).fields_into(
+                    fields!(api_record_into)
+                        .field("omitted", expand_return!(OwnedResource))
+                        .field("omitted_opt", expand_return!(OwnedResource))
+                        .field("omitted_vec", expand_return!(OwnedResource)),
+                ),
+            ),
+        )
+        .opaque_error(syn::parse_quote!(ResultFailure), fun!(result_error_message))
+        .opaque_error(syn::parse_quote!(StorageError), fun!(storage_error_message))
+        .error("result_error", pq!(CResultError))
+        .error("panic_error", pq!(CPanicError))
+        .error("rich_error", pq!(CRichError))
+        .error("drop_error", pq!(CDropError))
+        .expand(expand_return!(CPanicOutput).field(fun!(c_panic_output_value)))
+        .function(fun!(c_result_drop_panic))
+        .function(fun!(c_result_error_drop))
+        .function(fun!(c_result_panic_error))
+        .function(fun!(c_result_rich_error))
+        .function(fun!(c_result_optional_handle))
+        .error("resource_error", pq!(CResourceError))
+        .function(fun!(c_result_structured))
+        .function(fun!(c_result_bool))
+        .function(
+            fun!(c_result_late_niche).expand_return(
+                expand_return!(CResultPair).fields_into(fields!(c_result_pair_into)),
+            ),
+        )
+        .function(fun!(c_result_resource_error))
+        .function(fun!(collection_construct_all).expand_param(
+            "values",
+            expand_param!(CollectionItem).variant(fun!(collection_construct)),
+        ))
+        .panic()
+        .function(fun!(collection_make_items).expand_return(
+            expand_return!(CollectionItem).fields_into(fields!(collection_item_into)),
+        ))
+        .panic()
+        .function(fun!(collection_bundle).expand_return(
+            expand_return!(CollectionBundle).fields_into(fields!(collection_bundle_into)),
+        ))
+        .panic()
+        .function(fun!(collection_optional_handles).callback_return())
+        .panic()
+        .function(fun!(collection_nested_handles).callback_return())
+        .panic()
+        .function(fun!(collection_numbers).expand_return(
+            expand_return!(CollectionNumbers).fields(fields!(collection_numbers_view)),
+        ))
+        .panic()
+        .function(fun!(collection_resource_ids).expand_param(
+            "values",
+            expand_param!(OwnedResource).variant(fun!(collection_resource_clone)),
+        ))
+        .panic()
+        .function(fun!(collection_i64).callback_return())
+        .panic()
+        .function(
+            fun!(collection_text)
+                .expand_param("values", expand_param!(Vec<String>).variant_self())
+                .callback_return(),
+        )
+        .panic()
+        .function(fun!(collection_bytes).callback_return())
+        .panic()
+        .function(fun!(collection_nested).callback_return())
+        .panic()
+        .function(fun!(collection_options).callback_return())
+        .panic()
+        .function(fun!(collection_optional).callback_return())
+        .panic()
+        .function(fun!(collection_optional_items).callback_return())
+        .panic()
+        .function(fun!(collection_enum).callback_return())
+        .panic()
+        .function(fun!(collection_probe))
+        .panic()
+        .function(fun!(collection_borrow).callback_return())
+        .panic()
+        .function(fun!(collection_slice).callback_return())
+        .panic()
+        .function(fun!(collection_resource_new))
+        .panic()
+        .function(fun!(collection_handles).callback_return())
+        .function(fun!(collection_alias))
+        .panic()
+        .function(fun!(collection_result).callback_return())
+        .function(fun!(collection_try_construct_all).expand_param(
+            "values",
+            expand_param!(CollectionItem).variant(fun!(collection_construct)),
+        ))
+        .function(fun!(collection_try_make_items).expand_return(
+            expand_return!(CollectionItem).fields_into(fields!(collection_item_into)),
+        ))
+        .error("collection_error", pq!(CollectionError))
+        .function(fun!(collection_fail))
+        .function(fun!(collection_result_optional).callback_return())
+        .function(
+            fun!(sequence_late_drop)
+                .callback_return_only()
+                .expand_return(expand_return!(Vec<CPanicOutput>).field(fun!(sequence_late_view))),
+        )
+        .function(fun!(sequence_scalars).callback_return_only().expand_return(
+            expand_return!(SequenceScalars).fields_into(fields!(sequence_scalars_into)),
+        ))
+        .panic()
+        .function(
+            fun!(sequence_parts).callback_return_only().expand_return(
+                expand_return!(SequencePart).fields_into(fields!(sequence_part_into)),
+            ),
+        )
+        .function(
+            fun!(collection_late_drop)
+                .expand_return(expand_return!(CPanicOutput).field(fun!(collection_late_values))),
+        )
+        .function(fun!(storage_put_slice))
+        .panic()
+        .function(fun!(storage_get_vec).callback_return())
+        .panic()
+        .function(fun!(result_scalar))
+        .function(fun!(result_unit))
+        .function(fun!(result_optional))
+        .function(fun!(result_text))
+        .function(fun!(result_record))
+        .function(fun!(result_owned))
+        .function(
+            fun!(result_other)
+                .on_error(fun!(result_string_message))
+                .expand_return(expand_return!(i64).field_self()),
+        )
+        .function(fun!(storage_try_with_label))
+        .function(fun!(result_error_drops))
+        .panic()
+        .enum_type("priority", pq!(Priority))
+        .opaque_ptr("enum_payload", pq!(PayloadHandle))
+        .function(
+            fun!(enum_payload_new).expand_return(expand_return!(PayloadHandle).field_self_into()),
+        )
+        .panic()
+        .function(fun!(payload_priority))
+        .panic()
+        .enum_type("code", pq!(SparseCode))
+        .enum_type("enum_names", pq!(EnumNames))
+        .expand(expand_param!(EnumRecord).variant(fun!(enum_record_new)))
+        .expand(expand_return!(EnumRecord).fields_into(fields!(enum_record_into)))
+        .function(fun!(priority_weight))
+        .panic()
+        .function(fun!(priority_or))
+        .panic()
+        .function(fun!(sparse_echo))
+        .panic()
+        .function(fun!(sparse_optional))
+        .panic()
+        .function(fun!(sparse_nested))
+        .panic()
+        .function(fun!(sparse_ref))
+        .panic()
+        .function(fun!(sparse_borrowed))
+        .panic()
+        .function(fun!(enum_record_echo))
+        .panic()
+        .function(fun!(enum_names_echo))
+        .panic()
         /* Unsupported: old C output naming or memory policy.
         .source_module(pq!(perftest_flat))
         */
@@ -101,10 +362,7 @@ fn main() {
     // on a null pointer. The five `storage_put_*`/`storage_get_into_*` demonstrate the
     // distinct C parameter semantics (by-value consume, `const *` read, `*` read/write,
     // out-param-into-init, out-param-into-uninit).
-    cbindgen = cbindgen.function(fun!(storage_new));
-    /* Unsupported: this declaration requires unsupported conversions or builder options.
-    cbindgen = cbindgen.function(pq!(storage_get)).panic();
-    */
+    cbindgen = cbindgen.function(fun!(storage_new)).panic();
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.function(pq!(storage_put_by_take)).panic();
     */
@@ -128,8 +386,8 @@ fn main() {
     /* Unsupported: this declaration requires unsupported conversions or builder options.
     cbindgen = cbindgen.function(pq!(storage_callback)).panic();
     */
-    cbindgen = cbindgen.function(fun!(string_new))/* C errors now return a status. */;
-    cbindgen = cbindgen.function(fun!(string_len))/* C errors now return a status. */;
+    cbindgen = cbindgen.function(fun!(string_new)).panic()/* C errors now return a status. */;
+    cbindgen = cbindgen.function(fun!(string_len)).panic()/* C errors now return a status. */;
 
     // Array (slice / Vec) API. `storage_put_slice` takes `&[Payload]` — a
     // `repr_c_struct` slice — which lowers to `(const payload_t *, size_t)`
@@ -168,9 +426,13 @@ fn main() {
                 .field_self(),
         )
         .function(fun!(blob_value_new))
+        .panic()
         .function(fun!(blob_value_echo))
+        .panic()
         .function(fun!(report_new))
-        .function(fun!(report_into_struct));
+        .panic()
+        .function(fun!(report_into_struct))
+        .panic();
 
     cbindgen = cbindgen
         .opaque_ptr("summary", pq!(Summary))
@@ -193,17 +455,42 @@ fn main() {
         .expand(expand_return!(Payload).fields(fields!(payload_to_struct)))
         .expand(expand_param!(Payload).variant(fun!(payload_new)))
         .function(fun!(payload_new))
+        .panic()
         .function(fun!(storage_with_payload))
+        .panic()
         .function(fun!(summary_new))
+        .panic()
         .function(fun!(summary_total_raw))
+        .panic()
         .function(fun!(stamp_new))
-        .function(fun!(unsigned_round_trip));
+        .panic()
+        .function(fun!(unsigned_round_trip))
+        .panic()
+        .function(fun!(plain_note_echo))
+        .panic()
+        .function(fun!(unsigned_optional))
+        .panic()
+        .function(fun!(unsigned_data_maybe))
+        .panic()
+        .function(fun!(storage_get))
+        .panic()
+        .function(fun!(storage_put_opt))
+        .panic()
+        .opaque_ptr("archive", pq!(Archive))
+        .function(fun!(archive_new))
+        .panic()
+        .function(fun!(archive_store))
+        .panic()
+        .function(fun!(archive_latest))
+        .panic();
     cbindgen = cbindgen
         .function(fun!(report_label).expand_param(
             "report",
             expand_param!(Report).variant(fun!(report_from_summary)),
         ))
-        .function(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self()));
+        .panic()
+        .function(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self()))
+        .panic();
     for f in [
         fun!(storage_len),
         fun!(storage_contains),
@@ -228,7 +515,63 @@ fn main() {
         fun!(primitive_char),
         fun!(primitive_unit),
     ] {
-        cbindgen = cbindgen.function(f);
+        cbindgen = cbindgen.function(f).panic();
+    }
+    cbindgen = cbindgen
+        .opaque_ptr("owned_resource", pq!(OwnedResource))
+        .expand(expand_param!(ResourceChoice).variant(fun!(resource_choice_new)))
+        .opaque_ptr("niche_choice", pq!(NicheChoiceHandle))
+        .expand(
+            expand_param!(NicheChoiceHandle)
+                .variant(fun!(niche_choice_new))
+                .variant_self(),
+        )
+        .opaque_ptr("option_ctor", pq!(OptionCtor))
+        .expand(
+            expand_param!(OptionCtor)
+                .variant(fun!(option_ctor_new))
+                .variant_self(),
+        )
+        .opaque_ptr("option_choice", pq!(OptionChoice))
+        .expand(
+            expand_param!(OptionChoice)
+                .variant(fun!(option_choice_new))
+                .variant_self(),
+        )
+        .expand(expand_param!(OptionalFields).variant(fun!(optional_fields_new)))
+        .expand(expand_return!(OptionalFields).fields_into(fields!(optional_fields_into)));
+    for f in [
+        fun!(resource_choice_id),
+        fun!(option_ctor_new),
+        fun!(option_ctor_id),
+        fun!(option_nested_resource),
+        fun!(option_nested_u32),
+        fun!(niche_choice_new),
+        fun!(niche_choice_id),
+        fun!(option_str_echo),
+        fun!(option_slice_echo),
+        fun!(option_str_len),
+        fun!(option_slice_len),
+        fun!(option_string_len),
+        fun!(option_i64_ref),
+        fun!(option_choice_id),
+        fun!(option_resource_pair),
+        fun!(option_i64),
+        fun!(option_char),
+        fun!(option_u8),
+        fun!(option_bool),
+        fun!(option_text),
+        fun!(option_bytes),
+        fun!(option_unit),
+        fun!(option_nested),
+        fun!(option_nested_char),
+        fun!(option_resource_new),
+        fun!(option_resource_echo),
+        fun!(option_resource_id),
+        fun!(owned_resource_drops),
+        fun!(optional_fields_echo),
+    ] {
+        cbindgen = cbindgen.function(f).panic();
     }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let generation = cbindgen.build().expect("build supported declarations");

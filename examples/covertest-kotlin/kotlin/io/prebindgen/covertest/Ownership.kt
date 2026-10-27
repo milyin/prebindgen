@@ -9,10 +9,10 @@ private fun rejected(action: () -> Unit) {
 }
 
 fun checkOwnership() {
-    val report = reportNew(1, 2.0, "original") { _, _, _, _, _, handle -> handle }
-    rejected { reportRelabel(report, null) { _, _, _, _, _, handle -> handle.close() } }
+    val report = reportNew(1, 2.0, "original") { _, _, _, _, handle -> handle }
+    rejected { reportRelabel(report, null) { _, _, _, _, handle -> handle.close() } }
     check(!report.isClosed)
-    reportRelabel(report, "changed") { _, _, _, _, label, handle ->
+    reportRelabel(report, "changed") { _, _, _, label, handle ->
         check(label == "changed" && report.isClosed)
         handle.close()
     }
@@ -74,7 +74,7 @@ fun checkOwnership() {
             try {
                 gate.await()
                 try { summaryTotalRaw(1, 0, 0.0, owner) }
-                catch (_: IllegalStateException) { }
+                catch (_: IllegalArgumentException) { }
             } catch (e: Throwable) { failure.set(e) }
         }
         val closer = Thread { gate.await(); owner.close() }
@@ -85,7 +85,7 @@ fun checkOwnership() {
     failure.get()?.let { throw it }
     val borrowed = storageWithPayload(1, 0, 0.0, false)
     val reader = Thread {
-        try { repeat(2000) { try { storageLen(borrowed) } catch (_: IllegalStateException) { } } }
+        try { repeat(2000) { try { storageLen(borrowed) } catch (_: IllegalArgumentException) { } } }
         catch (e: Throwable) { failure.set(e) }
     }
     reader.start(); borrowed.close(); reader.join()
