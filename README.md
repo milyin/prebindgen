@@ -24,15 +24,14 @@ metadata on Flat owners records language representations and project choices.
 Flat also preserves source names, locations and guards.
 Wrapper writers use flat's generation API; recursive recipe resolution belongs to declarations.
 
-## Examples migrated from main
+## Examples
 
-This branch replaces the generator engine while preserving source capture and
-source-reading support. Class, package, and conversion declarations preserve the production builder API.
+The generator supports source capture and source reading. Class, package, and
+conversion declarations use the builder API.
 Import shared declaration types and macros directly from
 `prebindgen-declarations` (`prebindgen_declarations` in Rust imports).
 
-The artificial `demo-flat`, `demo-c`, and shared demonstration declarations have
-been removed. All eight Rust example crates from `main` are in the workspace.
+The workspace contains eight Rust example crates.
 Unsupported declarations, record fields and matching constructor arguments are
 commented in the flat sources and `build.rs` files as the checklist for future
 work. The retained records demonstrate the supported shapes of the real examples.
@@ -60,7 +59,7 @@ unsupported shapes remain active behind that selection.
 
 The old foreign performance drivers require the commented bindings and have
 been removed. Full coverage clients are replaced with focused C and Kotlin smoke
-clients exercising the active declarations; this branch makes no performance or
+clients exercising the active declarations; these examples make no performance or
 full downstream compatibility claim. Generated artifacts remain under `OUT_DIR`.
 
 Named flat objects must have nonzero Rust size, including opaque aliases and
@@ -178,7 +177,7 @@ Preparation trees use `Input<InputRequest>` and `Output<OutputRequest>`: structu
 operations and pending choices share one tree. `Request` marks a choice that
 preparation must resolve: `Auto` selects a configured default, `Call` discovers
 constructor arguments, `ForType` applies a typed override, and `NamedFields`
-fills in source fields by name. The production
+fills in source fields by name. The
 `expand_param!`, `expand_return!`, and `fields!` builders write those trees;
 `.expand(...)` registers type defaults and function `.expand_param(name, ...)` /
 `.expand_return(...)` replace them. For example:
@@ -530,7 +529,7 @@ fails. Invalid inputs or conversion failures then abort at the C boundary; sourc
 and destructor panics also abort. Use `Result<T, E>` when the caller needs to
 recover from an error. Error messages use the explicit Result error output.
 
-**JNI owns handle semantics.** As on `main`, a Kotlin object owns a boxed Rust
+**JNI owns handle semantics.** A Kotlin object owns a boxed Rust
 allocation whose address travels in a `Long`. A low pointer bit records closed
 or consumed state. A JNI-specific wrapper guarantees the alignment needed for
 that bit. Native objects require `Send` because Kotlin can transfer them between
@@ -553,7 +552,7 @@ an object array. Multi-output delivery uses a builder lambda, outside input
 locks; a throwing builder closes output handles, including escaped references.
 Further JNI object-array ABI optimization remains separate work.
 
-Source callback parameters, data-carrying enums, maps/sets, mutable text/byte views, methods,
+C source callback parameters, data-carrying enums, maps/sets, mutable text/byte views, methods,
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
 
@@ -592,10 +591,10 @@ through object arrays. Each element
 must expose exactly one Kotlin input/output value; declare a data class to wrap
 multiple fields. General collection fields inside data classes are not yet
 supported. Inputs snapshot list structure once before choosing locks, then read
-handle addresses while all active handles are locked. Handle locking uses an
-iterative acquisition loop so list length does not add JVM stack frames. JNI
+handle addresses while all active handles are locked. Handle locking uses
+reentrant monitor acquisition in address order. JNI
 validates row shapes and active field types, using local reference frames per
-row. Native failure before ownership acknowledgement leaves input handles live;
+row. Native failure before input ownership acknowledgement leaves input handles live;
 after acknowledgement Kotlin marks every selected handle consumed. Prepared
 outputs are reclaimed on failure. These row arrays and boxed JVM scalars are a
 correctness-oriented transport, with no zero-copy or throughput claim.
@@ -694,9 +693,266 @@ returns the initial accumulator. With a nullable accumulator type, a null final
 accumulator and None both return null. Result errors use callbacks returning the same
 accumulator type, and do not invoke the folder.
 
-Sequence-valued arguments of source callbacks remain part of future general
-callback support. Byte-buffer returns keep their existing transport and are not
-selected as element-wise sequences by these declarations.
+Retained source callbacks, including buffered sequence arguments, are described
+below. Byte-buffer returns keep their existing transport and are not selected as
+element-wise sequences by these declarations.
+
+## Retained JNI source callbacks
+
+JNI binds direct function parameters of the form
+`impl Fn(...) -> R + Send + Sync + 'static`. Omitting `-> R` means `()`.
+`Send`, `Sync`, and `'static` bounds may be omitted. The generated
+Kotlin parameter uses a typed `fun interface`; ordinary `.fun(fun!(...))` declarations
+select these functions without extra callback configuration.
+
+Callbacks also work in source constructors selected by input expansions. For a
+constructor `handler_new(callback: impl Fn(Sample)) -> Handler`, declaring
+`expand_param!(Handler).variant(fun!(handler_new))` lets a bound function taking
+`Handler` receive the generated callback interface instead. The constructor does
+not need its own `.fun(...)` declaration. Nested constructors, selector alternatives,
+optional inputs and collections reuse the same callback conversion. Inactive
+alternatives do not register callbacks; a later argument validation failure releases
+any callback captures already retained while preparing that input.
+
+```rust,ignore
+#[prebindgen]
+pub fn subscribe(callback: impl Fn(Sample) + Send + Sync + 'static) -> Subscription { /* ... */ }
+```
+
+Callback arguments use their type-wide output expansions and declared data/enum
+representations. Public interfaces retain source type names (`SampleCallback`),
+even when a Kotlin class is renamed, and live in the first argument type's package.
+Zero-argument callbacks share `VoidCallback` in the root package. Identical public
+signatures share an interface; conflicting signatures or handle ownership contracts
+with the same name are diagnosed.
+
+Declare callback defaults with `callback!`, placed alongside other classes:
+
+```rust,ignore
+.package(package!("handlers")
+    .class(callback!(impl Fn(Packet, i64) -> Decision)
+        .name("PacketHandler")
+        .expand_param(0, expand_return!(Packet)
+            .field(fun!(packet_payload).name("payload")))
+        .expand_return(expand_param!(Decision)
+            .variant(fun!(decision_from_flag)))))
+```
+
+Callback arguments leave Rust, so `.expand_param(index, ...)` accepts output
+conversions such as `expand_return!`. The callback's result enters Rust, so
+`.expand_return(...)` accepts input conversions such as `expand_param!`.
+Argument indices start at zero: `Fn` signatures have no parameter names.
+The declaration above emits `handlers.PacketHandler` in the configured package
+prefix, including when no exported function uses the interface. Its callback
+signature must occur in a parameter of a supplied nongeneric source function; a
+declaration with no matching occurrence is a generation error. Unexported source functions
+and constructor helpers count as occurrences. Matching uses the same normalized
+argument and return types as callback defaults.
+
+Override a particular callback through the ordinary function parameter API:
+
+```rust,ignore
+.fun(fun!(register_special).expand_param("callback",
+    callback!(impl Fn(Packet, i64) -> Decision)
+        .name("SpecialPacketHandler")
+        .expand_param(0, expand_return!(Packet)
+            .field(fun!(packet_priority)))))
+```
+
+This changes argument zero while inheriting the declared callback's result
+conversion, other arguments and package. A selected argument or result conversion
+replaces that whole conversion tree. Unspecified settings inherit callback
+signature defaults, followed by ordinary value-type defaults. Callback settings
+do not change ordinary functions' conversions. Unit callbacks retain an empty unit
+return representation; an input expansion requiring a returned value is rejected. Signature matching resolves Rust
+type names and ignores `Send`, `Sync`, `'static`, and an omitted `-> ()`.
+Use a distinct `.name(...)` when an override changes the Kotlin signature or
+handle ownership contract of an existing interface.
+
+Constructor arguments accept the same local declarations through input trees:
+
+```rust,ignore
+Input::constructor("handler_new", [
+    callback!(impl Fn(Packet, i64) -> Decision)
+        .name("ConstructedPacketHandler")
+        .expand_return(expand_param!(Decision)
+            .variant(fun!(decision_from_number)))
+        .into(),
+])
+```
+
+These overrides also apply when that constructor is used inside optional or
+collection inputs. Callback configuration is resolved during generation and adds
+no runtime tracking or Kotlin grouping objects. Explicit callback argument
+expansions transfer produced handles to the callback author, like explicit
+type-wide output expansions. The configured callback API is supported by JniGen;
+the C adapter retains its existing automatically configured callbacks and rejects
+callback-specific names or conversion overrides.
+
+Registration retains a JVM global reference and caches the bridge method. Rust
+closures can retain that reference beyond registration and invoke it concurrently
+from native worker threads. Each invocation attaches its thread as needed and uses
+an explicit local-reference frame. Dropping the last Rust closure releases its JVM
+capture. User callbacks run synchronously on the invoking thread, including during
+an outer native call. Generated handles use reentrant JVM
+monitors: native calls, `close()` and `take()` serialize between threads, and the
+same thread can reenter a monitor. There is no callback-depth tracking, active-borrow
+reservation or callback-specific lock timeout. Callers must respect Rust borrows:
+a callback must not close or consume a value still used by its caller, or create
+conflicting mutable/shared references. Applications must avoid lock cycles when a
+native caller waits for a callback on another thread. Source interior locks can
+also deadlock or panic on reentry.
+
+Borrowed arguments are observed through their output conversions. Unexpanded opaque
+handle arguments are closed after `run`, including when it throws; `take()` retains
+a separate owning Kotlin wrapper. Explicit output expansions of the callback argument type (or its optional payload)
+transfer their handles to the user. Field-type defaults do not rewrite a data
+class's properties; the containing argument's expansion controls that record. Once reconstruction succeeds, those handles stay user-owned even if
+`run` throws. Reconstruction failure reclaims all unpublished argument handles.
+Native output ownership commits immediately before the upcall and transfers to the
+Kotlin bridge without a per-invocation acknowledgement array or native rollback
+registry. If invocation fails before bridge entry (for example,
+JVM stack exhaustion), committed handles may leak.
+
+Callback conversion, upcall and returned-value failures produce `tracing` ERROR
+events on the `prebindgen::callback` target. Generated callbacks attach the Kotlin
+interface name and JVM method descriptor as `callback` and `signature` fields;
+the `error` field contains the failure message. Applications choose a tracing
+subscriber to collect, filter or format these events. C callbacks record their
+generated callback name and Rust signature in the same fields. Successful invocations
+perform no diagnostic formatting or logging. JNI still describes and clears
+callback-created JVM exceptions on failure so subsequent invocations remain usable.
+Callback-result cleanup failures also use this tracing target. A panicking
+subscriber is contained on the failure path. Without a tracing subscriber,
+failures retain a stderr fallback. Subscriber filters control structured events;
+JVM exception descriptions still go to `System.err` independently of those filters.
+
+Callbacks returning `()` report failures and let Rust continue.
+Callbacks returning a value raise a Rust panic on failure, as described below.
+In both cases callback-created JVM exceptions are described and cleared, so later
+invocations can run. The invocation uses the
+checked JNI call without additional exception probes on the successful path. The
+invoking thread must have no pending JVM exception before entering the callback.
+Registration errors use the function's ordinary binding-error callback.
+
+Callbacks support scalar, string, byte, record, optional, enum and buffered
+sequence argument conversions, including declared projections. Vectors and borrowed
+slices can contain records with handles, including nested records, optional fields
+and nested collections.
+
+For a callback taking `Vec<Row>`, where `Row` contains native handles:
+
+| Output declaration | How handle fields reach Kotlin | Who closes the Kotlin handles |
+| --- | --- | --- |
+| No output expansion for `Row` or `Vec<Row>` | Clone the fields; their types must implement `Clone`. | The generated bridge closes them after `run`, including when it throws. |
+| `expand_return!(Row).field_self_into()` | Move the fields out of each owned row; `Clone` is unnecessary. | The generated bridge still closes them after `run`. |
+| `expand_return!(Vec<Row>).field_self_into()` | Move the fields out of the owned rows. | The callback implementation must close them, even if `run` throws. |
+
+When the bridge closes handles automatically, call `handle.take()` during the
+callback to keep one. Use the owning wrapper returned by `take()` and close it
+when finished. These output declarations apply to every matching callback in the
+generator, as well as ordinary function returns.
+
+A callback taking `&[Row]` borrows the Rust rows, so their fields cannot be moved
+out. The default conversion clones handle fields and the bridge closes those
+clones after `run`; the original Rust rows remain untouched. A declaration for
+`Vec<Row>` does not change this behavior. The moving `Row` conversion in the table
+requires owned rows and cannot also serve borrowed slices of that row type.
+
+If Rust cannot finish converting the arguments, it drops the allocations prepared
+so far and skips that callback invocation. If Kotlin cannot construct the complete
+argument list, it closes the delivered handles without calling user code.
+
+Mutable arguments, `Result` arguments, callbacks taking callable-signature arguments,
+explicit higher-ranked bounds, and `FnMut`/`FnOnce` are rejected. Callbacks are accepted
+as direct parameters of exported source functions or input constructors. The covertest
+exercises retained and concurrent callbacks, output ownership, reentry, exception
+containment, and release of JVM captures under `-Xcheck:jni`.
+
+### Values returned by callbacks
+
+A callback can return a value to its Rust caller:
+
+```rust,ignore
+#[prebindgen]
+pub fn evaluate(callback: impl Fn(i64) -> i64 + Send + Sync + 'static) -> i64 {
+    callback(21)
+}
+```
+
+The generated Kotlin call is `evaluate({ value -> value * 2 })`, which returns `42`.
+Its callback interface has `run(value: Long): Long`; the generated parameter name
+may differ. Interfaces for callbacks returning values include the return type in
+their names, such as `i64Toi64Callback`.
+
+The returned value uses the same conversion as an argument passed from Kotlin to
+Rust. Type-wide `expand_param!(R)` declarations therefore also apply to callback
+results of type `R`. Scalars, strings, bytes, enums, optionals, collections, owned
+handles and data classes without handle fields are supported. The conversion must
+expose one Kotlin value. Borrowed results and `Result` values are unsupported by
+the adapters; Flat can still represent those signatures for other consumers.
+
+Returning an owning handle gives Rust ownership of its value and marks the Kotlin
+wrapper consumed. Kotlin must not close or use that wrapper afterward. To return
+a handle that the bridge would otherwise close after the callback, return
+`handle.take()`. Handle addresses collected before validation are reclaimed if
+return validation or construction fails. A VM failure while completing the JNI handoff or reading
+its raw result can strand handles that Rust has not yet received, just as failure
+to enter a callback can lose its arguments.
+
+Values with a JVM primitive representation return directly in that type. Multiple
+native fields travel in an object array. Unit callbacks keep their existing invocation path.
+If a callback returning a value throws, or conversion fails, the trampoline raises
+a Rust panic after leaving its JNI frame and clearing the JVM exception. The
+synchronous generated JNI boundary catches the panic and uses its binding-error
+handler. A retained callback invoked on a Rust worker thread unwinds that thread
+unless Rust catches the panic; `panic=abort` terminates the process. No substitute
+return value or `Default` implementation is required.
+
+## Retained C source callbacks
+
+The C adapter also accepts `impl Fn(...) -> R` parameters, including callbacks
+selected through input constructors. Declare their source functions with
+`.function(fun!(evaluate)).panic()` for a non-`Result` function such as the example
+above. The ordinary C error policy handles invalid callback registration.
+
+For the Rust parameter `evaluate(callback: ...)`, the header provides a
+`pb_evaluate_callback` type (`pb` is the configured prefix):
+
+```c
+static int64_t twice(void *context, int64_t value) {
+    (void)context;
+    return value * 2;
+}
+int64_t answer = pb_evaluate((pb_evaluate_callback){ .run = twice });
+```
+
+The callback value contains `run`, `context` and an optional `drop(context)`.
+Rust retains the context with the closure and calls `drop` once when the last
+owner of that closure is released. Input ownership transfers only after validation;
+`Result` wrappers report acceptance through their existing `ownership` flag.
+The context must stay live until then, and callback functions and context access
+must support the threads permitted by the Rust signature.
+
+Rust-to-C callback arguments use ordinary output conversions. The C callback owns
+any delivered handles, buffers and row allocations, and releases them with the
+generated typed destructors, buffer freer and row-storage freer. Values returned
+from C use ordinary input conversions: one native field is returned directly;
+multiple fields use a generated result structure. The header also provides
+`pb_evaluate_callback_return` and collection argument aliases where applicable.
+Owned handle results move into Rust; returned byte buffers and row storage are
+borrowed while Rust copies or converts them.
+
+For callbacks returning buffers or rows, an optional `release_result(context,
+result)` function runs after decoding, including on conversion failure. It can free
+storage allocated by the C callback. It must not free handles moved into Rust.
+Without this function, returned storage must remain valid throughout decoding;
+concurrent invocations must not overwrite storage another invocation is using.
+C callback return-conversion failures raise a Rust panic on the invoking thread.
+A synchronous `Result` export reports the failure through its C error output; a
+non-`Result` export configured with `.panic()` aborts. Rust may catch the panic
+before either boundary is reached. An uncaught worker-thread panic unwinds the
+worker; `panic=abort` terminates the process.
 
 ## Result returns
 
@@ -760,9 +1016,8 @@ ownership and error output storage must be pairwise disjoint. This explicit
 flag reports whether Rust accepted ownership before returning a Result failure.
 Non-Result calls need no ownership flag because failures abort the process.
 
-JNI follows the production adapter's callback model. `Err(E)` is converted
-through the ordinary output declarations for `E`, including `expand_return!`,
-data/enum classes and explicit borrowed/owned projections. The generated
+JNI converts `Err(E)` through the ordinary output declarations for `E`, including
+`expand_return!`, data/enum classes and explicit borrowed/owned projections. The generated
 `<Error>Handler<R>.run(...)` receives these typed values. A message mapper is an
 explicit alternative that generates `<Error>MessageHandler<R>` with one String
 parameter. Neither representation is selected from the error's field contents.

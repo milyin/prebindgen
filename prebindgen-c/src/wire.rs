@@ -8,6 +8,11 @@ use super::*;
 /// restore a consumed niche. Use [`Self::set_niche`] to check updates.
 #[derive(Clone, Debug)]
 pub enum CWire {
+    /// A retained C function pointer, context and optional context destructor.
+    Callback {
+        /// Prepared argument and return conversions.
+        callback: std::rc::Rc<CCallback>,
+    },
     /// One pointer/length carrier of generated ABI rows. Its element layout lives
     /// in the enclosing sequence chain; empty rows may use a null pointer.
     Rows,
@@ -127,7 +132,7 @@ impl CWire {
                 null_niche_available,
                 ..
             } => *null_niche_available = false,
-            Self::Buffer | Self::Rows => {}
+            Self::Buffer | Self::Rows | Self::Callback { .. } => {}
         }
     }
     // A reserved sentinel remains valid even after availability advances or clears.
@@ -179,6 +184,10 @@ impl CWire {
 impl WireKind for CWire {
     fn rust_type(&self) -> syn::Type {
         match self {
+            CWire::Callback { callback } => {
+                let name = format_ident!("{}", callback.name);
+                syn::parse_quote!(#name)
+            }
             CWire::Enum { .. } => syn::parse_quote!(i32),
             CWire::Scalar { primitive: p, .. } => match p {
                 Primitive::Bool => syn::parse_quote!(u8),

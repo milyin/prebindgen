@@ -1,7 +1,51 @@
 //! Panic containment and pointer validation for foreign adapters.
 #![warn(missing_docs)]
+mod callback;
+#[cfg(test)]
+mod diagnostics_tests;
+pub use callback::CallbackReturnAllocations;
+
 /// Runtime failure represented as a message for the adapter's error channel.
 pub type Result<T> = std::result::Result<T, String>;
+
+/// Report a contained callback failure through the application's tracing subscriber.
+///
+/// Called only on failure. Successful callbacks need no diagnostic work.
+#[cold]
+#[inline(never)]
+pub fn report_callback_error(callback: &str, signature: &str, error: &str) {
+    let _ = boundary(|| {
+        if no_subscriber() {
+            eprintln!(
+                "prebindgen callback error [callback={callback}, signature={signature}]: {error}"
+            );
+        } else {
+            tracing::error!(target: "prebindgen::callback", callback, signature, error,
+                "foreign callback failed");
+        }
+        Ok(())
+    });
+}
+
+/// Report failure to reclaim a returned callback resource, after containing its panic.
+#[cold]
+#[inline(never)]
+pub fn report_callback_cleanup_error(error: &str) {
+    let _ = boundary(|| {
+        if no_subscriber() {
+            eprintln!("prebindgen callback result cleanup error: {error}");
+        } else {
+            tracing::error!(target: "prebindgen::callback", error, "callback result cleanup failed");
+        }
+        Ok(())
+    });
+}
+
+fn no_subscriber() -> bool {
+    tracing::dispatcher::get_default(|dispatcher| {
+        dispatcher.is::<tracing::subscriber::NoSubscriber>()
+    })
+}
 
 /// Run a boundary operation, converting unwinding panics into a generic error.
 ///

@@ -20,6 +20,8 @@ pub struct JniModule {
     pub package: String,
     /// Kotlin initialization statements in JNINative.
     pub native_init: String,
+    /// Prepared callback declarations, including interfaces unused by exported functions.
+    pub callbacks: Vec<JniInput>,
 }
 /// Export and placement decisions belonging to one function.
 #[derive(Clone, Debug)]

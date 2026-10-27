@@ -329,3 +329,63 @@ fn filling_fixed_schema_slots_preserves_metadata_on_each_source_owner() {
     assert_eq!(copied.function("echo").unwrap().ret.slot, Some(2));
     assert!(format!("{copied:?}").contains("property"));
 }
+
+#[test]
+fn callback_parameters_qualify_arguments_without_admitting_other_impl_traits() {
+    let flat = parse("pub type Item=String; pub fn f(cb: impl Fn(&Item, Option<Item>) -> () + Send + Sync + 'static) {}").unwrap();
+    let callback = callback_signature(&flat.function("f").unwrap().params[0].ty.ty)
+        .unwrap()
+        .unwrap();
+    assert_eq!(type_key(&callback.arguments[0]), "& source_crate :: Item");
+    assert_eq!(
+        type_key(&callback.arguments[1]),
+        "Option < source_crate :: Item >"
+    );
+    assert!(flat.resolve_type(&syn::parse_quote!(impl Fn())).is_err());
+    for source in [
+        "pub fn f(cb: impl FnMut()) {}",
+        "pub fn f(cb: impl FnOnce()) {}",
+        "pub fn f(cb: impl for<'a> Fn(&'a str)) {}",
+        "pub fn f(cb: impl std::ops::Fn() + other::Send) {}",
+        "pub fn f(cb: impl Iterator<Item=i64>) {}",
+        "pub fn f(cb: Option<impl Fn()>) {}",
+        "pub fn f() -> impl Fn() {}",
+        "pub struct Record { pub callback: impl Fn() }",
+        "pub fn f(cb: impl Fn(Option<impl Fn()>)) {}",
+    ] {
+        assert!(parse(source).is_err(), "{source}");
+    }
+    assert!(parse("pub fn f(cb: impl std::ops::Fn() + core::marker::Send) {}").is_ok());
+}
+
+#[test]
+fn callback_returns_are_qualified_validated_and_discovered() {
+    let flat = parse("pub struct Row { pub id:i64 } pub type Error=String; pub fn get(cb:impl core::ops::Fn(Option<Row>) -> Result<Vec<Row>,Error> + Send) {}").unwrap();
+    let signature = callback_signature(&flat.function("get").unwrap().params[0].ty.ty)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        type_key(&signature.return_type),
+        ":: core :: result :: Result < Vec < source_crate :: Row > , source_crate :: Error >"
+    );
+    for output in ["Unknown", "impl Fn()", "Option<Unknown>", "(i64,i64)"] {
+        assert!(parse(&format!("pub fn f(cb:impl Fn() -> {output}) {{}} ")).is_err());
+    }
+    for ty in [
+        syn::parse_quote!(impl Fn()),
+        syn::parse_quote!(impl Fn() -> ()),
+    ] {
+        assert_eq!(
+            type_key(&callback_signature(&ty).unwrap().unwrap().return_type),
+            "()"
+        );
+    }
+    let items = syn::parse_file("pub struct OnlyReturn { pub value:i64 } pub fn f(cb:impl Fn() -> OnlyReturn) {} pub fn unused(x:Unknown){}").unwrap().items;
+    let flat = Flat::<()>::parse_selected(
+        items.into_iter().map(|item| (item, Default::default())),
+        &["f".into()],
+        &[],
+    )
+    .unwrap();
+    assert!(flat.record(&syn::parse_quote!(crate::OnlyReturn)).is_ok());
+}

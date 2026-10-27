@@ -171,12 +171,12 @@ pub trait KotlinOutputConversion:
 /// Prepared JNI input, with a logical schema and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub struct JniInput {
-    rust: InputPlan<JniWire>,
+    pub(crate) rust: InputPlan<JniWire>,
 }
 /// Prepared JNI output, with logical outcomes and a native plan shared by Rust/Kotlin emission.
 #[derive(Clone, Debug)]
 pub struct JniOutput {
-    rust: OutputPlan<JniWire>,
+    pub(crate) rust: OutputPlan<JniWire>,
 }
 impl From<InputPlan<JniWire>> for JniInput {
     fn from(rust: InputPlan<JniWire>) -> Self {
@@ -233,6 +233,10 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
     for w in wires {
         let n = &w.name;
         let (kt, arg) = match &w.kind {
+            JniWire::Callback { callback } => (
+                format!("{}?", callback.fqn()),
+                callback.adapter(&n.to_string(), context)?,
+            ),
             JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
             JniWire::Enum { enum_type, .. } => (
                 enum_type.class_name.clone(),
@@ -275,17 +279,13 @@ impl KotlinOutputConversion for JniOutput {
 }
 fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinOutput> {
     let result = context.result;
-    let suppress_cleanup = match context.cleanup_failure {
-        Some(target) => format!(
-            "if ({target} == null) {target} = cleanup else {target}!!.addSuppressed(cleanup)"
-        ),
-        None => format!("{}.addSuppressed(cleanup)", context.failure),
-    };
+    let suppress_cleanup = record_cleanup_failure(context, "cleanup");
     let output = context.output_prefix;
     let mut delivered = Vec::new();
     let mut result_types = Vec::new();
     for (i, w) in wires.iter().enumerate() {
         let (kt, decode) = match &w.kind {
+            JniWire::Callback { .. } => return Err("callback objects are input-only".into()),
             JniWire::Scalar { primitive: p, .. } => scalar::output_kotlin(*p, i, result),
             JniWire::Handle { handle, .. } => {
                 let c = context.class_name(&handle.ty)?;
@@ -328,6 +328,16 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
         materialize,
         cleanup,
     })
+}
+
+/// Record a cleanup error without replacing the delivery exception or suppressing itself.
+pub(crate) fn record_cleanup_failure(context: &KotlinContext<'_>, error: &str) -> String {
+    match context.cleanup_failure {
+        Some(target) => format!(
+            "if ({target} == null) {target} = {error} else if ({target} !== {error}) {target}!!.addSuppressed({error})"
+        ),
+        None => format!("if ({} !== {error}) {}.addSuppressed({error})", context.failure, context.failure),
+    }
 }
 
 pub(crate) type JniNode = prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>;

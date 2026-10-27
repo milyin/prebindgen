@@ -1,7 +1,7 @@
 //! Active coverage: primitives, strings/bytes, owned handles, selectors and field outputs.
 //! The original coverage inventory below includes features now commented out.
 //!
-//! Migrated from main. Unsupported declarations remain commented below.
+//! Unsupported declarations remain commented below.
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
 //! separate `prebindgen-jni` crate's `JniGenBuilder` adapter — exercising **every**
 //! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
@@ -128,17 +128,131 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 
 */
 use prebindgen_declarations::{expand_param, expand_return, fields, fun};
-use prebindgen_jni::{data_class, enum_class, package, ptr_class, JniGen};
+use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
 
 fn main() {
     let binding = JniGen::builder()
+        .expand(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
+        .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
+        .expand(expand_return!(CallbackBoundaryPanic).field(fun!(callback_boundary_view)))
+        .expand(expand_return!(CallbackBoundaryError).fields_into(fields!(callback_boundary_error_into)))
+        .package(package!("callbackboundaries")
+            .class(ptr_class!(CallbackBoundaryHandler))
+            .fun(fun!(callback_boundary_register)).fun(fun!(callback_boundary_fire))
+            .fun(fun!(callback_boundary_fold).callback_return())
+            .fun(fun!(callback_boundary_faults)).fun(fun!(callback_boundary_conversion))
+            .fun(fun!(callback_boundary_borrowed)).fun(fun!(callback_boundary_strings)))
+        .package(package!("callbackconfig")
+            .class(callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                .name("ConfiguredHandler")
+                .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_number).name("number")))
+                .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_flag))))
+            .class(callback!(impl Fn(bool) -> i16).name("UnusedHandler"))
+            .class(callback!(impl Fn(CallbackConfigValue) -> i64).name("TypeDefaultHandler"))
+            .class(ptr_class!(CallbackConfigHandler))
+            .fun(fun!(callback_config_default))
+            .fun(fun!(callback_config_type_default))
+            .fun(fun!(callback_config_argument).expand_param("callback",
+                callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("FlagArgumentHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_config_return).expand_param("callback",
+                callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("NumberReturnHandler")
+                    .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))))
+            .fun(fun!(callback_config_pair)
+                .expand_param("first", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue))
+                .expand_param("second", callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                    .name("FlagArgumentHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_config_nested).expand_param("handlers",
+                Input::for_type(syn::parse_quote!(CallbackConfigHandler), Input::constructor("callback_config_handler", [
+                    callback!(impl Fn(CallbackConfigValue, i64) -> CallbackConfigValue)
+                        .name("NestedHandler")
+                        .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))
+                        .expand_return(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
+                        .into()
+                ]))))
+            .fun(fun!(callback_config_optional).expand_param("handler", expand_param!(CallbackConfigHandler).variant(fun!(callback_config_handler))))
+            .fun(fun!(callback_config_ordinary)))
+        .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
+        .expand(expand_param!(CallbackConstructorEnvelope).variant(fun!(callback_constructor_wrap)))
+        .expand(expand_return!(CallbackTransferred).field_self_into())
+        .expand(expand_return!(Vec<CallbackTransferredRow>).field_self_into())
+        .expand(expand_return!(CallbackUniqueRow).field_self_into())
+        .expand(expand_return!(Vec<CallbackObservedRow>).field_self_ref())
+        .expand(expand_return!(CallbackProjected).field(fun!(callback_projected_id).name("id")).field_self_into())
+        .error_mapper(syn::parse_quote!(String),fun!(callback_return_error_message))
+        .package(package!("callbackreturns")
+            .class(data_class!(CallbackReturnRecord)).class(enum_class!(CallbackReturnChoice))
+            .class(ptr_class!(CallbackReturnResource)).class(ptr_class!(CallbackReturnJob)).class(ptr_class!(CallbackReturnHandler))
+            .fun(fun!(callback_return_i64)).fun(fun!(callback_return_i8)).fun(fun!(callback_return_i16)).fun(fun!(callback_return_f32)).fun(fun!(callback_return_u128)).fun(fun!(callback_return_zero)).fun(fun!(callback_return_bool))
+            .fun(fun!(callback_return_char)).fun(fun!(callback_return_float)).fun(fun!(callback_return_unsigned)).fun(fun!(callback_return_wide))
+            .fun(fun!(callback_return_text)).fun(fun!(callback_return_bytes)).fun(fun!(callback_return_optional)).fun(fun!(callback_return_vector))
+            .fun(fun!(callback_return_record)).fun(fun!(callback_return_enum))
+            .fun(fun!(callback_return_resource_new)).fun(fun!(callback_return_resource_live))
+            .fun(fun!(callback_return_owned)).fun(fun!(callback_return_take)).fun(fun!(callback_return_owned_optional)).fun(fun!(callback_return_owned_vector))
+            .fun(fun!(callback_return_spawn)).fun(fun!(callback_return_join))
+            .fun(fun!(callback_return_handler_new)).fun(fun!(callback_return_handler_call)).fun(fun!(callback_return_catch))
+            .fun(fun!(callback_return_handler_many).expand_param("handlers",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap))))
+            .fun(fun!(callback_return_char_catch)).fun(fun!(callback_return_owned_vector_catch)).fun(fun!(callback_return_unit))
+            .fun(fun!(callback_return_handler_value).expand_param("handler",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)))))
+        .package(package!("callbacks")
+            .class(data_class!(CallbackRecord)).class(data_class!(CallbackEnvelope))
+            .class(ptr_class!(CallbackSet)).class(ptr_class!(CallbackJob))
+            .class(ptr_class!(CallbackOwned)).class(ptr_class!(CallbackTransferred))
+            .class(ptr_class!(CallbackProjected))
+            .class(ptr_class!(CallbackConstructor)).class(ptr_class!(CallbackConstructorEnvelope))
+            .class(ptr_class!(CallbackConstructorJob))
+            .class(data_class!(CallbackObservedRow)).fun(fun!(callback_rows_ref)).fun(fun!(callback_row_return_cleanup_failure))
+            .class(ptr_class!(CallbackUniqueResource)).class(data_class!(CallbackUniqueRow))
+            .fun(fun!(callback_unique_resource_id)).fun(fun!(callback_rows_unique)).fun(fun!(callback_rows_unique_error))
+            .class(ptr_class!(CallbackRowResource))
+            .class(data_class!(CallbackRow)).class(data_class!(CallbackRowDetail))
+            .class(data_class!(CallbackNestedRow)).class(data_class!(CallbackTransferredRow))
+            .fun(fun!(callback_row_resource_id)).fun(fun!(callback_row_resource_live)).fun(fun!(callback_row_resource_drops))
+            .fun(fun!(callback_row_resource_hold))
+            .fun(fun!(callback_rows_owned)).fun(fun!(callback_rows_borrowed))
+            .fun(fun!(callback_rows_optional)).fun(fun!(callback_rows_nested))
+            .fun(fun!(callback_rows_pair)).fun(fun!(callback_row_handles))
+            .fun(fun!(callback_rows_transferred)).fun(fun!(callback_rows_transferred_pair)).fun(fun!(callback_rows_conversion_failure))
+            .fun(fun!(callback_rows_spawn)).fun(fun!(callback_row_job_finished))
+            .class(ptr_class!(CallbackReentry))
+            .fun(fun!(callback_reentry_new)).fun(fun!(callback_reentry_read))
+            .fun(fun!(callback_reentry_write)).fun(fun!(callback_reentry_take))
+            .fun(fun!(callback_reentry_shared)).fun(fun!(callback_reentry_exclusive))
+            .fun(fun!(callback_reentry_consuming)).fun(fun!(callback_reentry_pair))
+            .fun(fun!(callback_reentry_mixed)).fun(fun!(callback_reentry_worker))
+            .fun(fun!(callback_reentry_probe))
+            .fun(fun!(callback_reentry_optional))
+            .fun(fun!(callback_reentry_constructed).expand_param("value",expand_param!(CallbackReentry).variant(fun!(callback_reentry_clone))))
+            .fun(fun!(callback_constructor_new)).fun(fun!(callback_constructor_fire))
+            .fun(fun!(callback_constructor_owned_fire).expand_param("handler",expand_param!(CallbackConstructor).variant(fun!(callback_constructor_owned))))
+            .fun(fun!(callback_constructor_pair)).fun(fun!(callback_constructor_mixed))
+            .fun(fun!(callback_constructor_set_fire).expand_param("callbacks",expand_param!(CallbackSet).variant(fun!(callback_set_new))))
+            .fun(fun!(callback_constructor_nested))
+            .fun(fun!(callback_constructor_spawn))
+            .fun(fun!(callback_constructor_run))
+            .fun(fun!(callback_constructor_selected).expand_param("handler",expand_param!(CallbackConstructor).variant(fun!(callback_constructor_new)).variant_self()))
+            .fun(fun!(callback_constructor_optional)).fun(fun!(callback_constructor_list))
+            .fun(fun!(callback_constructor_checked))
+            .fun(fun!(callback_set_new)).fun(fun!(callback_set_fire))
+            .fun(fun!(callback_set_spawn)).fun(fun!(callback_job_join))
+            .fun(fun!(callback_owned_new)).fun(fun!(callback_owned_id)).fun(fun!(callback_owned_drops))
+            .fun(fun!(callback_owned_fire)).fun(fun!(callback_owned_borrow))
+            .fun(fun!(callback_transferred_id)).fun(fun!(callback_transferred_drops))
+            .fun(fun!(callback_transferred_fire)).fun(fun!(callback_projection_fire))
+            .fun(fun!(callback_projected_id)).fun(fun!(callback_preflight))
+            .fun(fun!(callback_scalars)).fun(fun!(callback_texts))
+            .fun(fun!(callback_optional_owned)).fun(fun!(callback_envelope)).fun(fun!(callback_primitives))
+            .fun(fun!(callback_enums)))
         .configure(|flat| {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
             declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
-            // Observe a clone so the production builder still installs its own codec.
-            // Collections.kt exercises the separately generated production boundary.
+            // Observe a clone so the builder still installs its own codec.
+            // Collections.kt exercises the separately generated JNI boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;
             let Outcomes { success, source_error: None, binding_failure: Some(_) } = output.output_outcomes() else {
                 return Err("collection probe must declare success and binding failure only".into());
