@@ -19,6 +19,8 @@ internal object JNINative {
     @JvmStatic external fun drop_CallbackSet_42869ab2828f84d4(id: Long)
     @JvmStatic external fun drop_CallbackTransferred_eab9ef9641575576(id: Long)
     @JvmStatic external fun drop_CallbackUniqueResource_d31d0c3f2ae0419c(id: Long)
+    @JvmStatic external fun drop_GetterLeaf_b28f97ae79569aa8(id: Long)
+    @JvmStatic external fun drop_GetterOwner_bc1803eb5b8c76ef(id: Long)
     @JvmStatic external fun drop_NicheChoiceHandle_820b60fc3ef75039(id: Long)
     @JvmStatic external fun drop_OptionChoice_feab979b8bef4265(id: Long)
     @JvmStatic external fun drop_OptionCtor_9701b4353b1ab7b0(id: Long)
@@ -29,6 +31,15 @@ internal object JNINative {
     @JvmStatic external fun drop_ReportStruct_2659d7dec79ecce0(id: Long)
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
+    @JvmStatic external fun call_getter_owner_new_9b3691104cf4f094(p0_w1: Boolean): Array<Any?>
+    @JvmStatic external fun call_getter_owner_failure_983fd2bf1ecc08ff(): Array<Any?>
+    @JvmStatic external fun call_getter_owner_id_6e5c79e15f3c8ecb(p0_w1: Long): Array<Any?>
+    @JvmStatic external fun call_getter_leaf_id_2b89bfb1695b1a8e(p0_w1: Long): Array<Any?>
+    @JvmStatic external fun call_getter_owner_read_405afcf1de6633af(p0_w1: Long): Array<Any?>
+    @JvmStatic external fun call_getter_counts_ac432be3e581775f(): Array<Any?>
+    @JvmStatic external fun call_getter_two_clones_new_c6e10ed44149bf78(): Array<Any?>
+    @JvmStatic external fun call_getter_fields_new_6223254642400003(): Array<Any?>
+    @JvmStatic external fun call_getter_callback_261a8655bbbdf16f(p0_callback: Any?, p1_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_callback_boundary_register_f9d2a0713d344329(p0_callback: Any?, p1_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_callback_boundary_fire_a2aad327338bd2a9(p0_w1: Long, p1_w1: Long): Array<Any?>
     @JvmStatic external fun call_callback_boundary_fold_fdb4940d384f5a6d(p0_callback: Any?, p1_w1: Long): Array<Any?>
