@@ -77,3 +77,24 @@ pub fn callback_boundary_conversion(
         assert_eq!(callback_owned_drops(), drops + 2);
     }
 }
+
+#[prebindgen]
+pub fn callback_boundary_borrowed(
+    callback: impl Fn(Option<&CallbackOwned>, &i64) + Send + Sync + 'static,
+) {
+    let value = callback_owned_new(71);
+    let number = 29;
+    let drops = callback_owned_drops();
+    callback(None, &number);
+    assert_eq!(callback_owned_drops(), drops);
+    callback(Some(&value), &number);
+    // The callback's cloned handle is reclaimed; the borrowed source is intact.
+    assert_eq!(callback_owned_drops(), drops + 1);
+    assert_eq!(crate::callback_owned_id(&value), 71);
+}
+
+#[prebindgen]
+pub fn callback_boundary_strings(callback: impl Fn(Vec<String>) + Send + Sync + 'static) {
+    callback(vec![String::new(), "héllo\0世界".into()]);
+    callback(vec![]);
+}

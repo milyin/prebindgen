@@ -103,8 +103,35 @@ fun checkCallbackBoundaryFailures() {
     })
     failure.get()?.let { throw it }
     check(converted == 1)
+
+    val drops = callbackOwnedDrops()
+    var borrowedCalls = 0
+    var delivered: CallbackOwned? = null
+    callbackBoundaryBorrowed({ handle, number ->
+        try {
+            check(number == 29L)
+            if (borrowedCalls++ == 0) check(handle == null)
+            else {
+                check(handle != null && callbackOwnedId(handle) == 71L)
+                delivered = handle
+            }
+        } catch (error: Throwable) { failure.set(error) }
+    })
+    failure.get()?.let { throw it }
+    check(borrowedCalls == 2 && delivered?.isClosed == true)
+    check(callbackOwnedDrops() == drops + 2uL)
+
+    var stringCalls = 0
+    callbackBoundaryStrings({ values ->
+        try {
+            check(values == if (stringCalls++ == 0) listOf("", "héllo\u0000世界") else emptyList<String>())
+        } catch (error: Throwable) { failure.set(error) }
+    })
+    failure.get()?.let { throw it }
+    check(stringCalls == 2)
+
     // Each probe fails exactly one allocation inside the generated Rust
     // callback, then proves the second invocation succeeds after OOME cleanup.
     for (mode in 0..1) check(CallbackFailureProbe.exercise(mode) == 1)
-    println("callback boundary failures PASS: typed registration errors, captures, folds, conversion panic and JNI allocation failures")
+    println("callback boundary failures PASS: typed registration errors, captures, folds, borrowed values, strings, conversion panic and JNI allocation failures")
 }

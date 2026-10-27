@@ -1,5 +1,4 @@
 #![allow(non_camel_case_types, unused_variables)]
-mod boundary_faults;
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 // Binding-error delivery and its native fallback must preserve pending JVM exceptions.
@@ -91,3 +90,5 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackRowsRuntimeProbe_mal
         perftest_flat::callback_row_resource_live()
     }
 }
+
+mod boundary_faults;
