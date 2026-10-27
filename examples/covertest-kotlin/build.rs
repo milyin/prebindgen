@@ -1500,5 +1500,9 @@ fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let jni = binding.build().expect("build supported declarations");
     jni.write_rust("bindings.rs").unwrap();
-    jni.write_kotlin(&out.join("kotlin")).unwrap();
+    let kotlin = out.join("kotlin");
+    if kotlin.exists() {
+        std::fs::remove_dir_all(&kotlin).unwrap();
+    }
+    jni.write_kotlin(&kotlin).unwrap();
 }
