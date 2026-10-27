@@ -1,0 +1,2601 @@
+@file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
+package io.prebindgen.covertest.callbacks
+
+public fun `callbackRowsRef`(p0_callback: io.prebindgen.covertest.CallbackObservedRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackObservedRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackObservedRow>
+        try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackObservedRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call48(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowReturnCleanupFailure`(p0_callback: io.prebindgen.covertest.CallbackUniqueRowVecToCallbackReturnResourceCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?): Long {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackUniqueRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackUniqueRow>
+        var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackReturnResource? = null
+var callbackReturnReady = false
+        try { var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackUniqueResource(callbackOutput0__row[0] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackUniqueRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            callbackReturned = p0_callback.run(callbackArgument0_0); callbackReturnReady = true
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        } } catch (failure: Throwable) { if (callbackReturnReady) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callbackReturned) }; throw failure }
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try {  io.prebindgen.covertest.withHandleLocks(kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w1) { "null handle" } else null)) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
+if (true) callback_return_w1!!.markConsumed()
+callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call49(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackUniqueResourceId`(p0_w1: io.prebindgen.covertest.callbacks.CallbackUniqueResource?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call50(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsUnique`(p0_callback: io.prebindgen.covertest.CallbackUniqueRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackUniqueRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackUniqueRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackUniqueResource(callbackOutput0__row[0] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackUniqueRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call51(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsUniqueError`(p0_callback: io.prebindgen.covertest.CallbackUniqueRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackUniqueRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackUniqueRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackUniqueResource(callbackOutput0__row[0] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackUniqueRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackUniqueResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop16(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call52(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowResourceId`(p0_w1: io.prebindgen.covertest.callbacks.CallbackRowResource?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call53(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowResourceLive`(onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { ; io.prebindgen.covertest.JNINative.call54() } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowResourceDrops`(onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { ; io.prebindgen.covertest.JNINative.call55() } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowResourceHold`(p0_w1: io.prebindgen.covertest.callbacks.CallbackRowResource?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call56(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsOwned`(p0_callback: io.prebindgen.covertest.CallbackRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call57(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsBorrowed`(p0_callback: io.prebindgen.covertest.CallbackRowListCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call58(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsOptional`(p0_callback: io.prebindgen.covertest.OptionalOptionalCallbackRowVecCallback?, p1_w1: Int, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow?>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow?>? = null
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            if (raw0 != null) {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             if (callbackOutput0__row[0] == 1) {
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            if (callbackOutput0__row[0] == 1) {
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[1] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[3] as Long)
+            }
+
+callbackOutput0_list.add(if (callbackOutput0__row[0] == 1) io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[2] as String, requireNotNull(callbackOutput0_item_g2_0)) else null)
+}
+            }
+            callbackArgument0_0 = if (raw0 != null) requireNotNull(callbackOutput0_list) else null
+        } catch (failure: Throwable) {
+            if (raw0 != null) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            if (callbackOutput0__row[0] == 1) {
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            if (raw0 != null) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            if (callbackOutput0__row[0] == 1) {
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call59(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsNested`(p0_callback: io.prebindgen.covertest.OptionalCallbackNestedRowVecVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackNestedRow?>>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackNestedRow?>>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+var callbackOutput0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackNestedRow?>? = null
+var callbackOutput0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try { try {
+for (callbackOutput0_item_cleanupAction in callbackOutput0_item_cleanups.orEmpty()) { try { callbackOutput0_failure = callbackOutput0_item_cleanupAction(callbackOutput0_failure) } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) } }
+for (callbackOutput0_item_index in (callbackOutput0_item_cleanups?.size ?: 0) until (callbackOutput0__row[0] as kotlin.Array<*>).size) {
+var callbackOutput0_item_failure: kotlin.Throwable? = callbackOutput0_failure
+try { val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+        var callbackOutput0_item_item_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g0_g0_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g1_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            if (callbackOutput0_item__row[0] == 1) {
+            try { val owner = callbackOutput0_item_item_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_item_g0_g0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            if (callbackOutput0_item__row[4] == 1) {
+            if (callbackOutput0_item__row[5] != 0L) {
+            try { val owner = callbackOutput0_item_item_g1_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[5] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            }
+            }
+            }
+
+} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
+callbackOutput0_failure = callbackOutput0_item_failure
+}
+} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+callbackOutput0_item_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_item_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_item_rawRow in (callbackOutput0__row[0] as kotlin.Array<*>)) {
+val callbackOutput0_item__row = callbackOutput0_item_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_item_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g0_g0_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g1_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_item_cleanups.add { callbackOutput0_item_initialFailure -> var callbackOutput0_item_failure = callbackOutput0_item_initialFailure; try {             if (callbackOutput0_item__row[0] == 1) {
+            try { val owner = callbackOutput0_item_item_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_item_g0_g0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            if (callbackOutput0_item__row[4] == 1) {
+            if (callbackOutput0_item__row[5] != 0L) {
+            try { val owner = callbackOutput0_item_item_g1_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[5] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            }
+            }
+            }
+ } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }; callbackOutput0_item_failure }
+            if (callbackOutput0_item__row[0] == 1) {
+            callbackOutput0_item_item_g0_g0_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0_item__row[1] as Long)
+            callbackOutput0_item_item_g0_g0_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0_item__row[3] as Long)
+            if (callbackOutput0_item__row[4] == 1) {
+            if (callbackOutput0_item__row[5] != 0L) {
+            callbackOutput0_item_item_g1_g0_g0_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0_item__row[5] as Long)
+            }
+            }
+            }
+
+callbackOutput0_item_list.add(if (callbackOutput0_item__row[0] == 1) io.prebindgen.covertest.callbacks.CallbackNestedRow(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_item_g0_g0_g0_0), callbackOutput0_item__row[2] as String, requireNotNull(callbackOutput0_item_item_g0_g0_g2_0)), if (callbackOutput0_item__row[4] == 1) io.prebindgen.covertest.callbacks.CallbackRowDetail(if (callbackOutput0_item__row[5] != 0L) requireNotNull(callbackOutput0_item_item_g1_g0_g0_g0_0) else null, callbackOutput0_item__row[6] as String) else null) else null)
+}
+
+callbackOutput0_list.add(requireNotNull(callbackOutput0_item_list))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+var callbackOutput0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackNestedRow?>? = null
+var callbackOutput0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+
+try {
+for (callbackOutput0_item_cleanupAction in callbackOutput0_item_cleanups.orEmpty()) { try { callbackOutput0_failure = callbackOutput0_item_cleanupAction(callbackOutput0_failure) } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) } }
+for (callbackOutput0_item_index in (callbackOutput0_item_cleanups?.size ?: 0) until (callbackOutput0__row[0] as kotlin.Array<*>).size) {
+var callbackOutput0_item_failure: kotlin.Throwable? = callbackOutput0_failure
+try { val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+        var callbackOutput0_item_item_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g0_g0_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g1_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            if (callbackOutput0_item__row[0] == 1) {
+            try { val owner = callbackOutput0_item_item_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_item_g0_g0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            if (callbackOutput0_item__row[4] == 1) {
+            if (callbackOutput0_item__row[5] != 0L) {
+            try { val owner = callbackOutput0_item_item_g1_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[5] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            }
+            }
+            }
+
+} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
+callbackOutput0_failure = callbackOutput0_item_failure
+}
+} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+var callbackOutput0_item_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackNestedRow?>? = null
+var callbackOutput0_item_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+
+try {
+for (callbackOutput0_item_cleanupAction in callbackOutput0_item_cleanups.orEmpty()) { try { callbackOutput0_failure = callbackOutput0_item_cleanupAction(callbackOutput0_failure) } catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) } }
+for (callbackOutput0_item_index in (callbackOutput0_item_cleanups?.size ?: 0) until (callbackOutput0__row[0] as kotlin.Array<*>).size) {
+var callbackOutput0_item_failure: kotlin.Throwable? = callbackOutput0_failure
+try { val callbackOutput0_item__row = (callbackOutput0__row[0] as kotlin.Array<*>)[callbackOutput0_item_index] as kotlin.Array<*>
+        var callbackOutput0_item_item_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g0_g0_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_item_g1_g0_g0_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            if (callbackOutput0_item__row[0] == 1) {
+            try { val owner = callbackOutput0_item_item_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[1] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_item_g0_g0_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[3] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            if (callbackOutput0_item__row[4] == 1) {
+            if (callbackOutput0_item__row[5] != 0L) {
+            try { val owner = callbackOutput0_item_item_g1_g0_g0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0_item__row[5] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = cleanup else if (callbackOutput0_item_failure !== cleanup) callbackOutput0_item_failure!!.addSuppressed(cleanup) }
+            }
+            }
+            }
+
+} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_item_failure == null) callbackOutput0_item_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_item_failure !== callbackOutput0_item_cleanupError) callbackOutput0_item_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
+callbackOutput0_failure = callbackOutput0_item_failure
+}
+} catch (callbackOutput0_item_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_item_cleanupError else if (callbackOutput0_failure !== callbackOutput0_item_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_item_cleanupError) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call60(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsPair`(p0_callback: io.prebindgen.covertest.CallbackRowVecCallbackRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?, raw1: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+var callbackOutput1_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput1_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument1_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+callbackOutput1_cleanups = kotlin.collections.mutableListOf()
+callbackOutput1_list = kotlin.collections.mutableListOf()
+for (callbackOutput1_rawRow in (raw1 as kotlin.Array<*>)) {
+val callbackOutput1__row = callbackOutput1_rawRow as kotlin.Array<*>
+        var callbackOutput1_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput1_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput1_cleanups.add { callbackOutput1_initialFailure -> var callbackOutput1_failure = callbackOutput1_initialFailure; try {             try { val owner = callbackOutput1_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput1_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput1_cleanupError: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = callbackOutput1_cleanupError else if (callbackOutput1_failure !== callbackOutput1_cleanupError) callbackOutput1_failure!!.addSuppressed(callbackOutput1_cleanupError) }; callbackOutput1_failure }
+            callbackOutput1_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput1__row[0] as Long)
+            callbackOutput1_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput1__row[2] as Long)
+
+callbackOutput1_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput1_item_g0_0), callbackOutput1__row[1] as String, requireNotNull(callbackOutput1_item_g2_0)))
+}
+            callbackArgument1_0 = requireNotNull(callbackOutput1_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+try {
+for (callbackOutput1_cleanupAction in callbackOutput1_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput1_cleanupAction(callbackCleanupFailure) } catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) } }
+for (callbackOutput1_index in (callbackOutput1_cleanups?.size ?: 0) until (raw1 as kotlin.Array<*>).size) {
+var callbackOutput1_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput1__row = (raw1 as kotlin.Array<*>)[callbackOutput1_index] as kotlin.Array<*>
+        var callbackOutput1_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput1_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput1_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput1_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = callbackOutput1_cleanupError else if (callbackOutput1_failure !== callbackOutput1_cleanupError) callbackOutput1_failure!!.addSuppressed(callbackOutput1_cleanupError) }
+callbackCleanupFailure = callbackOutput1_failure
+}
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0, callbackArgument1_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+try {
+for (callbackOutput1_cleanupAction in callbackOutput1_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput1_cleanupAction(callbackCleanupFailure) } catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) } }
+for (callbackOutput1_index in (callbackOutput1_cleanups?.size ?: 0) until (raw1 as kotlin.Array<*>).size) {
+var callbackOutput1_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput1__row = (raw1 as kotlin.Array<*>)[callbackOutput1_index] as kotlin.Array<*>
+        var callbackOutput1_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput1_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput1_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput1_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = callbackOutput1_cleanupError else if (callbackOutput1_failure !== callbackOutput1_cleanupError) callbackOutput1_failure!!.addSuppressed(callbackOutput1_cleanupError) }
+callbackCleanupFailure = callbackOutput1_failure
+}
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call61(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowHandles`(p0_callback: io.prebindgen.covertest.CallbackRowResourceVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRowResource>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRowResource>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+
+callbackOutput0_list.add(requireNotNull(callbackOutput0_item_0))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call62(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsTransferred`(p0_callback: io.prebindgen.covertest.CallbackTransferredRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackTransferredRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackTransferredRow>
+        try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackTransferredRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call63(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsTransferredPair`(p0_callback: io.prebindgen.covertest.CallbackTransferredRowVecCallbackRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?, raw1: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackTransferredRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackTransferredRow>
+var callbackOutput1_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput1_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument1_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackTransferredRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+callbackOutput1_cleanups = kotlin.collections.mutableListOf()
+callbackOutput1_list = kotlin.collections.mutableListOf()
+for (callbackOutput1_rawRow in (raw1 as kotlin.Array<*>)) {
+val callbackOutput1__row = callbackOutput1_rawRow as kotlin.Array<*>
+        var callbackOutput1_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput1_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput1_cleanups.add { callbackOutput1_initialFailure -> var callbackOutput1_failure = callbackOutput1_initialFailure; try {             try { val owner = callbackOutput1_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput1_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput1_cleanupError: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = callbackOutput1_cleanupError else if (callbackOutput1_failure !== callbackOutput1_cleanupError) callbackOutput1_failure!!.addSuppressed(callbackOutput1_cleanupError) }; callbackOutput1_failure }
+            callbackOutput1_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput1__row[0] as Long)
+            callbackOutput1_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput1__row[2] as Long)
+
+callbackOutput1_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput1_item_g0_0), callbackOutput1__row[1] as String, requireNotNull(callbackOutput1_item_g2_0)))
+}
+            callbackArgument1_0 = requireNotNull(callbackOutput1_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+try {
+for (callbackOutput1_cleanupAction in callbackOutput1_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput1_cleanupAction(callbackCleanupFailure) } catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) } }
+for (callbackOutput1_index in (callbackOutput1_cleanups?.size ?: 0) until (raw1 as kotlin.Array<*>).size) {
+var callbackOutput1_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput1__row = (raw1 as kotlin.Array<*>)[callbackOutput1_index] as kotlin.Array<*>
+        var callbackOutput1_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput1_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput1_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput1_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = callbackOutput1_cleanupError else if (callbackOutput1_failure !== callbackOutput1_cleanupError) callbackOutput1_failure!!.addSuppressed(callbackOutput1_cleanupError) }
+callbackCleanupFailure = callbackOutput1_failure
+}
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0, callbackArgument1_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput1_cleanupAction in callbackOutput1_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput1_cleanupAction(callbackCleanupFailure) } catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) } }
+for (callbackOutput1_index in (callbackOutput1_cleanups?.size ?: 0) until (raw1 as kotlin.Array<*>).size) {
+var callbackOutput1_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput1__row = (raw1 as kotlin.Array<*>)[callbackOutput1_index] as kotlin.Array<*>
+        var callbackOutput1_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput1_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput1_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput1_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput1__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = cleanup else if (callbackOutput1_failure !== cleanup) callbackOutput1_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackOutput1_failure == null) callbackOutput1_failure = callbackOutput1_cleanupError else if (callbackOutput1_failure !== callbackOutput1_cleanupError) callbackOutput1_failure!!.addSuppressed(callbackOutput1_cleanupError) }
+callbackCleanupFailure = callbackOutput1_failure
+}
+} catch (callbackOutput1_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput1_cleanupError else if (callbackCleanupFailure !== callbackOutput1_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput1_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call64(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsConversionFailure`(p0_callback: io.prebindgen.covertest.CallbackRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call65(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowsSpawn`(p0_callback: io.prebindgen.covertest.CallbackRowVecCallback?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackJob = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+var callbackOutput0_list: kotlin.collections.MutableList<io.prebindgen.covertest.callbacks.CallbackRow>? = null
+var callbackOutput0_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument0_0: kotlin.collections.List<io.prebindgen.covertest.callbacks.CallbackRow>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+callbackOutput0_cleanups = kotlin.collections.mutableListOf()
+callbackOutput0_list = kotlin.collections.mutableListOf()
+for (callbackOutput0_rawRow in (raw0 as kotlin.Array<*>)) {
+val callbackOutput0__row = callbackOutput0_rawRow as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+callbackOutput0_cleanups.add { callbackOutput0_initialFailure -> var callbackOutput0_failure = callbackOutput0_initialFailure; try {             try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+ } catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }; callbackOutput0_failure }
+            callbackOutput0_item_g0_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[0] as Long)
+            callbackOutput0_item_g2_0 = io.prebindgen.covertest.callbacks.CallbackRowResource(callbackOutput0__row[2] as Long)
+
+callbackOutput0_list.add(io.prebindgen.covertest.callbacks.CallbackRow(requireNotNull(callbackOutput0_item_g0_0), callbackOutput0__row[1] as String, requireNotNull(callbackOutput0_item_g2_0)))
+}
+            callbackArgument0_0 = requireNotNull(callbackOutput0_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput0_cleanupAction in callbackOutput0_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput0_cleanupAction(callbackCleanupFailure) } catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) } }
+for (callbackOutput0_index in (callbackOutput0_cleanups?.size ?: 0) until (raw0 as kotlin.Array<*>).size) {
+var callbackOutput0_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput0__row = (raw0 as kotlin.Array<*>)[callbackOutput0_index] as kotlin.Array<*>
+        var callbackOutput0_item_g0_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+        var callbackOutput0_item_g2_0: io.prebindgen.covertest.callbacks.CallbackRowResource? = null
+
+            try { val owner = callbackOutput0_item_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[0] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_item_g2_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop13(callbackOutput0__row[2] as Long) } catch (cleanup: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = cleanup else if (callbackOutput0_failure !== cleanup) callbackOutput0_failure!!.addSuppressed(cleanup) }
+
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackOutput0_failure == null) callbackOutput0_failure = callbackOutput0_cleanupError else if (callbackOutput0_failure !== callbackOutput0_cleanupError) callbackOutput0_failure!!.addSuppressed(callbackOutput0_cleanupError) }
+callbackCleanupFailure = callbackOutput0_failure
+}
+} catch (callbackOutput0_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput0_cleanupError else if (callbackCleanupFailure !== callbackOutput0_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput0_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call66(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackJob? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackJob(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop6(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackRowJobFinished`(p0_w1: io.prebindgen.covertest.callbacks.CallbackJob?, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call67(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Boolean }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryNew`(p0_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackReentry> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackReentry = run {
+    val result = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call68(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackReentry? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackReentry(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop9(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryRead`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call69(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryWrite`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call70(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryTake`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        val ownership = BooleanArray(1)
+        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call71(nativeArgument0, nativeArgument1) } } finally { if (ownership[0]) { if (true) p0_w1!!.markConsumed() } }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryShared`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call72(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryExclusive`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call73(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryConsuming`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        val ownership = BooleanArray(1)
+        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call74(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0]) { if (true) p0_w1!!.markConsumed() } }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryPair`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p2_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val handle1 = try { if (true) requireNotNull(p1_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0, handle1) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { if (p2_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p2_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call75(nativeArgument0, nativeArgument1, nativeArgument2) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryMixed`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p2_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; val handle1 = try { if (true) requireNotNull(p1_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0, handle1) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { if (p2_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p2_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call76(nativeArgument0, nativeArgument1, nativeArgument2) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryWorker`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call77(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryProbe`(p0_w1: io.prebindgen.covertest.callbacks.CallbackReentry?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call78(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryOptional`(p0_w3: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (p0_w3 != null) if (true) requireNotNull(requireNotNull(p0_w3)) { "null handle" } else null else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3).raw else 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call79(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackReentryConstructed`(p0_w2: io.prebindgen.covertest.callbacks.CallbackReentry?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w2) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w2?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call80(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorNew`(p0_callback: io.prebindgen.covertest.i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackConstructor> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackConstructor = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call81(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackConstructor? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackConstructor(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop3(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorFire`(p0_w2: io.prebindgen.covertest.i64Callback?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w2.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call82(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorOwnedFire`(p0_w2: io.prebindgen.covertest.callbacks.CallbackOwnedCallback?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.callbacks.CallbackOwned
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackOutput0_0 = io.prebindgen.covertest.callbacks.CallbackOwned(raw0 as Long)
+            callbackArgument0_0 = requireNotNull(callbackOutput0_0)
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_w2.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call83(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorPair`(p0_w2: io.prebindgen.covertest.i64Callback?, p1_w2: io.prebindgen.covertest.i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w2.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_w2.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call84(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorMixed`(p0_callback: io.prebindgen.covertest.i64Callback?, p1_w2: io.prebindgen.covertest.i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_w2.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call85(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorSetFire`(p0_w2: io.prebindgen.covertest.i64CallbackRecordCallback?, p0_w4: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: Long, raw2: String?) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        lateinit var callbackArgument1_0: io.prebindgen.covertest.callbacks.CallbackRecord
+        try {
+            callbackArgument0_0 = raw0 as Long
+            callbackArgument1_0 = io.prebindgen.covertest.callbacks.CallbackRecord(raw1 as Long, raw2 as String)
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w2.run(callbackArgument0_0, callbackArgument1_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p0_w4 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w4.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call86(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorNested`(p0_w3: io.prebindgen.covertest.i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w3 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w3.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call87(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorSpawn`(p0_w2: io.prebindgen.covertest.i64Callback?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackConstructorJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackConstructorJob = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w2.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call88(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackConstructorJob? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackConstructorJob(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop5(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorRun`(p0_w1: io.prebindgen.covertest.callbacks.CallbackConstructorJob?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        val ownership = BooleanArray(1)
+        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call89(nativeArgument0, nativeArgument1) } } finally { if (ownership[0]) { if (true) p0_w1!!.markConsumed() } }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorSelected`(p0_w1: Int, p0_w4: io.prebindgen.covertest.i64Callback?, p0_w6: io.prebindgen.covertest.callbacks.CallbackConstructor?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (p0_w1 == 1) requireNotNull(p0_w6) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        val ownership = BooleanArray(1)
+        try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p0_w4 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w4.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { p0_w6?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument3 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument4 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call90(nativeArgument0, nativeArgument1, nativeArgument2, nativeArgument3, nativeArgument4) } } finally { if (ownership[0]) { if (p0_w1 == 1) p0_w6!!.markConsumed() } }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorOptional`(p0_w4: io.prebindgen.covertest.i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Boolean> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Boolean = run {
+    val result = try { run { val nativeArgument0 = try { (if (p0_w4 != null) 1 else 0) } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p0_w4 != null) if (requireNotNull(p0_w4) == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        requireNotNull(p0_w4).run(callbackArgument0_0)
+
+    }
+} else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call91(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Boolean }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorList`(p0_w1: kotlin.collections.List<io.prebindgen.covertest.i64Callback?>, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w6 ->
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(if (p0_w6 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w6.run(callbackArgument0_0)
+
+    }
+}) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+} else null
+val result = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call92(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackConstructorChecked`(p0_w2: io.prebindgen.covertest.i64Callback?, p1_w1: Int, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_w2 == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_w2.run(callbackArgument0_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call93(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackSetNew`(p0_callback: io.prebindgen.covertest.i64CallbackRecordCallback?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackSet> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackSet = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: Long, raw2: String?) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        lateinit var callbackArgument1_0: io.prebindgen.covertest.callbacks.CallbackRecord
+        try {
+            callbackArgument0_0 = raw0 as Long
+            callbackArgument1_0 = io.prebindgen.covertest.callbacks.CallbackRecord(raw1 as Long, raw2 as String)
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0, callbackArgument1_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call94(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackSet? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackSet(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop14(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackSetFire`(p0_w1: io.prebindgen.covertest.callbacks.CallbackSet?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call95(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackSetSpawn`(p0_w1: io.prebindgen.covertest.callbacks.CallbackSet?, p1_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackJob> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackJob = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call96(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackJob? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackJob(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop6(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackJobJoin`(p0_w1: io.prebindgen.covertest.callbacks.CallbackJob?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        val ownership = BooleanArray(1)
+        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call97(nativeArgument0, nativeArgument1) } } finally { if (ownership[0]) { if (true) p0_w1!!.markConsumed() } }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackOwnedNew`(p0_w1: Long, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.callbacks.CallbackOwned> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.callbacks.CallbackOwned = run {
+    val result = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call98(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        try {
+            output0 = io.prebindgen.covertest.callbacks.CallbackOwned(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackOwnedId`(p0_w1: io.prebindgen.covertest.callbacks.CallbackOwned?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call99(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackOwnedDrops`(onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
+    val result = try { run { ; io.prebindgen.covertest.JNINative.call100() } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { (result[1] as Long).toULong() }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackOwnedFire`(p0_callback: io.prebindgen.covertest.callbacks.CallbackOwnedCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.callbacks.CallbackOwned
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackOutput0_0 = io.prebindgen.covertest.callbacks.CallbackOwned(raw0 as Long)
+            callbackArgument0_0 = requireNotNull(callbackOutput0_0)
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call101(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackOwnedBorrow`(p0_w1: io.prebindgen.covertest.callbacks.CallbackOwned?, p1_callback: io.prebindgen.covertest.callbacks.CallbackOwnedCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.callbacks.CallbackOwned
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackOutput0_0 = io.prebindgen.covertest.callbacks.CallbackOwned(raw0 as Long)
+            callbackArgument0_0 = requireNotNull(callbackOutput0_0)
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p1_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call102(nativeArgument0, nativeArgument1) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackTransferredId`(p0_w1: io.prebindgen.covertest.callbacks.CallbackTransferred?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call103(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackTransferredDrops`(onError: io.prebindgen.covertest.JniErrorHandler<ULong> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): ULong = run {
+    val result = try { run { ; io.prebindgen.covertest.JNINative.call104() } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { (result[1] as Long).toULong() }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackTransferredFire`(p0_callback: io.prebindgen.covertest.callbacks.CallbackTransferredOptionalCallbackTransferredCallback?, p1_w1: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_0: io.prebindgen.covertest.callbacks.CallbackTransferred? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.callbacks.CallbackTransferred
+        var callbackOutput1_0: io.prebindgen.covertest.callbacks.CallbackTransferred? = null
+        var callbackArgument1_0: io.prebindgen.covertest.callbacks.CallbackTransferred? = null
+        try {
+            callbackOutput0_0 = io.prebindgen.covertest.callbacks.CallbackTransferred(raw0 as Long)
+            callbackArgument0_0 = requireNotNull(callbackOutput0_0)
+            if (raw1 != 0L) {
+            callbackOutput1_0 = io.prebindgen.covertest.callbacks.CallbackTransferred(raw1 as Long)
+            }
+            callbackArgument1_0 = if (raw1 != 0L) requireNotNull(callbackOutput1_0) else null
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop15(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            if (raw1 != 0L) {
+            try { val owner = callbackOutput1_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop15(raw1 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0, callbackArgument1_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call105(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackProjectionFire`(p0_callback: io.prebindgen.covertest.callbacks.CallbackProjectedCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_g1_0: io.prebindgen.covertest.callbacks.CallbackProjected? = null
+        var callbackArgument0_0: Long = 0L
+        lateinit var callbackArgument0_1: io.prebindgen.covertest.callbacks.CallbackProjected
+        try {
+            callbackOutput0_g1_0 = io.prebindgen.covertest.callbacks.CallbackProjected(raw1 as Long)
+            callbackArgument0_0 = raw0 as Long
+            callbackArgument0_1 = requireNotNull(callbackOutput0_g1_0)
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_g1_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop8(raw1 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0, callbackArgument0_1)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call106(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackProjectedId`(p0_w1: io.prebindgen.covertest.callbacks.CallbackProjected?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call107(nativeArgument0) }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { result[1] as Long }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackPreflight`(p0_w1: io.prebindgen.covertest.callbacks.CallbackOwned?, p1_callback: io.prebindgen.covertest.VoidCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
+        val ownership = BooleanArray(1)
+        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { if (p1_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run() {
+        var callbackCleanupFailure: Throwable? = null
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p1_callback.run()
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call108(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0]) { if (true) p0_w1!!.markConsumed() } }
+    } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackScalars`(p0_callback: io.prebindgen.covertest.i64i64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        var callbackArgument1_0: Long = 0L
+        try {
+            callbackArgument0_0 = raw0 as Long
+            callbackArgument1_0 = raw1 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0, callbackArgument1_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call109(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackTexts`(p0_callback: io.prebindgen.covertest.stru8Listi64VecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: String?, raw1: ByteArray?, raw2: Array<Any?>?) {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackArgument0_0: String
+        lateinit var callbackArgument1_0: ByteArray
+var callbackOutput2_list: kotlin.collections.MutableList<Long>? = null
+var callbackOutput2_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+        lateinit var callbackArgument2_0: kotlin.collections.List<Long>
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackArgument0_0 = raw0 as String
+            callbackArgument1_0 = raw1 as ByteArray
+callbackOutput2_cleanups = kotlin.collections.mutableListOf()
+callbackOutput2_list = kotlin.collections.mutableListOf()
+for (callbackOutput2_rawRow in (raw2 as kotlin.Array<*>)) {
+val callbackOutput2__row = callbackOutput2_rawRow as kotlin.Array<*>
+
+callbackOutput2_cleanups.add { callbackOutput2_initialFailure -> var callbackOutput2_failure = callbackOutput2_initialFailure; try {  } catch (callbackOutput2_cleanupError: Throwable) { if (callbackOutput2_failure == null) callbackOutput2_failure = callbackOutput2_cleanupError else if (callbackOutput2_failure !== callbackOutput2_cleanupError) callbackOutput2_failure!!.addSuppressed(callbackOutput2_cleanupError) }; callbackOutput2_failure }
+
+callbackOutput2_list.add(callbackOutput2__row[0] as Long)
+}
+            callbackArgument2_0 = requireNotNull(callbackOutput2_list)
+        } catch (failure: Throwable) {
+try {
+for (callbackOutput2_cleanupAction in callbackOutput2_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput2_cleanupAction(callbackCleanupFailure) } catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) } }
+for (callbackOutput2_index in (callbackOutput2_cleanups?.size ?: 0) until (raw2 as kotlin.Array<*>).size) {
+var callbackOutput2_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput2__row = (raw2 as kotlin.Array<*>)[callbackOutput2_index] as kotlin.Array<*>
+
+
+} catch (callbackOutput2_cleanupError: Throwable) { if (callbackOutput2_failure == null) callbackOutput2_failure = callbackOutput2_cleanupError else if (callbackOutput2_failure !== callbackOutput2_cleanupError) callbackOutput2_failure!!.addSuppressed(callbackOutput2_cleanupError) }
+callbackCleanupFailure = callbackOutput2_failure
+}
+} catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0, callbackArgument1_0, callbackArgument2_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+try {
+for (callbackOutput2_cleanupAction in callbackOutput2_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput2_cleanupAction(callbackCleanupFailure) } catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) } }
+for (callbackOutput2_index in (callbackOutput2_cleanups?.size ?: 0) until (raw2 as kotlin.Array<*>).size) {
+var callbackOutput2_failure: kotlin.Throwable? = callbackCleanupFailure
+try { val callbackOutput2__row = (raw2 as kotlin.Array<*>)[callbackOutput2_index] as kotlin.Array<*>
+
+
+} catch (callbackOutput2_cleanupError: Throwable) { if (callbackOutput2_failure == null) callbackOutput2_failure = callbackOutput2_cleanupError else if (callbackOutput2_failure !== callbackOutput2_cleanupError) callbackOutput2_failure!!.addSuppressed(callbackOutput2_cleanupError) }
+callbackCleanupFailure = callbackOutput2_failure
+}
+} catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call110(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackOptionalOwned`(p0_callback: io.prebindgen.covertest.callbacks.OptionalCallbackOwnedCallback?, p1_w1: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        var callbackArgument0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            if (raw0 != 0L) {
+            callbackOutput0_0 = io.prebindgen.covertest.callbacks.CallbackOwned(raw0 as Long)
+            }
+            callbackArgument0_0 = if (raw0 != 0L) requireNotNull(callbackOutput0_0) else null
+        } catch (failure: Throwable) {
+            if (raw0 != 0L) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            if (raw0 != 0L) {
+            try { val owner = callbackOutput0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call111(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackEnvelope`(p0_callback: io.prebindgen.covertest.callbacks.CallbackEnvelopeCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: String?) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_g0_0: io.prebindgen.covertest.callbacks.CallbackOwned? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.callbacks.CallbackEnvelope
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackOutput0_g0_0 = io.prebindgen.covertest.callbacks.CallbackOwned(raw0 as Long)
+            callbackArgument0_0 = io.prebindgen.covertest.callbacks.CallbackEnvelope(requireNotNull(callbackOutput0_g0_0), raw1 as String)
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            try { val owner = callbackOutput0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop7(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call112(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackPrimitives`(p0_callback: io.prebindgen.covertest.boolcharu8u16u32u64i128u128f32f64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Boolean, raw1: Int, raw2: Int, raw3: Int, raw4: Long, raw5: Long, raw6: ByteArray?, raw7: ByteArray?, raw8: Float, raw9: Double) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Boolean = false
+        var callbackArgument1_0: Int = 0
+        var callbackArgument2_0: Int = 0
+        var callbackArgument3_0: Int = 0
+        var callbackArgument4_0: Long = 0L
+        var callbackArgument5_0: ULong = 0UL
+        lateinit var callbackArgument6_0: java.math.BigInteger
+        lateinit var callbackArgument7_0: java.math.BigInteger
+        var callbackArgument8_0: Float = 0.0f
+        var callbackArgument9_0: Double = 0.0
+        try {
+            callbackArgument0_0 = raw0 as Boolean
+            callbackArgument1_0 = raw1 as Int
+            callbackArgument2_0 = raw2 as Int
+            callbackArgument3_0 = raw3 as Int
+            callbackArgument4_0 = raw4 as Long
+            callbackArgument5_0 = (raw5 as Long).toULong()
+            callbackArgument6_0 = java.math.BigInteger(raw6 as ByteArray)
+            callbackArgument7_0 = java.math.BigInteger(1, raw7 as ByteArray)
+            callbackArgument8_0 = raw8 as Float
+            callbackArgument9_0 = raw9 as Double
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        p0_callback.run(callbackArgument0_0, callbackArgument1_0, callbackArgument2_0, callbackArgument3_0, callbackArgument4_0, callbackArgument5_0, callbackArgument6_0, callbackArgument7_0, callbackArgument8_0, callbackArgument9_0)
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call113(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
+public fun `callbackEnums`(p0_callback: io.prebindgen.covertest.enums.PriorityOptionalPriorityCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Int, raw1: Int) {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.enums.Priority
+        var callbackArgument1_0: io.prebindgen.covertest.enums.Priority? = null
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackArgument0_0 = io.prebindgen.covertest.enums.Priority.fromWire(raw0 as Int)
+            if (raw1 != -1) {
+            }
+            callbackArgument1_0 = if (raw1 != -1) io.prebindgen.covertest.enums.Priority.fromWire(raw1 as Int) else null
+        } catch (failure: Throwable) {
+            if (raw1 != -1) {
+            }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0, callbackArgument1_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            if (raw1 != -1) {
+            }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call114(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
