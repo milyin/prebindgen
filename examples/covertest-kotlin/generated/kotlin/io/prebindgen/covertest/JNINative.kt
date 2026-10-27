@@ -35,6 +35,7 @@ internal object JNINative {
     @JvmStatic external fun call_getter_owner_failure_983fd2bf1ecc08ff(): Array<Any?>
     @JvmStatic external fun call_getter_owner_id_6e5c79e15f3c8ecb(p0_w1: Long): Array<Any?>
     @JvmStatic external fun call_getter_leaf_id_2b89bfb1695b1a8e(p0_w1: Long): Array<Any?>
+    @JvmStatic external fun call_getter_static_leaf_3de084de8ab56cf6(): Array<Any?>
     @JvmStatic external fun call_getter_owner_read_405afcf1de6633af(p0_w1: Long): Array<Any?>
     @JvmStatic external fun call_getter_counts_ac432be3e581775f(): Array<Any?>
     @JvmStatic external fun call_getter_two_clones_new_c6e10ed44149bf78(): Array<Any?>

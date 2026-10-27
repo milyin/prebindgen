@@ -1501,6 +1501,77 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1static_1leaf_13de084de8ab56cf6<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let source_value = perftest_flat::getter_static_leaf();
+            let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ::core::clone::Clone::clone(source_value),
+            });
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[
+                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                            ((&mut *ret_w0)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::GetterLeaf,
+                                >) as i64,
+                        ),
+                    ],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                let _ = Box::into_raw(ret_w0);
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1read_1405afcf1de6633af<
     'local,
 >(
