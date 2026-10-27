@@ -43,6 +43,8 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // both the perf surface and the coverage surface.
 pub mod callback_returns;
 pub use callback_returns::*;
+mod callback_results;
+pub use callback_results::*;
 mod callback_config;
 pub use callback_config::*;
 pub mod ext;

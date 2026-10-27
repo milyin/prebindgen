@@ -454,13 +454,27 @@ impl Declarations {
                             }
                             _ => source,
                         };
-                        arguments.push(self.resolve_output(
-                            flat,
-                            codec,
-                            ty,
-                            selected.params.get(&index).unwrap_or(&Output::auto()),
-                            extra,
-                        )?);
+                        let requested = selected
+                            .params
+                            .get(&index)
+                            .cloned()
+                            .unwrap_or_else(Output::auto);
+                        let requested = if let Some((_, error_ty)) = result_parts(ty) {
+                            let default_error = self.errors.get(&type_key(error_ty)).cloned();
+                            match requested {
+                                Output::Result { ok, error } => Output::Result {
+                                    ok,
+                                    error: error.or(default_error),
+                                },
+                                ok => Output::Result {
+                                    ok: Box::new(ok),
+                                    error: default_error,
+                                },
+                            }
+                        } else {
+                            requested
+                        };
+                        arguments.push(self.resolve_output(flat, codec, ty, &requested, extra)?);
                     }
                     let ret = resolve(
                         &signature.return_type,

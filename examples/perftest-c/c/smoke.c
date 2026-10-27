@@ -6,6 +6,7 @@
 #include <math.h>
 #include <limits.h>
 #include "callback_returns.h"
+#include "callback_results.h"
 
 struct sequence_acc { size_t calls; int64_t total; };
 static void sequence_number(void *context, int64_t value) {
@@ -570,6 +571,7 @@ static void check_results(void) {
 }
 int main(void) {
     check_callback_returns();
+    check_callback_result_arguments();
     /* Empty typed field overrides omit plain, optional and vector resources. */
     size_t omitted_before = perftest_owned_resource_drops();
     assert(perftest_api_record_new() == 7);

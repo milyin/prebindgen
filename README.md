@@ -850,7 +850,16 @@ If Rust cannot finish converting the arguments, it drops the allocations prepare
 so far and skips that callback invocation. If Kotlin cannot construct the complete
 argument list, it closes the delivered handles without calling user code.
 
-Mutable arguments, `Result` arguments, callbacks taking callable-signature arguments,
+Owned outermost `Result<T, E>` callback arguments deliver only `Ok(T)` to Kotlin
+or C. `Err(E)` skips that invocation; later calls remain usable. `String` errors
+are reported directly. Other error types require an explicit `error_mapper`,
+which may take `E` or `&E` and returns `String`. Success values use ordinary output
+defaults and callback argument overrides; an override can also supply an explicit
+`Output::Result` error mapper. A failed argument to a value-returning callback
+follows its existing missing-result policy and raises a Rust panic. Arguments
+prepared before a failure are dropped before any upcall or ownership transfer.
+
+Mutable arguments, nested or borrowed `Result` arguments, callbacks taking callable-signature arguments,
 explicit higher-ranked bounds, and `FnMut`/`FnOnce` are rejected. Callbacks are accepted
 as direct parameters of exported source functions or input constructors. The covertest
 exercises retained and concurrent callbacks, output ownership, reentry, exception

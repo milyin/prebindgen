@@ -6,6 +6,20 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .error_mapper(
+            pq!(CallbackResultError),
+            fun!(callback_result_error_message),
+        )
+        .function(fun!(callback_result_values))
+        .panic()
+        .function(fun!(callback_result_unit))
+        .panic()
+        .function(fun!(callback_result_return))
+        .panic()
+        .function(fun!(callback_result_mapped))
+        .panic()
+        .function(fun!(callback_result_handles))
+        .panic()
         .opaque_ptr("panic_output", pq!(CPanicOutput))
         .function(
             fun!(c_panic_output_new).expand_return(expand_return!(CPanicOutput).field_self_into()),

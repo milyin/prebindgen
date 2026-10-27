@@ -1,14 +1,22 @@
 //! Explicit enum declarations and the enum-aware C conversion codec.
 use super::*;
 use prebindgen_declarations::{Condition, EnumMapping};
+use prebindgen_flat::type_key;
 
 /// C conversions read representation and error declarations from Flat.
 #[derive(Default)]
 pub(crate) struct EnumCodec<'a> {
+    pub(crate) callback_argument: Option<usize>,
     pub(crate) return_owners:
         Option<&'a std::cell::RefCell<std::collections::BTreeMap<String, syn::Type>>>,
 }
 impl EnumCodec<'_> {
+    pub(crate) fn callback_argument(index: usize) -> Self {
+        Self {
+            callback_argument: Some(index),
+            ..Self::default()
+        }
+    }
     fn mapping<'a>(
         &self,
         flat: &'a Bindings,
@@ -59,6 +67,19 @@ impl Codec for EnumCodec<'_> {
         mapped: bool,
         e: &(),
     ) -> Result<prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>> {
+        if self.callback_argument.is_some() {
+            return Ok(CCodec
+                .output_leaf(
+                    flat,
+                    &syn::parse_quote!(String),
+                    &(),
+                    format_ident!("callback_error_message"),
+                    quote!(callback_error_message),
+                    false,
+                )?
+                .outcomes
+                .success);
+        }
         if let Some(layout) = flat
             .type_info(ty)
             .ok()
@@ -123,6 +144,20 @@ impl Codec for EnumCodec<'_> {
         message: Option<TokenStream>,
         extra: &(),
     ) -> Result<TokenStream> {
+        if let Some(index) = self.callback_argument {
+            let message = match message {
+                Some(message) => message,
+                None if type_key(ty) == "String" => value,
+                None => {
+                    return Err(format!(
+                        "callback Result error `{}` requires an error_mapper",
+                        type_key(ty)
+                    ))
+                }
+            };
+            let prefix = format!("callback argument {index}: {{}}");
+            return Ok(quote!(format!(#prefix, #message)));
+        }
         if let Some(name) = flat
             .type_info(ty)
             .ok()

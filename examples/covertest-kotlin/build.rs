@@ -132,6 +132,22 @@ use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input
 
 fn main() {
     let binding = JniGen::builder()
+        .error_mapper(syn::parse_quote!(CallbackResultError), fun!(callback_result_error_message))
+        .package(package!("callbackresults")
+            .class(ptr_class!(CallbackResultHandler))
+            .fun(fun!(callback_result_values)).fun(fun!(callback_result_unit)).fun(fun!(callback_result_return))
+            .fun(fun!(callback_result_handles)).fun(fun!(callback_result_mapped)).fun(fun!(callback_return_resource_id))
+            .fun(fun!(callback_result_register)).fun(fun!(callback_result_worker))
+            .fun(fun!(callback_result_configured).expand_param("callback",
+                callback!(impl Fn(Result<CallbackConfigValue, String>))
+                    .name("ConfiguredResultHandler")
+                    .expand_param(0, expand_return!(CallbackConfigValue).field(fun!(callback_config_positive)))))
+            .fun(fun!(callback_result_mapper_panic).expand_param("callback",
+                callback!(impl Fn(Result<i64, CallbackResultError>))
+                    .expand_param(0, prebindgen_jni::Output::Result {
+                        ok: Box::new(prebindgen_jni::Output::auto()),
+                        error: Some("callback_result_error_panics".into()),
+                    }))))
         .expand(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
         .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
         .package(package!("callbackconfig")

@@ -46,7 +46,6 @@ pub(crate) fn input(
         (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
     });
     let name = format!("{}_callback_{hash:016x}", flat.metadata.prefix);
-    let codec = enums::EnumCodec::default();
     let mut arguments = Vec::new();
     for (index, source) in signature.arguments.into_iter().enumerate() {
         if matches!(&source, syn::Type::Reference(r) if r.mutability.is_some()) {
@@ -60,14 +59,14 @@ pub(crate) fn input(
             }
             _ => (source.clone(), false),
         };
-        if contains_result(&ty) {
+        if contains_result(&ty) && prebindgen_flat::result_parts(&ty).is_none() {
             return Err(
                 "Result callback arguments require an explicit value representation".into(),
             );
         }
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
-            &codec,
+            &enums::EnumCodec::callback_argument(index),
             &ty,
             &configuration.arguments[index],
             index,
@@ -75,16 +74,12 @@ pub(crate) fn input(
             &(),
         )?;
         sequence::validate_buffered(&output.outcomes.success)?;
-        if output.outcomes.source_error.is_some() {
-            return Err(
-                "Result callback arguments require an explicit value representation".into(),
-            );
-        }
         arguments.push(Argument { ty: source, output });
     }
     let return_owners = std::cell::RefCell::new(BTreeMap::new());
     let return_codec = enums::EnumCodec {
         return_owners: Some(&return_owners),
+        ..Default::default()
     };
     let returned = if unit {
         None

@@ -14,6 +14,8 @@ mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
 mod callback;
 #[cfg(test)]
+mod callback_result_tests;
+#[cfg(test)]
 mod callback_tests;
 mod optional;
 mod sequence;
@@ -530,6 +532,7 @@ impl JniGenBuilder {
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
         let codec = data::DataCodec {
             callback_outputs: Some(&output_defaults),
+            ..Default::default()
         };
         for ty in callback_types {
             let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;

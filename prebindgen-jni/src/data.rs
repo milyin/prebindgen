@@ -129,6 +129,7 @@ pub struct DataGroup {
 pub(crate) struct DataCodec<'a> {
     // Explicit global argument-output declarations determine callback ownership.
     pub(crate) callback_outputs: Option<&'a BTreeSet<String>>,
+    pub(crate) callback_argument: Option<usize>,
 }
 /// Complete class and enum declarations already attached to their source types.
 pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
@@ -429,6 +430,14 @@ impl Class {
     }
 }
 
+impl DataCodec<'_> {
+    pub(crate) fn callback_argument(index: usize) -> Self {
+        Self {
+            callback_argument: Some(index),
+            ..Self::default()
+        }
+    }
+}
 impl Codec for DataCodec<'_> {
     type Schema = JniSchema;
     fn expand_input(
@@ -592,6 +601,19 @@ impl Codec for DataCodec<'_> {
         mapped: bool,
         _: &(),
     ) -> Result<prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>> {
+        if self.callback_argument.is_some() {
+            return Ok(JniCodec
+                .output_leaf(
+                    flat,
+                    &syn::parse_quote!(String),
+                    &(),
+                    format_ident!("callback_error_message"),
+                    quote!(callback_error_message),
+                    false,
+                )?
+                .outcomes
+                .success);
+        }
         flat.type_info(ty)?
             .metadata
             .errors
@@ -607,6 +629,20 @@ impl Codec for DataCodec<'_> {
         message: Option<TokenStream>,
         _: &(),
     ) -> Result<TokenStream> {
+        if let Some(index) = self.callback_argument {
+            let message = match message {
+                Some(message) => message,
+                None if type_key(ty) == "String" => value,
+                None => {
+                    return Err(format!(
+                        "callback Result error `{}` requires an error_mapper",
+                        type_key(ty)
+                    ))
+                }
+            };
+            let prefix = format!("callback argument {index}: {{}}");
+            return Ok(quote!(format!(#prefix, #message)));
+        }
         let helper = flat
             .type_info(ty)?
             .metadata

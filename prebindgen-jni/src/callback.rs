@@ -202,7 +202,7 @@ pub(crate) fn input(
             _ => (source_type.clone(), false),
         };
         let value = quote!(#binding);
-        if contains_result(&ty) {
+        if contains_result(&ty) && prebindgen_flat::result_parts(&ty).is_none() {
             return Err(
                 "Result-valued callback arguments require an explicit value representation".into(),
             );
@@ -213,7 +213,7 @@ pub(crate) fn input(
             && !explicit_outputs.contains(&type_key(subject_type(&ty)));
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
-            &data::DataCodec::default(),
+            &data::DataCodec::callback_argument(i),
             &ty,
             recipe,
             i,
@@ -802,6 +802,7 @@ fn subject_type(ty: &syn::Type) -> &syn::Type {
     match ty {
         syn::Type::Reference(r) => subject_type(&r.elem),
         _ => prebindgen_flat::option_inner(ty)
+            .or_else(|| prebindgen_flat::result_parts(ty).map(|(ok, _)| ok))
             .map(subject_type)
             .unwrap_or(ty),
     }
@@ -813,6 +814,9 @@ fn subject_name(ty: &syn::Type) -> String {
         _ => {
             if let Some(inner) = prebindgen_flat::option_inner(ty) {
                 return format!("Optional{}", subject_name(inner));
+            }
+            if let Some((ok, _)) = prebindgen_flat::result_parts(ty) {
+                return format!("Result{}", subject_name(ok));
             }
             if let Some(inner) = prebindgen_flat::vec_inner(ty) {
                 return format!("{}Vec", subject_name(inner));

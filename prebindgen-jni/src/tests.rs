@@ -1408,7 +1408,7 @@ fn retained_callback_names_follow_source_types_and_prepared_placement() {
 fn callback_rejections_are_preparation_errors() {
     for (source, message) in [
         (
-            "pub fn f(cb:impl Fn(Result<i64,String>)) {}",
+            "pub fn f(cb:impl Fn(Option<Result<i64,String>>)) {}",
             "Result-valued callback",
         ),
         ("pub fn f(cb:impl Fn(&mut i64)) {}", "mutable callback"),
