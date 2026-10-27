@@ -3686,3 +3686,13 @@ pub fn collection_result_optional(
         _ => Err(ResultFailureImpl { code: 7 }),
     }
 }
+
+#[prebindgen]
+#[allow(clippy::result_unit_err)] // Exercise an unnamed callback error type.
+pub fn result_unit_error(fail: bool) -> Result<i64, ()> {
+    if fail {
+        Err(())
+    } else {
+        Ok(42)
+    }
+}

@@ -318,6 +318,7 @@ fn main() {
             .fun(fun!(c_result_resource_error))
             .fun(fun!(c_result_rich_error))
             .fun(fun!(result_scalar))
+            .fun(fun!(result_unit_error))
             .fun(fun!(result_unit))
             .fun(fun!(result_optional))
             .fun(fun!(result_text))

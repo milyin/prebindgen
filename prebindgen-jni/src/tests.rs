@@ -10,6 +10,107 @@ fn flat(source: &str) -> Bindings {
     )
     .unwrap()
 }
+
+#[test]
+fn unrelated_declarations_and_reordering_preserve_existing_native_bindings() {
+    fn generate_example(extra: bool, reverse: bool) -> JniGen {
+        let source = "pub type Handle=String;pub type Added=String;pub type Error=String;pub fn code(e:&Error)->i64{}pub fn message(e:&Error)->String{}pub fn keep(value:&Handle)->i64{}pub fn values()->Result<Vec<i64>,Error>{}pub fn mapped()->Result<i64,Error>{}pub fn added()->Result<i64,i64>{}";
+        let mut builder = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(expand_return!(Error).field(fun!(code)));
+        if extra {
+            builder = builder.package(package!("added").class(ptr_class!(Added)).fun(fun!(added)));
+        }
+        let mut functions = vec![
+            fun!(keep),
+            fun!(values).callback_return(),
+            fun!(mapped).on_error(fun!(message)),
+        ];
+        if reverse {
+            functions.reverse();
+        }
+        let mut api = package!("api").class(ptr_class!(Handle));
+        for function in functions {
+            api = api.fun(function);
+        }
+        builder.package(api).build().unwrap()
+    }
+    fn rust_functions(generation: &JniGen) -> BTreeMap<String, String> {
+        syn::parse_file(&generation.rust)
+            .unwrap()
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                if let syn::Item::Fn(function) = item {
+                    Some((
+                        function.sig.ident.to_string(),
+                        quote!(#function).to_string(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    let original = generate_example(false, false);
+    let functions = rust_functions(&original);
+    assert!(original.rust.contains("__pb_jni_error_Error_typed_"));
+    assert!(original.rust.contains("__pb_jni_error_Error_mapped_"));
+    assert!(original.kotlin["test/JNINative.kt"].contains("SequenceSink_values_fold_"));
+    assert!(original.kotlin["test/api/Handle.kt"].contains("JNINative.drop_Handle_"));
+    for reverse in [false, true] {
+        let extended = generate_example(true, reverse);
+        for line in original.kotlin["test/JNINative.kt"].lines() {
+            assert!(
+                extended.kotlin["test/JNINative.kt"]
+                    .lines()
+                    .any(|candidate| candidate == line),
+                "native declaration changed: {line}"
+            );
+        }
+        let extended_functions = rust_functions(&extended);
+        for (name, body) in &functions {
+            assert_eq!(
+                Some(body),
+                extended_functions.get(name),
+                "binding changed: {name}"
+            );
+        }
+        for (path, text) in &original.kotlin {
+            if path != "test/JNINative.kt" && !(reverse && path == "test/api/Functions.kt") {
+                assert_eq!(
+                    Some(text),
+                    extended.kotlin.get(path),
+                    "Kotlin changed: {path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn native_name_identity_has_a_fixed_encoding_and_ignores_destination_renaming() {
+    let generate = |name: &str| {
+        JniGen::builder()
+            .flat(flat("pub fn read()->i64{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(read).name(name)))
+            .build()
+            .unwrap()
+    };
+    let original = generate("read");
+    let renamed = generate("readRenamed");
+    assert!(original.kotlin["test/JNINative.kt"].contains("call_read_e42fa77bcd21ca1a("));
+    assert!(original
+        .rust
+        .contains("Java_test_JNINative_call_1read_1e42fa77bcd21ca1a"));
+    assert_eq!(original.rust, renamed.rust);
+    assert_eq!(
+        original.kotlin["test/JNINative.kt"],
+        renamed.kotlin["test/JNINative.kt"]
+    );
+}
 fn fail(builder: JniGenBuilder) -> String {
     match builder.build() {
         Ok(_) => panic!("expected generation error"),
@@ -686,7 +787,12 @@ fn result_unit_error_has_a_zero_argument_domain_handler() {
         .package(package!().fun(fun!(empty)))
         .build()
         .unwrap();
-    assert!(generated.kotlin["test/EmptyErrorHandler.kt"].contains("run(): R"));
+    let handler = generated
+        .kotlin
+        .iter()
+        .find(|(path, _)| path.starts_with("test/ErrorHandler_Unit_typed_"))
+        .unwrap();
+    assert!(handler.1.contains("run(): R"));
     syn::parse_file(&generated.rust).unwrap();
 }
 
@@ -1668,4 +1774,54 @@ fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
         .err()
         .expect("non-Result callback binding needs explicit panic policy");
     assert!(error.contains("declare .panic()"), "{error}");
+}
+
+#[test]
+fn unnamed_error_handlers_are_independent_of_their_first_caller() {
+    let source = "pub fn first()->Result<i64,()>{}pub fn second()->Result<i64,()>{}";
+    let generate = |reverse| {
+        let package = if reverse {
+            package!().fun(fun!(second)).fun(fun!(first))
+        } else {
+            package!().fun(fun!(first)).fun(fun!(second))
+        };
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package)
+            .build()
+            .unwrap()
+    };
+    let original = generate(false);
+    let reordered = generate(true);
+    let (name, text) = original
+        .kotlin
+        .iter()
+        .find(|(path, _)| path.starts_with("test/ErrorHandler_Unit_typed_"))
+        .unwrap();
+    assert_eq!(Some(text), reordered.kotlin.get(name));
+    assert!(!original
+        .kotlin
+        .keys()
+        .any(|path| path.contains("FirstError") || path.contains("SecondError")));
+}
+
+#[test]
+fn generic_error_types_get_distinct_readable_handlers() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn first()->Result<i64,Vec<i64>>{}pub fn second()->Result<i64,Vec<String>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(first)).fun(fun!(second)))
+        .build()
+        .unwrap();
+    assert!(generated
+        .kotlin
+        .keys()
+        .any(|name| name.starts_with("test/ErrorHandler_Vec_i64_typed_")));
+    assert!(generated
+        .kotlin
+        .keys()
+        .any(|name| name.starts_with("test/ErrorHandler_Vec_String_typed_")));
 }

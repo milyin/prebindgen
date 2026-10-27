@@ -1,7 +1,7 @@
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_drop0(
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_drop_1Storage_19651261943550368(
     mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,
     id: i64,
@@ -22,7 +22,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_drop0(
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call0<'local>(
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1new_1a15b46920214a065<
+    'local,
+>(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
 ) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
@@ -91,7 +93,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call0<'local
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call1<'local>(
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1get_1b7f3d4a82ad753f5<
+    'local,
+>(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
     p0_w1: i64,
@@ -262,7 +266,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call1<'local
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call2<'local>(
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payload_1new_14db541865be00283<
+    'local,
+>(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
     p0_w1: i64,
@@ -393,7 +399,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call2<'local
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call3<'local>(
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1with_1payload_1b44f150bf309e573<
+    'local,
+>(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
     p0_w2: i64,
@@ -484,7 +492,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call3<'local
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call4<'local>(
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storage_1put_1opt_138084ee844ee97a7<
+    'local,
+>(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
     p0_w1: i64,

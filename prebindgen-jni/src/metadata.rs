@@ -30,7 +30,7 @@ pub struct JniFunction {
     pub package: String,
     /// Destination function name.
     pub name: String,
-    /// Stable declaration order used for native entry-point numbering.
+    /// Declaration order used when rendering functions.
     pub order: usize,
     pub(crate) error: Option<Rc<errors::ErrorBinding>>,
 }
