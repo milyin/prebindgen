@@ -45,6 +45,8 @@ pub mod callback_returns;
 pub use callback_returns::*;
 mod callback_config;
 pub use callback_config::*;
+mod callback_boundaries;
+pub use callback_boundaries::*;
 pub mod ext;
 pub use ext::*;
 
