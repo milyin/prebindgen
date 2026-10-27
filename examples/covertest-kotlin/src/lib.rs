@@ -90,3 +90,5 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackRowsRuntimeProbe_mal
         perftest_flat::callback_row_resource_live()
     }
 }
+
+mod boundary_faults;

@@ -18,6 +18,7 @@ fun main() {
     checkSourceCallbacks()
     checkCallbackHandleCollections()
     checkSharedCallbackReentry()
+    checkCallbackBoundaryFailures()
     checkCollections()
     checkSequenceDelivery()
     checkResults()
