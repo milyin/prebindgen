@@ -49,6 +49,24 @@ fn rejects_duplicates_and_unknown_types() {
     assert!(parse("pub type Key=String; pub fn Key(){}").is_err());
     assert!(parse("pub fn f(x:Undeclared){}").is_err());
 }
+
+#[test]
+fn static_references_are_allowed_only_in_source_returns() {
+    parse("pub type Child=String;pub fn fixed()->Option<&'static Child>{}").unwrap();
+    for source in [
+        "pub type Child=String;pub fn keep(value:&'static Child){}",
+        "pub fn keep(value:Option<&'static str>){}",
+        "pub fn keep(callback:impl Fn(&'static str)){}",
+        "pub fn keep(callback:impl Fn()->&'static str){}",
+        "pub struct Row{pub value:&'static str}",
+    ] {
+        let error = parse(source).unwrap_err();
+        assert!(
+            error.contains("explicit reference lifetimes"),
+            "{source}: {error}"
+        );
+    }
+}
 #[test]
 fn refuses_unsupported_syntax_without_dropping_it() {
     for source in [

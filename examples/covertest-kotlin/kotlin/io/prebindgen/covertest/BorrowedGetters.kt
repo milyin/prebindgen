@@ -15,6 +15,12 @@ private fun checkGetterViews(number: Long, name: String, optionalNumber: Long?, 
 }
 
 fun checkBorrowedGetters() {
+    val firstStatic = getterStaticLeaf()
+    val secondStatic = getterStaticLeaf()
+    check(firstStatic !== secondStatic && getterLeafId(firstStatic) == 101L)
+    firstStatic.close()
+    check(getterLeafId(secondStatic) == 101L)
+    secondStatic.close()
     val copiedField = getterFieldsNew { owner, number, text ->
         check(number == 31L)
         owner.close()

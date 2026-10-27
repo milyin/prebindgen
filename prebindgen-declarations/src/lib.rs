@@ -282,7 +282,8 @@ pub enum Output<P = std::convert::Infallible> {
     },
     /// Convert an optional payload without preparing absent values.
     Optional(Box<Output<P>>),
-    /// Convert the occurrence type itself with [`Codec::output_leaf`].
+    /// Convert the occurrence type itself with [`Codec::output_leaf`], or
+    /// [`Codec::output_return_reference`] for a direct shared-reference return.
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
     Fields(Vec<Output<P>>),
@@ -1030,6 +1031,27 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<CodecOutput<Self>>;
+    /// Convert a shared reference supplied directly by the Rust return value.
+    ///
+    /// Unlike observing an owned value through a getter, this reference already
+    /// has the source function's lifetime contract. Adapters may expose it as a
+    /// non-owning foreign pointer. `ty` is the referent and `value` produces `&ty`.
+    /// This also applies inside optional and successful Result returns, but not
+    /// inside getter expansions, record decomposition or callback arguments.
+    /// The foreign caller must preserve the referenced storage and Rust aliasing
+    /// rules. No runtime lifetime tracking is implied.
+    ///
+    /// Return `None` to use ordinary borrowed leaf conversion (the default).
+    fn output_return_reference(
+        &self,
+        _flat: &prebindgen_flat::Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+    ) -> Result<Option<CodecOutput<Self>>> {
+        Ok(None)
+    }
 }
 /// A flat model whose slots contain only conversion data for wrapper emission.
 ///
@@ -1131,7 +1153,7 @@ pub fn compile_output_value<C: Codec>(
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Output> {
-    compile_output_at(flat, codec, ty, recipe, extra, "ret".into(), false)
+    compile_output_at(flat, codec, ty, recipe, extra, OutputPosition::Return)
 }
 
 /// Compile the foreign-to-Rust value returned by a source callback.
@@ -1176,9 +1198,13 @@ pub fn compile_callback_argument<C: Codec>(
         ty,
         recipe,
         extra,
-        format!("callback_arg_{index}"),
-        borrowed,
+        OutputPosition::CallbackArgument { index, borrowed },
     )
+}
+
+enum OutputPosition {
+    Return,
+    CallbackArgument { index: usize, borrowed: bool },
 }
 
 fn compile_output_at<C: Codec>(
@@ -1187,16 +1213,17 @@ fn compile_output_at<C: Codec>(
     ty: &Type,
     recipe: &Output,
     extra: &C::Extra,
-    prefix: String,
-    borrowed: bool,
+    position: OutputPosition,
 ) -> Result<<C::Schema as Schema>::Output> {
-    let mut plan = Compiler::new(flat, codec, prefix).output_root(
-        ty,
-        recipe,
-        extra,
-        prebindgen_conversions::source_result_expr(),
-        borrowed,
-    )?;
+    let value = prebindgen_conversions::source_result_expr();
+    let mut plan = match position {
+        OutputPosition::Return => Compiler::new(flat, codec, "ret".into())
+            .output_root(ty, recipe, extra, value, false, true)?,
+        OutputPosition::CallbackArgument { index, borrowed } => {
+            Compiler::new(flat, codec, format!("callback_arg_{index}"))
+                .output_root(ty, recipe, extra, value, borrowed, false)?
+        }
+    };
     finalize_output_schema(codec, &mut plan, extra)?;
     codec.finish_output(&mut plan, extra)?;
     codec.validate_output(&plan)?;
@@ -1586,6 +1613,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
         extra: &C::Extra,
         value: TokenStream,
         borrowed: bool,
+        reference_return: bool,
     ) -> Result<CodecOutput<C>> {
         if let Output::Result { ok, error } = recipe {
             if borrowed {
@@ -1625,7 +1653,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 mapped,
                 extra,
             )?;
-            let mut child = self.output(success_ty, ok, extra, quote!(#payload), false)?;
+            let mut child = if reference_return {
+                self.output_return(success_ty, ok, extra, quote!(#payload), false)?
+            } else {
+                self.output(success_ty, ok, extra, quote!(#payload), false)?
+            };
             let prepare = child.statements;
             child.statements = quote! {
                 let #payload = match #value {
@@ -1640,6 +1672,46 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 .source_error_layout(self.flat, error_ty, mapped_error, extra)?;
             child.outcomes.source_error = Some(error);
             return Ok(child);
+        }
+        if reference_return {
+            self.output_return(ty, recipe, extra, value, borrowed)
+        } else {
+            self.output(ty, recipe, extra, value, borrowed)
+        }
+    }
+    // Only references supplied by the source return may escape as loans. Getter
+    // expansions use output() below: their owner may be a generated temporary.
+    fn output_return(
+        &self,
+        ty: &Type,
+        recipe: &Output,
+        extra: &C::Extra,
+        value: TokenStream,
+        borrowed: bool,
+    ) -> Result<CodecOutput<C>> {
+        if !borrowed {
+            if let (Type::Reference(reference), Output::Leaf) = (ty, recipe) {
+                if reference.mutability.is_none() {
+                    let wire = self.name();
+                    if let Some(plan) = self.codec.output_return_reference(
+                        self.flat,
+                        &reference.elem,
+                        extra,
+                        wire.clone(),
+                        value.clone(),
+                    )? {
+                        return Ok(plan);
+                    }
+                    return self.output_named(ty, recipe, extra, value, false, Some(&wire));
+                }
+            }
+            if let (Some(payload_ty), Output::Optional(inner)) = (option_inner(ty), recipe) {
+                let tag = self.name();
+                let payload = self.name();
+                let child =
+                    self.output_return(payload_ty, inner, extra, quote!(#payload), false)?;
+                return optional_output(self.codec, extra, tag, payload, value, false, child);
+            }
         }
         self.output(ty, recipe, extra, value, borrowed)
     }

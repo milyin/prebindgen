@@ -214,6 +214,7 @@ impl Codec for CCodec {
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
         Ok(match wire {
             CWire::Callback { callback } => callback.absent_value(),
+            CWire::Pointer { pointer, .. } if !pointer.mutable => quote!(std::ptr::null()),
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
             CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
             CWire::Rows => quote!(__PbRows {
@@ -375,6 +376,49 @@ impl Codec for CCodec {
         }
     }
 
+    fn output_return_reference(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        // Scalars, enums and buffers retain their value conversions. Only an
+        // opaque source type has an address-preserving C representation.
+        if !matches!(ty, syn::Type::Path(_))
+            || prebindgen_flat::type_key(ty) == "str"
+            || Value::of(ty).is_some()
+            || prebindgen_flat::sequence_parts(ty).is_some()
+            || prebindgen_flat::option_inner(ty).is_some()
+            || flat
+                .type_info(ty)
+                .ok()
+                .is_some_and(|t| t.metadata.enumeration.is_some())
+        {
+            return Ok(None);
+        }
+        Ok(Some(OutputPlan {
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            commit: TokenStream::new(),
+            outcomes: prebindgen_flat::Outcomes {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: wire.clone(),
+                    kind: CWire::pointer(CPointer {
+                        ty: ty.clone(),
+                        mutable: false,
+                    }),
+                }]),
+                source_error: None,
+                binding_failure: None,
+            },
+            statements: quote!(let #wire: *const #ty = #value as *const #ty;),
+            values: vec![(wire.clone(), quote!(#wire))],
+        }))
+    }
+
     fn optional_niche(
         &self,
         payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
@@ -486,7 +530,11 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// directly; otherwise the return is bool and success values use output pointers.
 /// Unit success needs no output pointer. Consuming Result calls additionally
 /// require a bool ownership output, indicating transfer even on failure.
-/// Returned pointers, buffers and errors require their matching destructors.
+/// Owned returned pointers, buffers and errors require their matching destructors.
+/// Direct shared-reference returns of opaque types use non-owning `const` pointers
+/// (nullable for `Option<&T>`). Never destroy or consume these pointers; keep their
+/// source storage alive and at a stable address, respecting Rust's aliasing rules.
+/// Getter expansions continue to copy borrowed leaves into owned outputs.
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -1066,6 +1114,7 @@ where
         }
         let is_result = prebindgen_declarations::result_parts(&f.ret.ty).is_some();
         let outcomes = f.output_conversion()?.output_outcomes();
+        validate_return_loans(f, &outcomes.success)?;
         for error in outcomes
             .source_error
             .iter()
@@ -1339,6 +1388,12 @@ The pointer must be null or a live allocation of the declared type returned by t
         let outputs =
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .collect::<Vec<_>>();
+        if outputs
+            .iter()
+            .any(|w| matches!(&w.kind, CWire::Pointer { pointer, .. } if !pointer.mutable))
+        {
+            header.push_str("/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */\n");
+        }
         let mut next_option_label = 0;
         for param in &f.params {
             if let Some(slot) = &param.ty.slot {
@@ -1519,6 +1574,76 @@ The pointer must be null or a live allocation of the declared type returned by t
     })
 }
 
+// A Rust reference may refer to a wrapper-reconstructed input, rather than C's
+// persistent allocation. Such a pointer must not escape the generated call.
+fn validate_return_loans<I, O, M>(
+    function: &prebindgen_flat::Function<I, O, M>,
+    output: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+) -> Result<()>
+where
+    I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
+{
+    if !crate::group::result_packet_fields(output)
+        .any(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if !pointer.mutable))
+    {
+        return Ok(());
+    }
+    fn reference(ty: &syn::Type) -> Option<&syn::TypeReference> {
+        if let syn::Type::Reference(r) = ty {
+            return Some(r);
+        }
+        prebindgen_flat::option_inner(ty).and_then(reference)
+    }
+    let returned = prebindgen_flat::result_parts(&function.ret.ty)
+        .map_or(&function.ret.ty, |(success, _)| success);
+    if reference(returned).is_some_and(|r| r.lifetime.as_ref().is_some_and(|l| l.ident == "static"))
+    {
+        return Ok(());
+    }
+    fn stable_input(
+        ty: &syn::Type,
+        node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
+    ) -> bool {
+        if let (
+            Some(inner),
+            prebindgen_flat::WireNode::Chain {
+                meta: CChain::Optional(_),
+                child,
+                ..
+            },
+        ) = (prebindgen_flat::option_inner(ty), node)
+        {
+            return stable_input(inner, child);
+        }
+        match (ty, node) {
+            (syn::Type::Reference(r), prebindgen_flat::WireNode::Leaf(wires))
+                if wires.len() == 1 =>
+            {
+                matches!(&wires[0].kind,CWire::Pointer {pointer,..} if prebindgen_flat::same_type(&pointer.ty,&r.elem))
+                    || (matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]")
+                        && matches!(wires[0].kind, CWire::Buffer))
+            }
+            _ => false,
+        }
+    }
+    for parameter in &function.params {
+        if reference(&parameter.ty.ty).is_some()
+            && !stable_input(
+                &parameter.ty.ty,
+                parameter
+                    .ty
+                    .slot
+                    .as_ref()
+                    .ok_or("missing C input conversion")?
+                    .input_node(),
+            )
+        {
+            return Err(format!("C function `{}` cannot return a borrowed pointer with reconstructed reference input `{}`; use a direct opaque pointer input, an explicit owning output projection, or a 'static return", function.name,parameter.name));
+        }
+    }
+    Ok(())
+}
+
 fn describe_groups(
     layout: &prebindgen_flat::WireNode<CWire, crate::CChain, crate::CBranch>,
     wires: &[&Wire],
@@ -1667,6 +1792,191 @@ mod generation_tests {
                 .map(|item| (item, Default::default())),
         )
         .unwrap()
+    }
+    #[test]
+    fn direct_shared_returns_are_non_owning_nullable_const_pointers() {
+        use prebindgen_declarations::fun;
+        let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&Owner)->&Child{}pub fn maybe(owner:&Owner)->Option<&Child>{}pub fn nested(owner:&Owner)->Option<Option<&Child>>{}pub fn fallible(owner:&Owner)->Result<&Child,String>{}pub fn optional(owner:&Owner)->Result<Option<&Child>,String>{}pub fn message(error:&String)->String{}"))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .opaque_ptr("child_t", syn::parse_quote!(Child))
+            .function(fun!(child)).panic()
+            .function(fun!(maybe)).panic()
+            .function(fun!(nested)).panic()
+            .function(fun!(fallible))
+            .function(fun!(optional))
+            .opaque_error(syn::parse_quote!(String), fun!(message))
+            .prepare().unwrap();
+        for name in ["child", "maybe", "nested", "fallible", "optional"] {
+            let output = flat.function(name).unwrap().ret.slot.as_ref().unwrap();
+            assert!(!output.statements.to_string().contains("Clone"));
+            assert!(!output.statements.to_string().contains("Box"));
+            let pointers = crate::group::result_packet_fields(&output.outcomes.success)
+                .filter_map(|w| match &w.kind {
+                    CWire::Pointer { pointer, .. } => Some(pointer),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(pointers.len(), 1);
+            assert!(!pointers[0].mutable);
+        }
+        assert_eq!(
+            crate::group::result_packet_fields(
+                &flat
+                    .function("nested")
+                    .unwrap()
+                    .ret
+                    .slot
+                    .as_ref()
+                    .unwrap()
+                    .outcomes
+                    .success
+            )
+            .count(),
+            2
+        );
+        let generated = generate(&flat).unwrap();
+        assert!(generated.header.contains("const pb_child_t * pb_child("));
+        assert!(generated.header.contains("const pb_child_t * pb_maybe("));
+        assert!(generated.header.contains("const pb_child_t * pb_fallible("));
+        assert!(generated.header.contains("bool pb_optional("));
+        assert!(generated.header.contains("const pb_child_t * *out0"));
+        assert!(generated.header.contains("never free or consume"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn getter_expansions_and_explicit_projections_keep_owned_clones() {
+        use prebindgen_declarations::{expand_return, fun};
+        let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&Child{}"))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .opaque_ptr("child", syn::parse_quote!(Child))
+            .function(fun!(make).expand_return(expand_return!(Owner).field(fun!(child))))
+            .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
+            .panic()
+            .prepare().unwrap();
+        for name in ["make", "child"] {
+            let output = flat.function(name).unwrap().ret.slot.as_ref().unwrap();
+            assert!(
+                output.statements.to_string().contains("Clone"),
+                "{name}: {}",
+                output.statements
+            );
+            assert!(crate::group::result_packet_fields(&output.outcomes.success)
+                .all(|w| matches!(&w.kind,CWire::Pointer { pointer,..} if pointer.mutable)));
+        }
+    }
+
+    #[test]
+    fn loans_reject_reconstructed_inputs_but_allow_static_returns_and_owned_copies() {
+        use prebindgen_declarations::{expand_param, expand_return, fun};
+        let source = "pub type Child=String;pub fn peek(value:&String)->&Child{}pub fn fixed(value:&String)->&'static Child{}pub fn first(values:&[Child])->&Child{}pub fn copy_child(child:&Child)->Child{}";
+        let model =
+            || Cbindgen::new(error_model(source)).opaque_ptr("child_t", syn::parse_quote!(Child));
+        let bad = model().function(fun!(peek)).panic().build().err().unwrap();
+        assert!(
+            bad.contains("reconstructed reference input `value`"),
+            "{bad}"
+        );
+        let bad = model()
+            .expand(expand_param!(Child).variant(fun!(copy_child)))
+            .function(fun!(first))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            bad.contains("reconstructed reference input `values`"),
+            "{bad}"
+        );
+        model().function(fun!(fixed)).panic().build().unwrap();
+        model()
+            .function(fun!(peek).expand_return(expand_return!(Child).field_self_ref()))
+            .panic()
+            .build()
+            .unwrap();
+    }
+
+    #[test]
+    fn expanded_reference_to_option_keeps_ordinary_value_conversion() {
+        use prebindgen_declarations::{expand_return, fun};
+        let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn length(child:&Child)->i64{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,String>{}pub fn message(error:&String)->String{}";
+        let generated = Cbindgen::new(error_model(source))
+            .opaque_ptr("owner", syn::parse_quote!(Owner))
+            .function(fun!(maybe).expand_return(expand_return!(Child).field(fun!(length))))
+            .panic()
+            .function(fun!(fallible).expand_return(expand_return!(Child).field(fun!(length))))
+            .opaque_error(syn::parse_quote!(String), fun!(message))
+            .build()
+            .unwrap();
+        assert!(generated
+            .header
+            .contains("int32_t pb_maybe(const pb_owner *"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn optional_callback_references_keep_their_owning_copy_contract() {
+        use prebindgen_declarations::{compile_callback_argument, Output};
+        let output = compile_callback_argument(
+            &error_model("pub type Child=String;"),
+            &CCodec,
+            &syn::parse_quote!(Option<&Child>),
+            &Output::Optional(Box::new(Output::Leaf)),
+            0,
+            false,
+            &(),
+        )
+        .unwrap();
+        assert!(output.statements.to_string().contains("Clone"));
+        assert!(crate::group::result_packet_fields(&output.outcomes.success)
+            .all(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.mutable)));
+    }
+
+    #[test]
+    fn reclaiming_undelivered_outputs_does_not_destroy_loans() {
+        let context = CContext {
+            row_types: Default::default(),
+            acknowledgement: syn::parse_quote!(accepted),
+            output_pointer: syn::parse_quote!(out),
+            output_type: syn::parse_quote!(Returned),
+            error_pointer: syn::parse_quote!(error),
+            error_reported: syn::parse_quote!(reported),
+            output_committed: quote!(),
+            buffer_type: syn::parse_quote!(Buffer),
+            wide_integer_type: syn::parse_quote!(Wide),
+            read_buffer: syn::parse_quote!(read),
+        };
+        let plan = CCodec
+            .output_return_reference(
+                &error_model("pub type Child=String;"),
+                &syn::parse_quote!(Child),
+                &(),
+                syn::parse_quote!(child),
+                quote!(source),
+            )
+            .unwrap()
+            .unwrap();
+        let wire = crate::group::result_packet_fields(&plan.outcomes.success)
+            .next()
+            .unwrap();
+        let release = sequence::release(
+            &plan.outcomes.success,
+            &[(wire, quote!(child))],
+            &context,
+            false,
+        );
+        assert!(release.is_empty());
+        let mut owned = wire.clone();
+        if let CWire::Pointer { pointer, .. } = &mut owned.kind {
+            pointer.mutable = true;
+        }
+        assert!(!sequence::release(
+            &plan.outcomes.success,
+            &[(&owned, quote!(child))],
+            &context,
+            false
+        )
+        .is_empty());
     }
     #[test]
     fn opaque_declarations_reject_unregistered_builtin_and_composite_types() {

@@ -220,6 +220,7 @@ impl Declarations {
                 extra,
                 prebindgen_conversions::source_result_expr(),
                 false,
+                true,
             )?)
         } else {
             None
