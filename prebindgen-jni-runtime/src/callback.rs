@@ -14,6 +14,8 @@ pub struct Callback {
     object: GlobalRef,
     vm: JavaVM,
     method: JMethodID,
+    name: &'static str,
+    signature: Option<&'static str>,
 }
 impl Callback {
     /// Retain `object` and resolve its generated void `run` method once.
@@ -28,7 +30,39 @@ impl Callback {
         env.delete_local_ref(class).map_err(|e| e.to_string())?;
         let object = env.new_global_ref(object).map_err(|e| e.to_string())?;
         let vm = env.get_java_vm().map_err(|e| e.to_string())?;
-        Ok(Self { object, vm, method })
+        Ok(Self {
+            object,
+            vm,
+            method,
+            name: "<unnamed callback>",
+            signature: None,
+        })
+    }
+
+    /// Retain a generated callback with static diagnostic name and JVM signature.
+    ///
+    /// The context is recorded at registration; successful invocations perform
+    /// no logging, string formatting or diagnostic allocations.
+    pub fn new_named(
+        env: &mut JNIEnv<'_>,
+        object: &JObject<'_>,
+        descriptor: &'static str,
+        name: &'static str,
+    ) -> Result<Self> {
+        let mut callback = Self::new(env, object, descriptor)?;
+        callback.name = name;
+        callback.signature = Some(descriptor);
+        Ok(callback)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn report(&self, error: &str) {
+        prebindgen_runtime::report_callback_error(
+            self.name,
+            self.signature.unwrap_or("<dynamic signature>"),
+            error,
+        );
     }
 
     /// Run an upcall on the current native thread with a bounded local frame.
@@ -55,7 +89,7 @@ impl Callback {
             result
         });
         if let Err(error) = result {
-            eprintln!("prebindgen callback error: {error}");
+            self.report(&error);
         }
     }
 
@@ -69,7 +103,7 @@ impl Callback {
         capacity: i32,
         call: impl FnOnce(&mut JNIEnv<'_>) -> Result<R>,
     ) -> Result<R> {
-        boundary(|| {
+        let result = boundary(|| {
             let mut env = self
                 .vm
                 .attach_current_thread_as_daemon()
@@ -85,7 +119,11 @@ impl Callback {
                 let _ = env.exception_clear();
             }
             result
-        })
+        });
+        if let Err(error) = &result {
+            self.report(error);
+        }
+        result
     }
 
     /// Invoke a cached non-unit method and keep its result in the caller's frame.

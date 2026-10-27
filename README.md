@@ -814,7 +814,20 @@ Kotlin bridge without a per-invocation acknowledgement array or native rollback
 registry. If invocation fails before bridge entry (for example,
 JVM stack exhaustion), committed handles may leak.
 
-Callbacks returning `()` report Kotlin exceptions on stderr and let Rust continue.
+Callback conversion, upcall and returned-value failures produce `tracing` ERROR
+events on the `prebindgen::callback` target. Generated callbacks attach the Kotlin
+interface name and JVM method descriptor as `callback` and `signature` fields;
+the `error` field contains the failure message. Applications choose a tracing
+subscriber to collect, filter or format these events. C callbacks record their
+generated callback name and Rust signature in the same fields. Successful invocations
+perform no diagnostic formatting or logging. JNI still describes and clears
+callback-created JVM exceptions on failure so subsequent invocations remain usable.
+Callback-result cleanup failures also use this tracing target. A panicking
+subscriber is contained on the failure path. Without a tracing subscriber,
+failures retain a stderr fallback. Subscriber filters control structured events;
+JVM exception descriptions still go to `System.err` independently of those filters.
+
+Callbacks returning `()` report failures and let Rust continue.
 Callbacks returning a value raise a Rust panic on failure, as described below.
 In both cases callback-created JVM exceptions are described and cleared, so later
 invocations can run. The invocation uses the

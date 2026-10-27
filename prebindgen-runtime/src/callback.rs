@@ -60,7 +60,7 @@ impl Drop for CallbackReturnAllocations {
                 unsafe { release(pointer) };
                 Ok(())
             }) {
-                eprintln!("prebindgen callback result cleanup error: {error}");
+                crate::report_callback_cleanup_error(&error);
             }
         }
     }
