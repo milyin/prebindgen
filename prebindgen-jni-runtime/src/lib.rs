@@ -1,4 +1,4 @@
-//! String, byte, integer and allocation operations used by generated JNI bindings.
+//! Values, allocations and retained callbacks used by generated JNI bindings.
 //!
 //! Functions that take `env` use it for the JNI calls they make; generated code
 //! passes the environment of the native call it is running in. Objects they
@@ -13,6 +13,8 @@ use prebindgen_runtime::Result;
 
 mod sequence;
 pub use sequence::*;
+mod callback;
+pub use callback::Callback;
 
 /// Copy the Java string `value` into an owned Rust string. JNI failures become messages.
 pub fn text(env: &mut JNIEnv<'_>, value: &JString<'_>) -> Result<String> {

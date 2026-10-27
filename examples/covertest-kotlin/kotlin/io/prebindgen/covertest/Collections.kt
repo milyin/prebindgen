@@ -82,6 +82,13 @@ fun checkCollections() {
         onBindingError = JniErrorHandler { closedRouted = true; emptyList() },
         onError = throwResult).isEmpty())
     check(closedRouted)
+    // All rows validate before any valid owner is acquired or acknowledged.
+    val liveWithClosed = collectionResourceNew(103)
+    val beforeClosedValidation = ownedResourceDrops()
+    collectionInvalid { collectionHandles(listOf(liveWithClosed, aliasProbe), 65, 0, onError = throwResult) }
+    check(!liveWithClosed.isClosed && ownedResourceId(liveWithClosed) == 103L)
+    check(ownedResourceDrops() == beforeClosedValidation)
+    liveWithClosed.close()
     val start = ownedResourceDrops()
     val handles = listOf(collectionResourceNew(1), collectionResourceNew(2))
     collectionInvalid { collectionHandles(handles, 0xd800, 0, onError = throwResult) }
@@ -132,7 +139,7 @@ fun checkCollections() {
     check(!nestedHandle.isClosed)
     collectionNestedHandles(listOf(emptyList(), listOf(nestedHandle))).flatten().single().close()
     check(nestedHandle.isClosed)
-    // Dynamic handle lists must not add one JVM stack frame per lock.
+    // Large dynamic handle lists retain serialization and ownership semantics.
     val many = List(4000) { collectionResourceNew(it.toLong()) }
     collectionHandles(many, 65, 0, onError = throwResult).forEach { it.close() }
     check(many.all { it.isClosed })

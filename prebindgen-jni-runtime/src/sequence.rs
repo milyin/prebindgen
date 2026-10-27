@@ -114,6 +114,7 @@ impl<'local> LocalFrame<'local> {
     /// # Safety
     /// The caller must stop using every reference created in this frame before
     /// dropping the guard. The cloned environment is used only for frame cleanup.
+    #[inline]
     pub unsafe fn new(env: &JNIEnv<'local>, capacity: i32) -> Result<Self> {
         env.push_local_frame(capacity).map_err(|e| e.to_string())?;
         Ok(Self {
@@ -122,6 +123,7 @@ impl<'local> LocalFrame<'local> {
     }
 }
 impl Drop for LocalFrame<'_> {
+    #[inline]
     fn drop(&mut self) {
         // PopLocalFrame is permitted while a JVM exception is pending.
         let _ = unsafe { self.env.pop_local_frame(&JObject::null()) };

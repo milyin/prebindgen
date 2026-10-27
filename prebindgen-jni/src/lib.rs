@@ -1,19 +1,24 @@
 //! Generate Rust/JNI wrappers and Kotlin bindings from conversion slots.
 //! Supported declarations include `package!`, `ptr_class!`, `data_class!`, `fun!`,
-//! expansion declarations, `.name()`, source selection, package prefix and native initialization.
+//! expansion declarations, retained `impl Fn` inputs, `.name()`, source selection,
+//! package prefix and native initialization.
 //! Declaration processing fills occurrence slots before wrappers are generated.
 #![warn(missing_docs)]
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
-pub use prebindgen_declarations::{Projection, ProjectionMode};
+pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
 mod metadata;
 pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
 pub use enums::{EnumClassDecl, JniEnum};
+mod callback;
+#[cfg(test)]
+mod callback_tests;
 mod optional;
 mod sequence;
 mod sequence_callback;
+pub use callback::JniCallback;
 pub use optional::JniNiche;
 mod group;
 mod scalar;
@@ -283,7 +288,7 @@ impl JniGenBuilder {
         self.source = Some(path.as_ref().to_owned());
         self
     }
-    /// Register an input/output default using the production declaration syntax.
+    /// Register an input/output default using the declaration syntax.
     /// The builder is consumed directly into its Input/Output tree.
     pub fn expand(self, decl: impl Into<prebindgen_declarations::ExpandDecl>) -> Self {
         use prebindgen_declarations::ExpandDecl;
@@ -372,7 +377,21 @@ impl JniGenBuilder {
     /// recipes, undeclared handle types and signatures exceeding JVM parameter limits.
     /// Layout, Rust trait bounds and injected Kotlin syntax are checked by the
     /// respective compilers when consuming the generated output.
-    pub fn prepare(self) -> Result<Bindings> {
+    pub fn prepare(mut self) -> Result<Bindings> {
+        for package in &self.packages {
+            let namespace = if package.name.is_empty() {
+                self.prefix.clone()
+            } else {
+                format!("{}.{}", self.prefix, package.name)
+            };
+            for class in &package.classes {
+                if let ClassDecl::Callback(declaration) = class {
+                    let mut declaration = declaration.clone();
+                    declaration.namespace = Some(namespace.clone());
+                    self.inputs.push(declaration.into());
+                }
+            }
+        }
         let references = prebindgen_declarations::declarations::source_functions(
             &self.inputs,
             &self.outputs,
@@ -386,24 +405,29 @@ impl JniGenBuilder {
             .chain(self.error_classes.iter().map(|(ty, _)| ty.clone()))
             .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
             .collect();
-        let mut flat = match (self.flat, self.source, self.items) {
-            (Some(flat), None, None) => flat,
-            (None, Some(path), None) => Flat::parse_selected(
-                prebindgen::Source::new(path).items_all(),
-                &references,
-                &types,
-            )?,
-            (None, None, Some(items)) => Flat::parse_selected(items, &references, &types)?,
+        let (mut flat, mut callback_sources) = match (self.flat, self.source, self.items) {
+            (Some(flat), None, None) => (flat, Vec::new()),
+            (None, source, items) => {
+                let items = match (source, items) {
+                    (Some(path), None) => prebindgen::Source::new(path).items_all().collect(),
+                    (None, Some(items)) => items,
+                    _ => return Err("supply exactly one source, item stream or flat model".into()),
+                };
+                let callbacks = callback::source_parameters(&items);
+                (Flat::parse_selected(items, &references, &types)?, callbacks)
+            }
             _ => return Err("supply exactly one source, item stream or flat model".into()),
         };
         validate_package(&self.prefix)?;
         flat.metadata = JniModule {
             package: self.prefix,
             native_init: self.init,
+            callbacks: Vec::new(),
         };
         let mut declarations = Vec::new();
         let mut class_types = BTreeSet::new();
         let mut bound = BTreeSet::new();
+        let mut callback_types = vec![];
         for p in self.packages {
             let pkg = if p.name.is_empty() {
                 flat.metadata.package.clone()
@@ -412,6 +436,10 @@ impl JniGenBuilder {
             };
             validate_package(&pkg)?;
             for c in p.classes {
+                if let ClassDecl::Callback(declaration) = c {
+                    callback_types.push(declaration.ty);
+                    continue;
+                }
                 let ty = flat.resolve_type(c.ty())?;
                 let name = match c.name() {
                     Some(n) => n.clone(),
@@ -420,18 +448,7 @@ impl JniGenBuilder {
                         _ => return Err("class needs a name".into()),
                     },
                 };
-                validate_name(&name)?;
-                if [
-                    "JNINative",
-                    "Functions",
-                    "NativeHandle",
-                    "JniErrorHandler",
-                    "HandleValidationFailure",
-                ]
-                .contains(&name.as_str())
-                {
-                    return Err("reserved generated class name".into());
-                }
+                validate_class_name(&name)?;
                 if !class_types.insert(type_key(&ty)) {
                     return Err("duplicate class for source type".into());
                 }
@@ -481,10 +498,17 @@ impl JniGenBuilder {
                 return Err("duplicate exception class for source error type".into());
             }
         }
-        let codec = data::DataCodec;
+        let codec = data::DataCodec::default();
         for configure in self.configure {
             configure(&mut flat)?;
         }
+        callback_sources.extend(
+            flat.functions
+                .values()
+                .flat_map(|function| &function.params)
+                .filter(|parameter| matches!(&parameter.ty.ty, syn::Type::ImplTrait(_)))
+                .map(|parameter| parameter.ty.ty.clone()),
+        );
         validate_package(&flat.metadata.package)?;
         for declaration in &declarations {
             if flat.function(&declaration.name)?.metadata.is_none() {
@@ -494,6 +518,7 @@ impl JniGenBuilder {
                 ));
             }
         }
+        let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
@@ -503,6 +528,26 @@ impl JniGenBuilder {
         validate_declaration_names(&flat)?;
         data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
+        let codec = data::DataCodec {
+            callback_outputs: Some(&output_defaults),
+        };
+        for ty in callback_types {
+            let recipe = defaults.resolve_input(&flat, &codec, &ty, &Input::auto(), &())?;
+            let Input::Callback(configuration) = recipe else {
+                return Err("callback declaration requires a callback conversion".into());
+            };
+            callback::validate_source_occurrence(&flat, &configuration, &callback_sources)?;
+            let plan = callback::input(
+                &flat,
+                &configuration,
+                &output_defaults,
+                &configuration.ty,
+                format_ident!("declared_callback"),
+                format_ident!("declared_callback_value"),
+                &Default::default(),
+            )?;
+            flat.metadata.callbacks.push(plan.into());
+        }
         let mut next_order = declarations.len();
         for declaration in declarations {
             defaults.fill(&mut flat, &codec, &declaration, &())?;
@@ -995,6 +1040,21 @@ impl JniGen {
         Ok(written)
     }
 }
+fn validate_class_name(name: &str) -> Result<()> {
+    validate_name(name)?;
+    if [
+        "JNINative",
+        "Functions",
+        "NativeHandle",
+        "JniErrorHandler",
+        "HandleValidationFailure",
+    ]
+    .contains(&name)
+    {
+        return Err("reserved generated class name".into());
+    }
+    Ok(())
+}
 fn validate_name(s: &str) -> Result<()> {
     if s.is_empty()
         || s.chars().all(|c| c == '_')
@@ -1161,7 +1221,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
         native.push_str(&format!("    @JvmStatic external fun {method}(id: Long)\n"));
-        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = lock.run {{ lock(); try {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }} finally {{ unlock() }} }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
+        let text=format!("package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n",c.pkg,c.name,c.name,c.name);
         files.insert(format!("{}/{}.kt", c.pkg.replace('.', "/"), c.name), text);
     }
     let kotlin_classes = classes
@@ -1177,6 +1237,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             )
         })
         .collect();
+    callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,
         &KotlinContext {
@@ -1466,6 +1527,20 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         }
         let call = if locks.is_empty() && lock_groups.is_empty() {
             call
+        } else if lock_groups.is_empty() && locks.len() <= 3 {
+            use std::fmt::Write as _;
+            // Evaluate and validate each expression before taking any monitor.
+            let names = (0..locks.len())
+                .map(|i| format!("handle{i}"))
+                .collect::<Vec<_>>();
+            let mut locals = String::new();
+            for (name, value) in names.iter().zip(&locks) {
+                write!(locals, "val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; ").expect("writing to a String");
+            }
+            format!(
+                "run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}",
+                names.join(", ")
+            )
         } else {
             let mut all_locks = if locks.is_empty() {
                 "kotlin.collections.emptyList<Nothing>()".to_string()

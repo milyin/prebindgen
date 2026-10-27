@@ -15,6 +15,8 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 mod builders;
+mod callback;
+pub use callback::{CallbackDecl, CallbackInput};
 mod request_conversion;
 pub use builders::{ErrorDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl};
 mod enums;
@@ -87,6 +89,8 @@ pub enum Input<P = std::convert::Infallible> {
     /// A pending preparation instruction. The default payload is uninhabited,
     /// so a resolved Input cannot contain this variant in safe Rust.
     Request(P),
+    /// Retain a source callback with independent, fully resolved invocation conversions.
+    Callback(Box<CallbackInput>),
     /// Construct a foreign record value using its configured language representation.
     Record(Vec<Input<P>>),
     /// Construct a collection by applying one recipe to every element.
@@ -113,6 +117,8 @@ pub enum Input<P = std::convert::Infallible> {
 pub enum InputRequest {
     /// Select the configured default for this source occurrence.
     Auto,
+    /// Select or override a callback signature's argument and result conversions.
+    Callback(Box<CallbackDecl>),
     /// Apply a type-specific override, including inside optional/sequence sources.
     ForType {
         /// Source type targeted by the override.
@@ -578,6 +584,18 @@ pub trait Codec {
         Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
         Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
     >;
+    /// Compile a callback whose two conversion directions are already resolved.
+    fn callback_input(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _callback: &CallbackInput,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _var: syn::Ident,
+        _active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        Err("configured callbacks are unsupported by this codec".into())
+    }
     /// Source-aware input normalization, called only during tree preparation.
     /// Return an explicit operation tree for a language-specific representation.
     fn expand_input(
@@ -1094,12 +1112,71 @@ pub fn compile_output_value<C: Codec>(
     recipe: &Output,
     extra: &C::Extra,
 ) -> Result<<C::Schema as Schema>::Output> {
-    let mut plan = Compiler::new(flat, codec, "ret".into()).output_root(
+    compile_output_at(flat, codec, ty, recipe, extra, "ret".into(), false)
+}
+
+/// Compile the foreign-to-Rust value returned by a source callback.
+///
+/// Uses the adapter's ordinary input conversions with an independent local namespace.
+/// The request-free recipe comes from the binding's type-wide input declarations.
+pub fn compile_callback_return<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Input,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Input> {
+    let mut plan = Compiler::new(flat, codec, "callback_return".into()).input(
+        ty,
+        recipe,
+        extra,
+        &Condition::default(),
+    )?;
+    codec.finish_input(&mut plan, extra)?;
+    codec.validate_input(&plan)?;
+    Ok(plan.into())
+}
+
+/// Compile one Rust-to-foreign callback argument with independent local names.
+///
+/// `index` is its position in the callback signature. The adapter supplies callback
+/// delivery instead of the ordinary function-result packet; the same resolved
+/// projection and ownership operations prepare the value in either position.
+pub fn compile_callback_argument<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Output,
+    index: usize,
+    borrowed: bool,
+    extra: &C::Extra,
+) -> Result<<C::Schema as Schema>::Output> {
+    compile_output_at(
+        flat,
+        codec,
+        ty,
+        recipe,
+        extra,
+        format!("callback_arg_{index}"),
+        borrowed,
+    )
+}
+
+fn compile_output_at<C: Codec>(
+    flat: &Flat<C::Schema>,
+    codec: &C,
+    ty: &Type,
+    recipe: &Output,
+    extra: &C::Extra,
+    prefix: String,
+    borrowed: bool,
+) -> Result<<C::Schema as Schema>::Output> {
+    let mut plan = Compiler::new(flat, codec, prefix).output_root(
         ty,
         recipe,
         extra,
         prebindgen_conversions::source_result_expr(),
-        false,
+        borrowed,
     )?;
     finalize_output_schema(codec, &mut plan, extra)?;
     codec.finish_output(&mut plan, extra)?;
@@ -1253,6 +1330,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<CodecInput<C>> {
+        if prebindgen_flat::callback_signature(ty)?.is_some()
+            && !matches!(recipe, Input::Leaf | Input::Callback(_))
+        {
+            return Err("source callback parameters only support leaf inputs".into());
+        }
         if contains_result(ty) {
             return Err("Result inputs require an explicit data representation; error routing is output-only".into());
         }
@@ -1268,6 +1350,19 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
+            Input::Callback(callback) => {
+                callback.validate_for(self.flat, ty)?;
+                return self.codec.callback_input(
+                    self.flat,
+                    callback,
+                    extra,
+                    names
+                        .map(|(wire, _)| wire.clone())
+                        .unwrap_or_else(|| self.name()),
+                    var,
+                    active,
+                );
+            }
             Input::Sequence(element_recipe) => {
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;

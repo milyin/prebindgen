@@ -41,6 +41,12 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // generator features (see [`ext`]); not used by the `perftest-*` benchmarks.
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
+pub mod callback_returns;
+pub use callback_returns::*;
+mod callback_config;
+pub use callback_config::*;
+mod callback_boundaries;
+pub use callback_boundaries::*;
 pub mod ext;
 pub use ext::*;
 
@@ -509,3 +515,6 @@ pub fn payload_new(id: i64, seq: i32, value: f64, flag: bool) -> Payload {
 pub fn payload_to_struct(value: &Payload) -> Payload {
     value.clone()
 }
+
+mod callbacks;
+pub use callbacks::*;

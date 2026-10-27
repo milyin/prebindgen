@@ -31,7 +31,7 @@ impl ErrorBinding {
 /// Fill the conversions of error declarations already attached to their source types.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &enums::EnumCodec,
+    codec: &enums::EnumCodec<'_>,
     declarations: &prebindgen_declarations::Declarations,
 ) -> Result<()> {
     let mut types = flat

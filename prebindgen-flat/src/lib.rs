@@ -14,6 +14,8 @@ pub use conversion::*;
 
 mod primitive;
 pub use primitive::Primitive;
+mod callback;
+pub use callback::{callback_signature, CallbackSignature};
 
 /// A model or generation result with a diagnostic suitable for a build script.
 pub type Result<T> = std::result::Result<T, String>;
@@ -386,7 +388,7 @@ impl<M: Schema> Flat<M> {
                         params.push(Param {
                             name: id.ident,
                             ty: TypeUse {
-                                ty: flat.resolve_type(&p.ty)?,
+                                ty: flat.resolve_parameter_type(&p.ty)?,
                                 slot: None,
                             },
                         });
@@ -610,6 +612,34 @@ impl<M: Schema> Flat<M> {
         }
         Names(&self.types).visit_type_mut(&mut ty);
         self.validate_type(&ty)?;
+        Ok(ty)
+    }
+    fn resolve_parameter_type(&self, ty: &Type) -> Result<Type> {
+        if callback_signature(ty)?.is_none() {
+            return self.resolve_type(ty);
+        }
+        let mut ty = ty.clone();
+        let Type::ImplTrait(callback) = &mut ty else {
+            unreachable!()
+        };
+        for bound in &mut callback.bounds {
+            if let syn::TypeParamBound::Trait(bound) = bound {
+                if let Some(segment) = bound.path.segments.last_mut() {
+                    if segment.ident == "Fn" {
+                        let syn::PathArguments::Parenthesized(signature) = &mut segment.arguments
+                        else {
+                            unreachable!()
+                        };
+                        for argument in &mut signature.inputs {
+                            *argument = self.resolve_type(argument)?;
+                        }
+                        if let syn::ReturnType::Type(_, output) = &mut signature.output {
+                            **output = self.resolve_type(output)?;
+                        }
+                    }
+                }
+            }
+        }
         Ok(ty)
     }
     fn validate_type(&self, ty: &Type) -> Result<()> {

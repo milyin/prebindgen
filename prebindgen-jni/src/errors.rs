@@ -32,7 +32,7 @@ impl ErrorBinding {
 /// Prepare each error once on its type and attach each function's selected binding.
 pub(crate) fn prepare(
     flat: &mut Bindings,
-    codec: &data::DataCodec,
+    codec: &data::DataCodec<'_>,
     declarations: &prebindgen_declarations::Declarations,
     functions: &[FunctionDecl],
 ) -> Result<()> {

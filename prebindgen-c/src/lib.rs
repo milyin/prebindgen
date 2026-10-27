@@ -6,6 +6,8 @@ use prebindgen_flat::{
     Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
 };
 
+mod callback;
+pub use callback::CCallback;
 mod wire;
 pub use wire::CWire;
 /// Pointee type and mutability of a C boundary pointer.
@@ -114,6 +116,8 @@ impl Codec for CCodec {
             .resources
             .iter()
             .any(|r| r.access == prebindgen_conversions::Access::Move)
+            || prebindgen_flat::wire_definitions(std::iter::once(&plan.node))
+                .any(|w| matches!(w.kind, CWire::Callback { .. }))
         {
             let accepted = prebindgen_conversions::template_parameter("acknowledgement");
             plan.acknowledgement = Some(quote!(#accepted = true;));
@@ -209,6 +213,7 @@ impl Codec for CCodec {
         let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
         Ok(match wire {
+            CWire::Callback { callback } => callback.absent_value(),
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
             CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
             CWire::Rows => quote!(__PbRows {
@@ -754,13 +759,13 @@ impl Cbindgen {
             }
             info.pointer_order = order;
         }
-        let codec = enums::EnumCodec;
         let declarations = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
             self.outputs,
             self.error_mappers,
         )?;
+        let codec = enums::EnumCodec::default();
         let mut names = std::collections::BTreeSet::new();
         for decl in &self.functions {
             if !names.insert(decl.name.clone()) {
@@ -863,6 +868,7 @@ fn c_ty(
     context: &CContext,
 ) -> String {
     match &wire.kind {
+        CWire::Callback { callback } => callback.name.clone(),
         CWire::Enum { name, .. } => format!("{prefix}_{name}"),
         CWire::Scalar { primitive: p, .. } => match p {
             Primitive::Bool | Primitive::U8 => "uint8_t".into(),
@@ -1198,6 +1204,86 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!(
             "typedef struct {prefix}_{name} {prefix}_{name};\nvoid {drop}({prefix}_{name} *ptr);\n"
         ));
+    }
+    let mut callbacks = std::collections::BTreeMap::new();
+    for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
+        for wire in f.input_wire_definitions()? {
+            if let CWire::Callback { callback } = &wire.kind {
+                if let Some(previous) = callbacks.insert(callback.name.clone(), callback.clone()) {
+                    if previous.signature != callback.signature {
+                        return Err("C callback name collision".into());
+                    }
+                }
+            }
+        }
+    }
+    callback::emit(
+        &callbacks,
+        prefix,
+        pointers,
+        &enums,
+        &mut symbols,
+        &mut tokens,
+        &mut header,
+    )?;
+    for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
+        for param in &f.params {
+            if let Some(slot) = &param.ty.slot {
+                let callbacks =
+                    prebindgen_flat::wire_definitions(std::iter::once(slot.input_node()))
+                        .filter_map(|w| {
+                            if let CWire::Callback { callback } = &w.kind {
+                                Some((w, callback))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                for (wire, callback) in &callbacks {
+                    let alias = if callbacks.len() == 1 {
+                        format!("{prefix}_{}_{}", f.name, param.name)
+                    } else {
+                        format!("{prefix}_{}_{}_{}", f.name, param.name, wire.name)
+                    };
+                    if !symbols.insert(alias.clone()) {
+                        return Err("C callback alias symbol collision".into());
+                    }
+                    header.push_str(&format!("typedef {} {alias};\n", callback.name));
+                    let callback_context = callback.context();
+                    let returned = callback.return_fields();
+                    if !returned.is_empty() {
+                        let ty = if returned.len() == 1 {
+                            c_ty(returned[0], prefix, pointers, &callback_context)
+                        } else {
+                            format!("{}_result", callback.name)
+                        };
+                        let result_alias = format!("{alias}_return");
+                        if !symbols.insert(result_alias.clone()) {
+                            return Err("C callback return alias collision".into());
+                        }
+                        header.push_str(&format!("typedef {ty} {result_alias};\n"));
+                        if returned.len() == 1 && matches!(returned[0].kind, CWire::Rows) {
+                            let row = format!(
+                                "{}_row",
+                                ty.strip_suffix("_rows")
+                                    .ok_or("invalid C callback row alias")?
+                            );
+                            header.push_str(&format!("typedef {row} {result_alias}_row;\n"));
+                        }
+                    }
+                    for (index, arg) in callback.argument_fields().into_iter().enumerate() {
+                        if matches!(arg.kind, CWire::Rows) {
+                            let ty = c_ty(arg, prefix, pointers, &callback_context);
+                            let arg_alias = format!("{alias}_arg{index}");
+                            if !symbols.insert(arg_alias.clone()) {
+                                return Err("C callback argument alias collision".into());
+                            }
+                            header.push_str(&format!("typedef {ty} {arg_alias};\nstatic inline void {arg_alias}_free({arg_alias} value) {{ {ty}_free(value); }}\n"));
+                        }
+                    }
+                }
+            }
+        }
     }
     for error in &errors {
         validate_layout(&error.plan()?.outcomes.success)?;
@@ -1599,7 +1685,7 @@ mod generation_tests {
     }
     #[test]
     fn error_conversion_reads_current_flat_definition() {
-        let codec = enums::EnumCodec;
+        let codec = enums::EnumCodec::default();
         let mut flat =
             error_model("pub struct Failure{pub code:i64}pub fn f()->Result<i64,Failure>{}");
         let ty = flat.resolve_type(&syn::parse_quote!(Failure)).unwrap();
@@ -1649,7 +1735,7 @@ mod generation_tests {
 
         let mut flat=error_model("pub struct Failure {pub code:i64,pub info:Option<String>} pub fn f(v:Option<Vec<i64>>)->Result<Option<Vec<Option<i64>>>,Failure>{}");
         let ty = flat.resolve_type(&syn::parse_quote!(Failure)).unwrap();
-        let codec = enums::EnumCodec;
+        let codec = enums::EnumCodec::default();
         flat.type_metadata_mut(&ty).unwrap().error = Some(std::rc::Rc::new(
             errors::ErrorBinding::declared("failure".into(), ty.clone()),
         ));
