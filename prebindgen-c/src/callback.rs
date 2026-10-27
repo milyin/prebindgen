@@ -132,12 +132,17 @@ pub(crate) fn input(
             quote!(#name:#ty)
         })
         .collect::<Vec<_>>();
+    let callback_name = callback.name.clone();
+    let callback_signature = callback.signature.clone();
     let handled = if unit {
         quote!(if let Err(error) = result {
-            eprintln!("prebindgen callback error: {}", error);
+            ::prebindgen_runtime::report_callback_error(#callback_name, #callback_signature, &error);
         })
     } else {
-        quote!(result.unwrap_or_else(|error| panic!("callback failed: {}", error)))
+        quote!(result.unwrap_or_else(|error| {
+            ::prebindgen_runtime::report_callback_error(#callback_name, #callback_signature, &error);
+            panic!("callback failed: {}", error)
+        }))
     };
     Ok(InputPlan {
         fallible: true,

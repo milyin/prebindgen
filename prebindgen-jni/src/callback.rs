@@ -339,15 +339,16 @@ impl JniCallback {
                 &syn::parse_quote!(::prebindgen_runtime::Result<()>),
             )?;
         }
+        let callback_name = self.fqn();
         let (registration, activate) = if active.0.is_empty() {
             (
-                quote!(let #retained = ::prebindgen_jni_runtime::Callback::new(&mut #env, &#wire, #descriptor)?;),
+                quote!(let #retained = ::prebindgen_jni_runtime::Callback::new_named(&mut #env, &#wire, #descriptor, #callback_name)?;),
                 quote!(),
             )
         } else {
             let condition = active.rust();
             (
-                quote!(let #retained = if #condition {Some(::prebindgen_jni_runtime::Callback::new(&mut #env, &#wire, #descriptor)?)} else {None};),
+                quote!(let #retained = if #condition {Some(::prebindgen_jni_runtime::Callback::new_named(&mut #env, &#wire, #descriptor, #callback_name)?)} else {None};),
                 // Optional/selector construction executes only on its validated active path.
                 quote!(let #retained = #retained.expect("validated active callback");),
             )

@@ -15,6 +15,7 @@ private fun expectInvalid(action: () -> Unit) {
 fun main() {
     checkCallbackConfiguration()
     checkCallbackReturns()
+    checkCallbackDiagnostics()
     checkSourceCallbacks()
     checkCallbackHandleCollections()
     checkSharedCallbackReentry()
