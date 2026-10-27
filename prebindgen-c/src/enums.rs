@@ -5,7 +5,6 @@ use prebindgen_declarations::{Condition, EnumMapping};
 /// C conversions read representation and error declarations from Flat.
 #[derive(Default)]
 pub(crate) struct EnumCodec<'a> {
-    pub(crate) callbacks: Option<&'a prebindgen_declarations::Declarations>,
     pub(crate) return_owners:
         Option<&'a std::cell::RefCell<std::collections::BTreeMap<String, syn::Type>>>,
 }
@@ -176,6 +175,24 @@ impl Codec for EnumCodec<'_> {
         }
         self.mapping(flat, ty).is_none() && CCodec.consumes(flat, ty, e)
     }
+    fn callback_input(
+        &self,
+        flat: &Bindings,
+        callback: &prebindgen_declarations::CallbackInput,
+        _: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<CWire>> {
+        if callback.foreign.is_some()
+            || callback.namespace.is_some()
+            || !callback.explicit_arguments.is_empty()
+            || callback.explicit_return
+        {
+            return Err("configured callbacks are unsupported by the C adapter".into());
+        }
+        callback::input(flat, callback, wire, var, active)
+    }
     fn input_leaf(
         &self,
         flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -186,15 +203,7 @@ impl Codec for EnumCodec<'_> {
         active: &Condition,
     ) -> Result<InputPlan<CWire>> {
         if prebindgen_flat::callback_signature(ty)?.is_some() {
-            return callback::input(
-                flat,
-                self.callbacks
-                    .ok_or("source callbacks require adapter callback preparation")?,
-                ty,
-                w,
-                v,
-                active,
-            );
+            return Err("resolve Callback operations before leaf compilation".into());
         }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());

@@ -765,10 +765,7 @@ impl Cbindgen {
             self.outputs,
             self.error_mappers,
         )?;
-        let codec = enums::EnumCodec {
-            callbacks: Some(&declarations),
-            return_owners: None,
-        };
+        let codec = enums::EnumCodec::default();
         let mut names = std::collections::BTreeSet::new();
         for decl in &self.functions {
             if !names.insert(decl.name.clone()) {

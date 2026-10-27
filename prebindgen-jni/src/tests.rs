@@ -1425,7 +1425,10 @@ fn callback_rejections_are_preparation_errors() {
             .set_package_prefix("test")
             .package(package!().fun(fun!(f).expand_param("cb", expand_param!(i64).variant_self()))),
     );
-    assert!(error.contains("argument output expansions"), "{error}");
+    assert!(
+        error.contains("input expansion type does not match occurrence"),
+        "{error}"
+    );
 }
 
 #[test]

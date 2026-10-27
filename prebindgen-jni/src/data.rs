@@ -57,6 +57,8 @@ pub enum ClassDecl {
     Data(DataClassDecl),
     /// A fieldless enum mapped to a Kotlin enum class.
     Enum(EnumClassDecl),
+    /// A retained callback interface and its signature defaults.
+    Callback(prebindgen_declarations::CallbackDecl),
 }
 impl From<PtrClassDecl> for ClassDecl {
     fn from(value: PtrClassDecl) -> Self {
@@ -73,12 +75,18 @@ impl From<EnumClassDecl> for ClassDecl {
         Self::Enum(value)
     }
 }
+impl From<prebindgen_declarations::CallbackDecl> for ClassDecl {
+    fn from(value: prebindgen_declarations::CallbackDecl) -> Self {
+        Self::Callback(value)
+    }
+}
 impl ClassDecl {
     pub(crate) fn ty(&self) -> &syn::Type {
         match self {
             Self::Ptr(c) => &c.ty,
             Self::Data(c) => &c.ty,
             Self::Enum(c) => &c.ty,
+            Self::Callback(c) => &c.ty,
         }
     }
     pub(crate) fn name(&self) -> &Option<String> {
@@ -86,6 +94,7 @@ impl ClassDecl {
             Self::Ptr(c) => &c.name,
             Self::Data(c) => &c.name,
             Self::Enum(c) => &c.name,
+            Self::Callback(c) => &c.foreign,
         }
     }
 }
@@ -118,11 +127,8 @@ pub struct DataGroup {
 /// JNI conversions consult the declarations attached to Flat.
 #[derive(Default)]
 pub(crate) struct DataCodec<'a> {
-    // Preparation-only defaults: emitted callback slots retain their own output plans.
-    pub(crate) callbacks: Option<(
-        &'a prebindgen_declarations::Declarations,
-        &'a BTreeSet<String>,
-    )>,
+    // Explicit global argument-output declarations determine callback ownership.
+    pub(crate) callback_outputs: Option<&'a BTreeSet<String>>,
 }
 /// Complete class and enum declarations already attached to their source types.
 pub(crate) fn prepare(flat: &mut Bindings) -> Result<()> {
@@ -669,6 +675,28 @@ impl Codec for DataCodec<'_> {
         }
         Ok(())
     }
+    fn callback_input(
+        &self,
+        flat: &Bindings,
+        configuration: &prebindgen_declarations::CallbackInput,
+        _: &(),
+        wire: syn::Ident,
+        var: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        let outputs = self
+            .callback_outputs
+            .ok_or("source callback parameters require adapter callback preparation")?;
+        callback::input(
+            flat,
+            configuration,
+            outputs,
+            &configuration.ty,
+            wire,
+            var,
+            active,
+        )
+    }
     fn input_leaf(
         &self,
         flat: &prebindgen_flat::Flat<Self::Schema>,
@@ -679,10 +707,7 @@ impl Codec for DataCodec<'_> {
         active: &Condition,
     ) -> Result<InputPlan<JniWire>> {
         if prebindgen_flat::callback_signature(ty)?.is_some() {
-            let (defaults, outputs) = self
-                .callbacks
-                .ok_or("source callback parameters require adapter callback preparation")?;
-            return callback::input(flat, defaults, outputs, ty, wire, var, active);
+            return Err("resolve Callback operations before leaf compilation".into());
         }
         if Self::source_record(flat, ty)?.is_some() {
             return Err("resolve the data-class Input::Record before leaf compilation".into());

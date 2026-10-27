@@ -723,8 +723,71 @@ Callback arguments use their type-wide output expansions and declared data/enum
 representations. Public interfaces retain source type names (`SampleCallback`),
 even when a Kotlin class is renamed, and live in the first argument type's package.
 Zero-argument callbacks share `VoidCallback` in the root package. Identical public
-signatures share an interface; conflicting signatures with the same derived name
-are diagnosed. Input-side `expand_param` overrides on callbacks are rejected.
+signatures share an interface; conflicting signatures or handle ownership contracts
+with the same name are diagnosed.
+
+Declare callback defaults with `callback!`, placed alongside other classes:
+
+```rust,ignore
+.package(package!("handlers")
+    .class(callback!(impl Fn(Packet, i64) -> Decision)
+        .name("PacketHandler")
+        .expand_param(0, expand_return!(Packet)
+            .field(fun!(packet_payload).name("payload")))
+        .expand_return(expand_param!(Decision)
+            .variant(fun!(decision_from_flag)))))
+```
+
+Callback arguments leave Rust, so `.expand_param(index, ...)` accepts output
+conversions such as `expand_return!`. The callback's result enters Rust, so
+`.expand_return(...)` accepts input conversions such as `expand_param!`.
+Argument indices start at zero: `Fn` signatures have no parameter names.
+The declaration above emits `handlers.PacketHandler` in the configured package
+prefix, including when no exported function uses the interface. Its callback
+signature must occur in a parameter of a supplied nongeneric source function; a
+declaration with no matching occurrence is a generation error. Unexported source functions
+and constructor helpers count as occurrences. Matching uses the same normalized
+argument and return types as callback defaults.
+
+Override a particular callback through the ordinary function parameter API:
+
+```rust,ignore
+.fun(fun!(register_special).expand_param("callback",
+    callback!(impl Fn(Packet, i64) -> Decision)
+        .name("SpecialPacketHandler")
+        .expand_param(0, expand_return!(Packet)
+            .field(fun!(packet_priority)))))
+```
+
+This changes argument zero while inheriting the declared callback's result
+conversion, other arguments and package. A selected argument or result conversion
+replaces that whole conversion tree. Unspecified settings inherit callback
+signature defaults, followed by ordinary value-type defaults. Callback settings
+do not change ordinary functions' conversions. Unit callbacks retain an empty unit
+return representation; an input expansion requiring a returned value is rejected. Signature matching resolves Rust
+type names and ignores `Send`, `Sync`, `'static`, and an omitted `-> ()`.
+Use a distinct `.name(...)` when an override changes the Kotlin signature or
+handle ownership contract of an existing interface.
+
+Constructor arguments accept the same local declarations through input trees:
+
+```rust,ignore
+Input::constructor("handler_new", [
+    callback!(impl Fn(Packet, i64) -> Decision)
+        .name("ConstructedPacketHandler")
+        .expand_return(expand_param!(Decision)
+            .variant(fun!(decision_from_number)))
+        .into(),
+])
+```
+
+These overrides also apply when that constructor is used inside optional or
+collection inputs. Callback configuration is resolved during generation and adds
+no runtime tracking or Kotlin grouping objects. Explicit callback argument
+expansions transfer produced handles to the callback author, like explicit
+type-wide output expansions. The configured callback API is supported by JniGen;
+the C adapter retains its existing automatically configured callbacks and rejects
+callback-specific names or conversion overrides.
 
 Registration retains a JVM global reference and caches the bridge method. Rust
 closures can retain that reference beyond registration and invoke it concurrently

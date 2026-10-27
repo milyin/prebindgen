@@ -1,7 +1,7 @@
 //! Typed C callbacks retained by source closures.
 use super::*;
 use prebindgen_conversions::{InputFragment, OutputFragment, TemplateContext};
-use prebindgen_declarations::{Condition, Declarations, Input};
+use prebindgen_declarations::{CallbackInput, Condition};
 use prebindgen_flat::{callback_signature, type_key, InputConversion, WireNode};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -25,13 +25,12 @@ struct Argument {
 
 pub(crate) fn input(
     flat: &Bindings,
-    defaults: &Declarations,
-    ty: &syn::Type,
+    configuration: &CallbackInput,
     wire: syn::Ident,
     var: syn::Ident,
     active: &Condition,
 ) -> Result<InputPlan<CWire>> {
-    let signature = callback_signature(ty)?.ok_or("expected source callback")?;
+    let signature = callback_signature(&configuration.ty)?.ok_or("expected source callback")?;
     let unit = matches!(&signature.return_type, syn::Type::Tuple(t) if t.elems.is_empty());
     let key = format!(
         "({})->{}",
@@ -66,12 +65,11 @@ pub(crate) fn input(
                 "Result callback arguments require an explicit value representation".into(),
             );
         }
-        let recipe = defaults.output_recipe(flat, &codec, &ty, &())?;
         let output = prebindgen_declarations::compile_callback_argument(
             flat,
             &codec,
             &ty,
-            &recipe,
+            &configuration.arguments[index],
             index,
             borrowed,
             &(),
@@ -86,7 +84,6 @@ pub(crate) fn input(
     }
     let return_owners = std::cell::RefCell::new(BTreeMap::new());
     let return_codec = enums::EnumCodec {
-        callbacks: None,
         return_owners: Some(&return_owners),
     };
     let returned = if unit {
@@ -97,13 +94,6 @@ pub(crate) fn input(
                 "callback return values must be owned; borrowed returns are unsupported".into(),
             );
         }
-        let recipe = defaults.resolve_input(
-            flat,
-            &return_codec,
-            &signature.return_type,
-            &Input::auto(),
-            &(),
-        )?;
         return_owners.borrow_mut().clear();
         Some((
             signature.return_type.clone(),
@@ -111,7 +101,7 @@ pub(crate) fn input(
                 flat,
                 &return_codec,
                 &signature.return_type,
-                &recipe,
+                &configuration.return_value,
                 &(),
             )?,
         ))
