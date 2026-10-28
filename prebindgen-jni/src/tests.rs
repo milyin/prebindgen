@@ -2013,3 +2013,133 @@ fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
         .build()
         .unwrap();
 }
+
+#[test]
+fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
+    for bytes in [false, true] {
+        let ty = if bytes { "Vec<u8>" } else { "String" };
+        let source = format!("pub fn make()->{ty}{{}}pub fn observe(value:&{ty})->usize{{}}");
+        for copy in [false, true] {
+            let expansion = match (bytes, copy) {
+                (false, false) => expand_return!(String).field_self().field(fun!(observe)),
+                (true, false) => expand_return!(Vec<u8>).field_self().field(fun!(observe)),
+                (false, true) => expand_return!(String).field_self_ref().field_self(),
+                (true, true) => expand_return!(Vec<u8>).field_self_ref().field_self(),
+            };
+            let jni = JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(make).expand_return(expansion.clone())))
+                .build()
+                .unwrap();
+            let c = prebindgen_c::Cbindgen::new(
+                prebindgen_flat::Flat::parse(
+                    syn::parse_file(&source)
+                        .unwrap()
+                        .items
+                        .into_iter()
+                        .map(|i| (i, Default::default())),
+                )
+                .unwrap(),
+            )
+            .function(fun!(make).expand_return(expansion))
+            .panic()
+            .build()
+            .unwrap();
+            assert_eq!(jni.rust.contains("Clone::clone"), copy, "JNI {ty}");
+            assert_eq!(c.rust.contains("Clone::clone"), copy, "C {ty}");
+            let declaration = c
+                .header
+                .lines()
+                .find(|line| line.contains("_make("))
+                .unwrap();
+            assert!(declaration.contains("_buffer "), "{declaration}");
+        }
+        for mixed in [false, true] {
+            let expansion = match (bytes, mixed) {
+                (false, false) => expand_return!(String).field_self().field_self(),
+                (true, false) => expand_return!(Vec<u8>).field_self().field_self(),
+                (false, true) => expand_return!(String).field_self().field_self_into(),
+                (true, true) => expand_return!(Vec<u8>).field_self().field_self_into(),
+            };
+            let error = fail(
+                JniGen::builder()
+                    .flat(flat(&source))
+                    .set_package_prefix("test")
+                    .package(package!().fun(fun!(make).expand_return(expansion.clone()))),
+            );
+            assert!(error.contains("field_self_ref()"), "{error}");
+            let c = prebindgen_c::Cbindgen::new(
+                prebindgen_flat::Flat::parse(
+                    syn::parse_file(&source)
+                        .unwrap()
+                        .items
+                        .into_iter()
+                        .map(|i| (i, Default::default())),
+                )
+                .unwrap(),
+            )
+            .function(fun!(make).expand_return(expansion))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+            assert!(c.contains("field_self_ref()"), "{c}");
+        }
+        let source = format!(
+            "pub fn make()->Option<{ty}>{{}}pub fn observe(value:&Option<{ty}>)->usize{{}}"
+        );
+        let expansion = if bytes {
+            expand_return!(Option<Vec<u8>>)
+                .field_self()
+                .field(fun!(observe))
+        } else {
+            expand_return!(Option<String>)
+                .field_self()
+                .field(fun!(observe))
+        };
+        let jni = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(expansion.clone())))
+            .build()
+            .unwrap();
+        let c = prebindgen_c::Cbindgen::new(
+            prebindgen_flat::Flat::parse(
+                syn::parse_file(&source)
+                    .unwrap()
+                    .items
+                    .into_iter()
+                    .map(|i| (i, Default::default())),
+            )
+            .unwrap(),
+        )
+        .function(fun!(make).expand_return(expansion))
+        .panic()
+        .build()
+        .unwrap();
+        assert!(!jni.rust.contains("Clone::clone"));
+        assert!(!c.rust.contains("Clone::clone"));
+    }
+}
+
+#[test]
+fn callback_return_handles_use_direct_locks_and_collections_keep_dynamic_locks() {
+    for returned in ["Handle", "Option<Handle>", "Vec<Handle>"] {
+        let source=format!("pub struct Handle {{pub n:i64}}pub fn call(callback:impl Fn()->{returned}+Send+Sync+'static)->i64{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(call)))
+            .build()
+            .unwrap();
+        let wrapper = &generated.kotlin["test/Functions.kt"];
+        assert!(wrapper.contains("test.withHandleLocks("));
+        if returned == "Vec<Handle>" {
+            assert!(wrapper.contains("flatMap"));
+        } else {
+            assert!(!wrapper.contains("listOfNotNull"), "{returned}: {wrapper}");
+            assert!(!wrapper.contains("emptyList"), "{returned}: {wrapper}");
+        }
+    }
+}

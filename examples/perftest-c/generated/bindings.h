@@ -403,6 +403,13 @@ perftest_archive * perftest_archive_new(void);
 void perftest_archive_store(perftest_archive * p0_w1, int32_t p1_w1, int64_t p1_w4, double p1_w6, perftest_summary * p1_w8);
 perftest_blob * perftest_blob_value_echo(perftest_blob * p0_w1);
 perftest_blob * perftest_blob_value_new(int64_t p0_w1, perftest_buffer p1_w1);
+uintptr_t perftest_buffer_views_address(void);
+perftest_buffer perftest_buffer_views_bytes(uintptr_t *out1);
+/* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
+int32_t perftest_buffer_views_optional_bytes(uint8_t p0_w1, perftest_buffer *out1, uintptr_t *out2);
+/* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
+int32_t perftest_buffer_views_optional_text(uint8_t p0_w1, perftest_buffer *out1, uintptr_t *out2);
+perftest_buffer perftest_buffer_views_text(uintptr_t *out1);
 perftest_panic_output * perftest_c_panic_output_new(void);
 int64_t perftest_c_plain_panic(void);
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */

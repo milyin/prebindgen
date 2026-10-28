@@ -138,6 +138,11 @@ views are rejected: combinations that previously copied through `field_self()`
 should select `field_self_ref()` for each intended copy alongside one owning view.
 Type-wide expansions of field types do not rewrite a data class's properties.
 
+Owned `String` and `Vec<u8>` identities also transfer their storage when combined
+with getter views. Getters run before that move, regardless of output order.
+Multiple independent owning identities require explicit copies with
+`field_self_ref()`; adding a getter does not authorize a hidden buffer clone.
+
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
 and moves its returned record fields. Both support existing per-field expansion
