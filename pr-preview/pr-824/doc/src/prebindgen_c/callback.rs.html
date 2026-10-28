@@ -323,267 +323,261 @@
 <a href=#323 id=323 data-nosnippet>323</a>                <span class="kw-2">&amp;</span>expected,
 <a href=#324 id=324 data-nosnippet>324</a>            )<span class="question-mark">?</span>;
 <a href=#325 id=325 data-nosnippet>325</a>            body = <span class="macro">quote!</span>({#commit_owners #body});
-<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw">if </span>!plan.resources.is_empty()
-<a href=#327 id=327 data-nosnippet>327</a>                &amp;&amp; !<span class="macro">matches!</span>(fields.as_slice(),[field] <span class="kw">if </span><span class="macro">matches!</span>(field.kind,CWire::Pointer{..}))
-<a href=#328 id=328 data-nosnippet>328</a>            {
-<a href=#329 id=329 data-nosnippet>329</a>                <span class="kw">let </span>seen = <span class="macro">syn::parse_quote!</span>(callback_return_resources);
-<a href=#330 id=330 data-nosnippet>330</a>                <span class="kw">let </span>check = plan.code_fragment_slot(
-<a href=#331 id=331 data-nosnippet>331</a>                    InputFragment::CheckAliases {
-<a href=#332 id=332 data-nosnippet>332</a>                        context,
-<a href=#333 id=333 data-nosnippet>333</a>                        seen: <span class="kw-2">&amp;</span>seen,
-<a href=#334 id=334 data-nosnippet>334</a>                    },
-<a href=#335 id=335 data-nosnippet>335</a>                    <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(()),
-<a href=#336 id=336 data-nosnippet>336</a>                )<span class="question-mark">?</span>;
-<a href=#337 id=337 data-nosnippet>337</a>                body = <span class="macro">quote!</span>({<span class="kw">let </span><span class="kw-2">mut </span>#seen:Vec&lt;(usize,bool)&gt;=Vec::new();<span class="kw">let _</span>:()=#check;#body});
-<a href=#338 id=338 data-nosnippet>338</a>            }
-<a href=#339 id=339 data-nosnippet>339</a>            plan.code_fragment_slot(
-<a href=#340 id=340 data-nosnippet>340</a>                InputFragment::Validate {
-<a href=#341 id=341 data-nosnippet>341</a>                    context,
-<a href=#342 id=342 data-nosnippet>342</a>                    next: body,
-<a href=#343 id=343 data-nosnippet>343</a>                },
-<a href=#344 id=344 data-nosnippet>344</a>                <span class="kw-2">&amp;</span>expected,
-<a href=#345 id=345 data-nosnippet>345</a>            )<span class="question-mark">?
-<a href=#346 id=346 data-nosnippet>346</a>        </span>} <span class="kw">else </span>{
-<a href=#347 id=347 data-nosnippet>347</a>            <span class="macro">quote!</span>(<span class="prelude-val">Ok</span>(()))
-<a href=#348 id=348 data-nosnippet>348</a>        };
-<a href=#349 id=349 data-nosnippet>349</a>        <span class="kw">let </span>names = values
-<a href=#350 id=350 data-nosnippet>350</a>            .iter()
-<a href=#351 id=351 data-nosnippet>351</a>            .enumerate()
-<a href=#352 id=352 data-nosnippet>352</a>            .map(|(i, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">"callback_argument_{i}"</span>))
-<a href=#353 id=353 data-nosnippet>353</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw">let </span>snapshots = names
-<a href=#355 id=355 data-nosnippet>355</a>            .iter()
-<a href=#356 id=356 data-nosnippet>356</a>            .zip(<span class="kw-2">&amp;</span>values)
-<a href=#357 id=357 data-nosnippet>357</a>            .map(|(name, value)| <span class="macro">quote!</span>(<span class="kw">let </span>#name=#value;));
-<a href=#358 id=358 data-nosnippet>358</a>        <span class="kw">let </span>protect_result=<span class="self">self</span>.has_release().then(||<span class="macro">quote!</span>(<span class="kw">let </span>callback_result=__PbCallbackResult {value:raw_result,context:#owner.context(),release:#release};<span class="kw">let </span>raw_result=callback_result.value;));
-<a href=#359 id=359 data-nosnippet>359</a>        <span class="kw">let </span><span class="kw-2">mut </span>body = <span class="macro">quote!</span>({ #(#snapshots)* #commits <span class="kw">let </span>raw_result=<span class="kw">unsafe </span>{#run(#owner.context(), #(#names),<span class="kw-2">*</span>)}; #protect_result #decode #owners #result });
-<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">for </span>(index, arg) <span class="kw">in </span><span class="self">self</span>.arguments.iter().enumerate().rev() {
-<a href=#361 id=361 data-nosnippet>361</a>            <span class="kw">let </span>source = <span class="macro">format_ident!</span>(<span class="string">"callback_source_{index}"</span>);
-<a href=#362 id=362 data-nosnippet>362</a>            body = arg.output.code_fragment_slot(
-<a href=#363 id=363 data-nosnippet>363</a>                OutputFragment::Prepare {
-<a href=#364 id=364 data-nosnippet>364</a>                    context,
-<a href=#365 id=365 data-nosnippet>365</a>                    source: <span class="kw-2">&amp;</span>source,
-<a href=#366 id=366 data-nosnippet>366</a>                    next: body,
-<a href=#367 id=367 data-nosnippet>367</a>                },
-<a href=#368 id=368 data-nosnippet>368</a>                <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(::prebindgen_runtime::Result&lt;()&gt;),
-<a href=#369 id=369 data-nosnippet>369</a>            )<span class="question-mark">?</span>;
-<a href=#370 id=370 data-nosnippet>370</a>        }
-<a href=#371 id=371 data-nosnippet>371</a>        <span class="prelude-val">Ok</span>(body)
-<a href=#372 id=372 data-nosnippet>372</a>    }
-<a href=#373 id=373 data-nosnippet>373</a>}
-<a href=#374 id=374 data-nosnippet>374</a><span class="kw">fn </span>receive_return_owners(
-<a href=#375 id=375 data-nosnippet>375</a>    node: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;CWire, CChain, CBranch&gt;,
-<a href=#376 id=376 data-nosnippet>376</a>    context: <span class="kw-2">&amp;</span>CContext,
-<a href=#377 id=377 data-nosnippet>377</a>    owners: <span class="kw-2">&amp;</span>BTreeMap&lt;String, syn::Type&gt;,
-<a href=#378 id=378 data-nosnippet>378</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#379 id=379 data-nosnippet>379</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>node {
-<a href=#380 id=380 data-nosnippet>380</a>        WireNode::Leaf(fields) =&gt; fields
-<a href=#381 id=381 data-nosnippet>381</a>            .iter()
-<a href=#382 id=382 data-nosnippet>382</a>            .filter_map(|field| {
-<a href=#383 id=383 data-nosnippet>383</a>                <span class="kw">if let </span>CWire::Pointer { pointer, .. } = <span class="kw-2">&amp;</span>field.kind {
-<a href=#384 id=384 data-nosnippet>384</a>                    <span class="kw">if </span>owners.contains_key(<span class="kw-2">&amp;</span>field.name.to_string()) {
-<a href=#385 id=385 data-nosnippet>385</a>                        <span class="kw">let </span>name = <span class="kw-2">&amp;</span>field.name;
-<a href=#386 id=386 data-nosnippet>386</a>                        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>pointer.ty;
-<a href=#387 id=387 data-nosnippet>387</a>                        <span class="kw">return </span><span class="prelude-val">Some</span>(
-<a href=#388 id=388 data-nosnippet>388</a>                            <span class="macro">quote!</span>(<span class="kw">unsafe </span>{callback_return_owners.receive(#name <span class="kw">as </span><span class="kw-2">*mut </span>#ty);}),
-<a href=#389 id=389 data-nosnippet>389</a>                        );
-<a href=#390 id=390 data-nosnippet>390</a>                    }
-<a href=#391 id=391 data-nosnippet>391</a>                }
-<a href=#392 id=392 data-nosnippet>392</a>                <span class="prelude-val">None
-<a href=#393 id=393 data-nosnippet>393</a>            </span>})
-<a href=#394 id=394 data-nosnippet>394</a>            .collect(),
-<a href=#395 id=395 data-nosnippet>395</a>        WireNode::Chain {
-<a href=#396 id=396 data-nosnippet>396</a>            meta: CChain::Optional(optional),
-<a href=#397 id=397 data-nosnippet>397</a>            child,
-<a href=#398 id=398 data-nosnippet>398</a>            ..
-<a href=#399 id=399 data-nosnippet>399</a>        } =&gt; {
-<a href=#400 id=400 data-nosnippet>400</a>            <span class="kw">let </span>scan = receive_return_owners(child, context, owners)<span class="question-mark">?</span>;
-<a href=#401 id=401 data-nosnippet>401</a>            <span class="kw">if </span>scan.is_empty() {
-<a href=#402 id=402 data-nosnippet>402</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(scan);
-<a href=#403 id=403 data-nosnippet>403</a>            }
-<a href=#404 id=404 data-nosnippet>404</a>            <span class="kw">let </span>name = optional.discriminator();
-<a href=#405 id=405 data-nosnippet>405</a>            <span class="kw">let </span>present = optional
-<a href=#406 id=406 data-nosnippet>406</a>                .niche()
-<a href=#407 id=407 data-nosnippet>407</a>                .map(|n| n.present(<span class="macro">quote!</span>(#name)))
-<a href=#408 id=408 data-nosnippet>408</a>                .unwrap_or_else(|| <span class="macro">quote!</span>(#name==<span class="number">1</span>));
-<a href=#409 id=409 data-nosnippet>409</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#present {#scan})
-<a href=#410 id=410 data-nosnippet>410</a>        }
-<a href=#411 id=411 data-nosnippet>411</a>        WireNode::Chain {
-<a href=#412 id=412 data-nosnippet>412</a>            meta: CChain::Sequence(<span class="kw">_</span>),
-<a href=#413 id=413 data-nosnippet>413</a>            controls,
-<a href=#414 id=414 data-nosnippet>414</a>            child,
-<a href=#415 id=415 data-nosnippet>415</a>        } =&gt; {
-<a href=#416 id=416 data-nosnippet>416</a>            <span class="kw">let </span>scan = receive_return_owners(child, context, owners)<span class="question-mark">?</span>;
-<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw">if </span>scan.is_empty() {
-<a href=#418 id=418 data-nosnippet>418</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(scan);
-<a href=#419 id=419 data-nosnippet>419</a>            }
-<a href=#420 id=420 data-nosnippet>420</a>            <span class="kw">let </span>carrier = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
-<a href=#421 id=421 data-nosnippet>421</a>            <span class="kw">let </span>row = <span class="kw-2">&amp;</span>context.row_types[<span class="kw-2">&amp;</span>carrier.to_string()];
-<a href=#422 id=422 data-nosnippet>422</a>            <span class="kw">let </span>reads = group::row_fields(child).enumerate().map(|(i, w)| {
-<a href=#423 id=423 data-nosnippet>423</a>                <span class="kw">let </span>name = <span class="kw-2">&amp;</span>w.name;
-<a href=#424 id=424 data-nosnippet>424</a>                <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#425 id=425 data-nosnippet>425</a>                <span class="macro">quote!</span>(<span class="kw">let </span>#name=<span class="kw">unsafe </span>{(<span class="kw-2">*</span>((#carrier.data <span class="kw">as </span><span class="kw-2">*const </span>#row).add(index))).#field};)
-<a href=#426 id=426 data-nosnippet>426</a>            });
-<a href=#427 id=427 data-nosnippet>427</a>            <span class="macro">quote!</span>(::prebindgen_runtime::validate_slice(#carrier.data <span class="kw">as </span><span class="kw-2">*const </span>#row,#carrier.len)<span class="question-mark">?</span>;<span class="kw">for </span>index <span class="kw">in </span><span class="number">0</span>..#carrier.len {#(#reads)* #scan})
-<a href=#428 id=428 data-nosnippet>428</a>        }
-<a href=#429 id=429 data-nosnippet>429</a>        WireNode::Branch {
-<a href=#430 id=430 data-nosnippet>430</a>            meta: CBranch::Alternatives,
-<a href=#431 id=431 data-nosnippet>431</a>            controls,
-<a href=#432 id=432 data-nosnippet>432</a>            children,
-<a href=#433 id=433 data-nosnippet>433</a>        } =&gt; {
-<a href=#434 id=434 data-nosnippet>434</a>            <span class="kw">let </span>selector = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
-<a href=#435 id=435 data-nosnippet>435</a>            <span class="kw">let </span>scans = children
-<a href=#436 id=436 data-nosnippet>436</a>                .iter()
-<a href=#437 id=437 data-nosnippet>437</a>                .enumerate()
-<a href=#438 id=438 data-nosnippet>438</a>                .map(|(i, child)| {
-<a href=#439 id=439 data-nosnippet>439</a>                    <span class="kw">let </span>scan = receive_return_owners(child, context, owners)<span class="question-mark">?</span>;
-<a href=#440 id=440 data-nosnippet>440</a>                    <span class="kw">let </span>i = i <span class="kw">as </span>i32;
-<a href=#441 id=441 data-nosnippet>441</a>                    <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">if </span>#selector==#i {#scan}))
-<a href=#442 id=442 data-nosnippet>442</a>                })
-<a href=#443 id=443 data-nosnippet>443</a>                .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#444 id=444 data-nosnippet>444</a>            <span class="macro">quote!</span>(#(#scans)<span class="kw-2">*</span>)
-<a href=#445 id=445 data-nosnippet>445</a>        }
-<a href=#446 id=446 data-nosnippet>446</a>        WireNode::Branch { children, .. } =&gt; children
-<a href=#447 id=447 data-nosnippet>447</a>            .iter()
-<a href=#448 id=448 data-nosnippet>448</a>            .map(|child| receive_return_owners(child, context, owners))
-<a href=#449 id=449 data-nosnippet>449</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
-<a href=#450 id=450 data-nosnippet>450</a>            </span>.into_iter()
-<a href=#451 id=451 data-nosnippet>451</a>            .collect(),
-<a href=#452 id=452 data-nosnippet>452</a>    })
-<a href=#453 id=453 data-nosnippet>453</a>}
-<a href=#454 id=454 data-nosnippet>454</a><span class="kw">fn </span>render(context: <span class="kw-2">&amp;</span>CContext, code: <span class="kw-2">&amp;</span>TokenStream, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#455 id=455 data-nosnippet>455</a>    <span class="kw">let </span>code = prebindgen_conversions::render_template(code, <span class="kw-2">&amp;</span>|name| {
-<a href=#456 id=456 data-nosnippet>456</a>        <span class="prelude-val">Ok</span>(<span class="kw">if </span>name == <span class="string">"source_result" </span>{
-<a href=#457 id=457 data-nosnippet>457</a>            <span class="macro">quote!</span>(#source)
-<a href=#458 id=458 data-nosnippet>458</a>        } <span class="kw">else </span>{
-<a href=#459 id=459 data-nosnippet>459</a>            prebindgen_conversions::template_parameter(name)
-<a href=#460 id=460 data-nosnippet>460</a>        })
-<a href=#461 id=461 data-nosnippet>461</a>    })<span class="question-mark">?</span>;
-<a href=#462 id=462 data-nosnippet>462</a>    context.render(<span class="kw-2">&amp;</span>code)
-<a href=#463 id=463 data-nosnippet>463</a>}
-<a href=#464 id=464 data-nosnippet>464</a><span class="attr">#[allow(clippy::too_many_arguments)]
-<a href=#465 id=465 data-nosnippet>465</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>emit(
-<a href=#466 id=466 data-nosnippet>466</a>    callbacks: <span class="kw-2">&amp;</span>BTreeMap&lt;String, Rc&lt;CCallback&gt;&gt;,
-<a href=#467 id=467 data-nosnippet>467</a>    prefix: <span class="kw-2">&amp;</span>str,
-<a href=#468 id=468 data-nosnippet>468</a>    pointers: <span class="kw-2">&amp;</span>BTreeMap&lt;String, prebindgen_flat::TypeInfo&lt;CType&gt;&gt;,
-<a href=#469 id=469 data-nosnippet>469</a>    enums: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>String, <span class="kw-2">&amp;</span>prebindgen_declarations::EnumMapping)],
-<a href=#470 id=470 data-nosnippet>470</a>    symbols: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;,
-<a href=#471 id=471 data-nosnippet>471</a>    tokens: <span class="kw-2">&amp;mut </span>TokenStream,
-<a href=#472 id=472 data-nosnippet>472</a>    header: <span class="kw-2">&amp;mut </span>String,
-<a href=#473 id=473 data-nosnippet>473</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#474 id=474 data-nosnippet>474</a>    <span class="kw">if </span>callbacks.is_empty() {
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#476 id=476 data-nosnippet>476</a>    }
-<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">if </span>callbacks.values().any(|callback| callback.has_release()) {
-<a href=#478 id=478 data-nosnippet>478</a>        tokens.extend(<span class="macro">quote!</span>(
-<a href=#479 id=479 data-nosnippet>479</a>            <span class="kw">struct </span>__PbCallbackResult&lt;T: Copy&gt; {
-<a href=#480 id=480 data-nosnippet>480</a>                value: T,
-<a href=#481 id=481 data-nosnippet>481</a>                context: <span class="kw-2">*mut </span>::core::ffi::c_void,
-<a href=#482 id=482 data-nosnippet>482</a>                release: <span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void, <span class="kw-2">*const </span>T)&gt;,
-<a href=#483 id=483 data-nosnippet>483</a>            }
-<a href=#484 id=484 data-nosnippet>484</a>            <span class="kw">impl</span>&lt;T: Copy&gt; Drop <span class="kw">for </span>__PbCallbackResult&lt;T&gt; {
-<a href=#485 id=485 data-nosnippet>485</a>                <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-<a href=#486 id=486 data-nosnippet>486</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(release) = <span class="self">self</span>.release {
-<a href=#487 id=487 data-nosnippet>487</a>                        <span class="kw">unsafe </span>{ release(<span class="self">self</span>.context, <span class="kw-2">&amp;</span><span class="self">self</span>.value) }
-<a href=#488 id=488 data-nosnippet>488</a>                    }
-<a href=#489 id=489 data-nosnippet>489</a>                }
-<a href=#490 id=490 data-nosnippet>490</a>            }
-<a href=#491 id=491 data-nosnippet>491</a>        ));
-<a href=#492 id=492 data-nosnippet>492</a>    }
-<a href=#493 id=493 data-nosnippet>493</a>    tokens.extend(<span class="macro">quote!</span>(
-<a href=#494 id=494 data-nosnippet>494</a>        <span class="kw">struct </span>__PbCallbackOwner { context:<span class="kw-2">*mut </span>::core::ffi::c_void, drop:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void)&gt; }
-<a href=#495 id=495 data-nosnippet>495</a>        <span class="comment">// The C callback contract requires the context and functions to support
-<a href=#496 id=496 data-nosnippet>496</a>        // concurrent invocation whenever the Rust source requires Send/Sync.
-<a href=#497 id=497 data-nosnippet>497</a>        </span><span class="kw">unsafe impl </span>Send <span class="kw">for </span>__PbCallbackOwner {} <span class="kw">unsafe impl </span>Sync <span class="kw">for </span>__PbCallbackOwner {}
-<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">impl </span>__PbCallbackOwner { <span class="kw">fn </span>new(context:<span class="kw-2">*mut </span>::core::ffi::c_void,drop:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void)&gt;)-&gt;<span class="self">Self</span>{<span class="self">Self</span>{context,drop}} <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>)-&gt;<span class="kw-2">*mut </span>::core::ffi::c_void {<span class="self">self</span>.context} }
-<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">impl </span>Drop <span class="kw">for </span>__PbCallbackOwner { <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>){<span class="kw">if let </span><span class="prelude-val">Some</span>(drop)=<span class="self">self</span>.drop {<span class="kw">unsafe </span>{drop(<span class="self">self</span>.context)}}} }
-<a href=#500 id=500 data-nosnippet>500</a>    ));
-<a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">for </span>callback <span class="kw">in </span>callbacks.values() {
-<a href=#502 id=502 data-nosnippet>502</a>        <span class="kw">if </span>!symbols.insert(callback.name.clone()) {
-<a href=#503 id=503 data-nosnippet>503</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C callback symbol"</span>.into());
-<a href=#504 id=504 data-nosnippet>504</a>        }
-<a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>context = callback.context();
-<a href=#506 id=506 data-nosnippet>506</a>        <span class="kw">let </span><span class="kw-2">mut </span>schemas = Vec::new();
-<a href=#507 id=507 data-nosnippet>507</a>        <span class="kw">let </span><span class="kw-2">mut </span>output_carriers = BTreeSet::new();
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
-<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">for </span>arg <span class="kw">in </span><span class="kw-2">&amp;</span>callback.arguments {
-<a href=#510 id=510 data-nosnippet>510</a>            sequence::schemas(<span class="kw-2">&amp;</span>arg.output.outcomes.success, <span class="kw-2">&amp;mut </span>schemas);
-<a href=#511 id=511 data-nosnippet>511</a>            fields.extend(group::callback_parameters(<span class="kw-2">&amp;</span>arg.output.outcomes.success));
+<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw">let </span>check = plan.code_fragment_slot(
+<a href=#327 id=327 data-nosnippet>327</a>                InputFragment::CheckInternalAliases { context },
+<a href=#328 id=328 data-nosnippet>328</a>                <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(()),
+<a href=#329 id=329 data-nosnippet>329</a>            )<span class="question-mark">?</span>;
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="kw">if </span>check.to_string() != <span class="macro">quote!</span>(()).to_string() {
+<a href=#331 id=331 data-nosnippet>331</a>                body = <span class="macro">quote!</span>({<span class="kw">let _</span>: () = #check; #body});
+<a href=#332 id=332 data-nosnippet>332</a>            }
+<a href=#333 id=333 data-nosnippet>333</a>            plan.code_fragment_slot(
+<a href=#334 id=334 data-nosnippet>334</a>                InputFragment::Validate {
+<a href=#335 id=335 data-nosnippet>335</a>                    context,
+<a href=#336 id=336 data-nosnippet>336</a>                    next: body,
+<a href=#337 id=337 data-nosnippet>337</a>                },
+<a href=#338 id=338 data-nosnippet>338</a>                <span class="kw-2">&amp;</span>expected,
+<a href=#339 id=339 data-nosnippet>339</a>            )<span class="question-mark">?
+<a href=#340 id=340 data-nosnippet>340</a>        </span>} <span class="kw">else </span>{
+<a href=#341 id=341 data-nosnippet>341</a>            <span class="macro">quote!</span>(<span class="prelude-val">Ok</span>(()))
+<a href=#342 id=342 data-nosnippet>342</a>        };
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>names = values
+<a href=#344 id=344 data-nosnippet>344</a>            .iter()
+<a href=#345 id=345 data-nosnippet>345</a>            .enumerate()
+<a href=#346 id=346 data-nosnippet>346</a>            .map(|(i, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">"callback_argument_{i}"</span>))
+<a href=#347 id=347 data-nosnippet>347</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw">let </span>snapshots = names
+<a href=#349 id=349 data-nosnippet>349</a>            .iter()
+<a href=#350 id=350 data-nosnippet>350</a>            .zip(<span class="kw-2">&amp;</span>values)
+<a href=#351 id=351 data-nosnippet>351</a>            .map(|(name, value)| <span class="macro">quote!</span>(<span class="kw">let </span>#name=#value;));
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="kw">let </span>protect_result=<span class="self">self</span>.has_release().then(||<span class="macro">quote!</span>(<span class="kw">let </span>callback_result=__PbCallbackResult {value:raw_result,context:#owner.context(),release:#release};<span class="kw">let </span>raw_result=callback_result.value;));
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="kw">let </span><span class="kw-2">mut </span>body = <span class="macro">quote!</span>({ #(#snapshots)* #commits <span class="kw">let </span>raw_result=<span class="kw">unsafe </span>{#run(#owner.context(), #(#names),<span class="kw-2">*</span>)}; #protect_result #decode #owners #result });
+<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw">for </span>(index, arg) <span class="kw">in </span><span class="self">self</span>.arguments.iter().enumerate().rev() {
+<a href=#355 id=355 data-nosnippet>355</a>            <span class="kw">let </span>source = <span class="macro">format_ident!</span>(<span class="string">"callback_source_{index}"</span>);
+<a href=#356 id=356 data-nosnippet>356</a>            body = arg.output.code_fragment_slot(
+<a href=#357 id=357 data-nosnippet>357</a>                OutputFragment::Prepare {
+<a href=#358 id=358 data-nosnippet>358</a>                    context,
+<a href=#359 id=359 data-nosnippet>359</a>                    source: <span class="kw-2">&amp;</span>source,
+<a href=#360 id=360 data-nosnippet>360</a>                    next: body,
+<a href=#361 id=361 data-nosnippet>361</a>                },
+<a href=#362 id=362 data-nosnippet>362</a>                <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(::prebindgen_runtime::Result&lt;()&gt;),
+<a href=#363 id=363 data-nosnippet>363</a>            )<span class="question-mark">?</span>;
+<a href=#364 id=364 data-nosnippet>364</a>        }
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="prelude-val">Ok</span>(body)
+<a href=#366 id=366 data-nosnippet>366</a>    }
+<a href=#367 id=367 data-nosnippet>367</a>}
+<a href=#368 id=368 data-nosnippet>368</a><span class="kw">fn </span>receive_return_owners(
+<a href=#369 id=369 data-nosnippet>369</a>    node: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;CWire, CChain, CBranch&gt;,
+<a href=#370 id=370 data-nosnippet>370</a>    context: <span class="kw-2">&amp;</span>CContext,
+<a href=#371 id=371 data-nosnippet>371</a>    owners: <span class="kw-2">&amp;</span>BTreeMap&lt;String, syn::Type&gt;,
+<a href=#372 id=372 data-nosnippet>372</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#373 id=373 data-nosnippet>373</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>node {
+<a href=#374 id=374 data-nosnippet>374</a>        WireNode::Leaf(fields) =&gt; fields
+<a href=#375 id=375 data-nosnippet>375</a>            .iter()
+<a href=#376 id=376 data-nosnippet>376</a>            .filter_map(|field| {
+<a href=#377 id=377 data-nosnippet>377</a>                <span class="kw">if let </span>CWire::Pointer { pointer, .. } = <span class="kw-2">&amp;</span>field.kind {
+<a href=#378 id=378 data-nosnippet>378</a>                    <span class="kw">if </span>owners.contains_key(<span class="kw-2">&amp;</span>field.name.to_string()) {
+<a href=#379 id=379 data-nosnippet>379</a>                        <span class="kw">let </span>name = <span class="kw-2">&amp;</span>field.name;
+<a href=#380 id=380 data-nosnippet>380</a>                        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>pointer.ty;
+<a href=#381 id=381 data-nosnippet>381</a>                        <span class="kw">return </span><span class="prelude-val">Some</span>(
+<a href=#382 id=382 data-nosnippet>382</a>                            <span class="macro">quote!</span>(<span class="kw">unsafe </span>{callback_return_owners.receive(#name <span class="kw">as </span><span class="kw-2">*mut </span>#ty);}),
+<a href=#383 id=383 data-nosnippet>383</a>                        );
+<a href=#384 id=384 data-nosnippet>384</a>                    }
+<a href=#385 id=385 data-nosnippet>385</a>                }
+<a href=#386 id=386 data-nosnippet>386</a>                <span class="prelude-val">None
+<a href=#387 id=387 data-nosnippet>387</a>            </span>})
+<a href=#388 id=388 data-nosnippet>388</a>            .collect(),
+<a href=#389 id=389 data-nosnippet>389</a>        WireNode::Chain {
+<a href=#390 id=390 data-nosnippet>390</a>            meta: CChain::Optional(optional),
+<a href=#391 id=391 data-nosnippet>391</a>            child,
+<a href=#392 id=392 data-nosnippet>392</a>            ..
+<a href=#393 id=393 data-nosnippet>393</a>        } =&gt; {
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">let </span>scan = receive_return_owners(child, context, owners)<span class="question-mark">?</span>;
+<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">if </span>scan.is_empty() {
+<a href=#396 id=396 data-nosnippet>396</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(scan);
+<a href=#397 id=397 data-nosnippet>397</a>            }
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="kw">let </span>name = optional.discriminator();
+<a href=#399 id=399 data-nosnippet>399</a>            <span class="kw">let </span>present = optional
+<a href=#400 id=400 data-nosnippet>400</a>                .niche()
+<a href=#401 id=401 data-nosnippet>401</a>                .map(|n| n.present(<span class="macro">quote!</span>(#name)))
+<a href=#402 id=402 data-nosnippet>402</a>                .unwrap_or_else(|| <span class="macro">quote!</span>(#name==<span class="number">1</span>));
+<a href=#403 id=403 data-nosnippet>403</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#present {#scan})
+<a href=#404 id=404 data-nosnippet>404</a>        }
+<a href=#405 id=405 data-nosnippet>405</a>        WireNode::Chain {
+<a href=#406 id=406 data-nosnippet>406</a>            meta: CChain::Sequence(<span class="kw">_</span>),
+<a href=#407 id=407 data-nosnippet>407</a>            controls,
+<a href=#408 id=408 data-nosnippet>408</a>            child,
+<a href=#409 id=409 data-nosnippet>409</a>        } =&gt; {
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">let </span>scan = receive_return_owners(child, context, owners)<span class="question-mark">?</span>;
+<a href=#411 id=411 data-nosnippet>411</a>            <span class="kw">if </span>scan.is_empty() {
+<a href=#412 id=412 data-nosnippet>412</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(scan);
+<a href=#413 id=413 data-nosnippet>413</a>            }
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">let </span>carrier = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
+<a href=#415 id=415 data-nosnippet>415</a>            <span class="kw">let </span>row = <span class="kw-2">&amp;</span>context.row_types[<span class="kw-2">&amp;</span>carrier.to_string()];
+<a href=#416 id=416 data-nosnippet>416</a>            <span class="kw">let </span>reads = group::row_fields(child).enumerate().map(|(i, w)| {
+<a href=#417 id=417 data-nosnippet>417</a>                <span class="kw">let </span>name = <span class="kw-2">&amp;</span>w.name;
+<a href=#418 id=418 data-nosnippet>418</a>                <span class="kw">let </span>field = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#419 id=419 data-nosnippet>419</a>                <span class="macro">quote!</span>(<span class="kw">let </span>#name=<span class="kw">unsafe </span>{(<span class="kw-2">*</span>((#carrier.data <span class="kw">as </span><span class="kw-2">*const </span>#row).add(index))).#field};)
+<a href=#420 id=420 data-nosnippet>420</a>            });
+<a href=#421 id=421 data-nosnippet>421</a>            <span class="macro">quote!</span>(::prebindgen_runtime::validate_slice(#carrier.data <span class="kw">as </span><span class="kw-2">*const </span>#row,#carrier.len)<span class="question-mark">?</span>;<span class="kw">for </span>index <span class="kw">in </span><span class="number">0</span>..#carrier.len {#(#reads)* #scan})
+<a href=#422 id=422 data-nosnippet>422</a>        }
+<a href=#423 id=423 data-nosnippet>423</a>        WireNode::Branch {
+<a href=#424 id=424 data-nosnippet>424</a>            meta: CBranch::Alternatives,
+<a href=#425 id=425 data-nosnippet>425</a>            controls,
+<a href=#426 id=426 data-nosnippet>426</a>            children,
+<a href=#427 id=427 data-nosnippet>427</a>        } =&gt; {
+<a href=#428 id=428 data-nosnippet>428</a>            <span class="kw">let </span>selector = <span class="kw-2">&amp;</span>controls[<span class="number">0</span>].name;
+<a href=#429 id=429 data-nosnippet>429</a>            <span class="kw">let </span>scans = children
+<a href=#430 id=430 data-nosnippet>430</a>                .iter()
+<a href=#431 id=431 data-nosnippet>431</a>                .enumerate()
+<a href=#432 id=432 data-nosnippet>432</a>                .map(|(i, child)| {
+<a href=#433 id=433 data-nosnippet>433</a>                    <span class="kw">let </span>scan = receive_return_owners(child, context, owners)<span class="question-mark">?</span>;
+<a href=#434 id=434 data-nosnippet>434</a>                    <span class="kw">let </span>i = i <span class="kw">as </span>i32;
+<a href=#435 id=435 data-nosnippet>435</a>                    <span class="prelude-val">Ok</span>(<span class="macro">quote!</span>(<span class="kw">if </span>#selector==#i {#scan}))
+<a href=#436 id=436 data-nosnippet>436</a>                })
+<a href=#437 id=437 data-nosnippet>437</a>                .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#438 id=438 data-nosnippet>438</a>            <span class="macro">quote!</span>(#(#scans)<span class="kw-2">*</span>)
+<a href=#439 id=439 data-nosnippet>439</a>        }
+<a href=#440 id=440 data-nosnippet>440</a>        WireNode::Branch { children, .. } =&gt; children
+<a href=#441 id=441 data-nosnippet>441</a>            .iter()
+<a href=#442 id=442 data-nosnippet>442</a>            .map(|child| receive_return_owners(child, context, owners))
+<a href=#443 id=443 data-nosnippet>443</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
+<a href=#444 id=444 data-nosnippet>444</a>            </span>.into_iter()
+<a href=#445 id=445 data-nosnippet>445</a>            .collect(),
+<a href=#446 id=446 data-nosnippet>446</a>    })
+<a href=#447 id=447 data-nosnippet>447</a>}
+<a href=#448 id=448 data-nosnippet>448</a><span class="kw">fn </span>render(context: <span class="kw-2">&amp;</span>CContext, code: <span class="kw-2">&amp;</span>TokenStream, source: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">let </span>code = prebindgen_conversions::render_template(code, <span class="kw-2">&amp;</span>|name| {
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="prelude-val">Ok</span>(<span class="kw">if </span>name == <span class="string">"source_result" </span>{
+<a href=#451 id=451 data-nosnippet>451</a>            <span class="macro">quote!</span>(#source)
+<a href=#452 id=452 data-nosnippet>452</a>        } <span class="kw">else </span>{
+<a href=#453 id=453 data-nosnippet>453</a>            prebindgen_conversions::template_parameter(name)
+<a href=#454 id=454 data-nosnippet>454</a>        })
+<a href=#455 id=455 data-nosnippet>455</a>    })<span class="question-mark">?</span>;
+<a href=#456 id=456 data-nosnippet>456</a>    context.render(<span class="kw-2">&amp;</span>code)
+<a href=#457 id=457 data-nosnippet>457</a>}
+<a href=#458 id=458 data-nosnippet>458</a><span class="attr">#[allow(clippy::too_many_arguments)]
+<a href=#459 id=459 data-nosnippet>459</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>emit(
+<a href=#460 id=460 data-nosnippet>460</a>    callbacks: <span class="kw-2">&amp;</span>BTreeMap&lt;String, Rc&lt;CCallback&gt;&gt;,
+<a href=#461 id=461 data-nosnippet>461</a>    prefix: <span class="kw-2">&amp;</span>str,
+<a href=#462 id=462 data-nosnippet>462</a>    pointers: <span class="kw-2">&amp;</span>BTreeMap&lt;String, prebindgen_flat::TypeInfo&lt;CType&gt;&gt;,
+<a href=#463 id=463 data-nosnippet>463</a>    enums: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>String, <span class="kw-2">&amp;</span>prebindgen_declarations::EnumMapping)],
+<a href=#464 id=464 data-nosnippet>464</a>    symbols: <span class="kw-2">&amp;mut </span>BTreeSet&lt;String&gt;,
+<a href=#465 id=465 data-nosnippet>465</a>    tokens: <span class="kw-2">&amp;mut </span>TokenStream,
+<a href=#466 id=466 data-nosnippet>466</a>    header: <span class="kw-2">&amp;mut </span>String,
+<a href=#467 id=467 data-nosnippet>467</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">if </span>callbacks.is_empty() {
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#470 id=470 data-nosnippet>470</a>    }
+<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">if </span>callbacks.values().any(|callback| callback.has_release()) {
+<a href=#472 id=472 data-nosnippet>472</a>        tokens.extend(<span class="macro">quote!</span>(
+<a href=#473 id=473 data-nosnippet>473</a>            <span class="kw">struct </span>__PbCallbackResult&lt;T: Copy&gt; {
+<a href=#474 id=474 data-nosnippet>474</a>                value: T,
+<a href=#475 id=475 data-nosnippet>475</a>                context: <span class="kw-2">*mut </span>::core::ffi::c_void,
+<a href=#476 id=476 data-nosnippet>476</a>                release: <span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void, <span class="kw-2">*const </span>T)&gt;,
+<a href=#477 id=477 data-nosnippet>477</a>            }
+<a href=#478 id=478 data-nosnippet>478</a>            <span class="kw">impl</span>&lt;T: Copy&gt; Drop <span class="kw">for </span>__PbCallbackResult&lt;T&gt; {
+<a href=#479 id=479 data-nosnippet>479</a>                <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#480 id=480 data-nosnippet>480</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(release) = <span class="self">self</span>.release {
+<a href=#481 id=481 data-nosnippet>481</a>                        <span class="kw">unsafe </span>{ release(<span class="self">self</span>.context, <span class="kw-2">&amp;</span><span class="self">self</span>.value) }
+<a href=#482 id=482 data-nosnippet>482</a>                    }
+<a href=#483 id=483 data-nosnippet>483</a>                }
+<a href=#484 id=484 data-nosnippet>484</a>            }
+<a href=#485 id=485 data-nosnippet>485</a>        ));
+<a href=#486 id=486 data-nosnippet>486</a>    }
+<a href=#487 id=487 data-nosnippet>487</a>    tokens.extend(<span class="macro">quote!</span>(
+<a href=#488 id=488 data-nosnippet>488</a>        <span class="kw">struct </span>__PbCallbackOwner { context:<span class="kw-2">*mut </span>::core::ffi::c_void, drop:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void)&gt; }
+<a href=#489 id=489 data-nosnippet>489</a>        <span class="comment">// The C callback contract requires the context and functions to support
+<a href=#490 id=490 data-nosnippet>490</a>        // concurrent invocation whenever the Rust source requires Send/Sync.
+<a href=#491 id=491 data-nosnippet>491</a>        </span><span class="kw">unsafe impl </span>Send <span class="kw">for </span>__PbCallbackOwner {} <span class="kw">unsafe impl </span>Sync <span class="kw">for </span>__PbCallbackOwner {}
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">impl </span>__PbCallbackOwner { <span class="kw">fn </span>new(context:<span class="kw-2">*mut </span>::core::ffi::c_void,drop:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void)&gt;)-&gt;<span class="self">Self</span>{<span class="self">Self</span>{context,drop}} <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>)-&gt;<span class="kw-2">*mut </span>::core::ffi::c_void {<span class="self">self</span>.context} }
+<a href=#493 id=493 data-nosnippet>493</a>        <span class="kw">impl </span>Drop <span class="kw">for </span>__PbCallbackOwner { <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>){<span class="kw">if let </span><span class="prelude-val">Some</span>(drop)=<span class="self">self</span>.drop {<span class="kw">unsafe </span>{drop(<span class="self">self</span>.context)}}} }
+<a href=#494 id=494 data-nosnippet>494</a>    ));
+<a href=#495 id=495 data-nosnippet>495</a>    <span class="kw">for </span>callback <span class="kw">in </span>callbacks.values() {
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">if </span>!symbols.insert(callback.name.clone()) {
+<a href=#497 id=497 data-nosnippet>497</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C callback symbol"</span>.into());
+<a href=#498 id=498 data-nosnippet>498</a>        }
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">let </span>context = callback.context();
+<a href=#500 id=500 data-nosnippet>500</a>        <span class="kw">let </span><span class="kw-2">mut </span>schemas = Vec::new();
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="kw">let </span><span class="kw-2">mut </span>output_carriers = BTreeSet::new();
+<a href=#502 id=502 data-nosnippet>502</a>        <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">for </span>arg <span class="kw">in </span><span class="kw-2">&amp;</span>callback.arguments {
+<a href=#504 id=504 data-nosnippet>504</a>            sequence::schemas(<span class="kw-2">&amp;</span>arg.output.outcomes.success, <span class="kw-2">&amp;mut </span>schemas);
+<a href=#505 id=505 data-nosnippet>505</a>            fields.extend(group::callback_parameters(<span class="kw-2">&amp;</span>arg.output.outcomes.success));
+<a href=#506 id=506 data-nosnippet>506</a>        }
+<a href=#507 id=507 data-nosnippet>507</a>        <span class="kw">for </span>(wire, <span class="kw">_</span>, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>schemas {
+<a href=#508 id=508 data-nosnippet>508</a>            output_carriers.insert(wire.name.to_string());
+<a href=#509 id=509 data-nosnippet>509</a>        }
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, plan)) = <span class="kw-2">&amp;</span>callback.returned {
+<a href=#511 id=511 data-nosnippet>511</a>            sequence::schemas(<span class="kw-2">&amp;</span>plan.node, <span class="kw-2">&amp;mut </span>schemas);
 <a href=#512 id=512 data-nosnippet>512</a>        }
-<a href=#513 id=513 data-nosnippet>513</a>        <span class="kw">for </span>(wire, <span class="kw">_</span>, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>schemas {
-<a href=#514 id=514 data-nosnippet>514</a>            output_carriers.insert(wire.name.to_string());
+<a href=#513 id=513 data-nosnippet>513</a>        <span class="kw">for </span>field <span class="kw">in </span>fields.iter().copied().chain(callback.return_fields()) {
+<a href=#514 id=514 data-nosnippet>514</a>            validate_wire_declaration(field, pointers, enums)<span class="question-mark">?</span>;
 <a href=#515 id=515 data-nosnippet>515</a>        }
-<a href=#516 id=516 data-nosnippet>516</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, plan)) = <span class="kw-2">&amp;</span>callback.returned {
-<a href=#517 id=517 data-nosnippet>517</a>            sequence::schemas(<span class="kw-2">&amp;</span>plan.node, <span class="kw-2">&amp;mut </span>schemas);
-<a href=#518 id=518 data-nosnippet>518</a>        }
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">for </span>field <span class="kw">in </span>fields.iter().copied().chain(callback.return_fields()) {
-<a href=#520 id=520 data-nosnippet>520</a>            validate_wire_declaration(field, pointers, enums)<span class="question-mark">?</span>;
-<a href=#521 id=521 data-nosnippet>521</a>        }
-<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">for </span>(<span class="kw">_</span>, element, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>schemas {
-<a href=#523 id=523 data-nosnippet>523</a>            <span class="kw">for </span>field <span class="kw">in </span>group::row_fields(element) {
-<a href=#524 id=524 data-nosnippet>524</a>                validate_wire_declaration(field, pointers, enums)<span class="question-mark">?</span>;
-<a href=#525 id=525 data-nosnippet>525</a>            }
-<a href=#526 id=526 data-nosnippet>526</a>        }
-<a href=#527 id=527 data-nosnippet>527</a>        sequence::emit_schemas(
-<a href=#528 id=528 data-nosnippet>528</a>            schemas,
-<a href=#529 id=529 data-nosnippet>529</a>            <span class="kw-2">&amp;</span>output_carriers,
-<a href=#530 id=530 data-nosnippet>530</a>            <span class="kw-2">&amp;</span>context,
-<a href=#531 id=531 data-nosnippet>531</a>            prefix,
-<a href=#532 id=532 data-nosnippet>532</a>            pointers,
-<a href=#533 id=533 data-nosnippet>533</a>            symbols,
-<a href=#534 id=534 data-nosnippet>534</a>            tokens,
-<a href=#535 id=535 data-nosnippet>535</a>            header,
-<a href=#536 id=536 data-nosnippet>536</a>        )<span class="question-mark">?</span>;
-<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw">let </span>return_fields = callback.return_fields();
-<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">let </span>result = callback.return_rust_type();
-<a href=#539 id=539 data-nosnippet>539</a>        <span class="kw">let </span>c_result = <span class="kw">match </span>return_fields.as_slice() {
-<a href=#540 id=540 data-nosnippet>540</a>            [] =&gt; <span class="string">"void"</span>.into(),
-<a href=#541 id=541 data-nosnippet>541</a>            [field] =&gt; c_ty(field, prefix, pointers, <span class="kw-2">&amp;</span>context),
-<a href=#542 id=542 data-nosnippet>542</a>            <span class="kw">_ </span>=&gt; {
-<a href=#543 id=543 data-nosnippet>543</a>                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{}_result"</span>, callback.name);
-<a href=#544 id=544 data-nosnippet>544</a>                <span class="kw">if </span>!symbols.insert(name.clone()) {
-<a href=#545 id=545 data-nosnippet>545</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C callback result symbol"</span>.into());
-<a href=#546 id=546 data-nosnippet>546</a>                }
-<a href=#547 id=547 data-nosnippet>547</a>                <span class="kw">let </span>names = return_fields.iter().enumerate().map(|(i, w)| {
-<a href=#548 id=548 data-nosnippet>548</a>                    <span class="kw">let </span>f = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#549 id=549 data-nosnippet>549</a>                    <span class="kw">let </span>ty = w.rust_type();
-<a href=#550 id=550 data-nosnippet>550</a>                    <span class="macro">quote!</span>(<span class="kw">pub </span>#f:#ty)
-<a href=#551 id=551 data-nosnippet>551</a>                });
-<a href=#552 id=552 data-nosnippet>552</a>                tokens.extend(
-<a href=#553 id=553 data-nosnippet>553</a>                    <span class="macro">quote!</span>(<span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>#result {#(#names),<span class="kw-2">*</span>}),
-<a href=#554 id=554 data-nosnippet>554</a>                );
-<a href=#555 id=555 data-nosnippet>555</a>                header.push_str(<span class="string">"typedef struct {\n"</span>);
-<a href=#556 id=556 data-nosnippet>556</a>                <span class="kw">for </span>(i, w) <span class="kw">in </span>return_fields.iter().enumerate() {
-<a href=#557 id=557 data-nosnippet>557</a>                    header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#558 id=558 data-nosnippet>558</a>                        <span class="string">"    {} v{i};\n"</span>,
-<a href=#559 id=559 data-nosnippet>559</a>                        c_ty(w, prefix, pointers, <span class="kw-2">&amp;</span>context)
-<a href=#560 id=560 data-nosnippet>560</a>                    ));
-<a href=#561 id=561 data-nosnippet>561</a>                }
-<a href=#562 id=562 data-nosnippet>562</a>                header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"}} {name};\n"</span>));
-<a href=#563 id=563 data-nosnippet>563</a>                name
-<a href=#564 id=564 data-nosnippet>564</a>            }
-<a href=#565 id=565 data-nosnippet>565</a>        };
-<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">let </span>types = fields.iter().map(|w| w.rust_type()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{}"</span>, callback.name);
-<a href=#568 id=568 data-nosnippet>568</a>        <span class="kw">let </span>release_field=callback.has_release().then(||<span class="macro">quote!</span>(<span class="kw">pub </span>release_result:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void,<span class="kw-2">*const </span>#result)&gt;,));
-<a href=#569 id=569 data-nosnippet>569</a>        tokens.extend(<span class="macro">quote!</span>(<span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>#name {<span class="kw">pub </span>run:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void,#(#types),<span class="kw-2">*</span>)-&gt;#result&gt;,<span class="kw">pub </span>context:<span class="kw-2">*mut </span>::core::ffi::c_void,<span class="kw">pub </span>drop:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void)&gt;,#release_field}));
-<a href=#570 id=570 data-nosnippet>570</a>        <span class="kw">let </span>release_declaration = <span class="kw">if </span>callback.has_release() {
-<a href=#571 id=571 data-nosnippet>571</a>            <span class="macro">format!</span>(<span class="string">"    void (*release_result)(void *context, const {c_result} *result);\n"</span>)
-<a href=#572 id=572 data-nosnippet>572</a>        } <span class="kw">else </span>{
-<a href=#573 id=573 data-nosnippet>573</a>            String::new()
-<a href=#574 id=574 data-nosnippet>574</a>        };
-<a href=#575 id=575 data-nosnippet>575</a>        <span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
-<a href=#576 id=576 data-nosnippet>576</a>        <span class="kw">let </span><span class="kw-2">mut </span>args = String::new();
-<a href=#577 id=577 data-nosnippet>577</a>        <span class="kw">for </span>(index, field) <span class="kw">in </span>fields.iter().enumerate() {
-<a href=#578 id=578 data-nosnippet>578</a>            <span class="macro">write!</span>(
-<a href=#579 id=579 data-nosnippet>579</a>                args,
-<a href=#580 id=580 data-nosnippet>580</a>                <span class="string">", {} arg{index}"</span>,
-<a href=#581 id=581 data-nosnippet>581</a>                c_ty(field, prefix, pointers, <span class="kw-2">&amp;</span>context)
-<a href=#582 id=582 data-nosnippet>582</a>            )
-<a href=#583 id=583 data-nosnippet>583</a>            .expect(<span class="string">"writing to a String"</span>);
-<a href=#584 id=584 data-nosnippet>584</a>        }
-<a href=#585 id=585 data-nosnippet>585</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/* Rust signature: {}. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Output allocations passed to run are callback-owned. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles. */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n"</span>,callback.signature));
-<a href=#586 id=586 data-nosnippet>586</a>    }
-<a href=#587 id=587 data-nosnippet>587</a>    <span class="prelude-val">Ok</span>(())
-<a href=#588 id=588 data-nosnippet>588</a>}
+<a href=#516 id=516 data-nosnippet>516</a>        <span class="kw">for </span>(<span class="kw">_</span>, element, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>schemas {
+<a href=#517 id=517 data-nosnippet>517</a>            <span class="kw">for </span>field <span class="kw">in </span>group::row_fields(element) {
+<a href=#518 id=518 data-nosnippet>518</a>                validate_wire_declaration(field, pointers, enums)<span class="question-mark">?</span>;
+<a href=#519 id=519 data-nosnippet>519</a>            }
+<a href=#520 id=520 data-nosnippet>520</a>        }
+<a href=#521 id=521 data-nosnippet>521</a>        sequence::emit_schemas(
+<a href=#522 id=522 data-nosnippet>522</a>            schemas,
+<a href=#523 id=523 data-nosnippet>523</a>            <span class="kw-2">&amp;</span>output_carriers,
+<a href=#524 id=524 data-nosnippet>524</a>            <span class="kw-2">&amp;</span>context,
+<a href=#525 id=525 data-nosnippet>525</a>            prefix,
+<a href=#526 id=526 data-nosnippet>526</a>            pointers,
+<a href=#527 id=527 data-nosnippet>527</a>            symbols,
+<a href=#528 id=528 data-nosnippet>528</a>            tokens,
+<a href=#529 id=529 data-nosnippet>529</a>            header,
+<a href=#530 id=530 data-nosnippet>530</a>        )<span class="question-mark">?</span>;
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">let </span>return_fields = callback.return_fields();
+<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">let </span>result = callback.return_rust_type();
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="kw">let </span>c_result = <span class="kw">match </span>return_fields.as_slice() {
+<a href=#534 id=534 data-nosnippet>534</a>            [] =&gt; <span class="string">"void"</span>.into(),
+<a href=#535 id=535 data-nosnippet>535</a>            [field] =&gt; c_ty(field, prefix, pointers, <span class="kw-2">&amp;</span>context),
+<a href=#536 id=536 data-nosnippet>536</a>            <span class="kw">_ </span>=&gt; {
+<a href=#537 id=537 data-nosnippet>537</a>                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{}_result"</span>, callback.name);
+<a href=#538 id=538 data-nosnippet>538</a>                <span class="kw">if </span>!symbols.insert(name.clone()) {
+<a href=#539 id=539 data-nosnippet>539</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"duplicate C callback result symbol"</span>.into());
+<a href=#540 id=540 data-nosnippet>540</a>                }
+<a href=#541 id=541 data-nosnippet>541</a>                <span class="kw">let </span>names = return_fields.iter().enumerate().map(|(i, w)| {
+<a href=#542 id=542 data-nosnippet>542</a>                    <span class="kw">let </span>f = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
+<a href=#543 id=543 data-nosnippet>543</a>                    <span class="kw">let </span>ty = w.rust_type();
+<a href=#544 id=544 data-nosnippet>544</a>                    <span class="macro">quote!</span>(<span class="kw">pub </span>#f:#ty)
+<a href=#545 id=545 data-nosnippet>545</a>                });
+<a href=#546 id=546 data-nosnippet>546</a>                tokens.extend(
+<a href=#547 id=547 data-nosnippet>547</a>                    <span class="macro">quote!</span>(<span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>#result {#(#names),<span class="kw-2">*</span>}),
+<a href=#548 id=548 data-nosnippet>548</a>                );
+<a href=#549 id=549 data-nosnippet>549</a>                header.push_str(<span class="string">"typedef struct {\n"</span>);
+<a href=#550 id=550 data-nosnippet>550</a>                <span class="kw">for </span>(i, w) <span class="kw">in </span>return_fields.iter().enumerate() {
+<a href=#551 id=551 data-nosnippet>551</a>                    header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#552 id=552 data-nosnippet>552</a>                        <span class="string">"    {} v{i};\n"</span>,
+<a href=#553 id=553 data-nosnippet>553</a>                        c_ty(w, prefix, pointers, <span class="kw-2">&amp;</span>context)
+<a href=#554 id=554 data-nosnippet>554</a>                    ));
+<a href=#555 id=555 data-nosnippet>555</a>                }
+<a href=#556 id=556 data-nosnippet>556</a>                header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"}} {name};\n"</span>));
+<a href=#557 id=557 data-nosnippet>557</a>                name
+<a href=#558 id=558 data-nosnippet>558</a>            }
+<a href=#559 id=559 data-nosnippet>559</a>        };
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw">let </span>types = fields.iter().map(|w| w.rust_type()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#561 id=561 data-nosnippet>561</a>        <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"{}"</span>, callback.name);
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">let </span>release_field=callback.has_release().then(||<span class="macro">quote!</span>(<span class="kw">pub </span>release_result:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void,<span class="kw-2">*const </span>#result)&gt;,));
+<a href=#563 id=563 data-nosnippet>563</a>        tokens.extend(<span class="macro">quote!</span>(<span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>#name {<span class="kw">pub </span>run:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void,#(#types),<span class="kw-2">*</span>)-&gt;#result&gt;,<span class="kw">pub </span>context:<span class="kw-2">*mut </span>::core::ffi::c_void,<span class="kw">pub </span>drop:<span class="prelude-ty">Option</span>&lt;<span class="kw">unsafe extern </span><span class="string">"C" </span><span class="kw">fn</span>(<span class="kw-2">*mut </span>::core::ffi::c_void)&gt;,#release_field}));
+<a href=#564 id=564 data-nosnippet>564</a>        <span class="kw">let </span>release_declaration = <span class="kw">if </span>callback.has_release() {
+<a href=#565 id=565 data-nosnippet>565</a>            <span class="macro">format!</span>(<span class="string">"    void (*release_result)(void *context, const {c_result} *result);\n"</span>)
+<a href=#566 id=566 data-nosnippet>566</a>        } <span class="kw">else </span>{
+<a href=#567 id=567 data-nosnippet>567</a>            String::new()
+<a href=#568 id=568 data-nosnippet>568</a>        };
+<a href=#569 id=569 data-nosnippet>569</a>        <span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="kw">let </span><span class="kw-2">mut </span>args = String::new();
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="kw">for </span>(index, field) <span class="kw">in </span>fields.iter().enumerate() {
+<a href=#572 id=572 data-nosnippet>572</a>            <span class="macro">write!</span>(
+<a href=#573 id=573 data-nosnippet>573</a>                args,
+<a href=#574 id=574 data-nosnippet>574</a>                <span class="string">", {} arg{index}"</span>,
+<a href=#575 id=575 data-nosnippet>575</a>                c_ty(field, prefix, pointers, <span class="kw-2">&amp;</span>context)
+<a href=#576 id=576 data-nosnippet>576</a>            )
+<a href=#577 id=577 data-nosnippet>577</a>            .expect(<span class="string">"writing to a String"</span>);
+<a href=#578 id=578 data-nosnippet>578</a>        }
+<a href=#579 id=579 data-nosnippet>579</a>        header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/* Rust signature: {}. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Output allocations passed to run are callback-owned. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles. */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n"</span>,callback.signature));
+<a href=#580 id=580 data-nosnippet>580</a>    }
+<a href=#581 id=581 data-nosnippet>581</a>    <span class="prelude-val">Ok</span>(())
+<a href=#582 id=582 data-nosnippet>582</a>}
 </code></pre></div></section></main></body></html>
