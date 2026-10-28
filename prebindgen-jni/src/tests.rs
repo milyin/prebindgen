@@ -2122,3 +2122,24 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
         assert!(!c.rust.contains("Clone::clone"));
     }
 }
+
+#[test]
+fn callback_return_handles_use_direct_locks_and_collections_keep_dynamic_locks() {
+    for returned in ["Handle", "Option<Handle>", "Vec<Handle>"] {
+        let source=format!("pub struct Handle {{pub n:i64}}pub fn call(callback:impl Fn()->{returned}+Send+Sync+'static)->i64{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(call)))
+            .build()
+            .unwrap();
+        let wrapper = &generated.kotlin["test/Functions.kt"];
+        assert!(wrapper.contains("test.withHandleLocks("));
+        if returned == "Vec<Handle>" {
+            assert!(wrapper.contains("flatMap"));
+        } else {
+            assert!(!wrapper.contains("listOfNotNull"), "{returned}: {wrapper}");
+            assert!(!wrapper.contains("emptyList"), "{returned}: {wrapper}");
+        }
+    }
+}
