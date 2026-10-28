@@ -303,6 +303,7 @@ internal object JNINative {
     @JvmStatic external fun call_storage_summary_handle_7c23e0abb4322c29(p0_w1: Long): Array<Any?>
     @JvmStatic external fun call_projection_pair_borrowed_bc9032fce77ca56f(): Array<Any?>
     @JvmStatic external fun call_projection_pair_owned_eda94d58bc123b34(): Array<Any?>
+    @JvmStatic external fun call_projection_pair_callback_7a64636be1de6f9f(p0_callback: Any?): Array<Any?>
     @JvmStatic external fun call_projection_pair_mixed_833184fb3cea18c0(): Array<Any?>
     @JvmStatic external fun call_projection_pair_views_05197d1569e216c6(): Array<Any?>
     @JvmStatic external fun call_projection_clones_4cb30df2ddad16fb(): Array<Any?>
