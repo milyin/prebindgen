@@ -1,3 +1,12 @@
+#[allow(dead_code)]
+struct __PbOutputOwner<T: ?Sized>(*mut T);
+impl<T: ?Sized> Drop for __PbOutputOwner<T> {
+    fn drop(&mut self) {
+        unsafe {
+            drop(Box::from_raw(self.0));
+        }
+    }
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __Pb128 {
@@ -127,13 +136,16 @@ pub unsafe extern "C" fn example_calculator_new() -> *mut example_flat::Calculat
         {
             let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = example_flat::calculator_new();
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut example_flat::Calculator = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = example_calculator_new_result {
-                v0: (&mut *ret_w0) as *mut example_flat::Calculator,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -193,13 +205,16 @@ pub unsafe extern "C" fn example_caption_new(
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut example_flat::Caption = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = example_caption_new_result {
-                v0: (&mut *ret_w0) as *mut example_flat::Caption,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -303,13 +318,14 @@ pub unsafe extern "C" fn example_foo_new(p0_w1: u64) -> *mut example_flat::Foo {
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::foo_new(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut example_flat::Foo = Box::into_raw(Box::new(source_value));
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = example_foo_new_result {
-                v0: (&mut *ret_w0) as *mut example_flat::Foo,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -393,13 +409,16 @@ pub unsafe extern "C" fn example_local_counter_label(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut example_flat::LocalCounter = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = example_local_counter_label_result {
-                v0: (&mut *ret_w0) as *mut example_flat::LocalCounter,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -439,13 +458,16 @@ pub unsafe extern "C" fn example_local_counter_new(
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::local_counter_new(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut example_flat::LocalCounter = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = example_local_counter_new_result {
-                v0: (&mut *ret_w0) as *mut example_flat::LocalCounter,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
