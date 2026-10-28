@@ -638,7 +638,9 @@ impl CallbackReturn {
             InputFragment::CheckInternalAliases { context },
             &syn::parse_quote!(()),
         )?;
-        body = quote!({let _: () = #checks; #body});
+        if checks.to_string() != quote!(()).to_string() {
+            body = quote!({let _: () = #checks; #body});
+        }
         body = self.input.code_fragment_slot(
             InputFragment::Validate {
                 context,

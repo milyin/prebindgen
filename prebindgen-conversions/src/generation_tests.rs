@@ -914,6 +914,10 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
         ("shared_set", vec![vec![many(Access::Shared)], vec![]]),
         ("exclusive_set", vec![vec![many(Access::Exclusive)], vec![]]),
         (
+            "internal_pair",
+            vec![vec![single(Access::Move), single(Access::Shared)], vec![]],
+        ),
+        (
             "separate",
             vec![vec![single(Access::Move)], vec![single(Access::Shared)]],
         ),
@@ -950,6 +954,12 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
             &[],
         )
         .unwrap();
+        if matches!(
+            name,
+            "no_resources" | "shared" | "exclusive" | "moved" | "shared_set"
+        ) {
+            assert!(!body.to_string().contains("Vec"), "{name}: {body}");
+        }
         let name = format_ident!("{name}");
         wrappers.extend(quote! {
             fn #name(enabled: bool, left: usize, __prebindgen_parameter_resources: &[usize]) -> Result<i32,String> { #body }
@@ -986,6 +996,8 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
             assert!(exclusive_set(true,7,&[7,7]).is_err());
             assert_eq!(exclusive_set(true,7,&[7,8]),Ok(42));
             assert_eq!(exclusive_set(false,7,&[7,7]),Ok(42));
+            assert!(internal_pair(true,7,&[]).is_err());
+            assert_eq!(internal_pair(false,7,&[]),Ok(42));
             assert!(separate(true,7,&[]).is_err());
             assert_eq!(separate(false,7,&[]),Ok(42));
         }

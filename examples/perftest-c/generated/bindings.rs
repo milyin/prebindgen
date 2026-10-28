@@ -2570,7 +2570,6 @@ pub unsafe extern "C" fn perftest_callback_return_bool(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: bool = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -2672,7 +2671,6 @@ pub unsafe extern "C" fn perftest_callback_return_borrowed_pair_catch(
                         } else {
                             None
                         };
-                        let _: () = ();
                         let callback_return_w1: &mut perftest_flat::CallbackReturnResource = unsafe {
                             &mut (*callback_return_w2_pointer)
                         };
@@ -2786,7 +2784,6 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: Vec<u8> = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -2894,7 +2891,6 @@ pub unsafe extern "C" fn perftest_callback_return_c_result(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: char = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3016,7 +3012,6 @@ pub unsafe extern "C" fn perftest_callback_return_catch(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3108,7 +3103,6 @@ pub unsafe extern "C" fn perftest_callback_return_char(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: char = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3198,7 +3192,6 @@ pub unsafe extern "C" fn perftest_callback_return_char_catch(
                         } else {
                             None
                         };
-                        let _: () = ();
                         let callback_return_w0: char = ::core::convert::Into::into(
                             callback_return_w0.expect("active value"),
                         );
@@ -3299,7 +3292,6 @@ pub unsafe extern "C" fn perftest_callback_return_enum(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0 = callback_return_w0.expect("active enum");
                     let callback_return_value = callback_return_w0;
                     Ok(callback_return_value)
@@ -3386,7 +3378,6 @@ pub unsafe extern "C" fn perftest_callback_return_f32(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: f32 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3475,7 +3466,6 @@ pub unsafe extern "C" fn perftest_callback_return_float(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: f64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3644,7 +3634,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_many(p0_w1: __PbRows) 
                                         } else {
                                             None
                                         };
-                                        let _: () = ();
                                         let callback_return_w0: i64 = ::core::convert::Into::into(
                                             callback_return_w0.expect("active value"),
                                         );
@@ -3763,7 +3752,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_new(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3901,7 +3889,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_value(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -3993,7 +3980,6 @@ pub unsafe extern "C" fn perftest_callback_return_i16(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i16 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -4082,7 +4068,6 @@ pub unsafe extern "C" fn perftest_callback_return_i64(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -4171,7 +4156,6 @@ pub unsafe extern "C" fn perftest_callback_return_i8(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i8 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -4351,7 +4335,6 @@ pub unsafe extern "C" fn perftest_callback_return_optional(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0 = if callback_return_w1 == 1i32 {
                         let callback_return_w2: i64 = ::core::convert::Into::into(
                             callback_return_w2.expect("active value"),
@@ -4474,7 +4457,6 @@ pub unsafe extern "C" fn perftest_callback_return_owned(
                                 callback_return_w1_pointer,
                             )?;
                         }
-                        let _: () = ();
                         let _ = callback_return_owner.map(Box::into_raw);
                         let callback_return_w0 = if true {
                             Some(unsafe { Box::from_raw(callback_return_w1_pointer) })
@@ -4591,7 +4573,6 @@ pub unsafe extern "C" fn perftest_callback_return_owned_optional(
                                 callback_return_w3_pointer,
                             )?;
                         }
-                        let _: () = ();
                         let _ = callback_return_owner.map(Box::into_raw);
                         let callback_return_w2 = if callback_return_w1 == 1i32 {
                             Some(unsafe { Box::from_raw(callback_return_w3_pointer) })
@@ -5113,7 +5094,6 @@ pub unsafe extern "C" fn perftest_callback_return_pair_catch(
                         } else {
                             None
                         };
-                        let _: () = ();
                         callback_return_owners.commit();
                         let callback_return_w1 = if true {
                             Some(unsafe { Box::from_raw(callback_return_w2_pointer) })
@@ -5255,7 +5235,6 @@ pub unsafe extern "C" fn perftest_callback_return_record(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w1: i64 = ::core::convert::Into::into(
                         callback_return_w1.expect("active value"),
                     );
@@ -5491,7 +5470,6 @@ pub unsafe extern "C" fn perftest_callback_return_spawn(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -5607,7 +5585,6 @@ pub unsafe extern "C" fn perftest_callback_return_text(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: String = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -5713,7 +5690,6 @@ pub unsafe extern "C" fn perftest_callback_return_u128(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: u128 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -5881,7 +5857,6 @@ pub unsafe extern "C" fn perftest_callback_return_unsigned(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: u64 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -6057,7 +6032,6 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
                                 });
                         }
                     }
-                    let _: () = ();
                     let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
                         .into_iter()
                         .map(|acquire| acquire())
@@ -6186,7 +6160,6 @@ pub unsafe extern "C" fn perftest_callback_return_wide(
                     } else {
                         None
                     };
-                    let _: () = ();
                     let callback_return_w0: i128 = ::core::convert::Into::into(
                         callback_return_w0.expect("active value"),
                     );
@@ -6279,7 +6252,6 @@ pub unsafe extern "C" fn perftest_callback_return_zero(
                         } else {
                             None
                         };
-                        let _: () = ();
                         let callback_return_w0: i64 = ::core::convert::Into::into(
                             callback_return_w0.expect("active value"),
                         );

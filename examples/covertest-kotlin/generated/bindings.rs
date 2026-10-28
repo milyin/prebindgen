@@ -3166,7 +3166,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w1: bool = ::core::convert::Into::into(
                                     callback_return_w1.expect("active value"),
                                 );
@@ -3288,7 +3287,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -3415,7 +3413,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w1: bool = ::core::convert::Into::into(
                                     callback_return_w1.expect("active value"),
                                 );
@@ -3544,7 +3541,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w1: i64 = ::core::convert::Into::into(
                                     callback_return_w1.expect("active value"),
                                 );
@@ -3681,7 +3677,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w1: bool = ::core::convert::Into::into(
                                     callback_return_w1.expect("active value"),
                                 );
@@ -3743,7 +3738,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w1: bool = ::core::convert::Into::into(
                                     callback_return_w1.expect("active value"),
                                 );
@@ -3906,7 +3900,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     } else {
                                                         None
                                                     };
-                                                    let _: () = ();
                                                     let callback_return_w1: i64 = ::core::convert::Into::into(
                                                         callback_return_w1.expect("active value"),
                                                     );
@@ -4067,7 +4060,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     } else {
                                         None
                                     };
-                                    let _: () = ();
                                     let callback_return_w1: bool = ::core::convert::Into::into(
                                         callback_return_w1.expect("active value"),
                                     );
@@ -4259,7 +4251,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -4373,7 +4364,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i8 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -4487,7 +4477,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i16 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -4601,7 +4590,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: f32 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -4725,7 +4713,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: u128 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -4829,7 +4816,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         } else {
                                             None
                                         };
-                                        let _: () = ();
                                         let callback_return_w0: i64 = ::core::convert::Into::into(
                                             callback_return_w0.expect("active value"),
                                         );
@@ -4946,7 +4932,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: bool = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5065,7 +5050,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: char = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5179,7 +5163,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: f64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5293,7 +5276,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: u64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5417,7 +5399,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i128 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5543,7 +5524,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: String = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5671,7 +5651,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: Vec<u8> = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -5812,7 +5791,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0 = if callback_return_w1 == 1i32 {
                                     let callback_return_w2: i64 = ::core::convert::Into::into(
                                         callback_return_w2.expect("active value"),
@@ -6079,7 +6057,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             });
                                     }
                                 }
-                                let _: () = ();
                                 let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
                                     .into_iter()
                                     .map(|acquire| acquire())
@@ -6273,7 +6250,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0_f0: i64 = ::core::convert::Into::into(
                                     callback_return_w0_f0.expect("active value"),
                                 );
@@ -6405,7 +6381,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0 = callback_return_w0
                                     .expect("active enum");
                                 let callback_return_value = callback_return_w0;
@@ -6666,7 +6641,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 callback_return_w1_pointer,
                                             )?;
                                         }
-                                        let _: () = ();
                                         let _ = callback_return_owner.map(Box::into_raw);
                                         let callback_return_w0 = if true {
                                             Some(unsafe { Box::from_raw(callback_return_w1_pointer) })
@@ -6815,7 +6789,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         callback_return_w1_pointer,
                                     )?;
                                 }
-                                let _: () = ();
                                 let _ = callback_return_owner.map(Box::into_raw);
                                 let callback_return_w0 = if true {
                                     Some(unsafe { Box::from_raw(callback_return_w1_pointer) })
@@ -6953,7 +6926,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 callback_return_w3_pointer,
                                             )?;
                                         }
-                                        let _: () = ();
                                         let _ = callback_return_owner.map(Box::into_raw);
                                         let callback_return_w2 = if callback_return_w1 == 1i32 {
                                             Some(unsafe { Box::from_raw(callback_return_w3_pointer) })
@@ -7354,7 +7326,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -7576,7 +7547,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -7800,7 +7770,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -7947,7 +7916,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     } else {
                                                         None
                                                     };
-                                                    let _: () = ();
                                                     let callback_return_w0: i64 = ::core::convert::Into::into(
                                                         callback_return_w0.expect("active value"),
                                                     );
@@ -8080,7 +8048,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         } else {
                                             None
                                         };
-                                        let _: () = ();
                                         let callback_return_w0: char = ::core::convert::Into::into(
                                             callback_return_w0.expect("active value"),
                                         );
@@ -8522,7 +8489,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 } else {
                                     None
                                 };
-                                let _: () = ();
                                 let callback_return_w0: i64 = ::core::convert::Into::into(
                                     callback_return_w0.expect("active value"),
                                 );
@@ -8948,7 +8914,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         callback_return_w1_pointer,
                                     )?;
                                 }
-                                let _: () = ();
                                 let _ = callback_return_owner.map(Box::into_raw);
                                 let callback_return_w0 = if true {
                                     Some(unsafe { Box::from_raw(callback_return_w1_pointer) })

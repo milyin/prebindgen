@@ -327,7 +327,9 @@ impl CCallback {
                 InputFragment::CheckInternalAliases { context },
                 &syn::parse_quote!(()),
             )?;
-            body = quote!({let _: () = #check; #body});
+            if check.to_string() != quote!(()).to_string() {
+                body = quote!({let _: () = #check; #body});
+            }
             plan.code_fragment_slot(
                 InputFragment::Validate {
                     context,
