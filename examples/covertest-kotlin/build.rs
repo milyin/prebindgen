@@ -131,7 +131,41 @@ use prebindgen_declarations::{expand_param, expand_return, fields, fun};
 use prebindgen_jni::{callback, data_class, enum_class, package, ptr_class, Input, JniGen};
 
 fn main() {
+    let getter_views = || {
+        expand_return!(GetterOwner)
+            .field(fun!(getter_owner_child))
+            .field(fun!(getter_owner_optional))
+            .field(fun!(getter_owner_container))
+            .field(fun!(getter_owner_rows))
+            .field(fun!(getter_owner_leaf))
+    };
     let binding = JniGen::builder()
+        .expand(expand_return!(GetterChild)
+            .field(fun!(getter_child_number)).field(fun!(getter_child_name)))
+        .package(package!("getters")
+            .class(ptr_class!(GetterOwner)).class(ptr_class!(GetterLeaf))
+            .class(data_class!(GetterDetails))
+            .fun(fun!(getter_owner_new).expand_return(expand_return!(GetterOwner)
+                .field_self_into()
+                .field(fun!(getter_owner_child)).field(fun!(getter_owner_optional))
+                .field(fun!(getter_owner_container)).field(fun!(getter_owner_rows))
+                .field(fun!(getter_owner_leaf))))
+            .fun(fun!(getter_owner_failure).expand_return(expand_return!(GetterOwner)
+                .field_self_into().field(fun!(getter_owner_leaf)).field(fun!(getter_owner_fail))))
+            .fun(fun!(getter_owner_id)).fun(fun!(getter_leaf_id))
+            .fun(fun!(getter_static_leaf))
+            .fun(fun!(getter_owner_read).expand_return(expand_return!(GetterChild)
+                .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
+            .fun(fun!(getter_counts))
+            .fun(fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner)
+                .view(prebindgen_declarations::Output::getter("getter_owner_leaf",
+                    prebindgen_declarations::Output::combine([
+                        prebindgen_declarations::Output::Leaf, prebindgen_declarations::Output::Leaf])))))
+            .fun(fun!(getter_fields_new).expand_return(expand_return!(GetterOwner)
+                .field_self_into().fields(fields!(getter_owner_details))))
+            .fun(fun!(getter_callback).expand_param("callback",
+                callback!(impl Fn(&GetterOwner)).name("GetterObserver")
+                    .expand_param(0, getter_views()))))
         .expand(expand_param!(CallbackConfigValue).variant(fun!(callback_config_from_number)))
         .expand(expand_return!(CallbackConfigValue).field(fun!(callback_config_number)))
         .expand(expand_return!(CallbackBoundaryPanic).field(fun!(callback_boundary_view)))
@@ -318,6 +352,7 @@ fn main() {
             .fun(fun!(c_result_resource_error))
             .fun(fun!(c_result_rich_error))
             .fun(fun!(result_scalar))
+            .fun(fun!(result_unit_error))
             .fun(fun!(result_unit))
             .fun(fun!(result_optional))
             .fun(fun!(result_text))
@@ -1500,5 +1535,9 @@ fn main() {
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let jni = binding.build().expect("build supported declarations");
     jni.write_rust("bindings.rs").unwrap();
-    jni.write_kotlin(&out.join("kotlin")).unwrap();
+    let kotlin = out.join("kotlin");
+    if kotlin.exists() {
+        std::fs::remove_dir_all(&kotlin).unwrap();
+    }
+    jni.write_kotlin(&kotlin).unwrap();
 }

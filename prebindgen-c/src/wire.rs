@@ -36,7 +36,8 @@ pub enum CWire {
     /// A null pointer with zero length is a valid empty value, so no null niche
     /// is available for this representation.
     Buffer,
-    /// A typed opaque pointer to a boxed source value.
+    /// A typed opaque pointer. Mutable outputs own a boxed source value;
+    /// const outputs are non-owning references into caller-preserved storage.
     Pointer {
         /// Pointee type and mutability.
         pointer: Box<CPointer>,

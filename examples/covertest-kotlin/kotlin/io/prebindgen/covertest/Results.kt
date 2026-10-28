@@ -23,6 +23,8 @@ private inline fun <reified T : Throwable> resultFailure(message: String, action
 }
 
 fun checkResults() {
+    check(resultUnitError(false, onError = { error("unexpected unit error") }) == 42L)
+    check(resultUnitError(true, onError = { 17L }) == 17L)
     // The getter's .name("code") survives preparation into the handler API.
     check(ResultFailureHandler<Long> { it }.run(code = 7L) == 7L)
     check(optionalTextInputLen(true, null, 0, onError = JniErrorHandler { 123L }) == 123L)

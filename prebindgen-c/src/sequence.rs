@@ -199,7 +199,7 @@ pub(crate) fn release(
     for (wire, value) in fields {
         match &wire.kind {
             CWire::Buffer => code.extend(quote! {if !(#value).data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut((#value).data as *mut u8,(#value).len)));}}),
-            CWire::Pointer { pointer, .. } => {
+            CWire::Pointer { pointer, .. } if pointer.mutable => {
                 let ty = &pointer.ty;
                 let drop = quote!(drop(Box::from_raw((#value) as *mut #ty)););
                 let drop = if catch_panics {

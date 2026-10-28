@@ -34,6 +34,7 @@ use prebindgen_declarations::Codec;
 pub use wire::{JniArgument, JniWire};
 mod emission;
 mod errors;
+mod names;
 pub use emission::JniContext;
 type InputPlan<W> =
     prebindgen_conversions::InputPlan<W, JniContext, crate::JniChain, crate::JniBranch>;
@@ -1215,8 +1216,9 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         format!("{}/NativeHandle.kt", prefix.replace('.', "/")),
         native_handle(prefix),
     );
-    for (index, (ty, c)) in classes.values().enumerate() {
-        let method = format!("drop{index}");
+    let mut names = names::Names::default();
+    for (ty, c) in classes.values() {
+        let method = names.name("drop", &names::type_label(ty), &[&names::type_identity(ty)])?;
         let sym = symbol(prefix, &method);
         rust.extend(quote!{#[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
 #[no_mangle]pub unsafe extern "system" fn #sym(mut env: ::prebindgen_jni_runtime::jni::JNIEnv<'_>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'_>,id:i64){if let Err(e)=::prebindgen_runtime::boundary(||unsafe {::prebindgen_jni_runtime::drop_pointer::<#ty>(id)}){::prebindgen_jni_runtime::fail(&mut env,&e);}}});
@@ -1226,17 +1228,23 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     }
     let kotlin_classes = classes
         .iter()
-        .enumerate()
-        .map(|(index, (ty, (_, class)))| {
-            (
+        .map(|(ty, (source, class))| {
+            Ok((
                 ty.clone(),
                 KotlinClass {
                     name: class.fqn(),
-                    drop_function: format!("{prefix}.JNINative.drop{index}"),
+                    drop_function: format!(
+                        "{prefix}.JNINative.{}",
+                        names.name(
+                            "drop",
+                            &names::type_label(source),
+                            &[&names::type_identity(source)]
+                        )?
+                    ),
                 },
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<_>>()?;
     callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,
@@ -1249,7 +1257,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         },
         &mut files,
     )?;
-    for (index, (source, placement)) in functions.into_iter().enumerate() {
+    for (source, placement) in functions {
         let source = source.to_string();
         let pkg = &placement.package;
         let name = &placement.name;
@@ -1301,7 +1309,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             output_committed: quote!(),
         };
         let source = format_ident!("source_value");
-        let method = format!("call{index}");
+        let method = names.name(
+            "call",
+            &f.name.to_string(),
+            &[&names::path_identity(&f.path), &f.name.to_string()],
+        )?;
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
@@ -1363,6 +1375,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             kt_args.push("ownership".into());
         }
         if callback {
+            let sink = names.name(
+                "SequenceSink",
+                &f.name.to_string(),
+                &[&names::path_identity(&f.path), &f.name.to_string()],
+            )?;
             let (_, element, _) =
                 sequence::return_sequence(&f.output_conversion()?.output_outcomes().success)
                     .ok_or("missing callback sequence")?;
@@ -1371,18 +1388,18 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 .map(|(i, w)| format!("v{i}: {}", w.kind.kotlin_type()))
                 .collect::<Vec<_>>();
             native.push_str(&format!(
-                "    internal fun interface SequenceSink{index} {{ fun run({}) }}\n",
+                "    internal fun interface {sink} {{ fun run({}) }}\n",
                 fields.join(", ")
             ));
             params.push(
                 quote!(__pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>),
             );
-            raw_params.push(format!("callback: SequenceSink{index}"));
+            raw_params.push(format!("callback: {sink}"));
             let names = (0..fields.len())
                 .map(|i| format!("v{i}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            setup.push_str(&format!("val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()\nval __pb_sink = {prefix}.JNINative.SequenceSink{index} {{ {names} -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>({names})); kotlin.Unit }}\n"));
+            setup.push_str(&format!("val __pb_rows = kotlin.collections.mutableListOf<kotlin.Array<kotlin.Any?>>()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {names} -> __pb_rows.add(kotlin.arrayOf<kotlin.Any?>({names})); kotlin.Unit }}\n"));
             kt_args.push("__pb_sink".into());
             params.push(quote!(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>));
             raw_params.push("outputAccepted: BooleanArray".into());

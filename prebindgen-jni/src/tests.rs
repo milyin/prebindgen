@@ -10,6 +10,140 @@ fn flat(source: &str) -> Bindings {
     )
     .unwrap()
 }
+
+#[test]
+fn expanded_reference_to_option_keeps_jni_value_conversion() {
+    let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,i64>{}pub fn length(child:&Child)->i64{}";
+    let generated = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Owner))
+                .fun(fun!(maybe).expand_return(expand_return!(Child).field(fun!(length))))
+                .fun(fun!(fallible).expand_return(expand_return!(Child).field(fun!(length)))),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("Long?"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn static_reference_outputs_keep_independent_jni_handles() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub type Child=String;pub fn fixed()->&'static Child{}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Child)).fun(fun!(fixed)))
+        .build()
+        .unwrap();
+    assert!(generated.rust.contains("Clone"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("Child"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn unrelated_declarations_and_reordering_preserve_existing_native_bindings() {
+    fn generate_example(extra: bool, reverse: bool) -> JniGen {
+        let source = "pub type Handle=String;pub type Added=String;pub type Error=String;pub fn code(e:&Error)->i64{}pub fn message(e:&Error)->String{}pub fn keep(value:&Handle)->i64{}pub fn values()->Result<Vec<i64>,Error>{}pub fn mapped()->Result<i64,Error>{}pub fn added()->Result<i64,i64>{}";
+        let mut builder = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(expand_return!(Error).field(fun!(code)));
+        if extra {
+            builder = builder.package(package!("added").class(ptr_class!(Added)).fun(fun!(added)));
+        }
+        let mut functions = vec![
+            fun!(keep),
+            fun!(values).callback_return(),
+            fun!(mapped).on_error(fun!(message)),
+        ];
+        if reverse {
+            functions.reverse();
+        }
+        let mut api = package!("api").class(ptr_class!(Handle));
+        for function in functions {
+            api = api.fun(function);
+        }
+        builder.package(api).build().unwrap()
+    }
+    fn rust_functions(generation: &JniGen) -> BTreeMap<String, String> {
+        syn::parse_file(&generation.rust)
+            .unwrap()
+            .items
+            .into_iter()
+            .filter_map(|item| {
+                if let syn::Item::Fn(function) = item {
+                    Some((
+                        function.sig.ident.to_string(),
+                        quote!(#function).to_string(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    let original = generate_example(false, false);
+    let functions = rust_functions(&original);
+    assert!(original.rust.contains("__pb_jni_error_Error_typed_"));
+    assert!(original.rust.contains("__pb_jni_error_Error_mapped_"));
+    assert!(original.kotlin["test/JNINative.kt"].contains("SequenceSink_values_fold_"));
+    assert!(original.kotlin["test/api/Handle.kt"].contains("JNINative.drop_Handle_"));
+    for reverse in [false, true] {
+        let extended = generate_example(true, reverse);
+        for line in original.kotlin["test/JNINative.kt"].lines() {
+            assert!(
+                extended.kotlin["test/JNINative.kt"]
+                    .lines()
+                    .any(|candidate| candidate == line),
+                "native declaration changed: {line}"
+            );
+        }
+        let extended_functions = rust_functions(&extended);
+        for (name, body) in &functions {
+            assert_eq!(
+                Some(body),
+                extended_functions.get(name),
+                "binding changed: {name}"
+            );
+        }
+        for (path, text) in &original.kotlin {
+            if path != "test/JNINative.kt" && !(reverse && path == "test/api/Functions.kt") {
+                assert_eq!(
+                    Some(text),
+                    extended.kotlin.get(path),
+                    "Kotlin changed: {path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn native_name_identity_has_a_fixed_encoding_and_ignores_destination_renaming() {
+    let generate = |name: &str| {
+        JniGen::builder()
+            .flat(flat("pub fn read()->i64{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(read).name(name)))
+            .build()
+            .unwrap()
+    };
+    let original = generate("read");
+    let renamed = generate("readRenamed");
+    assert!(original.kotlin["test/JNINative.kt"].contains("call_read_e42fa77bcd21ca1a("));
+    assert!(original
+        .rust
+        .contains("Java_test_JNINative_call_1read_1e42fa77bcd21ca1a"));
+    assert_eq!(original.rust, renamed.rust);
+    assert_eq!(
+        original.kotlin["test/JNINative.kt"],
+        renamed.kotlin["test/JNINative.kt"]
+    );
+}
 fn fail(builder: JniGenBuilder) -> String {
     match builder.build() {
         Ok(_) => panic!("expected generation error"),
@@ -167,6 +301,67 @@ fn data_classes_reject_borrowed_occurrences_and_duplicate_representations() {
             )
     )
     .contains("duplicate class"));
+}
+
+#[test]
+fn borrowed_getter_outputs_reject_moves_and_mutable_views() {
+    for returned in ["&Child", "Option<&Child>", "&Option<Child>"] {
+        let source = format!("pub type Owner=String;pub type Child=String;pub fn child(v:&Owner)->{returned}{{}}pub fn read()->Owner{{}}");
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .expand(expand_return!(Child).field_self_into())
+                .package(
+                    package!()
+                        .class(ptr_class!(Owner))
+                        .class(ptr_class!(Child))
+                        .fun(fun!(read).expand_return(expand_return!(Owner).field(fun!(child)))),
+                ),
+        );
+        assert!(error.contains("owned projection cannot consume"), "{error}");
+    }
+    let error = fail(JniGen::builder()
+        .flat(flat("pub type Owner=String;pub type Child=String;pub fn child(v:&Owner)->&mut Child{}pub fn read()->Owner{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).class(ptr_class!(Child))
+            .fun(fun!(read).expand_return(expand_return!(Owner).field(fun!(child))))));
+    assert!(
+        error.contains("mutable-reference getter results are unsupported"),
+        "{error}"
+    );
+}
+
+#[test]
+fn explicit_shared_data_outputs_resolve_ordinary_record_defaults() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub struct Value { pub n:i64,pub text:String }pub fn read()->&Value{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Value))
+                .fun(fun!(read).expand_return(expand_return!(Value).field_self_ref())),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains(": test.Value"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn plain_borrowed_handles_keep_their_abi_while_explicit_views_can_expand() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub fn label(v:&Handle)->&str{}pub fn plain()->Option<&Handle>{}pub fn projected()->&Handle{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Handle).field(fun!(label)))
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(plain))
+            .fun(fun!(projected).expand_return(expand_return!(Handle).field(fun!(label)))))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains(": test.Handle?"), "{kotlin}");
+    assert!(kotlin.contains(": String"), "{kotlin}");
 }
 
 #[test]
@@ -686,7 +881,12 @@ fn result_unit_error_has_a_zero_argument_domain_handler() {
         .package(package!().fun(fun!(empty)))
         .build()
         .unwrap();
-    assert!(generated.kotlin["test/EmptyErrorHandler.kt"].contains("run(): R"));
+    let handler = generated
+        .kotlin
+        .iter()
+        .find(|(path, _)| path.starts_with("test/ErrorHandler_Unit_typed_"))
+        .unwrap();
+    assert!(handler.1.contains("run(): R"));
     syn::parse_file(&generated.rust).unwrap();
 }
 
@@ -1668,4 +1868,54 @@ fn c_callback_return_failures_require_the_ordinary_c_error_policy() {
         .err()
         .expect("non-Result callback binding needs explicit panic policy");
     assert!(error.contains("declare .panic()"), "{error}");
+}
+
+#[test]
+fn unnamed_error_handlers_are_independent_of_their_first_caller() {
+    let source = "pub fn first()->Result<i64,()>{}pub fn second()->Result<i64,()>{}";
+    let generate = |reverse| {
+        let package = if reverse {
+            package!().fun(fun!(second)).fun(fun!(first))
+        } else {
+            package!().fun(fun!(first)).fun(fun!(second))
+        };
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .package(package)
+            .build()
+            .unwrap()
+    };
+    let original = generate(false);
+    let reordered = generate(true);
+    let (name, text) = original
+        .kotlin
+        .iter()
+        .find(|(path, _)| path.starts_with("test/ErrorHandler_Unit_typed_"))
+        .unwrap();
+    assert_eq!(Some(text), reordered.kotlin.get(name));
+    assert!(!original
+        .kotlin
+        .keys()
+        .any(|path| path.contains("FirstError") || path.contains("SecondError")));
+}
+
+#[test]
+fn generic_error_types_get_distinct_readable_handlers() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub fn first()->Result<i64,Vec<i64>>{}pub fn second()->Result<i64,Vec<String>>{}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(first)).fun(fun!(second)))
+        .build()
+        .unwrap();
+    assert!(generated
+        .kotlin
+        .keys()
+        .any(|name| name.starts_with("test/ErrorHandler_Vec_i64_typed_")));
+    assert!(generated
+        .kotlin
+        .keys()
+        .any(|name| name.starts_with("test/ErrorHandler_Vec_String_typed_")));
 }

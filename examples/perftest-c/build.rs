@@ -6,6 +6,79 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .opaque_ptr("getter_owner", pq!(GetterOwner))
+        .opaque_ptr("getter_child", pq!(GetterChild))
+        .opaque_ptr("getter_leaf", pq!(GetterLeaf))
+        .expand(
+            expand_return!(GetterChild)
+                .field(fun!(getter_child_number))
+                .field(fun!(getter_child_name)),
+        )
+        .function(
+            fun!(getter_owner_new).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .field(fun!(getter_owner_child))
+                    .field(fun!(getter_owner_leaf)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(getter_owner_read).expand_return(
+                expand_return!(GetterChild)
+                    .field(fun!(getter_child_number))
+                    .field(fun!(getter_child_name)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(getter_owner_optional).expand_return(
+                expand_return!(GetterChild)
+                    .field(fun!(getter_child_number))
+                    .field(fun!(getter_child_name)),
+            ),
+        )
+        .panic()
+        .function(fun!(getter_owner_id))
+        .panic()
+        .function(fun!(getter_owner_child))
+        .panic()
+        .function(fun!(getter_owner_optional_pointer))
+        .panic()
+        .function(fun!(getter_owner_child_matches))
+        .panic()
+        .function(fun!(getter_owner_try_child))
+        .function(fun!(getter_owner_try_optional_child))
+        .function(fun!(getter_static_child))
+        .panic()
+        .function(fun!(getter_child_number))
+        .panic()
+        .function(fun!(getter_child_name))
+        .panic()
+        .function(fun!(getter_leaf_id))
+        .panic()
+        .function(fun!(getter_counts))
+        .panic()
+        .function(
+            fun!(getter_two_clones_new).expand_return(expand_return!(GetterOwner).view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_leaf",
+                    prebindgen_declarations::Output::combine([
+                        prebindgen_declarations::Output::Leaf,
+                        prebindgen_declarations::Output::Leaf,
+                    ]),
+                ),
+            )),
+        )
+        .panic()
+        .function(
+            fun!(getter_fields_new).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .fields(fields!(getter_owner_details)),
+            ),
+        )
+        .panic()
         .opaque_ptr("panic_output", pq!(CPanicOutput))
         .function(
             fun!(c_panic_output_new).expand_return(expand_return!(CPanicOutput).field_self_into()),
@@ -461,6 +534,8 @@ fn main() {
         .function(fun!(summary_new))
         .panic()
         .function(fun!(summary_total_raw))
+        .panic()
+        .function(fun!(summary_total))
         .panic()
         .function(fun!(stamp_new))
         .panic()

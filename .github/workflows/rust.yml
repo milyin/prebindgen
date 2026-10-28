@@ -41,6 +41,7 @@ jobs:
           curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.1.0/kotlin-compiler-2.1.0.zip -o /tmp/kotlin.zip
           unzip -q /tmp/kotlin.zip -d /tmp/kotlin
       - run: cargo build --workspace
+      - run: python3 examples/record-generated.py --check
       - run: python3 examples/check.py
         env:
           KOTLINC: /tmp/kotlin/kotlinc/bin/kotlinc

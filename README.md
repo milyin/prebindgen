@@ -139,6 +139,40 @@ explicitly omits that field while keeping its Rust cleanup.
 These fields use their type-wide defaults when not overridden.
 `fields_self_into(...)` remains available as a deprecated alias for `fields_into(...)`.
 
+Getters used by output expansions may return shared values such as `&Child`,
+`&str`, `&[Row]`, `Option<&Child>` or `&Option<Child>`. A borrowed getter result
+uses the referent's output defaults, so nested getters and record projections
+work without cloning the owner or an intermediate object. Text and fields are
+copied as required by the foreign representation; a handle leaf clones its
+referent into an independent owning allocation and requires `Clone`. Borrowed
+results cannot satisfy an owned projection. Each getter runs once per configured
+view, and its output conversion finishes before another view moves the owner.
+These rules also apply to output projections of callback arguments.
+
+Plain reference returns use the adapter's direct representation unless an
+expansion is selected explicitly. C returns an opaque `&Child` as a non-owning
+`const child *`, without cloning or allocating; `Option<&Child>` uses null for
+absence. This also works in the success value of `Result`. The C caller must
+keep the referenced storage alive at a stable address and obey Rust's aliasing
+rules. Never free or pass a borrowed pointer to a consuming function. JNI still
+clones opaque references into independent owning handles.
+For example, a function returning `&Child` can
+use `.expand_return(expand_return!(Child).field(fun!(child_name)))` to deliver a
+name instead of a child pointer/handle. Getter expansions and explicit borrowed
+projections still copy their opaque leaves: their owner may be temporary and
+cannot lend pointers past the call. Mutable-reference returns remain unsupported.
+For direct loans, reference inputs must use persistent opaque pointers or borrowed
+text/byte buffers. A reference input reconstructed from record fields, a collection
+or a constructor can own temporary storage, so generation rejects lending from
+such a call unless the return is explicitly `'static`. Select an independent copy
+with `.expand_return(expand_return!(Child).field_self_ref())` when `Child: Clone`.
+This check runs during generation and adds no runtime bookkeeping.
+This changes unexpanded C opaque-reference returns from owning copies to loans.
+Existing C callers must stop freeing or consuming these results and retain their
+source owner, or select the explicit copy projection above. Explicit `'static`
+reference lifetimes are accepted on source function returns only; inputs,
+callback signatures and record fields retain their elided-lifetime requirement.
+
 A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
 and duplicate consuming views are rejected. Observing getters run before consuming
 views regardless of declaration order. Rust checks `Clone` requirements and rejects
