@@ -6,6 +6,39 @@ fn main() {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
+        .function(
+            fun!(buffer_views_text).expand_return(
+                expand_return!(String)
+                    .field_self()
+                    .field(fun!(buffer_views_text_len)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(buffer_views_bytes).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self()
+                    .field(fun!(buffer_views_bytes_len)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(buffer_views_optional_text).expand_return(
+                expand_return!(Option<String>)
+                    .field_self()
+                    .field(fun!(buffer_views_optional_text_len)),
+            ),
+        )
+        .panic()
+        .function(
+            fun!(buffer_views_optional_bytes).expand_return(
+                expand_return!(Option<Vec<u8>>)
+                    .field_self()
+                    .field(fun!(buffer_views_optional_bytes_len)),
+            ),
+        )
+        .panic()
+        .function(fun!(buffer_views_address))
         .opaque_ptr("getter_owner", pq!(GetterOwner))
         .opaque_ptr("getter_child", pq!(GetterChild))
         .opaque_ptr("getter_leaf", pq!(GetterLeaf))

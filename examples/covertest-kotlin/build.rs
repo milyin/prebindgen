@@ -140,6 +140,11 @@ fn main() {
             .field(fun!(getter_owner_leaf))
     };
     let binding = JniGen::builder()
+        .package(package!("runtimecosts")
+            .fun(fun!(buffer_views_optional_text).expand_return(expand_return!(Option<String>).field_self().field(fun!(buffer_views_optional_text_len))))
+            .fun(fun!(buffer_views_optional_bytes).expand_return(expand_return!(Option<Vec<u8>>).field_self().field(fun!(buffer_views_optional_bytes_len))))
+            .fun(fun!(buffer_views_text).expand_return(expand_return!(String).field_self().field(fun!(buffer_views_text_len))))
+            .fun(fun!(buffer_views_bytes).expand_return(expand_return!(Vec<u8>).field_self().field(fun!(buffer_views_bytes_len)))))
         .expand(expand_return!(GetterChild)
             .field(fun!(getter_child_number)).field(fun!(getter_child_name)))
         .package(package!("getters")

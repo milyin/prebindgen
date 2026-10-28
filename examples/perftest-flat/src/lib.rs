@@ -42,6 +42,8 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
 mod borrowed_getters;
+mod runtime_costs;
+pub use runtime_costs::*;
 pub mod callback_returns;
 pub use borrowed_getters::*;
 pub use callback_returns::*;
