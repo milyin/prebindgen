@@ -703,6 +703,13 @@ int main(void) {
     contains = perftest_storage_contains(borrowed, 7); assert(contains == 1);
     int64_t lengths = {0};
     lengths = perftest_storage_total_len(borrowed, borrowed, borrowed); assert(lengths == 3);
+    perftest_storage *target = perftest_storage_with_payload(0, 0, 0.0, 0);
+    assert(perftest_storage_accumulate_lengths(target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, NULL) == 7);
+    assert(perftest_storage_accumulate_lengths(target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed) == 15);
+    EXPECT_ABORT(perftest_storage_accumulate_lengths(target, target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, NULL));
+    EXPECT_ABORT(perftest_storage_accumulate_lengths(target, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, borrowed, target));
+    assert(perftest_storage_contains(target, 15));
+    perftest_drop_storage(target);
     perftest_summary *first = NULL, *second = NULL;
     first = perftest_storage_summary_handle(borrowed);
     second = perftest_storage_summary_handle(borrowed);

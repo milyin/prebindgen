@@ -247,7 +247,6 @@ pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u6
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -355,7 +354,6 @@ pub unsafe extern "C" fn example_local_counter_label(
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -471,7 +469,6 @@ pub unsafe extern "C" fn example_local_counter_value(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &example_flat::LocalCounter = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::local_counter_value(

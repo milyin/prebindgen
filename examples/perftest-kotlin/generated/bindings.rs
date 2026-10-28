@@ -112,7 +112,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
@@ -502,7 +501,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
             let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
             let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
-            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe {
                 &mut (*p0_w1_pointer).value
             };

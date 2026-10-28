@@ -704,6 +704,7 @@ fn main() {
         fun!(storage_len),
         fun!(storage_contains),
         fun!(storage_total_len),
+        fun!(storage_accumulate_lengths),
         fun!(storage_put_by_take),
         fun!(summary_merge),
         fun!(primitive_i8),
