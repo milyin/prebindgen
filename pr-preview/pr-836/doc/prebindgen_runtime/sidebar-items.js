@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["boundary","report_callback_cleanup_error","report_callback_error","validate_pointer","validate_slice"],"struct":["CallbackReturnAllocations"],"type":["Result"]};
