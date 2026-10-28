@@ -818,8 +818,8 @@
 <a href=#818 id=818 data-nosnippet>818</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = prebindgen_declarations::option_inner(ty) {
 <a href=#819 id=819 data-nosnippet>819</a>            <span class="kw">return </span><span class="self">self</span>.consumes(_flat, inner, <span class="kw-2">&amp;</span>());
 <a href=#820 id=820 data-nosnippet>820</a>        }
-<a href=#821 id=821 data-nosnippet>821</a>        <span class="comment">// Text and bytes own their storage just like opaque objects. Treating
-<a href=#822 id=822 data-nosnippet>822</a>        // them as observations silently cloned them when another view was added.
+<a href=#821 id=821 data-nosnippet>821</a>        <span class="comment">// Owned text/bytes are moved into their encoder. Keep observing getters
+<a href=#822 id=822 data-nosnippet>822</a>        // before that move and reject two consuming views, as for opaque objects.
 <a href=#823 id=823 data-nosnippet>823</a>        </span>!<span class="macro">matches!</span>(ty, syn::Type::Reference(<span class="kw">_</span>)) &amp;&amp; !<span class="macro">matches!</span>(Value::of(ty), <span class="prelude-val">Some</span>(Value::Scalar(<span class="kw">_</span>)))
 <a href=#824 id=824 data-nosnippet>824</a>    }
 <a href=#825 id=825 data-nosnippet>825</a>    <span class="kw">fn </span>input_leaf(
@@ -873,767 +873,795 @@
 <a href=#873 id=873 data-nosnippet>873</a>        <span class="kw">if </span>prebindgen_flat::sequence_parts(ty).is_some() {
 <a href=#874 id=874 data-nosnippet>874</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage"</span>.into());
 <a href=#875 id=875 data-nosnippet>875</a>        }
-<a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">if let </span>syn::Type::Reference(reference) = ty {
-<a href=#877 id=877 data-nosnippet>877</a>            <span class="kw">if </span>reference.mutability.is_some() {
-<a href=#878 id=878 data-nosnippet>878</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"mutable-reference outputs are unsupported"</span>.into());
-<a href=#879 id=879 data-nosnippet>879</a>            }
-<a href=#880 id=880 data-nosnippet>880</a>            <span class="kw">match </span>type_key(<span class="kw-2">&amp;</span>reference.elem).as_str() {
-<a href=#881 id=881 data-nosnippet>881</a>                <span class="string">"str" </span>=&gt; {
-<a href=#882 id=882 data-nosnippet>882</a>                    <span class="kw">return </span><span class="self">self</span>.output_leaf(
-<a href=#883 id=883 data-nosnippet>883</a>                        _flat,
-<a href=#884 id=884 data-nosnippet>884</a>                        <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(String),
-<a href=#885 id=885 data-nosnippet>885</a>                        <span class="kw-2">&amp;</span>(),
-<a href=#886 id=886 data-nosnippet>886</a>                        w,
-<a href=#887 id=887 data-nosnippet>887</a>                        <span class="macro">quote!</span>((#v).to_string()),
-<a href=#888 id=888 data-nosnippet>888</a>                        <span class="bool-val">false</span>,
-<a href=#889 id=889 data-nosnippet>889</a>                    )
-<a href=#890 id=890 data-nosnippet>890</a>                }
-<a href=#891 id=891 data-nosnippet>891</a>                <span class="string">"[u8]" </span>=&gt; {
-<a href=#892 id=892 data-nosnippet>892</a>                    <span class="kw">return </span><span class="self">self</span>.output_leaf(
-<a href=#893 id=893 data-nosnippet>893</a>                        _flat,
-<a href=#894 id=894 data-nosnippet>894</a>                        <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(Vec&lt;u8&gt;),
-<a href=#895 id=895 data-nosnippet>895</a>                        <span class="kw-2">&amp;</span>(),
-<a href=#896 id=896 data-nosnippet>896</a>                        w,
-<a href=#897 id=897 data-nosnippet>897</a>                        <span class="macro">quote!</span>((#v).to_vec()),
-<a href=#898 id=898 data-nosnippet>898</a>                        <span class="bool-val">false</span>,
-<a href=#899 id=899 data-nosnippet>899</a>                    )
-<a href=#900 id=900 data-nosnippet>900</a>                }
-<a href=#901 id=901 data-nosnippet>901</a>                <span class="kw">_ </span>=&gt; {}
-<a href=#902 id=902 data-nosnippet>902</a>            }
-<a href=#903 id=903 data-nosnippet>903</a>            <span class="kw">let </span>value = <span class="kw">if </span>borrowed { <span class="macro">quote!</span>(<span class="kw-2">*</span>#v) } <span class="kw">else </span>{ v };
-<a href=#904 id=904 data-nosnippet>904</a>            <span class="kw">return </span><span class="self">self</span>.output_leaf(_flat, <span class="kw-2">&amp;</span>reference.elem, <span class="kw-2">&amp;</span>(), w, value, <span class="bool-val">true</span>);
-<a href=#905 id=905 data-nosnippet>905</a>        }
-<a href=#906 id=906 data-nosnippet>906</a>        <span class="kw">if </span>prebindgen_declarations::option_inner(ty).is_some() {
-<a href=#907 id=907 data-nosnippet>907</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"resolve Optional operations before leaf compilation"</span>.into());
-<a href=#908 id=908 data-nosnippet>908</a>        }
-<a href=#909 id=909 data-nosnippet>909</a>        <span class="comment">// Text and bytes stay optional Rust payloads until delivery. This keeps
-<a href=#910 id=910 data-nosnippet>910</a>        // a null reference distinct from a present empty string or byte array.
-<a href=#911 id=911 data-nosnippet>911</a>        </span><span class="kw">let </span>(encode, kind): (<span class="kw">fn</span>(TokenStream) -&gt; TokenStream, <span class="kw">_</span>) = <span class="kw">match </span>Value::of(ty) {
-<a href=#912 id=912 data-nosnippet>912</a>            <span class="prelude-val">Some</span>(Value::Scalar(p)) =&gt; {
-<a href=#913 id=913 data-nosnippet>913</a>                <span class="kw">return </span>prebindgen_conversions::value::output(
-<a href=#914 id=914 data-nosnippet>914</a>                    ty,
-<a href=#915 id=915 data-nosnippet>915</a>                    w,
-<a href=#916 id=916 data-nosnippet>916</a>                    v,
-<a href=#917 id=917 data-nosnippet>917</a>                    borrowed,
-<a href=#918 id=918 data-nosnippet>918</a>                    |v| scalar::encode(p, v),
-<a href=#919 id=919 data-nosnippet>919</a>                    JniWire::scalar(p),
-<a href=#920 id=920 data-nosnippet>920</a>                )
-<a href=#921 id=921 data-nosnippet>921</a>            }
-<a href=#922 id=922 data-nosnippet>922</a>            <span class="prelude-val">Some</span>(Value::Text) =&gt; (|v| <span class="macro">quote!</span>(<span class="prelude-val">Some</span>(#v)), JniWire::text()),
-<a href=#923 id=923 data-nosnippet>923</a>            <span class="prelude-val">Some</span>(Value::Bytes) =&gt; (|v| <span class="macro">quote!</span>(<span class="prelude-val">Some</span>(#v)), JniWire::bytes()),
-<a href=#924 id=924 data-nosnippet>924</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#925 id=925 data-nosnippet>925</a>                <span class="kw">return </span>prebindgen_conversions::boxed::output(<span class="kw-2">&amp;</span>storage(), ty, w, v, borrowed, |b| {
-<a href=#926 id=926 data-nosnippet>926</a>                    JniWire::handle(b, <span class="string">"true"</span>)
-<a href=#927 id=927 data-nosnippet>927</a>                })
-<a href=#928 id=928 data-nosnippet>928</a>            }
-<a href=#929 id=929 data-nosnippet>929</a>        };
-<a href=#930 id=930 data-nosnippet>930</a>        prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
-<a href=#931 id=931 data-nosnippet>931</a>    }
-<a href=#932 id=932 data-nosnippet>932</a>
-<a href=#933 id=933 data-nosnippet>933</a>    <span class="kw">fn </span>optional_niche(
-<a href=#934 id=934 data-nosnippet>934</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#935 id=935 data-nosnippet>935</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
-<a href=#936 id=936 data-nosnippet>936</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt; {
-<a href=#937 id=937 data-nosnippet>937</a>        <span class="kw">crate</span>::group::optional_niche(payload)
-<a href=#938 id=938 data-nosnippet>938</a>    }
-<a href=#939 id=939 data-nosnippet>939</a>    <span class="kw">fn </span>optional_presence(
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="comment">// Materialize JVM buffers while their source is still in scope. Optional
+<a href=#877 id=877 data-nosnippet>877</a>        // payloads, getter temporaries and collection rows may be dropped before
+<a href=#878 id=878 data-nosnippet>878</a>        // final delivery, so carrying a borrowed Rust view that far is unsound.
+<a href=#879 id=879 data-nosnippet>879</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(value_kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
+<a href=#880 id=880 data-nosnippet>880</a>            <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
+<a href=#881 id=881 data-nosnippet>881</a>            <span class="kw">let </span>(encode, kind) = <span class="kw">match </span>value_kind {
+<a href=#882 id=882 data-nosnippet>882</a>                Value::Text =&gt; (
+<a href=#883 id=883 data-nosnippet>883</a>                    <span class="macro">quote!</span>(::prebindgen_jni_runtime::text_object(
+<a href=#884 id=884 data-nosnippet>884</a>                        <span class="kw-2">&amp;mut </span>#env, ::core::convert::AsRef::&lt;str&gt;::as_ref(<span class="kw-2">&amp;</span>#w))<span class="question-mark">?</span>),
+<a href=#885 id=885 data-nosnippet>885</a>                    JniWire::text(),
+<a href=#886 id=886 data-nosnippet>886</a>                ),
+<a href=#887 id=887 data-nosnippet>887</a>                Value::Bytes =&gt; (
+<a href=#888 id=888 data-nosnippet>888</a>                    <span class="macro">quote!</span>(::prebindgen_jni_runtime::bytes_object(
+<a href=#889 id=889 data-nosnippet>889</a>                        <span class="kw-2">&amp;mut </span>#env, ::core::convert::AsRef::&lt;[u8]&gt;::as_ref(<span class="kw-2">&amp;</span>#w))<span class="question-mark">?</span>),
+<a href=#890 id=890 data-nosnippet>890</a>                    JniWire::bytes(),
+<a href=#891 id=891 data-nosnippet>891</a>                ),
+<a href=#892 id=892 data-nosnippet>892</a>                Value::Scalar(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(),
+<a href=#893 id=893 data-nosnippet>893</a>            };
+<a href=#894 id=894 data-nosnippet>894</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(OutputPlan {
+<a href=#895 id=895 data-nosnippet>895</a>                fallible: <span class="bool-val">true</span>,
+<a href=#896 id=896 data-nosnippet>896</a>                context: Default::default(),
+<a href=#897 id=897 data-nosnippet>897</a>                delivery: Default::default(),
+<a href=#898 id=898 data-nosnippet>898</a>                outcomes: prebindgen_flat::Outcomes {
+<a href=#899 id=899 data-nosnippet>899</a>                    success: prebindgen_flat::WireNode::Leaf(<span class="macro">vec!</span>[prebindgen_flat::Wire {
+<a href=#900 id=900 data-nosnippet>900</a>                        name: w.clone(),
+<a href=#901 id=901 data-nosnippet>901</a>                        kind,
+<a href=#902 id=902 data-nosnippet>902</a>                    }]),
+<a href=#903 id=903 data-nosnippet>903</a>                    source_error: <span class="prelude-val">None</span>,
+<a href=#904 id=904 data-nosnippet>904</a>                    binding_failure: <span class="prelude-val">None</span>,
+<a href=#905 id=905 data-nosnippet>905</a>                },
+<a href=#906 id=906 data-nosnippet>906</a>                statements: <span class="macro">quote!</span>(<span class="kw">let </span>#w: ::prebindgen_jni_runtime::jni::objects::JObject&lt;<span class="lifetime">'_</span>&gt; = {
+<a href=#907 id=907 data-nosnippet>907</a>                    <span class="kw">let </span>#w = #v; #encode
+<a href=#908 id=908 data-nosnippet>908</a>                };),
+<a href=#909 id=909 data-nosnippet>909</a>                values: <span class="macro">vec!</span>[(w.clone(), <span class="macro">quote!</span>(#w))],
+<a href=#910 id=910 data-nosnippet>910</a>                commit: <span class="macro">quote!</span>(),
+<a href=#911 id=911 data-nosnippet>911</a>            });
+<a href=#912 id=912 data-nosnippet>912</a>        }
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="kw">if let </span>syn::Type::Reference(reference) = ty {
+<a href=#914 id=914 data-nosnippet>914</a>            <span class="kw">if </span>reference.mutability.is_some() {
+<a href=#915 id=915 data-nosnippet>915</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"mutable-reference outputs are unsupported"</span>.into());
+<a href=#916 id=916 data-nosnippet>916</a>            }
+<a href=#917 id=917 data-nosnippet>917</a>            <span class="kw">let </span>value = <span class="kw">if </span>borrowed { <span class="macro">quote!</span>(<span class="kw-2">*</span>#v) } <span class="kw">else </span>{ v };
+<a href=#918 id=918 data-nosnippet>918</a>            <span class="kw">return </span><span class="self">self</span>.output_leaf(_flat, <span class="kw-2">&amp;</span>reference.elem, <span class="kw-2">&amp;</span>(), w, value, <span class="bool-val">true</span>);
+<a href=#919 id=919 data-nosnippet>919</a>        }
+<a href=#920 id=920 data-nosnippet>920</a>        <span class="kw">if </span>prebindgen_declarations::option_inner(ty).is_some() {
+<a href=#921 id=921 data-nosnippet>921</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"resolve Optional operations before leaf compilation"</span>.into());
+<a href=#922 id=922 data-nosnippet>922</a>        }
+<a href=#923 id=923 data-nosnippet>923</a>        <span class="kw">match </span>Value::of(ty) {
+<a href=#924 id=924 data-nosnippet>924</a>            <span class="prelude-val">Some</span>(Value::Scalar(p)) =&gt; prebindgen_conversions::value::output(
+<a href=#925 id=925 data-nosnippet>925</a>                ty,
+<a href=#926 id=926 data-nosnippet>926</a>                w,
+<a href=#927 id=927 data-nosnippet>927</a>                v,
+<a href=#928 id=928 data-nosnippet>928</a>                borrowed,
+<a href=#929 id=929 data-nosnippet>929</a>                |v| scalar::encode(p, v),
+<a href=#930 id=930 data-nosnippet>930</a>                JniWire::scalar(p),
+<a href=#931 id=931 data-nosnippet>931</a>            ),
+<a href=#932 id=932 data-nosnippet>932</a>            <span class="prelude-val">Some</span>(Value::Text | Value::Bytes) =&gt; <span class="macro">unreachable!</span>(<span class="string">"buffers prepared above"</span>),
+<a href=#933 id=933 data-nosnippet>933</a>            <span class="prelude-val">None </span>=&gt; prebindgen_conversions::boxed::output(<span class="kw-2">&amp;</span>storage(), ty, w, v, borrowed, |b| {
+<a href=#934 id=934 data-nosnippet>934</a>                JniWire::handle(b, <span class="string">"true"</span>)
+<a href=#935 id=935 data-nosnippet>935</a>            }),
+<a href=#936 id=936 data-nosnippet>936</a>        }
+<a href=#937 id=937 data-nosnippet>937</a>    }
+<a href=#938 id=938 data-nosnippet>938</a>
+<a href=#939 id=939 data-nosnippet>939</a>    <span class="kw">fn </span>optional_niche(
 <a href=#940 id=940 data-nosnippet>940</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#941 id=941 data-nosnippet>941</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
-<a href=#942 id=942 data-nosnippet>942</a>        reservation: <span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;,
-<a href=#943 id=943 data-nosnippet>943</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
-<a href=#944 id=944 data-nosnippet>944</a>        <span class="kw">crate</span>::group::optional_presence(payload, reservation)
-<a href=#945 id=945 data-nosnippet>945</a>    }
-<a href=#946 id=946 data-nosnippet>946</a>    <span class="kw">fn </span>absent_output_values(
-<a href=#947 id=947 data-nosnippet>947</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#948 id=948 data-nosnippet>948</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
-<a href=#949 id=949 data-nosnippet>949</a>        reservation: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt;,
-<a href=#950 id=950 data-nosnippet>950</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(syn::Ident, TokenStream)&gt;&gt; {
-<a href=#951 id=951 data-nosnippet>951</a>        <span class="kw">crate</span>::group::absent_output_values(payload, reservation)
-<a href=#952 id=952 data-nosnippet>952</a>    }
-<a href=#953 id=953 data-nosnippet>953</a>    <span class="kw">fn </span>retire_niches(
-<a href=#954 id=954 data-nosnippet>954</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#955 id=955 data-nosnippet>955</a>        payload: <span class="kw-2">&amp;mut </span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
-<a href=#956 id=956 data-nosnippet>956</a>        reservation: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt;,
-<a href=#957 id=957 data-nosnippet>957</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#958 id=958 data-nosnippet>958</a>        <span class="kw">crate</span>::group::retire_niches(payload, reservation)
-<a href=#959 id=959 data-nosnippet>959</a>    }
-<a href=#960 id=960 data-nosnippet>960</a>    <span class="kw">fn </span>validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;</span>prebindgen_declarations::CodecInput&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#961 id=961 data-nosnippet>961</a>        sequence::validate_buffered(<span class="kw-2">&amp;</span>plan.node)<span class="question-mark">?</span>;
-<a href=#962 id=962 data-nosnippet>962</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>plan.node)
-<a href=#963 id=963 data-nosnippet>963</a>    }
-<a href=#964 id=964 data-nosnippet>964</a>    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;</span>prebindgen_declarations::CodecOutput&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#965 id=965 data-nosnippet>965</a>        sequence::callback_delivery(<span class="kw-2">&amp;</span>plan.outcomes.success)<span class="question-mark">?</span>;
-<a href=#966 id=966 data-nosnippet>966</a>        <span class="kw">for </span>error <span class="kw">in </span>plan
-<a href=#967 id=967 data-nosnippet>967</a>            .outcomes
-<a href=#968 id=968 data-nosnippet>968</a>            .source_error
-<a href=#969 id=969 data-nosnippet>969</a>            .iter()
-<a href=#970 id=970 data-nosnippet>970</a>            .chain(plan.outcomes.binding_failure.iter())
-<a href=#971 id=971 data-nosnippet>971</a>        {
-<a href=#972 id=972 data-nosnippet>972</a>            sequence::validate_buffered(error)<span class="question-mark">?</span>;
-<a href=#973 id=973 data-nosnippet>973</a>        }
-<a href=#974 id=974 data-nosnippet>974</a>        <span class="kw">for </span>node <span class="kw">in </span>std::iter::once(<span class="kw-2">&amp;</span>plan.outcomes.success)
-<a href=#975 id=975 data-nosnippet>975</a>            .chain(plan.outcomes.source_error.iter())
+<a href=#942 id=942 data-nosnippet>942</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt; {
+<a href=#943 id=943 data-nosnippet>943</a>        <span class="kw">crate</span>::group::optional_niche(payload)
+<a href=#944 id=944 data-nosnippet>944</a>    }
+<a href=#945 id=945 data-nosnippet>945</a>    <span class="kw">fn </span>optional_presence(
+<a href=#946 id=946 data-nosnippet>946</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#947 id=947 data-nosnippet>947</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
+<a href=#948 id=948 data-nosnippet>948</a>        reservation: <span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;,
+<a href=#949 id=949 data-nosnippet>949</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TokenStream&gt; {
+<a href=#950 id=950 data-nosnippet>950</a>        <span class="kw">crate</span>::group::optional_presence(payload, reservation)
+<a href=#951 id=951 data-nosnippet>951</a>    }
+<a href=#952 id=952 data-nosnippet>952</a>    <span class="kw">fn </span>absent_output_values(
+<a href=#953 id=953 data-nosnippet>953</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#954 id=954 data-nosnippet>954</a>        payload: <span class="kw-2">&amp;</span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
+<a href=#955 id=955 data-nosnippet>955</a>        reservation: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt;,
+<a href=#956 id=956 data-nosnippet>956</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(syn::Ident, TokenStream)&gt;&gt; {
+<a href=#957 id=957 data-nosnippet>957</a>        <span class="kw">crate</span>::group::absent_output_values(payload, reservation)
+<a href=#958 id=958 data-nosnippet>958</a>    }
+<a href=#959 id=959 data-nosnippet>959</a>    <span class="kw">fn </span>retire_niches(
+<a href=#960 id=960 data-nosnippet>960</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#961 id=961 data-nosnippet>961</a>        payload: <span class="kw-2">&amp;mut </span>prebindgen_flat::WireNode&lt;<span class="self">Self</span>::Wire, <span class="self">Self</span>::Chain, <span class="self">Self</span>::Branch&gt;,
+<a href=#962 id=962 data-nosnippet>962</a>        reservation: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_declarations::NicheReservation&lt;<span class="self">Self</span>::Niche&gt;&gt;,
+<a href=#963 id=963 data-nosnippet>963</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#964 id=964 data-nosnippet>964</a>        <span class="kw">crate</span>::group::retire_niches(payload, reservation)
+<a href=#965 id=965 data-nosnippet>965</a>    }
+<a href=#966 id=966 data-nosnippet>966</a>    <span class="kw">fn </span>validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;</span>prebindgen_declarations::CodecInput&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#967 id=967 data-nosnippet>967</a>        sequence::validate_buffered(<span class="kw-2">&amp;</span>plan.node)<span class="question-mark">?</span>;
+<a href=#968 id=968 data-nosnippet>968</a>        <span class="kw">crate</span>::group::validate_layout(<span class="kw-2">&amp;</span>plan.node)
+<a href=#969 id=969 data-nosnippet>969</a>    }
+<a href=#970 id=970 data-nosnippet>970</a>    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, plan: <span class="kw-2">&amp;</span>prebindgen_declarations::CodecOutput&lt;<span class="self">Self</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#971 id=971 data-nosnippet>971</a>        sequence::callback_delivery(<span class="kw-2">&amp;</span>plan.outcomes.success)<span class="question-mark">?</span>;
+<a href=#972 id=972 data-nosnippet>972</a>        <span class="kw">for </span>error <span class="kw">in </span>plan
+<a href=#973 id=973 data-nosnippet>973</a>            .outcomes
+<a href=#974 id=974 data-nosnippet>974</a>            .source_error
+<a href=#975 id=975 data-nosnippet>975</a>            .iter()
 <a href=#976 id=976 data-nosnippet>976</a>            .chain(plan.outcomes.binding_failure.iter())
 <a href=#977 id=977 data-nosnippet>977</a>        {
-<a href=#978 id=978 data-nosnippet>978</a>            <span class="kw">crate</span>::group::validate_layout(node)<span class="question-mark">?</span>;
+<a href=#978 id=978 data-nosnippet>978</a>            sequence::validate_buffered(error)<span class="question-mark">?</span>;
 <a href=#979 id=979 data-nosnippet>979</a>        }
-<a href=#980 id=980 data-nosnippet>980</a>        <span class="kw">crate</span>::group::result_packet(<span class="kw-2">&amp;</span>plan.outcomes.success, <span class="kw-2">&amp;</span>plan.values)<span class="question-mark">?</span>;
-<a href=#981 id=981 data-nosnippet>981</a>        <span class="prelude-val">Ok</span>(())
-<a href=#982 id=982 data-nosnippet>982</a>    }
-<a href=#983 id=983 data-nosnippet>983</a>}
-<a href=#984 id=984 data-nosnippet>984</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>encode_array(
-<a href=#985 id=985 data-nosnippet>985</a>    fields: Vec&lt;(<span class="kw-2">&amp;</span>prebindgen_flat::Wire&lt;JniWire&gt;, <span class="kw-2">&amp;</span>TokenStream)&gt;,
-<a href=#986 id=986 data-nosnippet>986</a>    array: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#987 id=987 data-nosnippet>987</a>    offset: usize,
-<a href=#988 id=988 data-nosnippet>988</a>) -&gt; TokenStream {
-<a href=#989 id=989 data-nosnippet>989</a>    <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
-<a href=#990 id=990 data-nosnippet>990</a>    <span class="kw">let </span><span class="kw-2">mut </span>encode = TokenStream::new();
-<a href=#991 id=991 data-nosnippet>991</a>    <span class="kw">for </span>(i, (wire, value)) <span class="kw">in </span>fields.into_iter().enumerate() {
-<a href=#992 id=992 data-nosnippet>992</a>        <span class="kw">let </span>expr = wire.kind.output_object(value);
-<a href=#993 id=993 data-nosnippet>993</a>        <span class="kw">let </span>i = (i + offset) <span class="kw">as </span>i32;
-<a href=#994 id=994 data-nosnippet>994</a>        encode.extend(<span class="macro">quote!</span> {
-<a href=#995 id=995 data-nosnippet>995</a>            <span class="kw">let </span>object = #expr;
-<a href=#996 id=996 data-nosnippet>996</a>            #env.set_object_array_element(<span class="kw-2">&amp;</span>#array, #i, <span class="kw-2">&amp;</span>object).map_err(|e|e.to_string())<span class="question-mark">?</span>;
-<a href=#997 id=997 data-nosnippet>997</a>            #env.delete_local_ref(object).map_err(|e|e.to_string())<span class="question-mark">?</span>;
-<a href=#998 id=998 data-nosnippet>998</a>        });
-<a href=#999 id=999 data-nosnippet>999</a>    }
-<a href=#1000 id=1000 data-nosnippet>1000</a>
-<a href=#1001 id=1001 data-nosnippet>1001</a>    encode
-<a href=#1002 id=1002 data-nosnippet>1002</a>}
-<a href=#1003 id=1003 data-nosnippet>1003</a><span class="kw">fn </span>storage() -&gt; prebindgen_conversions::boxed::Storage {
-<a href=#1004 id=1004 data-nosnippet>1004</a>    prebindgen_conversions::boxed::Storage::Wrapped(<span class="macro">syn::parse_quote!</span>(
-<a href=#1005 id=1005 data-nosnippet>1005</a>        ::prebindgen_jni_runtime::Allocation
-<a href=#1006 id=1006 data-nosnippet>1006</a>    ))
-<a href=#1007 id=1007 data-nosnippet>1007</a>}
-<a href=#1008 id=1008 data-nosnippet>1008</a><span class="doccomment">/// Another name for the generated Rust and Kotlin sources in [`JniGen`].
-<a href=#1009 id=1009 data-nosnippet>1009</a></span><span class="kw">pub type </span>Generation = JniGen;
-<a href=#1010 id=1010 data-nosnippet>1010</a><span class="kw">impl </span>JniGen {
-<a href=#1011 id=1011 data-nosnippet>1011</a>    <span class="doccomment">/// Write native Rust source, returning the destination path.
-<a href=#1012 id=1012 data-nosnippet>1012</a>    ///
-<a href=#1013 id=1013 data-nosnippet>1013</a>    /// Relative paths resolve under Cargo's `OUT_DIR`; absolute paths are used
-<a href=#1014 id=1014 data-nosnippet>1014</a>    /// directly. Creates parent directories and overwrites an existing file.
-<a href=#1015 id=1015 data-nosnippet>1015</a>    /// Returns an error if `OUT_DIR` is needed but absent, or filesystem access fails.
-<a href=#1016 id=1016 data-nosnippet>1016</a>    </span><span class="kw">pub fn </span>write_rust(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw">impl </span>AsRef&lt;std::path::Path&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;std::path::PathBuf&gt; {
-<a href=#1017 id=1017 data-nosnippet>1017</a>        <span class="kw">let </span>path = path.as_ref();
-<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="kw">let </span>path = <span class="kw">if </span>path.is_absolute() {
-<a href=#1019 id=1019 data-nosnippet>1019</a>            path.to_owned()
-<a href=#1020 id=1020 data-nosnippet>1020</a>        } <span class="kw">else </span>{
-<a href=#1021 id=1021 data-nosnippet>1021</a>            std::path::PathBuf::from(std::env::var_os(<span class="string">"OUT_DIR"</span>).ok_or(<span class="string">"OUT_DIR is not set"</span>)<span class="question-mark">?</span>)
-<a href=#1022 id=1022 data-nosnippet>1022</a>                .join(path)
-<a href=#1023 id=1023 data-nosnippet>1023</a>        };
-<a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = path.parent() {
-<a href=#1025 id=1025 data-nosnippet>1025</a>            std::fs::create_dir_all(parent).map_err(|e| e.to_string())<span class="question-mark">?</span>;
-<a href=#1026 id=1026 data-nosnippet>1026</a>        }
-<a href=#1027 id=1027 data-nosnippet>1027</a>        std::fs::write(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span><span class="self">self</span>.rust).map_err(|e| e.to_string())<span class="question-mark">?</span>;
-<a href=#1028 id=1028 data-nosnippet>1028</a>        <span class="prelude-val">Ok</span>(path)
-<a href=#1029 id=1029 data-nosnippet>1029</a>    }
-<a href=#1030 id=1030 data-nosnippet>1030</a>    <span class="doccomment">/// Write all Kotlin files beneath `root`, creating package directories.
-<a href=#1031 id=1031 data-nosnippet>1031</a>    ///
-<a href=#1032 id=1032 data-nosnippet>1032</a>    /// Relative roots use the current directory, not `OUT_DIR`. Existing generated
-<a href=#1033 id=1033 data-nosnippet>1033</a>    /// paths are overwritten; stale files are not removed. Returns the written paths
-<a href=#1034 id=1034 data-nosnippet>1034</a>    /// or a filesystem error. Earlier writes remain if a later write fails.
-<a href=#1035 id=1035 data-nosnippet>1035</a>    </span><span class="kw">pub fn </span>write_kotlin(<span class="kw-2">&amp;</span><span class="self">self</span>, root: <span class="kw-2">&amp;</span>std::path::Path) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;std::path::PathBuf&gt;&gt; {
-<a href=#1036 id=1036 data-nosnippet>1036</a>        <span class="kw">let </span><span class="kw-2">mut </span>written = Vec::new();
-<a href=#1037 id=1037 data-nosnippet>1037</a>        <span class="kw">for </span>(path, text) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.kotlin {
-<a href=#1038 id=1038 data-nosnippet>1038</a>            <span class="kw">let </span>path = root.join(path);
-<a href=#1039 id=1039 data-nosnippet>1039</a>            std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())<span class="question-mark">?</span>;
-<a href=#1040 id=1040 data-nosnippet>1040</a>            std::fs::write(<span class="kw-2">&amp;</span>path, text).map_err(|e| e.to_string())<span class="question-mark">?</span>;
-<a href=#1041 id=1041 data-nosnippet>1041</a>            written.push(path);
-<a href=#1042 id=1042 data-nosnippet>1042</a>        }
-<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="prelude-val">Ok</span>(written)
-<a href=#1044 id=1044 data-nosnippet>1044</a>    }
-<a href=#1045 id=1045 data-nosnippet>1045</a>}
-<a href=#1046 id=1046 data-nosnippet>1046</a><span class="kw">fn </span>validate_class_name(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1047 id=1047 data-nosnippet>1047</a>    validate_name(name)<span class="question-mark">?</span>;
-<a href=#1048 id=1048 data-nosnippet>1048</a>    <span class="kw">if </span>[
-<a href=#1049 id=1049 data-nosnippet>1049</a>        <span class="string">"JNINative"</span>,
-<a href=#1050 id=1050 data-nosnippet>1050</a>        <span class="string">"Functions"</span>,
-<a href=#1051 id=1051 data-nosnippet>1051</a>        <span class="string">"NativeHandle"</span>,
-<a href=#1052 id=1052 data-nosnippet>1052</a>        <span class="string">"JniErrorHandler"</span>,
-<a href=#1053 id=1053 data-nosnippet>1053</a>        <span class="string">"HandleValidationFailure"</span>,
-<a href=#1054 id=1054 data-nosnippet>1054</a>    ]
-<a href=#1055 id=1055 data-nosnippet>1055</a>    .contains(<span class="kw-2">&amp;</span>name)
-<a href=#1056 id=1056 data-nosnippet>1056</a>    {
-<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"reserved generated class name"</span>.into());
-<a href=#1058 id=1058 data-nosnippet>1058</a>    }
-<a href=#1059 id=1059 data-nosnippet>1059</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1060 id=1060 data-nosnippet>1060</a>}
-<a href=#1061 id=1061 data-nosnippet>1061</a><span class="kw">fn </span>validate_name(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1062 id=1062 data-nosnippet>1062</a>    <span class="kw">if </span>s.is_empty()
-<a href=#1063 id=1063 data-nosnippet>1063</a>        || s.chars().all(|c| c == <span class="string">'_'</span>)
-<a href=#1064 id=1064 data-nosnippet>1064</a>        || [
-<a href=#1065 id=1065 data-nosnippet>1065</a>            <span class="string">"as"</span>,
-<a href=#1066 id=1066 data-nosnippet>1066</a>            <span class="string">"break"</span>,
-<a href=#1067 id=1067 data-nosnippet>1067</a>            <span class="string">"class"</span>,
-<a href=#1068 id=1068 data-nosnippet>1068</a>            <span class="string">"continue"</span>,
-<a href=#1069 id=1069 data-nosnippet>1069</a>            <span class="string">"do"</span>,
-<a href=#1070 id=1070 data-nosnippet>1070</a>            <span class="string">"else"</span>,
-<a href=#1071 id=1071 data-nosnippet>1071</a>            <span class="string">"false"</span>,
-<a href=#1072 id=1072 data-nosnippet>1072</a>            <span class="string">"for"</span>,
-<a href=#1073 id=1073 data-nosnippet>1073</a>            <span class="string">"fun"</span>,
-<a href=#1074 id=1074 data-nosnippet>1074</a>            <span class="string">"if"</span>,
-<a href=#1075 id=1075 data-nosnippet>1075</a>            <span class="string">"in"</span>,
-<a href=#1076 id=1076 data-nosnippet>1076</a>            <span class="string">"interface"</span>,
-<a href=#1077 id=1077 data-nosnippet>1077</a>            <span class="string">"is"</span>,
-<a href=#1078 id=1078 data-nosnippet>1078</a>            <span class="string">"null"</span>,
-<a href=#1079 id=1079 data-nosnippet>1079</a>            <span class="string">"object"</span>,
-<a href=#1080 id=1080 data-nosnippet>1080</a>            <span class="string">"package"</span>,
-<a href=#1081 id=1081 data-nosnippet>1081</a>            <span class="string">"return"</span>,
-<a href=#1082 id=1082 data-nosnippet>1082</a>            <span class="string">"super"</span>,
-<a href=#1083 id=1083 data-nosnippet>1083</a>            <span class="string">"this"</span>,
-<a href=#1084 id=1084 data-nosnippet>1084</a>            <span class="string">"throw"</span>,
-<a href=#1085 id=1085 data-nosnippet>1085</a>            <span class="string">"true"</span>,
-<a href=#1086 id=1086 data-nosnippet>1086</a>            <span class="string">"try"</span>,
-<a href=#1087 id=1087 data-nosnippet>1087</a>            <span class="string">"typealias"</span>,
-<a href=#1088 id=1088 data-nosnippet>1088</a>            <span class="string">"typeof"</span>,
-<a href=#1089 id=1089 data-nosnippet>1089</a>            <span class="string">"val"</span>,
-<a href=#1090 id=1090 data-nosnippet>1090</a>            <span class="string">"var"</span>,
-<a href=#1091 id=1091 data-nosnippet>1091</a>            <span class="string">"when"</span>,
-<a href=#1092 id=1092 data-nosnippet>1092</a>            <span class="string">"while"</span>,
-<a href=#1093 id=1093 data-nosnippet>1093</a>        ]
-<a href=#1094 id=1094 data-nosnippet>1094</a>        .contains(<span class="kw-2">&amp;</span>s)
-<a href=#1095 id=1095 data-nosnippet>1095</a>        || !s
-<a href=#1096 id=1096 data-nosnippet>1096</a>            .chars()
-<a href=#1097 id=1097 data-nosnippet>1097</a>            .enumerate()
-<a href=#1098 id=1098 data-nosnippet>1098</a>            .all(|(i, c)| c == <span class="string">'_' </span>|| c.is_ascii_alphabetic() || (i &gt; <span class="number">0 </span>&amp;&amp; c.is_ascii_digit()))
-<a href=#1099 id=1099 data-nosnippet>1099</a>    {
-<a href=#1100 id=1100 data-nosnippet>1100</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"invalid Kotlin name `{s}`"</span>));
-<a href=#1101 id=1101 data-nosnippet>1101</a>    }
-<a href=#1102 id=1102 data-nosnippet>1102</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1103 id=1103 data-nosnippet>1103</a>}
-<a href=#1104 id=1104 data-nosnippet>1104</a><span class="kw">fn </span>validate_package(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1105 id=1105 data-nosnippet>1105</a>    <span class="kw">for </span>p <span class="kw">in </span>s.split(<span class="string">'.'</span>) {
-<a href=#1106 id=1106 data-nosnippet>1106</a>        validate_name(p)<span class="question-mark">?</span>;
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="kw">for </span>node <span class="kw">in </span>std::iter::once(<span class="kw-2">&amp;</span>plan.outcomes.success)
+<a href=#981 id=981 data-nosnippet>981</a>            .chain(plan.outcomes.source_error.iter())
+<a href=#982 id=982 data-nosnippet>982</a>            .chain(plan.outcomes.binding_failure.iter())
+<a href=#983 id=983 data-nosnippet>983</a>        {
+<a href=#984 id=984 data-nosnippet>984</a>            <span class="kw">crate</span>::group::validate_layout(node)<span class="question-mark">?</span>;
+<a href=#985 id=985 data-nosnippet>985</a>        }
+<a href=#986 id=986 data-nosnippet>986</a>        <span class="kw">crate</span>::group::result_packet(<span class="kw-2">&amp;</span>plan.outcomes.success, <span class="kw-2">&amp;</span>plan.values)<span class="question-mark">?</span>;
+<a href=#987 id=987 data-nosnippet>987</a>        <span class="prelude-val">Ok</span>(())
+<a href=#988 id=988 data-nosnippet>988</a>    }
+<a href=#989 id=989 data-nosnippet>989</a>}
+<a href=#990 id=990 data-nosnippet>990</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>encode_array(
+<a href=#991 id=991 data-nosnippet>991</a>    fields: Vec&lt;(<span class="kw-2">&amp;</span>prebindgen_flat::Wire&lt;JniWire&gt;, <span class="kw-2">&amp;</span>TokenStream)&gt;,
+<a href=#992 id=992 data-nosnippet>992</a>    array: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#993 id=993 data-nosnippet>993</a>    offset: usize,
+<a href=#994 id=994 data-nosnippet>994</a>) -&gt; TokenStream {
+<a href=#995 id=995 data-nosnippet>995</a>    <span class="kw">let </span>env = prebindgen_conversions::template_parameter(<span class="string">"environment"</span>);
+<a href=#996 id=996 data-nosnippet>996</a>    <span class="kw">let </span><span class="kw-2">mut </span>encode = TokenStream::new();
+<a href=#997 id=997 data-nosnippet>997</a>    <span class="kw">for </span>(i, (wire, value)) <span class="kw">in </span>fields.into_iter().enumerate() {
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="kw">let </span>expr = wire.kind.output_object(value);
+<a href=#999 id=999 data-nosnippet>999</a>        <span class="kw">let </span>i = (i + offset) <span class="kw">as </span>i32;
+<a href=#1000 id=1000 data-nosnippet>1000</a>        encode.extend(<span class="macro">quote!</span> {
+<a href=#1001 id=1001 data-nosnippet>1001</a>            <span class="kw">let </span>object = #expr;
+<a href=#1002 id=1002 data-nosnippet>1002</a>            #env.set_object_array_element(<span class="kw-2">&amp;</span>#array, #i, <span class="kw-2">&amp;</span>object).map_err(|e|e.to_string())<span class="question-mark">?</span>;
+<a href=#1003 id=1003 data-nosnippet>1003</a>            #env.delete_local_ref(object).map_err(|e|e.to_string())<span class="question-mark">?</span>;
+<a href=#1004 id=1004 data-nosnippet>1004</a>        });
+<a href=#1005 id=1005 data-nosnippet>1005</a>    }
+<a href=#1006 id=1006 data-nosnippet>1006</a>
+<a href=#1007 id=1007 data-nosnippet>1007</a>    encode
+<a href=#1008 id=1008 data-nosnippet>1008</a>}
+<a href=#1009 id=1009 data-nosnippet>1009</a><span class="kw">fn </span>storage() -&gt; prebindgen_conversions::boxed::Storage {
+<a href=#1010 id=1010 data-nosnippet>1010</a>    prebindgen_conversions::boxed::Storage::Wrapped(<span class="macro">syn::parse_quote!</span>(
+<a href=#1011 id=1011 data-nosnippet>1011</a>        ::prebindgen_jni_runtime::Allocation
+<a href=#1012 id=1012 data-nosnippet>1012</a>    ))
+<a href=#1013 id=1013 data-nosnippet>1013</a>}
+<a href=#1014 id=1014 data-nosnippet>1014</a><span class="doccomment">/// Another name for the generated Rust and Kotlin sources in [`JniGen`].
+<a href=#1015 id=1015 data-nosnippet>1015</a></span><span class="kw">pub type </span>Generation = JniGen;
+<a href=#1016 id=1016 data-nosnippet>1016</a><span class="kw">impl </span>JniGen {
+<a href=#1017 id=1017 data-nosnippet>1017</a>    <span class="doccomment">/// Write native Rust source, returning the destination path.
+<a href=#1018 id=1018 data-nosnippet>1018</a>    ///
+<a href=#1019 id=1019 data-nosnippet>1019</a>    /// Relative paths resolve under Cargo's `OUT_DIR`; absolute paths are used
+<a href=#1020 id=1020 data-nosnippet>1020</a>    /// directly. Creates parent directories and overwrites an existing file.
+<a href=#1021 id=1021 data-nosnippet>1021</a>    /// Returns an error if `OUT_DIR` is needed but absent, or filesystem access fails.
+<a href=#1022 id=1022 data-nosnippet>1022</a>    </span><span class="kw">pub fn </span>write_rust(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw">impl </span>AsRef&lt;std::path::Path&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;std::path::PathBuf&gt; {
+<a href=#1023 id=1023 data-nosnippet>1023</a>        <span class="kw">let </span>path = path.as_ref();
+<a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="kw">let </span>path = <span class="kw">if </span>path.is_absolute() {
+<a href=#1025 id=1025 data-nosnippet>1025</a>            path.to_owned()
+<a href=#1026 id=1026 data-nosnippet>1026</a>        } <span class="kw">else </span>{
+<a href=#1027 id=1027 data-nosnippet>1027</a>            std::path::PathBuf::from(std::env::var_os(<span class="string">"OUT_DIR"</span>).ok_or(<span class="string">"OUT_DIR is not set"</span>)<span class="question-mark">?</span>)
+<a href=#1028 id=1028 data-nosnippet>1028</a>                .join(path)
+<a href=#1029 id=1029 data-nosnippet>1029</a>        };
+<a href=#1030 id=1030 data-nosnippet>1030</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = path.parent() {
+<a href=#1031 id=1031 data-nosnippet>1031</a>            std::fs::create_dir_all(parent).map_err(|e| e.to_string())<span class="question-mark">?</span>;
+<a href=#1032 id=1032 data-nosnippet>1032</a>        }
+<a href=#1033 id=1033 data-nosnippet>1033</a>        std::fs::write(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span><span class="self">self</span>.rust).map_err(|e| e.to_string())<span class="question-mark">?</span>;
+<a href=#1034 id=1034 data-nosnippet>1034</a>        <span class="prelude-val">Ok</span>(path)
+<a href=#1035 id=1035 data-nosnippet>1035</a>    }
+<a href=#1036 id=1036 data-nosnippet>1036</a>    <span class="doccomment">/// Write all Kotlin files beneath `root`, creating package directories.
+<a href=#1037 id=1037 data-nosnippet>1037</a>    ///
+<a href=#1038 id=1038 data-nosnippet>1038</a>    /// Relative roots use the current directory, not `OUT_DIR`. Existing generated
+<a href=#1039 id=1039 data-nosnippet>1039</a>    /// paths are overwritten; stale files are not removed. Returns the written paths
+<a href=#1040 id=1040 data-nosnippet>1040</a>    /// or a filesystem error. Earlier writes remain if a later write fails.
+<a href=#1041 id=1041 data-nosnippet>1041</a>    </span><span class="kw">pub fn </span>write_kotlin(<span class="kw-2">&amp;</span><span class="self">self</span>, root: <span class="kw-2">&amp;</span>std::path::Path) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;std::path::PathBuf&gt;&gt; {
+<a href=#1042 id=1042 data-nosnippet>1042</a>        <span class="kw">let </span><span class="kw-2">mut </span>written = Vec::new();
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="kw">for </span>(path, text) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.kotlin {
+<a href=#1044 id=1044 data-nosnippet>1044</a>            <span class="kw">let </span>path = root.join(path);
+<a href=#1045 id=1045 data-nosnippet>1045</a>            std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())<span class="question-mark">?</span>;
+<a href=#1046 id=1046 data-nosnippet>1046</a>            std::fs::write(<span class="kw-2">&amp;</span>path, text).map_err(|e| e.to_string())<span class="question-mark">?</span>;
+<a href=#1047 id=1047 data-nosnippet>1047</a>            written.push(path);
+<a href=#1048 id=1048 data-nosnippet>1048</a>        }
+<a href=#1049 id=1049 data-nosnippet>1049</a>        <span class="prelude-val">Ok</span>(written)
+<a href=#1050 id=1050 data-nosnippet>1050</a>    }
+<a href=#1051 id=1051 data-nosnippet>1051</a>}
+<a href=#1052 id=1052 data-nosnippet>1052</a><span class="kw">fn </span>validate_class_name(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1053 id=1053 data-nosnippet>1053</a>    validate_name(name)<span class="question-mark">?</span>;
+<a href=#1054 id=1054 data-nosnippet>1054</a>    <span class="kw">if </span>[
+<a href=#1055 id=1055 data-nosnippet>1055</a>        <span class="string">"JNINative"</span>,
+<a href=#1056 id=1056 data-nosnippet>1056</a>        <span class="string">"Functions"</span>,
+<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="string">"NativeHandle"</span>,
+<a href=#1058 id=1058 data-nosnippet>1058</a>        <span class="string">"JniErrorHandler"</span>,
+<a href=#1059 id=1059 data-nosnippet>1059</a>        <span class="string">"HandleValidationFailure"</span>,
+<a href=#1060 id=1060 data-nosnippet>1060</a>    ]
+<a href=#1061 id=1061 data-nosnippet>1061</a>    .contains(<span class="kw-2">&amp;</span>name)
+<a href=#1062 id=1062 data-nosnippet>1062</a>    {
+<a href=#1063 id=1063 data-nosnippet>1063</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"reserved generated class name"</span>.into());
+<a href=#1064 id=1064 data-nosnippet>1064</a>    }
+<a href=#1065 id=1065 data-nosnippet>1065</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1066 id=1066 data-nosnippet>1066</a>}
+<a href=#1067 id=1067 data-nosnippet>1067</a><span class="kw">fn </span>validate_name(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1068 id=1068 data-nosnippet>1068</a>    <span class="kw">if </span>s.is_empty()
+<a href=#1069 id=1069 data-nosnippet>1069</a>        || s.chars().all(|c| c == <span class="string">'_'</span>)
+<a href=#1070 id=1070 data-nosnippet>1070</a>        || [
+<a href=#1071 id=1071 data-nosnippet>1071</a>            <span class="string">"as"</span>,
+<a href=#1072 id=1072 data-nosnippet>1072</a>            <span class="string">"break"</span>,
+<a href=#1073 id=1073 data-nosnippet>1073</a>            <span class="string">"class"</span>,
+<a href=#1074 id=1074 data-nosnippet>1074</a>            <span class="string">"continue"</span>,
+<a href=#1075 id=1075 data-nosnippet>1075</a>            <span class="string">"do"</span>,
+<a href=#1076 id=1076 data-nosnippet>1076</a>            <span class="string">"else"</span>,
+<a href=#1077 id=1077 data-nosnippet>1077</a>            <span class="string">"false"</span>,
+<a href=#1078 id=1078 data-nosnippet>1078</a>            <span class="string">"for"</span>,
+<a href=#1079 id=1079 data-nosnippet>1079</a>            <span class="string">"fun"</span>,
+<a href=#1080 id=1080 data-nosnippet>1080</a>            <span class="string">"if"</span>,
+<a href=#1081 id=1081 data-nosnippet>1081</a>            <span class="string">"in"</span>,
+<a href=#1082 id=1082 data-nosnippet>1082</a>            <span class="string">"interface"</span>,
+<a href=#1083 id=1083 data-nosnippet>1083</a>            <span class="string">"is"</span>,
+<a href=#1084 id=1084 data-nosnippet>1084</a>            <span class="string">"null"</span>,
+<a href=#1085 id=1085 data-nosnippet>1085</a>            <span class="string">"object"</span>,
+<a href=#1086 id=1086 data-nosnippet>1086</a>            <span class="string">"package"</span>,
+<a href=#1087 id=1087 data-nosnippet>1087</a>            <span class="string">"return"</span>,
+<a href=#1088 id=1088 data-nosnippet>1088</a>            <span class="string">"super"</span>,
+<a href=#1089 id=1089 data-nosnippet>1089</a>            <span class="string">"this"</span>,
+<a href=#1090 id=1090 data-nosnippet>1090</a>            <span class="string">"throw"</span>,
+<a href=#1091 id=1091 data-nosnippet>1091</a>            <span class="string">"true"</span>,
+<a href=#1092 id=1092 data-nosnippet>1092</a>            <span class="string">"try"</span>,
+<a href=#1093 id=1093 data-nosnippet>1093</a>            <span class="string">"typealias"</span>,
+<a href=#1094 id=1094 data-nosnippet>1094</a>            <span class="string">"typeof"</span>,
+<a href=#1095 id=1095 data-nosnippet>1095</a>            <span class="string">"val"</span>,
+<a href=#1096 id=1096 data-nosnippet>1096</a>            <span class="string">"var"</span>,
+<a href=#1097 id=1097 data-nosnippet>1097</a>            <span class="string">"when"</span>,
+<a href=#1098 id=1098 data-nosnippet>1098</a>            <span class="string">"while"</span>,
+<a href=#1099 id=1099 data-nosnippet>1099</a>        ]
+<a href=#1100 id=1100 data-nosnippet>1100</a>        .contains(<span class="kw-2">&amp;</span>s)
+<a href=#1101 id=1101 data-nosnippet>1101</a>        || !s
+<a href=#1102 id=1102 data-nosnippet>1102</a>            .chars()
+<a href=#1103 id=1103 data-nosnippet>1103</a>            .enumerate()
+<a href=#1104 id=1104 data-nosnippet>1104</a>            .all(|(i, c)| c == <span class="string">'_' </span>|| c.is_ascii_alphabetic() || (i &gt; <span class="number">0 </span>&amp;&amp; c.is_ascii_digit()))
+<a href=#1105 id=1105 data-nosnippet>1105</a>    {
+<a href=#1106 id=1106 data-nosnippet>1106</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"invalid Kotlin name `{s}`"</span>));
 <a href=#1107 id=1107 data-nosnippet>1107</a>    }
 <a href=#1108 id=1108 data-nosnippet>1108</a>    <span class="prelude-val">Ok</span>(())
 <a href=#1109 id=1109 data-nosnippet>1109</a>}
-<a href=#1110 id=1110 data-nosnippet>1110</a><span class="kw">fn </span>camel(s: <span class="kw-2">&amp;</span>str) -&gt; String {
-<a href=#1111 id=1111 data-nosnippet>1111</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = String::new();
-<a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">let </span><span class="kw-2">mut </span>upper = <span class="bool-val">false</span>;
-<a href=#1113 id=1113 data-nosnippet>1113</a>    <span class="kw">for </span>c <span class="kw">in </span>s.chars() {
-<a href=#1114 id=1114 data-nosnippet>1114</a>        <span class="kw">if </span>c == <span class="string">'_' </span>{
-<a href=#1115 id=1115 data-nosnippet>1115</a>            upper = <span class="bool-val">true</span>;
-<a href=#1116 id=1116 data-nosnippet>1116</a>        } <span class="kw">else if </span>upper {
-<a href=#1117 id=1117 data-nosnippet>1117</a>            out.extend(c.to_uppercase());
-<a href=#1118 id=1118 data-nosnippet>1118</a>            upper = <span class="bool-val">false</span>;
-<a href=#1119 id=1119 data-nosnippet>1119</a>        } <span class="kw">else </span>{
-<a href=#1120 id=1120 data-nosnippet>1120</a>            out.push(c);
-<a href=#1121 id=1121 data-nosnippet>1121</a>        }
-<a href=#1122 id=1122 data-nosnippet>1122</a>    }
-<a href=#1123 id=1123 data-nosnippet>1123</a>    out
-<a href=#1124 id=1124 data-nosnippet>1124</a>}
-<a href=#1125 id=1125 data-nosnippet>1125</a><span class="doccomment">/// JNI escaping is defined over UTF-16, including underscores in identifiers.
-<a href=#1126 id=1126 data-nosnippet>1126</a></span><span class="kw">fn </span>escape(s: <span class="kw-2">&amp;</span>str) -&gt; String {
-<a href=#1127 id=1127 data-nosnippet>1127</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = String::new();
-<a href=#1128 id=1128 data-nosnippet>1128</a>    <span class="kw">for </span>c <span class="kw">in </span>s.encode_utf16() {
-<a href=#1129 id=1129 data-nosnippet>1129</a>        <span class="kw">match </span>c {
-<a href=#1130 id=1130 data-nosnippet>1130</a>            <span class="number">46 </span>| <span class="number">47 </span>=&gt; out.push(<span class="string">'_'</span>),
-<a href=#1131 id=1131 data-nosnippet>1131</a>            <span class="number">95 </span>=&gt; out.push_str(<span class="string">"_1"</span>),
-<a href=#1132 id=1132 data-nosnippet>1132</a>            <span class="number">59 </span>=&gt; out.push_str(<span class="string">"_2"</span>),
-<a href=#1133 id=1133 data-nosnippet>1133</a>            <span class="number">91 </span>=&gt; out.push_str(<span class="string">"_3"</span>),
-<a href=#1134 id=1134 data-nosnippet>1134</a>            c <span class="kw">if </span>(c <span class="kw">as </span>u8).is_ascii_alphanumeric() &amp;&amp; c &lt; <span class="number">128 </span>=&gt; out.push(char::from(c <span class="kw">as </span>u8)),
-<a href=#1135 id=1135 data-nosnippet>1135</a>            c =&gt; out.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"_0{c:04x}"</span>)),
-<a href=#1136 id=1136 data-nosnippet>1136</a>        }
-<a href=#1137 id=1137 data-nosnippet>1137</a>    }
-<a href=#1138 id=1138 data-nosnippet>1138</a>    out
-<a href=#1139 id=1139 data-nosnippet>1139</a>}
-<a href=#1140 id=1140 data-nosnippet>1140</a><span class="kw">fn </span>symbol(pkg: <span class="kw-2">&amp;</span>str, method: <span class="kw-2">&amp;</span>str) -&gt; syn::Ident {
-<a href=#1141 id=1141 data-nosnippet>1141</a>    <span class="macro">format_ident!</span>(
-<a href=#1142 id=1142 data-nosnippet>1142</a>        <span class="string">"Java_{}_{}"</span>,
-<a href=#1143 id=1143 data-nosnippet>1143</a>        escape(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{pkg}.JNINative"</span>)),
-<a href=#1144 id=1144 data-nosnippet>1144</a>        escape(method)
-<a href=#1145 id=1145 data-nosnippet>1145</a>    )
-<a href=#1146 id=1146 data-nosnippet>1146</a>}
-<a href=#1147 id=1147 data-nosnippet>1147</a>
-<a href=#1148 id=1148 data-nosnippet>1148</a><span class="doccomment">/// Emit Rust/JNI and Kotlin using only the prepared Flat model.
-<a href=#1149 id=1149 data-nosnippet>1149</a>/// All project-dependent settings and declarations are read from its metadata.
-<a href=#1150 id=1150 data-nosnippet>1150</a></span><span class="kw">pub fn </span>generate(flat: <span class="kw-2">&amp;</span>Bindings) -&gt; <span class="prelude-ty">Result</span>&lt;JniGen&gt; {
-<a href=#1151 id=1151 data-nosnippet>1151</a>    <span class="kw">let </span>prefix = <span class="kw-2">&amp;</span>flat.metadata.package;
-<a href=#1152 id=1152 data-nosnippet>1152</a>    validate_package(prefix)<span class="question-mark">?</span>;
-<a href=#1153 id=1153 data-nosnippet>1153</a>    <span class="kw">for </span>f <span class="kw">in </span>flat.functions.values().filter(|f| f.ret.slot.is_some()) {
-<a href=#1154 id=1154 data-nosnippet>1154</a>        <span class="kw">let </span>metadata = f
-<a href=#1155 id=1155 data-nosnippet>1155</a>            .metadata
-<a href=#1156 id=1156 data-nosnippet>1156</a>            .as_ref()
-<a href=#1157 id=1157 data-nosnippet>1157</a>            .ok_or_else(|| <span class="macro">format!</span>(<span class="string">"bound JNI function `{}` has no export metadata"</span>, f.name))<span class="question-mark">?</span>;
-<a href=#1158 id=1158 data-nosnippet>1158</a>        validate_package(<span class="kw-2">&amp;</span>metadata.package)<span class="question-mark">?</span>;
-<a href=#1159 id=1159 data-nosnippet>1159</a>        validate_name(<span class="kw-2">&amp;</span>metadata.name)<span class="question-mark">?</span>;
-<a href=#1160 id=1160 data-nosnippet>1160</a>    }
-<a href=#1161 id=1161 data-nosnippet>1161</a>    <span class="kw">let </span>init = <span class="kw-2">&amp;</span>flat.metadata.native_init;
-<a href=#1162 id=1162 data-nosnippet>1162</a>    <span class="kw">let </span>classes = flat
-<a href=#1163 id=1163 data-nosnippet>1163</a>        .types
-<a href=#1164 id=1164 data-nosnippet>1164</a>        .values()
-<a href=#1165 id=1165 data-nosnippet>1165</a>        .filter_map(|t| {
-<a href=#1166 id=1166 data-nosnippet>1166</a>            t.metadata
-<a href=#1167 id=1167 data-nosnippet>1167</a>                .class
-<a href=#1168 id=1168 data-nosnippet>1168</a>                .as_ref()
-<a href=#1169 id=1169 data-nosnippet>1169</a>                .filter(|c| !c.data &amp;&amp; !c.enumeration)
-<a href=#1170 id=1170 data-nosnippet>1170</a>                .map(|c| (type_key(<span class="kw-2">&amp;</span>t.ty), (<span class="kw-2">&amp;</span>t.ty, c)))
-<a href=#1171 id=1171 data-nosnippet>1171</a>        })
-<a href=#1172 id=1172 data-nosnippet>1172</a>        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-<a href=#1173 id=1173 data-nosnippet>1173</a>    <span class="kw">let </span><span class="kw-2">mut </span>functions = flat
-<a href=#1174 id=1174 data-nosnippet>1174</a>        .functions
-<a href=#1175 id=1175 data-nosnippet>1175</a>        .values()
-<a href=#1176 id=1176 data-nosnippet>1176</a>        .filter_map(|f| f.metadata.as_ref().map(|m| (<span class="kw-2">&amp;</span>f.name, m)))
-<a href=#1177 id=1177 data-nosnippet>1177</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#1178 id=1178 data-nosnippet>1178</a>    functions.sort_by_key(|(<span class="kw">_</span>, m)| m.order);
-<a href=#1179 id=1179 data-nosnippet>1179</a>    <span class="kw">let </span>errors = flat
+<a href=#1110 id=1110 data-nosnippet>1110</a><span class="kw">fn </span>validate_package(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1111 id=1111 data-nosnippet>1111</a>    <span class="kw">for </span>p <span class="kw">in </span>s.split(<span class="string">'.'</span>) {
+<a href=#1112 id=1112 data-nosnippet>1112</a>        validate_name(p)<span class="question-mark">?</span>;
+<a href=#1113 id=1113 data-nosnippet>1113</a>    }
+<a href=#1114 id=1114 data-nosnippet>1114</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1115 id=1115 data-nosnippet>1115</a>}
+<a href=#1116 id=1116 data-nosnippet>1116</a><span class="kw">fn </span>camel(s: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#1117 id=1117 data-nosnippet>1117</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = String::new();
+<a href=#1118 id=1118 data-nosnippet>1118</a>    <span class="kw">let </span><span class="kw-2">mut </span>upper = <span class="bool-val">false</span>;
+<a href=#1119 id=1119 data-nosnippet>1119</a>    <span class="kw">for </span>c <span class="kw">in </span>s.chars() {
+<a href=#1120 id=1120 data-nosnippet>1120</a>        <span class="kw">if </span>c == <span class="string">'_' </span>{
+<a href=#1121 id=1121 data-nosnippet>1121</a>            upper = <span class="bool-val">true</span>;
+<a href=#1122 id=1122 data-nosnippet>1122</a>        } <span class="kw">else if </span>upper {
+<a href=#1123 id=1123 data-nosnippet>1123</a>            out.extend(c.to_uppercase());
+<a href=#1124 id=1124 data-nosnippet>1124</a>            upper = <span class="bool-val">false</span>;
+<a href=#1125 id=1125 data-nosnippet>1125</a>        } <span class="kw">else </span>{
+<a href=#1126 id=1126 data-nosnippet>1126</a>            out.push(c);
+<a href=#1127 id=1127 data-nosnippet>1127</a>        }
+<a href=#1128 id=1128 data-nosnippet>1128</a>    }
+<a href=#1129 id=1129 data-nosnippet>1129</a>    out
+<a href=#1130 id=1130 data-nosnippet>1130</a>}
+<a href=#1131 id=1131 data-nosnippet>1131</a><span class="doccomment">/// JNI escaping is defined over UTF-16, including underscores in identifiers.
+<a href=#1132 id=1132 data-nosnippet>1132</a></span><span class="kw">fn </span>escape(s: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#1133 id=1133 data-nosnippet>1133</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = String::new();
+<a href=#1134 id=1134 data-nosnippet>1134</a>    <span class="kw">for </span>c <span class="kw">in </span>s.encode_utf16() {
+<a href=#1135 id=1135 data-nosnippet>1135</a>        <span class="kw">match </span>c {
+<a href=#1136 id=1136 data-nosnippet>1136</a>            <span class="number">46 </span>| <span class="number">47 </span>=&gt; out.push(<span class="string">'_'</span>),
+<a href=#1137 id=1137 data-nosnippet>1137</a>            <span class="number">95 </span>=&gt; out.push_str(<span class="string">"_1"</span>),
+<a href=#1138 id=1138 data-nosnippet>1138</a>            <span class="number">59 </span>=&gt; out.push_str(<span class="string">"_2"</span>),
+<a href=#1139 id=1139 data-nosnippet>1139</a>            <span class="number">91 </span>=&gt; out.push_str(<span class="string">"_3"</span>),
+<a href=#1140 id=1140 data-nosnippet>1140</a>            c <span class="kw">if </span>(c <span class="kw">as </span>u8).is_ascii_alphanumeric() &amp;&amp; c &lt; <span class="number">128 </span>=&gt; out.push(char::from(c <span class="kw">as </span>u8)),
+<a href=#1141 id=1141 data-nosnippet>1141</a>            c =&gt; out.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"_0{c:04x}"</span>)),
+<a href=#1142 id=1142 data-nosnippet>1142</a>        }
+<a href=#1143 id=1143 data-nosnippet>1143</a>    }
+<a href=#1144 id=1144 data-nosnippet>1144</a>    out
+<a href=#1145 id=1145 data-nosnippet>1145</a>}
+<a href=#1146 id=1146 data-nosnippet>1146</a><span class="kw">fn </span>symbol(pkg: <span class="kw-2">&amp;</span>str, method: <span class="kw-2">&amp;</span>str) -&gt; syn::Ident {
+<a href=#1147 id=1147 data-nosnippet>1147</a>    <span class="macro">format_ident!</span>(
+<a href=#1148 id=1148 data-nosnippet>1148</a>        <span class="string">"Java_{}_{}"</span>,
+<a href=#1149 id=1149 data-nosnippet>1149</a>        escape(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{pkg}.JNINative"</span>)),
+<a href=#1150 id=1150 data-nosnippet>1150</a>        escape(method)
+<a href=#1151 id=1151 data-nosnippet>1151</a>    )
+<a href=#1152 id=1152 data-nosnippet>1152</a>}
+<a href=#1153 id=1153 data-nosnippet>1153</a>
+<a href=#1154 id=1154 data-nosnippet>1154</a><span class="doccomment">/// Emit Rust/JNI and Kotlin using only the prepared Flat model.
+<a href=#1155 id=1155 data-nosnippet>1155</a>/// All project-dependent settings and declarations are read from its metadata.
+<a href=#1156 id=1156 data-nosnippet>1156</a></span><span class="kw">pub fn </span>generate(flat: <span class="kw-2">&amp;</span>Bindings) -&gt; <span class="prelude-ty">Result</span>&lt;JniGen&gt; {
+<a href=#1157 id=1157 data-nosnippet>1157</a>    <span class="kw">let </span>prefix = <span class="kw-2">&amp;</span>flat.metadata.package;
+<a href=#1158 id=1158 data-nosnippet>1158</a>    validate_package(prefix)<span class="question-mark">?</span>;
+<a href=#1159 id=1159 data-nosnippet>1159</a>    <span class="kw">for </span>f <span class="kw">in </span>flat.functions.values().filter(|f| f.ret.slot.is_some()) {
+<a href=#1160 id=1160 data-nosnippet>1160</a>        <span class="kw">let </span>metadata = f
+<a href=#1161 id=1161 data-nosnippet>1161</a>            .metadata
+<a href=#1162 id=1162 data-nosnippet>1162</a>            .as_ref()
+<a href=#1163 id=1163 data-nosnippet>1163</a>            .ok_or_else(|| <span class="macro">format!</span>(<span class="string">"bound JNI function `{}` has no export metadata"</span>, f.name))<span class="question-mark">?</span>;
+<a href=#1164 id=1164 data-nosnippet>1164</a>        validate_package(<span class="kw-2">&amp;</span>metadata.package)<span class="question-mark">?</span>;
+<a href=#1165 id=1165 data-nosnippet>1165</a>        validate_name(<span class="kw-2">&amp;</span>metadata.name)<span class="question-mark">?</span>;
+<a href=#1166 id=1166 data-nosnippet>1166</a>    }
+<a href=#1167 id=1167 data-nosnippet>1167</a>    <span class="kw">let </span>init = <span class="kw-2">&amp;</span>flat.metadata.native_init;
+<a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="kw">let </span>classes = flat
+<a href=#1169 id=1169 data-nosnippet>1169</a>        .types
+<a href=#1170 id=1170 data-nosnippet>1170</a>        .values()
+<a href=#1171 id=1171 data-nosnippet>1171</a>        .filter_map(|t| {
+<a href=#1172 id=1172 data-nosnippet>1172</a>            t.metadata
+<a href=#1173 id=1173 data-nosnippet>1173</a>                .class
+<a href=#1174 id=1174 data-nosnippet>1174</a>                .as_ref()
+<a href=#1175 id=1175 data-nosnippet>1175</a>                .filter(|c| !c.data &amp;&amp; !c.enumeration)
+<a href=#1176 id=1176 data-nosnippet>1176</a>                .map(|c| (type_key(<span class="kw-2">&amp;</span>t.ty), (<span class="kw-2">&amp;</span>t.ty, c)))
+<a href=#1177 id=1177 data-nosnippet>1177</a>        })
+<a href=#1178 id=1178 data-nosnippet>1178</a>        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+<a href=#1179 id=1179 data-nosnippet>1179</a>    <span class="kw">let </span><span class="kw-2">mut </span>functions = flat
 <a href=#1180 id=1180 data-nosnippet>1180</a>        .functions
-<a href=#1181 id=1181 data-nosnippet>1181</a>        .iter()
-<a href=#1182 id=1182 data-nosnippet>1182</a>        .filter_map(|(name, f)| {
-<a href=#1183 id=1183 data-nosnippet>1183</a>            f.metadata
-<a href=#1184 id=1184 data-nosnippet>1184</a>                .as_ref()
-<a href=#1185 id=1185 data-nosnippet>1185</a>                .and_then(|m| m.error.as_deref())
-<a href=#1186 id=1186 data-nosnippet>1186</a>                .map(|e| (name.clone(), e))
-<a href=#1187 id=1187 data-nosnippet>1187</a>        })
-<a href=#1188 id=1188 data-nosnippet>1188</a>        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-<a href=#1189 id=1189 data-nosnippet>1189</a>    <span class="kw">let </span><span class="kw-2">mut </span>files = BTreeMap::new();
-<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="kw">for </span>t <span class="kw">in </span>flat.types.values() {
-<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(class) = <span class="kw-2">&amp;</span>t.metadata.class {
-<a href=#1192 id=1192 data-nosnippet>1192</a>            <span class="kw">if </span>class.data {
-<a href=#1193 id=1193 data-nosnippet>1193</a>                files.insert(
-<a href=#1194 id=1194 data-nosnippet>1194</a>                    <span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, class.pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), class.name),
-<a href=#1195 id=1195 data-nosnippet>1195</a>                    data::render_record(flat, class, <span class="kw-2">&amp;</span>t.ty)<span class="question-mark">?</span>,
-<a href=#1196 id=1196 data-nosnippet>1196</a>                );
-<a href=#1197 id=1197 data-nosnippet>1197</a>            }
-<a href=#1198 id=1198 data-nosnippet>1198</a>            <span class="kw">if </span>class.enumeration {
+<a href=#1181 id=1181 data-nosnippet>1181</a>        .values()
+<a href=#1182 id=1182 data-nosnippet>1182</a>        .filter_map(|f| f.metadata.as_ref().map(|m| (<span class="kw-2">&amp;</span>f.name, m)))
+<a href=#1183 id=1183 data-nosnippet>1183</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#1184 id=1184 data-nosnippet>1184</a>    functions.sort_by_key(|(<span class="kw">_</span>, m)| m.order);
+<a href=#1185 id=1185 data-nosnippet>1185</a>    <span class="kw">let </span>errors = flat
+<a href=#1186 id=1186 data-nosnippet>1186</a>        .functions
+<a href=#1187 id=1187 data-nosnippet>1187</a>        .iter()
+<a href=#1188 id=1188 data-nosnippet>1188</a>        .filter_map(|(name, f)| {
+<a href=#1189 id=1189 data-nosnippet>1189</a>            f.metadata
+<a href=#1190 id=1190 data-nosnippet>1190</a>                .as_ref()
+<a href=#1191 id=1191 data-nosnippet>1191</a>                .and_then(|m| m.error.as_deref())
+<a href=#1192 id=1192 data-nosnippet>1192</a>                .map(|e| (name.clone(), e))
+<a href=#1193 id=1193 data-nosnippet>1193</a>        })
+<a href=#1194 id=1194 data-nosnippet>1194</a>        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+<a href=#1195 id=1195 data-nosnippet>1195</a>    <span class="kw">let </span><span class="kw-2">mut </span>files = BTreeMap::new();
+<a href=#1196 id=1196 data-nosnippet>1196</a>    <span class="kw">for </span>t <span class="kw">in </span>flat.types.values() {
+<a href=#1197 id=1197 data-nosnippet>1197</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(class) = <span class="kw-2">&amp;</span>t.metadata.class {
+<a href=#1198 id=1198 data-nosnippet>1198</a>            <span class="kw">if </span>class.data {
 <a href=#1199 id=1199 data-nosnippet>1199</a>                files.insert(
 <a href=#1200 id=1200 data-nosnippet>1200</a>                    <span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, class.pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), class.name),
-<a href=#1201 id=1201 data-nosnippet>1201</a>                    t.metadata
-<a href=#1202 id=1202 data-nosnippet>1202</a>                        .enumeration
-<a href=#1203 id=1203 data-nosnippet>1203</a>                        .as_deref()
-<a href=#1204 id=1204 data-nosnippet>1204</a>                        .ok_or(<span class="string">"missing prepared enum declaration"</span>)<span class="question-mark">?
-<a href=#1205 id=1205 data-nosnippet>1205</a>                        </span>.render(class)<span class="question-mark">?</span>,
-<a href=#1206 id=1206 data-nosnippet>1206</a>                );
-<a href=#1207 id=1207 data-nosnippet>1207</a>            }
-<a href=#1208 id=1208 data-nosnippet>1208</a>        }
-<a href=#1209 id=1209 data-nosnippet>1209</a>    }
-<a href=#1210 id=1210 data-nosnippet>1210</a>    <span class="kw">let </span><span class="kw-2">mut </span>rust = errors::emit(<span class="kw-2">&amp;</span>errors)<span class="question-mark">?</span>;
-<a href=#1211 id=1211 data-nosnippet>1211</a>    <span class="kw">let </span><span class="kw-2">mut </span>packages: BTreeMap&lt;String, String&gt; = BTreeMap::new();
-<a href=#1212 id=1212 data-nosnippet>1212</a>    errors::interfaces(prefix, <span class="kw-2">&amp;mut </span>files)<span class="question-mark">?</span>;
-<a href=#1213 id=1213 data-nosnippet>1213</a>    <span class="kw">let </span><span class="kw-2">mut </span>native = <span class="macro">format!</span>(<span class="string">"package {prefix}\n\ninternal object JNINative {{\n"</span>);
-<a href=#1214 id=1214 data-nosnippet>1214</a>    <span class="kw">if </span>!init.is_empty() {
-<a href=#1215 id=1215 data-nosnippet>1215</a>        native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"    init {{ {init} }}\n"</span>));
-<a href=#1216 id=1216 data-nosnippet>1216</a>    }
-<a href=#1217 id=1217 data-nosnippet>1217</a>    files.insert(
-<a href=#1218 id=1218 data-nosnippet>1218</a>        <span class="macro">format!</span>(<span class="string">"{}/NativeHandle.kt"</span>, prefix.replace(<span class="string">'.'</span>, <span class="string">"/"</span>)),
-<a href=#1219 id=1219 data-nosnippet>1219</a>        native_handle(prefix),
-<a href=#1220 id=1220 data-nosnippet>1220</a>    );
-<a href=#1221 id=1221 data-nosnippet>1221</a>    <span class="kw">let </span><span class="kw-2">mut </span>names = names::Names::default();
-<a href=#1222 id=1222 data-nosnippet>1222</a>    <span class="kw">for </span>(ty, c) <span class="kw">in </span>classes.values() {
-<a href=#1223 id=1223 data-nosnippet>1223</a>        <span class="kw">let </span>method = names.name(<span class="string">"drop"</span>, <span class="kw-2">&amp;</span>names::type_label(ty), <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::type_identity(ty)])<span class="question-mark">?</span>;
-<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="kw">let </span>sym = symbol(prefix, <span class="kw-2">&amp;</span>method);
-<a href=#1225 id=1225 data-nosnippet>1225</a>        rust.extend(<span class="macro">quote!</span>{<span class="attr">#[doc = <span class="string">"# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."</span>]
-<a href=#1226 id=1226 data-nosnippet>1226</a>#[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"system" </span><span class="kw">fn </span>#sym(<span class="kw-2">mut </span>env: ::prebindgen_jni_runtime::jni::JNIEnv&lt;<span class="lifetime">'_</span>&gt;,_class: ::prebindgen_jni_runtime::jni::objects::JClass&lt;<span class="lifetime">'_</span>&gt;,id:i64){<span class="kw">if let </span><span class="prelude-val">Err</span>(e)=::prebindgen_runtime::boundary(||<span class="kw">unsafe </span>{::prebindgen_jni_runtime::drop_pointer::&lt;#ty&gt;(id)}){::prebindgen_jni_runtime::fail(<span class="kw-2">&amp;mut </span>env,<span class="kw-2">&amp;</span>e);}}});
-<a href=#1227 id=1227 data-nosnippet>1227</a>        native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"    @JvmStatic external fun {method}(id: Long)\n"</span>));
-<a href=#1228 id=1228 data-nosnippet>1228</a>        <span class="kw">let </span>text=<span class="macro">format!</span>(<span class="string">"package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n"</span>,c.pkg,c.name,c.name,c.name);
-<a href=#1229 id=1229 data-nosnippet>1229</a>        files.insert(<span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, c.pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), c.name), text);
-<a href=#1230 id=1230 data-nosnippet>1230</a>    }
-<a href=#1231 id=1231 data-nosnippet>1231</a>    <span class="kw">let </span>kotlin_classes = classes
-<a href=#1232 id=1232 data-nosnippet>1232</a>        .iter()
-<a href=#1233 id=1233 data-nosnippet>1233</a>        .map(|(ty, (source, class))| {
-<a href=#1234 id=1234 data-nosnippet>1234</a>            <span class="prelude-val">Ok</span>((
-<a href=#1235 id=1235 data-nosnippet>1235</a>                ty.clone(),
-<a href=#1236 id=1236 data-nosnippet>1236</a>                KotlinClass {
-<a href=#1237 id=1237 data-nosnippet>1237</a>                    name: class.fqn(),
-<a href=#1238 id=1238 data-nosnippet>1238</a>                    drop_function: <span class="macro">format!</span>(
-<a href=#1239 id=1239 data-nosnippet>1239</a>                        <span class="string">"{prefix}.JNINative.{}"</span>,
-<a href=#1240 id=1240 data-nosnippet>1240</a>                        names.name(
-<a href=#1241 id=1241 data-nosnippet>1241</a>                            <span class="string">"drop"</span>,
-<a href=#1242 id=1242 data-nosnippet>1242</a>                            <span class="kw-2">&amp;</span>names::type_label(source),
-<a href=#1243 id=1243 data-nosnippet>1243</a>                            <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::type_identity(source)]
-<a href=#1244 id=1244 data-nosnippet>1244</a>                        )<span class="question-mark">?
-<a href=#1245 id=1245 data-nosnippet>1245</a>                    </span>),
-<a href=#1246 id=1246 data-nosnippet>1246</a>                },
-<a href=#1247 id=1247 data-nosnippet>1247</a>            ))
-<a href=#1248 id=1248 data-nosnippet>1248</a>        })
-<a href=#1249 id=1249 data-nosnippet>1249</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#1250 id=1250 data-nosnippet>1250</a>    callback::files(flat, <span class="kw-2">&amp;</span>kotlin_classes, <span class="kw-2">&amp;mut </span>files)<span class="question-mark">?</span>;
-<a href=#1251 id=1251 data-nosnippet>1251</a>    errors::handler_files(
-<a href=#1252 id=1252 data-nosnippet>1252</a>        <span class="kw-2">&amp;</span>errors,
-<a href=#1253 id=1253 data-nosnippet>1253</a>        <span class="kw-2">&amp;</span>KotlinContext {
-<a href=#1254 id=1254 data-nosnippet>1254</a>            classes: <span class="kw-2">&amp;</span>kotlin_classes,
-<a href=#1255 id=1255 data-nosnippet>1255</a>            result: <span class="string">"result"</span>,
-<a href=#1256 id=1256 data-nosnippet>1256</a>            failure: <span class="string">"failure"</span>,
-<a href=#1257 id=1257 data-nosnippet>1257</a>            cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#1258 id=1258 data-nosnippet>1258</a>            output_prefix: <span class="string">"errorOutput"</span>,
-<a href=#1259 id=1259 data-nosnippet>1259</a>        },
-<a href=#1260 id=1260 data-nosnippet>1260</a>        <span class="kw-2">&amp;mut </span>files,
-<a href=#1261 id=1261 data-nosnippet>1261</a>    )<span class="question-mark">?</span>;
-<a href=#1262 id=1262 data-nosnippet>1262</a>    <span class="kw">for </span>(source, placement) <span class="kw">in </span>functions {
-<a href=#1263 id=1263 data-nosnippet>1263</a>        <span class="kw">let </span>source = source.to_string();
-<a href=#1264 id=1264 data-nosnippet>1264</a>        <span class="kw">let </span>pkg = <span class="kw-2">&amp;</span>placement.package;
-<a href=#1265 id=1265 data-nosnippet>1265</a>        <span class="kw">let </span>name = <span class="kw-2">&amp;</span>placement.name;
-<a href=#1266 id=1266 data-nosnippet>1266</a>        <span class="kw">let </span>f = flat.function(<span class="kw-2">&amp;</span>source)<span class="question-mark">?</span>;
-<a href=#1267 id=1267 data-nosnippet>1267</a>        <span class="kw">let </span>callback =
-<a href=#1268 id=1268 data-nosnippet>1268</a>            sequence::callback_delivery(<span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success)<span class="question-mark">?</span>;
-<a href=#1269 id=1269 data-nosnippet>1269</a>        <span class="kw">let </span>error = errors.get(<span class="kw-2">&amp;</span>source);
-<a href=#1270 id=1270 data-nosnippet>1270</a>        <span class="kw">let </span>outcomes = f.output_conversion()<span class="question-mark">?</span>.output_outcomes();
-<a href=#1271 id=1271 data-nosnippet>1271</a>        <span class="kw">let </span>logical = <span class="kw-2">&amp;</span>outcomes.success;
-<a href=#1272 id=1272 data-nosnippet>1272</a>        <span class="kw">for </span>node <span class="kw">in </span>std::iter::once(logical)
-<a href=#1273 id=1273 data-nosnippet>1273</a>            .chain(outcomes.source_error.iter())
-<a href=#1274 id=1274 data-nosnippet>1274</a>            .chain(outcomes.binding_failure.iter())
-<a href=#1275 id=1275 data-nosnippet>1275</a>        {
-<a href=#1276 id=1276 data-nosnippet>1276</a>            group::validate_layout(node)<span class="question-mark">?</span>;
-<a href=#1277 id=1277 data-nosnippet>1277</a>        }
-<a href=#1278 id=1278 data-nosnippet>1278</a>        <span class="kw">for </span>error <span class="kw">in </span>outcomes
-<a href=#1279 id=1279 data-nosnippet>1279</a>            .source_error
-<a href=#1280 id=1280 data-nosnippet>1280</a>            .iter()
-<a href=#1281 id=1281 data-nosnippet>1281</a>            .chain(outcomes.binding_failure.iter())
-<a href=#1282 id=1282 data-nosnippet>1282</a>        {
-<a href=#1283 id=1283 data-nosnippet>1283</a>            sequence::validate_buffered(error)<span class="question-mark">?</span>;
-<a href=#1284 id=1284 data-nosnippet>1284</a>        }
-<a href=#1285 id=1285 data-nosnippet>1285</a>        <span class="kw">let </span>has_source_error = outcomes.source_error.is_some();
-<a href=#1286 id=1286 data-nosnippet>1286</a>        <span class="kw">let </span>has_binding_failure = outcomes.binding_failure.is_some();
-<a href=#1287 id=1287 data-nosnippet>1287</a>        <span class="kw">if </span>has_source_error != error.is_some() {
-<a href=#1288 id=1288 data-nosnippet>1288</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"JNI source-error schema must match its configured error converter"</span>.into());
-<a href=#1289 id=1289 data-nosnippet>1289</a>        }
-<a href=#1290 id=1290 data-nosnippet>1290</a>        <span class="comment">// Every JNI wrapper has a separate binding-error callback, including
-<a href=#1291 id=1291 data-nosnippet>1291</a>        // functions without a source Result. Manual schemas must declare it.
-<a href=#1292 id=1292 data-nosnippet>1292</a>        </span><span class="kw">if </span>!has_binding_failure {
-<a href=#1293 id=1293 data-nosnippet>1293</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"JNI native delivery requires a declared binding-failure schema"</span>.into());
-<a href=#1294 id=1294 data-nosnippet>1294</a>        }
-<a href=#1295 id=1295 data-nosnippet>1295</a>
-<a href=#1296 id=1296 data-nosnippet>1296</a>        <span class="kw">let </span>exception = <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, ty)) = prebindgen_flat::result_parts(<span class="kw-2">&amp;</span>f.ret.ty) {
-<a href=#1297 id=1297 data-nosnippet>1297</a>            flat.type_info(ty)
-<a href=#1298 id=1298 data-nosnippet>1298</a>                .ok()
-<a href=#1299 id=1299 data-nosnippet>1299</a>                .and_then(|t| t.metadata.error_class.as_deref())
-<a href=#1300 id=1300 data-nosnippet>1300</a>        } <span class="kw">else </span>{
-<a href=#1301 id=1301 data-nosnippet>1301</a>            <span class="prelude-val">None
-<a href=#1302 id=1302 data-nosnippet>1302</a>        </span>};
-<a href=#1303 id=1303 data-nosnippet>1303</a>        <span class="kw">let </span>throws = error.map_or_else(String::new, |error| error.throws(exception));
-<a href=#1304 id=1304 data-nosnippet>1304</a>        <span class="kw">let </span>env = <span class="macro">format_ident!</span>(<span class="string">"jni_environment"</span>);
-<a href=#1305 id=1305 data-nosnippet>1305</a>        <span class="kw">let </span>ownership = <span class="macro">format_ident!</span>(<span class="string">"ownership_accepted"</span>);
-<a href=#1306 id=1306 data-nosnippet>1306</a>        <span class="kw">let </span>context = JniContext {
-<a href=#1307 id=1307 data-nosnippet>1307</a>            environment: env.clone(),
-<a href=#1308 id=1308 data-nosnippet>1308</a>            acknowledgement: ownership.clone(),
-<a href=#1309 id=1309 data-nosnippet>1309</a>            domain_output: <span class="macro">format_ident!</span>(<span class="string">"domain_output"</span>),
-<a href=#1310 id=1310 data-nosnippet>1310</a>            is_domain_error: <span class="bool-val">false</span>,
-<a href=#1311 id=1311 data-nosnippet>1311</a>            output_committed: <span class="macro">quote!</span>(),
-<a href=#1312 id=1312 data-nosnippet>1312</a>        };
-<a href=#1313 id=1313 data-nosnippet>1313</a>        <span class="kw">let </span>source = <span class="macro">format_ident!</span>(<span class="string">"source_value"</span>);
-<a href=#1314 id=1314 data-nosnippet>1314</a>        <span class="kw">let </span>method = names.name(
-<a href=#1315 id=1315 data-nosnippet>1315</a>            <span class="string">"call"</span>,
-<a href=#1316 id=1316 data-nosnippet>1316</a>            <span class="kw-2">&amp;</span>f.name.to_string(),
-<a href=#1317 id=1317 data-nosnippet>1317</a>            <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::path_identity(<span class="kw-2">&amp;</span>f.path), <span class="kw-2">&amp;</span>f.name.to_string()],
-<a href=#1318 id=1318 data-nosnippet>1318</a>        )<span class="question-mark">?</span>;
-<a href=#1319 id=1319 data-nosnippet>1319</a>        <span class="kw">let </span>sym = symbol(prefix, <span class="kw-2">&amp;</span>method);
-<a href=#1320 id=1320 data-nosnippet>1320</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
-<a href=#1321 id=1321 data-nosnippet>1321</a>        <span class="kw">let </span><span class="kw-2">mut </span>raw_params = Vec::new();
-<a href=#1322 id=1322 data-nosnippet>1322</a>        <span class="kw">let </span>kotlin_context = KotlinContext {
-<a href=#1323 id=1323 data-nosnippet>1323</a>            classes: <span class="kw-2">&amp;</span>kotlin_classes,
-<a href=#1324 id=1324 data-nosnippet>1324</a>            result: <span class="string">"result"</span>,
-<a href=#1325 id=1325 data-nosnippet>1325</a>            failure: <span class="string">"failure"</span>,
-<a href=#1326 id=1326 data-nosnippet>1326</a>            cleanup_failure: <span class="prelude-val">None</span>,
-<a href=#1327 id=1327 data-nosnippet>1327</a>            output_prefix: <span class="string">"output"</span>,
-<a href=#1328 id=1328 data-nosnippet>1328</a>        };
-<a href=#1329 id=1329 data-nosnippet>1329</a>        <span class="kw">let </span><span class="kw-2">mut </span>kt_params = Vec::new();
-<a href=#1330 id=1330 data-nosnippet>1330</a>        <span class="kw">let </span><span class="kw-2">mut </span>kt_args = Vec::new();
-<a href=#1331 id=1331 data-nosnippet>1331</a>        <span class="kw">let </span><span class="kw-2">mut </span>locks = Vec::new();
-<a href=#1332 id=1332 data-nosnippet>1332</a>        <span class="kw">let </span><span class="kw-2">mut </span>lock_groups = Vec::new();
-<a href=#1333 id=1333 data-nosnippet>1333</a>        <span class="kw">let </span><span class="kw-2">mut </span>setup = String::new();
-<a href=#1334 id=1334 data-nosnippet>1334</a>        <span class="kw">let </span><span class="kw-2">mut </span>consumed = Vec::new();
-<a href=#1335 id=1335 data-nosnippet>1335</a>        <span class="kw">for </span>w <span class="kw">in </span><span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">? </span>{
-<a href=#1336 id=1336 data-nosnippet>1336</a>            <span class="kw">let </span>n = <span class="kw-2">&amp;</span>w.name;
-<a href=#1337 id=1337 data-nosnippet>1337</a>            <span class="kw">let </span>rt = w.kind.rust_type();
-<a href=#1338 id=1338 data-nosnippet>1338</a>            params.push(<span class="macro">quote!</span>(#n:#rt));
-<a href=#1339 id=1339 data-nosnippet>1339</a>            raw_params.push(<span class="macro">format!</span>(<span class="string">"{n}: {}"</span>, w.kind.kotlin_type()));
-<a href=#1340 id=1340 data-nosnippet>1340</a>        }
-<a href=#1341 id=1341 data-nosnippet>1341</a>        <span class="kw">for </span>input <span class="kw">in </span>f.input_conversions()<span class="question-mark">? </span>{
-<a href=#1342 id=1342 data-nosnippet>1342</a>            <span class="kw">let </span>code = input.kotlin(<span class="kw-2">&amp;</span>kotlin_context)<span class="question-mark">?</span>;
-<a href=#1343 id=1343 data-nosnippet>1343</a>            kt_params.extend(code.parameters);
-<a href=#1344 id=1344 data-nosnippet>1344</a>            kt_args.extend(code.arguments);
-<a href=#1345 id=1345 data-nosnippet>1345</a>            locks.extend(code.locks);
-<a href=#1346 id=1346 data-nosnippet>1346</a>            lock_groups.extend(code.lock_groups);
-<a href=#1347 id=1347 data-nosnippet>1347</a>            <span class="kw">for </span>binding <span class="kw">in </span>code.setup {
-<a href=#1348 id=1348 data-nosnippet>1348</a>                setup.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"val {} = {}\n"</span>, binding.name, binding.expression));
-<a href=#1349 id=1349 data-nosnippet>1349</a>            }
-<a href=#1350 id=1350 data-nosnippet>1350</a>            consumed.extend(code.consumed);
-<a href=#1351 id=1351 data-nosnippet>1351</a>        }
-<a href=#1352 id=1352 data-nosnippet>1352</a>        <span class="kw">if </span>kt_args.len() != <span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">?</span>.len() {
-<a href=#1353 id=1353 data-nosnippet>1353</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin input argument/parameter count differs"</span>.into());
-<a href=#1354 id=1354 data-nosnippet>1354</a>        }
-<a href=#1355 id=1355 data-nosnippet>1355</a>        <span class="kw">let </span>has_consumes = !consumed.is_empty();
-<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="kw">let </span>has_acknowledgement = f
-<a href=#1357 id=1357 data-nosnippet>1357</a>            .input_conversions()<span class="question-mark">?
-<a href=#1358 id=1358 data-nosnippet>1358</a>            </span>.iter()
-<a href=#1359 id=1359 data-nosnippet>1359</a>            .map(|i| {
-<a href=#1360 id=1360 data-nosnippet>1360</a>                i.code_fragment_slot(
-<a href=#1361 id=1361 data-nosnippet>1361</a>                    prebindgen_conversions::InputFragment::Acknowledge { context: <span class="kw-2">&amp;</span>context },
-<a href=#1362 id=1362 data-nosnippet>1362</a>                    <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(()),
-<a href=#1363 id=1363 data-nosnippet>1363</a>                )
-<a href=#1364 id=1364 data-nosnippet>1364</a>                .map(|code| code.to_string() != <span class="macro">quote!</span>(()).to_string())
-<a href=#1365 id=1365 data-nosnippet>1365</a>            })
-<a href=#1366 id=1366 data-nosnippet>1366</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
-<a href=#1367 id=1367 data-nosnippet>1367</a>            </span>.into_iter()
-<a href=#1368 id=1368 data-nosnippet>1368</a>            .any(|present| present);
-<a href=#1369 id=1369 data-nosnippet>1369</a>        <span class="kw">if </span>has_acknowledgement != has_consumes {
-<a href=#1370 id=1370 data-nosnippet>1370</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"JNI acknowledgement does not match slot ownership updates"</span>.into());
-<a href=#1371 id=1371 data-nosnippet>1371</a>        }
-<a href=#1372 id=1372 data-nosnippet>1372</a>        <span class="kw">if </span>has_consumes {
-<a href=#1373 id=1373 data-nosnippet>1373</a>            params.push(
-<a href=#1374 id=1374 data-nosnippet>1374</a>                <span class="macro">quote!</span>(#ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray&lt;<span class="lifetime">'local</span>&gt;),
-<a href=#1375 id=1375 data-nosnippet>1375</a>            );
-<a href=#1376 id=1376 data-nosnippet>1376</a>            raw_params.push(<span class="string">"ownership: BooleanArray"</span>.into());
-<a href=#1377 id=1377 data-nosnippet>1377</a>            kt_args.push(<span class="string">"ownership"</span>.into());
-<a href=#1378 id=1378 data-nosnippet>1378</a>        }
-<a href=#1379 id=1379 data-nosnippet>1379</a>        <span class="kw">if </span>callback {
-<a href=#1380 id=1380 data-nosnippet>1380</a>            <span class="kw">let </span>sink = names.name(
-<a href=#1381 id=1381 data-nosnippet>1381</a>                <span class="string">"SequenceSink"</span>,
-<a href=#1382 id=1382 data-nosnippet>1382</a>                <span class="kw-2">&amp;</span>f.name.to_string(),
-<a href=#1383 id=1383 data-nosnippet>1383</a>                <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::path_identity(<span class="kw-2">&amp;</span>f.path), <span class="kw-2">&amp;</span>f.name.to_string()],
-<a href=#1384 id=1384 data-nosnippet>1384</a>            )<span class="question-mark">?</span>;
-<a href=#1385 id=1385 data-nosnippet>1385</a>            <span class="kw">let </span>(<span class="kw">_</span>, element, <span class="kw">_</span>) =
-<a href=#1386 id=1386 data-nosnippet>1386</a>                sequence::return_sequence(<span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success)
-<a href=#1387 id=1387 data-nosnippet>1387</a>                    .ok_or(<span class="string">"missing callback sequence"</span>)<span class="question-mark">?</span>;
-<a href=#1388 id=1388 data-nosnippet>1388</a>            <span class="kw">let </span>fields = <span class="kw">crate</span>::group::row_fields(element)
-<a href=#1389 id=1389 data-nosnippet>1389</a>                .enumerate()
-<a href=#1390 id=1390 data-nosnippet>1390</a>                .map(|(i, w)| <span class="macro">format!</span>(<span class="string">"v{i}: {}"</span>, w.kind.kotlin_type()))
-<a href=#1391 id=1391 data-nosnippet>1391</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#1392 id=1392 data-nosnippet>1392</a>            native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#1393 id=1393 data-nosnippet>1393</a>                <span class="string">"    internal fun interface {sink} {{ fun run({}) }}\n"</span>,
-<a href=#1394 id=1394 data-nosnippet>1394</a>                fields.join(<span class="string">", "</span>)
-<a href=#1395 id=1395 data-nosnippet>1395</a>            ));
-<a href=#1396 id=1396 data-nosnippet>1396</a>            params.push(
-<a href=#1397 id=1397 data-nosnippet>1397</a>                <span class="macro">quote!</span>(__pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject&lt;<span class="lifetime">'local</span>&gt;),
-<a href=#1398 id=1398 data-nosnippet>1398</a>            );
-<a href=#1399 id=1399 data-nosnippet>1399</a>            raw_params.push(<span class="macro">format!</span>(<span class="string">"callback: {sink}"</span>));
-<a href=#1400 id=1400 data-nosnippet>1400</a>            <span class="kw">let </span>names = (<span class="number">0</span>..fields.len())
-<a href=#1401 id=1401 data-nosnippet>1401</a>                .map(|i| <span class="macro">format!</span>(<span class="string">"v{i}"</span>))
-<a href=#1402 id=1402 data-nosnippet>1402</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#1403 id=1403 data-nosnippet>1403</a>                .join(<span class="string">", "</span>);
-<a href=#1404 id=1404 data-nosnippet>1404</a>            setup.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"val __pb_rows = kotlin.collections.mutableListOf&lt;kotlin.Array&lt;kotlin.Any?&gt;&gt;()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {names} -&gt; __pb_rows.add(kotlin.arrayOf&lt;kotlin.Any?&gt;({names})); kotlin.Unit }}\n"</span>));
-<a href=#1405 id=1405 data-nosnippet>1405</a>            kt_args.push(<span class="string">"__pb_sink"</span>.into());
-<a href=#1406 id=1406 data-nosnippet>1406</a>            params.push(<span class="macro">quote!</span>(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray&lt;<span class="lifetime">'local</span>&gt;));
-<a href=#1407 id=1407 data-nosnippet>1407</a>            raw_params.push(<span class="string">"outputAccepted: BooleanArray"</span>.into());
-<a href=#1408 id=1408 data-nosnippet>1408</a>            setup.push_str(<span class="string">"val __pb_outputAccepted = BooleanArray(1)\n"</span>);
-<a href=#1409 id=1409 data-nosnippet>1409</a>            kt_args.push(<span class="string">"__pb_outputAccepted"</span>.into());
-<a href=#1410 id=1410 data-nosnippet>1410</a>        }
-<a href=#1411 id=1411 data-nosnippet>1411</a>        <span class="kw">let </span>slots: usize = usize::from(has_consumes)
-<a href=#1412 id=1412 data-nosnippet>1412</a>            + <span class="number">2 </span>* usize::from(callback)
-<a href=#1413 id=1413 data-nosnippet>1413</a>            + <span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">?
-<a href=#1414 id=1414 data-nosnippet>1414</a>                </span>.map(|w| w.kind.parameter_slots())
-<a href=#1415 id=1415 data-nosnippet>1415</a>                .sum::&lt;usize&gt;();
-<a href=#1416 id=1416 data-nosnippet>1416</a>        <span class="kw">if </span>slots &gt; <span class="number">255 </span>{
-<a href=#1417 id=1417 data-nosnippet>1417</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
-<a href=#1418 id=1418 data-nosnippet>1418</a>                <span class="string">"`{source}` needs {slots} JVM parameter slots; the limit is 255"
-<a href=#1419 id=1419 data-nosnippet>1419</a>            </span>));
-<a href=#1420 id=1420 data-nosnippet>1420</a>        }
-<a href=#1421 id=1421 data-nosnippet>1421</a>        <span class="kw">let </span>body = prebindgen_conversions::staged::emit_call(
-<a href=#1422 id=1422 data-nosnippet>1422</a>            f,
-<a href=#1423 id=1423 data-nosnippet>1423</a>            <span class="kw-2">&amp;</span>context,
-<a href=#1424 id=1424 data-nosnippet>1424</a>            <span class="kw-2">&amp;</span>source,
-<a href=#1425 id=1425 data-nosnippet>1425</a>            <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::sys::jobjectArray),
-<a href=#1426 id=1426 data-nosnippet>1426</a>            <span class="kw-2">&amp;</span><span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">?
-<a href=#1427 id=1427 data-nosnippet>1427</a>                </span>.map(|w| w.name.clone())
-<a href=#1428 id=1428 data-nosnippet>1428</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#1429 id=1429 data-nosnippet>1429</a>        )<span class="question-mark">?</span>;
-<a href=#1430 id=1430 data-nosnippet>1430</a>        <span class="kw">let </span>body = <span class="kw">if </span>callback {
-<a href=#1431 id=1431 data-nosnippet>1431</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#env.get_array_length(<span class="kw-2">&amp;</span>__pb_output_accepted).map_err(|e|e.to_string())<span class="question-mark">? </span>!= <span class="number">1 </span>{<span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"invalid sequence output acknowledgement"</span>.into());} <span class="kw">if </span>__pb_callback.is_null(){<span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"null sequence callback"</span>.into());} #body)
-<a href=#1432 id=1432 data-nosnippet>1432</a>        } <span class="kw">else </span>{
-<a href=#1433 id=1433 data-nosnippet>1433</a>            body
-<a href=#1434 id=1434 data-nosnippet>1434</a>        };
-<a href=#1435 id=1435 data-nosnippet>1435</a>        <span class="kw">let </span>fold = <span class="kw">if </span>callback {
-<a href=#1436 id=1436 data-nosnippet>1436</a>            <span class="prelude-val">Some</span>(sequence_callback::fold(
-<a href=#1437 id=1437 data-nosnippet>1437</a>                <span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success,
-<a href=#1438 id=1438 data-nosnippet>1438</a>                <span class="kw-2">&amp;</span>kotlin_context,
-<a href=#1439 id=1439 data-nosnippet>1439</a>            )<span class="question-mark">?</span>)
-<a href=#1440 id=1440 data-nosnippet>1440</a>        } <span class="kw">else </span>{
-<a href=#1441 id=1441 data-nosnippet>1441</a>            <span class="prelude-val">None
-<a href=#1442 id=1442 data-nosnippet>1442</a>        </span>};
-<a href=#1443 id=1443 data-nosnippet>1443</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(fold) = <span class="kw-2">&amp;</span>fold {
-<a href=#1444 id=1444 data-nosnippet>1444</a>            setup.push_str(<span class="kw-2">&amp;</span>fold.discard);
-<a href=#1445 id=1445 data-nosnippet>1445</a>        }
-<a href=#1446 id=1446 data-nosnippet>1446</a>        <span class="kw">let </span><span class="kw-2">mut </span>kotlin_output = <span class="kw">match </span><span class="kw-2">&amp;</span>fold {
-<a href=#1447 id=1447 data-nosnippet>1447</a>            <span class="prelude-val">Some</span>(fold) =&gt; fold.output.clone(),
-<a href=#1448 id=1448 data-nosnippet>1448</a>            <span class="prelude-val">None </span>=&gt; f.output_conversion()<span class="question-mark">?</span>.kotlin(<span class="kw-2">&amp;</span>kotlin_context)<span class="question-mark">?</span>,
-<a href=#1449 id=1449 data-nosnippet>1449</a>        };
-<a href=#1450 id=1450 data-nosnippet>1450</a>        kotlin::remap_output(
-<a href=#1451 id=1451 data-nosnippet>1451</a>            <span class="kw-2">&amp;mut </span>kotlin_output,
-<a href=#1452 id=1452 data-nosnippet>1452</a>            kotlin_context.result,
-<a href=#1453 id=1453 data-nosnippet>1453</a>            kotlin_context.result,
-<a href=#1454 id=1454 data-nosnippet>1454</a>            <span class="number">1</span>,
-<a href=#1455 id=1455 data-nosnippet>1455</a>            <span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success)
-<a href=#1456 id=1456 data-nosnippet>1456</a>                .len(),
-<a href=#1457 id=1457 data-nosnippet>1457</a>        );
-<a href=#1458 id=1458 data-nosnippet>1458</a>        <span class="kw">let </span>build_parameters = kotlin_output.callback_type_parameters()<span class="question-mark">?</span>;
-<a href=#1459 id=1459 data-nosnippet>1459</a>        <span class="kw">let </span>KotlinOutput {
-<a href=#1460 id=1460 data-nosnippet>1460</a>            delivered,
-<a href=#1461 id=1461 data-nosnippet>1461</a>            result_types,
-<a href=#1462 id=1462 data-nosnippet>1462</a>            output_locals,
-<a href=#1463 id=1463 data-nosnippet>1463</a>            materialize,
-<a href=#1464 id=1464 data-nosnippet>1464</a>            cleanup,
-<a href=#1465 id=1465 data-nosnippet>1465</a>            ..
-<a href=#1466 id=1466 data-nosnippet>1466</a>        } = kotlin_output;
-<a href=#1467 id=1467 data-nosnippet>1467</a>        <span class="kw">if </span>delivered.len() != result_types.len() {
-<a href=#1468 id=1468 data-nosnippet>1468</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin output expression/type count differs"</span>.into());
-<a href=#1469 id=1469 data-nosnippet>1469</a>        }
-<a href=#1470 id=1470 data-nosnippet>1470</a>        rust.extend(<span class="macro">quote!</span>{
-<a href=#1471 id=1471 data-nosnippet>1471</a>   <span class="attr">#[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-<a href=#1472 id=1472 data-nosnippet>1472</a>   #[doc = <span class="string">"# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."</span>]
-<a href=#1473 id=1473 data-nosnippet>1473</a>#[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"system" </span><span class="kw">fn </span>#sym&lt;<span class="lifetime">'local</span>&gt;(<span class="kw-2">mut </span>#env: ::prebindgen_jni_runtime::jni::JNIEnv&lt;<span class="lifetime">'local</span>&gt;,_class: ::prebindgen_jni_runtime::jni::objects::JClass&lt;<span class="lifetime">'local</span>&gt;,#(#params),<span class="kw-2">*</span>)-&gt;::prebindgen_jni_runtime::jni::sys::jobjectArray{
-<a href=#1474 id=1474 data-nosnippet>1474</a>    <span class="attr">#[allow(unused_mut)]
-<a href=#1475 id=1475 data-nosnippet>1475</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>domain_output = <span class="prelude-val">None</span>;
-<a href=#1476 id=1476 data-nosnippet>1476</a>    <span class="kw">match </span>::prebindgen_runtime::boundary(||{
-<a href=#1477 id=1477 data-nosnippet>1477</a>     #body
-<a href=#1478 id=1478 data-nosnippet>1478</a>    }){<span class="prelude-val">Ok</span>(result)=&gt;result,<span class="prelude-val">Err</span>(e)=&gt;{
-<a href=#1479 id=1479 data-nosnippet>1479</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = domain_output { result } <span class="kw">else </span>{
-<a href=#1480 id=1480 data-nosnippet>1480</a>            <span class="kw">match </span>::prebindgen_jni_runtime::binding_packet(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>e) {
-<a href=#1481 id=1481 data-nosnippet>1481</a>                <span class="prelude-val">Ok</span>(result) =&gt; result.into_raw(),
-<a href=#1482 id=1482 data-nosnippet>1482</a>                <span class="prelude-val">Err</span>(message) =&gt; { ::prebindgen_jni_runtime::fail(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>message); std::ptr::null_mut() }
-<a href=#1483 id=1483 data-nosnippet>1483</a>            }
-<a href=#1484 id=1484 data-nosnippet>1484</a>        }
-<a href=#1485 id=1485 data-nosnippet>1485</a>    }}
-<a href=#1486 id=1486 data-nosnippet>1486</a>   }
-<a href=#1487 id=1487 data-nosnippet>1487</a>  });
-<a href=#1488 id=1488 data-nosnippet>1488</a>        native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#1489 id=1489 data-nosnippet>1489</a>            <span class="string">"    @JvmStatic external fun {method}({}): Array&lt;Any?&gt;\n"</span>,
-<a href=#1490 id=1490 data-nosnippet>1490</a>            raw_params.join(<span class="string">", "</span>)
-<a href=#1491 id=1491 data-nosnippet>1491</a>        ));
-<a href=#1492 id=1492 data-nosnippet>1492</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>generic, ret, end) = <span class="kw">match </span>delivered.len() {
-<a href=#1493 id=1493 data-nosnippet>1493</a>            <span class="number">0 </span>=&gt; (<span class="string">""</span>, <span class="string">"Unit"</span>.into(), <span class="string">"Unit"</span>.into()),
-<a href=#1494 id=1494 data-nosnippet>1494</a>            <span class="number">1 </span>=&gt; (<span class="string">""</span>, result_types[<span class="number">0</span>].clone(), delivered[<span class="number">0</span>].clone()),
-<a href=#1495 id=1495 data-nosnippet>1495</a>            <span class="kw">_ </span>=&gt; {
-<a href=#1496 id=1496 data-nosnippet>1496</a>                kt_params.push(<span class="macro">format!</span>(<span class="string">"build: ({build_parameters}) -&gt; R"</span>));
-<a href=#1497 id=1497 data-nosnippet>1497</a>                (
-<a href=#1498 id=1498 data-nosnippet>1498</a>                    <span class="string">"&lt;R&gt; "</span>,
-<a href=#1499 id=1499 data-nosnippet>1499</a>                    <span class="string">"R"</span>.into(),
-<a href=#1500 id=1500 data-nosnippet>1500</a>                    <span class="macro">format!</span>(<span class="string">"build({})"</span>, delivered.join(<span class="string">", "</span>)),
-<a href=#1501 id=1501 data-nosnippet>1501</a>                )
-<a href=#1502 id=1502 data-nosnippet>1502</a>            }
-<a href=#1503 id=1503 data-nosnippet>1503</a>        };
-<a href=#1504 id=1504 data-nosnippet>1504</a>        <span class="kw">if </span>fold.is_some() {
-<a href=#1505 id=1505 data-nosnippet>1505</a>            generic = <span class="string">"&lt;A&gt; "</span>;
-<a href=#1506 id=1506 data-nosnippet>1506</a>            kt_params.push(<span class="string">"initial: A"</span>.into());
-<a href=#1507 id=1507 data-nosnippet>1507</a>        }
-<a href=#1508 id=1508 data-nosnippet>1508</a>        <span class="kw">let </span>failure = kotlin_context.failure;
-<a href=#1509 id=1509 data-nosnippet>1509</a>        <span class="kw">let </span>result = kotlin_context.result;
-<a href=#1510 id=1510 data-nosnippet>1510</a>        <span class="kw">let </span>end = <span class="kw">if </span>cleanup.is_empty() {
-<a href=#1511 id=1511 data-nosnippet>1511</a>            end
-<a href=#1512 id=1512 data-nosnippet>1512</a>        } <span class="kw">else </span>{
-<a href=#1513 id=1513 data-nosnippet>1513</a>            <span class="macro">format!</span>(<span class="string">"{output_locals}        try {{\n{materialize}            {end}\n        }} catch ({failure}: Throwable) {{\n{cleanup}            throw {failure}\n        }}"</span>)
-<a href=#1514 id=1514 data-nosnippet>1514</a>        };
-<a href=#1515 id=1515 data-nosnippet>1515</a>        <span class="kw">let </span>argument_locals = kt_args.iter().enumerate().map(|(i, arg)| <span class="macro">format!</span>(<span class="string">"val nativeArgument{i} = try {{ {arg} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid input\") }}"</span>)).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().join(<span class="string">"; "</span>);
-<a href=#1516 id=1516 data-nosnippet>1516</a>        <span class="kw">let </span>argument_names = (<span class="number">0</span>..kt_args.len())
-<a href=#1517 id=1517 data-nosnippet>1517</a>            .map(|i| <span class="macro">format!</span>(<span class="string">"nativeArgument{i}"</span>))
-<a href=#1518 id=1518 data-nosnippet>1518</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#1519 id=1519 data-nosnippet>1519</a>            .join(<span class="string">", "</span>);
-<a href=#1520 id=1520 data-nosnippet>1520</a>        <span class="kw">let </span>call =
-<a href=#1521 id=1521 data-nosnippet>1521</a>            <span class="macro">format!</span>(<span class="string">"run {{ {argument_locals}; {prefix}.JNINative.{method}({argument_names}) }}"</span>);
-<a href=#1522 id=1522 data-nosnippet>1522</a>        <span class="kw">let </span>call = <span class="kw">if </span>has_consumes {
-<a href=#1523 id=1523 data-nosnippet>1523</a>            <span class="macro">format!</span>(<span class="string">"val ownership = BooleanArray(1)\n        try {{ {call} }} finally {{ if (ownership[0]) {{ {} }} }}"</span>, consumed.join(<span class="string">"; "</span>))
-<a href=#1524 id=1524 data-nosnippet>1524</a>        } <span class="kw">else </span>{
-<a href=#1525 id=1525 data-nosnippet>1525</a>            call
-<a href=#1526 id=1526 data-nosnippet>1526</a>        };
-<a href=#1527 id=1527 data-nosnippet>1527</a>        <span class="kw">let </span>binding_name = <span class="kw">if </span>error.is_some() {
-<a href=#1528 id=1528 data-nosnippet>1528</a>            <span class="string">"onBindingError"
-<a href=#1529 id=1529 data-nosnippet>1529</a>        </span>} <span class="kw">else </span>{
-<a href=#1530 id=1530 data-nosnippet>1530</a>            <span class="string">"onError"
-<a href=#1531 id=1531 data-nosnippet>1531</a>        </span>};
-<a href=#1532 id=1532 data-nosnippet>1532</a>        <span class="kw">let </span>build = <span class="kw">if </span>delivered.len() &gt; <span class="number">1 </span>{
-<a href=#1533 id=1533 data-nosnippet>1533</a>            kt_params.pop()
-<a href=#1534 id=1534 data-nosnippet>1534</a>        } <span class="kw">else </span>{
-<a href=#1535 id=1535 data-nosnippet>1535</a>            <span class="prelude-val">None
-<a href=#1536 id=1536 data-nosnippet>1536</a>        </span>};
-<a href=#1537 id=1537 data-nosnippet>1537</a>        kt_params.push(<span class="macro">format!</span>(<span class="string">"{binding_name}: {prefix}.JniErrorHandler&lt;{ret}&gt; = {prefix}.JniErrorHandler {{ message -&gt; throw IllegalArgumentException(message) }}"</span>));
-<a href=#1538 id=1538 data-nosnippet>1538</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = error {
-<a href=#1539 id=1539 data-nosnippet>1539</a>            kt_params.push(error.parameter(<span class="kw-2">&amp;</span>ret, exception));
-<a href=#1540 id=1540 data-nosnippet>1540</a>        }
-<a href=#1541 id=1541 data-nosnippet>1541</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(build) = build {
-<a href=#1542 id=1542 data-nosnippet>1542</a>            kt_params.push(build);
-<a href=#1543 id=1543 data-nosnippet>1543</a>        }
-<a href=#1544 id=1544 data-nosnippet>1544</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(fold) = <span class="kw-2">&amp;</span>fold {
-<a href=#1545 id=1545 data-nosnippet>1545</a>            kt_params.push(fold.parameter.clone());
-<a href=#1546 id=1546 data-nosnippet>1546</a>        }
-<a href=#1547 id=1547 data-nosnippet>1547</a>        <span class="kw">let </span>call = <span class="kw">if </span>locks.is_empty() &amp;&amp; lock_groups.is_empty() {
-<a href=#1548 id=1548 data-nosnippet>1548</a>            call
-<a href=#1549 id=1549 data-nosnippet>1549</a>        } <span class="kw">else if </span>lock_groups.is_empty() &amp;&amp; locks.len() &lt;= <span class="number">3 </span>{
-<a href=#1550 id=1550 data-nosnippet>1550</a>            <span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
-<a href=#1551 id=1551 data-nosnippet>1551</a>            <span class="comment">// Evaluate and validate each expression before taking any monitor.
-<a href=#1552 id=1552 data-nosnippet>1552</a>            </span><span class="kw">let </span>names = (<span class="number">0</span>..locks.len())
-<a href=#1553 id=1553 data-nosnippet>1553</a>                .map(|i| <span class="macro">format!</span>(<span class="string">"handle{i}"</span>))
-<a href=#1554 id=1554 data-nosnippet>1554</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#1555 id=1555 data-nosnippet>1555</a>            <span class="kw">let </span><span class="kw-2">mut </span>locals = String::new();
-<a href=#1556 id=1556 data-nosnippet>1556</a>            <span class="kw">for </span>(name, value) <span class="kw">in </span>names.iter().zip(<span class="kw-2">&amp;</span>locks) {
-<a href=#1557 id=1557 data-nosnippet>1557</a>                <span class="macro">write!</span>(locals, <span class="string">"val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; "</span>).expect(<span class="string">"writing to a String"</span>);
-<a href=#1558 id=1558 data-nosnippet>1558</a>            }
-<a href=#1559 id=1559 data-nosnippet>1559</a>            <span class="macro">format!</span>(
-<a href=#1560 id=1560 data-nosnippet>1560</a>                <span class="string">"run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}"</span>,
-<a href=#1561 id=1561 data-nosnippet>1561</a>                names.join(<span class="string">", "</span>)
-<a href=#1562 id=1562 data-nosnippet>1562</a>            )
-<a href=#1563 id=1563 data-nosnippet>1563</a>        } <span class="kw">else </span>{
-<a href=#1564 id=1564 data-nosnippet>1564</a>            <span class="kw">let </span><span class="kw-2">mut </span>all_locks = <span class="kw">if </span>locks.is_empty() {
-<a href=#1565 id=1565 data-nosnippet>1565</a>                <span class="string">"kotlin.collections.emptyList&lt;Nothing&gt;()"</span>.to_string()
-<a href=#1566 id=1566 data-nosnippet>1566</a>            } <span class="kw">else </span>{
-<a href=#1567 id=1567 data-nosnippet>1567</a>                <span class="macro">format!</span>(<span class="string">"listOfNotNull({})"</span>, locks.join(<span class="string">", "</span>))
-<a href=#1568 id=1568 data-nosnippet>1568</a>            };
-<a href=#1569 id=1569 data-nosnippet>1569</a>            <span class="kw">for </span>group <span class="kw">in </span>lock_groups {
-<a href=#1570 id=1570 data-nosnippet>1570</a>                all_locks = <span class="macro">format!</span>(<span class="string">"({all_locks} + ({group}))"</span>);
-<a href=#1571 id=1571 data-nosnippet>1571</a>            }
-<a href=#1572 id=1572 data-nosnippet>1572</a>            <span class="macro">format!</span>(<span class="string">"run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}"</span>)
-<a href=#1573 id=1573 data-nosnippet>1573</a>        };
-<a href=#1574 id=1574 data-nosnippet>1574</a>        <span class="kw">let </span>call = <span class="kw">if </span>callback {
-<a href=#1575 id=1575 data-nosnippet>1575</a>            <span class="macro">format!</span>(<span class="string">"try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}"</span>)
-<a href=#1576 id=1576 data-nosnippet>1576</a>        } <span class="kw">else </span>{
-<a href=#1577 id=1577 data-nosnippet>1577</a>            call
-<a href=#1578 id=1578 data-nosnippet>1578</a>        };
-<a href=#1579 id=1579 data-nosnippet>1579</a>        <span class="comment">// Catch local handle validation separately from the native invocation: pending JVM
-<a href=#1580 id=1580 data-nosnippet>1580</a>        // exceptions and exceptions from user callbacks must retain their original identity.
-<a href=#1581 id=1581 data-nosnippet>1581</a>        </span><span class="kw">let </span>call = <span class="macro">format!</span>(<span class="string">"try {{ {call} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}"</span>);
-<a href=#1582 id=1582 data-nosnippet>1582</a>        <span class="kw">let </span>domain = <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = error {
-<a href=#1583 id=1583 data-nosnippet>1583</a>            <span class="kw">let </span>delivery = errors::delivery(error, <span class="kw-2">&amp;</span>kotlin_context)<span class="question-mark">?</span>;
-<a href=#1584 id=1584 data-nosnippet>1584</a>            <span class="macro">format!</span>(<span class="string">"true -&gt; {{ {delivery} }}"</span>)
-<a href=#1585 id=1585 data-nosnippet>1585</a>        } <span class="kw">else </span>{
-<a href=#1586 id=1586 data-nosnippet>1586</a>            String::new()
-<a href=#1587 id=1587 data-nosnippet>1587</a>        };
-<a href=#1588 id=1588 data-nosnippet>1588</a>        <span class="kw">let </span>callback_failure = <span class="kw">if </span>callback {
-<a href=#1589 id=1589 data-nosnippet>1589</a>            <span class="macro">format!</span>(<span class="string">"if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException({result}[0] as String)); "</span>)
-<a href=#1590 id=1590 data-nosnippet>1590</a>        } <span class="kw">else </span>{
-<a href=#1591 id=1591 data-nosnippet>1591</a>            String::new()
-<a href=#1592 id=1592 data-nosnippet>1592</a>        };
-<a href=#1593 id=1593 data-nosnippet>1593</a>        <span class="kw">let </span>native_call = <span class="macro">format!</span>(<span class="string">"val {result} = {call}\n    when ({result}[0]) {{\n        null -&gt; {{ {end} }}\n        {domain}\n        is String -&gt; {{ {callback_failure}{binding_name}.run({result}[0] as String) }}\n        else -&gt; error(\"invalid native result channel\")\n    }}"</span>);
-<a href=#1594 id=1594 data-nosnippet>1594</a>        <span class="kw">let </span>text = packages.entry(pkg.clone()).or_default();
-<a href=#1595 id=1595 data-nosnippet>1595</a>        text.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#1596 id=1596 data-nosnippet>1596</a>            <span class="string">"{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n"</span>,
-<a href=#1597 id=1597 data-nosnippet>1597</a>            kt_params.join(<span class="string">", "</span>)
-<a href=#1598 id=1598 data-nosnippet>1598</a>        ));
-<a href=#1599 id=1599 data-nosnippet>1599</a>    }
-<a href=#1600 id=1600 data-nosnippet>1600</a>    native.push_str(<span class="string">"}\n"</span>);
-<a href=#1601 id=1601 data-nosnippet>1601</a>    files.insert(<span class="macro">format!</span>(<span class="string">"{}/JNINative.kt"</span>, prefix.replace(<span class="string">'.'</span>, <span class="string">"/"</span>)), native);
-<a href=#1602 id=1602 data-nosnippet>1602</a>    <span class="kw">for </span>(pkg, body) <span class="kw">in </span>packages {
-<a href=#1603 id=1603 data-nosnippet>1603</a>        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{}/Functions.kt"</span>, pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>));
-<a href=#1604 id=1604 data-nosnippet>1604</a>        <span class="kw">if </span>files
-<a href=#1605 id=1605 data-nosnippet>1605</a>            .insert(
-<a href=#1606 id=1606 data-nosnippet>1606</a>                path,
-<a href=#1607 id=1607 data-nosnippet>1607</a>                <span class="macro">format!</span>(<span class="string">"@file:Suppress(\"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\")\npackage {pkg}\n\n{body}"</span>),
-<a href=#1608 id=1608 data-nosnippet>1608</a>            )
-<a href=#1609 id=1609 data-nosnippet>1609</a>            .is_some()
-<a href=#1610 id=1610 data-nosnippet>1610</a>        {
-<a href=#1611 id=1611 data-nosnippet>1611</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin file collision"</span>.into());
-<a href=#1612 id=1612 data-nosnippet>1612</a>        }
-<a href=#1613 id=1613 data-nosnippet>1613</a>    }
-<a href=#1614 id=1614 data-nosnippet>1614</a>    <span class="kw">let </span>guards = <span class="kw-2">&amp;</span>flat.guards;
-<a href=#1615 id=1615 data-nosnippet>1615</a>    rust.extend(<span class="macro">quote!</span>(#(#guards)<span class="kw-2">*</span>));
-<a href=#1616 id=1616 data-nosnippet>1616</a>    <span class="prelude-val">Ok</span>(JniGen {
-<a href=#1617 id=1617 data-nosnippet>1617</a>        rust: prebindgen_flat::rust_source(rust)<span class="question-mark">?</span>,
-<a href=#1618 id=1618 data-nosnippet>1618</a>        kotlin: files,
-<a href=#1619 id=1619 data-nosnippet>1619</a>    })
-<a href=#1620 id=1620 data-nosnippet>1620</a>}
-<a href=#1621 id=1621 data-nosnippet>1621</a>
-<a href=#1622 id=1622 data-nosnippet>1622</a><span class="attr">#[cfg(test)]
-<a href=#1623 id=1623 data-nosnippet>1623</a></span><span class="kw">mod </span>tests;
-<a href=#1624 id=1624 data-nosnippet>1624</a>
-<a href=#1625 id=1625 data-nosnippet>1625</a><span class="kw">fn </span>kotlin_condition(condition: <span class="kw-2">&amp;</span>prebindgen_declarations::Condition) -&gt; String {
-<a href=#1626 id=1626 data-nosnippet>1626</a>    <span class="kw">if </span>condition.<span class="number">0</span>.is_empty() {
-<a href=#1627 id=1627 data-nosnippet>1627</a>        <span class="kw">return </span><span class="string">"true"</span>.into();
-<a href=#1628 id=1628 data-nosnippet>1628</a>    }
-<a href=#1629 id=1629 data-nosnippet>1629</a>    condition
-<a href=#1630 id=1630 data-nosnippet>1630</a>        .<span class="number">0
-<a href=#1631 id=1631 data-nosnippet>1631</a>        </span>.iter()
-<a href=#1632 id=1632 data-nosnippet>1632</a>        .map(|(tag, index)| <span class="macro">format!</span>(<span class="string">"{tag} == {index}"</span>))
-<a href=#1633 id=1633 data-nosnippet>1633</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#1634 id=1634 data-nosnippet>1634</a>        .join(<span class="string">" &amp;&amp; "</span>)
-<a href=#1635 id=1635 data-nosnippet>1635</a>}
-<a href=#1636 id=1636 data-nosnippet>1636</a><span class="kw">fn </span>native_handle(prefix: <span class="kw-2">&amp;</span>str) -&gt; String {
-<a href=#1637 id=1637 data-nosnippet>1637</a>    <span class="macro">include_str!</span>(<span class="string">"native_handle.kt"</span>).replace(<span class="string">"PACKAGE"</span>, prefix)
-<a href=#1638 id=1638 data-nosnippet>1638</a>}
+<a href=#1201 id=1201 data-nosnippet>1201</a>                    data::render_record(flat, class, <span class="kw-2">&amp;</span>t.ty)<span class="question-mark">?</span>,
+<a href=#1202 id=1202 data-nosnippet>1202</a>                );
+<a href=#1203 id=1203 data-nosnippet>1203</a>            }
+<a href=#1204 id=1204 data-nosnippet>1204</a>            <span class="kw">if </span>class.enumeration {
+<a href=#1205 id=1205 data-nosnippet>1205</a>                files.insert(
+<a href=#1206 id=1206 data-nosnippet>1206</a>                    <span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, class.pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), class.name),
+<a href=#1207 id=1207 data-nosnippet>1207</a>                    t.metadata
+<a href=#1208 id=1208 data-nosnippet>1208</a>                        .enumeration
+<a href=#1209 id=1209 data-nosnippet>1209</a>                        .as_deref()
+<a href=#1210 id=1210 data-nosnippet>1210</a>                        .ok_or(<span class="string">"missing prepared enum declaration"</span>)<span class="question-mark">?
+<a href=#1211 id=1211 data-nosnippet>1211</a>                        </span>.render(class)<span class="question-mark">?</span>,
+<a href=#1212 id=1212 data-nosnippet>1212</a>                );
+<a href=#1213 id=1213 data-nosnippet>1213</a>            }
+<a href=#1214 id=1214 data-nosnippet>1214</a>        }
+<a href=#1215 id=1215 data-nosnippet>1215</a>    }
+<a href=#1216 id=1216 data-nosnippet>1216</a>    <span class="kw">let </span><span class="kw-2">mut </span>rust = errors::emit(<span class="kw-2">&amp;</span>errors)<span class="question-mark">?</span>;
+<a href=#1217 id=1217 data-nosnippet>1217</a>    <span class="kw">let </span><span class="kw-2">mut </span>packages: BTreeMap&lt;String, String&gt; = BTreeMap::new();
+<a href=#1218 id=1218 data-nosnippet>1218</a>    errors::interfaces(prefix, <span class="kw-2">&amp;mut </span>files)<span class="question-mark">?</span>;
+<a href=#1219 id=1219 data-nosnippet>1219</a>    <span class="kw">let </span><span class="kw-2">mut </span>native = <span class="macro">format!</span>(<span class="string">"package {prefix}\n\ninternal object JNINative {{\n"</span>);
+<a href=#1220 id=1220 data-nosnippet>1220</a>    <span class="kw">if </span>!init.is_empty() {
+<a href=#1221 id=1221 data-nosnippet>1221</a>        native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"    init {{ {init} }}\n"</span>));
+<a href=#1222 id=1222 data-nosnippet>1222</a>    }
+<a href=#1223 id=1223 data-nosnippet>1223</a>    files.insert(
+<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="macro">format!</span>(<span class="string">"{}/NativeHandle.kt"</span>, prefix.replace(<span class="string">'.'</span>, <span class="string">"/"</span>)),
+<a href=#1225 id=1225 data-nosnippet>1225</a>        native_handle(prefix),
+<a href=#1226 id=1226 data-nosnippet>1226</a>    );
+<a href=#1227 id=1227 data-nosnippet>1227</a>    <span class="kw">let </span><span class="kw-2">mut </span>names = names::Names::default();
+<a href=#1228 id=1228 data-nosnippet>1228</a>    <span class="kw">for </span>(ty, c) <span class="kw">in </span>classes.values() {
+<a href=#1229 id=1229 data-nosnippet>1229</a>        <span class="kw">let </span>method = names.name(<span class="string">"drop"</span>, <span class="kw-2">&amp;</span>names::type_label(ty), <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::type_identity(ty)])<span class="question-mark">?</span>;
+<a href=#1230 id=1230 data-nosnippet>1230</a>        <span class="kw">let </span>sym = symbol(prefix, <span class="kw-2">&amp;</span>method);
+<a href=#1231 id=1231 data-nosnippet>1231</a>        rust.extend(<span class="macro">quote!</span>{<span class="attr">#[doc = <span class="string">"# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."</span>]
+<a href=#1232 id=1232 data-nosnippet>1232</a>#[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"system" </span><span class="kw">fn </span>#sym(<span class="kw-2">mut </span>env: ::prebindgen_jni_runtime::jni::JNIEnv&lt;<span class="lifetime">'_</span>&gt;,_class: ::prebindgen_jni_runtime::jni::objects::JClass&lt;<span class="lifetime">'_</span>&gt;,id:i64){<span class="kw">if let </span><span class="prelude-val">Err</span>(e)=::prebindgen_runtime::boundary(||<span class="kw">unsafe </span>{::prebindgen_jni_runtime::drop_pointer::&lt;#ty&gt;(id)}){::prebindgen_jni_runtime::fail(<span class="kw-2">&amp;mut </span>env,<span class="kw-2">&amp;</span>e);}}});
+<a href=#1233 id=1233 data-nosnippet>1233</a>        native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"    @JvmStatic external fun {method}(id: Long)\n"</span>));
+<a href=#1234 id=1234 data-nosnippet>1234</a>        <span class="kw">let </span>text=<span class="macro">format!</span>(<span class="string">"package {}\n\npublic class {} internal constructor(raw: Long) : {prefix}.NativeHandle(raw) {{\n    public fun take(): {} = synchronized(this) {{ check(!isClosed) {{ \"closed or consumed handle\" }}; val owner = {}(raw); markConsumed(); owner }}\n    override fun freeNative(raw: Long) {{ {prefix}.JNINative.{method}(raw) }}\n}}\n"</span>,c.pkg,c.name,c.name,c.name);
+<a href=#1235 id=1235 data-nosnippet>1235</a>        files.insert(<span class="macro">format!</span>(<span class="string">"{}/{}.kt"</span>, c.pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>), c.name), text);
+<a href=#1236 id=1236 data-nosnippet>1236</a>    }
+<a href=#1237 id=1237 data-nosnippet>1237</a>    <span class="kw">let </span>kotlin_classes = classes
+<a href=#1238 id=1238 data-nosnippet>1238</a>        .iter()
+<a href=#1239 id=1239 data-nosnippet>1239</a>        .map(|(ty, (source, class))| {
+<a href=#1240 id=1240 data-nosnippet>1240</a>            <span class="prelude-val">Ok</span>((
+<a href=#1241 id=1241 data-nosnippet>1241</a>                ty.clone(),
+<a href=#1242 id=1242 data-nosnippet>1242</a>                KotlinClass {
+<a href=#1243 id=1243 data-nosnippet>1243</a>                    name: class.fqn(),
+<a href=#1244 id=1244 data-nosnippet>1244</a>                    drop_function: <span class="macro">format!</span>(
+<a href=#1245 id=1245 data-nosnippet>1245</a>                        <span class="string">"{prefix}.JNINative.{}"</span>,
+<a href=#1246 id=1246 data-nosnippet>1246</a>                        names.name(
+<a href=#1247 id=1247 data-nosnippet>1247</a>                            <span class="string">"drop"</span>,
+<a href=#1248 id=1248 data-nosnippet>1248</a>                            <span class="kw-2">&amp;</span>names::type_label(source),
+<a href=#1249 id=1249 data-nosnippet>1249</a>                            <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::type_identity(source)]
+<a href=#1250 id=1250 data-nosnippet>1250</a>                        )<span class="question-mark">?
+<a href=#1251 id=1251 data-nosnippet>1251</a>                    </span>),
+<a href=#1252 id=1252 data-nosnippet>1252</a>                },
+<a href=#1253 id=1253 data-nosnippet>1253</a>            ))
+<a href=#1254 id=1254 data-nosnippet>1254</a>        })
+<a href=#1255 id=1255 data-nosnippet>1255</a>        .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#1256 id=1256 data-nosnippet>1256</a>    callback::files(flat, <span class="kw-2">&amp;</span>kotlin_classes, <span class="kw-2">&amp;mut </span>files)<span class="question-mark">?</span>;
+<a href=#1257 id=1257 data-nosnippet>1257</a>    errors::handler_files(
+<a href=#1258 id=1258 data-nosnippet>1258</a>        <span class="kw-2">&amp;</span>errors,
+<a href=#1259 id=1259 data-nosnippet>1259</a>        <span class="kw-2">&amp;</span>KotlinContext {
+<a href=#1260 id=1260 data-nosnippet>1260</a>            classes: <span class="kw-2">&amp;</span>kotlin_classes,
+<a href=#1261 id=1261 data-nosnippet>1261</a>            result: <span class="string">"result"</span>,
+<a href=#1262 id=1262 data-nosnippet>1262</a>            failure: <span class="string">"failure"</span>,
+<a href=#1263 id=1263 data-nosnippet>1263</a>            cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#1264 id=1264 data-nosnippet>1264</a>            output_prefix: <span class="string">"errorOutput"</span>,
+<a href=#1265 id=1265 data-nosnippet>1265</a>        },
+<a href=#1266 id=1266 data-nosnippet>1266</a>        <span class="kw-2">&amp;mut </span>files,
+<a href=#1267 id=1267 data-nosnippet>1267</a>    )<span class="question-mark">?</span>;
+<a href=#1268 id=1268 data-nosnippet>1268</a>    <span class="kw">for </span>(source, placement) <span class="kw">in </span>functions {
+<a href=#1269 id=1269 data-nosnippet>1269</a>        <span class="kw">let </span>source = source.to_string();
+<a href=#1270 id=1270 data-nosnippet>1270</a>        <span class="kw">let </span>pkg = <span class="kw-2">&amp;</span>placement.package;
+<a href=#1271 id=1271 data-nosnippet>1271</a>        <span class="kw">let </span>name = <span class="kw-2">&amp;</span>placement.name;
+<a href=#1272 id=1272 data-nosnippet>1272</a>        <span class="kw">let </span>f = flat.function(<span class="kw-2">&amp;</span>source)<span class="question-mark">?</span>;
+<a href=#1273 id=1273 data-nosnippet>1273</a>        <span class="kw">let </span>callback =
+<a href=#1274 id=1274 data-nosnippet>1274</a>            sequence::callback_delivery(<span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success)<span class="question-mark">?</span>;
+<a href=#1275 id=1275 data-nosnippet>1275</a>        <span class="kw">let </span>error = errors.get(<span class="kw-2">&amp;</span>source);
+<a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="kw">let </span>outcomes = f.output_conversion()<span class="question-mark">?</span>.output_outcomes();
+<a href=#1277 id=1277 data-nosnippet>1277</a>        <span class="kw">let </span>logical = <span class="kw-2">&amp;</span>outcomes.success;
+<a href=#1278 id=1278 data-nosnippet>1278</a>        <span class="kw">for </span>node <span class="kw">in </span>std::iter::once(logical)
+<a href=#1279 id=1279 data-nosnippet>1279</a>            .chain(outcomes.source_error.iter())
+<a href=#1280 id=1280 data-nosnippet>1280</a>            .chain(outcomes.binding_failure.iter())
+<a href=#1281 id=1281 data-nosnippet>1281</a>        {
+<a href=#1282 id=1282 data-nosnippet>1282</a>            group::validate_layout(node)<span class="question-mark">?</span>;
+<a href=#1283 id=1283 data-nosnippet>1283</a>        }
+<a href=#1284 id=1284 data-nosnippet>1284</a>        <span class="kw">for </span>error <span class="kw">in </span>outcomes
+<a href=#1285 id=1285 data-nosnippet>1285</a>            .source_error
+<a href=#1286 id=1286 data-nosnippet>1286</a>            .iter()
+<a href=#1287 id=1287 data-nosnippet>1287</a>            .chain(outcomes.binding_failure.iter())
+<a href=#1288 id=1288 data-nosnippet>1288</a>        {
+<a href=#1289 id=1289 data-nosnippet>1289</a>            sequence::validate_buffered(error)<span class="question-mark">?</span>;
+<a href=#1290 id=1290 data-nosnippet>1290</a>        }
+<a href=#1291 id=1291 data-nosnippet>1291</a>        <span class="kw">let </span>has_source_error = outcomes.source_error.is_some();
+<a href=#1292 id=1292 data-nosnippet>1292</a>        <span class="kw">let </span>has_binding_failure = outcomes.binding_failure.is_some();
+<a href=#1293 id=1293 data-nosnippet>1293</a>        <span class="kw">if </span>has_source_error != error.is_some() {
+<a href=#1294 id=1294 data-nosnippet>1294</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"JNI source-error schema must match its configured error converter"</span>.into());
+<a href=#1295 id=1295 data-nosnippet>1295</a>        }
+<a href=#1296 id=1296 data-nosnippet>1296</a>        <span class="comment">// Every JNI wrapper has a separate binding-error callback, including
+<a href=#1297 id=1297 data-nosnippet>1297</a>        // functions without a source Result. Manual schemas must declare it.
+<a href=#1298 id=1298 data-nosnippet>1298</a>        </span><span class="kw">if </span>!has_binding_failure {
+<a href=#1299 id=1299 data-nosnippet>1299</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"JNI native delivery requires a declared binding-failure schema"</span>.into());
+<a href=#1300 id=1300 data-nosnippet>1300</a>        }
+<a href=#1301 id=1301 data-nosnippet>1301</a>
+<a href=#1302 id=1302 data-nosnippet>1302</a>        <span class="kw">let </span>exception = <span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, ty)) = prebindgen_flat::result_parts(<span class="kw-2">&amp;</span>f.ret.ty) {
+<a href=#1303 id=1303 data-nosnippet>1303</a>            flat.type_info(ty)
+<a href=#1304 id=1304 data-nosnippet>1304</a>                .ok()
+<a href=#1305 id=1305 data-nosnippet>1305</a>                .and_then(|t| t.metadata.error_class.as_deref())
+<a href=#1306 id=1306 data-nosnippet>1306</a>        } <span class="kw">else </span>{
+<a href=#1307 id=1307 data-nosnippet>1307</a>            <span class="prelude-val">None
+<a href=#1308 id=1308 data-nosnippet>1308</a>        </span>};
+<a href=#1309 id=1309 data-nosnippet>1309</a>        <span class="kw">let </span>throws = error.map_or_else(String::new, |error| error.throws(exception));
+<a href=#1310 id=1310 data-nosnippet>1310</a>        <span class="kw">let </span>env = <span class="macro">format_ident!</span>(<span class="string">"jni_environment"</span>);
+<a href=#1311 id=1311 data-nosnippet>1311</a>        <span class="kw">let </span>ownership = <span class="macro">format_ident!</span>(<span class="string">"ownership_accepted"</span>);
+<a href=#1312 id=1312 data-nosnippet>1312</a>        <span class="kw">let </span>context = JniContext {
+<a href=#1313 id=1313 data-nosnippet>1313</a>            environment: env.clone(),
+<a href=#1314 id=1314 data-nosnippet>1314</a>            acknowledgement: ownership.clone(),
+<a href=#1315 id=1315 data-nosnippet>1315</a>            domain_output: <span class="macro">format_ident!</span>(<span class="string">"domain_output"</span>),
+<a href=#1316 id=1316 data-nosnippet>1316</a>            is_domain_error: <span class="bool-val">false</span>,
+<a href=#1317 id=1317 data-nosnippet>1317</a>            output_committed: <span class="macro">quote!</span>(),
+<a href=#1318 id=1318 data-nosnippet>1318</a>        };
+<a href=#1319 id=1319 data-nosnippet>1319</a>        <span class="kw">let </span>source = <span class="macro">format_ident!</span>(<span class="string">"source_value"</span>);
+<a href=#1320 id=1320 data-nosnippet>1320</a>        <span class="kw">let </span>method = names.name(
+<a href=#1321 id=1321 data-nosnippet>1321</a>            <span class="string">"call"</span>,
+<a href=#1322 id=1322 data-nosnippet>1322</a>            <span class="kw-2">&amp;</span>f.name.to_string(),
+<a href=#1323 id=1323 data-nosnippet>1323</a>            <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::path_identity(<span class="kw-2">&amp;</span>f.path), <span class="kw-2">&amp;</span>f.name.to_string()],
+<a href=#1324 id=1324 data-nosnippet>1324</a>        )<span class="question-mark">?</span>;
+<a href=#1325 id=1325 data-nosnippet>1325</a>        <span class="kw">let </span>sym = symbol(prefix, <span class="kw-2">&amp;</span>method);
+<a href=#1326 id=1326 data-nosnippet>1326</a>        <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
+<a href=#1327 id=1327 data-nosnippet>1327</a>        <span class="kw">let </span><span class="kw-2">mut </span>raw_params = Vec::new();
+<a href=#1328 id=1328 data-nosnippet>1328</a>        <span class="kw">let </span>kotlin_context = KotlinContext {
+<a href=#1329 id=1329 data-nosnippet>1329</a>            classes: <span class="kw-2">&amp;</span>kotlin_classes,
+<a href=#1330 id=1330 data-nosnippet>1330</a>            result: <span class="string">"result"</span>,
+<a href=#1331 id=1331 data-nosnippet>1331</a>            failure: <span class="string">"failure"</span>,
+<a href=#1332 id=1332 data-nosnippet>1332</a>            cleanup_failure: <span class="prelude-val">None</span>,
+<a href=#1333 id=1333 data-nosnippet>1333</a>            output_prefix: <span class="string">"output"</span>,
+<a href=#1334 id=1334 data-nosnippet>1334</a>        };
+<a href=#1335 id=1335 data-nosnippet>1335</a>        <span class="kw">let </span><span class="kw-2">mut </span>kt_params = Vec::new();
+<a href=#1336 id=1336 data-nosnippet>1336</a>        <span class="kw">let </span><span class="kw-2">mut </span>kt_args = Vec::new();
+<a href=#1337 id=1337 data-nosnippet>1337</a>        <span class="kw">let </span><span class="kw-2">mut </span>locks = Vec::new();
+<a href=#1338 id=1338 data-nosnippet>1338</a>        <span class="kw">let </span><span class="kw-2">mut </span>lock_groups = Vec::new();
+<a href=#1339 id=1339 data-nosnippet>1339</a>        <span class="kw">let </span><span class="kw-2">mut </span>setup = String::new();
+<a href=#1340 id=1340 data-nosnippet>1340</a>        <span class="kw">let </span><span class="kw-2">mut </span>consumed = Vec::new();
+<a href=#1341 id=1341 data-nosnippet>1341</a>        <span class="kw">for </span>w <span class="kw">in </span><span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">? </span>{
+<a href=#1342 id=1342 data-nosnippet>1342</a>            <span class="kw">let </span>n = <span class="kw-2">&amp;</span>w.name;
+<a href=#1343 id=1343 data-nosnippet>1343</a>            <span class="kw">let </span>rt = w.kind.rust_type();
+<a href=#1344 id=1344 data-nosnippet>1344</a>            params.push(<span class="macro">quote!</span>(#n:#rt));
+<a href=#1345 id=1345 data-nosnippet>1345</a>            raw_params.push(<span class="macro">format!</span>(<span class="string">"{n}: {}"</span>, w.kind.kotlin_type()));
+<a href=#1346 id=1346 data-nosnippet>1346</a>        }
+<a href=#1347 id=1347 data-nosnippet>1347</a>        <span class="kw">for </span>input <span class="kw">in </span>f.input_conversions()<span class="question-mark">? </span>{
+<a href=#1348 id=1348 data-nosnippet>1348</a>            <span class="kw">let </span>code = input.kotlin(<span class="kw-2">&amp;</span>kotlin_context)<span class="question-mark">?</span>;
+<a href=#1349 id=1349 data-nosnippet>1349</a>            kt_params.extend(code.parameters);
+<a href=#1350 id=1350 data-nosnippet>1350</a>            kt_args.extend(code.arguments);
+<a href=#1351 id=1351 data-nosnippet>1351</a>            locks.extend(code.locks);
+<a href=#1352 id=1352 data-nosnippet>1352</a>            lock_groups.extend(code.lock_groups);
+<a href=#1353 id=1353 data-nosnippet>1353</a>            <span class="kw">for </span>binding <span class="kw">in </span>code.setup {
+<a href=#1354 id=1354 data-nosnippet>1354</a>                setup.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"val {} = {}\n"</span>, binding.name, binding.expression));
+<a href=#1355 id=1355 data-nosnippet>1355</a>            }
+<a href=#1356 id=1356 data-nosnippet>1356</a>            consumed.extend(code.consumed);
+<a href=#1357 id=1357 data-nosnippet>1357</a>        }
+<a href=#1358 id=1358 data-nosnippet>1358</a>        <span class="kw">if </span>kt_args.len() != <span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">?</span>.len() {
+<a href=#1359 id=1359 data-nosnippet>1359</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin input argument/parameter count differs"</span>.into());
+<a href=#1360 id=1360 data-nosnippet>1360</a>        }
+<a href=#1361 id=1361 data-nosnippet>1361</a>        <span class="kw">let </span>has_consumes = !consumed.is_empty();
+<a href=#1362 id=1362 data-nosnippet>1362</a>        <span class="kw">let </span>has_acknowledgement = f
+<a href=#1363 id=1363 data-nosnippet>1363</a>            .input_conversions()<span class="question-mark">?
+<a href=#1364 id=1364 data-nosnippet>1364</a>            </span>.iter()
+<a href=#1365 id=1365 data-nosnippet>1365</a>            .map(|i| {
+<a href=#1366 id=1366 data-nosnippet>1366</a>                i.code_fragment_slot(
+<a href=#1367 id=1367 data-nosnippet>1367</a>                    prebindgen_conversions::InputFragment::Acknowledge { context: <span class="kw-2">&amp;</span>context },
+<a href=#1368 id=1368 data-nosnippet>1368</a>                    <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(()),
+<a href=#1369 id=1369 data-nosnippet>1369</a>                )
+<a href=#1370 id=1370 data-nosnippet>1370</a>                .map(|code| code.to_string() != <span class="macro">quote!</span>(()).to_string())
+<a href=#1371 id=1371 data-nosnippet>1371</a>            })
+<a href=#1372 id=1372 data-nosnippet>1372</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
+<a href=#1373 id=1373 data-nosnippet>1373</a>            </span>.into_iter()
+<a href=#1374 id=1374 data-nosnippet>1374</a>            .any(|present| present);
+<a href=#1375 id=1375 data-nosnippet>1375</a>        <span class="kw">if </span>has_acknowledgement != has_consumes {
+<a href=#1376 id=1376 data-nosnippet>1376</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"JNI acknowledgement does not match slot ownership updates"</span>.into());
+<a href=#1377 id=1377 data-nosnippet>1377</a>        }
+<a href=#1378 id=1378 data-nosnippet>1378</a>        <span class="kw">if </span>has_consumes {
+<a href=#1379 id=1379 data-nosnippet>1379</a>            params.push(
+<a href=#1380 id=1380 data-nosnippet>1380</a>                <span class="macro">quote!</span>(#ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray&lt;<span class="lifetime">'local</span>&gt;),
+<a href=#1381 id=1381 data-nosnippet>1381</a>            );
+<a href=#1382 id=1382 data-nosnippet>1382</a>            raw_params.push(<span class="string">"ownership: BooleanArray"</span>.into());
+<a href=#1383 id=1383 data-nosnippet>1383</a>            kt_args.push(<span class="string">"ownership"</span>.into());
+<a href=#1384 id=1384 data-nosnippet>1384</a>        }
+<a href=#1385 id=1385 data-nosnippet>1385</a>        <span class="kw">if </span>callback {
+<a href=#1386 id=1386 data-nosnippet>1386</a>            <span class="kw">let </span>sink = names.name(
+<a href=#1387 id=1387 data-nosnippet>1387</a>                <span class="string">"SequenceSink"</span>,
+<a href=#1388 id=1388 data-nosnippet>1388</a>                <span class="kw-2">&amp;</span>f.name.to_string(),
+<a href=#1389 id=1389 data-nosnippet>1389</a>                <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>names::path_identity(<span class="kw-2">&amp;</span>f.path), <span class="kw-2">&amp;</span>f.name.to_string()],
+<a href=#1390 id=1390 data-nosnippet>1390</a>            )<span class="question-mark">?</span>;
+<a href=#1391 id=1391 data-nosnippet>1391</a>            <span class="kw">let </span>(<span class="kw">_</span>, element, <span class="kw">_</span>) =
+<a href=#1392 id=1392 data-nosnippet>1392</a>                sequence::return_sequence(<span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success)
+<a href=#1393 id=1393 data-nosnippet>1393</a>                    .ok_or(<span class="string">"missing callback sequence"</span>)<span class="question-mark">?</span>;
+<a href=#1394 id=1394 data-nosnippet>1394</a>            <span class="kw">let </span>fields = <span class="kw">crate</span>::group::row_fields(element)
+<a href=#1395 id=1395 data-nosnippet>1395</a>                .enumerate()
+<a href=#1396 id=1396 data-nosnippet>1396</a>                .map(|(i, w)| <span class="macro">format!</span>(<span class="string">"v{i}: {}"</span>, w.kind.kotlin_type()))
+<a href=#1397 id=1397 data-nosnippet>1397</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#1398 id=1398 data-nosnippet>1398</a>            native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#1399 id=1399 data-nosnippet>1399</a>                <span class="string">"    internal fun interface {sink} {{ fun run({}) }}\n"</span>,
+<a href=#1400 id=1400 data-nosnippet>1400</a>                fields.join(<span class="string">", "</span>)
+<a href=#1401 id=1401 data-nosnippet>1401</a>            ));
+<a href=#1402 id=1402 data-nosnippet>1402</a>            params.push(
+<a href=#1403 id=1403 data-nosnippet>1403</a>                <span class="macro">quote!</span>(__pb_callback: ::prebindgen_jni_runtime::jni::objects::JObject&lt;<span class="lifetime">'local</span>&gt;),
+<a href=#1404 id=1404 data-nosnippet>1404</a>            );
+<a href=#1405 id=1405 data-nosnippet>1405</a>            raw_params.push(<span class="macro">format!</span>(<span class="string">"callback: {sink}"</span>));
+<a href=#1406 id=1406 data-nosnippet>1406</a>            <span class="kw">let </span>names = (<span class="number">0</span>..fields.len())
+<a href=#1407 id=1407 data-nosnippet>1407</a>                .map(|i| <span class="macro">format!</span>(<span class="string">"v{i}"</span>))
+<a href=#1408 id=1408 data-nosnippet>1408</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#1409 id=1409 data-nosnippet>1409</a>                .join(<span class="string">", "</span>);
+<a href=#1410 id=1410 data-nosnippet>1410</a>            setup.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"val __pb_rows = kotlin.collections.mutableListOf&lt;kotlin.Array&lt;kotlin.Any?&gt;&gt;()\nval __pb_sink = {prefix}.JNINative.{sink} {{ {names} -&gt; __pb_rows.add(kotlin.arrayOf&lt;kotlin.Any?&gt;({names})); kotlin.Unit }}\n"</span>));
+<a href=#1411 id=1411 data-nosnippet>1411</a>            kt_args.push(<span class="string">"__pb_sink"</span>.into());
+<a href=#1412 id=1412 data-nosnippet>1412</a>            params.push(<span class="macro">quote!</span>(__pb_output_accepted: ::prebindgen_jni_runtime::jni::objects::JBooleanArray&lt;<span class="lifetime">'local</span>&gt;));
+<a href=#1413 id=1413 data-nosnippet>1413</a>            raw_params.push(<span class="string">"outputAccepted: BooleanArray"</span>.into());
+<a href=#1414 id=1414 data-nosnippet>1414</a>            setup.push_str(<span class="string">"val __pb_outputAccepted = BooleanArray(1)\n"</span>);
+<a href=#1415 id=1415 data-nosnippet>1415</a>            kt_args.push(<span class="string">"__pb_outputAccepted"</span>.into());
+<a href=#1416 id=1416 data-nosnippet>1416</a>        }
+<a href=#1417 id=1417 data-nosnippet>1417</a>        <span class="kw">let </span>slots: usize = usize::from(has_consumes)
+<a href=#1418 id=1418 data-nosnippet>1418</a>            + <span class="number">2 </span>* usize::from(callback)
+<a href=#1419 id=1419 data-nosnippet>1419</a>            + <span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">?
+<a href=#1420 id=1420 data-nosnippet>1420</a>                </span>.map(|w| w.kind.parameter_slots())
+<a href=#1421 id=1421 data-nosnippet>1421</a>                .sum::&lt;usize&gt;();
+<a href=#1422 id=1422 data-nosnippet>1422</a>        <span class="kw">if </span>slots &gt; <span class="number">255 </span>{
+<a href=#1423 id=1423 data-nosnippet>1423</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
+<a href=#1424 id=1424 data-nosnippet>1424</a>                <span class="string">"`{source}` needs {slots} JVM parameter slots; the limit is 255"
+<a href=#1425 id=1425 data-nosnippet>1425</a>            </span>));
+<a href=#1426 id=1426 data-nosnippet>1426</a>        }
+<a href=#1427 id=1427 data-nosnippet>1427</a>        <span class="comment">// Prepared buffer objects and collection carriers live until packet
+<a href=#1428 id=1428 data-nosnippet>1428</a>        // delivery. Include the result packet, a boxing class lookup and the
+<a href=#1429 id=1429 data-nosnippet>1429</a>        // temporary boxed value. JNI class lookups themselves create local refs.
+<a href=#1430 id=1430 data-nosnippet>1430</a>        // JNI guarantees 16 spare local slots; small outputs need no extra call.
+<a href=#1431 id=1431 data-nosnippet>1431</a>        </span><span class="kw">let </span>reference_capacity = std::iter::once(logical)
+<a href=#1432 id=1432 data-nosnippet>1432</a>            .chain(outcomes.source_error.iter())
+<a href=#1433 id=1433 data-nosnippet>1433</a>            .map(|node| {
+<a href=#1434 id=1434 data-nosnippet>1434</a>                <span class="kw">crate</span>::group::result_packet_fields(node)
+<a href=#1435 id=1435 data-nosnippet>1435</a>                    .filter(|w| w.kind.is_reference())
+<a href=#1436 id=1436 data-nosnippet>1436</a>                    .count()
+<a href=#1437 id=1437 data-nosnippet>1437</a>                    + <span class="number">3
+<a href=#1438 id=1438 data-nosnippet>1438</a>            </span>})
+<a href=#1439 id=1439 data-nosnippet>1439</a>            .max()
+<a href=#1440 id=1440 data-nosnippet>1440</a>            .unwrap_or(<span class="number">3</span>);
+<a href=#1441 id=1441 data-nosnippet>1441</a>        <span class="kw">let </span>reserve_outputs = <span class="kw">if </span>reference_capacity &gt; <span class="number">16 </span>{
+<a href=#1442 id=1442 data-nosnippet>1442</a>            <span class="kw">let </span>capacity =
+<a href=#1443 id=1443 data-nosnippet>1443</a>                i32::try_from(reference_capacity).map_err(|<span class="kw">_</span>| <span class="string">"too many JNI reference outputs"</span>)<span class="question-mark">?</span>;
+<a href=#1444 id=1444 data-nosnippet>1444</a>            <span class="macro">quote!</span>(#env.ensure_local_capacity(#capacity).map_err(|e|e.to_string())<span class="question-mark">?</span>;)
+<a href=#1445 id=1445 data-nosnippet>1445</a>        } <span class="kw">else </span>{
+<a href=#1446 id=1446 data-nosnippet>1446</a>            TokenStream::new()
+<a href=#1447 id=1447 data-nosnippet>1447</a>        };
+<a href=#1448 id=1448 data-nosnippet>1448</a>        <span class="kw">let </span>body = prebindgen_conversions::staged::emit_call(
+<a href=#1449 id=1449 data-nosnippet>1449</a>            f,
+<a href=#1450 id=1450 data-nosnippet>1450</a>            <span class="kw-2">&amp;</span>context,
+<a href=#1451 id=1451 data-nosnippet>1451</a>            <span class="kw-2">&amp;</span>source,
+<a href=#1452 id=1452 data-nosnippet>1452</a>            <span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(::prebindgen_jni_runtime::jni::sys::jobjectArray),
+<a href=#1453 id=1453 data-nosnippet>1453</a>            <span class="kw-2">&amp;</span><span class="kw">crate</span>::group::function_parameters(f)<span class="question-mark">?
+<a href=#1454 id=1454 data-nosnippet>1454</a>                </span>.map(|w| w.name.clone())
+<a href=#1455 id=1455 data-nosnippet>1455</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#1456 id=1456 data-nosnippet>1456</a>        )<span class="question-mark">?</span>;
+<a href=#1457 id=1457 data-nosnippet>1457</a>        <span class="kw">let </span>body = <span class="kw">if </span>callback {
+<a href=#1458 id=1458 data-nosnippet>1458</a>            <span class="macro">quote!</span>(<span class="kw">if </span>#env.get_array_length(<span class="kw-2">&amp;</span>__pb_output_accepted).map_err(|e|e.to_string())<span class="question-mark">? </span>!= <span class="number">1 </span>{<span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"invalid sequence output acknowledgement"</span>.into());} <span class="kw">if </span>__pb_callback.is_null(){<span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"null sequence callback"</span>.into());} #body)
+<a href=#1459 id=1459 data-nosnippet>1459</a>        } <span class="kw">else </span>{
+<a href=#1460 id=1460 data-nosnippet>1460</a>            body
+<a href=#1461 id=1461 data-nosnippet>1461</a>        };
+<a href=#1462 id=1462 data-nosnippet>1462</a>        <span class="kw">let </span>fold = <span class="kw">if </span>callback {
+<a href=#1463 id=1463 data-nosnippet>1463</a>            <span class="prelude-val">Some</span>(sequence_callback::fold(
+<a href=#1464 id=1464 data-nosnippet>1464</a>                <span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success,
+<a href=#1465 id=1465 data-nosnippet>1465</a>                <span class="kw-2">&amp;</span>kotlin_context,
+<a href=#1466 id=1466 data-nosnippet>1466</a>            )<span class="question-mark">?</span>)
+<a href=#1467 id=1467 data-nosnippet>1467</a>        } <span class="kw">else </span>{
+<a href=#1468 id=1468 data-nosnippet>1468</a>            <span class="prelude-val">None
+<a href=#1469 id=1469 data-nosnippet>1469</a>        </span>};
+<a href=#1470 id=1470 data-nosnippet>1470</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(fold) = <span class="kw-2">&amp;</span>fold {
+<a href=#1471 id=1471 data-nosnippet>1471</a>            setup.push_str(<span class="kw-2">&amp;</span>fold.discard);
+<a href=#1472 id=1472 data-nosnippet>1472</a>        }
+<a href=#1473 id=1473 data-nosnippet>1473</a>        <span class="kw">let </span><span class="kw-2">mut </span>kotlin_output = <span class="kw">match </span><span class="kw-2">&amp;</span>fold {
+<a href=#1474 id=1474 data-nosnippet>1474</a>            <span class="prelude-val">Some</span>(fold) =&gt; fold.output.clone(),
+<a href=#1475 id=1475 data-nosnippet>1475</a>            <span class="prelude-val">None </span>=&gt; f.output_conversion()<span class="question-mark">?</span>.kotlin(<span class="kw-2">&amp;</span>kotlin_context)<span class="question-mark">?</span>,
+<a href=#1476 id=1476 data-nosnippet>1476</a>        };
+<a href=#1477 id=1477 data-nosnippet>1477</a>        kotlin::remap_output(
+<a href=#1478 id=1478 data-nosnippet>1478</a>            <span class="kw-2">&amp;mut </span>kotlin_output,
+<a href=#1479 id=1479 data-nosnippet>1479</a>            kotlin_context.result,
+<a href=#1480 id=1480 data-nosnippet>1480</a>            kotlin_context.result,
+<a href=#1481 id=1481 data-nosnippet>1481</a>            <span class="number">1</span>,
+<a href=#1482 id=1482 data-nosnippet>1482</a>            <span class="kw">crate</span>::group::result_packet_fields(<span class="kw-2">&amp;</span>f.output_conversion()<span class="question-mark">?</span>.output_outcomes().success)
+<a href=#1483 id=1483 data-nosnippet>1483</a>                .len(),
+<a href=#1484 id=1484 data-nosnippet>1484</a>        );
+<a href=#1485 id=1485 data-nosnippet>1485</a>        <span class="kw">let </span>build_parameters = kotlin_output.callback_type_parameters()<span class="question-mark">?</span>;
+<a href=#1486 id=1486 data-nosnippet>1486</a>        <span class="kw">let </span>KotlinOutput {
+<a href=#1487 id=1487 data-nosnippet>1487</a>            delivered,
+<a href=#1488 id=1488 data-nosnippet>1488</a>            result_types,
+<a href=#1489 id=1489 data-nosnippet>1489</a>            output_locals,
+<a href=#1490 id=1490 data-nosnippet>1490</a>            materialize,
+<a href=#1491 id=1491 data-nosnippet>1491</a>            cleanup,
+<a href=#1492 id=1492 data-nosnippet>1492</a>            ..
+<a href=#1493 id=1493 data-nosnippet>1493</a>        } = kotlin_output;
+<a href=#1494 id=1494 data-nosnippet>1494</a>        <span class="kw">if </span>delivered.len() != result_types.len() {
+<a href=#1495 id=1495 data-nosnippet>1495</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin output expression/type count differs"</span>.into());
+<a href=#1496 id=1496 data-nosnippet>1496</a>        }
+<a href=#1497 id=1497 data-nosnippet>1497</a>        rust.extend(<span class="macro">quote!</span>{
+<a href=#1498 id=1498 data-nosnippet>1498</a>   <span class="attr">#[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
+<a href=#1499 id=1499 data-nosnippet>1499</a>   #[doc = <span class="string">"# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."</span>]
+<a href=#1500 id=1500 data-nosnippet>1500</a>#[no_mangle]</span><span class="kw">pub unsafe extern </span><span class="string">"system" </span><span class="kw">fn </span>#sym&lt;<span class="lifetime">'local</span>&gt;(<span class="kw-2">mut </span>#env: ::prebindgen_jni_runtime::jni::JNIEnv&lt;<span class="lifetime">'local</span>&gt;,_class: ::prebindgen_jni_runtime::jni::objects::JClass&lt;<span class="lifetime">'local</span>&gt;,#(#params),<span class="kw-2">*</span>)-&gt;::prebindgen_jni_runtime::jni::sys::jobjectArray{
+<a href=#1501 id=1501 data-nosnippet>1501</a>    <span class="attr">#[allow(unused_mut)]
+<a href=#1502 id=1502 data-nosnippet>1502</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>domain_output = <span class="prelude-val">None</span>;
+<a href=#1503 id=1503 data-nosnippet>1503</a>    <span class="kw">match </span>::prebindgen_runtime::boundary(||{
+<a href=#1504 id=1504 data-nosnippet>1504</a>     #reserve_outputs
+<a href=#1505 id=1505 data-nosnippet>1505</a>     #body
+<a href=#1506 id=1506 data-nosnippet>1506</a>    }){<span class="prelude-val">Ok</span>(result)=&gt;result,<span class="prelude-val">Err</span>(e)=&gt;{
+<a href=#1507 id=1507 data-nosnippet>1507</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(result) = domain_output { result } <span class="kw">else </span>{
+<a href=#1508 id=1508 data-nosnippet>1508</a>            <span class="kw">match </span>::prebindgen_jni_runtime::binding_packet(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>e) {
+<a href=#1509 id=1509 data-nosnippet>1509</a>                <span class="prelude-val">Ok</span>(result) =&gt; result.into_raw(),
+<a href=#1510 id=1510 data-nosnippet>1510</a>                <span class="prelude-val">Err</span>(message) =&gt; { ::prebindgen_jni_runtime::fail(<span class="kw-2">&amp;mut </span>#env, <span class="kw-2">&amp;</span>message); std::ptr::null_mut() }
+<a href=#1511 id=1511 data-nosnippet>1511</a>            }
+<a href=#1512 id=1512 data-nosnippet>1512</a>        }
+<a href=#1513 id=1513 data-nosnippet>1513</a>    }}
+<a href=#1514 id=1514 data-nosnippet>1514</a>   }
+<a href=#1515 id=1515 data-nosnippet>1515</a>  });
+<a href=#1516 id=1516 data-nosnippet>1516</a>        native.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#1517 id=1517 data-nosnippet>1517</a>            <span class="string">"    @JvmStatic external fun {method}({}): Array&lt;Any?&gt;\n"</span>,
+<a href=#1518 id=1518 data-nosnippet>1518</a>            raw_params.join(<span class="string">", "</span>)
+<a href=#1519 id=1519 data-nosnippet>1519</a>        ));
+<a href=#1520 id=1520 data-nosnippet>1520</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>generic, ret, end) = <span class="kw">match </span>delivered.len() {
+<a href=#1521 id=1521 data-nosnippet>1521</a>            <span class="number">0 </span>=&gt; (<span class="string">""</span>, <span class="string">"Unit"</span>.into(), <span class="string">"Unit"</span>.into()),
+<a href=#1522 id=1522 data-nosnippet>1522</a>            <span class="number">1 </span>=&gt; (<span class="string">""</span>, result_types[<span class="number">0</span>].clone(), delivered[<span class="number">0</span>].clone()),
+<a href=#1523 id=1523 data-nosnippet>1523</a>            <span class="kw">_ </span>=&gt; {
+<a href=#1524 id=1524 data-nosnippet>1524</a>                kt_params.push(<span class="macro">format!</span>(<span class="string">"build: ({build_parameters}) -&gt; R"</span>));
+<a href=#1525 id=1525 data-nosnippet>1525</a>                (
+<a href=#1526 id=1526 data-nosnippet>1526</a>                    <span class="string">"&lt;R&gt; "</span>,
+<a href=#1527 id=1527 data-nosnippet>1527</a>                    <span class="string">"R"</span>.into(),
+<a href=#1528 id=1528 data-nosnippet>1528</a>                    <span class="macro">format!</span>(<span class="string">"build({})"</span>, delivered.join(<span class="string">", "</span>)),
+<a href=#1529 id=1529 data-nosnippet>1529</a>                )
+<a href=#1530 id=1530 data-nosnippet>1530</a>            }
+<a href=#1531 id=1531 data-nosnippet>1531</a>        };
+<a href=#1532 id=1532 data-nosnippet>1532</a>        <span class="kw">if </span>fold.is_some() {
+<a href=#1533 id=1533 data-nosnippet>1533</a>            generic = <span class="string">"&lt;A&gt; "</span>;
+<a href=#1534 id=1534 data-nosnippet>1534</a>            kt_params.push(<span class="string">"initial: A"</span>.into());
+<a href=#1535 id=1535 data-nosnippet>1535</a>        }
+<a href=#1536 id=1536 data-nosnippet>1536</a>        <span class="kw">let </span>failure = kotlin_context.failure;
+<a href=#1537 id=1537 data-nosnippet>1537</a>        <span class="kw">let </span>result = kotlin_context.result;
+<a href=#1538 id=1538 data-nosnippet>1538</a>        <span class="kw">let </span>end = <span class="kw">if </span>cleanup.is_empty() {
+<a href=#1539 id=1539 data-nosnippet>1539</a>            end
+<a href=#1540 id=1540 data-nosnippet>1540</a>        } <span class="kw">else </span>{
+<a href=#1541 id=1541 data-nosnippet>1541</a>            <span class="macro">format!</span>(<span class="string">"{output_locals}        try {{\n{materialize}            {end}\n        }} catch ({failure}: Throwable) {{\n{cleanup}            throw {failure}\n        }}"</span>)
+<a href=#1542 id=1542 data-nosnippet>1542</a>        };
+<a href=#1543 id=1543 data-nosnippet>1543</a>        <span class="kw">let </span>argument_locals = kt_args.iter().enumerate().map(|(i, arg)| <span class="macro">format!</span>(<span class="string">"val nativeArgument{i} = try {{ {arg} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid input\") }}"</span>)).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().join(<span class="string">"; "</span>);
+<a href=#1544 id=1544 data-nosnippet>1544</a>        <span class="kw">let </span>argument_names = (<span class="number">0</span>..kt_args.len())
+<a href=#1545 id=1545 data-nosnippet>1545</a>            .map(|i| <span class="macro">format!</span>(<span class="string">"nativeArgument{i}"</span>))
+<a href=#1546 id=1546 data-nosnippet>1546</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#1547 id=1547 data-nosnippet>1547</a>            .join(<span class="string">", "</span>);
+<a href=#1548 id=1548 data-nosnippet>1548</a>        <span class="kw">let </span>call =
+<a href=#1549 id=1549 data-nosnippet>1549</a>            <span class="macro">format!</span>(<span class="string">"run {{ {argument_locals}; {prefix}.JNINative.{method}({argument_names}) }}"</span>);
+<a href=#1550 id=1550 data-nosnippet>1550</a>        <span class="kw">let </span>call = <span class="kw">if </span>has_consumes {
+<a href=#1551 id=1551 data-nosnippet>1551</a>            <span class="macro">format!</span>(<span class="string">"val ownership = BooleanArray(1)\n        try {{ {call} }} finally {{ if (ownership[0]) {{ {} }} }}"</span>, consumed.join(<span class="string">"; "</span>))
+<a href=#1552 id=1552 data-nosnippet>1552</a>        } <span class="kw">else </span>{
+<a href=#1553 id=1553 data-nosnippet>1553</a>            call
+<a href=#1554 id=1554 data-nosnippet>1554</a>        };
+<a href=#1555 id=1555 data-nosnippet>1555</a>        <span class="kw">let </span>binding_name = <span class="kw">if </span>error.is_some() {
+<a href=#1556 id=1556 data-nosnippet>1556</a>            <span class="string">"onBindingError"
+<a href=#1557 id=1557 data-nosnippet>1557</a>        </span>} <span class="kw">else </span>{
+<a href=#1558 id=1558 data-nosnippet>1558</a>            <span class="string">"onError"
+<a href=#1559 id=1559 data-nosnippet>1559</a>        </span>};
+<a href=#1560 id=1560 data-nosnippet>1560</a>        <span class="kw">let </span>build = <span class="kw">if </span>delivered.len() &gt; <span class="number">1 </span>{
+<a href=#1561 id=1561 data-nosnippet>1561</a>            kt_params.pop()
+<a href=#1562 id=1562 data-nosnippet>1562</a>        } <span class="kw">else </span>{
+<a href=#1563 id=1563 data-nosnippet>1563</a>            <span class="prelude-val">None
+<a href=#1564 id=1564 data-nosnippet>1564</a>        </span>};
+<a href=#1565 id=1565 data-nosnippet>1565</a>        kt_params.push(<span class="macro">format!</span>(<span class="string">"{binding_name}: {prefix}.JniErrorHandler&lt;{ret}&gt; = {prefix}.JniErrorHandler {{ message -&gt; throw IllegalArgumentException(message) }}"</span>));
+<a href=#1566 id=1566 data-nosnippet>1566</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = error {
+<a href=#1567 id=1567 data-nosnippet>1567</a>            kt_params.push(error.parameter(<span class="kw-2">&amp;</span>ret, exception));
+<a href=#1568 id=1568 data-nosnippet>1568</a>        }
+<a href=#1569 id=1569 data-nosnippet>1569</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(build) = build {
+<a href=#1570 id=1570 data-nosnippet>1570</a>            kt_params.push(build);
+<a href=#1571 id=1571 data-nosnippet>1571</a>        }
+<a href=#1572 id=1572 data-nosnippet>1572</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(fold) = <span class="kw-2">&amp;</span>fold {
+<a href=#1573 id=1573 data-nosnippet>1573</a>            kt_params.push(fold.parameter.clone());
+<a href=#1574 id=1574 data-nosnippet>1574</a>        }
+<a href=#1575 id=1575 data-nosnippet>1575</a>        <span class="kw">let </span>call = <span class="kw">if </span>locks.is_empty() &amp;&amp; lock_groups.is_empty() {
+<a href=#1576 id=1576 data-nosnippet>1576</a>            call
+<a href=#1577 id=1577 data-nosnippet>1577</a>        } <span class="kw">else if </span>lock_groups.is_empty() &amp;&amp; locks.len() &lt;= <span class="number">3 </span>{
+<a href=#1578 id=1578 data-nosnippet>1578</a>            <span class="kw">use </span>std::fmt::Write <span class="kw">as _</span>;
+<a href=#1579 id=1579 data-nosnippet>1579</a>            <span class="comment">// Evaluate and validate each expression before taking any monitor.
+<a href=#1580 id=1580 data-nosnippet>1580</a>            </span><span class="kw">let </span>names = (<span class="number">0</span>..locks.len())
+<a href=#1581 id=1581 data-nosnippet>1581</a>                .map(|i| <span class="macro">format!</span>(<span class="string">"handle{i}"</span>))
+<a href=#1582 id=1582 data-nosnippet>1582</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#1583 id=1583 data-nosnippet>1583</a>            <span class="kw">let </span><span class="kw-2">mut </span>locals = String::new();
+<a href=#1584 id=1584 data-nosnippet>1584</a>            <span class="kw">for </span>(name, value) <span class="kw">in </span>names.iter().zip(<span class="kw-2">&amp;</span>locks) {
+<a href=#1585 id=1585 data-nosnippet>1585</a>                <span class="macro">write!</span>(locals, <span class="string">"val {name} = try {{ {value} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; "</span>).expect(<span class="string">"writing to a String"</span>);
+<a href=#1586 id=1586 data-nosnippet>1586</a>            }
+<a href=#1587 id=1587 data-nosnippet>1587</a>            <span class="macro">format!</span>(
+<a href=#1588 id=1588 data-nosnippet>1588</a>                <span class="string">"run {{ {locals}{prefix}.withHandleLocks({}) {{\n        {call}\n    }} }}"</span>,
+<a href=#1589 id=1589 data-nosnippet>1589</a>                names.join(<span class="string">", "</span>)
+<a href=#1590 id=1590 data-nosnippet>1590</a>            )
+<a href=#1591 id=1591 data-nosnippet>1591</a>        } <span class="kw">else </span>{
+<a href=#1592 id=1592 data-nosnippet>1592</a>            <span class="kw">let </span><span class="kw-2">mut </span>all_locks = <span class="kw">if </span>locks.is_empty() {
+<a href=#1593 id=1593 data-nosnippet>1593</a>                <span class="string">"kotlin.collections.emptyList&lt;Nothing&gt;()"</span>.to_string()
+<a href=#1594 id=1594 data-nosnippet>1594</a>            } <span class="kw">else </span>{
+<a href=#1595 id=1595 data-nosnippet>1595</a>                <span class="macro">format!</span>(<span class="string">"listOfNotNull({})"</span>, locks.join(<span class="string">", "</span>))
+<a href=#1596 id=1596 data-nosnippet>1596</a>            };
+<a href=#1597 id=1597 data-nosnippet>1597</a>            <span class="kw">for </span>group <span class="kw">in </span>lock_groups {
+<a href=#1598 id=1598 data-nosnippet>1598</a>                all_locks = <span class="macro">format!</span>(<span class="string">"({all_locks} + ({group}))"</span>);
+<a href=#1599 id=1599 data-nosnippet>1599</a>            }
+<a href=#1600 id=1600 data-nosnippet>1600</a>            <span class="macro">format!</span>(<span class="string">"run {{ val handles = try {{ {all_locks} }} catch (failure: IllegalArgumentException) {{ throw {prefix}.HandleValidationFailure(failure.message ?: \"invalid handle\") }}; {prefix}.withHandleLocks(handles) {{\n        {call}\n    }} }}"</span>)
+<a href=#1601 id=1601 data-nosnippet>1601</a>        };
+<a href=#1602 id=1602 data-nosnippet>1602</a>        <span class="kw">let </span>call = <span class="kw">if </span>callback {
+<a href=#1603 id=1603 data-nosnippet>1603</a>            <span class="macro">format!</span>(<span class="string">"try {{ {call} }} catch (failure: Throwable) {{ if (__pb_outputAccepted[0]) __pb_discard(failure); throw failure }}"</span>)
+<a href=#1604 id=1604 data-nosnippet>1604</a>        } <span class="kw">else </span>{
+<a href=#1605 id=1605 data-nosnippet>1605</a>            call
+<a href=#1606 id=1606 data-nosnippet>1606</a>        };
+<a href=#1607 id=1607 data-nosnippet>1607</a>        <span class="comment">// Catch local handle validation separately from the native invocation: pending JVM
+<a href=#1608 id=1608 data-nosnippet>1608</a>        // exceptions and exceptions from user callbacks must retain their original identity.
+<a href=#1609 id=1609 data-nosnippet>1609</a>        </span><span class="kw">let </span>call = <span class="macro">format!</span>(<span class="string">"try {{ {call} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}"</span>);
+<a href=#1610 id=1610 data-nosnippet>1610</a>        <span class="kw">let </span>domain = <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = error {
+<a href=#1611 id=1611 data-nosnippet>1611</a>            <span class="kw">let </span>delivery = errors::delivery(error, <span class="kw-2">&amp;</span>kotlin_context)<span class="question-mark">?</span>;
+<a href=#1612 id=1612 data-nosnippet>1612</a>            <span class="macro">format!</span>(<span class="string">"true -&gt; {{ {delivery} }}"</span>)
+<a href=#1613 id=1613 data-nosnippet>1613</a>        } <span class="kw">else </span>{
+<a href=#1614 id=1614 data-nosnippet>1614</a>            String::new()
+<a href=#1615 id=1615 data-nosnippet>1615</a>        };
+<a href=#1616 id=1616 data-nosnippet>1616</a>        <span class="kw">let </span>callback_failure = <span class="kw">if </span>callback {
+<a href=#1617 id=1617 data-nosnippet>1617</a>            <span class="macro">format!</span>(<span class="string">"if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException({result}[0] as String)); "</span>)
+<a href=#1618 id=1618 data-nosnippet>1618</a>        } <span class="kw">else </span>{
+<a href=#1619 id=1619 data-nosnippet>1619</a>            String::new()
+<a href=#1620 id=1620 data-nosnippet>1620</a>        };
+<a href=#1621 id=1621 data-nosnippet>1621</a>        <span class="kw">let </span>native_call = <span class="macro">format!</span>(<span class="string">"val {result} = {call}\n    when ({result}[0]) {{\n        null -&gt; {{ {end} }}\n        {domain}\n        is String -&gt; {{ {callback_failure}{binding_name}.run({result}[0] as String) }}\n        else -&gt; error(\"invalid native result channel\")\n    }}"</span>);
+<a href=#1622 id=1622 data-nosnippet>1622</a>        <span class="kw">let </span>text = packages.entry(pkg.clone()).or_default();
+<a href=#1623 id=1623 data-nosnippet>1623</a>        text.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#1624 id=1624 data-nosnippet>1624</a>            <span class="string">"{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n"</span>,
+<a href=#1625 id=1625 data-nosnippet>1625</a>            kt_params.join(<span class="string">", "</span>)
+<a href=#1626 id=1626 data-nosnippet>1626</a>        ));
+<a href=#1627 id=1627 data-nosnippet>1627</a>    }
+<a href=#1628 id=1628 data-nosnippet>1628</a>    native.push_str(<span class="string">"}\n"</span>);
+<a href=#1629 id=1629 data-nosnippet>1629</a>    files.insert(<span class="macro">format!</span>(<span class="string">"{}/JNINative.kt"</span>, prefix.replace(<span class="string">'.'</span>, <span class="string">"/"</span>)), native);
+<a href=#1630 id=1630 data-nosnippet>1630</a>    <span class="kw">for </span>(pkg, body) <span class="kw">in </span>packages {
+<a href=#1631 id=1631 data-nosnippet>1631</a>        <span class="kw">let </span>path = <span class="macro">format!</span>(<span class="string">"{}/Functions.kt"</span>, pkg.replace(<span class="string">'.'</span>, <span class="string">"/"</span>));
+<a href=#1632 id=1632 data-nosnippet>1632</a>        <span class="kw">if </span>files
+<a href=#1633 id=1633 data-nosnippet>1633</a>            .insert(
+<a href=#1634 id=1634 data-nosnippet>1634</a>                path,
+<a href=#1635 id=1635 data-nosnippet>1635</a>                <span class="macro">format!</span>(<span class="string">"@file:Suppress(\"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\")\npackage {pkg}\n\n{body}"</span>),
+<a href=#1636 id=1636 data-nosnippet>1636</a>            )
+<a href=#1637 id=1637 data-nosnippet>1637</a>            .is_some()
+<a href=#1638 id=1638 data-nosnippet>1638</a>        {
+<a href=#1639 id=1639 data-nosnippet>1639</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Kotlin file collision"</span>.into());
+<a href=#1640 id=1640 data-nosnippet>1640</a>        }
+<a href=#1641 id=1641 data-nosnippet>1641</a>    }
+<a href=#1642 id=1642 data-nosnippet>1642</a>    <span class="kw">let </span>guards = <span class="kw-2">&amp;</span>flat.guards;
+<a href=#1643 id=1643 data-nosnippet>1643</a>    rust.extend(<span class="macro">quote!</span>(#(#guards)<span class="kw-2">*</span>));
+<a href=#1644 id=1644 data-nosnippet>1644</a>    <span class="prelude-val">Ok</span>(JniGen {
+<a href=#1645 id=1645 data-nosnippet>1645</a>        rust: prebindgen_flat::rust_source(rust)<span class="question-mark">?</span>,
+<a href=#1646 id=1646 data-nosnippet>1646</a>        kotlin: files,
+<a href=#1647 id=1647 data-nosnippet>1647</a>    })
+<a href=#1648 id=1648 data-nosnippet>1648</a>}
+<a href=#1649 id=1649 data-nosnippet>1649</a>
+<a href=#1650 id=1650 data-nosnippet>1650</a><span class="attr">#[cfg(test)]
+<a href=#1651 id=1651 data-nosnippet>1651</a></span><span class="kw">mod </span>tests;
+<a href=#1652 id=1652 data-nosnippet>1652</a>
+<a href=#1653 id=1653 data-nosnippet>1653</a><span class="kw">fn </span>kotlin_condition(condition: <span class="kw-2">&amp;</span>prebindgen_declarations::Condition) -&gt; String {
+<a href=#1654 id=1654 data-nosnippet>1654</a>    <span class="kw">if </span>condition.<span class="number">0</span>.is_empty() {
+<a href=#1655 id=1655 data-nosnippet>1655</a>        <span class="kw">return </span><span class="string">"true"</span>.into();
+<a href=#1656 id=1656 data-nosnippet>1656</a>    }
+<a href=#1657 id=1657 data-nosnippet>1657</a>    condition
+<a href=#1658 id=1658 data-nosnippet>1658</a>        .<span class="number">0
+<a href=#1659 id=1659 data-nosnippet>1659</a>        </span>.iter()
+<a href=#1660 id=1660 data-nosnippet>1660</a>        .map(|(tag, index)| <span class="macro">format!</span>(<span class="string">"{tag} == {index}"</span>))
+<a href=#1661 id=1661 data-nosnippet>1661</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#1662 id=1662 data-nosnippet>1662</a>        .join(<span class="string">" &amp;&amp; "</span>)
+<a href=#1663 id=1663 data-nosnippet>1663</a>}
+<a href=#1664 id=1664 data-nosnippet>1664</a><span class="kw">fn </span>native_handle(prefix: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#1665 id=1665 data-nosnippet>1665</a>    <span class="macro">include_str!</span>(<span class="string">"native_handle.kt"</span>).replace(<span class="string">"PACKAGE"</span>, prefix)
+<a href=#1666 id=1666 data-nosnippet>1666</a>}
 </code></pre></div></section></main></body></html>
