@@ -30,7 +30,7 @@
 // callback types mirror the C closure structs. Item-level allows would be
 // captured into the `#[prebindgen]` records and drift the committed golden
 // bindings, so silence these lints crate-wide instead.
-#![allow(clippy::ptr_arg, clippy::type_complexity)]
+#![allow(clippy::ptr_arg, clippy::type_complexity, clippy::too_many_arguments)]
 
 // Disabled: unsupported by the current binding subset
 // use std::mem::MaybeUninit;

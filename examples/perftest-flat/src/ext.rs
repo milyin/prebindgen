@@ -1604,6 +1604,32 @@ pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
     (a.payloads.len() + b.payloads.len() + c.payloads.len()) as i64
 }
 
+/// Exercise a fixed set of nine addresses, including shared aliases and an
+/// optional input, while mutating existing storage without allocating.
+#[prebindgen]
+pub fn storage_accumulate_lengths(
+    target: &mut Storage,
+    a: &Storage,
+    b: &Storage,
+    c: &Storage,
+    d: &Storage,
+    e: &Storage,
+    f: &Storage,
+    g: &Storage,
+    h: Option<&Storage>,
+) -> i64 {
+    let lengths = storage_total_len(a, b, c)
+        + storage_total_len(d, e, f)
+        + storage_len(g)
+        + h.map(storage_len).unwrap_or(0);
+    let first = target
+        .payloads
+        .first_mut()
+        .expect("fixture requires a payload");
+    first.id += lengths;
+    first.id
+}
+
 // Disabled: unsupported by the current binding subset
 // /// All present labels, in storage order (`Vec<String>` **return** — the
 // /// single-leaf string fold).

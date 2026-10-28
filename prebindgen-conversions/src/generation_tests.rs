@@ -788,17 +788,18 @@ fn validate_resources(resources: &[Resource]) -> TokenStream {
         argument: quote!(()),
         resources: resources.to_vec(),
     };
-    let seen = syn::parse_quote!(seen);
-    let check = plan
+    let mut aliases = crate::staged::ParameterAliasCheck::default();
+    let contribution = plan
         .code_fragment_slot(
             InputFragment::CheckAliases {
                 context: &(),
-                seen: &seen,
+                check: &mut aliases,
             },
             &syn::parse_quote!(()),
         )
         .unwrap();
-    quote!(let mut #seen: Vec<(usize, bool)> = Vec::new(); #check;)
+    let check = aliases.emit().unwrap();
+    quote!(let _: () = #contribution; #check;)
 }
 
 #[derive(Debug)]
@@ -900,8 +901,8 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
         active: quote!(enabled),
     };
     let many = |access| Resource {
-        // Also exercises scratch-name hygiene in the isolated parameter path.
-        identity: ResourceIdentity::Many(quote!(__prebindgen_parameter_resources.iter().copied())),
+        // Dynamic-set scratch storage must not shadow this validation local.
+        identity: ResourceIdentity::Many(quote!(__prebindgen_resources.iter().copied())),
         access,
         active: quote!(enabled),
     };
@@ -962,7 +963,7 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
         }
         let name = format_ident!("{name}");
         wrappers.extend(quote! {
-            fn #name(enabled: bool, left: usize, __prebindgen_parameter_resources: &[usize]) -> Result<i32,String> { #body }
+            fn #name(enabled: bool, left: usize, __prebindgen_resources: &[usize]) -> Result<i32,String> { #body }
         });
     }
     let code = quote! {
@@ -1009,6 +1010,147 @@ fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
     let compile = std::process::Command::new("rustc")
         .args(["--edition=2021", "-O"])
         .arg(&path)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+    let run = std::process::Command::new(executable).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
+
+#[test]
+fn fixed_parameter_sets_allocate_nothing_and_reject_only_active_conflicts() {
+    use crate::staged::ParameterAliasCheck;
+    let mut wrappers = TokenStream::new();
+    let mut successes = TokenStream::new();
+    let mut conflicts = TokenStream::new();
+    for count in [1usize, 2, 3, 8, 9, 16] {
+        for shared in [true, false] {
+            let mut check = ParameterAliasCheck::default();
+            for index in 0..count {
+                check
+                    .include_parameter(
+                        &(),
+                        &[Resource {
+                            identity: ResourceIdentity::Single(
+                                quote!(__prebindgen_alias_0[#index]),
+                            ),
+                            active: quote!(__prebindgen_resources & (1u32 << #index) != 0),
+                            access: if shared || (count > 1 && index == 0) {
+                                Access::Shared
+                            } else if index % 2 == 0 {
+                                Access::Move
+                            } else {
+                                Access::Exclusive
+                            },
+                        }],
+                    )
+                    .unwrap();
+            }
+            let check = check.emit().unwrap();
+            assert!(!check.to_string().contains("Vec"), "{check}");
+            if shared || count <= 8 {
+                assert!(!check.to_string().contains("sort_unstable"), "{check}");
+            } else {
+                assert!(check.to_string().contains("sort_unstable"), "{check}");
+            }
+            if shared {
+                assert_eq!(check.to_string(), "()");
+            }
+            let name = format_ident!("fixed_{count}_{shared}");
+            wrappers.extend(quote! {
+                fn #name(__prebindgen_resources:u32, __prebindgen_alias_0:&[usize]) -> Result<(),String> {
+                    let _: () = #check;
+                    Ok(())
+                }
+            });
+            let active = (1u32 << count) - 1;
+            successes.extend(quote! {
+                assert_eq!(#name(#active, std::hint::black_box(&[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])),Ok(()));
+                assert_eq!(#name(0, &[]),Ok(()));
+            });
+            if count > 1 {
+                conflicts.extend(quote! {
+                    assert_eq!(#name(#active, &[0;16]).is_ok(),#shared);
+                    assert_eq!(#name(1, &[0;16]),Ok(()));
+                });
+            }
+        }
+    }
+    // A shared/shared duplicate remains legal inside a set that also has a
+    // distinct writer. Exercise both direct comparisons and the stack sort.
+    for count in [3usize, 9] {
+        let mut check = ParameterAliasCheck::default();
+        for index in 0..count {
+            check
+                .include_parameter(
+                    &(),
+                    &[Resource {
+                        identity: ResourceIdentity::Single(quote!(__prebindgen_resources[#index])),
+                        active: quote!(true),
+                        access: if index == 2 {
+                            Access::Exclusive
+                        } else {
+                            Access::Shared
+                        },
+                    }],
+                )
+                .unwrap();
+        }
+        let body = check.emit().unwrap();
+        let name = format_ident!("mixed_duplicates_{count}");
+        wrappers.extend(quote! {
+            fn #name(__prebindgen_resources:&[usize])->Result<(),String> {
+                let _: ()=#body;
+                Ok(())
+            }
+        });
+        successes.extend(quote! {
+            assert_eq!(#name(std::hint::black_box(&[7,7,9,10,11,12,13,14,15])),Ok(()));
+        });
+        conflicts.extend(quote! {
+            assert!(#name(&[7,7,7,10,11,12,13,14,15]).is_err());
+        });
+    }
+    let code = quote! {
+        use std::alloc::{GlobalAlloc, Layout, System};
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        struct Allocator;
+        static COUNTING: AtomicBool=AtomicBool::new(false);
+        static ALLOCATIONS: AtomicUsize=AtomicUsize::new(0);
+        #[global_allocator] static ALLOCATOR:Allocator=Allocator;
+        unsafe impl GlobalAlloc for Allocator {
+            unsafe fn alloc(&self,layout:Layout)->*mut u8 {
+                if COUNTING.load(Ordering::Relaxed) {ALLOCATIONS.fetch_add(1,Ordering::Relaxed);}
+                System.alloc(layout)
+            }
+            unsafe fn dealloc(&self,p:*mut u8,layout:Layout) {System.dealloc(p,layout);}
+        }
+        #wrappers
+        fn main() {
+            COUNTING.store(true,Ordering::Relaxed);
+            for _ in 0..1000 { #successes }
+            COUNTING.store(false,Ordering::Relaxed);
+            assert_eq!(ALLOCATIONS.load(Ordering::Relaxed),0);
+            #conflicts
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("fixed_aliases.rs");
+    let executable = dir.path().join("fixed_aliases");
+    std::fs::write(&source, code.to_string()).unwrap();
+    let compile = std::process::Command::new("rustc")
+        .args(["--edition=2021", "-O"])
+        .arg(&source)
         .arg("-o")
         .arg(&executable)
         .output()

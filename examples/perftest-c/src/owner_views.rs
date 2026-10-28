@@ -11,6 +11,9 @@ unsafe fn finish(owner: *mut GetterOwner, before: &[usize]) {
 
 #[test]
 fn owner_backed_outputs_preserve_provenance_and_cleanup() {
+    let _getters = super::GETTER_TESTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     unsafe {
         let before = perftest_flat::getter_counts();
         let mut child = std::ptr::null();

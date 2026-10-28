@@ -467,7 +467,17 @@ projections or constructions itself. Wrapper writers never interpret these paths
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional staged plans describe allocation participation using emitted Rust
-boolean expressions. Their assembly helper checks allocation aliases. It omits alias bookkeeping when only one parameter supplies a single address or shared-only accesses; dynamic exclusive sets still check internal aliases. JNI slots
+boolean expressions. Their assembly helper checks allocation aliases across all parameters.
+Shared-only calls emit no alias check. Fixed sets of up to eight addresses use
+only the necessary pairwise comparisons; larger fixed sets sort a stack array.
+Dynamic sets with exclusive accesses retain a vector-based check, sorted once
+per call. Active conditions still guard every address read, and all checks run
+before ownership acknowledgement or acquisition. The optional staged protocol's
+`CheckAliases` request registers parameter accesses in a generation-time
+`ParameterAliasCheck`; emit its expression once after input validation. Custom
+staged conversions should use `CheckAliases { context, check }` and include their
+parameter's access requirements; this replaces the previous per-parameter `seen`
+vector field. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.

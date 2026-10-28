@@ -25,6 +25,15 @@ fun checkOwnership() {
     check(storageContains(c, 9) && !c.isClosed)
     // Repeated shared borrows are legal. All monitors use one ordering.
     check(storageTotalLen(a, a, a) == 3L)
+    // Nine fixed accesses exercise stack sorting and optional inactive storage.
+    val target = storageWithPayload(0, 0, 0.0, false)
+    check(storageAccumulateLengths(target, a, a, a, a, a, a, a, null) == 7L)
+    check(storageAccumulateLengths(target, a, a, a, a, a, a, a, a) == 15L)
+    rejected { storageAccumulateLengths(target, target, a, a, a, a, a, a, null) }
+    rejected { storageAccumulateLengths(target, a, a, a, a, a, a, a, target) }
+    check(storageContains(target, 15))
+    target.close()
+
     val failure = AtomicReference<Throwable?>()
     val start = CountDownLatch(1)
     val readers = listOf(listOf(a, b, c), listOf(c, b, a)).map { order ->
