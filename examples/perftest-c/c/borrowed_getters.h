@@ -1,11 +1,11 @@
 /* Ordinary value projections and explicitly requested owning copies. */
 static void check_borrowed_getters(void) {
     int64_t field_number = 0;
-    perftest_buffer field_text = {0};
+    perftest_owned_string field_text = {0};
     perftest_getter_owner *field_owner = perftest_getter_fields_new(&field_number, &field_text);
     perftest_drop_getter_owner(field_owner);
-    assert(field_number == 31 && field_text.len == 5 && memcmp(field_text.data, "first", 5) == 0);
-    perftest_free_buffer(field_text);
+    assert(field_number == 31 && text_view(&field_text).len == 5 && memcmp(text_view(&field_text).data, "first", 5) == 0);
+    perftest_drop_owned_string(&field_text);
     perftest_getter_leaf *second_clone = NULL;
     perftest_getter_leaf *first_clone = perftest_getter_two_clones_new(&second_clone);
     assert(first_clone != second_clone && perftest_getter_leaf_id(first_clone) == 19);
@@ -16,25 +16,22 @@ static void check_borrowed_getters(void) {
     for (uint8_t present = 0; present <= 1; ++present) {
         perftest_getter_counts_ret_w0_rows before = perftest_getter_counts();
         int64_t number = 0;
-        perftest_buffer name = {0};
+        perftest_buffer_view name = {0};
         perftest_getter_leaf *leaf = NULL;
         perftest_getter_owner *owner = perftest_getter_owner_new(present, &number, &name, &leaf);
         assert(number == 71 && name.len == sizeof(expected)-1);
         assert(memcmp(name.data, expected, name.len) == 0);
-        perftest_free_buffer(name);
         assert(perftest_getter_owner_id(owner) == 71 && perftest_getter_leaf_id(leaf) == 19);
         assert(perftest_getter_owner_read(owner, &name) == 71);
         assert(name.len == sizeof(expected)-1);
         assert(memcmp(name.data, expected, name.len) == 0);
-        perftest_free_buffer(name);
         number = -1;
-        name = (perftest_buffer){0};
+        name = (perftest_buffer_view){0};
         assert(perftest_getter_owner_optional(owner, &number, &name) == present);
         if (present) {
             assert(number == 71 && name.len == sizeof(expected)-1);
             assert(memcmp(name.data, expected, name.len) == 0);
-            perftest_free_buffer(name);
-        } else { assert(number == 0 && name.data == NULL && name.len == 0); }
+            } else { assert(number == 0 && name.data == NULL && name.len == 0); }
         perftest_drop_getter_owner(owner);
         assert(perftest_getter_leaf_id(leaf) == 19);
         perftest_drop_getter_leaf(leaf);
@@ -59,10 +56,9 @@ static void check_borrowed_pointers(void) {
     assert(perftest_getter_static_child((perftest_buffer){NULL, 0}) == fixed);
     for (uint8_t present = 0; present <= 1; ++present) {
         int64_t number = 0;
-        perftest_buffer name = {0};
+        perftest_buffer_view name = {0};
         perftest_getter_leaf *leaf = NULL;
         perftest_getter_owner *owner = perftest_getter_owner_new(present, &number, &name, &leaf);
-        perftest_free_buffer(name);
         const perftest_getter_child *child = perftest_getter_owner_child(owner);
         assert(child != NULL && perftest_getter_owner_child_matches(owner, child));
         assert(perftest_getter_owner_child(owner) == child);
@@ -70,7 +66,6 @@ static void check_borrowed_pointers(void) {
         name = perftest_getter_child_name(child);
         const char expected[] = "héllo\0世界😀";
         assert(name.len == sizeof(expected)-1 && memcmp(name.data, expected, name.len) == 0);
-        perftest_free_buffer(name);
         assert(perftest_getter_owner_optional_pointer(owner) == (present ? child : NULL));
         char *error = NULL;
         assert(perftest_getter_owner_try_child(owner, 0, &error) == child && error == NULL);
@@ -103,10 +98,9 @@ static void check_mutable_borrowed_pointers(void) {
     for (uint8_t present = 0; present <= 1; ++present) {
         perftest_getter_counts_ret_w0_rows before = perftest_getter_counts();
         int64_t number = 0;
-        perftest_buffer name = {0};
+        perftest_buffer_view name = {0};
         perftest_getter_leaf *leaf = NULL;
         perftest_getter_owner *owner = perftest_getter_owner_new(present, &number, &name, &leaf);
-        perftest_free_buffer(name);
         uintptr_t address = (uintptr_t)perftest_getter_owner_child(owner);
         // Each new owner borrow ends the previous child loan. Retain only its
         // numeric address for comparisons, and obtain a fresh loan before writing.

@@ -16,6 +16,17 @@ pub enum CWire {
     /// One pointer/length carrier of generated ABI rows. Its element layout lives
     /// in the enclosing sequence chain; empty rows may use a null pointer.
     Rows,
+    /// One inline owning value or a pointer borrowing/taking that value.
+    Owned {
+        /// Original Rust value and its opaque storage.
+        owner: std::rc::Rc<COwned>,
+        /// Ownership or borrow of the Rust value.
+        access: Access,
+        /// A by-value carrier; false uses a pointer to caller storage.
+        by_value: bool,
+    },
+    /// Non-owning byte/text view. No allocation is transferred.
+    View,
     /// A fieldless Rust enum represented by checked `int32_t` values.
     Enum {
         /// Unprefixed C typedef name.
@@ -133,7 +144,8 @@ impl CWire {
                 null_niche_available,
                 ..
             } => *null_niche_available = false,
-            Self::Buffer | Self::Rows | Self::Callback { .. } => {}
+            Self::Buffer | Self::View | Self::Owned { .. } | Self::Rows | Self::Callback { .. } => {
+            }
         }
     }
     // A reserved sentinel remains valid even after availability advances or clears.
@@ -204,7 +216,21 @@ impl WireKind for CWire {
                     syn::parse_quote!(*mut #ty)
                 }
             }
-            CWire::Buffer => syn::parse_quote!(__PbBuffer),
+            CWire::View | CWire::Buffer => syn::parse_quote!(__PbBuffer),
+            CWire::Owned {
+                owner,
+                access,
+                by_value,
+            } => {
+                let ty = owner.ident();
+                if *by_value {
+                    syn::parse_quote!(#ty)
+                } else if *access == Access::Shared {
+                    syn::parse_quote!(*const #ty)
+                } else {
+                    syn::parse_quote!(*mut #ty)
+                }
+            }
             CWire::Rows => syn::parse_quote!(__PbRows),
         }
     }

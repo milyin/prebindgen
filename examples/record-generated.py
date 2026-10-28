@@ -9,7 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {
     "example-cbindgen": ("bindings.rs", "bindings.h"),
-    "perftest-c": ("bindings.rs", "bindings.h"),
+    "perftest-c": ("bindings.rs", "bindings.h", "owners.rs", "owners.h"),
     "covertest-kotlin": ("bindings.rs", "kotlin"),
     "perftest-kotlin": ("bindings.rs", "kotlin"),
     "emitcheck": ("bindings.rs",),

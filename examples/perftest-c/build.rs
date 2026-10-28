@@ -783,7 +783,137 @@ fn main() {
     ] {
         cbindgen = cbindgen.function(f).panic();
     }
+    // These fixtures exercise explicit element conversion and visitor delivery.
+    // Ordinary Vec outputs use inline native ownership instead.
+    for ty in [
+        pq!(Vec<i64>),
+        pq!(Vec<usize>),
+        pq!(Vec<String>),
+        pq!(Vec<Vec<u8>>),
+        pq!(Vec<Vec<i64>>),
+        pq!(Vec<Option<i64>>),
+        pq!(Vec<SparseCode>),
+        pq!(Vec<char>),
+        pq!(Vec<CollectionItem>),
+        pq!(Vec<OwnedResource>),
+        pq!(Vec<Vec<OwnedResource>>),
+        pq!(Vec<SequenceScalars>),
+        pq!(Vec<u128>),
+        pq!(Vec<Payload>),
+        pq!(Vec<CallbackReturnResource>),
+    ] {
+        cbindgen = cbindgen.output(prebindgen_declarations::Output::for_type(
+            ty,
+            prebindgen_declarations::Output::Sequence {
+                element: Box::new(prebindgen_declarations::Output::auto()),
+                mode: None,
+                delivery: prebindgen_declarations::SequenceDelivery::Value,
+            },
+        ));
+    }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    // InlinePacket has two three-word descriptors, one nullable Box and a byte.
+    // Supply the target layout, rather than measuring the build-script host.
+    let pointer_bytes = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap()
+        / 8;
+    let packet_layout = prebindgen_c::OpaqueLayout::new(8 * pointer_bytes, pointer_bytes);
+    let owners = prebindgen_c::Cbindgen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .prefix("owner")
+        .opaque_owned_struct("bytes", pq!(Vec<u8>), prebindgen_c::OpaqueLayout::vector())
+        .opaque_owned_struct("text", pq!(String), prebindgen_c::OpaqueLayout::vector())
+        .opaque_owned_struct(
+            "numbers",
+            pq!(Vec<i64>),
+            prebindgen_c::OpaqueLayout::vector(),
+        )
+        .opaque_owned_struct_with_empty(
+            "packet",
+            pq!(InlinePacket),
+            packet_layout,
+            fun!(inline_packet_empty),
+        )
+        .opaque_ptr("child", pq!(InlineChild))
+        .opaque_ptr("boxed_numbers", pq!(Vec<i32>))
+        .error_mapper(pq!(String), fun!(inline_packet_error));
+    let mut owners = owners.expand(expand_param!(InlineReturn).variant(fun!(inline_return_new)));
+    for f in [
+        fun!(inline_bytes),
+        fun!(inline_text),
+        fun!(inline_numbers),
+        fun!(inline_text_new),
+        fun!(inline_numbers_new),
+        fun!(inline_bytes_capacity),
+        fun!(inline_text_capacity),
+        fun!(inline_numbers_capacity),
+        fun!(inline_bytes_take),
+        fun!(inline_text_take),
+        fun!(inline_numbers_take),
+        fun!(inline_bytes_alias),
+        fun!(inline_packet_new),
+        fun!(inline_packet_ref),
+        fun!(inline_child_id),
+        fun!(inline_packet_take),
+        fun!(inline_packet_drops),
+        fun!(inline_packet_optional),
+        fun!(inline_packet_callback),
+        fun!(inline_bytes_callback),
+        fun!(inline_return_catch),
+        fun!(inline_rows_catch),
+        fun!(inline_boxed_numbers_new),
+        fun!(inline_boxed_numbers_len),
+        fun!(inline_boxed_numbers_take),
+        fun!(inline_packets_take),
+    ] {
+        owners = owners.function(f).panic();
+    }
+    owners = owners
+        .function(
+            fun!(inline_packet_result).expand_return(
+                expand_return!(InlinePacket)
+                    .field_self_into()
+                    .field(fun!(inline_packet_panic)),
+            ),
+        )
+        .function(
+            fun!(inline_bytes_new).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self_into()
+                    .field(prebindgen_c::Cbindgen::owned_view("bytes"))
+                    .field(prebindgen_c::Cbindgen::owned_len("bytes")),
+            ),
+        );
+    owners = owners
+        .function(
+            fun!(inline_bytes_mutable).expand_return(
+                expand_return!(Vec<u8>)
+                    .field_self_into()
+                    .field(fun!(inline_bytes_clear)),
+            ),
+        )
+        .panic();
+    owners = owners.function(fun!(inline_packets_rows).output(
+        prebindgen_declarations::Output::combine([
+            prebindgen_declarations::Output::getter(
+                "inline_packets_getter",
+                prebindgen_declarations::Output::Sequence {
+                    element: Box::new(prebindgen_declarations::Output::auto()),
+                    mode: None,
+                    delivery: prebindgen_declarations::SequenceDelivery::Value,
+                },
+            ),
+            prebindgen_declarations::Output::getter(
+                "inline_packets_late",
+                prebindgen_declarations::Output::auto(),
+            ),
+        ]),
+    ));
+    let owners = owners.build().expect("native inline owner bindings");
+    owners.write_rust(out.join("owners.rs")).unwrap();
+    owners.write_header(out.join("owners.h")).unwrap();
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();

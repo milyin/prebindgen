@@ -643,6 +643,27 @@ pub trait Codec {
     ) -> Result<Option<Output<OutputRequest>>> {
         Ok(None)
     }
+    /// Keep a collection occurrence in one native input leaf instead of
+    /// decomposing it into element rows. Explicit `Input::Sequence` overrides
+    /// this preference; input defaults and whole-collection identities use it.
+    fn input_collection_is_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
+    }
+    /// Keep a collection occurrence in one native output leaf. Explicit
+    /// `Output::Sequence` and element-targeted expansions still produce rows.
+    fn output_collection_is_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
+    }
     /// Annotate an already compiled foreign-record input; structural expansion is complete.
     fn input_record_metadata(
         &self,
@@ -1076,10 +1097,23 @@ pub trait Codec {
     ) -> Result<Option<(CodecOutput<Self>, TokenStream)>> {
         Ok(None)
     }
+    /// Check a getter loan while its owning output is being delivered.
+    fn validate_owner_getter(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _owner: &Type,
+        _getter: &str,
+        _plan: &CodecOutput<Self>,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// Check whether a getter's converted outputs can outlive its temporary owner.
     /// Owner-backed views are compiled separately and already retain their owner.
     fn validate_getter_output(
         &self,
+        _flat: &Flat<Self::Schema>,
+        _receiver: &Type,
+        _borrowed: bool,
         _ty: &Type,
         _plan: &CodecOutput<Self>,
         _extra: &Self::Extra,
@@ -1365,6 +1399,8 @@ fn finalize_output_schema<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
+    // A Combine observation borrows a Rust temporary, not persistent foreign storage.
+    temporary_receiver: std::cell::Cell<bool>,
     flat: &'a Flat<C::Schema>,
     codec: &'a C,
     prefix: String,
@@ -1373,11 +1409,23 @@ struct Compiler<'a, C: Codec> {
 impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
+            temporary_receiver: std::cell::Cell::new(false),
             flat,
             codec,
             prefix,
             next: std::cell::Cell::new(0),
         }
+    }
+    fn with_temporary_receiver<T>(
+        &self,
+        temporary: bool,
+        prepare: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        let previous = self.temporary_receiver.get();
+        self.temporary_receiver.set(previous || temporary);
+        let result = prepare();
+        self.temporary_receiver.set(previous);
+        result
     }
     fn name(&self) -> syn::Ident {
         let next = self.next.get();
@@ -1858,12 +1906,19 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let payload = self.name();
                 let length = self.name();
                 let index = self.name();
-                let child = self.output(
-                    element_type,
-                    element,
-                    extra,
-                    quote!(#payload),
-                    mode == ProjectionMode::Borrowed,
+                let child = self.with_temporary_receiver(
+                    mode == ProjectionMode::Borrowed
+                        && !borrowed
+                        && sequence_parts(ty).unwrap().1 == SequenceView::Owned,
+                    || {
+                        self.output(
+                            element_type,
+                            element,
+                            extra,
+                            quote!(#payload),
+                            mode == ProjectionMode::Borrowed,
+                        )
+                    },
                 )?;
                 return sequence::output(
                     self.codec, ty, extra, wire, payload, length, index, value, borrowed, mode,
@@ -1964,23 +2019,25 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     .as_ref()
                     .map(|w| format_ident!("{w}_record"))
                     .unwrap_or_else(|| self.name());
-                let mut plan = if owned {
-                    record_output_owned(
-                        self.codec,
-                        var,
-                        value,
-                        r.fields.iter().map(|f| f.name.clone()),
-                        convert,
-                    )?
-                } else {
-                    record_output(
-                        self.codec,
-                        var,
-                        value,
-                        r.fields.iter().map(|f| f.name.clone()),
-                        convert,
-                    )?
-                };
+                let mut plan = self.with_temporary_receiver(!owned && !borrowed, || {
+                    if owned {
+                        record_output_owned(
+                            self.codec,
+                            var,
+                            value,
+                            r.fields.iter().map(|f| f.name.clone()),
+                            convert,
+                        )
+                    } else {
+                        record_output(
+                            self.codec,
+                            var,
+                            value,
+                            r.fields.iter().map(|f| f.name.clone()),
+                            convert,
+                        )
+                    }
+                })?;
                 if let Some(wire) = wire {
                     self.codec
                         .output_record_metadata(self.flat, ty, &wire, &mut plan, extra)?;
@@ -2018,8 +2075,14 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 };
                 out.statements = quote!(let #v=#path(#arg););
                 let mut child = self.output_return(&f.ret.ty, output, extra, quote!(#v), false)?;
-                self.codec
-                    .validate_getter_output(&f.ret.ty, &child, extra)?;
+                self.codec.validate_getter_output(
+                    self.flat,
+                    ty,
+                    borrowed && !self.temporary_receiver.get(),
+                    &f.ret.ty,
+                    &child,
+                    extra,
+                )?;
                 self.prefix(
                     &mut child.outcomes.success,
                     ComponentSegment::Getter(function.clone()),
@@ -2051,7 +2114,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     } else {
                         quote!(&#value)
                     };
-                    let mut p = self.output(ty, child, extra, arg, borrowed || !consuming)?;
+                    let mut p = self.with_temporary_receiver(!borrowed && !consuming, || {
+                        self.output(ty, child, extra, arg, borrowed || !consuming)
+                    })?;
                     self.prefix(&mut p.outcomes.success, ComponentSegment::View(index));
                     bodies.push((consuming, std::mem::take(&mut p.statements)));
                     append(&mut out, p)?;
@@ -2083,6 +2148,14 @@ impl<'a, C: Codec> Compiler<'a, C> {
             return Ok(None);
         };
         if parts.len() < 2 {
+            return Ok(None);
+        }
+        // Explicit copy projections use observation-before-move ordering. They
+        // do not require an address-preserving loan from the delivered owner.
+        if parts
+            .iter()
+            .any(|part| matches!(part,Output::Projected(p) if p.mode==ProjectionMode::Borrowed))
+        {
             return Ok(None);
         }
         // Reserve the same owner wire that the ordinary consuming leaf uses.
@@ -2159,6 +2232,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 };
                 let mut plan =
                     self.output_return(&f.ret.ty, output, extra, quote!(#source), false)?;
+                self.codec
+                    .validate_owner_getter(self.flat, ty, function, &plan)?;
                 plan.statements = {
                     let body = plan.statements;
                     quote!(let #source = #path(#argument); #body)

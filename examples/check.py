@@ -31,6 +31,15 @@ for name in ["example-cbindgen", "perftest-c"]:
     executable = build / name
     subprocess.run(cc + ["-I" + str(outputs[name]), f"examples/{name}/c/smoke.c", "-L" + str(lib), "-l" + name.replace("-", "_"), "-Wl,-rpath," + str(lib), "-o", str(executable)], check=True)
     subprocess.run([str(executable)], check=True)
+# Public headers remain usable from C++, including aligned inline owners.
+for name, header in [("example-cbindgen","bindings.h"),("perftest-c","bindings.h"),("perftest-c","owners.h")]:
+    subprocess.run([os.environ.get("CXX","c++"),"-std=c++11","-Wall","-Wextra","-Werror","-fsyntax-only","-x","c++","-include",str(outputs[name]/header),"/dev/null"],check=True)
+# Borrowed views cannot be passed to the owning buffer destructor.
+wrong_view=build/"wrong-view-drop.c"
+wrong_view.write_text('#include "bindings.h"\nvoid wrong(perftest_buffer_view view) { perftest_free_buffer(view); }\n')
+rejected=subprocess.run(cc+["-fsyntax-only","-I"+str(outputs["perftest-c"]),str(wrong_view)],capture_output=True,text=True)
+if rejected.returncode==0 or "incompatible" not in rejected.stderr:
+    raise RuntimeError("C compiler did not reject destroying a borrowed view: "+rejected.stderr)
 # The C compiler must reject crossing distinct opaque pointer types.
 wrong_type = build / "wrong-pointer.c"
 wrong_type.write_text('#include "bindings.h"\nvoid wrong(perftest_storage *p) { perftest_drop_blob(p); }\n')

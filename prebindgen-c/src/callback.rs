@@ -243,6 +243,19 @@ impl CCallback {
         };
         let fields = self.return_fields();
         if let [field] = fields.as_slice() {
+            if let CWire::Owned {
+                owner,
+                access: Access::Move,
+                by_value: true,
+            } = &field.kind
+            {
+                let guard = owner.guard_ident();
+                let name = &field.name;
+                return Ok((
+                    quote!(let callback_return_owner=#guard(#name);),
+                    quote!(::core::mem::forget(callback_return_owner);),
+                ));
+            }
             if let CWire::Pointer { pointer, .. } = &field.kind {
                 if self.return_owners.contains_key(&field.name.to_string()) {
                     let name = &field.name;
@@ -254,7 +267,14 @@ impl CCallback {
                 }
             }
         }
-        let scan = receive_return_owners(&plan.node, context, &self.return_owners)?;
+        // Fixed inline return fields need only stack guards, even beside scalars.
+        if self.return_owners.is_empty() {
+            if let Some((guards, commits)) = inline_return_guards(&plan.node, quote!(true)) {
+                return Ok((guards, commits));
+            }
+        }
+        let scan =
+            receive_return_owners(&plan.node, context, &self.return_owners, &BTreeMap::new())?;
         if scan.is_empty() {
             return Ok((quote!(), quote!()));
         }
@@ -365,10 +385,75 @@ impl CCallback {
         Ok(body)
     }
 }
+fn inline_return_guards(
+    node: &WireNode<CWire, CChain, CBranch>,
+    active: TokenStream,
+) -> Option<(TokenStream, TokenStream)> {
+    let mut prepare = TokenStream::new();
+    let mut commit = TokenStream::new();
+    match node {
+        WireNode::Leaf(fields) => {
+            for field in fields {
+                if let CWire::Owned {
+                    owner,
+                    access: Access::Move,
+                    by_value: true,
+                } = &field.kind
+                {
+                    let name = &field.name;
+                    let guard = format_ident!("{name}_return_guard");
+                    let ty = owner.guard_ident();
+                    prepare.extend(quote!(let #guard=if #active {Some(#ty(#name))} else {None};));
+                    commit.extend(quote!(::core::mem::forget(#guard);));
+                }
+            }
+        }
+        WireNode::Chain {
+            meta: CChain::Sequence(_),
+            ..
+        } => return None,
+        WireNode::Chain {
+            meta: CChain::Optional(optional),
+            child,
+            ..
+        } => {
+            let name = optional.discriminator();
+            let present = optional
+                .niche()
+                .map(|n| n.present(quote!(#name)))
+                .unwrap_or_else(|| quote!(#name==1));
+            let (p, c) = inline_return_guards(child, quote!((#active)&&(#present)))?;
+            prepare.extend(p);
+            commit.extend(c);
+        }
+        WireNode::Branch {
+            meta: CBranch::Alternatives,
+            controls,
+            children,
+        } => {
+            let selector = &controls[0].name;
+            for (index, child) in children.iter().enumerate() {
+                let index = index as i32;
+                let (p, c) = inline_return_guards(child, quote!((#active)&&#selector==#index))?;
+                prepare.extend(p);
+                commit.extend(c);
+            }
+        }
+        WireNode::Branch { children, .. } => {
+            for child in children {
+                let (p, c) = inline_return_guards(child, active.clone())?;
+                prepare.extend(p);
+                commit.extend(c);
+            }
+        }
+    }
+    Some((prepare, commit))
+}
 fn receive_return_owners(
     node: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
     context: &CContext,
     owners: &BTreeMap<String, syn::Type>,
+    locations: &BTreeMap<String, TokenStream>,
 ) -> Result<TokenStream> {
     Ok(match node {
         WireNode::Leaf(fields) => fields
@@ -383,6 +468,12 @@ fn receive_return_owners(
                         );
                     }
                 }
+                if let CWire::Owned {owner,access:Access::Move,by_value:true}=&field.kind {
+                    let name=&field.name;let ty=&owner.ty;
+                    let carrier=owner.ident();
+                    let pointer=locations.get(&name.to_string()).cloned().unwrap_or_else(||quote!(&#name));
+                    return Some(quote!(unsafe {callback_return_owners.receive_inline((#pointer as *const #carrier).cast::<#ty>());}));
+                }
                 None
             })
             .collect(),
@@ -391,7 +482,7 @@ fn receive_return_owners(
             child,
             ..
         } => {
-            let scan = receive_return_owners(child, context, owners)?;
+            let scan = receive_return_owners(child, context, owners, locations)?;
             if scan.is_empty() {
                 return Ok(scan);
             }
@@ -407,12 +498,12 @@ fn receive_return_owners(
             controls,
             child,
         } => {
-            let scan = receive_return_owners(child, context, owners)?;
-            if scan.is_empty() {
-                return Ok(scan);
-            }
             let carrier = &controls[0].name;
             let row = &context.row_types[&carrier.to_string()];
+            let mut row_locations=locations.clone();
+            for (i,w) in group::row_fields(child).enumerate(){let field=format_ident!("v{i}");row_locations.insert(w.name.to_string(),quote!(::core::ptr::addr_of!((*((#carrier.data as *const #row).add(index))).#field)));}
+            let scan = receive_return_owners(child, context, owners, &row_locations)?;
+            if scan.is_empty() {return Ok(scan);}
             let reads = group::row_fields(child).enumerate().map(|(i, w)| {
                 let name = &w.name;
                 let field = format_ident!("v{i}");
@@ -430,7 +521,7 @@ fn receive_return_owners(
                 .iter()
                 .enumerate()
                 .map(|(i, child)| {
-                    let scan = receive_return_owners(child, context, owners)?;
+                    let scan = receive_return_owners(child, context, owners, locations)?;
                     let i = i as i32;
                     Ok(quote!(if #selector==#i {#scan}))
                 })
@@ -439,7 +530,7 @@ fn receive_return_owners(
         }
         WireNode::Branch { children, .. } => children
             .iter()
-            .map(|child| receive_return_owners(child, context, owners))
+            .map(|child| receive_return_owners(child, context, owners, locations))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .collect(),
@@ -576,7 +667,7 @@ pub(crate) fn emit(
             )
             .expect("writing to a String");
         }
-        header.push_str(&format!("/* Rust signature: {}. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Output allocations passed to run are callback-owned. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles. */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
+        header.push_str(&format!("/* Rust signature: {}. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */\ntypedef struct {{\n    {c_result} (*run)(void *context{args});\n    void *context;\n    void (*drop)(void *context);\n{release_declaration}}} {name};\n",callback.signature));
     }
     Ok(())
 }

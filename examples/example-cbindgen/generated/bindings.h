@@ -21,6 +21,13 @@ typedef struct example_caption example_caption;
 void example_drop_caption(example_caption *ptr);
 typedef struct example_foo example_foo;
 void example_drop_foo(example_foo *ptr);
+typedef struct { const uint8_t *data; size_t len; } example_buffer_view;
+typedef struct { uintptr_t _storage[3]; } example_owned_string;
+/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
+void example_drop_owned_string(example_owned_string *value);
+size_t example_owned_string_len(const example_owned_string *value);
+/* Borrowed view; never free it. The owner retains the allocation. */
+example_buffer_view example_owned_string_view(const example_owned_string *value);
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
 example_calculator * example_calculator_new(void);
