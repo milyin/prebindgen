@@ -2180,7 +2180,7 @@ fn buffer_outputs_prepare_jvm_objects_without_native_staging() {
 
 #[test]
 fn wide_buffer_outputs_reserve_capacity_without_small_call_overhead() {
-    for count in [1, 14, 15, 48] {
+    for count in [1, 13, 14, 48] {
         let views = (0..count).fold(expand_return!(String), |views, _| views.field(fun!(view)));
         let generated = JniGen::builder()
             .flat(flat(
@@ -2190,7 +2190,7 @@ fn wide_buffer_outputs_reserve_capacity_without_small_call_overhead() {
             .package(package!().fun(fun!(make).expand_return(views)))
             .build()
             .unwrap();
-        assert_eq!(generated.rust.contains("ensure_local_capacity"), count > 14);
+        assert_eq!(generated.rust.contains("ensure_local_capacity"), count > 13);
         assert!(!generated.rust.contains("Clone::clone"));
         syn::parse_file(&generated.rust).unwrap();
     }
@@ -2214,10 +2214,28 @@ fn reference_capacity_counts_row_carriers_and_domain_error_payloads() {
             .package(package!().fun(fun!(make)))
             .build()
             .unwrap();
-        // Fourteen buffers + one retained row array + packet and temporary.
+        // Fourteen buffers + row array + packet, boxing class and temporary.
         assert!(
-            generated.rust.contains("ensure_local_capacity(17"),
+            generated.rust.contains("ensure_local_capacity(18"),
             "error={error}"
+        );
+    }
+}
+
+#[test]
+fn primitive_before_buffer_fields_has_capacity_for_boxing_class_and_value() {
+    for count in [13, 14] {
+        let views = (0..count).fold(expand_return!(Owner).field(fun!(number)), |views, _| {
+            views.field(fun!(text))
+        });
+        let generated = JniGen::builder()
+            .flat(flat("pub type Owner=String;pub fn make()->Owner{}pub fn number(owner:&Owner)->i64{}pub fn text(owner:&Owner)->&str{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(views)))
+            .build().unwrap();
+        assert_eq!(
+            generated.rust.contains("ensure_local_capacity"),
+            count == 14
         );
     }
 }

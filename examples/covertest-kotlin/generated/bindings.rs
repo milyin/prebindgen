@@ -2351,7 +2351,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1
     #[allow(unused_mut)]
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
-        jni_environment.ensure_local_capacity(50i32).map_err(|e| e.to_string())?;
+        jni_environment.ensure_local_capacity(51i32).map_err(|e| e.to_string())?;
         {
             let source_value = perftest_flat::jni_buffer_wide();
             let ret_w0 = perftest_flat::jni_buffer_row_text(&source_value);

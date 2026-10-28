@@ -1425,7 +1425,8 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             ));
         }
         // Prepared buffer objects and collection carriers live until packet
-        // delivery. Include the result packet and a temporary boxing/tag object.
+        // delivery. Include the result packet, a boxing class lookup and the
+        // temporary boxed value. JNI class lookups themselves create local refs.
         // JNI guarantees 16 spare local slots; small outputs need no extra call.
         let reference_capacity = std::iter::once(logical)
             .chain(outcomes.source_error.iter())
@@ -1433,10 +1434,10 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 crate::group::result_packet_fields(node)
                     .filter(|w| w.kind.is_reference())
                     .count()
-                    + 2
+                    + 3
             })
             .max()
-            .unwrap_or(2);
+            .unwrap_or(3);
         let reserve_outputs = if reference_capacity > 16 {
             let capacity =
                 i32::try_from(reference_capacity).map_err(|_| "too many JNI reference outputs")?;
