@@ -260,6 +260,25 @@ impl Codec for EnumCodec<'_> {
         CCodec.output_return_reference(flat, reference, extra, wire, value)
     }
 
+    fn output_owner(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+        CCodec.output_owner(flat, ty, extra, wire, value)
+    }
+    fn validate_getter_output(
+        &self,
+        ty: &syn::Type,
+        plan: &OutputPlan<CWire>,
+        extra: &(),
+    ) -> Result<()> {
+        CCodec.validate_getter_output(ty, plan, extra)
+    }
+
     fn optional_niche(
         &self,
         payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,

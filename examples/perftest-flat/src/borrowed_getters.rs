@@ -1,4 +1,5 @@
 //! Borrowed accessor views, including non-Clone owners and intermediate values.
+use crate::CPanicOutput;
 use prebindgen_proc_macro::prebindgen;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -232,4 +233,51 @@ pub fn getter_fields_new() -> GetterOwner {
 #[prebindgen]
 pub fn getter_two_clones_new() -> GetterOwner {
     getter_owner_new(false)
+}
+
+// Owned outputs with borrowed views must preserve the final owner's address.
+#[prebindgen]
+pub fn owner_view_shared(present: bool) -> GetterOwner {
+    getter_owner_new(present)
+}
+#[prebindgen]
+pub fn owner_view_reordered(present: bool) -> GetterOwner {
+    getter_owner_new(present)
+}
+#[prebindgen]
+pub fn owner_view_mutable(present: bool) -> GetterOwner {
+    getter_owner_new(present)
+}
+#[prebindgen]
+pub fn owner_view_optional(present: bool) -> GetterOwner {
+    getter_owner_new(present)
+}
+#[prebindgen]
+pub fn owner_view_optional_mut(present: bool) -> GetterOwner {
+    getter_owner_new(present)
+}
+#[prebindgen]
+pub fn owner_view_maybe(present: bool) -> Option<GetterOwner> {
+    present.then(|| getter_owner_new(true))
+}
+#[prebindgen]
+pub fn owner_view_from_temporary(_text: &String) -> GetterOwner {
+    getter_owner_new(false)
+}
+#[prebindgen]
+pub fn owner_view_checked(fail: bool) -> Result<GetterOwner, String> {
+    Ok(getter_owner_new(fail))
+}
+#[prebindgen]
+pub fn owner_view_check(owner: &GetterOwner) -> i64 {
+    assert!(!owner.present, "owner view conversion failure");
+    0
+}
+#[prebindgen]
+pub fn owner_view_rollback() -> Result<GetterOwner, String> {
+    Ok(getter_owner_new(false))
+}
+#[prebindgen]
+pub fn owner_view_late(_owner: &GetterOwner) -> CPanicOutput {
+    crate::c_panic_output_new()
 }
