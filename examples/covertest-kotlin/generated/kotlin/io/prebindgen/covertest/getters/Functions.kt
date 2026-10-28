@@ -95,6 +95,23 @@ public fun `getterLeafId`(p0_w1: io.prebindgen.covertest.getters.GetterLeaf?, on
     }
 }
 
+public fun `getterStaticLeaf`(onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.getters.GetterLeaf> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.getters.GetterLeaf = run {
+    val result = try { run { ; io.prebindgen.covertest.JNINative.call_getter_static_leaf_3de084de8ab56cf6() } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> {         var output0: io.prebindgen.covertest.getters.GetterLeaf? = null
+        try {
+            output0 = io.prebindgen.covertest.getters.GetterLeaf(result[1] as Long)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_GetterLeaf_b28f97ae79569aa8(result[1] as Long) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        } }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
 public fun <R> `getterOwnerRead`(p0_w1: io.prebindgen.covertest.getters.GetterOwner?, onError: io.prebindgen.covertest.JniErrorHandler<R> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }, build: (Long, String) -> R): R = run {
     val result = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
         run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_getter_owner_read_405afcf1de6633af(nativeArgument0) }

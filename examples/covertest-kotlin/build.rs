@@ -153,6 +153,7 @@ fn main() {
             .fun(fun!(getter_owner_failure).expand_return(expand_return!(GetterOwner)
                 .field_self_into().field(fun!(getter_owner_leaf)).field(fun!(getter_owner_fail))))
             .fun(fun!(getter_owner_id)).fun(fun!(getter_leaf_id))
+            .fun(fun!(getter_static_leaf))
             .fun(fun!(getter_owner_read).expand_return(expand_return!(GetterChild)
                 .field(fun!(getter_child_number)).field(fun!(getter_child_name))))
             .fun(fun!(getter_counts))

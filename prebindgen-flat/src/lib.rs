@@ -429,6 +429,7 @@ impl<M: Schema> Flat<M> {
                         if !matches!(field.vis, syn::Visibility::Public(_)) {
                             return Err("record fields must be public".into());
                         }
+                        validate_input_lifetimes(&field.ty)?;
                         out.push(Field {
                             metadata: Default::default(),
                             name: field.ident.unwrap(),
@@ -577,7 +578,8 @@ impl<M: Schema> Flat<M> {
     /// Qualify the declared names in `ty` and validate the supported source-type grammar.
     ///
     /// Accepts primitives, declared types, unit, strings, byte vectors/slices and
-    /// `Option<T>`, `Result<T, E>`, vectors and slices recursively, and references without explicit lifetimes. A successful result does not mean
+    /// `Option<T>`, `Result<T, E>`, vectors and slices recursively, and references
+    /// with elided or `'static` lifetimes. A successful result does not mean
     /// a consumer can use the type in every position. Aliases remain opaque.
     pub fn resolve_type(&self, ty: &Type) -> Result<Type> {
         let mut ty = ty.clone();
@@ -615,6 +617,7 @@ impl<M: Schema> Flat<M> {
         Ok(ty)
     }
     fn resolve_parameter_type(&self, ty: &Type) -> Result<Type> {
+        validate_input_lifetimes(ty)?;
         if callback_signature(ty)?.is_none() {
             return self.resolve_type(ty);
         }
@@ -662,7 +665,9 @@ impl<M: Schema> Flat<M> {
         }
         match ty {
             Type::Tuple(t) if t.elems.is_empty() => Ok(()),
-            Type::Reference(r) if r.lifetime.is_none() => self.validate_type(&r.elem),
+            Type::Reference(r) if r.lifetime.as_ref().is_none_or(|l| l.ident == "static") => {
+                self.validate_type(&r.elem)
+            }
             Type::Slice(s) => self.validate_type(&s.elem),
             Type::Path(_)
                 if matches!(
@@ -730,6 +735,24 @@ impl<M: Schema> Flat<M> {
             guards: self.guards,
         })
     }
+}
+
+// Static loans can leave a source function, but accepting them as inputs would
+// let source code retain caller-owned or wrapper-temporary storage forever.
+fn validate_input_lifetimes(ty: &Type) -> Result<()> {
+    struct Check(bool);
+    impl VisitMut for Check {
+        fn visit_type_reference_mut(&mut self, reference: &mut syn::TypeReference) {
+            self.0 |= reference.lifetime.is_some();
+            syn::visit_mut::visit_type_reference_mut(self, reference);
+        }
+    }
+    let mut check = Check(false);
+    check.visit_type_mut(&mut ty.clone());
+    if check.0 {
+        return Err("explicit reference lifetimes are supported only for 'static function returns, not inputs, callback signatures or record fields".into());
+    }
+    Ok(())
 }
 
 /// Return the token spelling of `ty`, used to index types.

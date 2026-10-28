@@ -12,6 +12,39 @@ fn flat(source: &str) -> Bindings {
 }
 
 #[test]
+fn expanded_reference_to_option_keeps_jni_value_conversion() {
+    let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,i64>{}pub fn length(child:&Child)->i64{}";
+    let generated = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Owner))
+                .fun(fun!(maybe).expand_return(expand_return!(Child).field(fun!(length))))
+                .fun(fun!(fallible).expand_return(expand_return!(Child).field(fun!(length)))),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("Long?"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn static_reference_outputs_keep_independent_jni_handles() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub type Child=String;pub fn fixed()->&'static Child{}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Child)).fun(fun!(fixed)))
+        .build()
+        .unwrap();
+    assert!(generated.rust.contains("Clone"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("Child"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
 fn unrelated_declarations_and_reordering_preserve_existing_native_bindings() {
     fn generate_example(extra: bool, reverse: bool) -> JniGen {
         let source = "pub type Handle=String;pub type Added=String;pub type Error=String;pub fn code(e:&Error)->i64{}pub fn message(e:&Error)->String{}pub fn keep(value:&Handle)->i64{}pub fn values()->Result<Vec<i64>,Error>{}pub fn mapped()->Result<i64,Error>{}pub fn added()->Result<i64,i64>{}";

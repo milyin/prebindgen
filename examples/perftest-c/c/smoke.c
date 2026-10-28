@@ -571,6 +571,7 @@ static void check_results(void) {
 }
 int main(void) {
     check_borrowed_getters();
+    check_borrowed_pointers();
     check_callback_returns();
     /* Empty typed field overrides omit plain, optional and vector resources. */
     size_t omitted_before = perftest_owned_resource_drops();
@@ -656,17 +657,17 @@ int main(void) {
     assert(optional_unsigned.v0 == 1 && optional_unsigned.v1 == UINT64_MAX);
     EXPECT_ABORT(perftest_unsigned_optional(2, 0, &optional_unsigned.v1));
     perftest_archive * archive = {0};
-    perftest_summary *latest = NULL, *second_latest = NULL;
+    const perftest_summary *latest = NULL, *second_latest = NULL;
 
     archive = perftest_archive_new();
     latest = perftest_archive_latest(archive); assert(latest == NULL);
     perftest_archive_store(archive, 0, 2, 40.0, NULL);
     latest = perftest_archive_latest(archive); assert(latest != NULL);
-    second_latest = perftest_archive_latest(archive); assert(second_latest != latest);
-    perftest_drop_archive(archive);
+    second_latest = perftest_archive_latest(archive); assert(second_latest == latest);
     double archived_total = {0};
-    archived_total = perftest_summary_total_raw(1, 0, 0.0, latest); assert(archived_total == 40.0);
-    archived_total = perftest_summary_total_raw(1, 0, 0.0, second_latest); assert(archived_total == 40.0);
+    archived_total = perftest_summary_total(latest); assert(archived_total == 40.0);
+    archived_total = perftest_summary_total(second_latest); assert(archived_total == 40.0);
+    perftest_drop_archive(archive);
     perftest_storage * optional_storage = {0};
     struct { int32_t v0; int64_t v1; int32_t v2; double v3; uint8_t v4; } optional_payload = {0};
     uint8_t pushed = {0};

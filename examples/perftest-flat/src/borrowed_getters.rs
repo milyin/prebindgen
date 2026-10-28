@@ -87,6 +87,47 @@ pub fn getter_owner_optional(value: &GetterOwner) -> Option<&GetterChild> {
     value.present.then_some(&value.child)
 }
 #[prebindgen]
+pub fn getter_owner_optional_pointer(value: &GetterOwner) -> Option<&GetterChild> {
+    getter_owner_optional(value)
+}
+#[prebindgen]
+pub fn getter_owner_child_matches(owner: &GetterOwner, child: &GetterChild) -> bool {
+    std::ptr::eq(&owner.child, child)
+}
+#[prebindgen]
+pub fn getter_owner_try_child(value: &GetterOwner, fail: bool) -> Result<&GetterChild, String> {
+    if fail {
+        Err("borrowed child error".into())
+    } else {
+        Ok(&value.child)
+    }
+}
+#[prebindgen]
+pub fn getter_owner_try_optional_child(
+    value: &GetterOwner,
+    mode: i32,
+) -> Result<Option<&GetterChild>, String> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(&value.child)),
+        _ => Err("optional borrowed child error".into()),
+    }
+}
+#[prebindgen]
+pub fn getter_static_child(details: &String) -> &'static GetterChild {
+    let _ = details.len();
+    static CHILD: std::sync::OnceLock<GetterChild> = std::sync::OnceLock::new();
+    CHILD.get_or_init(|| GetterChildImpl {
+        number: 91,
+        name: "static child".into(),
+    })
+}
+#[prebindgen]
+pub fn getter_static_leaf() -> &'static GetterLeaf {
+    static LEAF: std::sync::OnceLock<GetterLeaf> = std::sync::OnceLock::new();
+    LEAF.get_or_init(|| GetterLeafImpl(101))
+}
+#[prebindgen]
 pub fn getter_owner_container(value: &GetterOwner) -> &Option<GetterDetails> {
     &value.optional
 }
