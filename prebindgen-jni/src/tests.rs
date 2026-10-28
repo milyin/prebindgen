@@ -2046,7 +2046,9 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
             .panic()
             .build()
             .unwrap();
-            assert_eq!(jni.rust.contains("Clone::clone"), copy, "JNI {ty}");
+            // Independent JVM views need independent JVM objects, without an
+            // intermediate Rust clone even for an explicit borrowing view.
+            assert!(!jni.rust.contains("Clone::clone"), "JNI {ty}");
             assert_eq!(c.rust.contains("Clone::clone"), copy, "C {ty}");
             let declaration = c
                 .header
@@ -2141,5 +2143,99 @@ fn callback_return_handles_use_direct_locks_and_collections_keep_dynamic_locks()
             assert!(!wrapper.contains("listOfNotNull"), "{returned}: {wrapper}");
             assert!(!wrapper.contains("emptyList"), "{returned}: {wrapper}");
         }
+    }
+}
+
+#[test]
+fn buffer_outputs_prepare_jvm_objects_without_native_staging() {
+    for ty in [
+        "String",
+        "Vec<u8>",
+        "&'static str",
+        "&'static String",
+        "&'static [u8]",
+        "&'static Vec<u8>",
+    ] {
+        for optional in [false, true] {
+            let returned = if optional {
+                format!("Option<Option<{ty}>>")
+            } else {
+                ty.into()
+            };
+            let generated = JniGen::builder()
+                .flat(flat(&format!("pub fn make()->{returned}{{}}")))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(make)))
+                .build()
+                .unwrap();
+            for staging in ["Clone::clone", ").to_string()", ").to_vec()"] {
+                assert!(!generated.rust.contains(staging), "{returned}: {staging}");
+            }
+            // Ordinary small results must not gain a capacity JNI call.
+            assert!(!generated.rust.contains("ensure_local_capacity"));
+            syn::parse_file(&generated.rust).unwrap();
+        }
+    }
+}
+
+#[test]
+fn wide_buffer_outputs_reserve_capacity_without_small_call_overhead() {
+    for count in [1, 13, 14, 48] {
+        let views = (0..count).fold(expand_return!(String), |views, _| views.field(fun!(view)));
+        let generated = JniGen::builder()
+            .flat(flat(
+                "pub fn make()->String{}pub fn view(value:&String)->&str{}",
+            ))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(views)))
+            .build()
+            .unwrap();
+        assert_eq!(generated.rust.contains("ensure_local_capacity"), count > 13);
+        assert!(!generated.rust.contains("Clone::clone"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+}
+
+#[test]
+fn reference_capacity_counts_row_carriers_and_domain_error_payloads() {
+    for error in [false, true] {
+        let source = if error {
+            "pub type Owner=String;pub fn make()->Result<i64,Owner>{}pub fn text(owner:&Owner)->&str{}pub fn rows(owner:&Owner)->Vec<i64>{}"
+        } else {
+            "pub type Owner=String;pub fn make()->Owner{}pub fn text(owner:&Owner)->&str{}pub fn rows(owner:&Owner)->Vec<i64>{}"
+        };
+        let views = (0..14)
+            .fold(expand_return!(Owner), |views, _| views.field(fun!(text)))
+            .field(fun!(rows));
+        let generated = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(views)
+            .package(package!().fun(fun!(make)))
+            .build()
+            .unwrap();
+        // Fourteen buffers + row array + packet, boxing class and temporary.
+        assert!(
+            generated.rust.contains("ensure_local_capacity(18"),
+            "error={error}"
+        );
+    }
+}
+
+#[test]
+fn primitive_before_buffer_fields_has_capacity_for_boxing_class_and_value() {
+    for count in [13, 14] {
+        let views = (0..count).fold(expand_return!(Owner).field(fun!(number)), |views, _| {
+            views.field(fun!(text))
+        });
+        let generated = JniGen::builder()
+            .flat(flat("pub type Owner=String;pub fn make()->Owner{}pub fn number(owner:&Owner)->i64{}pub fn text(owner:&Owner)->&str{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(views)))
+            .build().unwrap();
+        assert_eq!(
+            generated.rust.contains("ensure_local_capacity"),
+            count == 14
+        );
     }
 }

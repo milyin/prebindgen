@@ -527,12 +527,29 @@ variant; JNI also derives Kotlin types and JVM parameter width.
 `read_array_element()`, `output_object()` and `output_argument()` let ordinary
 returns, collection rows and callback delivery share the same field conversion.
 Reads produce native input values; output methods take prepared
-`OutputPlan::values` (for example `Option<String>`, encoded wide-integer bytes,
-or an allocation pointer), rather than JNI input references. They use the
-`environment` template parameter and leave local-reference lifetimes and
-ownership commit to their caller. `output_argument()` returns `JniArgument`:
-emit its preparation statements before using its `jvalue` expression, in the
-same local-reference frame.
+`OutputPlan::values` (for example `JObject` for text/bytes, encoded
+wide-integer bytes, or an allocation pointer), rather than JNI input references.
+The methods use the `environment` template parameter and leave local-reference
+lifetimes and ownership commit to their caller. `output_argument()` returns
+`JniArgument`: emit its preparation statements before using its `jvalue`
+expression, in the same local-reference frame.
+
+Text and byte outputs are copied directly into JVM objects during preparation,
+while their Rust source is alive. Borrowed `str`/`String` and byte slice/vector
+outputs need no intermediate owned Rust buffer. Owned Rust buffers are moved,
+encoded and dropped; getters run before an owning move. This also handles
+optional payloads, record fields, collection rows and source callback arguments
+without keeping references to temporary owners. JVM storage and text encoding
+still have their normal marshalling costs. Independent text/byte output views
+create independent JVM objects without cloning the Rust buffer first.
+
+Custom JNI output plans using text/byte wires must now prepare
+`JObject` in the caller's local-reference frame; null means absent and a present
+value is a non-null object of the matching JVM type. `output_object()` and
+`output_argument()` consume that prepared value without allocating another
+object. Ordinary wrappers reserve local-reference capacity for wide fixed
+buffer outputs; small outputs need no additional capacity call.
+
 All leaf information is accessible through
 `wire.kind`; there is no second leaf-metadata type. C and JNI retain distinct
 carrier types.

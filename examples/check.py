@@ -43,12 +43,22 @@ borrowed_drop.write_text('#include "bindings.h"\nvoid wrong(const perftest_gette
 rejected = subprocess.run(cc + ["-fsyntax-only", "-I" + str(outputs["perftest-c"]), str(borrowed_drop)], capture_output=True, text=True)
 if rejected.returncode == 0 or "const" not in rejected.stderr:
     raise RuntimeError("C compiler did not diagnose destroying a borrowed pointer: " + rejected.stderr)
+def run_java(arguments):
+    completed = subprocess.run(["java", "-Xcheck:jni", *arguments],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    print(completed.stdout, end="")
+    completed.check_returncode()
+    for line in completed.stdout.splitlines():
+        if "WARNING in native method" in line or ("JNI local refs:" in line and "exceeds capacity" in line):
+            raise RuntimeError("JNI boundary warning: " + line)
+
+
 for name in ["covertest-kotlin", "perftest-kotlin"]:
     kotlin = sorted(outputs[name].joinpath("kotlin").rglob("*.kt"))
     kotlin += sorted(Path(f"examples/{name}/kotlin").rglob("*.kt"))
     jar = build / (name + ".jar")
     subprocess.run([os.environ.get("KOTLINC", "kotlinc"), *map(str, kotlin), "-include-runtime", "-d", str(jar)], check=True)
-    subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-jar", str(jar)], check=True)
+    run_java(["-Djava.library.path=" + str(lib), "-jar", str(jar)])
 
 # Java callers can recover through the same typed domain-error callback.
 java_test = build / "ResultJava.java"
@@ -62,4 +72,4 @@ java_test.write_text("""public class ResultJava {
 """)
 classpath = str(build / "covertest-kotlin.jar")
 subprocess.run(["javac", "-encoding", "UTF-8", "-cp", classpath, "-d", str(build), str(java_test)], check=True)
-subprocess.run(["java", "-Xcheck:jni", "-Djava.library.path=" + str(lib), "-cp", classpath + os.pathsep + str(build), "ResultJava"], check=True)
+run_java(["-Djava.library.path=" + str(lib), "-cp", classpath + os.pathsep + str(build), "ResultJava"])

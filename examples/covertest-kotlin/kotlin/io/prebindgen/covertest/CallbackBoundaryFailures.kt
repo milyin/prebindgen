@@ -132,6 +132,6 @@ fun checkCallbackBoundaryFailures() {
 
     // Each probe fails exactly one allocation inside the generated Rust
     // callback, then proves the second invocation succeeds after OOME cleanup.
-    for (mode in 0..1) check(CallbackFailureProbe.exercise(mode) == 1)
+    for (mode in 0..9) check(CallbackFailureProbe.exercise(mode) == 1)
     println("callback boundary failures PASS: typed registration errors, captures, folds, borrowed values, strings, conversion panic and JNI allocation failures")
 }
