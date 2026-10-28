@@ -818,8 +818,8 @@ impl Codec for JniCodec {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             return self.consumes(_flat, inner, &());
         }
-        // Text and bytes own their storage just like opaque objects. Treating
-        // them as observations silently cloned them when another view was added.
+        // Owned text/bytes are moved into their encoder. Keep observing getters
+        // before that move and reject two consuming views, as for opaque objects.
         !matches!(ty, syn::Type::Reference(_)) && !matches!(Value::of(ty), Some(Value::Scalar(_)))
     }
     fn input_leaf(
@@ -873,32 +873,46 @@ impl Codec for JniCodec {
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
+        // Materialize JVM buffers while their source is still in scope. Optional
+        // payloads, getter temporaries and collection rows may be dropped before
+        // final delivery, so carrying a borrowed Rust view that far is unsound.
+        if let Some(value_kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
+            let env = prebindgen_conversions::template_parameter("environment");
+            let (encode, kind) = match value_kind {
+                Value::Text => (
+                    quote!(::prebindgen_jni_runtime::text_object(
+                        &mut #env, ::core::convert::AsRef::<str>::as_ref(&#w))?),
+                    JniWire::text(),
+                ),
+                Value::Bytes => (
+                    quote!(::prebindgen_jni_runtime::bytes_object(
+                        &mut #env, ::core::convert::AsRef::<[u8]>::as_ref(&#w))?),
+                    JniWire::bytes(),
+                ),
+                Value::Scalar(_) => unreachable!(),
+            };
+            return Ok(OutputPlan {
+                fallible: true,
+                context: Default::default(),
+                delivery: Default::default(),
+                outcomes: prebindgen_flat::Outcomes {
+                    success: prebindgen_flat::WireNode::Leaf(vec![prebindgen_flat::Wire {
+                        name: w.clone(),
+                        kind,
+                    }]),
+                    source_error: None,
+                    binding_failure: None,
+                },
+                statements: quote!(let #w: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let #w = #v; #encode
+                };),
+                values: vec![(w.clone(), quote!(#w))],
+                commit: quote!(),
+            });
+        }
         if let syn::Type::Reference(reference) = ty {
             if reference.mutability.is_some() {
                 return Err("mutable-reference outputs are unsupported".into());
-            }
-            match type_key(&reference.elem).as_str() {
-                "str" => {
-                    return self.output_leaf(
-                        _flat,
-                        &syn::parse_quote!(String),
-                        &(),
-                        w,
-                        quote!((#v).to_string()),
-                        false,
-                    )
-                }
-                "[u8]" => {
-                    return self.output_leaf(
-                        _flat,
-                        &syn::parse_quote!(Vec<u8>),
-                        &(),
-                        w,
-                        quote!((#v).to_vec()),
-                        false,
-                    )
-                }
-                _ => {}
             }
             let value = if borrowed { quote!(*#v) } else { v };
             return self.output_leaf(_flat, &reference.elem, &(), w, value, true);
@@ -906,28 +920,20 @@ impl Codec for JniCodec {
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
         }
-        // Text and bytes stay optional Rust payloads until delivery. This keeps
-        // a null reference distinct from a present empty string or byte array.
-        let (encode, kind): (fn(TokenStream) -> TokenStream, _) = match Value::of(ty) {
-            Some(Value::Scalar(p)) => {
-                return prebindgen_conversions::value::output(
-                    ty,
-                    w,
-                    v,
-                    borrowed,
-                    |v| scalar::encode(p, v),
-                    JniWire::scalar(p),
-                )
-            }
-            Some(Value::Text) => (|v| quote!(Some(#v)), JniWire::text()),
-            Some(Value::Bytes) => (|v| quote!(Some(#v)), JniWire::bytes()),
-            None => {
-                return prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
-                    JniWire::handle(b, "true")
-                })
-            }
-        };
-        prebindgen_conversions::value::output(ty, w, v, borrowed, encode, kind)
+        match Value::of(ty) {
+            Some(Value::Scalar(p)) => prebindgen_conversions::value::output(
+                ty,
+                w,
+                v,
+                borrowed,
+                |v| scalar::encode(p, v),
+                JniWire::scalar(p),
+            ),
+            Some(Value::Text | Value::Bytes) => unreachable!("buffers prepared above"),
+            None => prebindgen_conversions::boxed::output(&storage(), ty, w, v, borrowed, |b| {
+                JniWire::handle(b, "true")
+            }),
+        }
     }
 
     fn optional_niche(
@@ -1418,6 +1424,26 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
                 "`{source}` needs {slots} JVM parameter slots; the limit is 255"
             ));
         }
+        // Prepared buffer objects and collection carriers live until packet
+        // delivery. Include the result packet and a temporary boxing/tag object.
+        // JNI guarantees 16 spare local slots; small outputs need no extra call.
+        let reference_capacity = std::iter::once(logical)
+            .chain(outcomes.source_error.iter())
+            .map(|node| {
+                crate::group::result_packet_fields(node)
+                    .filter(|w| w.kind.is_reference())
+                    .count()
+                    + 2
+            })
+            .max()
+            .unwrap_or(2);
+        let reserve_outputs = if reference_capacity > 16 {
+            let capacity =
+                i32::try_from(reference_capacity).map_err(|_| "too many JNI reference outputs")?;
+            quote!(#env.ensure_local_capacity(#capacity).map_err(|e|e.to_string())?;)
+        } else {
+            TokenStream::new()
+        };
         let body = prebindgen_conversions::staged::emit_call(
             f,
             &context,
@@ -1474,6 +1500,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     #[allow(unused_mut)]
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(||{
+     #reserve_outputs
      #body
     }){Ok(result)=>result,Err(e)=>{
         if let Some(result) = domain_output { result } else {

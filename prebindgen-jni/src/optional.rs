@@ -1,12 +1,16 @@
 //! Nullable JNI occurrence metadata and emission.
 use super::*;
 pub(crate) fn absent(w: &JniWire, niche: Option<&JniNiche>, input: bool) -> Result<TokenStream> {
-    // Prepared reference outputs are Option<String>/Option<Vec<u8>>. None
-    // becomes a Java null at delivery; Some(empty) stays a non-null object.
-    if matches!(
-        w,
-        JniWire::Rows { .. } | JniWire::Text { .. } | JniWire::Bytes { .. }
-    ) {
+    // Prepared text/bytes already are JVM references. Null means absent;
+    // an empty buffer is a non-null JVM object, with no Rust Option wrapper.
+    if matches!(w, JniWire::Text { .. } | JniWire::Bytes { .. }) {
+        return Ok(if input {
+            quote!(Default::default())
+        } else {
+            quote!(::prebindgen_jni_runtime::jni::objects::JObject::null())
+        });
+    }
+    if matches!(w, JniWire::Rows { .. }) {
         return Ok(if input {
             quote!(Default::default())
         } else {

@@ -60,7 +60,13 @@ fn __pb_jni_error_CResultError_typed_fdc76b156eba8b0a(
         let ret_w0 = perftest_flat::result_pair_error_into(source);
         let ret_w1 = ret_w0;
         let ret_w2 = ret_w1.code;
-        let ret_w3 = Some(ret_w1.message);
+        let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w3 = ret_w1.message;
+            ::prebindgen_jni_runtime::text_object(
+                &mut env,
+                ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+            )?
+        };
         let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
         let object = env
             .call_static_method(
@@ -73,10 +79,7 @@ fn __pb_jni_error_CResultError_typed_fdc76b156eba8b0a(
             .map_err(|e| e.to_string())?;
         env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
-        let object = match (ret_w3).as_ref() {
-            Some(value) => ::prebindgen_jni_runtime::text_object(&mut env, value)?,
-            None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-        };
+        let object = ret_w3;
         env.set_object_array_element(&result, 2i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
         ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
@@ -104,7 +107,13 @@ fn __pb_jni_error_CResourceError_typed_b601e344955ebc63(
         let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
             value: ret_w1.resource,
         });
-        let ret_w3 = Some(ret_w1.message);
+        let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w3 = ret_w1.message;
+            ::prebindgen_jni_runtime::text_object(
+                &mut env,
+                ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+            )?
+        };
         let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
         let object = env
             .call_static_method(
@@ -124,10 +133,7 @@ fn __pb_jni_error_CResourceError_typed_b601e344955ebc63(
             .map_err(|e| e.to_string())?;
         env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
-        let object = match (ret_w3).as_ref() {
-            Some(value) => ::prebindgen_jni_runtime::text_object(&mut env, value)?,
-            None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-        };
+        let object = ret_w3;
         env.set_object_array_element(&result, 2i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
         ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
@@ -163,11 +169,17 @@ fn __pb_jni_error_CRichError_typed_567a9ede94b6be79(
             perftest_flat::SparseCode::Top => 2147483647i32,
         };
         let (_, (ret_w3_value0,), ret_w3_commit) = if let Some(ret_w4) = ret_w1.message {
-            let ret_w5 = Some(ret_w4);
+            let ret_w5: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w5 = ret_w4;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut env,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w5),
+                )?
+            };
             let ret_w3_values = (ret_w5,);
             (1i32, ret_w3_values, Some(move || {}))
         } else {
-            (0i32, (None,), None)
+            (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
         };
         let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
         let object = env
@@ -181,10 +193,7 @@ fn __pb_jni_error_CRichError_typed_567a9ede94b6be79(
             .map_err(|e| e.to_string())?;
         env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
-        let object = match (ret_w3_value0).as_ref() {
-            Some(value) => ::prebindgen_jni_runtime::text_object(&mut env, value)?,
-            None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-        };
+        let object = ret_w3_value0;
         env.set_object_array_element(&result, 2i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
         ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
@@ -213,7 +222,13 @@ fn __pb_jni_error_CallbackBoundaryError_typed_0dc61bae09ff09f2(
         let ret_w0 = perftest_flat::callback_boundary_error_into(source);
         let ret_w1 = ret_w0;
         let ret_w2 = ret_w1.code;
-        let ret_w3 = Some(ret_w1.message);
+        let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w3 = ret_w1.message;
+            ::prebindgen_jni_runtime::text_object(
+                &mut env,
+                ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+            )?
+        };
         let result = ::prebindgen_jni_runtime::array(&mut env, 3usize)?;
         let object = env
             .call_static_method(
@@ -226,10 +241,7 @@ fn __pb_jni_error_CallbackBoundaryError_typed_0dc61bae09ff09f2(
             .map_err(|e| e.to_string())?;
         env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
-        let object = match (ret_w3).as_ref() {
-            Some(value) => ::prebindgen_jni_runtime::text_object(&mut env, value)?,
-            None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-        };
+        let object = ret_w3;
         env.set_object_array_element(&result, 2i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
         ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
@@ -252,12 +264,15 @@ fn __pb_jni_error_String_mapped_a4e45f5146673c62(
     reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
 ) -> ::prebindgen_runtime::Result<()> {
     {
-        let ret_w0 = Some(source);
-        let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-        let object = match (ret_w0).as_ref() {
-            Some(value) => ::prebindgen_jni_runtime::text_object(&mut env, value)?,
-            None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+        let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w0 = source;
+            ::prebindgen_jni_runtime::text_object(
+                &mut env,
+                ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+            )?
         };
+        let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
+        let object = ret_w0;
         env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
         ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
@@ -444,6 +459,70 @@ fn __pb_jni_error_ResultFailure_typed_1183170f6901c4fd(
     clippy::unnecessary_cast,
     clippy::useless_conversion
 )]
+fn __pb_jni_error_JniBufferResourceRow_typed_c6e25d27c04718b4(
+    mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
+    source: perftest_flat::JniBufferResourceRow,
+    reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
+) -> ::prebindgen_runtime::Result<()> {
+    {
+        let ret_w0_record = source;
+        let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+            value: ret_w0_record.resource,
+        });
+        let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w0_f1 = ret_w0_record.text;
+            ::prebindgen_jni_runtime::text_object(
+                &mut env,
+                ::core::convert::AsRef::<str>::as_ref(&ret_w0_f1),
+            )?
+        };
+        let ret_w0_f2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w0_f2 = ret_w0_record.bytes;
+            ::prebindgen_jni_runtime::bytes_object(
+                &mut env,
+                ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f2),
+            )?
+        };
+        let result = ::prebindgen_jni_runtime::array(&mut env, 4usize)?;
+        let object = env
+            .call_static_method(
+                "java/lang/Long",
+                "valueOf",
+                "(J)Ljava/lang/Long;",
+                &[
+                    ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                        ((&mut *ret_w0_f0)
+                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                perftest_flat::CallbackOwned,
+                            >) as i64,
+                    ),
+                ],
+            )
+            .and_then(|v| v.l())
+            .map_err(|e| e.to_string())?;
+        env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
+        env.delete_local_ref(object).map_err(|e| e.to_string())?;
+        let object = ret_w0_f1;
+        env.set_object_array_element(&result, 2i32, &object).map_err(|e| e.to_string())?;
+        env.delete_local_ref(object).map_err(|e| e.to_string())?;
+        let object = ret_w0_f2;
+        env.set_object_array_element(&result, 3i32, &object).map_err(|e| e.to_string())?;
+        env.delete_local_ref(object).map_err(|e| e.to_string())?;
+        ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
+        let _: () = {
+            let _ = Box::into_raw(ret_w0_f0);
+            *reported = Some(result.as_raw());
+        };
+        Ok(())
+    }
+}
+#[allow(
+    non_snake_case,
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
 fn __pb_jni_error_Unit_typed_a1e0cd1748dcb6ca(
     mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>,
     source: (),
@@ -471,12 +550,15 @@ fn __pb_jni_error_StorageError_mapped_1df44b7ffab026ad(
     reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>,
 ) -> ::prebindgen_runtime::Result<()> {
     {
-        let ret_w0 = Some(source);
-        let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
-        let object = match (ret_w0).as_ref() {
-            Some(value) => ::prebindgen_jni_runtime::text_object(&mut env, value)?,
-            None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+        let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+            let ret_w0 = source;
+            ::prebindgen_jni_runtime::text_object(
+                &mut env,
+                ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+            )?
         };
+        let result = ::prebindgen_jni_runtime::array(&mut env, 2usize)?;
+        let object = ret_w0;
         env.set_object_array_element(&result, 1i32, &object).map_err(|e| e.to_string())?;
         env.delete_local_ref(object).map_err(|e| e.to_string())?;
         ::prebindgen_jni_runtime::mark_domain_packet(&mut env, &result)?;
@@ -936,19 +1018,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
             let ret_w3 = perftest_flat::buffer_views_optional_text_len(&source_value);
             let ret_w4 = (ret_w3) as i64;
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some(ret_w1);
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1023,19 +1106,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
             let ret_w3 = perftest_flat::buffer_views_optional_bytes_len(&source_value);
             let ret_w4 = (ret_w3) as i64;
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some(ret_w1);
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1103,14 +1187,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
             let source_value = perftest_flat::buffer_views_text();
             let ret_w1 = perftest_flat::buffer_views_text_len(&source_value);
             let ret_w2 = (ret_w1) as i64;
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1174,14 +1259,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
             let source_value = perftest_flat::buffer_views_bytes();
             let ret_w1 = perftest_flat::buffer_views_bytes_len(&source_value);
             let ret_w2 = (ret_w1) as i64;
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1199,6 +1285,2231 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffe
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1resource_1f33d027f936f6663<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_resource();
+            let ret_w0_record = source_value;
+            let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                value: ret_w0_record.resource,
+            });
+            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1 = ret_w0_record.text;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f1),
+                )?
+            };
+            let ret_w0_f2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f2 = ret_w0_record.bytes;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f2),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[
+                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                            ((&mut *ret_w0_f0)
+                                as *mut ::prebindgen_jni_runtime::Allocation<
+                                    perftest_flat::CallbackOwned,
+                                >) as i64,
+                        ),
+                    ],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w0_f1;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w0_f2;
+            jni_environment
+                .set_object_array_element(&result, 3i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                let _ = Box::into_raw(ret_w0_f0);
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1domain_1failure_1f36020e4f4562fe0<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_domain_failure();
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        __pb_jni_error_JniBufferResourceRow_typed_c6e25d27c04718b4(
+                            &mut jni_environment,
+                            ret_w1,
+                            &mut domain_output,
+                        )?;
+                        String::new()
+                    });
+                }
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1resource_1rows_154fd0c38ecd1f227<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_resource_rows();
+            let ret_w0_source = source_value;
+            let ret_w2 = ret_w0_source.len();
+            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
+            let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
+                let ret_w0_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 11i32)
+                }?;
+                let ret_w4_record = ret_w1;
+                let mut ret_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                    value: ret_w4_record.resource,
+                });
+                let ret_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f1 = ret_w4_record.text;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4_f1),
+                    )?
+                };
+                let ret_w4_f2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f2 = ret_w4_record.bytes;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4_f2),
+                    )?
+                };
+                let ret_w0_row = ::prebindgen_jni_runtime::array(
+                    &mut jni_environment,
+                    3usize,
+                )?;
+                let object = jni_environment
+                    .call_static_method(
+                        "java/lang/Long",
+                        "valueOf",
+                        "(J)Ljava/lang/Long;",
+                        &[
+                            ::prebindgen_jni_runtime::jni::objects::JValue::Long(
+                                ((&mut *ret_w4_f0)
+                                    as *mut ::prebindgen_jni_runtime::Allocation<
+                                        perftest_flat::CallbackOwned,
+                                    >) as i64,
+                            ),
+                        ],
+                    )
+                    .and_then(|v| v.l())
+                    .map_err(|e| e.to_string())?;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 0i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let object = ret_w4_f1;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 1i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let object = ret_w4_f2;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 2i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                jni_environment
+                    .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
+                    .map_err(|e| e.to_string())?;
+                drop(ret_w0_frame);
+                ret_w0_commits
+                    .push(move || {
+                        let _ = Box::into_raw(ret_w4_f0);
+                    });
+            }
+            let ret_w0 = Some(ret_w0);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                for commit in ret_w0_commits {
+                    commit();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1text_1d33d1c8fd91af20d<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_text();
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1string_1649b053bccecf6a7<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_string();
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1bytes_1801aa24b9714561c<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_bytes();
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1vec_118f26d75535912ae<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_vec();
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1optional_1text_1d47e68fa29b4bf83<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i32,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::jni_buffer_optional_text(
+                __prebindgen_argument_0,
+            );
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
+                    let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                        let ret_w4 = ret_w3;
+                        ::prebindgen_jni_runtime::text_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                        )?
+                    };
+                    let ret_w2_values = (ret_w4,);
+                    (1i32, ret_w2_values, Some(move || {}))
+                } else {
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
+                };
+                let ret_w0_values = (ret_w2_value0,);
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        if let Some(ret_w2_action) = ret_w2_commit {
+                            ret_w2_action();
+                        }
+                    }),
+                )
+            } else {
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Integer",
+                    "valueOf",
+                    "(I)Ljava/lang/Integer;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w0)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w0_value0;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1optional_1bytes_12e41382fb70d4d62<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i32,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::jni_buffer_optional_bytes(
+                __prebindgen_argument_0,
+            );
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
+                    let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                        let ret_w4 = ret_w3;
+                        ::prebindgen_jni_runtime::bytes_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4),
+                        )?
+                    };
+                    let ret_w2_values = (ret_w4,);
+                    (1i32, ret_w2_values, Some(move || {}))
+                } else {
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
+                };
+                let ret_w0_values = (ret_w2_value0,);
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        if let Some(ret_w2_action) = ret_w2_commit {
+                            ret_w2_action();
+                        }
+                    }),
+                )
+            } else {
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Integer",
+                    "valueOf",
+                    "(I)Ljava/lang/Integer;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w0)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w0_value0;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1owned_1optional_13ea9b140c39283fe<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i32,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1) } else { None };
+            let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::jni_buffer_owned_optional(
+                __prebindgen_argument_0,
+            );
+            let (_, (ret_w0_value0, ret_w0_value1, ret_w0_value2), ret_w0_commit) = if let Some(
+                ret_w1,
+            ) = source_value {
+                let (ret_w2, (ret_w2_value0, ret_w2_value1), ret_w2_commit) = if let Some(
+                    ret_w3,
+                ) = ret_w1 {
+                    let ret_w4_record = ret_w3;
+                    let ret_w4_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                        let ret_w4_f0 = ret_w4_record.text;
+                        ::prebindgen_jni_runtime::text_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w4_f0),
+                        )?
+                    };
+                    let ret_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                        let ret_w4_f1 = ret_w4_record.bytes;
+                        ::prebindgen_jni_runtime::bytes_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4_f1),
+                        )?
+                    };
+                    let ret_w2_values = (ret_w4_f0, ret_w4_f1);
+                    (1i32, ret_w2_values, Some(move || {}))
+                } else {
+                    (
+                        0i32,
+                        (
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ),
+                        None,
+                    )
+                };
+                let ret_w0_values = (ret_w2, ret_w2_value0, ret_w2_value1);
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        if let Some(ret_w2_action) = ret_w2_commit {
+                            ret_w2_action();
+                        }
+                    }),
+                )
+            } else {
+                (
+                    0i32,
+                    (
+                        -1,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                    ),
+                    None,
+                )
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Integer",
+                    "valueOf",
+                    "(I)Ljava/lang/Integer;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w0_value0)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w0_value1;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w0_value2;
+            jni_environment
+                .set_object_array_element(&result, 3i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1owned_11b20562b3c5bfef8<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_owned();
+            let ret_w0 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w1 = ret_w0;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w1),
+                )?
+            };
+            let ret_w2 = perftest_flat::jni_buffer_row_bytes(&source_value);
+            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w3 = ret_w2;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w3),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = ret_w1;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w3;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1rows_10e85d0bcc7902cb5<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::jni_buffer_rows();
+            let ret_w0_source = &(source_value);
+            let ret_w2 = ret_w0_source.len();
+            let mut ret_w0_commits = Vec::with_capacity(ret_w2);
+            let ret_w0 = ::prebindgen_jni_runtime::array(&mut jni_environment, ret_w2)?;
+            for (ret_w3, ret_w1) in ret_w0_source.iter().enumerate() {
+                let ret_w0_frame = unsafe {
+                    ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 10i32)
+                }?;
+                let ret_w4_record = &(ret_w1);
+                let ret_w4_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f0 = &ret_w4_record.text;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4_f0),
+                    )?
+                };
+                let ret_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4_f1 = &ret_w4_record.bytes;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4_f1),
+                    )?
+                };
+                let ret_w0_row = ::prebindgen_jni_runtime::array(
+                    &mut jni_environment,
+                    2usize,
+                )?;
+                let object = ret_w4_f0;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 0i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                let object = ret_w4_f1;
+                jni_environment
+                    .set_object_array_element(&ret_w0_row, 1i32, &object)
+                    .map_err(|e| e.to_string())?;
+                jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+                jni_environment
+                    .set_object_array_element(&ret_w0, ret_w3 as i32, &ret_w0_row)
+                    .map_err(|e| e.to_string())?;
+                drop(ret_w0_frame);
+                ret_w0_commits.push(move || {});
+            }
+            let ret_w0 = Some(ret_w0);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    jni_environment.new_local_ref(value).map_err(|e| e.to_string())?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                for commit in ret_w0_commits {
+                    commit();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1wide_16983ec538bbdc661<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        jni_environment.ensure_local_capacity(50i32).map_err(|e| e.to_string())?;
+        {
+            let source_value = perftest_flat::jni_buffer_wide();
+            let ret_w0 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w1 = ret_w0;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w1),
+                )?
+            };
+            let ret_w2 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w3 = ret_w2;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                )?
+            };
+            let ret_w4 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w5: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w5 = ret_w4;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w5),
+                )?
+            };
+            let ret_w6 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w7 = ret_w6;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w7),
+                )?
+            };
+            let ret_w8 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w9: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w9 = ret_w8;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w9),
+                )?
+            };
+            let ret_w10 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w11: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w11 = ret_w10;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w11),
+                )?
+            };
+            let ret_w12 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w13: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w13 = ret_w12;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w13),
+                )?
+            };
+            let ret_w14 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w15: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w15 = ret_w14;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w15),
+                )?
+            };
+            let ret_w16 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w17: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w17 = ret_w16;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w17),
+                )?
+            };
+            let ret_w18 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w19: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w19 = ret_w18;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w19),
+                )?
+            };
+            let ret_w20 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w21: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w21 = ret_w20;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w21),
+                )?
+            };
+            let ret_w22 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w23: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w23 = ret_w22;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w23),
+                )?
+            };
+            let ret_w24 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w25: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w25 = ret_w24;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w25),
+                )?
+            };
+            let ret_w26 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w27: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w27 = ret_w26;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w27),
+                )?
+            };
+            let ret_w28 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w29: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w29 = ret_w28;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w29),
+                )?
+            };
+            let ret_w30 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w31: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w31 = ret_w30;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w31),
+                )?
+            };
+            let ret_w32 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w33: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w33 = ret_w32;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w33),
+                )?
+            };
+            let ret_w34 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w35: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w35 = ret_w34;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w35),
+                )?
+            };
+            let ret_w36 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w37: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w37 = ret_w36;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w37),
+                )?
+            };
+            let ret_w38 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w39: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w39 = ret_w38;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w39),
+                )?
+            };
+            let ret_w40 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w41: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w41 = ret_w40;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w41),
+                )?
+            };
+            let ret_w42 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w43: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w43 = ret_w42;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w43),
+                )?
+            };
+            let ret_w44 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w45: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w45 = ret_w44;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w45),
+                )?
+            };
+            let ret_w46 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w47: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w47 = ret_w46;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w47),
+                )?
+            };
+            let ret_w48 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w49: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w49 = ret_w48;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w49),
+                )?
+            };
+            let ret_w50 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w51: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w51 = ret_w50;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w51),
+                )?
+            };
+            let ret_w52 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w53: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w53 = ret_w52;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w53),
+                )?
+            };
+            let ret_w54 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w55: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w55 = ret_w54;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w55),
+                )?
+            };
+            let ret_w56 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w57: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w57 = ret_w56;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w57),
+                )?
+            };
+            let ret_w58 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w59: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w59 = ret_w58;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w59),
+                )?
+            };
+            let ret_w60 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w61: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w61 = ret_w60;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w61),
+                )?
+            };
+            let ret_w62 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w63: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w63 = ret_w62;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w63),
+                )?
+            };
+            let ret_w64 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w65: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w65 = ret_w64;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w65),
+                )?
+            };
+            let ret_w66 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w67: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w67 = ret_w66;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w67),
+                )?
+            };
+            let ret_w68 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w69: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w69 = ret_w68;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w69),
+                )?
+            };
+            let ret_w70 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w71: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w71 = ret_w70;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w71),
+                )?
+            };
+            let ret_w72 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w73: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w73 = ret_w72;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w73),
+                )?
+            };
+            let ret_w74 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w75: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w75 = ret_w74;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w75),
+                )?
+            };
+            let ret_w76 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w77: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w77 = ret_w76;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w77),
+                )?
+            };
+            let ret_w78 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w79: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w79 = ret_w78;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w79),
+                )?
+            };
+            let ret_w80 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w81: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w81 = ret_w80;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w81),
+                )?
+            };
+            let ret_w82 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w83: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w83 = ret_w82;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w83),
+                )?
+            };
+            let ret_w84 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w85: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w85 = ret_w84;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w85),
+                )?
+            };
+            let ret_w86 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w87: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w87 = ret_w86;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w87),
+                )?
+            };
+            let ret_w88 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w89: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w89 = ret_w88;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w89),
+                )?
+            };
+            let ret_w90 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w91: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w91 = ret_w90;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w91),
+                )?
+            };
+            let ret_w92 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w93: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w93 = ret_w92;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w93),
+                )?
+            };
+            let ret_w94 = perftest_flat::jni_buffer_row_text(&source_value);
+            let ret_w95: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w95 = ret_w94;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w95),
+                )?
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 49usize)?;
+            let object = ret_w1;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w3;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w5;
+            jni_environment
+                .set_object_array_element(&result, 3i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w7;
+            jni_environment
+                .set_object_array_element(&result, 4i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w9;
+            jni_environment
+                .set_object_array_element(&result, 5i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w11;
+            jni_environment
+                .set_object_array_element(&result, 6i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w13;
+            jni_environment
+                .set_object_array_element(&result, 7i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w15;
+            jni_environment
+                .set_object_array_element(&result, 8i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w17;
+            jni_environment
+                .set_object_array_element(&result, 9i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w19;
+            jni_environment
+                .set_object_array_element(&result, 10i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w21;
+            jni_environment
+                .set_object_array_element(&result, 11i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w23;
+            jni_environment
+                .set_object_array_element(&result, 12i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w25;
+            jni_environment
+                .set_object_array_element(&result, 13i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w27;
+            jni_environment
+                .set_object_array_element(&result, 14i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w29;
+            jni_environment
+                .set_object_array_element(&result, 15i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w31;
+            jni_environment
+                .set_object_array_element(&result, 16i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w33;
+            jni_environment
+                .set_object_array_element(&result, 17i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w35;
+            jni_environment
+                .set_object_array_element(&result, 18i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w37;
+            jni_environment
+                .set_object_array_element(&result, 19i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w39;
+            jni_environment
+                .set_object_array_element(&result, 20i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w41;
+            jni_environment
+                .set_object_array_element(&result, 21i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w43;
+            jni_environment
+                .set_object_array_element(&result, 22i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w45;
+            jni_environment
+                .set_object_array_element(&result, 23i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w47;
+            jni_environment
+                .set_object_array_element(&result, 24i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w49;
+            jni_environment
+                .set_object_array_element(&result, 25i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w51;
+            jni_environment
+                .set_object_array_element(&result, 26i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w53;
+            jni_environment
+                .set_object_array_element(&result, 27i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w55;
+            jni_environment
+                .set_object_array_element(&result, 28i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w57;
+            jni_environment
+                .set_object_array_element(&result, 29i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w59;
+            jni_environment
+                .set_object_array_element(&result, 30i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w61;
+            jni_environment
+                .set_object_array_element(&result, 31i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w63;
+            jni_environment
+                .set_object_array_element(&result, 32i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w65;
+            jni_environment
+                .set_object_array_element(&result, 33i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w67;
+            jni_environment
+                .set_object_array_element(&result, 34i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w69;
+            jni_environment
+                .set_object_array_element(&result, 35i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w71;
+            jni_environment
+                .set_object_array_element(&result, 36i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w73;
+            jni_environment
+                .set_object_array_element(&result, 37i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w75;
+            jni_environment
+                .set_object_array_element(&result, 38i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w77;
+            jni_environment
+                .set_object_array_element(&result, 39i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w79;
+            jni_environment
+                .set_object_array_element(&result, 40i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w81;
+            jni_environment
+                .set_object_array_element(&result, 41i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w83;
+            jni_environment
+                .set_object_array_element(&result, 42i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w85;
+            jni_environment
+                .set_object_array_element(&result, 43i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w87;
+            jni_environment
+                .set_object_array_element(&result, 44i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w89;
+            jni_environment
+                .set_object_array_element(&result, 45i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w91;
+            jni_environment
+                .set_object_array_element(&result, 46i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w93;
+            jni_environment
+                .set_object_array_element(&result, 47i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = ret_w95;
+            jni_environment
+                .set_object_array_element(&result, 48i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1callback_1a41319fcdf187075<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "(Ljava/lang/String;[BLjava/lang/String;[B)V",
+                "io.prebindgen.covertest.stru8ListOptionalstrOptionalu8ListCallback",
+            )?;
+            #[allow(unused_mut)]
+            let p0_callback_value = move |
+                callback_source_0: &str,
+                callback_source_1: &[u8],
+                callback_source_2: Option<&str>,
+                callback_source_3: Option<&[u8]>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        20i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            let callback_value_1 = callback_source_1;
+                            let callback_value_2 = callback_source_2;
+                            let callback_value_3 = callback_source_3;
+                            {
+                                let callback_arg_0_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0 = callback_value_0;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w0),
+                                    )?
+                                };
+                                let callback_arg_1_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_1_w0 = callback_value_1;
+                                    ::prebindgen_jni_runtime::bytes_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_1_w0),
+                                    )?
+                                };
+                                let (
+                                    _,
+                                    (callback_arg_2_w0_value0,),
+                                    callback_arg_2_w0_commit,
+                                ) = if let Some(callback_arg_2_w1) = callback_value_2 {
+                                    let callback_arg_2_w2: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_2_w2 = callback_arg_2_w1;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_2_w2),
+                                        )?
+                                    };
+                                    let callback_arg_2_w0_values = (callback_arg_2_w2,);
+                                    (1i32, callback_arg_2_w0_values, Some(move || {}))
+                                } else {
+                                    (
+                                        0i32,
+                                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                                        None,
+                                    )
+                                };
+                                let (
+                                    _,
+                                    (callback_arg_3_w0_value0,),
+                                    callback_arg_3_w0_commit,
+                                ) = if let Some(callback_arg_3_w1) = callback_value_3 {
+                                    let callback_arg_3_w2: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_3_w2 = callback_arg_3_w1;
+                                        ::prebindgen_jni_runtime::bytes_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_3_w2),
+                                        )?
+                                    };
+                                    let callback_arg_3_w0_values = (callback_arg_3_w2,);
+                                    (1i32, callback_arg_3_w0_values, Some(move || {}))
+                                } else {
+                                    (
+                                        0i32,
+                                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                                        None,
+                                    )
+                                };
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let callback_java_1_0 = callback_arg_1_w0;
+                                let callback_java_2_0 = callback_arg_2_w0_value0;
+                                let callback_java_3_0 = callback_arg_3_w0_value0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_1_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_2_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_3_0.as_raw(),
+                                    },
+                                ];
+                                {}
+                                {}
+                                {
+                                    if let Some(callback_arg_2_w0_action) = callback_arg_2_w0_commit {
+                                        callback_arg_2_w0_action();
+                                    }
+                                }
+                                {
+                                    if let Some(callback_arg_3_w0_action) = callback_arg_3_w0_commit {
+                                        callback_arg_3_w0_action();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::jni_buffer_callback(
+                __prebindgen_argument_0,
+            );
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1failure_16fdac6591b1a6726<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "(JLjava/lang/String;[B)V",
+                "io.prebindgen.covertest.callbacks.CallbackOwnedstru8ListCallback",
+            )?;
+            #[allow(unused_mut)]
+            let p0_callback_value = move |
+                callback_source_0: perftest_flat::CallbackOwned,
+                callback_source_1: &str,
+                callback_source_2: &[u8]|
+            {
+                p0_callback_retained
+                    .with_env(
+                        19i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            let callback_value_1 = callback_source_1;
+                            let callback_value_2 = callback_source_2;
+                            {
+                                let mut callback_arg_0_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                    value: callback_value_0,
+                                });
+                                let callback_arg_1_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_1_w0 = callback_value_1;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_1_w0),
+                                    )?
+                                };
+                                let callback_arg_2_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_2_w0 = callback_value_2;
+                                    ::prebindgen_jni_runtime::bytes_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_2_w0),
+                                    )?
+                                };
+                                let callback_java_1_0 = callback_arg_1_w0;
+                                let callback_java_2_0 = callback_arg_2_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *callback_arg_0_w0)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                perftest_flat::CallbackOwned,
+                                            >) as i64,
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_1_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_2_0.as_raw(),
+                                    },
+                                ];
+                                {
+                                    let _ = Box::into_raw(callback_arg_0_w0);
+                                }
+                                {}
+                                {}
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::jni_buffer_failure(
+                __prebindgen_argument_0,
+            );
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1worker_18d2b0e9314030afd<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "(Ljava/lang/String;[B)V",
+                "io.prebindgen.covertest.stru8ListCallback",
+            )?;
+            #[allow(unused_mut)]
+            let p0_callback_value = move |
+                callback_source_0: &str,
+                callback_source_1: &[u8]|
+            {
+                p0_callback_retained
+                    .with_env(
+                        18i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            let callback_value_1 = callback_source_1;
+                            {
+                                let callback_arg_0_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0 = callback_value_0;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w0),
+                                    )?
+                                };
+                                let callback_arg_1_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_1_w0 = callback_value_1;
+                                    ::prebindgen_jni_runtime::bytes_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_1_w0),
+                                    )?
+                                };
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let callback_java_1_0 = callback_arg_1_w0;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_1_0.as_raw(),
+                                    },
+                                ];
+                                {}
+                                {}
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::jni_buffer_worker(__prebindgen_argument_0);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1jni_1buffer_1owned_1callback_19fa8a662ae731b98<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "(Ljava/lang/String;[B)V",
+                "io.prebindgen.covertest.buffers.OwnedBufferViews",
+            )?;
+            #[allow(unused_mut)]
+            let p0_callback_value = move |
+                callback_source_0: Option<perftest_flat::JniBufferRow>|
+            {
+                p0_callback_retained
+                    .with_env(
+                        18i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let (
+                                    _,
+                                    (callback_arg_0_w0_value0, callback_arg_0_w0_value1),
+                                    callback_arg_0_w0_commit,
+                                ) = if let Some(callback_arg_0_w1) = callback_value_0 {
+                                    let callback_arg_0_w2 = perftest_flat::jni_buffer_row_text(
+                                        &callback_arg_0_w1,
+                                    );
+                                    let callback_arg_0_w3: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w3 = callback_arg_0_w2;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w3),
+                                        )?
+                                    };
+                                    let callback_arg_0_w4 = perftest_flat::jni_buffer_row_bytes(
+                                        &callback_arg_0_w1,
+                                    );
+                                    let callback_arg_0_w5: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w5 = callback_arg_0_w4;
+                                        ::prebindgen_jni_runtime::bytes_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_0_w5),
+                                        )?
+                                    };
+                                    let callback_arg_0_w0_values = (
+                                        callback_arg_0_w3,
+                                        callback_arg_0_w5,
+                                    );
+                                    (1i32, callback_arg_0_w0_values, Some(move || {}))
+                                } else {
+                                    (
+                                        0i32,
+                                        (
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        ),
+                                        None,
+                                    )
+                                };
+                                let callback_java_0_0 = callback_arg_0_w0_value0;
+                                let callback_java_0_1 = callback_arg_0_w0_value1;
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_0.as_raw(),
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        l: callback_java_0_1.as_raw(),
+                                    },
+                                ];
+                                {
+                                    if let Some(callback_arg_0_w0_action) = callback_arg_0_w0_commit {
+                                        callback_arg_0_w0_action();
+                                    }
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::jni_buffer_owned_callback(
+                __prebindgen_argument_0,
+            );
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
             let _: () = {};
             Ok(result.into_raw())
         }
@@ -1252,7 +3563,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             let ret_w3: &i64 = ret_w2;
             let ret_w3 = *ret_w3;
             let ret_w4 = perftest_flat::getter_child_name(ret_w1);
-            let ret_w5 = Some((ret_w4).to_string());
+            let ret_w5: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w5 = ret_w4;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w5),
+                )?
+            };
             let ret_w6 = perftest_flat::getter_owner_optional(&source_value);
             let (_, (ret_w7_value0, ret_w7_value1), ret_w7_commit) = if let Some(
                 ret_w8,
@@ -1261,11 +3578,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 let ret_w10: &i64 = ret_w9;
                 let ret_w10 = *ret_w10;
                 let ret_w11 = perftest_flat::getter_child_name(ret_w8);
-                let ret_w12 = Some((ret_w11).to_string());
+                let ret_w12: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w12 = ret_w11;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w12),
+                    )?
+                };
                 let ret_w7_values = (ret_w10, ret_w12);
                 (1i32, ret_w7_values, Some(move || {}))
             } else {
-                (0i32, (0, None), None)
+                (
+                    0i32,
+                    (0, ::prebindgen_jni_runtime::jni::objects::JObject::null()),
+                    None,
+                )
             };
             let ret_w13 = perftest_flat::getter_owner_container(&source_value);
             let (ret_w14, (ret_w14_value0, ret_w14_value1), ret_w14_commit) = if let Some(
@@ -1275,11 +3602,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 let ret_w16_record = &(ret_w15);
                 let ret_w16_f0: &i64 = &ret_w16_record.number;
                 let ret_w16_f0 = *ret_w16_f0;
-                let ret_w16_f1 = Some(::core::clone::Clone::clone(&ret_w16_record.text));
+                let ret_w16_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w16_f1 = &ret_w16_record.text;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w16_f1),
+                    )?
+                };
                 let ret_w14_values = (ret_w16_f0, ret_w16_f1);
                 (1i32, ret_w14_values, Some(move || {}))
             } else {
-                (0i32, (0, None), None)
+                (
+                    0i32,
+                    (0, ::prebindgen_jni_runtime::jni::objects::JObject::null()),
+                    None,
+                )
             };
             let ret_w17 = perftest_flat::getter_owner_rows(&source_value);
             let ret_w18_source = &(ret_w17);
@@ -1296,7 +3633,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 let ret_w22_record = &(ret_w19);
                 let ret_w22_f0: &i64 = &ret_w22_record.number;
                 let ret_w22_f0 = *ret_w22_f0;
-                let ret_w22_f1 = Some(::core::clone::Clone::clone(&ret_w22_record.text));
+                let ret_w22_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w22_f1 = &ret_w22_record.text;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w22_f1),
+                    )?
+                };
                 let ret_w18_row = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     2usize,
@@ -1318,15 +3661,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                     .set_object_array_element(&ret_w18_row, 0i32, &object)
                     .map_err(|e| e.to_string())?;
                 jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = match (ret_w22_f1).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let object = ret_w22_f1;
                 jni_environment
                     .set_object_array_element(&ret_w18_row, 1i32, &object)
                     .map_err(|e| e.to_string())?;
@@ -1379,12 +3714,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w5).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w5;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1406,12 +3736,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w7_value1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w7_value1;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1446,12 +3771,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 .set_object_array_element(&result, 7i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w14_value1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w14_value1;
             jni_environment
                 .set_object_array_element(&result, 8i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1547,7 +3867,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 value: ::core::clone::Clone::clone(ret_w1),
             });
             let ret_w3 = perftest_flat::getter_owner_fail(&source_value);
-            let ret_w4 = Some((ret_w3).to_string());
+            let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w4 = ret_w3;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                )?
+            };
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
             });
@@ -1592,12 +3918,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w4).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w4;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -1883,7 +4204,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             let ret_w1: &i64 = ret_w0;
             let ret_w1 = *ret_w1;
             let ret_w2 = perftest_flat::getter_child_name(source_value);
-            let ret_w3 = Some((ret_w2).to_string());
+            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w3 = ret_w2;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                )?
+            };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -1898,12 +4225,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w3).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w3;
             jni_environment
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -2143,7 +4465,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             let ret_w2 = &(ret_w1);
             let ret_w3: &i64 = &ret_w2.number;
             let ret_w3 = *ret_w3;
-            let ret_w4 = Some(::core::clone::Clone::clone(&ret_w2.text));
+            let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w4 = &ret_w2.text;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                )?
+            };
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
             });
@@ -2181,12 +4509,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w4).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w4;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -2267,9 +4590,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                                 let callback_arg_0_w3 = perftest_flat::getter_child_name(
                                     callback_arg_0_w0,
                                 );
-                                let callback_arg_0_w4 = Some(
-                                    (callback_arg_0_w3).to_string(),
-                                );
+                                let callback_arg_0_w4: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w4 = callback_arg_0_w3;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4),
+                                    )?
+                                };
                                 let callback_arg_0_w5 = perftest_flat::getter_owner_optional(
                                     callback_value_0,
                                 );
@@ -2286,16 +4615,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                                     let callback_arg_0_w10 = perftest_flat::getter_child_name(
                                         callback_arg_0_w7,
                                     );
-                                    let callback_arg_0_w11 = Some(
-                                        (callback_arg_0_w10).to_string(),
-                                    );
+                                    let callback_arg_0_w11: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w11 = callback_arg_0_w10;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w11),
+                                        )?
+                                    };
                                     let callback_arg_0_w6_values = (
                                         callback_arg_0_w9,
                                         callback_arg_0_w11,
                                     );
                                     (1i32, callback_arg_0_w6_values, Some(move || {}))
                                 } else {
-                                    (0i32, (0, None), None)
+                                    (
+                                        0i32,
+                                        (
+                                            0,
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        ),
+                                        None,
+                                    )
                                 };
                                 let callback_arg_0_w12 = perftest_flat::getter_owner_container(
                                     callback_value_0,
@@ -2311,16 +4653,31 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                                     let callback_arg_0_w15_f0: &i64 = &callback_arg_0_w15_record
                                         .number;
                                     let callback_arg_0_w15_f0 = *callback_arg_0_w15_f0;
-                                    let callback_arg_0_w15_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w15_record.text),
-                                    );
+                                    let callback_arg_0_w15_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w15_f1 = &callback_arg_0_w15_record.text;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<
+                                                str,
+                                            >::as_ref(&callback_arg_0_w15_f1),
+                                        )?
+                                    };
                                     let callback_arg_0_w13_values = (
                                         callback_arg_0_w15_f0,
                                         callback_arg_0_w15_f1,
                                     );
                                     (1i32, callback_arg_0_w13_values, Some(move || {}))
                                 } else {
-                                    (0i32, (0, None), None)
+                                    (
+                                        0i32,
+                                        (
+                                            0,
+                                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                        ),
+                                        None,
+                                    )
                                 };
                                 let callback_arg_0_w16 = perftest_flat::getter_owner_rows(
                                     callback_value_0,
@@ -2348,9 +4705,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                                     let callback_arg_0_w21_f0: &i64 = &callback_arg_0_w21_record
                                         .number;
                                     let callback_arg_0_w21_f0 = *callback_arg_0_w21_f0;
-                                    let callback_arg_0_w21_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w21_record.text),
-                                    );
+                                    let callback_arg_0_w21_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w21_f1 = &callback_arg_0_w21_record.text;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<
+                                                str,
+                                            >::as_ref(&callback_arg_0_w21_f1),
+                                        )?
+                                    };
                                     let callback_arg_0_w17_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
                                         2usize,
@@ -2378,17 +4743,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w21_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w21_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w17_row,
@@ -2416,43 +4771,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                                 let mut callback_arg_0_w23 = Box::new(::prebindgen_jni_runtime::Allocation {
                                     value: ::core::clone::Clone::clone(callback_arg_0_w22),
                                 });
-                                let callback_java_0_1 = match (callback_arg_0_w4).as_ref() {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
-                                let callback_java_0_3 = match (callback_arg_0_w6_value1)
-                                    .as_ref()
-                                {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
-                                let callback_java_0_6 = match (callback_arg_0_w13_value1)
-                                    .as_ref()
-                                {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
+                                let callback_java_0_1 = callback_arg_0_w4;
+                                let callback_java_0_3 = callback_arg_0_w6_value1;
+                                let callback_java_0_6 = callback_arg_0_w13_value1;
                                 let callback_java_0_7 = match (callback_arg_0_w17).as_ref()
                                 {
                                     Some(value) => {
@@ -3311,22 +5632,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             9i32,
                                         )
                                     }?;
-                                    let callback_arg_0_w4 = Some(callback_arg_0_w1);
+                                    let callback_arg_0_w4: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4 = callback_arg_0_w1;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4),
+                                        )?
+                                    };
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
                                         1usize,
                                     )?;
-                                    let object = match (callback_arg_0_w4).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -5794,18 +8113,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let mut callback_environment = callback_environment;
                             let callback_value_0 = callback_source_0;
                             {
-                                let callback_arg_0_w0 = Some(callback_value_0);
-                                let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
+                                let callback_arg_0_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0 = callback_value_0;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w0),
+                                    )?
                                 };
+                                let callback_java_0_0 = callback_arg_0_w0;
                                 let arguments = [
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
                                         l: callback_java_0_0.as_raw(),
@@ -5850,14 +8167,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             let source_value = perftest_flat::callback_return_text(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -5921,18 +8239,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let mut callback_environment = callback_environment;
                             let callback_value_0 = callback_source_0;
                             {
-                                let callback_arg_0_w0 = Some(callback_value_0);
-                                let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::bytes_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
+                                let callback_arg_0_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0 = callback_value_0;
+                                    ::prebindgen_jni_runtime::bytes_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_0_w0),
+                                    )?
                                 };
+                                let callback_java_0_0 = callback_arg_0_w0;
                                 let arguments = [
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
                                         l: callback_java_0_0.as_raw(),
@@ -5977,14 +8293,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             let source_value = perftest_flat::callback_return_bytes(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -6499,22 +8816,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             {
                                 let callback_arg_0_w0_record = callback_value_0;
                                 let callback_arg_0_w0_f0 = callback_arg_0_w0_record.number;
-                                let callback_arg_0_w0_f1 = Some(
-                                    callback_arg_0_w0_record.label,
-                                );
-                                let callback_java_0_1 = match (callback_arg_0_w0_f1)
-                                    .as_ref()
-                                {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
+                                let callback_arg_0_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0_f1 = callback_arg_0_w0_record.label;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w0_f1),
+                                    )?
                                 };
+                                let callback_java_0_1 = callback_arg_0_w0_f1;
                                 let arguments = [
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
                                         j: callback_arg_0_w0_f0,
@@ -8905,9 +11216,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_0_w4_record.resource,
                                         ),
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = &callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
                                         2usize,
@@ -8938,17 +11255,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -9088,9 +11395,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.resource,
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        callback_arg_0_w4_record.label,
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
                                         2usize,
@@ -9121,17 +11434,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -9394,9 +11697,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.resource,
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        callback_arg_0_w4_record.label,
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
                                         2usize,
@@ -9427,17 +11736,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -9579,9 +11878,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.resource,
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        callback_arg_0_w4_record.label,
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
                                         2usize,
@@ -9612,17 +11917,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -10050,9 +12345,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_0_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = &callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_0_w4_record.second,
@@ -10088,17 +12389,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -10269,9 +12560,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_0_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = &callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_0_w4_record.second,
@@ -10307,17 +12604,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -10504,9 +12791,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     &callback_arg_0_w8_record.first,
                                                 ),
                                             });
-                                            let callback_arg_0_w8_f1 = Some(
-                                                ::core::clone::Clone::clone(&callback_arg_0_w8_record.label),
-                                            );
+                                            let callback_arg_0_w8_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                                '_,
+                                            > = {
+                                                let callback_arg_0_w8_f1 = &callback_arg_0_w8_record.label;
+                                                ::prebindgen_jni_runtime::text_object(
+                                                    &mut callback_environment,
+                                                    ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w8_f1),
+                                                )?
+                                            };
                                             let mut callback_arg_0_w8_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                                 value: ::core::clone::Clone::clone(
                                                     &callback_arg_0_w8_record.second,
@@ -10534,7 +12827,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         } else {
                                             (
                                                 0i32,
-                                                (std::ptr::null_mut(), None, std::ptr::null_mut()),
+                                                (
+                                                    std::ptr::null_mut(),
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                    std::ptr::null_mut(),
+                                                ),
                                                 None,
                                             )
                                         };
@@ -10588,17 +12885,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         callback_environment
                                             .delete_local_ref(object)
                                             .map_err(|e| e.to_string())?;
-                                        let object = match (callback_arg_0_w6_value1).as_ref() {
-                                            Some(value) => {
-                                                ::prebindgen_jni_runtime::text_object(
-                                                    &mut callback_environment,
-                                                    value,
-                                                )?
-                                            }
-                                            None => {
-                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                            }
-                                        };
+                                        let object = callback_arg_0_w6_value1;
                                         callback_environment
                                             .set_object_array_element(
                                                 &callback_arg_0_w2_row,
@@ -10816,9 +13103,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             let mut callback_arg_0_w10_f0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                                 value: callback_arg_0_w10_f0_record.first,
                                             });
-                                            let callback_arg_0_w10_f0_f1 = Some(
-                                                callback_arg_0_w10_f0_record.label,
-                                            );
+                                            let callback_arg_0_w10_f0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                                '_,
+                                            > = {
+                                                let callback_arg_0_w10_f0_f1 = callback_arg_0_w10_f0_record
+                                                    .label;
+                                                ::prebindgen_jni_runtime::text_object(
+                                                    &mut callback_environment,
+                                                    ::core::convert::AsRef::<
+                                                        str,
+                                                    >::as_ref(&callback_arg_0_w10_f0_f1),
+                                                )?
+                                            };
                                             let mut callback_arg_0_w10_f0_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                                 value: callback_arg_0_w10_f0_record.second,
                                             });
@@ -10859,9 +13155,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 } else {
                                                     (0i32, (std::ptr::null_mut(),), None)
                                                 };
-                                                let callback_arg_0_w10_f1_some_f1 = Some(
-                                                    callback_arg_0_w10_f1_some_record.note,
-                                                );
+                                                let callback_arg_0_w10_f1_some_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                                    '_,
+                                                > = {
+                                                    let callback_arg_0_w10_f1_some_f1 = callback_arg_0_w10_f1_some_record
+                                                        .note;
+                                                    ::prebindgen_jni_runtime::text_object(
+                                                        &mut callback_environment,
+                                                        ::core::convert::AsRef::<
+                                                            str,
+                                                        >::as_ref(&callback_arg_0_w10_f1_some_f1),
+                                                    )?
+                                                };
                                                 let callback_arg_0_w10_f1_present_values = (
                                                     callback_arg_0_w10_f1_some_f0_present_value0,
                                                     callback_arg_0_w10_f1_some_f1,
@@ -10876,7 +13181,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     }),
                                                 )
                                             } else {
-                                                (0i32, (std::ptr::null_mut(), None), None)
+                                                (
+                                                    0i32,
+                                                    (
+                                                        std::ptr::null_mut(),
+                                                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                                                    ),
+                                                    None,
+                                                )
                                             };
                                             let callback_arg_0_w8_values = (
                                                 (&mut *callback_arg_0_w10_f0_f0)
@@ -10908,11 +13220,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                 0i32,
                                                 (
                                                     std::ptr::null_mut(),
-                                                    None,
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                                                     std::ptr::null_mut(),
                                                     0,
                                                     std::ptr::null_mut(),
-                                                    None,
+                                                    ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                                                 ),
                                                 None,
                                             )
@@ -10967,17 +13279,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         callback_environment
                                             .delete_local_ref(object)
                                             .map_err(|e| e.to_string())?;
-                                        let object = match (callback_arg_0_w8_value1).as_ref() {
-                                            Some(value) => {
-                                                ::prebindgen_jni_runtime::text_object(
-                                                    &mut callback_environment,
-                                                    value,
-                                                )?
-                                            }
-                                            None => {
-                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                            }
-                                        };
+                                        let object = callback_arg_0_w8_value1;
                                         callback_environment
                                             .set_object_array_element(
                                                 &callback_arg_0_w4_row,
@@ -11057,17 +13359,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                         callback_environment
                                             .delete_local_ref(object)
                                             .map_err(|e| e.to_string())?;
-                                        let object = match (callback_arg_0_w8_value5).as_ref() {
-                                            Some(value) => {
-                                                ::prebindgen_jni_runtime::text_object(
-                                                    &mut callback_environment,
-                                                    value,
-                                                )?
-                                            }
-                                            None => {
-                                                ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                            }
-                                        };
+                                        let object = callback_arg_0_w8_value5;
                                         callback_environment
                                             .set_object_array_element(
                                                 &callback_arg_0_w4_row,
@@ -11255,9 +13547,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_0_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = &callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_0_w4_record.second,
@@ -11293,17 +13591,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -11380,9 +13668,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_1_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_1_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_1_w4_record.label),
-                                    );
+                                    let callback_arg_1_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_1_w4_f1 = &callback_arg_1_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_1_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_1_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_1_w4_record.second,
@@ -11418,17 +13712,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_1_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_1_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_1_w0_row,
@@ -11775,9 +14059,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.first,
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        callback_arg_0_w4_record.label,
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.second,
                                     });
@@ -11811,17 +14101,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -11992,9 +14272,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.first,
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        callback_arg_0_w4_record.label,
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: callback_arg_0_w4_record.second,
                                     });
@@ -12028,17 +14314,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -12115,9 +14391,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_1_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_1_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_1_w4_record.label),
-                                    );
+                                    let callback_arg_1_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_1_w4_f1 = &callback_arg_1_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_1_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_1_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_1_w4_record.second,
@@ -12153,17 +14435,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_1_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_1_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_1_w0_row,
@@ -12352,9 +14624,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_0_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = &callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_0_w4_record.second,
@@ -12390,17 +14668,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -12573,9 +14841,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             &callback_arg_0_w4_record.first,
                                         ),
                                     });
-                                    let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
-                                    );
+                                    let callback_arg_0_w4_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                        '_,
+                                    > = {
+                                        let callback_arg_0_w4_f1 = &callback_arg_0_w4_record.label;
+                                        ::prebindgen_jni_runtime::text_object(
+                                            &mut callback_environment,
+                                            ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w4_f1),
+                                        )?
+                                    };
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
                                         value: ::core::clone::Clone::clone(
                                             &callback_arg_0_w4_record.second,
@@ -12611,17 +14885,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_environment
                                         .delete_local_ref(object)
                                         .map_err(|e| e.to_string())?;
-                                    let object = match (callback_arg_0_w4_f1).as_ref() {
-                                        Some(value) => {
-                                            ::prebindgen_jni_runtime::text_object(
-                                                &mut callback_environment,
-                                                value,
-                                            )?
-                                        }
-                                        None => {
-                                            ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                        }
-                                    };
+                                    let object = callback_arg_0_w4_f1;
                                     callback_environment
                                         .set_object_array_element(
                                             &callback_arg_0_w0_row,
@@ -14690,22 +16954,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 let callback_arg_1_w0_f0: &i64 = &callback_arg_1_w0_record
                                     .number;
                                 let callback_arg_1_w0_f0 = *callback_arg_1_w0_f0;
-                                let callback_arg_1_w0_f1 = Some(
-                                    ::core::clone::Clone::clone(&callback_arg_1_w0_record.text),
-                                );
-                                let callback_java_1_1 = match (callback_arg_1_w0_f1)
-                                    .as_ref()
-                                {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
+                                let callback_arg_1_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_1_w0_f1 = &callback_arg_1_w0_record.text;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_1_w0_f1),
+                                    )?
                                 };
+                                let callback_java_1_1 = callback_arg_1_w0_f1;
                                 let arguments = [
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
                                         j: callback_arg_0_w0,
@@ -15574,22 +17832,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 let callback_arg_1_w0_f0: &i64 = &callback_arg_1_w0_record
                                     .number;
                                 let callback_arg_1_w0_f0 = *callback_arg_1_w0_f0;
-                                let callback_arg_1_w0_f1 = Some(
-                                    ::core::clone::Clone::clone(&callback_arg_1_w0_record.text),
-                                );
-                                let callback_java_1_1 = match (callback_arg_1_w0_f1)
-                                    .as_ref()
-                                {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
+                                let callback_arg_1_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_1_w0_f1 = &callback_arg_1_w0_record.text;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_1_w0_f1),
+                                    )?
                                 };
+                                let callback_java_1_1 = callback_arg_1_w0_f1;
                                 let arguments = [
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
                                         j: callback_arg_0_w0,
@@ -16990,10 +19242,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let callback_value_1 = callback_source_1;
                             let callback_value_2 = callback_source_2;
                             {
-                                let callback_arg_0_w0 = Some(
-                                    (callback_value_0).to_string(),
-                                );
-                                let callback_arg_1_w0 = Some((callback_value_1).to_vec());
+                                let callback_arg_0_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0 = callback_value_0;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w0),
+                                    )?
+                                };
+                                let callback_arg_1_w0: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_1_w0 = callback_value_1;
+                                    ::prebindgen_jni_runtime::bytes_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<[u8]>::as_ref(&callback_arg_1_w0),
+                                    )?
+                                };
                                 let callback_arg_2_w0_source = callback_value_2;
                                 let callback_arg_2_w2 = callback_arg_2_w0_source.len();
                                 let mut callback_arg_2_w0_commits = Vec::with_capacity(
@@ -17052,28 +19318,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                     callback_arg_2_w0_commits.push(move || {});
                                 }
                                 let callback_arg_2_w0 = Some(callback_arg_2_w0);
-                                let callback_java_0_0 = match (callback_arg_0_w0).as_ref() {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
-                                let callback_java_1_0 = match (callback_arg_1_w0).as_ref() {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::bytes_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
-                                };
+                                let callback_java_0_0 = callback_arg_0_w0;
+                                let callback_java_1_0 = callback_arg_1_w0;
                                 let callback_java_2_0 = match (callback_arg_2_w0).as_ref() {
                                     Some(value) => {
                                         callback_environment
@@ -17291,22 +19537,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                 let mut callback_arg_0_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                                     value: callback_arg_0_w0_record.handle,
                                 });
-                                let callback_arg_0_w0_f1 = Some(
-                                    callback_arg_0_w0_record.label,
-                                );
-                                let callback_java_0_1 = match (callback_arg_0_w0_f1)
-                                    .as_ref()
-                                {
-                                    Some(value) => {
-                                        ::prebindgen_jni_runtime::text_object(
-                                            &mut callback_environment,
-                                            value,
-                                        )?
-                                    }
-                                    None => {
-                                        ::prebindgen_jni_runtime::jni::objects::JObject::null()
-                                    }
+                                let callback_arg_0_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<
+                                    '_,
+                                > = {
+                                    let callback_arg_0_w0_f1 = callback_arg_0_w0_record.label;
+                                    ::prebindgen_jni_runtime::text_object(
+                                        &mut callback_environment,
+                                        ::core::convert::AsRef::<str>::as_ref(&callback_arg_0_w0_f1),
+                                    )?
                                 };
+                                let callback_java_0_1 = callback_arg_0_w0_f1;
                                 let arguments = [
                                     ::prebindgen_jni_runtime::jni::sys::jvalue {
                                         j: ((&mut *callback_arg_0_w0_f0)
@@ -17900,11 +20140,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     ret_w4_f8_payload,
                 ) = ret_w4_record.text
                 {
-                    let ret_w4_f8_some = Some(ret_w4_f8_payload);
+                    let ret_w4_f8_some: ::prebindgen_jni_runtime::jni::objects::JObject<
+                        '_,
+                    > = {
+                        let ret_w4_f8_some = ret_w4_f8_payload;
+                        ::prebindgen_jni_runtime::text_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w4_f8_some),
+                        )?
+                    };
                     let ret_w4_f8_present_values = (ret_w4_f8_some,);
                     (1i32, ret_w4_f8_present_values, Some(move || {}))
                 } else {
-                    (0i32, (None,), None)
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
                 };
                 let ret_w0_row = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
@@ -18033,15 +20285,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     .set_object_array_element(&ret_w0_row, 7i32, &object)
                     .map_err(|e| e.to_string())?;
                 jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-                let object = match (ret_w4_f8_present_value0).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let object = ret_w4_f8_present_value0;
                 jni_environment
                     .set_object_array_element(&ret_w0_row, 8i32, &object)
                     .map_err(|e| e.to_string())?;
@@ -19681,20 +21925,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
-                let ret_w4 = Some(ret_w1);
+                let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4 = ret_w1;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                    )?
+                };
                 let ret_w0_row = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     1usize,
                 )?;
-                let object = match (ret_w4).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let object = ret_w4;
                 jni_environment
                     .set_object_array_element(&ret_w0_row, 0i32, &object)
                     .map_err(|e| e.to_string())?;
@@ -19834,20 +22076,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
-                let ret_w4 = Some(ret_w1);
+                let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4 = ret_w1;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4),
+                    )?
+                };
                 let ret_w0_row = ::prebindgen_jni_runtime::array(
                     &mut jni_environment,
                     1usize,
                 )?;
-                let object = match (ret_w4).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::bytes_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let object = ret_w4;
                 jni_environment
                     .set_object_array_element(&ret_w0_row, 0i32, &object)
                     .map_err(|e| e.to_string())?;
@@ -23344,14 +25584,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     });
                 }
             };
-            let ret_w2 = Some(ret_w0);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w2).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w2 = ret_w0;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w2;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -25445,11 +27686,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             ) = source_value {
                 let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
                     let (_, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w3 {
-                        let ret_w6 = Some(ret_w5);
+                        let ret_w6: ::prebindgen_jni_runtime::jni::objects::JObject<
+                            '_,
+                        > = {
+                            let ret_w6 = ret_w5;
+                            ::prebindgen_jni_runtime::text_object(
+                                &mut jni_environment,
+                                ::core::convert::AsRef::<str>::as_ref(&ret_w6),
+                            )?
+                        };
                         let ret_w4_values = (ret_w6,);
                         (1i32, ret_w4_values, Some(move || {}))
                     } else {
-                        (0i32, (None,), None)
+                        (
+                            0i32,
+                            (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                            None,
+                        )
                     };
                     let ret_w2_values = (ret_w4_value0,);
                     (
@@ -25462,7 +27715,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                         }),
                     )
                 } else {
-                    (0i32, (None,), None)
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
                 };
                 let ret_w0_values = (ret_w2, ret_w2_value0);
                 (
@@ -25475,7 +27732,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                     }),
                 )
             } else {
-                (0i32, (-1, None), None)
+                (
+                    0i32,
+                    (-1, ::prebindgen_jni_runtime::jni::objects::JObject::null()),
+                    None,
+                )
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
             let object = jni_environment
@@ -25491,12 +27752,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_value1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value1;
             jni_environment
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -25589,11 +27845,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             ) = source_value {
                 let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
                     let (_, (ret_w4_value0,), ret_w4_commit) = if let Some(ret_w5) = ret_w3 {
-                        let ret_w6 = Some(ret_w5);
+                        let ret_w6: ::prebindgen_jni_runtime::jni::objects::JObject<
+                            '_,
+                        > = {
+                            let ret_w6 = ret_w5;
+                            ::prebindgen_jni_runtime::bytes_object(
+                                &mut jni_environment,
+                                ::core::convert::AsRef::<[u8]>::as_ref(&ret_w6),
+                            )?
+                        };
                         let ret_w4_values = (ret_w6,);
                         (1i32, ret_w4_values, Some(move || {}))
                     } else {
-                        (0i32, (None,), None)
+                        (
+                            0i32,
+                            (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                            None,
+                        )
                     };
                     let ret_w2_values = (ret_w4_value0,);
                     (
@@ -25606,7 +27874,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                         }),
                     )
                 } else {
-                    (0i32, (None,), None)
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
                 };
                 let ret_w0_values = (ret_w2, ret_w2_value0);
                 (
@@ -25619,7 +27891,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                     }),
                 )
             } else {
-                (0i32, (-1, None), None)
+                (
+                    0i32,
+                    (-1, ::prebindgen_jni_runtime::jni::objects::JObject::null()),
+                    None,
+                )
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
             let object = jni_environment
@@ -25635,12 +27911,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_value1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value1;
             jni_environment
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -26956,19 +29227,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_str_echo(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some((ret_w1).to_string());
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -27039,19 +29311,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_slice_echo(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some((ret_w1).to_vec());
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -28053,19 +30326,22 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 ret_w0_f0_payload,
             ) = ret_w0_record.data
             {
-                let ret_w0_f0_some = Some(ret_w0_f0_payload);
+                let ret_w0_f0_some: ::prebindgen_jni_runtime::jni::objects::JObject<
+                    '_,
+                > = {
+                    let ret_w0_f0_some = ret_w0_f0_payload;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f0_some),
+                    )?
+                };
                 let ret_w0_f0_present_values = (ret_w0_f0_some,);
                 (1i32, ret_w0_f0_present_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0_f0_present_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0_present_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -28704,19 +30980,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_text(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some(ret_w1);
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -28786,19 +31063,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_bytes(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some(ret_w1);
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -29573,11 +31851,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                     ret_w2_f1_payload,
                 ) = ret_w2_record.text
                 {
-                    let ret_w2_f1_some = Some(ret_w2_f1_payload);
+                    let ret_w2_f1_some: ::prebindgen_jni_runtime::jni::objects::JObject<
+                        '_,
+                    > = {
+                        let ret_w2_f1_some = ret_w2_f1_payload;
+                        ::prebindgen_jni_runtime::text_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w2_f1_some),
+                        )?
+                    };
                     let ret_w2_f1_present_values = (ret_w2_f1_some,);
                     (1i32, ret_w2_f1_present_values, Some(move || {}))
                 } else {
-                    (0i32, (None,), None)
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
                 };
                 let (_, (ret_w2_f2_present_value0,), ret_w2_f2_present_commit) = if let Some(
                     ret_w2_f2_payload,
@@ -29611,7 +31901,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                     }),
                 )
             } else {
-                (0i32, (0, 0, None, 0), None)
+                (
+                    0i32,
+                    (0, 0, ::prebindgen_jni_runtime::jni::objects::JObject::null(), 0),
+                    None,
+                )
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 6usize)?;
             let object = jni_environment
@@ -29657,12 +31951,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_value2).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value2;
             jni_environment
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -29931,11 +32220,25 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                     ) = if let Some(ret_w2_f1_some_f1_payload) = ret_w2_f1_some_record
                         .text
                     {
-                        let ret_w2_f1_some_f1_some = Some(ret_w2_f1_some_f1_payload);
+                        let ret_w2_f1_some_f1_some: ::prebindgen_jni_runtime::jni::objects::JObject<
+                            '_,
+                        > = {
+                            let ret_w2_f1_some_f1_some = ret_w2_f1_some_f1_payload;
+                            ::prebindgen_jni_runtime::text_object(
+                                &mut jni_environment,
+                                ::core::convert::AsRef::<
+                                    str,
+                                >::as_ref(&ret_w2_f1_some_f1_some),
+                            )?
+                        };
                         let ret_w2_f1_some_f1_present_values = (ret_w2_f1_some_f1_some,);
                         (1i32, ret_w2_f1_some_f1_present_values, Some(move || {}))
                     } else {
-                        (0i32, (None,), None)
+                        (
+                            0i32,
+                            (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                            None,
+                        )
                     };
                     let (
                         _,
@@ -29972,7 +32275,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                         }),
                     )
                 } else {
-                    (0i32, (0, 0, None, 0), None)
+                    (
+                        0i32,
+                        (
+                            0,
+                            0,
+                            ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                            0,
+                        ),
+                        None,
+                    )
                 };
                 let ret_w0_values = (
                     ret_w2_f0_present_value0,
@@ -29995,7 +32307,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                     }),
                 )
             } else {
-                (0i32, (std::ptr::null_mut(), 0, 0, 0, None, 0), None)
+                (
+                    0i32,
+                    (
+                        std::ptr::null_mut(),
+                        0,
+                        0,
+                        0,
+                        ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                        0,
+                    ),
+                    None,
+                )
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 8usize)?;
             let object = jni_environment
@@ -30071,12 +32394,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_value4).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value4;
             jni_environment
                 .set_object_array_element(&result, 6i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -30245,19 +32563,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::plain_note_echo(__prebindgen_argument_0);
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = Some(ret_w1);
+                let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w2 = ret_w1;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                    )?
+                };
                 let ret_w0_values = (ret_w2,);
                 (1i32, ret_w0_values, Some(move || {}))
             } else {
-                (0i32, (None,), None)
+                (0i32, (::prebindgen_jni_runtime::jni::objects::JObject::null(),), None)
             };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0_value0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_value0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -30632,7 +32951,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let ret_w0_f0_record = ret_w0_record.stamp;
             let ret_w0_f0_f0 = ret_w0_f0_record.secs;
             let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
-            let ret_w0_f1 = Some(ret_w0_record.id);
+            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1 = ret_w0_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f1),
+                )?
+            };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -30660,12 +32985,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f1;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -30746,7 +33066,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let ret_w0_f0_record = ret_w0_record.stamp;
             let ret_w0_f0_f0 = ret_w0_f0_record.secs;
             let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
-            let ret_w0_f1 = Some(ret_w0_record.id);
+            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1 = ret_w0_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f1),
+                )?
+            };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -30774,12 +33100,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f1;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -31482,14 +33803,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
             let source_value = perftest_flat::string_new(__prebindgen_argument_0);
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -31686,14 +34008,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1text_
             );
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::text_echo(__prebindgen_argument_0);
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -31752,14 +34075,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bytes
             );
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::bytes_echo(__prebindgen_argument_0);
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -31841,7 +34165,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             let ret_w6_f0 = *ret_w6_f0;
             let ret_w6_f1: &i64 = &ret_w6_record.nanos;
             let ret_w6_f1 = *ret_w6_f1;
-            let ret_w7 = Some(::core::clone::Clone::clone(&ret_w1.label));
+            let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w7 = &ret_w1.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w7),
+                )?
+            };
             let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
             });
@@ -31898,12 +34228,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w7).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w7;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -33690,14 +36015,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             );
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::report_label(__prebindgen_argument_0);
-            let ret_w0 = Some(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = match (ret_w0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            let ret_w0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0 = source_value;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0),
+                )?
             };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = ret_w0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -33797,7 +36123,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             let ret_w6_f0 = *ret_w6_f0;
             let ret_w6_f1: &i64 = &ret_w6_record.nanos;
             let ret_w6_f1 = *ret_w6_f1;
-            let ret_w7 = Some(::core::clone::Clone::clone(&ret_w1.label));
+            let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w7 = &ret_w1.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w7),
+                )?
+            };
             let mut ret_w8 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
             });
@@ -33854,12 +36186,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w7).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w7;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -35428,7 +37755,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
         {
             let source_value = perftest_flat::resource_bundle_new();
             let ret_w0_record = source_value;
-            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f0 = ret_w0_record.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f0),
+                )?
+            };
             let ret_w0_f1_record = ret_w0_record.pair;
             let mut ret_w0_f1_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: ret_w0_f1_record.first,
@@ -35440,20 +37773,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 value: ret_w0_record.tail,
             });
             let ret_w0_f3_record = &(ret_w0_record.details);
-            let ret_w0_f3_f0 = Some(
-                ::core::clone::Clone::clone(&ret_w0_f3_record.bytes),
-            );
+            let ret_w0_f3_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f3_f0 = &ret_w0_f3_record.bytes;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f3_f0),
+                )?
+            };
             let ret_w0_f3_f1: &f32 = &ret_w0_f3_record.f;
             let ret_w0_f3_f1 = *ret_w0_f3_f1;
             let ret_w0_f3_f2: &f64 = &ret_w0_f3_record.d;
             let ret_w0_f3_f2 = *ret_w0_f3_f2;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 8usize)?;
-            let object = match (ret_w0_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -35518,12 +37850,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f3_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f3_f0;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -35611,7 +37938,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
         {
             let source_value = perftest_flat::resource_bundle_default();
             let ret_w0_record = source_value;
-            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f0 = ret_w0_record.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f0),
+                )?
+            };
             let ret_w0_f1_record = ret_w0_record.pair;
             let mut ret_w0_f1_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: ret_w0_f1_record.first,
@@ -35623,16 +37956,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 value: ret_w0_record.tail,
             });
             let ret_w0_f3_record = ret_w0_record.details;
-            let ret_w0_f3_f0 = Some(ret_w0_f3_record.bytes);
+            let ret_w0_f3_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f3_f0 = ret_w0_f3_record.bytes;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f3_f0),
+                )?
+            };
             let ret_w0_f3_f1 = ret_w0_f3_record.f;
             let ret_w0_f3_f2 = ret_w0_f3_record.d;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 8usize)?;
-            let object = match (ret_w0_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -35697,12 +38031,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f3_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f3_f0;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -35791,7 +38120,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
             let source_value = perftest_flat::resource_bundle_fields();
             let ret_w0 = perftest_flat::resource_bundle_into(source_value);
             let ret_w1 = ret_w0;
-            let ret_w2 = Some(ret_w1.label);
+            let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w2 = ret_w1.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                )?
+            };
             let ret_w3_record = ret_w1.pair;
             let mut ret_w3_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: ret_w3_record.first,
@@ -35803,18 +38138,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 value: ret_w1.tail,
             });
             let ret_w5_record = &(ret_w1.details);
-            let ret_w5_f0 = Some(::core::clone::Clone::clone(&ret_w5_record.bytes));
+            let ret_w5_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w5_f0 = &ret_w5_record.bytes;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w5_f0),
+                )?
+            };
             let ret_w5_f1: &f32 = &ret_w5_record.f;
             let ret_w5_f1 = *ret_w5_f1;
             let ret_w5_f2: &f64 = &ret_w5_record.d;
             let ret_w5_f2 = *ret_w5_f2;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 8usize)?;
-            let object = match (ret_w2).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w2;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -35879,12 +38215,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w5_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w5_f0;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -36027,7 +38358,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
             let ret_w0 = perftest_flat::api_record_count(&source_value);
             let ret_w1 = ret_w0;
             let ret_w2 = perftest_flat::api_record_label(&source_value);
-            let ret_w3 = Some(ret_w2);
+            let ret_w3: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w3 = ret_w2;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w3),
+                )?
+            };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -36042,12 +38379,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w3).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w3;
             jni_environment
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -36231,9 +38563,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
         {
             let source_value = perftest_flat::resource_bundle_views();
             let ret_w1 = perftest_flat::resource_bundle_label(&source_value);
-            let ret_w2 = Some(ret_w1);
+            let ret_w2: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w2 = ret_w1;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w2),
+                )?
+            };
             let ret_w0_record = source_value;
-            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f0 = ret_w0_record.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f0),
+                )?
+            };
             let ret_w0_f1_record = ret_w0_record.pair;
             let mut ret_w0_f1_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: ret_w0_f1_record.first,
@@ -36245,16 +38589,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 value: ret_w0_record.tail,
             });
             let ret_w0_f3_record = ret_w0_record.details;
-            let ret_w0_f3_f0 = Some(ret_w0_f3_record.bytes);
+            let ret_w0_f3_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f3_f0 = ret_w0_f3_record.bytes;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f3_f0),
+                )?
+            };
             let ret_w0_f3_f1 = ret_w0_f3_record.f;
             let ret_w0_f3_f2 = ret_w0_f3_record.d;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 9usize)?;
-            let object = match (ret_w0_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -36319,12 +38664,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f3_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f3_f0;
             jni_environment
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -36363,12 +38703,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 .set_object_array_element(&result, 7i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w2).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w2;
             jni_environment
                 .set_object_array_element(&result, 8i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -37271,12 +39606,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
                 __prebindgen_argument_0,
             );
             let ret_w0_record = source_value;
-            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f0 = ret_w0_record.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f0),
+                )?
+            };
             let ret_w0_f1_record = ret_w0_record.blob;
             let ret_w0_f1_f0_record = ret_w0_f1_record.stamp;
             let ret_w0_f1_f0_f0 = ret_w0_f1_f0_record.secs;
             let ret_w0_f1_f0_f1 = ret_w0_f1_f0_record.nanos;
-            let ret_w0_f1_f1 = Some(ret_w0_f1_record.id);
+            let ret_w0_f1_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1_f1 = ret_w0_f1_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f1_f1),
+                )?
+            };
             let ret_w0_f2_record = ret_w0_record.unsigned;
             let ret_w0_f2_f0 = (ret_w0_f2_record.byte) as i32;
             let ret_w0_f2_f1 = (ret_w0_f2_record.short) as i32;
@@ -37298,12 +39645,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let ret_w0_f5 = (ret_w0_record.signed).to_be_bytes();
             let ret_w0_f6 = (ret_w0_record.wide).to_be_bytes();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 15usize)?;
-            let object = match (ret_w0_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -37342,12 +39684,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f1_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f1_f1;
             jni_environment
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -37822,12 +40159,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
                 __prebindgen_argument_0,
             );
             let ret_w0_record = source_value;
-            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f0 = ret_w0_record.label;
+                ::prebindgen_jni_runtime::text_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<str>::as_ref(&ret_w0_f0),
+                )?
+            };
             let ret_w0_f1_record = ret_w0_record.blob;
             let ret_w0_f1_f0_record = ret_w0_f1_record.stamp;
             let ret_w0_f1_f0_f0 = ret_w0_f1_f0_record.secs;
             let ret_w0_f1_f0_f1 = ret_w0_f1_f0_record.nanos;
-            let ret_w0_f1_f1 = Some(ret_w0_f1_record.id);
+            let ret_w0_f1_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1_f1 = ret_w0_f1_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f1_f1),
+                )?
+            };
             let ret_w0_f2_record = ret_w0_record.unsigned;
             let ret_w0_f2_f0 = (ret_w0_f2_record.byte) as i32;
             let ret_w0_f2_f1 = (ret_w0_f2_record.short) as i32;
@@ -37849,12 +40198,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let ret_w0_f5 = (ret_w0_record.signed).to_be_bytes();
             let ret_w0_f6 = (ret_w0_record.wide).to_be_bytes();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 15usize)?;
-            let object = match (ret_w0_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -37893,12 +40237,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f1_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f1_f1;
             jni_environment
                 .set_object_array_element(&result, 4i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -38105,16 +40444,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::data_floats_echo(__prebindgen_argument_0);
             let ret_w0_record = source_value;
-            let ret_w0_f0 = Some(ret_w0_record.bytes);
+            let ret_w0_f0: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f0 = ret_w0_record.bytes;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f0),
+                )?
+            };
             let ret_w0_f1 = ret_w0_record.f;
             let ret_w0_f2 = ret_w0_record.d;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
-            let object = match (ret_w0_f0).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f0;
             jni_environment
                 .set_object_array_element(&result, 1i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -38254,7 +40594,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let ret_w0_f0_record = ret_w0_record.stamp;
             let ret_w0_f0_f0 = ret_w0_f0_record.secs;
             let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
-            let ret_w0_f1 = Some(ret_w0_record.id);
+            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1 = ret_w0_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f1),
+                )?
+            };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -38282,12 +40628,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f1;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -38370,18 +40711,36 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let ret_w0_f0_f0 = *ret_w0_f0_f0;
             let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
             let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w0_f1 = &ret_w0_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w0_f1),
+                )?
+            };
             let ret_w2 = perftest_flat::blob_value_copy(&source_value);
             let ret_w3_record = ret_w2;
             let ret_w3_f0_record = ret_w3_record.stamp;
             let ret_w3_f0_f0 = ret_w3_f0_record.secs;
             let ret_w3_f0_f1 = ret_w3_f0_record.nanos;
-            let ret_w3_f1 = Some(ret_w3_record.id);
+            let ret_w3_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w3_f1 = ret_w3_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w3_f1),
+                )?
+            };
             let ret_w1_record = source_value;
             let ret_w1_f0_record = ret_w1_record.stamp;
             let ret_w1_f0_f0 = ret_w1_f0_record.secs;
             let ret_w1_f0_f1 = ret_w1_f0_record.nanos;
-            let ret_w1_f1 = Some(ret_w1_record.id);
+            let ret_w1_f1: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                let ret_w1_f1 = ret_w1_record.id;
+                ::prebindgen_jni_runtime::bytes_object(
+                    &mut jni_environment,
+                    ::core::convert::AsRef::<[u8]>::as_ref(&ret_w1_f1),
+                )?
+            };
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 10usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -38409,12 +40768,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 .set_object_array_element(&result, 2i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w0_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w0_f1;
             jni_environment
                 .set_object_array_element(&result, 3i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -38445,12 +40799,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 .set_object_array_element(&result, 5i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w1_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w1_f1;
             jni_environment
                 .set_object_array_element(&result, 6i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -38481,12 +40830,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 .set_object_array_element(&result, 8i32, &object)
                 .map_err(|e| e.to_string())?;
             jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = match (ret_w3_f1).as_ref() {
-                Some(value) => {
-                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
-                }
-                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-            };
+            let object = ret_w3_f1;
             jni_environment
                 .set_object_array_element(&result, 9i32, &object)
                 .map_err(|e| e.to_string())?;
@@ -38971,26 +41315,29 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                     ret_w4_f8_payload,
                 ) = ret_w4_record.text
                 {
-                    let ret_w4_f8_some = Some(ret_w4_f8_payload);
+                    let ret_w4_f8_some: ::prebindgen_jni_runtime::jni::objects::JObject<
+                        '_,
+                    > = {
+                        let ret_w4_f8_some = ret_w4_f8_payload;
+                        ::prebindgen_jni_runtime::text_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w4_f8_some),
+                        )?
+                    };
                     let ret_w4_f8_present_values = (ret_w4_f8_some,);
                     (1i32, ret_w4_f8_present_values, Some(move || {}))
                 } else {
-                    (0i32, (None,), None)
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
                 };
                 let ret_w0_callback_object_7 = ::prebindgen_jni_runtime::bytes_object(
                     &mut jni_environment,
                     &(ret_w4_f7),
                 )?;
-                let ret_w0_callback_object_8 = match (ret_w4_f8_present_value0).as_ref()
-                {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let ret_w0_callback_object_8 = ret_w4_f8_present_value0;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
@@ -40103,16 +42450,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
-                let ret_w4 = Some(ret_w1);
-                let ret_w0_callback_object_0 = match (ret_w4).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4 = ret_w1;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w4),
+                    )?
                 };
+                let ret_w0_callback_object_0 = ret_w4;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
@@ -40283,16 +42628,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
                 }?;
-                let ret_w4 = Some(ret_w1);
-                let ret_w0_callback_object_0 = match (ret_w4).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::bytes_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                let ret_w4: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w4 = ret_w1;
+                    ::prebindgen_jni_runtime::bytes_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<[u8]>::as_ref(&ret_w4),
+                    )?
                 };
+                let ret_w0_callback_object_0 = ret_w4;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
@@ -42667,25 +45010,27 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                 let (_, (ret_w14_value0,), ret_w14_commit) = if let Some(ret_w15) = ret_w5
                     .text
                 {
-                    let ret_w16 = Some(ret_w15);
+                    let ret_w16: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                        let ret_w16 = ret_w15;
+                        ::prebindgen_jni_runtime::text_object(
+                            &mut jni_environment,
+                            ::core::convert::AsRef::<str>::as_ref(&ret_w16),
+                        )?
+                    };
                     let ret_w14_values = (ret_w16,);
                     (1i32, ret_w14_values, Some(move || {}))
                 } else {
-                    (0i32, (None,), None)
+                    (
+                        0i32,
+                        (::prebindgen_jni_runtime::jni::objects::JObject::null(),),
+                        None,
+                    )
                 };
                 let ret_w0_callback_object_7 = ::prebindgen_jni_runtime::bytes_object(
                     &mut jni_environment,
                     &(ret_w13),
                 )?;
-                let ret_w0_callback_object_8 = match (ret_w14_value0).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let ret_w0_callback_object_8 = ret_w14_value0;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
@@ -42844,19 +45189,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
                 let ret_w6 = perftest_flat::sequence_part_into(ret_w3);
                 let ret_w7 = ret_w6;
                 let ret_w8 = ret_w7.number;
-                let ret_w9 = Some(ret_w7.text);
+                let ret_w9: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w9 = ret_w7.text;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w9),
+                    )?
+                };
                 let mut ret_w10 = Box::new(::prebindgen_jni_runtime::Allocation {
                     value: ret_w7.resource,
                 });
-                let ret_w2_callback_object_1 = match (ret_w9).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
-                };
+                let ret_w2_callback_object_1 = ret_w9;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
@@ -43135,16 +45478,14 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
                 let ret_w4 = perftest_flat::api_record_count(&ret_w1);
                 let ret_w5 = ret_w4;
                 let ret_w6 = perftest_flat::api_record_label(&ret_w1);
-                let ret_w7 = Some(ret_w6);
-                let ret_w0_callback_object_1 = match (ret_w7).as_ref() {
-                    Some(value) => {
-                        ::prebindgen_jni_runtime::text_object(
-                            &mut jni_environment,
-                            value,
-                        )?
-                    }
-                    None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+                let ret_w7: ::prebindgen_jni_runtime::jni::objects::JObject<'_> = {
+                    let ret_w7 = ret_w6;
+                    ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        ::core::convert::AsRef::<str>::as_ref(&ret_w7),
+                    )?
                 };
+                let ret_w0_callback_object_1 = ret_w7;
                 unsafe {
                     jni_environment
                         .call_method_unchecked(
@@ -43425,6 +45766,14 @@ const _: () = assert!(
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::GetterOwner > () != 0,
     "flat object `GetterOwner` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::JniBufferResourceRow > () != 0,
+    "flat object `JniBufferResourceRow` must have nonzero size"
+);
+const _: () = assert!(
+    ::core::mem::size_of:: < perftest_flat::JniBufferRow > () != 0,
+    "flat object `JniBufferRow` must have nonzero size"
 );
 const _: () = assert!(
     ::core::mem::size_of:: < perftest_flat::NicheChoiceHandle > () != 0,

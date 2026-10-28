@@ -90,10 +90,12 @@ impl JniWire {
     /// Generate a Java object expression from a prepared output, boxing primitives.
     ///
     /// This accepts the representation in `OutputPlan::values`, not a native
-    /// input: text/bytes are optional Rust payloads, i128/u128 are encoded bytes,
+    /// input: text/bytes are prepared nullable JVM objects, i128/u128 are encoded bytes,
     /// handles are allocation pointers, and rows are optional JNI arrays.
     /// The expression can fail through `?`, uses the `environment` template
     /// parameter, and returns a local reference owned by the caller's frame.
+    /// Text/byte payloads are consumed; each prepared object may be delivered
+    /// once. Other wire kinds retain their declared representation.
     /// It does not commit any ownership transfer.
     pub fn output_object(&self, value: &TokenStream) -> TokenStream {
         let env = prebindgen_conversions::template_parameter("environment");
@@ -101,15 +103,11 @@ impl JniWire {
             return boxed;
         }
         match self.jvm_type() {
-            JvmType::Text => {
-                quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::text_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
-            }
+            JvmType::Text => quote!(#value),
             JvmType::Bytes if matches!(self, Self::Scalar { .. }) => {
                 quote!(::prebindgen_jni_runtime::bytes_object(&mut #env, &(#value))?)
             }
-            JvmType::Bytes => {
-                quote!(match (#value).as_ref(){Some(value)=>::prebindgen_jni_runtime::bytes_object(&mut #env,value)?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
-            }
+            JvmType::Bytes => quote!(#value),
             JvmType::Object => quote!(#env.new_local_ref(&(#value)).map_err(|e|e.to_string())?),
             JvmType::Rows => {
                 quote!(match (#value).as_ref(){Some(value)=>#env.new_local_ref(value).map_err(|e|e.to_string())?,None=>::prebindgen_jni_runtime::jni::objects::JObject::null()})
@@ -129,7 +127,8 @@ impl JniWire {
     ///
     /// `local` must be a fresh identifier for this argument's Java object.
     /// Emit the returned statements before its value and keep references alive
-    /// through the invocation. The caller supplies `environment`, validates the
+    /// through the invocation. Text/byte prepared payloads are consumed once.
+    /// The caller supplies `environment`, validates the
     /// method signature, and commits ownership only after successful delivery.
     /// A custom generator can render both fragments with its [`JniContext`]:
     ///

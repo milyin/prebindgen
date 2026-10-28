@@ -35,6 +35,23 @@ internal object JNINative {
     @JvmStatic external fun call_buffer_views_optional_bytes_f3f56b8a8b1996c2(p0_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_buffer_views_text_d3011d2eb33189c1(): Array<Any?>
     @JvmStatic external fun call_buffer_views_bytes_491539966ab74896(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_resource_f33d027f936f6663(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_domain_failure_f36020e4f4562fe0(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_resource_rows_54fd0c38ecd1f227(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_text_d33d1c8fd91af20d(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_string_649b053bccecf6a7(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_bytes_801aa24b9714561c(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_vec_18f26d75535912ae(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_optional_text_d47e68fa29b4bf83(p0_w1: Int): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_optional_bytes_2e41382fb70d4d62(p0_w1: Int): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_owned_optional_3ea9b140c39283fe(p0_w1: Int): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_owned_1b20562b3c5bfef8(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_rows_0e85d0bcc7902cb5(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_wide_6983ec538bbdc661(): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_callback_a41319fcdf187075(p0_callback: Any?): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_failure_6fdac6591b1a6726(p0_callback: Any?): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_worker_8d2b0e9314030afd(p0_callback: Any?): Array<Any?>
+    @JvmStatic external fun call_jni_buffer_owned_callback_9fa8a662ae731b98(p0_callback: Any?): Array<Any?>
     @JvmStatic external fun call_getter_owner_new_9b3691104cf4f094(p0_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_getter_owner_failure_983fd2bf1ecc08ff(): Array<Any?>
     @JvmStatic external fun call_getter_owner_id_6e5c79e15f3c8ecb(p0_w1: Long): Array<Any?>

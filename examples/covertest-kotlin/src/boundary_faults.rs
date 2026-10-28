@@ -9,7 +9,7 @@ use std::cell::RefCell;
 struct Fault {
     original: *const JNINativeInterface_,
     oom: jclass,
-    armed: bool,
+    remaining: jint,
     failures: jint,
 }
 thread_local! { static FAULT: RefCell<Option<Fault>> = const { RefCell::new(None) }; }
@@ -18,8 +18,8 @@ fn current() -> Option<(Fault, bool)> {
     FAULT.with(|slot| {
         let mut slot = slot.borrow_mut();
         let fault = slot.as_mut()?;
-        let inject = fault.armed;
-        fault.armed = false;
+        let inject = fault.remaining == 1;
+        fault.remaining = (fault.remaining - 1).max(0);
         if inject {
             fault.failures += 1;
         }
@@ -63,6 +63,29 @@ unsafe extern "system" fn fail_array(
     }
 }
 
+unsafe extern "system" fn fail_string(env: *mut JNIEnv, text: *const std::ffi::c_char) -> jstring {
+    let Some((fault, inject)) = current() else {
+        return std::ptr::null_mut();
+    };
+    if inject {
+        out_of_memory(env, fault);
+        std::ptr::null_mut()
+    } else {
+        ((*fault.original).NewStringUTF.unwrap())(env, text)
+    }
+}
+unsafe extern "system" fn fail_bytes(env: *mut JNIEnv, length: jsize) -> jbyteArray {
+    let Some((fault, inject)) = current() else {
+        return std::ptr::null_mut();
+    };
+    if inject {
+        out_of_memory(env, fault);
+        std::ptr::null_mut()
+    } else {
+        ((*fault.original).NewByteArray.unwrap())(env, length)
+    }
+}
+
 struct Hook {
     env: *mut JNIEnv,
     original: *const JNINativeInterface_,
@@ -81,16 +104,18 @@ impl Hook {
         let raw = env.get_native_interface();
         let original = *raw;
         let mut table = Box::new(*original);
-        if mode == 0 {
-            table.PushLocalFrame = Some(fail_frame);
-        } else {
-            table.NewObjectArray = Some(fail_array);
+        match mode {
+            0 => table.PushLocalFrame = Some(fail_frame),
+            1 => table.NewObjectArray = Some(fail_array),
+            2 | 4 | 6 | 8 => table.NewStringUTF = Some(fail_string),
+            3 | 5 | 7 | 9 => table.NewByteArray = Some(fail_bytes),
+            _ => unreachable!(),
         }
         FAULT.with(|slot| {
             *slot.borrow_mut() = Some(Fault {
                 original,
                 oom: oom.as_obj().as_raw(),
-                armed: true,
+                remaining: if mode >= 8 { 2 } else { 1 },
                 failures: 0,
             })
         });
@@ -119,16 +144,31 @@ pub extern "system" fn Java_io_prebindgen_covertest_CallbackFailureProbe_exercis
     mode: jint,
 ) -> jint {
     prebindgen_runtime::boundary(|| {
-        if !(0..=1).contains(&mode) {
+        if !(0..=9).contains(&mode) {
             return Err("unknown allocation probe".into());
         }
-        // Resolve the Java entry point before arming the table hook. Only the
-        // generated callback's first frame/array allocation is supposed to fail.
+        // Resolve Java entry points before arming the selected JNI allocation
+        // hook. Collection probes skip the first successfully prepared row.
         let class = env
-            .find_class("io/prebindgen/covertest/CallbackFailureEntryPoint")
+            .find_class(if mode < 2 {
+                "io/prebindgen/covertest/CallbackFailureEntryPoint"
+            } else if mode < 4 {
+                "io/prebindgen/covertest/BufferFailureEntryPoint"
+            } else {
+                "io/prebindgen/covertest/BufferReturnFailureEntryPoint"
+            })
             .map_err(|e| e.to_string())?;
         let hook = unsafe { Hook::install(&mut env, mode) }?;
-        let result = env.call_static_method(&class, "run", "()V", &[]);
+        let result = if mode < 4 {
+            env.call_static_method(&class, "run", "()V", &[])
+        } else {
+            env.call_static_method(
+                &class,
+                "run",
+                "(I)V",
+                &[prebindgen_jni_runtime::jni::objects::JValue::Int(mode)],
+            )
+        };
         let failures = FAULT.with(|slot| slot.borrow().as_ref().map_or(0, |fault| fault.failures));
         drop(hook);
         result.map_err(|e| e.to_string())?;
