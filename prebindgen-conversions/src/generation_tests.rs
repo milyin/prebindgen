@@ -891,3 +891,125 @@ fn result_fields_match_named_expressions_independently_of_binding_order() {
     .unwrap_err()
     .contains("duplicate"));
 }
+
+#[test]
+fn impossible_alias_conflicts_need_no_heap_and_real_conflicts_still_fail() {
+    let single = |access| Resource {
+        identity: ResourceIdentity::Single(quote!(left)),
+        access,
+        active: quote!(enabled),
+    };
+    let many = |access| Resource {
+        // Also exercises scratch-name hygiene in the isolated parameter path.
+        identity: ResourceIdentity::Many(quote!(__prebindgen_parameter_resources.iter().copied())),
+        access,
+        active: quote!(enabled),
+    };
+    let mut wrappers = TokenStream::new();
+    for (name, resources) in [
+        ("no_resources", vec![vec![], vec![]]),
+        ("shared", vec![vec![single(Access::Shared)], vec![]]),
+        ("exclusive", vec![vec![single(Access::Exclusive)], vec![]]),
+        ("moved", vec![vec![single(Access::Move)], vec![]]),
+        ("shared_set", vec![vec![many(Access::Shared)], vec![]]),
+        ("exclusive_set", vec![vec![many(Access::Exclusive)], vec![]]),
+        (
+            "separate",
+            vec![vec![single(Access::Move)], vec![single(Access::Shared)]],
+        ),
+    ] {
+        let mut flat = Flat::<syn::Type>::parse(
+            syn::parse_file("pub fn source(a:i32,b:i32)->i32 { 42 }")
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|i| (i, Default::default())),
+        )
+        .unwrap();
+        let function = flat.function_mut("source").unwrap();
+        for (index, resources) in resources.into_iter().enumerate() {
+            let mut input = Input(index).plan();
+            input.acknowledgement = None;
+            input.validation = quote!();
+            input.acquire = quote!();
+            input.statements = quote!();
+            input.argument = quote!(1i32);
+            input.resources = resources;
+            function.params[index].ty.slot = Some(input);
+        }
+        let mut output = Output.plan();
+        output.statements = quote!();
+        output.commit = quote!();
+        output.delivery.statements = quote!();
+        function.ret.slot = Some(output);
+        let body = emit_call(
+            function,
+            &(),
+            &source_binding(),
+            &syn::parse_quote!(i32),
+            &[],
+        )
+        .unwrap();
+        let name = format_ident!("{name}");
+        wrappers.extend(quote! {
+            fn #name(enabled: bool, left: usize, __prebindgen_parameter_resources: &[usize]) -> Result<i32,String> { #body }
+        });
+    }
+    let code = quote! {
+        use std::alloc::{GlobalAlloc, Layout, System};
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        struct Allocator;
+        static COUNTING: AtomicBool = AtomicBool::new(false);
+        static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+        #[global_allocator] static ALLOCATOR: Allocator = Allocator;
+        unsafe impl GlobalAlloc for Allocator {
+            unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+                if COUNTING.load(Ordering::Relaxed) { ALLOCATIONS.fetch_add(1, Ordering::Relaxed); }
+                System.alloc(layout)
+            }
+            unsafe fn dealloc(&self, p: *mut u8, layout: Layout) { System.dealloc(p,layout); }
+        }
+        fn source(_:i32,_:i32)->i32 {42}
+        #wrappers
+        fn main() {
+            COUNTING.store(true, Ordering::Relaxed);
+            for _ in 0..1000 {
+                let left=std::hint::black_box(7);
+                assert_eq!(no_resources(true,left,&[7,7]),Ok(42));
+                assert_eq!(shared(true,left,&[7,7]),Ok(42));
+                assert_eq!(exclusive(true,left,&[7,7]),Ok(42));
+                assert_eq!(moved(true,left,&[7,7]),Ok(42));
+                assert_eq!(shared_set(true,left,&[7,7]),Ok(42));
+            }
+            COUNTING.store(false, Ordering::Relaxed);
+            assert_eq!(ALLOCATIONS.load(Ordering::Relaxed),0);
+            assert!(exclusive_set(true,7,&[7,7]).is_err());
+            assert_eq!(exclusive_set(true,7,&[7,8]),Ok(42));
+            assert_eq!(exclusive_set(false,7,&[7,7]),Ok(42));
+            assert!(separate(true,7,&[]).is_err());
+            assert_eq!(separate(false,7,&[]),Ok(42));
+        }
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("alias_cost.rs");
+    let executable = dir.path().join("alias_cost");
+    std::fs::write(&path, code.to_string()).unwrap();
+    let compile = std::process::Command::new("rustc")
+        .args(["--edition=2021", "-O"])
+        .arg(&path)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+    let run = std::process::Command::new(executable).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}

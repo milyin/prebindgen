@@ -634,19 +634,11 @@ impl CallbackReturn {
             &expected,
         )?;
         body = quote!({ #commit_owners #body });
-        if !self.input.rust.resources.is_empty()
-            && !matches!(fields.as_slice(),[field] if matches!(field.kind,JniWire::Handle{..}))
-        {
-            let seen = format_ident!("callback_return_resources");
-            let checks = self.input.code_fragment_slot(
-                InputFragment::CheckAliases {
-                    context,
-                    seen: &seen,
-                },
-                &syn::parse_quote!(()),
-            )?;
-            body = quote!({let mut #seen: Vec<(usize, bool)> = Vec::new(); let _: () = #checks; #body});
-        }
+        let checks = self.input.code_fragment_slot(
+            InputFragment::CheckInternalAliases { context },
+            &syn::parse_quote!(()),
+        )?;
+        body = quote!({let _: () = #checks; #body});
         body = self.input.code_fragment_slot(
             InputFragment::Validate {
                 context,

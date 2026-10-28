@@ -454,7 +454,7 @@ projections or constructions itself. Wrapper writers never interpret these paths
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional staged plans describe allocation participation using emitted Rust
-boolean expressions. Their assembly helper checks allocation aliases. JNI slots
+boolean expressions. Their assembly helper checks allocation aliases. It omits alias bookkeeping when only one parameter supplies a single address or shared-only accesses; dynamic exclusive sets still check internal aliases. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.

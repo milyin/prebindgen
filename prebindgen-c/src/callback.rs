@@ -323,19 +323,11 @@ impl CCallback {
                 &expected,
             )?;
             body = quote!({#commit_owners #body});
-            if !plan.resources.is_empty()
-                && !matches!(fields.as_slice(),[field] if matches!(field.kind,CWire::Pointer{..}))
-            {
-                let seen = syn::parse_quote!(callback_return_resources);
-                let check = plan.code_fragment_slot(
-                    InputFragment::CheckAliases {
-                        context,
-                        seen: &seen,
-                    },
-                    &syn::parse_quote!(()),
-                )?;
-                body = quote!({let mut #seen:Vec<(usize,bool)>=Vec::new();let _:()=#check;#body});
-            }
+            let check = plan.code_fragment_slot(
+                InputFragment::CheckInternalAliases { context },
+                &syn::parse_quote!(()),
+            )?;
+            body = quote!({let _: () = #check; #body});
             plan.code_fragment_slot(
                 InputFragment::Validate {
                     context,

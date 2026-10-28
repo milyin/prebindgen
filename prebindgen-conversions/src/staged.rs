@@ -44,6 +44,13 @@ pub enum InputFragment<'a, C> {
         /// Caller-owned collection of previously checked allocation accesses.
         seen: &'a syn::Ident,
     },
+    /// Check aliases within this parameter when no other parameter has resources.
+    /// A single address, or shared-only accesses, cannot conflict and needs no
+    /// runtime bookkeeping. Dynamic exclusive sets still check internal aliases.
+    CheckInternalAliases {
+        /// Bindings used to render prepared templates.
+        context: &'a C,
+    },
 }
 /// Slot requests understood by stored output plans.
 pub enum OutputFragment<'a, C> {
@@ -123,6 +130,9 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
                 None => quote!(()),
             },
             InputFragment::CheckAliases { context, seen } => {
+                if self.resources.is_empty() {
+                    return Ok(quote!(()));
+                }
                 let mut checks = TokenStream::new();
                 for resource in &self.resources {
                     let active = context.render(&resource.active)?;
@@ -147,6 +157,37 @@ impl<W: WireKind, C: TemplateContext + 'static, N, B> Conversion for InputPlan<W
                     });
                 }
                 quote!({ #checks })
+            }
+            InputFragment::CheckInternalAliases { context } => {
+                if self.resources.iter().all(|r| r.access == Access::Shared)
+                    || matches!(self.resources.as_slice(), [r] if matches!(r.identity, crate::ResourceIdentity::Single(_)))
+                {
+                    return Ok(quote!(()));
+                }
+                // Resource expressions can refer to validation locals. Keep the
+                // private scratch binding from shadowing any of those locals.
+                let mut used = std::collections::BTreeSet::new();
+                for resource in &self.resources {
+                    reserve(&context.render(&resource.active)?, &mut used);
+                    let identity = match &resource.identity {
+                        crate::ResourceIdentity::Single(code)
+                        | crate::ResourceIdentity::Many(code) => code,
+                    };
+                    reserve(&context.render(identity)?, &mut used);
+                }
+                let mut name = "__prebindgen_parameter_resources".to_string();
+                while used.contains(&name) {
+                    name.push('_');
+                }
+                let seen = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                let check = self.code_fragment_slot(
+                    InputFragment::CheckAliases {
+                        context,
+                        seen: &seen,
+                    },
+                    &syn::parse_quote!(()),
+                )?;
+                quote!({ let mut #seen: Vec<(usize, bool)> = Vec::new(); let _: () = #check; })
             }
         })
     }
@@ -292,18 +333,34 @@ where
     let args: Vec<_> = (0..inputs.len())
         .map(|i| fresh(format!("__prebindgen_argument_{i}")))
         .collect();
-    let checks = inputs
+    let mut checks = inputs
         .iter()
-        .map(|input| {
-            input.code_fragment_slot(
+        .enumerate()
+        .map(|(index, input)| {
+            let code = input.code_fragment_slot(
                 InputFragment::CheckAliases {
                     context,
                     seen: &seen,
                 },
                 &unit,
-            )
+            )?;
+            Ok((index, code))
         })
         .collect::<Result<Vec<_>>>()?;
+    checks.retain(|(_, code)| code.to_string() != quote!(()).to_string());
+    let alias_checks = if let [(index, _)] = checks.as_slice() {
+        let check = inputs[*index]
+            .code_fragment_slot(InputFragment::CheckInternalAliases { context }, &unit)?;
+        quote!(let _: () = #check;)
+    } else if checks.is_empty() {
+        quote!()
+    } else {
+        let checks = checks.into_iter().map(|(_, code)| code);
+        quote! {
+            let mut #seen: Vec<(usize, bool)> = Vec::new();
+            #(let _: () = #checks;)*
+        }
+    };
     let delivered = plug(&deliver, quote!({ let _: () = #commit; Ok(#result) }))?;
     let mut body = plug(&prepare, delivered)?;
     body = scope(quote!(let #source = #path(#(#args),*);), body)?;
@@ -325,13 +382,7 @@ where
     } else {
         body
     };
-    body = scope(
-        quote!(
-            let mut #seen: Vec<(usize, bool)> = Vec::new();
-            #(let _: () = #checks;)*
-        ),
-        body,
-    )?;
+    body = scope(alias_checks, body)?;
     for scope in validation.iter().rev() {
         body = plug(scope, body)?;
     }
