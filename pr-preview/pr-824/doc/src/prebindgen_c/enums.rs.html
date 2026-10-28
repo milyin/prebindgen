@@ -252,12 +252,12 @@
 <a href=#252 id=252 data-nosnippet>252</a>    <span class="kw">fn </span>output_return_reference(
 <a href=#253 id=253 data-nosnippet>253</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#254 id=254 data-nosnippet>254</a>        flat: <span class="kw-2">&amp;</span>Bindings,
-<a href=#255 id=255 data-nosnippet>255</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#255 id=255 data-nosnippet>255</a>        reference: <span class="kw-2">&amp;</span>syn::TypeReference,
 <a href=#256 id=256 data-nosnippet>256</a>        extra: <span class="kw-2">&amp;</span>(),
 <a href=#257 id=257 data-nosnippet>257</a>        wire: syn::Ident,
 <a href=#258 id=258 data-nosnippet>258</a>        value: TokenStream,
 <a href=#259 id=259 data-nosnippet>259</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;OutputPlan&lt;CWire&gt;&gt;&gt; {
-<a href=#260 id=260 data-nosnippet>260</a>        CCodec.output_return_reference(flat, ty, extra, wire, value)
+<a href=#260 id=260 data-nosnippet>260</a>        CCodec.output_return_reference(flat, reference, extra, wire, value)
 <a href=#261 id=261 data-nosnippet>261</a>    }
 <a href=#262 id=262 data-nosnippet>262</a>
 <a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">fn </span>optional_niche(
