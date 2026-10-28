@@ -220,6 +220,7 @@ impl Declarations {
                 extra,
                 prebindgen_conversions::source_result_expr(),
                 false,
+                true,
             )?)
         } else {
             None
@@ -567,8 +568,9 @@ impl Declarations {
         tree: &Output<OutputRequest>,
         extra: &C::Extra,
     ) -> Result<Output> {
-        self.output(flat, codec, ty, tree, extra, &mut vec![])
+        self.output(flat, codec, ty, tree, extra, &mut vec![], false)
     }
+    #[allow(clippy::too_many_arguments)] // Getter defaults differ from the existing plain-reference ABI.
     fn output<C: Codec>(
         &self,
         flat: &Flat<C::Schema>,
@@ -577,10 +579,21 @@ impl Declarations {
         tree: &Output<OutputRequest>,
         extra: &C::Extra,
         stack: &mut Vec<String>,
+        getter_result: bool,
     ) -> Result<Output> {
         let resolve = |ty: &syn::Type, tree: &Output<OutputRequest>, stack: &mut Vec<String>| {
-            self.output(flat, codec, ty, tree, extra, stack)
+            self.output(flat, codec, ty, tree, extra, stack, getter_result)
         };
+        if let Some(referent) = crate::output_referent(ty) {
+            if (getter_result || !matches!(tree, Output::Leaf))
+                && !matches!(
+                    tree,
+                    Output::Request(OutputRequest::Auto | OutputRequest::ForType { .. })
+                )
+            {
+                return resolve(referent, tree, stack);
+            }
+        }
         match tree {
             Output::Discard => Ok(Output::Discard),
             Output::Named { name, output } => Ok(Output::Named {
@@ -597,6 +610,11 @@ impl Declarations {
                     let result = resolve(ty, tree, stack);
                     stack.pop();
                     return result;
+                }
+                if getter_result {
+                    if let Some(referent) = crate::output_referent(ty) {
+                        return resolve(referent, tree, stack);
+                    }
                 }
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Output::Optional(Box::new(resolve(
@@ -621,6 +639,9 @@ impl Declarations {
                 let target = flat.resolve_type(target)?;
                 if same_type(ty, &target) {
                     return resolve(ty, &output_body((**output).clone()), stack);
+                }
+                if let Some(referent) = crate::output_referent(ty) {
+                    return resolve(referent, tree, stack);
                 }
                 if let Some(inner) = option_inner(ty) {
                     let child = resolve(inner, tree, stack)?;
@@ -764,10 +785,11 @@ impl Declarations {
                         type_key(&expected)
                     ));
                 }
-                if matches!(f.ret.ty, syn::Type::Reference(_)) {
-                    return Err("borrowed getter results are outside this subset".into());
+                if matches!(&f.ret.ty, syn::Type::Reference(r) if r.mutability.is_some()) {
+                    return Err("mutable-reference getter results are unsupported".into());
                 }
-                let output = Box::new(resolve(&f.ret.ty, output, stack)?);
+                let output =
+                    Box::new(self.output(flat, codec, &f.ret.ty, output, extra, stack, true)?);
                 Ok(if matches!(tree, Output::Into { .. }) {
                     Output::Into {
                         function: function.clone(),

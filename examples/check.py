@@ -37,6 +37,12 @@ wrong_type.write_text('#include "bindings.h"\nvoid wrong(perftest_storage *p) { 
 rejected = subprocess.run(cc + ["-fsyntax-only", "-I" + str(outputs["perftest-c"]), str(wrong_type)], capture_output=True, text=True)
 if rejected.returncode == 0 or "incompatible" not in rejected.stderr:
     raise RuntimeError("C compiler did not diagnose incompatible opaque pointers: " + rejected.stderr)
+# Loans cannot be passed to the owning destructor without discarding const.
+borrowed_drop = build / "borrowed-pointer-drop.c"
+borrowed_drop.write_text('#include "bindings.h"\nvoid wrong(const perftest_getter_child *p) { perftest_drop_getter_child(p); }\n')
+rejected = subprocess.run(cc + ["-fsyntax-only", "-I" + str(outputs["perftest-c"]), str(borrowed_drop)], capture_output=True, text=True)
+if rejected.returncode == 0 or "const" not in rejected.stderr:
+    raise RuntimeError("C compiler did not diagnose destroying a borrowed pointer: " + rejected.stderr)
 for name in ["covertest-kotlin", "perftest-kotlin"]:
     kotlin = sorted(outputs[name].joinpath("kotlin").rglob("*.kt"))
     kotlin += sorted(Path(f"examples/{name}/kotlin").rglob("*.kt"))

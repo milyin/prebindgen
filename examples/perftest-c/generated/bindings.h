@@ -39,6 +39,12 @@ typedef int32_t perftest_code;
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
+typedef struct perftest_getter_owner perftest_getter_owner;
+void perftest_drop_getter_owner(perftest_getter_owner *ptr);
+typedef struct perftest_getter_child perftest_getter_child;
+void perftest_drop_getter_child(perftest_getter_child *ptr);
+typedef struct perftest_getter_leaf perftest_getter_leaf;
+void perftest_drop_getter_leaf(perftest_getter_leaf *ptr);
 typedef struct perftest_panic_output perftest_panic_output;
 void perftest_drop_panic_output(perftest_panic_output *ptr);
 typedef struct perftest_callback_return_resource perftest_callback_return_resource;
@@ -390,8 +396,9 @@ void perftest_drop_collection_error(perftest_collection_error *error);
 /* Field return.omitted_opt: no boundary values. */
 /* Field return.omitted_vec: no boundary values. */
 int64_t perftest_api_record_new(void);
+/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
 /* Option option0: return value == NULL means None; non-null means Some. */
-perftest_summary * perftest_archive_latest(const perftest_archive * p0_w1);
+const perftest_summary * perftest_archive_latest(const perftest_archive * p0_w1);
 perftest_archive * perftest_archive_new(void);
 void perftest_archive_store(perftest_archive * p0_w1, int32_t p1_w1, int64_t p1_w4, double p1_w6, perftest_summary * p1_w8);
 perftest_blob * perftest_blob_value_echo(perftest_blob * p0_w1);
@@ -1006,6 +1013,43 @@ perftest_enum_payload * perftest_enum_payload_new(double p0_w1);
 /* Field return.code: *out1. */
 /* Option option1: *out1 == -3 means None; other values encode Some and must be valid payloads. */
 perftest_priority perftest_enum_record_echo(perftest_priority p0_w2, perftest_code p0_w6, perftest_code *out1);
+perftest_buffer perftest_getter_child_name(const perftest_getter_child * p0_w1);
+int64_t perftest_getter_child_number(const perftest_getter_child * p0_w1);
+typedef struct {
+    uintptr_t v0;
+} perftest_getter_counts_ret_w0_row;
+typedef struct { perftest_getter_counts_ret_w0_row *data; size_t len; } perftest_getter_counts_ret_w0_rows;
+/* Release only the row allocation. Free or transfer owned element fields separately. Only pass buffers returned by this library. */
+void perftest_getter_counts_ret_w0_rows_free(perftest_getter_counts_ret_w0_rows rows);
+/* Collection return: ret_w0 carries rows of 1 ABI fields; element-owned fields are released separately from row storage. */
+perftest_getter_counts_ret_w0_rows perftest_getter_counts(void);
+/* Field return.number: *out1. */
+/* Field return.text: *out2. */
+perftest_getter_owner * perftest_getter_fields_new(int64_t *out1, perftest_buffer *out2);
+int64_t perftest_getter_leaf_id(const perftest_getter_leaf * p0_w1);
+/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+const perftest_getter_child * perftest_getter_owner_child(const perftest_getter_owner * p0_w1);
+uint8_t perftest_getter_owner_child_matches(const perftest_getter_owner * p0_w1, const perftest_getter_child * p1_w1);
+int64_t perftest_getter_owner_id(const perftest_getter_owner * p0_w1);
+perftest_getter_owner * perftest_getter_owner_new(uint8_t p0_w1, int64_t *out1, perftest_buffer *out2, perftest_getter_leaf * *out3);
+/* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
+int32_t perftest_getter_owner_optional(const perftest_getter_owner * p0_w1, int64_t *out1, perftest_buffer *out2);
+/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Option option0: return value == NULL means None; non-null means Some. */
+const perftest_getter_child * perftest_getter_owner_optional_pointer(const perftest_getter_owner * p0_w1);
+int64_t perftest_getter_owner_read(const perftest_getter_owner * p0_w1, perftest_buffer *out1);
+/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Result: success field v0 is returned directly; NULL means failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+const perftest_getter_child * perftest_getter_owner_try_child(const perftest_getter_owner * p0_w1, uint8_t p1_w1, char * *error);
+/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Option option0: *out0 == NULL means None; non-null means Some. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_getter_owner_try_optional_child(const perftest_getter_owner * p0_w1, int32_t p1_w1, const perftest_getter_child * *out0, char * *error);
+/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+const perftest_getter_child * perftest_getter_static_child(perftest_buffer p0_w1);
+perftest_getter_leaf * perftest_getter_two_clones_new(perftest_getter_leaf * *out1);
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
 /* Option option1: p0_w8 == 1114112 means None; other values encode Some and must be valid payloads; only when option0 is present. */
 int64_t perftest_niche_choice_id(int32_t p0_w1, int32_t p0_w3, uint32_t p0_w8, perftest_niche_choice * p0_w10);
@@ -1256,6 +1300,7 @@ uintptr_t perftest_string_len(perftest_buffer p0_w1);
 perftest_buffer perftest_string_new(perftest_buffer p0_w1);
 int64_t perftest_summary_merge(int32_t p0_w1, int64_t p0_w4, double p0_w6, perftest_summary * p0_w8, int32_t p1_w1, int64_t p1_w4, double p1_w6, perftest_summary * p1_w8, double *out1);
 int64_t perftest_summary_new(int64_t p0_w1, double p1_w1, double *out1);
+double perftest_summary_total(const perftest_summary * p0_w1);
 double perftest_summary_total_raw(int32_t p0_w1, int64_t p0_w4, double p0_w6, perftest_summary * p0_w8);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
 int32_t perftest_unsigned_data_maybe(const perftest_unsigned * p0_w1, uint64_t *out1);

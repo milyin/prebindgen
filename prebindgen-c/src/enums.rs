@@ -249,6 +249,17 @@ impl Codec for EnumCodec<'_> {
         CCodec.output_leaf(flat, ty, e, w, v, borrowed)
     }
 
+    fn output_return_reference(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        extra: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<OutputPlan<CWire>>> {
+        CCodec.output_return_reference(flat, ty, extra, wire, value)
+    }
+
     fn optional_niche(
         &self,
         payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,

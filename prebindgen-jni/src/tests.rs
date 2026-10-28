@@ -12,6 +12,39 @@ fn flat(source: &str) -> Bindings {
 }
 
 #[test]
+fn expanded_reference_to_option_keeps_jni_value_conversion() {
+    let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,i64>{}pub fn length(child:&Child)->i64{}";
+    let generated = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(ptr_class!(Owner))
+                .fun(fun!(maybe).expand_return(expand_return!(Child).field(fun!(length))))
+                .fun(fun!(fallible).expand_return(expand_return!(Child).field(fun!(length)))),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains("Long?"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn static_reference_outputs_keep_independent_jni_handles() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub type Child=String;pub fn fixed()->&'static Child{}",
+        ))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Child)).fun(fun!(fixed)))
+        .build()
+        .unwrap();
+    assert!(generated.rust.contains("Clone"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("Child"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
 fn unrelated_declarations_and_reordering_preserve_existing_native_bindings() {
     fn generate_example(extra: bool, reverse: bool) -> JniGen {
         let source = "pub type Handle=String;pub type Added=String;pub type Error=String;pub fn code(e:&Error)->i64{}pub fn message(e:&Error)->String{}pub fn keep(value:&Handle)->i64{}pub fn values()->Result<Vec<i64>,Error>{}pub fn mapped()->Result<i64,Error>{}pub fn added()->Result<i64,i64>{}";
@@ -268,6 +301,67 @@ fn data_classes_reject_borrowed_occurrences_and_duplicate_representations() {
             )
     )
     .contains("duplicate class"));
+}
+
+#[test]
+fn borrowed_getter_outputs_reject_moves_and_mutable_views() {
+    for returned in ["&Child", "Option<&Child>", "&Option<Child>"] {
+        let source = format!("pub type Owner=String;pub type Child=String;pub fn child(v:&Owner)->{returned}{{}}pub fn read()->Owner{{}}");
+        let error = fail(
+            JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .expand(expand_return!(Child).field_self_into())
+                .package(
+                    package!()
+                        .class(ptr_class!(Owner))
+                        .class(ptr_class!(Child))
+                        .fun(fun!(read).expand_return(expand_return!(Owner).field(fun!(child)))),
+                ),
+        );
+        assert!(error.contains("owned projection cannot consume"), "{error}");
+    }
+    let error = fail(JniGen::builder()
+        .flat(flat("pub type Owner=String;pub type Child=String;pub fn child(v:&Owner)->&mut Child{}pub fn read()->Owner{}"))
+        .set_package_prefix("test")
+        .package(package!().class(ptr_class!(Owner)).class(ptr_class!(Child))
+            .fun(fun!(read).expand_return(expand_return!(Owner).field(fun!(child))))));
+    assert!(
+        error.contains("mutable-reference getter results are unsupported"),
+        "{error}"
+    );
+}
+
+#[test]
+fn explicit_shared_data_outputs_resolve_ordinary_record_defaults() {
+    let generated = JniGen::builder()
+        .flat(flat(
+            "pub struct Value { pub n:i64,pub text:String }pub fn read()->&Value{}",
+        ))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Value))
+                .fun(fun!(read).expand_return(expand_return!(Value).field_self_ref())),
+        )
+        .build()
+        .unwrap();
+    assert!(generated.kotlin["test/Functions.kt"].contains(": test.Value"));
+    syn::parse_file(&generated.rust).unwrap();
+}
+
+#[test]
+fn plain_borrowed_handles_keep_their_abi_while_explicit_views_can_expand() {
+    let generated = JniGen::builder()
+        .flat(flat("pub type Handle=String;pub fn label(v:&Handle)->&str{}pub fn plain()->Option<&Handle>{}pub fn projected()->&Handle{}"))
+        .set_package_prefix("test")
+        .expand(expand_return!(Handle).field(fun!(label)))
+        .package(package!().class(ptr_class!(Handle)).fun(fun!(plain))
+            .fun(fun!(projected).expand_return(expand_return!(Handle).field(fun!(label)))))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains(": test.Handle?"), "{kotlin}");
+    assert!(kotlin.contains(": String"), "{kotlin}");
 }
 
 #[test]
