@@ -615,7 +615,7 @@ mod tests {
             (
                 CWire::pointer(CPointer {
                     ty: syn::parse_quote!(Widget),
-                    mutable: true,
+                    access: Access::Move,
                 }),
                 CNiche::Null,
             ),
@@ -655,7 +655,7 @@ mod tests {
             (
                 CWire::pointer(CPointer {
                     ty: syn::parse_quote!(Widget),
-                    mutable: false,
+                    access: Access::Shared,
                 }),
                 CNiche::Integer(0),
             ),

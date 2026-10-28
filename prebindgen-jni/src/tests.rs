@@ -12,6 +12,29 @@ fn flat(source: &str) -> Bindings {
 }
 
 #[test]
+fn mutable_reference_returns_never_fall_back_to_cloned_jni_handles() {
+    for returned in ["&mut Child", "Option<&mut Child>", "Result<&mut Child,i64>"] {
+        let source=format!("pub type Owner=String;pub type Child=String;pub fn child(owner:&mut Owner)->{returned}{{}}");
+        let error = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(
+                package!()
+                    .class(ptr_class!(Owner))
+                    .class(ptr_class!(Child))
+                    .fun(fun!(child)),
+            )
+            .build()
+            .err()
+            .unwrap();
+        assert!(
+            error.contains("mutable-reference outputs"),
+            "{returned}: {error}"
+        );
+    }
+}
+
+#[test]
 fn expanded_reference_to_option_keeps_jni_value_conversion() {
     let source = "pub type Child=String;pub type Owner=String;pub fn maybe(owner:&Owner)->&Option<Child>{}pub fn fallible(owner:&Owner)->Result<&Option<Child>,i64>{}pub fn length(child:&Child)->i64{}";
     let generated = JniGen::builder()

@@ -13164,6 +13164,77 @@ pub unsafe extern "C" fn perftest_getter_child_number(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_getter_child_set_number_result {
+    pub unused: u8,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_getter_child_set_number(
+    p0_w1: *mut perftest_flat::GetterChild,
+    p1_w1: i64,
+) {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_getter_child_set_number_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::GetterChild
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {
+                if true {
+                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_resources.push((identity, true));
+                    }
+                }
+                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
+            };
+            let _: () = {};
+            let p0_w0: &mut perftest_flat::GetterChild = unsafe {
+                &mut (*p0_w1_pointer)
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::getter_child_set_number(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let result = perftest_getter_child_set_number_result {
+                unused: 0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+}
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __PbRow_getter_counts_ret_w0 {
     pub v0: usize,
@@ -13534,6 +13605,75 @@ pub unsafe extern "C" fn perftest_getter_owner_child_matches(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_getter_owner_child_mut_result {
+    pub v0: *mut perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_getter_owner_child_mut(
+    p0_w1: *mut perftest_flat::GetterOwner,
+) -> *mut perftest_flat::GetterChild {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_getter_owner_child_mut_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::GetterOwner
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {
+                if true {
+                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_resources.push((identity, true));
+                    }
+                }
+                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
+            };
+            let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
+                &mut (*p0_w1_pointer)
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::getter_owner_child_mut(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::GetterChild = source_value
+                as *mut perftest_flat::GetterChild;
+            let result = perftest_getter_owner_child_mut_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
 pub struct perftest_getter_owner_id_result {
     pub v0: i64,
 }
@@ -13793,6 +13933,85 @@ pub unsafe extern "C" fn perftest_getter_owner_optional(
     let value = storage.assume_init();
     std::ptr::write(out1, value.v1);
     std::ptr::write(out2, value.v2);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_getter_owner_optional_mut_result {
+    pub v0: *mut perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_getter_owner_optional_mut(
+    p0_w1: *mut perftest_flat::GetterOwner,
+) -> *mut perftest_flat::GetterChild {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_getter_owner_optional_mut_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::GetterOwner
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {
+                if true {
+                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_resources.push((identity, true));
+                    }
+                }
+                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
+            };
+            let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
+                &mut (*p0_w1_pointer)
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::getter_owner_optional_mut(
+                __prebindgen_argument_0,
+            );
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2: *mut perftest_flat::GetterChild = ret_w1
+                    as *mut perftest_flat::GetterChild;
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (std::ptr::null_mut(),), None)
+            };
+            let result = perftest_getter_owner_optional_mut_result {
+                v0: ret_w0_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
     value.v0
 }
 #[repr(C)]
@@ -14061,6 +14280,115 @@ pub unsafe extern "C" fn perftest_getter_owner_try_child(
     }
 }
 #[repr(C)]
+pub struct perftest_getter_owner_try_child_mut_result {
+    pub v0: *mut perftest_flat::GetterChild,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_getter_owner_try_child_mut(
+    p0_w1: *mut perftest_flat::GetterOwner,
+    p1_w1: u8,
+    error: *mut *mut std::ffi::c_char,
+) -> *mut perftest_flat::GetterChild {
+    #[allow(unused_mut)]
+    let mut ownership_accepted = false;
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_getter_owner_try_child_mut_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::GetterOwner
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {
+                if true {
+                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_resources.push((identity, true));
+                    }
+                }
+                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
+            };
+            let _: () = {};
+            let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
+                &mut (*p0_w1_pointer)
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::getter_owner_try_child_mut(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2: *mut perftest_flat::GetterChild = ret_w0
+                as *mut perftest_flat::GetterChild;
+            let result = perftest_getter_owner_try_child_mut_result {
+                v0: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            value.v0
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+#[repr(C)]
 pub struct perftest_getter_owner_try_optional_child_result {
     pub v0: *const perftest_flat::GetterChild,
 }
@@ -14152,6 +14480,129 @@ pub unsafe extern "C" fn perftest_getter_owner_try_optional_child(
                 (0i32, (std::ptr::null(),), None)
             };
             let result = perftest_getter_owner_try_optional_child_result {
+                v0: ret_w2_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w2_action) = ret_w2_commit {
+                    ret_w2_action();
+                }
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out0, value.v0);
+            true
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            false
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_getter_owner_try_optional_mut_result {
+    pub v0: *mut perftest_flat::GetterChild,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_getter_owner_try_optional_mut(
+    p0_w1: *mut perftest_flat::GetterOwner,
+    p1_w1: i32,
+    out0: *mut *mut perftest_flat::GetterChild,
+    error: *mut *mut std::ffi::c_char,
+) -> bool {
+    #[allow(unused_mut)]
+    let mut ownership_accepted = false;
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_getter_owner_try_optional_mut_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out0.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w1_pointer = if true {
+                p0_w1 as *mut perftest_flat::GetterOwner
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            let p1_w0 = if true { Some(p1_w1) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {
+                if true {
+                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_resources.push((identity, true));
+                    }
+                }
+                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
+            };
+            let _: () = {};
+            let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
+                &mut (*p0_w1_pointer)
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
+            let __prebindgen_argument_1 = p1_w0;
+            let source_value = perftest_flat::getter_owner_try_optional_mut(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
+                let ret_w4: *mut perftest_flat::GetterChild = ret_w3
+                    as *mut perftest_flat::GetterChild;
+                let ret_w2_values = (ret_w4,);
+                (1i32, ret_w2_values, Some(move || {}))
+            } else {
+                (0i32, (std::ptr::null_mut(),), None)
+            };
+            let result = perftest_getter_owner_try_optional_mut_result {
                 v0: ret_w2_value0,
             };
             std::ptr::write(output, result);

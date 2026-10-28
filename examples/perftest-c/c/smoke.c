@@ -572,6 +572,7 @@ static void check_results(void) {
 int main(void) {
     check_borrowed_getters();
     check_borrowed_pointers();
+    check_mutable_borrowed_pointers();
     check_callback_returns();
     /* Empty typed field overrides omit plain, optional and vector resources. */
     size_t omitted_before = perftest_owned_resource_drops();

@@ -151,16 +151,21 @@ These rules also apply to output projections of callback arguments.
 
 Plain reference returns use the adapter's direct representation unless an
 expansion is selected explicitly. C returns an opaque `&Child` as a non-owning
-`const child *`, without cloning or allocating; `Option<&Child>` uses null for
-absence. This also works in the success value of `Result`. The C caller must
+`const child *` and an opaque `&mut Child` as a non-owning `child *`, without
+cloning or allocating. Optional references use null for absence. This also works
+in the success value of `Result`. The C caller must
 keep the referenced storage alive at a stable address and obey Rust's aliasing
-rules. Never free or pass a borrowed pointer to a consuming function. JNI still
+rules, including exclusive access while using a mutable borrow. Never free or
+pass a borrowed pointer to a consuming function. JNI still
 clones opaque references into independent owning handles.
 For example, a function returning `&Child` can
 use `.expand_return(expand_return!(Child).field(fun!(child_name)))` to deliver a
 name instead of a child pointer/handle. Getter expansions and explicit borrowed
-projections still copy their opaque leaves: their owner may be temporary and
-cannot lend pointers past the call. Mutable-reference returns remain unsupported.
+projections still follow their existing ownership policy: their owner may be
+temporary and cannot lend pointers past the call. Mutable getter projections,
+mutable callback arguments, and mutable value/collection conversions requiring
+copying or write-back remain unsupported. JNI rejects mutable reference returns
+instead of replacing them with independently owned copies.
 For direct loans, reference inputs must use persistent opaque pointers or borrowed
 text/byte buffers. A reference input reconstructed from record fields, a collection
 or a constructor can own temporary storage, so generation rejects lending from
@@ -172,6 +177,11 @@ Existing C callers must stop freeing or consuming these results and retain their
 source owner, or select the explicit copy projection above. Explicit `'static`
 reference lifetimes are accepted on source function returns only; inputs,
 callback signatures and record fields retain their elided-lifetime requirement.
+The generator preserves Rust's move/shared/exclusive access in `CPointer.access`
+(`Access` is re-exported by `prebindgen_c`), replacing `CPointer.mutable`. Both
+move and exclusive access use mutable C pointers, but only move outputs transfer
+ownership and participate in allocation cleanup. This is generation metadata;
+the emitted C pointers have no extra wrapper, ownership flag or runtime tracking.
 
 A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
 and duplicate consuming views are rejected. Observing getters run before consuming

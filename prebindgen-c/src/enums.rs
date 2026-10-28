@@ -252,12 +252,12 @@ impl Codec for EnumCodec<'_> {
     fn output_return_reference(
         &self,
         flat: &Bindings,
-        ty: &syn::Type,
+        reference: &syn::TypeReference,
         extra: &(),
         wire: syn::Ident,
         value: TokenStream,
     ) -> Result<Option<OutputPlan<CWire>>> {
-        CCodec.output_return_reference(flat, ty, extra, wire, value)
+        CCodec.output_return_reference(flat, reference, extra, wire, value)
     }
 
     fn optional_niche(

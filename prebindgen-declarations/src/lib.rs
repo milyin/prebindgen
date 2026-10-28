@@ -283,7 +283,7 @@ pub enum Output<P = std::convert::Infallible> {
     /// Convert an optional payload without preparing absent values.
     Optional(Box<Output<P>>),
     /// Convert the occurrence type itself with [`Codec::output_leaf`], or
-    /// [`Codec::output_return_reference`] for a direct shared-reference return.
+    /// [`Codec::output_return_reference`] for a direct reference return.
     Leaf,
     /// Observe named fields in declaration order; an empty list represents unit.
     Fields(Vec<Output<P>>),
@@ -1031,11 +1031,12 @@ pub trait Codec {
         value: TokenStream,
         borrowed: bool,
     ) -> Result<CodecOutput<Self>>;
-    /// Convert a shared reference supplied directly by the Rust return value.
+    /// Convert a reference supplied directly by the Rust return value.
     ///
     /// Unlike observing an owned value through a getter, this reference already
     /// has the source function's lifetime contract. Adapters may expose it as a
-    /// non-owning foreign pointer. `ty` is the referent and `value` produces `&ty`.
+    /// non-owning foreign pointer. `reference` preserves the referent and mutability;
+    /// `value` produces exactly that Rust reference.
     /// This also applies inside optional and successful Result returns, but not
     /// inside getter expansions, record decomposition or callback arguments.
     /// The foreign caller must preserve the referenced storage and Rust aliasing
@@ -1045,7 +1046,7 @@ pub trait Codec {
     fn output_return_reference(
         &self,
         _flat: &prebindgen_flat::Flat<Self::Schema>,
-        _ty: &Type,
+        _reference: &syn::TypeReference,
         _extra: &Self::Extra,
         _wire: syn::Ident,
         _value: TokenStream,
@@ -1691,19 +1692,17 @@ impl<'a, C: Codec> Compiler<'a, C> {
     ) -> Result<CodecOutput<C>> {
         if !borrowed {
             if let (Type::Reference(reference), Output::Leaf) = (ty, recipe) {
-                if reference.mutability.is_none() {
-                    let wire = self.name();
-                    if let Some(plan) = self.codec.output_return_reference(
-                        self.flat,
-                        &reference.elem,
-                        extra,
-                        wire.clone(),
-                        value.clone(),
-                    )? {
-                        return Ok(plan);
-                    }
-                    return self.output_named(ty, recipe, extra, value, false, Some(&wire));
+                let wire = self.name();
+                if let Some(plan) = self.codec.output_return_reference(
+                    self.flat,
+                    reference,
+                    extra,
+                    wire.clone(),
+                    value.clone(),
+                )? {
+                    return Ok(plan);
                 }
+                return self.output_named(ty, recipe, extra, value, false, Some(&wire));
             }
             if let (Some(payload_ty), Output::Optional(inner)) = (option_inner(ty), recipe) {
                 let tag = self.name();
