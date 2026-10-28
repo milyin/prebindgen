@@ -916,6 +916,322 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_drop_1Summa
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1optional_1text_12e5df9089cef5211<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: u8,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_text(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_text_len(&source_value);
+            let ret_w4 = (ret_w3) as i64;
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = Some(ret_w1);
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (None,), None)
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0_value0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w4)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1optional_1bytes_1f3f56b8a8b1996c2<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: u8,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_bytes(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_bytes_len(&source_value);
+            let ret_w4 = (ret_w3) as i64;
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = Some(ret_w1);
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (None,), None)
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0_value0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w4)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1text_1d3011d2eb33189c1<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_views_text();
+            let ret_w1 = perftest_flat::buffer_views_text_len(&source_value);
+            let ret_w2 = (ret_w1) as i64;
+            let ret_w0 = Some(source_value);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1bytes_1491539966ab74896<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_views_bytes();
+            let ret_w1 = perftest_flat::buffer_views_bytes_len(&source_value);
+            let ret_w2 = (ret_w1) as i64;
+            let ret_w0 = Some(source_value);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1new_19b3691104cf4f094<
     'local,
 >(
@@ -928,8 +1244,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_new(__prebindgen_argument_0);
@@ -1227,7 +1541,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_owner_failure();
             let ret_w1 = perftest_flat::getter_owner_leaf(&source_value);
             let mut ret_w2 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -1347,21 +1660,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_id(__prebindgen_argument_0);
@@ -1435,21 +1734,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterLeaf = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_leaf_id(__prebindgen_argument_0);
@@ -1511,7 +1796,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_static_leaf();
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: ::core::clone::Clone::clone(source_value),
@@ -1594,21 +1878,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_read(__prebindgen_argument_0);
@@ -1684,7 +1954,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_counts();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -1777,7 +2046,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_two_clones_new();
             let ret_w0 = perftest_flat::getter_owner_leaf(&source_value);
             let mut ret_w1 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -1873,7 +2141,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_fields_new();
             let ret_w1 = perftest_flat::getter_owner_details(&source_value);
             let ret_w2 = &(ret_w1);
@@ -1981,9 +2248,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
                 "io.prebindgen.covertest.getters.GetterObserver",
             )?;
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: &perftest_flat::GetterOwner|
@@ -2315,9 +2579,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.i64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -2445,22 +2706,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackBoundaryHandler = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -2524,9 +2770,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.i64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -2656,8 +2899,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackOwnedVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackOwned>|
@@ -2818,8 +3059,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JJJ)V",
                 "io.prebindgen.covertest.callbacks.CallbackOwnedCallbackBoundaryPanicCallbackOwnedCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackOwned,
@@ -2932,8 +3171,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JJ)V",
                 "io.prebindgen.covertest.callbacks.OptionalCallbackOwnedi64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Option<&perftest_flat::CallbackOwned>,
@@ -3050,8 +3287,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.StringVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: Vec<String>| {
                 p0_callback_retained
@@ -3200,8 +3435,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JJ)Z",
                 "io.prebindgen.covertest.callbackconfig.ConfiguredHandler",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackConfigValue,
@@ -3331,8 +3564,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.callbackconfig.TypeDefaultHandler",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackConfigValue|
@@ -3451,8 +3682,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(ZJ)Z",
                 "io.prebindgen.covertest.callbackconfig.FlagArgumentHandler",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackConfigValue,
@@ -3582,8 +3811,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JJ)J",
                 "io.prebindgen.covertest.callbackconfig.NumberReturnHandler",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackConfigValue,
@@ -3719,9 +3946,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(ZJ)Z",
                 "io.prebindgen.covertest.callbackconfig.FlagArgumentHandler",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackConfigValue,
@@ -4016,8 +4240,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -4105,8 +4327,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w4_retained = p0_w4_retained.expect("validated active callback");
                 #[allow(unused_mut)]
@@ -4240,8 +4460,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1 = if true { Some(p0_w2) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1: i64 = ::core::convert::Into::into(p0_w1.expect("active value"));
             let p0_w0: perftest_flat::CallbackConfigValue = perftest_flat::callback_config_from_number(
                 p0_w1,
@@ -4315,8 +4533,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.i64Toi64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -4430,8 +4646,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(B)B",
                 "io.prebindgen.covertest.i8Toi8Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i8| {
                 p0_callback_retained
@@ -4545,8 +4759,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(S)S",
                 "io.prebindgen.covertest.i16Toi16Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i16| {
                 p0_callback_retained
@@ -4660,8 +4872,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(F)F",
                 "io.prebindgen.covertest.f32Tof32Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: f32| {
                 p0_callback_retained
@@ -4775,8 +4985,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([B)[B",
                 "io.prebindgen.covertest.u128Tou128Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: u128| {
                 p0_callback_retained
@@ -4895,8 +5103,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()J",
                 "io.prebindgen.covertest.VoidToi64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move || {
                 p0_callback_retained
@@ -5007,8 +5213,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(Z)Z",
                 "io.prebindgen.covertest.boolToboolCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: bool| {
                 p0_callback_retained
@@ -5123,8 +5327,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(I)I",
                 "io.prebindgen.covertest.charTocharCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: char| {
                 p0_callback_retained
@@ -5243,8 +5445,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(D)D",
                 "io.prebindgen.covertest.f64Tof64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: f64| {
                 p0_callback_retained
@@ -5358,8 +5558,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.u64Tou64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: u64| {
                 p0_callback_retained
@@ -5473,8 +5671,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([B)[B",
                 "io.prebindgen.covertest.i128Toi128Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i128| {
                 p0_callback_retained
@@ -5593,8 +5789,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(Ljava/lang/String;)Ljava/lang/String;",
                 "io.prebindgen.covertest.StringToStringCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: String| {
                 p0_callback_retained
@@ -5722,8 +5916,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([B)[B",
                 "io.prebindgen.covertest.u8VecTou8VecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: Vec<u8>| {
                 p0_callback_retained
@@ -5853,9 +6045,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.Optionali64ToOptionali64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: Option<i64>| {
                 p0_callback_retained
@@ -6032,8 +6221,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)[Ljava/lang/Object;",
                 "io.prebindgen.covertest.i64VecToi64VecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: Vec<i64>| {
                 p0_callback_retained
@@ -6303,8 +6490,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JLjava/lang/String;)[Ljava/lang/Object;",
                 "io.prebindgen.covertest.callbackreturns.CallbackReturnRecordToCallbackReturnRecordCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackReturnRecord|
@@ -6316,12 +6501,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let mut callback_environment = callback_environment;
                             let callback_value_0 = callback_source_0;
                             {
-                                let callback_arg_0_w0_record = &(callback_value_0);
-                                let callback_arg_0_w0_f0: &i64 = &callback_arg_0_w0_record
-                                    .number;
-                                let callback_arg_0_w0_f0 = *callback_arg_0_w0_f0;
+                                let callback_arg_0_w0_record = callback_value_0;
+                                let callback_arg_0_w0_f0 = callback_arg_0_w0_record.number;
                                 let callback_arg_0_w0_f1 = Some(
-                                    ::core::clone::Clone::clone(&callback_arg_0_w0_record.label),
+                                    callback_arg_0_w0_record.label,
                                 );
                                 let callback_java_0_1 = match (callback_arg_0_w0_f1)
                                     .as_ref()
@@ -6467,8 +6650,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(I)I",
                 "io.prebindgen.covertest.callbackreturns.CallbackReturnChoiceToCallbackReturnChoiceCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackReturnChoice|
@@ -6587,8 +6768,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_return_resource_new(
@@ -6663,7 +6842,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::callback_return_resource_live();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -6730,8 +6908,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()J",
                 "io.prebindgen.covertest.VoidToCallbackReturnResourceCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move || {
                 p0_callback_retained
@@ -6866,8 +7042,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.callbackreturns.CallbackReturnResourceToCallbackReturnResourceCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackReturnResource|
@@ -7014,8 +7188,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()J",
                 "io.prebindgen.covertest.VoidToOptionalCallbackReturnResourceCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move || {
                 p0_callback_retained
@@ -7187,8 +7359,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()[Ljava/lang/Object;",
                 "io.prebindgen.covertest.VoidToCallbackReturnResourceVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move || {
                 p0_callback_retained
@@ -7322,26 +7492,30 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     });
                                             }
                                         }
-                                        let mut callback_return_resources: Vec<(usize, bool)> = Vec::new();
                                         let _: () = {
-                                            if true {
-                                                for identity in callback_return_w1_identities_0
-                                                    .iter()
-                                                    .copied()
-                                                {
-                                                    callback_return_resources.push((identity, true));
+                                            let mut __prebindgen_parameter_resources: Vec<
+                                                (usize, bool),
+                                            > = Vec::new();
+                                            let _: () = {
+                                                if true {
+                                                    for identity in callback_return_w1_identities_0
+                                                        .iter()
+                                                        .copied()
+                                                    {
+                                                        __prebindgen_parameter_resources.push((identity, true));
+                                                    }
                                                 }
-                                            }
-                                            callback_return_resources
-                                                .sort_unstable_by_key(|entry| entry.0);
-                                            if callback_return_resources
-                                                .windows(2)
-                                                .any(|pair| {
-                                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                                })
-                                            {
-                                                return Err("conflicting input aliases".into());
-                                            }
+                                                __prebindgen_parameter_resources
+                                                    .sort_unstable_by_key(|entry| entry.0);
+                                                if __prebindgen_parameter_resources
+                                                    .windows(2)
+                                                    .any(|pair| {
+                                                        pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
+                                                    })
+                                                {
+                                                    return Err("conflicting input aliases".into());
+                                                }
+                                            };
                                         };
                                         callback_return_owners.commit();
                                         let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
@@ -7432,8 +7606,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.i64Toi64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -7564,21 +7736,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -7669,9 +7827,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.i64Toi64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -7819,22 +7974,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReturnHandler = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -7910,8 +8050,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.i64Toi64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -8113,8 +8251,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -8192,8 +8328,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()I",
                 "io.prebindgen.covertest.VoidTocharCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move || {
                 p0_callback_retained
@@ -8309,8 +8443,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()[Ljava/lang/Object;",
                 "io.prebindgen.covertest.VoidToCallbackReturnResourceVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move || {
                 p0_callback_retained
@@ -8444,26 +8576,30 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     });
                                             }
                                         }
-                                        let mut callback_return_resources: Vec<(usize, bool)> = Vec::new();
                                         let _: () = {
-                                            if true {
-                                                for identity in callback_return_w1_identities_0
-                                                    .iter()
-                                                    .copied()
-                                                {
-                                                    callback_return_resources.push((identity, true));
+                                            let mut __prebindgen_parameter_resources: Vec<
+                                                (usize, bool),
+                                            > = Vec::new();
+                                            let _: () = {
+                                                if true {
+                                                    for identity in callback_return_w1_identities_0
+                                                        .iter()
+                                                        .copied()
+                                                    {
+                                                        __prebindgen_parameter_resources.push((identity, true));
+                                                    }
                                                 }
-                                            }
-                                            callback_return_resources
-                                                .sort_unstable_by_key(|entry| entry.0);
-                                            if callback_return_resources
-                                                .windows(2)
-                                                .any(|pair| {
-                                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                                })
-                                            {
-                                                return Err("conflicting input aliases".into());
-                                            }
+                                                __prebindgen_parameter_resources
+                                                    .sort_unstable_by_key(|entry| entry.0);
+                                                if __prebindgen_parameter_resources
+                                                    .windows(2)
+                                                    .any(|pair| {
+                                                        pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
+                                                    })
+                                                {
+                                                    return Err("conflicting input aliases".into());
+                                                }
+                                            };
                                         };
                                         callback_return_owners.commit();
                                         let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
@@ -8554,8 +8690,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.i64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -8635,8 +8769,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)J",
                 "io.prebindgen.covertest.i64Toi64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |callback_source_0: i64| {
                 p0_w2_retained
@@ -8753,8 +8885,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackObservedRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackObservedRow>|
@@ -8940,8 +9070,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)J",
                 "io.prebindgen.covertest.CallbackUniqueRowVecToCallbackReturnResourceCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackUniqueRow>|
@@ -9176,21 +9304,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackUniqueResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -9263,8 +9377,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackUniqueRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackUniqueRow>|
@@ -9450,8 +9562,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackUniqueRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackUniqueRow>|
@@ -9642,21 +9752,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackRowResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -9722,7 +9818,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::callback_row_resource_live();
             let ret_w0 = source_value;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -9782,7 +9877,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::callback_row_resource_drops();
             let ret_w0 = source_value;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -9861,22 +9955,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackRowResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -9954,8 +10033,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackRow>|
@@ -10175,8 +10252,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackRowListCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: &[perftest_flat::CallbackRow]|
@@ -10398,9 +10473,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.OptionalOptionalCallbackRowVecCallback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Option<Vec<Option<perftest_flat::CallbackRow>>>|
@@ -10696,8 +10768,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.OptionalCallbackNestedRowVecVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<Vec<Option<perftest_flat::CallbackNestedRow>>>|
@@ -10759,23 +10829,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             ),
                                             callback_arg_0_w8_commit,
                                         ) = if let Some(callback_arg_0_w9) = callback_arg_0_w5 {
-                                            let callback_arg_0_w10_record = &(callback_arg_0_w9);
-                                            let callback_arg_0_w10_f0_record = &(&callback_arg_0_w10_record
-                                                .row);
+                                            let callback_arg_0_w10_record = callback_arg_0_w9;
+                                            let callback_arg_0_w10_f0_record = callback_arg_0_w10_record
+                                                .row;
                                             let mut callback_arg_0_w10_f0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                                value: ::core::clone::Clone::clone(
-                                                    &callback_arg_0_w10_f0_record.first,
-                                                ),
+                                                value: callback_arg_0_w10_f0_record.first,
                                             });
                                             let callback_arg_0_w10_f0_f1 = Some(
-                                                ::core::clone::Clone::clone(
-                                                    &callback_arg_0_w10_f0_record.label,
-                                                ),
+                                                callback_arg_0_w10_f0_record.label,
                                             );
                                             let mut callback_arg_0_w10_f0_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                                value: ::core::clone::Clone::clone(
-                                                    &callback_arg_0_w10_f0_record.second,
-                                                ),
+                                                value: callback_arg_0_w10_f0_record.second,
                                             });
                                             let (
                                                 callback_arg_0_w10_f1_present,
@@ -10784,23 +10848,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     callback_arg_0_w10_f1_present_value1,
                                                 ),
                                                 callback_arg_0_w10_f1_present_commit,
-                                            ) = if let Some(callback_arg_0_w10_f1_payload) = (&callback_arg_0_w10_record
-                                                .detail)
-                                                .as_ref()
+                                            ) = if let Some(callback_arg_0_w10_f1_payload) = callback_arg_0_w10_record
+                                                .detail
                                             {
-                                                let callback_arg_0_w10_f1_some_record = &(callback_arg_0_w10_f1_payload);
+                                                let callback_arg_0_w10_f1_some_record = callback_arg_0_w10_f1_payload;
                                                 let (
                                                     _,
                                                     (callback_arg_0_w10_f1_some_f0_present_value0,),
                                                     callback_arg_0_w10_f1_some_f0_present_commit,
-                                                ) = if let Some(callback_arg_0_w10_f1_some_f0_payload) = (&callback_arg_0_w10_f1_some_record
-                                                    .resource)
-                                                    .as_ref()
+                                                ) = if let Some(callback_arg_0_w10_f1_some_f0_payload) = callback_arg_0_w10_f1_some_record
+                                                    .resource
                                                 {
                                                     let mut callback_arg_0_w10_f1_some_f0_some = Box::new(::prebindgen_jni_runtime::Allocation {
-                                                        value: ::core::clone::Clone::clone(
-                                                            callback_arg_0_w10_f1_some_f0_payload,
-                                                        ),
+                                                        value: callback_arg_0_w10_f1_some_f0_payload,
                                                     });
                                                     let callback_arg_0_w10_f1_some_f0_present_values = (
                                                         (&mut *callback_arg_0_w10_f1_some_f0_some)
@@ -10819,9 +10879,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     (0i32, (std::ptr::null_mut(),), None)
                                                 };
                                                 let callback_arg_0_w10_f1_some_f1 = Some(
-                                                    ::core::clone::Clone::clone(
-                                                        &callback_arg_0_w10_f1_some_record.note,
-                                                    ),
+                                                    callback_arg_0_w10_f1_some_record.note,
                                                 );
                                                 let callback_arg_0_w10_f1_present_values = (
                                                     callback_arg_0_w10_f1_some_f0_present_value0,
@@ -11178,8 +11236,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;[Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackRowVecCallbackRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackRow>,
@@ -11544,8 +11600,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackRowResourceVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackRowResource>|
@@ -11706,8 +11760,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackTransferredRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackTransferredRow>|
@@ -11738,19 +11790,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             11i32,
                                         )
                                     }?;
-                                    let callback_arg_0_w4_record = &(callback_arg_0_w1);
+                                    let callback_arg_0_w4_record = callback_arg_0_w1;
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.first,
-                                        ),
+                                        value: callback_arg_0_w4_record.first,
                                     });
                                     let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
+                                        callback_arg_0_w4_record.label,
                                     );
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.second,
-                                        ),
+                                        value: callback_arg_0_w4_record.second,
                                     });
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
@@ -11927,8 +11975,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;[Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackTransferredRowVecCallbackRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackTransferredRow>,
@@ -11961,19 +12007,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             11i32,
                                         )
                                     }?;
-                                    let callback_arg_0_w4_record = &(callback_arg_0_w1);
+                                    let callback_arg_0_w4_record = callback_arg_0_w1;
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.first,
-                                        ),
+                                        value: callback_arg_0_w4_record.first,
                                     });
                                     let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
+                                        callback_arg_0_w4_record.label,
                                     );
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.second,
-                                        ),
+                                        value: callback_arg_0_w4_record.second,
                                     });
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
@@ -12293,8 +12335,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "([Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.CallbackRowVecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackRow>|
@@ -12516,9 +12556,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.CallbackRowVecCallback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Vec<perftest_flat::CallbackRow>|
@@ -12771,21 +12808,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackJob = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_row_job_finished(
@@ -12851,8 +12874,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_reentry_new(
@@ -12939,21 +12960,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13033,22 +13040,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::CallbackReentry = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -13116,21 +13108,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -13231,22 +13209,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13350,22 +13313,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::CallbackReentry = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -13470,22 +13418,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -13646,7 +13579,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     return Err("conflicting input aliases".into());
                 }
             };
-            let _: () = {};
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13796,7 +13728,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                     return Err("conflicting input aliases".into());
                 }
             };
-            let _: () = {};
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13905,22 +13836,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -14017,21 +13933,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -14117,22 +14019,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &perftest_flat::CallbackReentry = unsafe {
                     &(*p0_w3_pointer).value
@@ -14241,22 +14128,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w2_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w1: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w2_pointer).value
             };
@@ -14351,8 +14223,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.i64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -14459,9 +14329,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.i64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |callback_source_0: i64| {
                 p0_w2_retained
@@ -14548,9 +14415,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.callbacks.CallbackOwnedCallback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |callback_source_0: perftest_flat::CallbackOwned| {
                 p0_w2_retained
@@ -14649,9 +14513,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.i64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |callback_source_0: i64| {
                 p0_w2_retained
@@ -14768,9 +14629,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.i64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -14885,8 +14743,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |
                 callback_source_0: i64,
@@ -15016,8 +14872,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.i64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w2 = move |callback_source_0: i64| {
                 p0_w3_retained
@@ -15104,9 +14958,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.i64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |callback_source_0: i64| {
                 p0_w2_retained
@@ -15222,21 +15073,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -15336,22 +15173,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w6_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -15476,8 +15298,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w4_retained = p0_w4_retained.expect("validated active callback");
                 #[allow(unused_mut)]
@@ -15644,8 +15464,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -15720,9 +15538,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_w1 = move |callback_source_0: i64| {
                 p0_w2_retained
@@ -15814,9 +15629,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: i64,
@@ -15978,22 +15790,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackSet = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -16060,22 +15857,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackSet = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -16166,21 +15948,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -16248,8 +16016,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_owned_new(
@@ -16336,21 +16102,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackOwned = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16414,7 +16166,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::callback_owned_drops();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -16481,8 +16232,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.callbacks.CallbackOwnedCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackOwned|
@@ -16583,22 +16332,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.callbacks.CallbackOwnedCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackOwned = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16697,21 +16431,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackTransferred = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16777,7 +16497,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::callback_transferred_drops();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -16846,9 +16565,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.callbacks.CallbackTransferredOptionalCallbackTransferredCallback",
             )?;
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackTransferred,
@@ -16974,8 +16690,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JJ)V",
                 "io.prebindgen.covertest.callbacks.CallbackProjectedCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackProjected|
@@ -17076,21 +16790,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackProjected = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -17176,22 +16876,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -17285,8 +16970,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JJ)V",
                 "io.prebindgen.covertest.i64i64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: i64,
@@ -17373,8 +17056,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(Ljava/lang/String;[B[Ljava/lang/Object;)V",
                 "io.prebindgen.covertest.stru8Listi64VecCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: &str,
@@ -17565,9 +17246,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.callbacks.OptionalCallbackOwnedCallback",
             )?;
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: Option<perftest_flat::CallbackOwned>|
@@ -17679,8 +17357,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(JLjava/lang/String;)V",
                 "io.prebindgen.covertest.callbacks.CallbackEnvelopeCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::CallbackEnvelope|
@@ -17692,14 +17368,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let mut callback_environment = callback_environment;
                             let callback_value_0 = callback_source_0;
                             {
-                                let callback_arg_0_w0_record = &(callback_value_0);
+                                let callback_arg_0_w0_record = callback_value_0;
                                 let mut callback_arg_0_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                    value: ::core::clone::Clone::clone(
-                                        &callback_arg_0_w0_record.handle,
-                                    ),
+                                    value: callback_arg_0_w0_record.handle,
                                 });
                                 let callback_arg_0_w0_f1 = Some(
-                                    ::core::clone::Clone::clone(&callback_arg_0_w0_record.label),
+                                    callback_arg_0_w0_record.label,
                                 );
                                 let callback_java_0_1 = match (callback_arg_0_w0_f1)
                                     .as_ref()
@@ -17789,8 +17463,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(ZIIIJJ[B[BFD)V",
                 "io.prebindgen.covertest.boolcharu8u16u32u64i128u128f32f64Callback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: bool,
@@ -17943,8 +17615,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(II)V",
                 "io.prebindgen.covertest.enums.PriorityOptionalPriorityCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |
                 callback_source_0: perftest_flat::Priority,
@@ -18275,9 +17945,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -18301,30 +17968,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 17i32)
                 }?;
-                let ret_w4_record = &(ret_w1);
-                let ret_w4_f0: &bool = &ret_w4_record.flag;
-                let ret_w4_f0 = u8::from(*ret_w4_f0);
-                let ret_w4_f1: &i8 = &ret_w4_record.byte;
-                let ret_w4_f1 = *ret_w4_f1;
-                let ret_w4_f2: &i16 = &ret_w4_record.short;
-                let ret_w4_f2 = *ret_w4_f2;
-                let ret_w4_f3: &i32 = &ret_w4_record.number;
-                let ret_w4_f3 = *ret_w4_f3;
-                let ret_w4_f4: &i64 = &ret_w4_record.long;
-                let ret_w4_f4 = *ret_w4_f4;
-                let ret_w4_f5: &f32 = &ret_w4_record.float;
-                let ret_w4_f5 = *ret_w4_f5;
-                let ret_w4_f6: &f64 = &ret_w4_record.double;
-                let ret_w4_f6 = *ret_w4_f6;
-                let ret_w4_f7: &i128 = &ret_w4_record.wide;
-                let ret_w4_f7 = (*ret_w4_f7).to_be_bytes();
+                let ret_w4_record = ret_w1;
+                let ret_w4_f0 = u8::from(ret_w4_record.flag);
+                let ret_w4_f1 = ret_w4_record.byte;
+                let ret_w4_f2 = ret_w4_record.short;
+                let ret_w4_f3 = ret_w4_record.number;
+                let ret_w4_f4 = ret_w4_record.long;
+                let ret_w4_f5 = ret_w4_record.float;
+                let ret_w4_f6 = ret_w4_record.double;
+                let ret_w4_f7 = (ret_w4_record.wide).to_be_bytes();
                 let (_, (ret_w4_f8_present_value0,), ret_w4_f8_present_commit) = if let Some(
                     ret_w4_f8_payload,
-                ) = (&ret_w4_record.text).as_ref()
+                ) = ret_w4_record.text
                 {
-                    let ret_w4_f8_some = Some(
-                        ::core::clone::Clone::clone(ret_w4_f8_payload),
-                    );
+                    let ret_w4_f8_some = Some(ret_w4_f8_payload);
                     let ret_w4_f8_present_values = (ret_w4_f8_some,);
                     (1i32, ret_w4_f8_present_values, Some(move || {}))
                 } else {
@@ -18592,8 +18249,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -18759,20 +18414,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 if jni_environment
@@ -18855,7 +18513,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_make_items();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -18962,7 +18619,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_bundle();
             let ret_w0 = perftest_flat::collection_bundle_into(source_value);
             let ret_w1 = ret_w0;
@@ -19150,20 +18806,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in p0_w3_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if p0_w1 == 1i32 {
+                        for identity in p0_w3_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 if jni_environment
@@ -19437,20 +19096,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 if jni_environment
@@ -19615,7 +19277,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_numbers();
             let ret_w0 = perftest_flat::collection_numbers_view(&source_value);
             let ret_w1 = &(ret_w0);
@@ -19789,21 +19450,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -19954,8 +19601,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -20109,8 +19754,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -20264,8 +19907,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -20465,8 +20106,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -20682,9 +20321,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -20867,8 +20503,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21070,8 +20704,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21291,8 +20923,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21460,9 +21090,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21617,8 +21244,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21768,8 +21393,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21873,8 +21496,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_resource_new(
@@ -22028,23 +21649,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 None
             };
             let p2_w0 = if true { Some(p2_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
-            let _: () = {};
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -22432,9 +22054,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -22554,7 +22173,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_fail();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -22681,22 +22299,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -22980,22 +22600,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p1_w1_acquired: Vec<_> = p1_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -23067,21 +22672,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
@@ -23255,7 +22846,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_result_error_drop();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -23316,8 +22906,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_late_niche(
@@ -23412,8 +23000,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_resource_error(
@@ -23478,8 +23064,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1c_1re
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_rich_error(
@@ -23544,8 +23128,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_scalar(__prebindgen_argument_0);
@@ -23622,8 +23204,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_unit_error(__prebindgen_argument_0);
@@ -23700,8 +23280,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_unit(__prebindgen_argument_0);
@@ -23764,8 +23342,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_optional(__prebindgen_argument_0);
@@ -23860,8 +23436,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_text(__prebindgen_argument_0);
@@ -23935,8 +23509,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_record(__prebindgen_argument_0);
@@ -23953,15 +23525,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     });
                 }
             };
-            let ret_w2_record = &(ret_w0);
-            let ret_w2_f0: i32 = match &(&ret_w2_record.priority) {
+            let ret_w2_record = ret_w0;
+            let ret_w2_f0: i32 = match &(ret_w2_record.priority) {
                 perftest_flat::Priority::Low => 0i32,
                 perftest_flat::Priority::Normal => 1i32,
                 perftest_flat::Priority::High => 2i32,
             };
             let (_, (ret_w2_f1_present_value0,), ret_w2_f1_present_commit) = if let Some(
                 ret_w2_f1_payload,
-            ) = (&ret_w2_record.code).as_ref()
+            ) = ret_w2_record.code
             {
                 let ret_w2_f1_some: i32 = match &(ret_w2_f1_payload) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
@@ -24081,23 +23653,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -24211,8 +23767,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_other(__prebindgen_argument_0);
@@ -24293,8 +23847,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = ::core::convert::AsRef::<
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
@@ -24383,7 +23935,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::result_error_drops();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -24474,10 +24025,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let __prebindgen_argument_0 = ::core::convert::AsRef::<
                 [u8],
             >::as_ref(p0_w0.as_ref().expect("active value"));
@@ -24593,8 +24140,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: f64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_payload_new(__prebindgen_argument_0);
@@ -24679,21 +24224,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1paylo
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::PayloadHandle = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -24774,8 +24305,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1prior
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = p0_w0.expect("active enum");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::priority_weight(__prebindgen_argument_0);
@@ -24864,9 +24393,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1prior
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = p0_w2.expect("active enum");
                 Some(p0_w2)
@@ -24959,8 +24485,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = p0_w0.expect("active enum");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::sparse_echo(__prebindgen_argument_0);
@@ -25048,8 +24572,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = p0_w2.expect("active enum");
                 Some(p0_w2)
@@ -25153,8 +24675,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4 = p0_w4.expect("active enum");
@@ -25275,8 +24795,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active enum");
             let source_value = perftest_flat::sparse_ref(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -25354,8 +24872,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1spars
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active enum");
             let source_value = perftest_flat::sparse_borrowed(__prebindgen_argument_0);
             let ret_w0: i32 = match &(source_value) {
@@ -25455,8 +24971,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0_f0 = p0_w0_f0.expect("active enum");
             let p0_w0_f1 = if p0_w1_f1_present == 1i32 {
                 let p0_w0_f1_some = p0_w0_f1_some.expect("active enum");
@@ -25470,15 +24984,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_record_echo(__prebindgen_argument_0);
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: i32 = match &(&ret_w0_record.priority) {
+            let ret_w0_record = source_value;
+            let ret_w0_f0: i32 = match &(ret_w0_record.priority) {
                 perftest_flat::Priority::Low => 0i32,
                 perftest_flat::Priority::Normal => 1i32,
                 perftest_flat::Priority::High => 2i32,
             };
             let (_, (ret_w0_f1_present_value0,), ret_w0_f1_present_commit) = if let Some(
                 ret_w0_f1_payload,
-            ) = (&ret_w0_record.code).as_ref()
+            ) = ret_w0_record.code
             {
                 let ret_w0_f1_some: i32 = match &(ret_w0_f1_payload) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
@@ -25592,8 +25106,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = p0_w0.expect("active enum");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_names_echo(__prebindgen_argument_0);
@@ -25678,8 +25190,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: char = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -25789,23 +25299,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
-                    for identity in ::core::iter::once(
-                        (p0_w10_pointer.addr()) as usize,
-                    ) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -25920,8 +25414,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4: u32 = ::core::convert::Into::into(
@@ -26035,8 +25527,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4 = if ((p0_w1 == 1i32) && (p0_w3 == 1i32))
@@ -26181,8 +25671,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4 = if ((p0_w1 == 1i32) && (p0_w3 == 1i32))
@@ -26327,8 +25815,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4 = if ((p0_w1 == 1i32) && (p0_w3 == 1i32))
@@ -26476,8 +25962,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if ((p0_w1 == 1i32) && (p0_w3 == 1i32)) && (p0_w5 != 0 && p0_w5 != 1) {
                 return Err("invalid option presence".into());
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4 = if ((p0_w1 == 1i32) && (p0_w3 == 1i32))
@@ -26603,8 +26087,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 None
             };
             let p0_w5 = if p0_w1 == 1i32 { Some(p0_w6) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w3: String = ::core::convert::Into::into(
                     p0_w3.expect("active value"),
@@ -26691,8 +26173,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 None
             };
             let p0_w5 = if p0_w1 == 1i32 { Some(p0_w6) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w3: Vec<u8> = ::core::convert::Into::into(
                     p0_w3.expect("active value"),
@@ -26805,23 +26285,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1neste
             if ((p0_w1 == 1i32) && (p0_w3 == 1i32)) && (p0_w5 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if ((p0_w1 == 1i32) && (p0_w3 == 1i32)) && (p0_w5 == 1i32) {
-                    for identity in ::core::iter::once(
-                        (p0_w12_pointer.addr()) as usize,
-                    ) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -26939,9 +26403,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -27097,8 +26558,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: i64 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -27205,21 +26664,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -27337,21 +26782,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
-                    for identity in ::core::iter::once((p0_w5_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -27521,21 +26952,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -27642,8 +27059,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -27727,8 +27142,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -27812,8 +27225,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -27917,8 +27328,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -28028,8 +27437,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(p0_w2.as_ref().expect("active value"))
             } else {
@@ -28132,8 +27539,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(p0_w2.as_ref().expect("active value"))
             } else {
@@ -28399,21 +27804,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 ::prebindgen_runtime::validate_pointer(p0_w4_pointer)?;
             }
             let p0_w5 = if p0_w1 == 1i32 { Some(p0_w6) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w4_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -28507,7 +27898,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::optional_pair_new();
             let ret_w0 = perftest_flat::optional_pair_into(source_value);
             let ret_w1 = ret_w0;
@@ -28642,8 +28032,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_projection_views(
@@ -28773,8 +28161,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0_f0 = if p0_w1_f0_present == 1i32 {
                 let p0_w0_f0_some: Vec<u8> = ::core::convert::Into::into(
                     p0_w0_f0_some.expect("active value"),
@@ -28790,14 +28176,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             let source_value = perftest_flat::optional_bytes_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
+            let ret_w0_record = source_value;
             let (_, (ret_w0_f0_present_value0,), ret_w0_f0_present_commit) = if let Some(
                 ret_w0_f0_payload,
-            ) = (&ret_w0_record.data).as_ref()
+            ) = ret_w0_record.data
             {
-                let ret_w0_f0_some = Some(
-                    ::core::clone::Clone::clone(ret_w0_f0_payload),
-                );
+                let ret_w0_f0_some = Some(ret_w0_f0_payload);
                 let ret_w0_f0_present_values = (ret_w0_f0_some,);
                 (1i32, ret_w0_f0_present_values, Some(move || {}))
             } else {
@@ -28874,21 +28258,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &mut perftest_flat::OwnedResource = unsafe {
                     &mut (*p0_w3_pointer).value
@@ -28973,22 +28343,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::ProjectionHandle = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -29090,8 +28445,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: i64 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -29199,8 +28552,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: char = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -29286,8 +28637,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: u8 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -29372,8 +28721,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: bool = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -29476,8 +28823,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: String = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -29560,8 +28905,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: Vec<u8> = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -29641,8 +28984,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 != 0 && p0_w1 != 1 {
                 return Err("invalid option presence".into());
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 { Some(()) } else { None };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_unit(__prebindgen_argument_0);
@@ -29724,8 +29065,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4: i64 = ::core::convert::Into::into(
@@ -29855,8 +29194,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4: char = ::core::convert::Into::into(
@@ -29958,8 +29295,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_resource_new(
@@ -30075,22 +29410,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -30220,21 +29540,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &perftest_flat::OwnedResource = unsafe {
                     &(*p0_w3_pointer).value
@@ -30340,8 +29646,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2_f0 = if (p0_w1 == 1i32) && (p0_w3_f0_present == 1i32) {
                     let p0_w2_f0_some: i64 = ::core::convert::Into::into(
@@ -30385,14 +29689,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 (ret_w0_value0, ret_w0_value1, ret_w0_value2, ret_w0_value3),
                 ret_w0_commit,
             ) = if let Some(ret_w1) = source_value {
-                let ret_w2_record = &(ret_w1);
+                let ret_w2_record = ret_w1;
                 let (
                     ret_w2_f0_present,
                     (ret_w2_f0_present_value0,),
                     ret_w2_f0_present_commit,
-                ) = if let Some(ret_w2_f0_payload) = (&ret_w2_record.count).as_ref() {
-                    let ret_w2_f0_some: &i64 = ret_w2_f0_payload;
-                    let ret_w2_f0_some = *ret_w2_f0_some;
+                ) = if let Some(ret_w2_f0_payload) = ret_w2_record.count {
+                    let ret_w2_f0_some = ret_w2_f0_payload;
                     let ret_w2_f0_present_values = (ret_w2_f0_some,);
                     (1i32, ret_w2_f0_present_values, Some(move || {}))
                 } else {
@@ -30400,11 +29703,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 let (_, (ret_w2_f1_present_value0,), ret_w2_f1_present_commit) = if let Some(
                     ret_w2_f1_payload,
-                ) = (&ret_w2_record.text).as_ref()
+                ) = ret_w2_record.text
                 {
-                    let ret_w2_f1_some = Some(
-                        ::core::clone::Clone::clone(ret_w2_f1_payload),
-                    );
+                    let ret_w2_f1_some = Some(ret_w2_f1_payload);
                     let ret_w2_f1_present_values = (ret_w2_f1_some,);
                     (1i32, ret_w2_f1_present_values, Some(move || {}))
                 } else {
@@ -30412,10 +29713,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 let (_, (ret_w2_f2_present_value0,), ret_w2_f2_present_commit) = if let Some(
                     ret_w2_f2_payload,
-                ) = (&ret_w2_record.letter).as_ref()
+                ) = ret_w2_record.letter
                 {
-                    let ret_w2_f2_some: &char = ret_w2_f2_payload;
-                    let ret_w2_f2_some = (*ret_w2_f2_some) as i32;
+                    let ret_w2_f2_some = (ret_w2_f2_payload) as i32;
                     let ret_w2_f2_present_values = (ret_w2_f2_some,);
                     (1i32, ret_w2_f2_present_values, Some(move || {}))
                 } else {
@@ -30567,9 +29867,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 return Err("invalid option presence".into());
             }
             let p1_w2 = if p1_w1 == 1i32 { Some(p1_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0 = if p1_w1 == 1i32 {
@@ -30694,8 +29991,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::optional_resource_new(
@@ -30982,9 +30277,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stamp
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -31074,8 +30366,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1plain
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: String = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -31177,12 +30467,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsig
                 return Err("invalid option presence".into());
             }
             let p4_w2 = if p4_w1 == 1i32 { Some(p4_w3 as u64) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: u8 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: u16 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -31207,22 +30491,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsig
                 __prebindgen_argument_3,
                 __prebindgen_argument_4,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: &u8 = &ret_w0_record.byte;
-            let ret_w0_f0 = (*ret_w0_f0) as i32;
-            let ret_w0_f1: &u16 = &ret_w0_record.short;
-            let ret_w0_f1 = (*ret_w0_f1) as i32;
-            let ret_w0_f2: &u32 = &ret_w0_record.int;
-            let ret_w0_f2 = (*ret_w0_f2) as i64;
-            let ret_w0_f3: &u64 = &ret_w0_record.long;
-            let ret_w0_f3 = (*ret_w0_f3) as i64;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = (ret_w0_record.byte) as i32;
+            let ret_w0_f1 = (ret_w0_record.short) as i32;
+            let ret_w0_f2 = (ret_w0_record.int) as i64;
+            let ret_w0_f3 = (ret_w0_record.long) as i64;
             let (
                 ret_w0_f4_present,
                 (ret_w0_f4_present_value0,),
                 ret_w0_f4_present_commit,
-            ) = if let Some(ret_w0_f4_payload) = (&ret_w0_record.maybe_long).as_ref() {
-                let ret_w0_f4_some: &u64 = ret_w0_f4_payload;
-                let ret_w0_f4_some = (*ret_w0_f4_some) as i64;
+            ) = if let Some(ret_w0_f4_payload) = ret_w0_record.maybe_long {
+                let ret_w0_f4_some = (ret_w0_f4_payload) as i64;
                 let ret_w0_f4_present_values = (ret_w0_f4_some,);
                 (1i32, ret_w0_f4_present_values, Some(move || {}))
             } else {
@@ -31368,8 +30647,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsig
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3 as u64) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: u64 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -31473,9 +30750,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: Vec<u8> = ::core::convert::Into::into(
@@ -31486,13 +30760,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0_record = &(&ret_w0_record.stamp);
-            let ret_w0_f0_f0: &i64 = &ret_w0_f0_record.secs;
-            let ret_w0_f0_f0 = *ret_w0_f0_f0;
-            let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
-            let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_record = source_value;
+            let ret_w0_f0_record = ret_w0_record.stamp;
+            let ret_w0_f0_f0 = ret_w0_f0_record.secs;
+            let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
+            let ret_w0_f1 = Some(ret_w0_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -31583,8 +30855,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0_f0_f0: i64 = ::core::convert::Into::into(
                 p0_w0_f0_f0.expect("active value"),
             );
@@ -31604,13 +30874,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::blob_value_echo(__prebindgen_argument_0);
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0_record = &(&ret_w0_record.stamp);
-            let ret_w0_f0_f0: &i64 = &ret_w0_f0_record.secs;
-            let ret_w0_f0_f0 = *ret_w0_f0_f0;
-            let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
-            let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_record = source_value;
+            let ret_w0_f0_record = ret_w0_record.stamp;
+            let ret_w0_f0_f0 = ret_w0_f0_record.secs;
+            let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
+            let ret_w0_f1 = Some(ret_w0_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -31691,7 +30959,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::archive_new();
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
@@ -31921,21 +31188,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Archive = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::archive_latest(__prebindgen_argument_0);
@@ -32024,7 +31277,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::storage_new();
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
@@ -32105,21 +31357,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
@@ -32290,22 +31528,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
             let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
             let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -32402,8 +31625,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = ::core::convert::AsRef::<
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
@@ -32475,8 +31696,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1strin
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
             let source_value = perftest_flat::string_len(__prebindgen_argument_0);
             let ret_w0 = (source_value) as i64;
@@ -32543,8 +31762,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1i64_1
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
             let source_value = perftest_flat::i64_ref_double(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -32611,8 +31828,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1text_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: String = ::core::convert::Into::into(
                 p0_w0.expect("active value"),
             );
@@ -32679,8 +31894,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bytes
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: Vec<u8> = ::core::convert::Into::into(
                 p0_w0.expect("active value"),
             );
@@ -32751,10 +31964,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: f64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -32935,21 +32144,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 0i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -33073,11 +32268,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1paylo
             let p1_w0 = if true { Some(p1_w1) } else { None };
             let p2_w0 = if true { Some(p2_w1) } else { None };
             let p3_w0 = if true { Some(p3_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -33206,8 +32396,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             let p0_w3 = if true { Some(p0_w4) } else { None };
             let p0_w5 = if true { Some(p0_w6) } else { None };
             let p0_w7 = if true { Some(p0_w8 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1: i64 = ::core::convert::Into::into(p0_w1.expect("active value"));
             let p0_w3: i32 = ::core::convert::Into::into(p0_w3.expect("active value"));
             let p0_w5: f64 = ::core::convert::Into::into(p0_w5.expect("active value"));
@@ -33295,9 +32483,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: f64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -33399,21 +32584,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -33514,8 +32685,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i8 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i8(__prebindgen_argument_0);
@@ -33579,8 +32748,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i16 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i16(__prebindgen_argument_0);
@@ -33644,8 +32811,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i32(__prebindgen_argument_0);
@@ -33709,8 +32874,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i64(__prebindgen_argument_0);
@@ -33778,8 +32941,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i128 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i128(__prebindgen_argument_0);
@@ -33842,8 +33003,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: isize = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_isize(__prebindgen_argument_0);
@@ -33911,8 +33070,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u8 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u8(__prebindgen_argument_0);
@@ -33980,8 +33137,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u16 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u16(__prebindgen_argument_0);
@@ -34049,8 +33204,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u32(__prebindgen_argument_0);
@@ -34114,8 +33267,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 as u64) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u64(__prebindgen_argument_0);
@@ -34185,8 +33336,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u128 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u128(__prebindgen_argument_0);
@@ -34252,8 +33401,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: usize = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_usize(__prebindgen_argument_0);
@@ -34317,8 +33464,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: f32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_f32(__prebindgen_argument_0);
@@ -34382,8 +33527,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: f64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_f64(__prebindgen_argument_0);
@@ -34447,8 +33590,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_bool(__prebindgen_argument_0);
@@ -34521,8 +33662,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: char = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_char(__prebindgen_argument_0);
@@ -34584,7 +33723,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1primi
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::primitive_unit();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
             let _: () = {};
@@ -34655,21 +33793,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w2 == 1i32 {
-                    for identity in ::core::iter::once((p0_w9_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -34787,22 +33911,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -34981,21 +34090,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_len(__prebindgen_argument_0);
@@ -35069,22 +34164,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -35311,22 +34391,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             let p1_w3 = if true { Some(p1_w4) } else { None };
             let p1_w5 = if true { Some(p1_w6) } else { None };
             let p1_w7 = if true { Some(p1_w8 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -35611,21 +34676,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_summary_handle(
@@ -35700,7 +34751,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::projection_pair_borrowed();
             let ret_w0_record = &(source_value);
             let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -35796,7 +34846,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::projection_pair_owned();
             let ret_w0_record = source_value;
             let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -35882,6 +34931,105 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1callback_17a64636be1de6f9f<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "(JJ)V",
+                "io.prebindgen.covertest.resources.ProjectionPairCallback",
+            )?;
+            #[allow(unused_mut)]
+            let p0_callback_value = move |
+                callback_source_0: perftest_flat::ProjectionPair|
+            {
+                p0_callback_retained
+                    .with_env(
+                        18i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let callback_arg_0_w0_record = callback_value_0;
+                                let mut callback_arg_0_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                    value: callback_arg_0_w0_record.first,
+                                });
+                                let mut callback_arg_0_w0_f1 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                    value: callback_arg_0_w0_record.second,
+                                });
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *callback_arg_0_w0_f0)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                perftest_flat::ProjectionHandle,
+                                            >) as i64,
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *callback_arg_0_w0_f1)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                perftest_flat::ProjectionHandle,
+                                            >) as i64,
+                                    },
+                                ];
+                                {
+                                    let _ = Box::into_raw(callback_arg_0_w0_f0);
+                                    let _ = Box::into_raw(callback_arg_0_w0_f1);
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::projection_pair_callback(
+                __prebindgen_argument_0,
+            );
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1mixed_1833184fb3cea18c0<
     'local,
 >(
@@ -35892,7 +35040,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::projection_pair_mixed();
             let ret_w0_record = source_value;
             let mut ret_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -35988,7 +35135,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::projection_pair_views();
             let ret_w1_record = &(&source_value);
             let mut ret_w1_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -36133,7 +35279,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::projection_clones();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -36193,7 +35338,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::projection_drops();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -36253,7 +35397,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::resource_bundle_new();
             let ret_w0_record = source_value;
             let ret_w0_f0 = Some(ret_w0_record.label);
@@ -36437,7 +35580,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::resource_bundle_default();
             let ret_w0_record = source_value;
             let ret_w0_f0 = Some(ret_w0_record.label);
@@ -36617,7 +35759,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::resource_bundle_fields();
             let ret_w0 = perftest_flat::resource_bundle_into(source_value);
             let ret_w1 = ret_w0;
@@ -36792,7 +35933,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::api_record_new();
             let ret_w0 = perftest_flat::api_record_into(source_value);
             let ret_w1 = ret_w0;
@@ -36854,7 +35994,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::api_record_views();
             let ret_w0 = perftest_flat::api_record_count(&source_value);
             let ret_w1 = ret_w0;
@@ -36939,21 +36078,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::OwnedResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -37017,7 +36142,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::owned_resource_drops();
             let ret_w0 = (source_value) as i64;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -37077,7 +36201,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::resource_bundle_views();
             let ret_w1 = perftest_flat::resource_bundle_label(&source_value);
             let ret_w2 = Some(ret_w1);
@@ -37359,8 +36482,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: perftest_flat::DataPrimitives = match p0_w1 {
                 0i32 => {
                     let p0_w2_f0: i8 = ::core::convert::Into::into(
@@ -37441,39 +36562,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let source_value = perftest_flat::data_primitives_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: &i8 = &ret_w0_record.i8v;
-            let ret_w0_f0 = *ret_w0_f0;
-            let ret_w0_f1: &i16 = &ret_w0_record.i16v;
-            let ret_w0_f1 = *ret_w0_f1;
-            let ret_w0_f2: &i32 = &ret_w0_record.i32v;
-            let ret_w0_f2 = *ret_w0_f2;
-            let ret_w0_f3: &i64 = &ret_w0_record.i64v;
-            let ret_w0_f3 = *ret_w0_f3;
-            let ret_w0_f4: &i128 = &ret_w0_record.i128v;
-            let ret_w0_f4 = (*ret_w0_f4).to_be_bytes();
-            let ret_w0_f5: &isize = &ret_w0_record.isizev;
-            let ret_w0_f5 = (*ret_w0_f5) as i64;
-            let ret_w0_f6: &u8 = &ret_w0_record.u8v;
-            let ret_w0_f6 = (*ret_w0_f6) as i32;
-            let ret_w0_f7: &u16 = &ret_w0_record.u16v;
-            let ret_w0_f7 = (*ret_w0_f7) as i32;
-            let ret_w0_f8: &u32 = &ret_w0_record.u32v;
-            let ret_w0_f8 = (*ret_w0_f8) as i64;
-            let ret_w0_f9: &u64 = &ret_w0_record.u64v;
-            let ret_w0_f9 = (*ret_w0_f9) as i64;
-            let ret_w0_f10: &u128 = &ret_w0_record.u128v;
-            let ret_w0_f10 = (*ret_w0_f10).to_be_bytes();
-            let ret_w0_f11: &usize = &ret_w0_record.usizev;
-            let ret_w0_f11 = (*ret_w0_f11) as i64;
-            let ret_w0_f12: &f32 = &ret_w0_record.f32v;
-            let ret_w0_f12 = *ret_w0_f12;
-            let ret_w0_f13: &f64 = &ret_w0_record.f64v;
-            let ret_w0_f13 = *ret_w0_f13;
-            let ret_w0_f14: &bool = &ret_w0_record.boolv;
-            let ret_w0_f14 = u8::from(*ret_w0_f14);
-            let ret_w0_f15: &char = &ret_w0_record.charv;
-            let ret_w0_f15 = (*ret_w0_f15) as i32;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = ret_w0_record.i8v;
+            let ret_w0_f1 = ret_w0_record.i16v;
+            let ret_w0_f2 = ret_w0_record.i32v;
+            let ret_w0_f3 = ret_w0_record.i64v;
+            let ret_w0_f4 = (ret_w0_record.i128v).to_be_bytes();
+            let ret_w0_f5 = (ret_w0_record.isizev) as i64;
+            let ret_w0_f6 = (ret_w0_record.u8v) as i32;
+            let ret_w0_f7 = (ret_w0_record.u16v) as i32;
+            let ret_w0_f8 = (ret_w0_record.u32v) as i64;
+            let ret_w0_f9 = (ret_w0_record.u64v) as i64;
+            let ret_w0_f10 = (ret_w0_record.u128v).to_be_bytes();
+            let ret_w0_f11 = (ret_w0_record.usizev) as i64;
+            let ret_w0_f12 = ret_w0_record.f32v;
+            let ret_w0_f13 = ret_w0_record.f64v;
+            let ret_w0_f14 = u8::from(ret_w0_record.boolv);
+            let ret_w0_f15 = (ret_w0_record.charv) as i32;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 17usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -37716,41 +36821,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::data_primitives_zero();
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: &i8 = &ret_w0_record.i8v;
-            let ret_w0_f0 = *ret_w0_f0;
-            let ret_w0_f1: &i16 = &ret_w0_record.i16v;
-            let ret_w0_f1 = *ret_w0_f1;
-            let ret_w0_f2: &i32 = &ret_w0_record.i32v;
-            let ret_w0_f2 = *ret_w0_f2;
-            let ret_w0_f3: &i64 = &ret_w0_record.i64v;
-            let ret_w0_f3 = *ret_w0_f3;
-            let ret_w0_f4: &i128 = &ret_w0_record.i128v;
-            let ret_w0_f4 = (*ret_w0_f4).to_be_bytes();
-            let ret_w0_f5: &isize = &ret_w0_record.isizev;
-            let ret_w0_f5 = (*ret_w0_f5) as i64;
-            let ret_w0_f6: &u8 = &ret_w0_record.u8v;
-            let ret_w0_f6 = (*ret_w0_f6) as i32;
-            let ret_w0_f7: &u16 = &ret_w0_record.u16v;
-            let ret_w0_f7 = (*ret_w0_f7) as i32;
-            let ret_w0_f8: &u32 = &ret_w0_record.u32v;
-            let ret_w0_f8 = (*ret_w0_f8) as i64;
-            let ret_w0_f9: &u64 = &ret_w0_record.u64v;
-            let ret_w0_f9 = (*ret_w0_f9) as i64;
-            let ret_w0_f10: &u128 = &ret_w0_record.u128v;
-            let ret_w0_f10 = (*ret_w0_f10).to_be_bytes();
-            let ret_w0_f11: &usize = &ret_w0_record.usizev;
-            let ret_w0_f11 = (*ret_w0_f11) as i64;
-            let ret_w0_f12: &f32 = &ret_w0_record.f32v;
-            let ret_w0_f12 = *ret_w0_f12;
-            let ret_w0_f13: &f64 = &ret_w0_record.f64v;
-            let ret_w0_f13 = *ret_w0_f13;
-            let ret_w0_f14: &bool = &ret_w0_record.boolv;
-            let ret_w0_f14 = u8::from(*ret_w0_f14);
-            let ret_w0_f15: &char = &ret_w0_record.charv;
-            let ret_w0_f15 = (*ret_w0_f15) as i32;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = ret_w0_record.i8v;
+            let ret_w0_f1 = ret_w0_record.i16v;
+            let ret_w0_f2 = ret_w0_record.i32v;
+            let ret_w0_f3 = ret_w0_record.i64v;
+            let ret_w0_f4 = (ret_w0_record.i128v).to_be_bytes();
+            let ret_w0_f5 = (ret_w0_record.isizev) as i64;
+            let ret_w0_f6 = (ret_w0_record.u8v) as i32;
+            let ret_w0_f7 = (ret_w0_record.u16v) as i32;
+            let ret_w0_f8 = (ret_w0_record.u32v) as i64;
+            let ret_w0_f9 = (ret_w0_record.u64v) as i64;
+            let ret_w0_f10 = (ret_w0_record.u128v).to_be_bytes();
+            let ret_w0_f11 = (ret_w0_record.usizev) as i64;
+            let ret_w0_f12 = ret_w0_record.f32v;
+            let ret_w0_f13 = ret_w0_record.f64v;
+            let ret_w0_f14 = u8::from(ret_w0_record.boolv);
+            let ret_w0_f15 = (ret_w0_record.charv) as i32;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 17usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -38082,8 +37170,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0_f0: String = ::core::convert::Into::into(
                 p0_w0_f0.expect("active value"),
             );
@@ -38156,46 +37242,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let source_value = perftest_flat::data_envelope_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0 = Some(::core::clone::Clone::clone(&ret_w0_record.label));
-            let ret_w0_f1_record = &(&ret_w0_record.blob);
-            let ret_w0_f1_f0_record = &(&ret_w0_f1_record.stamp);
-            let ret_w0_f1_f0_f0: &i64 = &ret_w0_f1_f0_record.secs;
-            let ret_w0_f1_f0_f0 = *ret_w0_f1_f0_f0;
-            let ret_w0_f1_f0_f1: &i64 = &ret_w0_f1_f0_record.nanos;
-            let ret_w0_f1_f0_f1 = *ret_w0_f1_f0_f1;
-            let ret_w0_f1_f1 = Some(::core::clone::Clone::clone(&ret_w0_f1_record.id));
-            let ret_w0_f2_record = &(&ret_w0_record.unsigned);
-            let ret_w0_f2_f0: &u8 = &ret_w0_f2_record.byte;
-            let ret_w0_f2_f0 = (*ret_w0_f2_f0) as i32;
-            let ret_w0_f2_f1: &u16 = &ret_w0_f2_record.short;
-            let ret_w0_f2_f1 = (*ret_w0_f2_f1) as i32;
-            let ret_w0_f2_f2: &u32 = &ret_w0_f2_record.int;
-            let ret_w0_f2_f2 = (*ret_w0_f2_f2) as i64;
-            let ret_w0_f2_f3: &u64 = &ret_w0_f2_record.long;
-            let ret_w0_f2_f3 = (*ret_w0_f2_f3) as i64;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f1_record = ret_w0_record.blob;
+            let ret_w0_f1_f0_record = ret_w0_f1_record.stamp;
+            let ret_w0_f1_f0_f0 = ret_w0_f1_f0_record.secs;
+            let ret_w0_f1_f0_f1 = ret_w0_f1_f0_record.nanos;
+            let ret_w0_f1_f1 = Some(ret_w0_f1_record.id);
+            let ret_w0_f2_record = ret_w0_record.unsigned;
+            let ret_w0_f2_f0 = (ret_w0_f2_record.byte) as i32;
+            let ret_w0_f2_f1 = (ret_w0_f2_record.short) as i32;
+            let ret_w0_f2_f2 = (ret_w0_f2_record.int) as i64;
+            let ret_w0_f2_f3 = (ret_w0_f2_record.long) as i64;
             let (
                 ret_w0_f2_f4_present,
                 (ret_w0_f2_f4_present_value0,),
                 ret_w0_f2_f4_present_commit,
-            ) = if let Some(ret_w0_f2_f4_payload) = (&ret_w0_f2_record.maybe_long)
-                .as_ref()
-            {
-                let ret_w0_f2_f4_some: &u64 = ret_w0_f2_f4_payload;
-                let ret_w0_f2_f4_some = (*ret_w0_f2_f4_some) as i64;
+            ) = if let Some(ret_w0_f2_f4_payload) = ret_w0_f2_record.maybe_long {
+                let ret_w0_f2_f4_some = (ret_w0_f2_f4_payload) as i64;
                 let ret_w0_f2_f4_present_values = (ret_w0_f2_f4_some,);
                 (1i32, ret_w0_f2_f4_present_values, Some(move || {}))
             } else {
                 (0i32, (0,), None)
             };
-            let ret_w0_f3: &bool = &ret_w0_record.enabled;
-            let ret_w0_f3 = u8::from(*ret_w0_f3);
-            let ret_w0_f4: &char = &ret_w0_record.code;
-            let ret_w0_f4 = (*ret_w0_f4) as i32;
-            let ret_w0_f5: &i128 = &ret_w0_record.signed;
-            let ret_w0_f5 = (*ret_w0_f5).to_be_bytes();
-            let ret_w0_f6: &u128 = &ret_w0_record.wide;
-            let ret_w0_f6 = (*ret_w0_f6).to_be_bytes();
+            let ret_w0_f3 = u8::from(ret_w0_record.enabled);
+            let ret_w0_f4 = (ret_w0_record.code) as i32;
+            let ret_w0_f5 = (ret_w0_record.signed).to_be_bytes();
+            let ret_w0_f6 = (ret_w0_record.wide).to_be_bytes();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 15usize)?;
             let object = match (ret_w0_f0).as_ref() {
                 Some(value) => {
@@ -38526,22 +37599,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -38712,8 +37770,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_f0_f0: i64 = ::core::convert::Into::into(
                 p0_w1_f0_f0.expect("active value"),
             );
@@ -38738,46 +37794,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let source_value = perftest_flat::data_envelope_constructed(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0 = Some(::core::clone::Clone::clone(&ret_w0_record.label));
-            let ret_w0_f1_record = &(&ret_w0_record.blob);
-            let ret_w0_f1_f0_record = &(&ret_w0_f1_record.stamp);
-            let ret_w0_f1_f0_f0: &i64 = &ret_w0_f1_f0_record.secs;
-            let ret_w0_f1_f0_f0 = *ret_w0_f1_f0_f0;
-            let ret_w0_f1_f0_f1: &i64 = &ret_w0_f1_f0_record.nanos;
-            let ret_w0_f1_f0_f1 = *ret_w0_f1_f0_f1;
-            let ret_w0_f1_f1 = Some(::core::clone::Clone::clone(&ret_w0_f1_record.id));
-            let ret_w0_f2_record = &(&ret_w0_record.unsigned);
-            let ret_w0_f2_f0: &u8 = &ret_w0_f2_record.byte;
-            let ret_w0_f2_f0 = (*ret_w0_f2_f0) as i32;
-            let ret_w0_f2_f1: &u16 = &ret_w0_f2_record.short;
-            let ret_w0_f2_f1 = (*ret_w0_f2_f1) as i32;
-            let ret_w0_f2_f2: &u32 = &ret_w0_f2_record.int;
-            let ret_w0_f2_f2 = (*ret_w0_f2_f2) as i64;
-            let ret_w0_f2_f3: &u64 = &ret_w0_f2_record.long;
-            let ret_w0_f2_f3 = (*ret_w0_f2_f3) as i64;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f1_record = ret_w0_record.blob;
+            let ret_w0_f1_f0_record = ret_w0_f1_record.stamp;
+            let ret_w0_f1_f0_f0 = ret_w0_f1_f0_record.secs;
+            let ret_w0_f1_f0_f1 = ret_w0_f1_f0_record.nanos;
+            let ret_w0_f1_f1 = Some(ret_w0_f1_record.id);
+            let ret_w0_f2_record = ret_w0_record.unsigned;
+            let ret_w0_f2_f0 = (ret_w0_f2_record.byte) as i32;
+            let ret_w0_f2_f1 = (ret_w0_f2_record.short) as i32;
+            let ret_w0_f2_f2 = (ret_w0_f2_record.int) as i64;
+            let ret_w0_f2_f3 = (ret_w0_f2_record.long) as i64;
             let (
                 ret_w0_f2_f4_present,
                 (ret_w0_f2_f4_present_value0,),
                 ret_w0_f2_f4_present_commit,
-            ) = if let Some(ret_w0_f2_f4_payload) = (&ret_w0_f2_record.maybe_long)
-                .as_ref()
-            {
-                let ret_w0_f2_f4_some: &u64 = ret_w0_f2_f4_payload;
-                let ret_w0_f2_f4_some = (*ret_w0_f2_f4_some) as i64;
+            ) = if let Some(ret_w0_f2_f4_payload) = ret_w0_f2_record.maybe_long {
+                let ret_w0_f2_f4_some = (ret_w0_f2_f4_payload) as i64;
                 let ret_w0_f2_f4_present_values = (ret_w0_f2_f4_some,);
                 (1i32, ret_w0_f2_f4_present_values, Some(move || {}))
             } else {
                 (0i32, (0,), None)
             };
-            let ret_w0_f3: &bool = &ret_w0_record.enabled;
-            let ret_w0_f3 = u8::from(*ret_w0_f3);
-            let ret_w0_f4: &char = &ret_w0_record.code;
-            let ret_w0_f4 = (*ret_w0_f4) as i32;
-            let ret_w0_f5: &i128 = &ret_w0_record.signed;
-            let ret_w0_f5 = (*ret_w0_f5).to_be_bytes();
-            let ret_w0_f6: &u128 = &ret_w0_record.wide;
-            let ret_w0_f6 = (*ret_w0_f6).to_be_bytes();
+            let ret_w0_f3 = u8::from(ret_w0_record.enabled);
+            let ret_w0_f4 = (ret_w0_record.code) as i32;
+            let ret_w0_f5 = (ret_w0_record.signed).to_be_bytes();
+            let ret_w0_f6 = (ret_w0_record.wide).to_be_bytes();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 15usize)?;
             let object = match (ret_w0_f0).as_ref() {
                 Some(value) => {
@@ -39018,8 +38061,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             };
             let p0_w0_f1 = if true { Some(p0_w1_f1) } else { None };
             let p0_w0_f2 = if true { Some(p0_w1_f2) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0_f0: Vec<u8> = ::core::convert::Into::into(
                 p0_w0_f0.expect("active value"),
             );
@@ -39036,12 +38077,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::data_floats_echo(__prebindgen_argument_0);
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0 = Some(::core::clone::Clone::clone(&ret_w0_record.bytes));
-            let ret_w0_f1: &f32 = &ret_w0_record.f;
-            let ret_w0_f1 = *ret_w0_f1;
-            let ret_w0_f2: &f64 = &ret_w0_record.d;
-            let ret_w0_f2 = *ret_w0_f2;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = Some(ret_w0_record.bytes);
+            let ret_w0_f1 = ret_w0_record.f;
+            let ret_w0_f2 = ret_w0_record.d;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = match (ret_w0_f0).as_ref() {
                 Some(value) => {
@@ -39144,8 +38183,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: perftest_flat::BlobValue = match p0_w1 {
                 0i32 => {
                     let p0_w2_f0_f0: i64 = ::core::convert::Into::into(
@@ -39186,13 +38223,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let source_value = perftest_flat::blob_value_selected(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0_record = &(&ret_w0_record.stamp);
-            let ret_w0_f0_f0: &i64 = &ret_w0_f0_record.secs;
-            let ret_w0_f0_f0 = *ret_w0_f0_f0;
-            let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
-            let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_record = source_value;
+            let ret_w0_f0_record = ret_w0_record.stamp;
+            let ret_w0_f0_f0 = ret_w0_f0_record.secs;
+            let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
+            let ret_w0_f1 = Some(ret_w0_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -39283,8 +38318,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0_f0_f0: i64 = ::core::convert::Into::into(
                 p0_w0_f0_f0.expect("active value"),
             );
@@ -39311,21 +38344,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
             let ret_w0_f0_f1 = *ret_w0_f0_f1;
             let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
-            let ret_w1_record = &(&source_value);
-            let ret_w1_f0_record = &(&ret_w1_record.stamp);
-            let ret_w1_f0_f0: &i64 = &ret_w1_f0_record.secs;
-            let ret_w1_f0_f0 = *ret_w1_f0_f0;
-            let ret_w1_f0_f1: &i64 = &ret_w1_f0_record.nanos;
-            let ret_w1_f0_f1 = *ret_w1_f0_f1;
-            let ret_w1_f1 = Some(::core::clone::Clone::clone(&ret_w1_record.id));
             let ret_w2 = perftest_flat::blob_value_copy(&source_value);
-            let ret_w3_record = &(ret_w2);
-            let ret_w3_f0_record = &(&ret_w3_record.stamp);
-            let ret_w3_f0_f0: &i64 = &ret_w3_f0_record.secs;
-            let ret_w3_f0_f0 = *ret_w3_f0_f0;
-            let ret_w3_f0_f1: &i64 = &ret_w3_f0_record.nanos;
-            let ret_w3_f0_f1 = *ret_w3_f0_f1;
-            let ret_w3_f1 = Some(::core::clone::Clone::clone(&ret_w3_record.id));
+            let ret_w3_record = ret_w2;
+            let ret_w3_f0_record = ret_w3_record.stamp;
+            let ret_w3_f0_f0 = ret_w3_f0_record.secs;
+            let ret_w3_f0_f1 = ret_w3_f0_record.nanos;
+            let ret_w3_f1 = Some(ret_w3_record.id);
+            let ret_w1_record = source_value;
+            let ret_w1_f0_record = ret_w1_record.stamp;
+            let ret_w1_f0_f0 = ret_w1_f0_record.secs;
+            let ret_w1_f0_f1 = ret_w1_f0_record.nanos;
+            let ret_w1_f1 = Some(ret_w1_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 10usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -39498,9 +38527,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "io.prebindgen.covertest.i64Callback",
             )?;
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             #[allow(unused_mut)]
             let p0_callback_value = move |callback_source_0: i64| {
                 p0_callback_retained
@@ -39870,9 +38896,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -39908,30 +38931,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 17i32)
                 }?;
-                let ret_w4_record = &(ret_w1);
-                let ret_w4_f0: &bool = &ret_w4_record.flag;
-                let ret_w4_f0 = u8::from(*ret_w4_f0);
-                let ret_w4_f1: &i8 = &ret_w4_record.byte;
-                let ret_w4_f1 = *ret_w4_f1;
-                let ret_w4_f2: &i16 = &ret_w4_record.short;
-                let ret_w4_f2 = *ret_w4_f2;
-                let ret_w4_f3: &i32 = &ret_w4_record.number;
-                let ret_w4_f3 = *ret_w4_f3;
-                let ret_w4_f4: &i64 = &ret_w4_record.long;
-                let ret_w4_f4 = *ret_w4_f4;
-                let ret_w4_f5: &f32 = &ret_w4_record.float;
-                let ret_w4_f5 = *ret_w4_f5;
-                let ret_w4_f6: &f64 = &ret_w4_record.double;
-                let ret_w4_f6 = *ret_w4_f6;
-                let ret_w4_f7: &i128 = &ret_w4_record.wide;
-                let ret_w4_f7 = (*ret_w4_f7).to_be_bytes();
+                let ret_w4_record = ret_w1;
+                let ret_w4_f0 = u8::from(ret_w4_record.flag);
+                let ret_w4_f1 = ret_w4_record.byte;
+                let ret_w4_f2 = ret_w4_record.short;
+                let ret_w4_f3 = ret_w4_record.number;
+                let ret_w4_f4 = ret_w4_record.long;
+                let ret_w4_f5 = ret_w4_record.float;
+                let ret_w4_f6 = ret_w4_record.double;
+                let ret_w4_f7 = (ret_w4_record.wide).to_be_bytes();
                 let (_, (ret_w4_f8_present_value0,), ret_w4_f8_present_commit) = if let Some(
                     ret_w4_f8_payload,
-                ) = (&ret_w4_record.text).as_ref()
+                ) = ret_w4_record.text
                 {
-                    let ret_w4_f8_some = Some(
-                        ::core::clone::Clone::clone(ret_w4_f8_payload),
-                    );
+                    let ret_w4_f8_some = Some(ret_w4_f8_payload);
                     let ret_w4_f8_present_values = (ret_w4_f8_some,);
                     (1i32, ret_w4_f8_present_values, Some(move || {}))
                 } else {
@@ -40124,8 +39137,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -40316,20 +39327,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in p0_w3_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if p0_w1 == 1i32 {
+                        for identity in p0_w3_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 if jni_environment
@@ -40616,20 +39630,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 if jni_environment
@@ -40868,8 +39885,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -41041,8 +40056,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -41223,8 +40236,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -41451,8 +40462,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -41695,9 +40704,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -41884,8 +40890,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -42102,8 +41106,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -42324,8 +41326,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -42500,8 +41500,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -42669,8 +41667,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -42869,23 +41865,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 None
             };
             let p2_w0 = if true { Some(p2_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
-            let _: () = {};
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -43094,9 +42091,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -43302,22 +42296,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -43490,7 +42486,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             return Err("null sequence callback".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::sequence_late_drop();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -43623,7 +42618,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
             return Err("null sequence callback".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::sequence_scalars();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -43800,8 +42794,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1seque
         }
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::sequence_parts(__prebindgen_argument_0);
@@ -43964,21 +42956,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
@@ -44123,7 +43101,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1api_1
             return Err("null sequence callback".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::api_record_rows();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();

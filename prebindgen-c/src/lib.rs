@@ -249,7 +249,9 @@ impl Codec for CCodec {
         if let Some(inner) = prebindgen_declarations::option_inner(ty) {
             return self.consumes(_flat, inner, &());
         }
-        Value::of(ty).is_none()
+        // Text and bytes own their storage just like opaque objects. Treating
+        // them as observations silently cloned them when another view was added.
+        !matches!(ty, syn::Type::Reference(_)) && !matches!(Value::of(ty), Some(Value::Scalar(_)))
     }
     fn input_leaf(
         &self,

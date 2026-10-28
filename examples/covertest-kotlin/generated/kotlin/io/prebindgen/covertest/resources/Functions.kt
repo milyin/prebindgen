@@ -41,6 +41,50 @@ public fun `projectionPairOwned`(onError: io.prebindgen.covertest.JniErrorHandle
     }
 }
 
+public fun `projectionPairCallback`(p0_callback: io.prebindgen.covertest.resources.ProjectionPairCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Unit> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Unit = run {
+    val result = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long, raw1: Long) {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackOutput0_g0_0: io.prebindgen.covertest.resources.ProjectionHandle? = null
+        var callbackOutput0_g1_0: io.prebindgen.covertest.resources.ProjectionHandle? = null
+        lateinit var callbackArgument0_0: io.prebindgen.covertest.resources.ProjectionPair
+        var callbackFailure: Throwable? = null
+        var callbackReady = false
+        try {
+            try {
+            callbackOutput0_g0_0 = io.prebindgen.covertest.resources.ProjectionHandle(raw0 as Long)
+            callbackOutput0_g1_0 = io.prebindgen.covertest.resources.ProjectionHandle(raw1 as Long)
+            callbackArgument0_0 = io.prebindgen.covertest.resources.ProjectionPair(requireNotNull(callbackOutput0_g0_0), requireNotNull(callbackOutput0_g1_0))
+        } catch (failure: Throwable) {
+            try { val owner = callbackOutput0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_ProjectionHandle_46b41135284839d8(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_g1_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_ProjectionHandle_46b41135284839d8(raw1 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+            callbackReady = true
+            p0_callback.run(callbackArgument0_0)
+        } catch (failure: Throwable) {
+            callbackFailure = failure
+            throw failure
+        } finally {
+            if (callbackReady) {
+            try { val owner = callbackOutput0_g0_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_ProjectionHandle_46b41135284839d8(raw0 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+            try { val owner = callbackOutput0_g1_0; if (owner != null) owner.close() else io.prebindgen.covertest.JNINative.drop_ProjectionHandle_46b41135284839d8(raw1 as Long) } catch (cleanup: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = cleanup else if (callbackCleanupFailure !== cleanup) callbackCleanupFailure!!.addSuppressed(cleanup) }
+                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
+            }
+        }
+
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_projection_pair_callback_7a64636be1de6f9f(nativeArgument0) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    when (result[0]) {
+        null -> { Unit }
+        
+        is String -> { onError.run(result[0] as String) }
+        else -> error("invalid native result channel")
+    }
+}
+
 public fun `projectionPairMixed`(onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.resources.ProjectionPair> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.resources.ProjectionPair = run {
     val result = try { run { ; io.prebindgen.covertest.JNINative.call_projection_pair_mixed_833184fb3cea18c0() } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     when (result[0]) {

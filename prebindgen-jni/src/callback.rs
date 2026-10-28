@@ -524,19 +524,28 @@ impl CallbackReturn {
             input.consumed.join("; ")
         );
         if !input.locks.is_empty() || !input.lock_groups.is_empty() {
-            let mut handles = if input.locks.is_empty() {
-                "kotlin.collections.emptyList<Nothing>()".into()
-            } else {
-                format!(
-                    "kotlin.collections.listOfNotNull({})",
-                    input.locks.join(", ")
-                )
-            };
-            for group in input.lock_groups {
-                handles = format!("({handles} + ({group}))");
-            }
             let prefix = &self.package;
-            body = format!("{prefix}.withHandleLocks({handles}) {{ {body} }}");
+            if input.lock_groups.is_empty() && input.locks.len() <= 3 {
+                // Kotlin evaluates all handle arguments before acquiring monitors.
+                // Reuse the ordinary-call overloads without allocating a lock list.
+                body = format!(
+                    "{prefix}.withHandleLocks({}) {{ {body} }}",
+                    input.locks.join(", ")
+                );
+            } else {
+                let mut handles = if input.locks.is_empty() {
+                    "kotlin.collections.emptyList<Nothing>()".into()
+                } else {
+                    format!(
+                        "kotlin.collections.listOfNotNull({})",
+                        input.locks.join(", ")
+                    )
+                };
+                for group in input.lock_groups {
+                    handles = format!("({handles} + ({group}))");
+                }
+                body = format!("{prefix}.withHandleLocks({handles}) {{ {body} }}");
+            }
         }
         body = format!("{setup} {body}");
         if let Some(cleanup) = self.kotlin_cleanup(name, context)? {
@@ -634,18 +643,12 @@ impl CallbackReturn {
             &expected,
         )?;
         body = quote!({ #commit_owners #body });
-        if !self.input.rust.resources.is_empty()
-            && !matches!(fields.as_slice(),[field] if matches!(field.kind,JniWire::Handle{..}))
-        {
-            let seen = format_ident!("callback_return_resources");
-            let checks = self.input.code_fragment_slot(
-                InputFragment::CheckAliases {
-                    context,
-                    seen: &seen,
-                },
-                &syn::parse_quote!(()),
-            )?;
-            body = quote!({let mut #seen: Vec<(usize, bool)> = Vec::new(); let _: () = #checks; #body});
+        let checks = self.input.code_fragment_slot(
+            InputFragment::CheckInternalAliases { context },
+            &syn::parse_quote!(()),
+        )?;
+        if checks.to_string() != quote!(()).to_string() {
+            body = quote!({let _: () = #checks; #body});
         }
         body = self.input.code_fragment_slot(
             InputFragment::Validate {

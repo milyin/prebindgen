@@ -134,7 +134,6 @@ pub unsafe extern "C" fn example_calculator_new() -> *mut example_flat::Calculat
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = example_flat::calculator_new();
             let ret_w0: *mut example_flat::Calculator = Box::into_raw(
                 Box::new(source_value),
@@ -189,10 +188,6 @@ pub unsafe extern "C" fn example_caption_new(
                 None
             };
             let p2_w0 = if true { Some(p2_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let __prebindgen_argument_1 = ::core::convert::AsRef::<
@@ -252,21 +247,7 @@ pub unsafe extern "C" fn example_foo_get_id(p0_w1: *mut example_flat::Foo) -> u6
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -313,8 +294,6 @@ pub unsafe extern "C" fn example_foo_new(p0_w1: u64) -> *mut example_flat::Foo {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::foo_new(__prebindgen_argument_0);
@@ -376,22 +355,7 @@ pub unsafe extern "C" fn example_local_counter_label(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -453,8 +417,6 @@ pub unsafe extern "C" fn example_local_counter_new(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::local_counter_new(__prebindgen_argument_0);
@@ -509,21 +471,7 @@ pub unsafe extern "C" fn example_local_counter_value(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &example_flat::LocalCounter = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = example_flat::local_counter_value(

@@ -32,7 +32,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     let mut domain_output = None;
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::storage_new();
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
@@ -113,21 +112,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
@@ -284,11 +269,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
             let p1_w0 = if true { Some(p1_w1) } else { None };
             let p2_w0 = if true { Some(p2_w1) } else { None };
             let p3_w0 = if true { Some(p3_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -417,8 +397,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             let p0_w3 = if true { Some(p0_w4) } else { None };
             let p0_w5 = if true { Some(p0_w6) } else { None };
             let p0_w7 = if true { Some(p0_w8 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1: i64 = ::core::convert::Into::into(p0_w1.expect("active value"));
             let p0_w3: i32 = ::core::convert::Into::into(p0_w3.expect("active value"));
             let p0_w5: f64 = ::core::convert::Into::into(p0_w5.expect("active value"));
@@ -524,22 +502,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
             let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
             let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe {
                 &mut (*p0_w1_pointer).value
             };

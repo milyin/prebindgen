@@ -1268,7 +1268,6 @@ pub unsafe extern "C" fn perftest_api_record_new() -> i64 {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::api_record_new();
             let ret_w0 = perftest_flat::api_record_into(source_value);
             let ret_w1 = ret_w0;
@@ -1316,21 +1315,7 @@ pub unsafe extern "C" fn perftest_archive_latest(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Archive = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::archive_latest(__prebindgen_argument_0);
@@ -1379,7 +1364,6 @@ pub unsafe extern "C" fn perftest_archive_new() -> *mut perftest_flat::Archive {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::archive_new();
             let ret_w0: *mut perftest_flat::Archive = Box::into_raw(
                 Box::new(source_value),
@@ -1553,21 +1537,7 @@ pub unsafe extern "C" fn perftest_blob_value_echo(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -1623,9 +1593,6 @@ pub unsafe extern "C" fn perftest_blob_value_new(
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
             let p1_w0 = if true { Some(unsafe { __pb_read(p1_w1)? }) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: Vec<u8> = ::core::convert::Into::into(
@@ -1656,6 +1623,335 @@ pub unsafe extern "C" fn perftest_blob_value_new(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_buffer_views_address_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_address() -> usize {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_address_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_views_address();
+            let ret_w0 = source_value;
+            let result = perftest_buffer_views_address_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_bytes_result {
+    pub v0: __PbBuffer,
+    pub v1: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_bytes(out1: *mut usize) -> __PbBuffer {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_bytes_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let source_value = perftest_flat::buffer_views_bytes();
+            let ret_w1 = perftest_flat::buffer_views_bytes_len(&source_value);
+            let ret_w2 = ret_w1;
+            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
+                .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_buffer_views_bytes_result {
+                v0: __PbBuffer {
+                    data: ret_w0 as *const u8,
+                    len: ret_w0.len(),
+                },
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_optional_bytes_result {
+    pub v0: i32,
+    pub v1: __PbBuffer,
+    pub v2: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_optional_bytes(
+    p0_w1: u8,
+    out1: *mut __PbBuffer,
+    out2: *mut usize,
+) -> i32 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_optional_bytes_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        if out2.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_bytes(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_bytes_len(&source_value);
+            let ret_w4 = ret_w3;
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
+                    .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w0_values = (
+                    __PbBuffer {
+                        data: ret_w2 as *const u8,
+                        len: ret_w2.len(),
+                    },
+                );
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        ::core::mem::forget(ret_w2_owner);
+                    }),
+                )
+            } else {
+                (
+                    0i32,
+                    (
+                        __PbBuffer {
+                            data: std::ptr::null(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_buffer_views_optional_bytes_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+                v2: ret_w4,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    std::ptr::write(out2, value.v2);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_optional_text_result {
+    pub v0: i32,
+    pub v1: __PbBuffer,
+    pub v2: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_optional_text(
+    p0_w1: u8,
+    out1: *mut __PbBuffer,
+    out2: *mut usize,
+) -> i32 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_optional_text_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        if out2.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_text(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_text_len(&source_value);
+            let ret_w4 = ret_w3;
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
+                    .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w0_values = (
+                    __PbBuffer {
+                        data: ret_w2 as *const u8,
+                        len: ret_w2.len(),
+                    },
+                );
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        ::core::mem::forget(ret_w2_owner);
+                    }),
+                )
+            } else {
+                (
+                    0i32,
+                    (
+                        __PbBuffer {
+                            data: std::ptr::null(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_buffer_views_optional_text_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+                v2: ret_w4,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    std::ptr::write(out2, value.v2);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_text_result {
+    pub v0: __PbBuffer,
+    pub v1: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_text(out1: *mut usize) -> __PbBuffer {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_text_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let source_value = perftest_flat::buffer_views_text();
+            let ret_w1 = perftest_flat::buffer_views_text_len(&source_value);
+            let ret_w2 = ret_w1;
+            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
+                .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_buffer_views_text_result {
+                v0: __PbBuffer {
+                    data: ret_w0 as *const u8,
+                    len: ret_w0.len(),
+                },
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
 pub struct perftest_c_panic_output_new_result {
     pub v0: *mut perftest_flat::CPanicOutput,
 }
@@ -1677,7 +1973,6 @@ pub unsafe extern "C" fn perftest_c_panic_output_new() -> *mut perftest_flat::CP
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_panic_output_new();
             let ret_w0: *mut perftest_flat::CPanicOutput = Box::into_raw(
                 Box::new(source_value),
@@ -1718,7 +2013,6 @@ pub unsafe extern "C" fn perftest_c_plain_panic() -> i64 {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_plain_panic();
             let ret_w0 = source_value;
             let result = perftest_c_plain_panic_result {
@@ -1765,8 +2059,6 @@ pub unsafe extern "C" fn perftest_c_result_bool(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_bool(__prebindgen_argument_0);
@@ -1848,7 +2140,6 @@ pub unsafe extern "C" fn perftest_c_result_drop_panic(
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_result_drop_panic();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -1942,7 +2233,6 @@ pub unsafe extern "C" fn perftest_c_result_error_drop(
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_result_error_drop();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -2027,8 +2317,6 @@ pub unsafe extern "C" fn perftest_c_result_late_niche(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_late_niche(
@@ -2122,8 +2410,6 @@ pub unsafe extern "C" fn perftest_c_result_optional_handle(
         }
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_optional_handle(
@@ -2235,7 +2521,6 @@ pub unsafe extern "C" fn perftest_c_result_panic_error(
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_result_panic_error();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -2315,8 +2600,6 @@ pub unsafe extern "C" fn perftest_c_result_resource_error(
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_resource_error(
@@ -2406,8 +2689,6 @@ pub unsafe extern "C" fn perftest_c_result_rich_error(
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::c_result_rich_error(
@@ -2504,9 +2785,6 @@ pub unsafe extern "C" fn perftest_c_result_structured(
                 None
             };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let __prebindgen_argument_0 = ::core::convert::AsRef::<
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
@@ -2596,8 +2874,6 @@ pub unsafe extern "C" fn perftest_callback_return_bool(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -2686,8 +2962,6 @@ pub unsafe extern "C" fn perftest_callback_return_borrowed_pair_catch(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -2725,26 +2999,6 @@ pub unsafe extern "C" fn perftest_callback_return_borrowed_pair_catch(
                             )
                         } else {
                             None
-                        };
-                        let mut callback_return_resources: Vec<(usize, bool)> = Vec::new();
-                        let _: () = {
-                            if true {
-                                for identity in ::core::iter::once(
-                                    (callback_return_w2_pointer.addr()) as usize,
-                                ) {
-                                    callback_return_resources.push((identity, true));
-                                }
-                            }
-                            callback_return_resources
-                                .sort_unstable_by_key(|entry| entry.0);
-                            if callback_return_resources
-                                .windows(2)
-                                .any(|pair| {
-                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                })
-                            {
-                                return Err("conflicting input aliases".into());
-                            }
                         };
                         let callback_return_w1: &mut perftest_flat::CallbackReturnResource = unsafe {
                             &mut (*callback_return_w2_pointer)
@@ -2817,8 +3071,6 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -2940,8 +3192,6 @@ pub unsafe extern "C" fn perftest_callback_return_c_result(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 ownership_accepted = true;
             };
@@ -3066,8 +3316,6 @@ pub unsafe extern "C" fn perftest_callback_return_catch(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3156,8 +3404,6 @@ pub unsafe extern "C" fn perftest_callback_return_char(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3249,8 +3495,6 @@ pub unsafe extern "C" fn perftest_callback_return_char_catch(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3341,8 +3585,6 @@ pub unsafe extern "C" fn perftest_callback_return_enum(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3440,8 +3682,6 @@ pub unsafe extern "C" fn perftest_callback_return_f32(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3530,8 +3770,6 @@ pub unsafe extern "C" fn perftest_callback_return_float(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3625,22 +3863,7 @@ pub unsafe extern "C" fn perftest_callback_return_handler_call(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReturnHandler = unsafe {
                 &(*p0_w1_pointer)
             };
@@ -3765,8 +3988,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_many(p0_w1: __PbRows) 
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -3835,9 +4056,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_new(
                 None
             };
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let _: () = {
                 ownership_accepted = true;
             };
@@ -3976,8 +4194,6 @@ pub unsafe extern "C" fn perftest_callback_return_handler_value(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4068,8 +4284,6 @@ pub unsafe extern "C" fn perftest_callback_return_i16(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4158,8 +4372,6 @@ pub unsafe extern "C" fn perftest_callback_return_i64(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4248,8 +4460,6 @@ pub unsafe extern "C" fn perftest_callback_return_i8(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4341,21 +4551,7 @@ pub unsafe extern "C" fn perftest_callback_return_join(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4420,9 +4616,6 @@ pub unsafe extern "C" fn perftest_callback_return_optional(
                 None
             };
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4554,8 +4747,6 @@ pub unsafe extern "C" fn perftest_callback_return_owned(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4669,8 +4860,6 @@ pub unsafe extern "C" fn perftest_callback_return_owned_optional(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4799,8 +4988,6 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -4898,26 +5085,30 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector(
                                     });
                             }
                         }
-                        let mut callback_return_resources: Vec<(usize, bool)> = Vec::new();
                         let _: () = {
-                            if true {
-                                for identity in callback_return_w1_identities_0
-                                    .iter()
-                                    .copied()
-                                {
-                                    callback_return_resources.push((identity, true));
+                            let mut __prebindgen_parameter_resources: Vec<
+                                (usize, bool),
+                            > = Vec::new();
+                            let _: () = {
+                                if true {
+                                    for identity in callback_return_w1_identities_0
+                                        .iter()
+                                        .copied()
+                                    {
+                                        __prebindgen_parameter_resources.push((identity, true));
+                                    }
                                 }
-                            }
-                            callback_return_resources
-                                .sort_unstable_by_key(|entry| entry.0);
-                            if callback_return_resources
-                                .windows(2)
-                                .any(|pair| {
-                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                })
-                            {
-                                return Err("conflicting input aliases".into());
-                            }
+                                __prebindgen_parameter_resources
+                                    .sort_unstable_by_key(|entry| entry.0);
+                                if __prebindgen_parameter_resources
+                                    .windows(2)
+                                    .any(|pair| {
+                                        pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
+                                    })
+                                {
+                                    return Err("conflicting input aliases".into());
+                                }
+                            };
                         };
                         callback_return_owners.commit();
                         let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
@@ -4991,8 +5182,6 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -5090,26 +5279,30 @@ pub unsafe extern "C" fn perftest_callback_return_owned_vector_catch(
                                     });
                             }
                         }
-                        let mut callback_return_resources: Vec<(usize, bool)> = Vec::new();
                         let _: () = {
-                            if true {
-                                for identity in callback_return_w1_identities_0
-                                    .iter()
-                                    .copied()
-                                {
-                                    callback_return_resources.push((identity, true));
+                            let mut __prebindgen_parameter_resources: Vec<
+                                (usize, bool),
+                            > = Vec::new();
+                            let _: () = {
+                                if true {
+                                    for identity in callback_return_w1_identities_0
+                                        .iter()
+                                        .copied()
+                                    {
+                                        __prebindgen_parameter_resources.push((identity, true));
+                                    }
                                 }
-                            }
-                            callback_return_resources
-                                .sort_unstable_by_key(|entry| entry.0);
-                            if callback_return_resources
-                                .windows(2)
-                                .any(|pair| {
-                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                })
-                            {
-                                return Err("conflicting input aliases".into());
-                            }
+                                __prebindgen_parameter_resources
+                                    .sort_unstable_by_key(|entry| entry.0);
+                                if __prebindgen_parameter_resources
+                                    .windows(2)
+                                    .any(|pair| {
+                                        pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
+                                    })
+                                {
+                                    return Err("conflicting input aliases".into());
+                                }
+                            };
                         };
                         callback_return_owners.commit();
                         let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
@@ -5183,8 +5376,6 @@ pub unsafe extern "C" fn perftest_callback_return_pair_catch(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -5231,26 +5422,6 @@ pub unsafe extern "C" fn perftest_callback_return_pair_catch(
                             )
                         } else {
                             None
-                        };
-                        let mut callback_return_resources: Vec<(usize, bool)> = Vec::new();
-                        let _: () = {
-                            if true {
-                                for identity in ::core::iter::once(
-                                    (callback_return_w2_pointer.addr()) as usize,
-                                ) {
-                                    callback_return_resources.push((identity, true));
-                                }
-                            }
-                            callback_return_resources
-                                .sort_unstable_by_key(|entry| entry.0);
-                            if callback_return_resources
-                                .windows(2)
-                                .any(|pair| {
-                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                })
-                            {
-                                return Err("conflicting input aliases".into());
-                            }
                         };
                         callback_return_owners.commit();
                         let callback_return_w1 = if true {
@@ -5328,8 +5499,6 @@ pub unsafe extern "C" fn perftest_callback_return_record(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -5468,21 +5637,7 @@ pub unsafe extern "C" fn perftest_callback_return_resource_id(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReturnResource = unsafe {
                 &(*p0_w1_pointer)
             };
@@ -5526,7 +5681,6 @@ pub unsafe extern "C" fn perftest_callback_return_resource_live() -> u64 {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::callback_return_resource_live();
             let ret_w0 = source_value;
             let result = perftest_callback_return_resource_live_result {
@@ -5567,8 +5721,6 @@ pub unsafe extern "C" fn perftest_callback_return_resource_new(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_return_resource_new(
@@ -5622,8 +5774,6 @@ pub unsafe extern "C" fn perftest_callback_return_spawn(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -5717,8 +5867,6 @@ pub unsafe extern "C" fn perftest_callback_return_text(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -5837,8 +5985,6 @@ pub unsafe extern "C" fn perftest_callback_return_u128(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -5942,8 +6088,6 @@ pub unsafe extern "C" fn perftest_callback_return_unit(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -6017,8 +6161,6 @@ pub unsafe extern "C" fn perftest_callback_return_unsigned(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -6129,8 +6271,6 @@ pub unsafe extern "C" fn perftest_callback_return_vector(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -6315,8 +6455,6 @@ pub unsafe extern "C" fn perftest_callback_return_wide(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -6420,8 +6558,6 @@ pub unsafe extern "C" fn perftest_callback_return_zero(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -6696,8 +6832,6 @@ pub unsafe extern "C" fn perftest_collection_borrow(p0_w1: __PbRows) -> __PbRows
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -6809,8 +6943,6 @@ pub unsafe extern "C" fn perftest_collection_borrow_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -6893,7 +7025,6 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
             return Err("null success output".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_bundle();
             let ret_w0 = perftest_flat::collection_bundle_into(source_value);
             let ret_w1 = ret_w0;
@@ -7023,8 +7154,6 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -7148,8 +7277,6 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -7266,20 +7393,23 @@ pub unsafe extern "C" fn perftest_collection_construct_all(p0_w1: __PbRows) -> i
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 _ownership_accepted = true;
@@ -7397,8 +7527,6 @@ pub unsafe extern "C" fn perftest_collection_enum(p0_w1: __PbRows) -> __PbRows {
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -7533,8 +7661,6 @@ pub unsafe extern "C" fn perftest_collection_enum_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -7603,7 +7729,6 @@ pub unsafe extern "C" fn perftest_collection_fail(
     let output = storage.as_mut_ptr();
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_fail();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -7773,23 +7898,24 @@ pub unsafe extern "C" fn perftest_collection_handles(
                 None
             };
             let p2_w0 = if true { Some(p2_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
-            let _: () = {};
             let _: () = {
                 ownership_accepted = true;
             };
@@ -8008,23 +8134,24 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
                 None
             };
             let p2_w0 = if true { Some(p2_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
-            let _: () = {};
             let _: () = {
                 ownership_accepted = true;
             };
@@ -8180,8 +8307,6 @@ pub unsafe extern "C" fn perftest_collection_i64(p0_w1: __PbRows) -> __PbRows {
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -8292,8 +8417,6 @@ pub unsafe extern "C" fn perftest_collection_i64_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -8400,7 +8523,6 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
             return Err("null success-output pointer".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_late_drop();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -8584,7 +8706,6 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_make_items();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -8762,8 +8883,6 @@ pub unsafe extern "C" fn perftest_collection_nested(p0_w1: __PbRows) -> __PbRows
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -8959,8 +9078,6 @@ pub unsafe extern "C" fn perftest_collection_nested_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -9182,20 +9299,23 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 _ownership_accepted = true;
@@ -9430,20 +9550,23 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 _ownership_accepted = true;
@@ -9562,7 +9685,6 @@ pub unsafe extern "C" fn perftest_collection_numbers(out1: *mut i64) -> __PbRows
             return Err("null success output".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_numbers();
             let ret_w0 = perftest_flat::collection_numbers_view(&source_value);
             let ret_w1 = &(ret_w0);
@@ -9695,8 +9817,6 @@ pub unsafe extern "C" fn perftest_collection_optional(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -9850,8 +9970,6 @@ pub unsafe extern "C" fn perftest_collection_optional_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -10011,20 +10129,23 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in p0_w3_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if p0_w1 == 1i32 {
+                        for identity in p0_w3_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 _ownership_accepted = true;
@@ -10209,20 +10330,23 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in p0_w3_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if p0_w1 == 1i32 {
+                        for identity in p0_w3_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 _ownership_accepted = true;
@@ -10386,8 +10510,6 @@ pub unsafe extern "C" fn perftest_collection_optional_items(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -10571,8 +10693,6 @@ pub unsafe extern "C" fn perftest_collection_optional_items_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w3_acquired: Vec<_> = p0_w3_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -10735,9 +10855,6 @@ pub unsafe extern "C" fn perftest_collection_options(
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -10881,9 +10998,6 @@ pub unsafe extern "C" fn perftest_collection_options_each(
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -11026,9 +11140,6 @@ pub unsafe extern "C" fn perftest_collection_probe(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -11177,21 +11288,7 @@ pub unsafe extern "C" fn perftest_collection_resource_ids(p0_w1: __PbRows) -> __
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -11269,8 +11366,6 @@ pub unsafe extern "C" fn perftest_collection_resource_new(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::collection_resource_new(
@@ -11380,9 +11475,6 @@ pub unsafe extern "C" fn perftest_collection_result(
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -11547,9 +11639,6 @@ pub unsafe extern "C" fn perftest_collection_result_each(
                 }
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -11736,22 +11825,24 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
             let _: () = {
                 ownership_accepted = true;
             };
@@ -11995,22 +12086,24 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                 }
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
-            let _: () = {};
             let _: () = {
                 ownership_accepted = true;
             };
@@ -12176,8 +12269,6 @@ pub unsafe extern "C" fn perftest_collection_slice(p0_w1: __PbRows) -> __PbRows 
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -12288,8 +12379,6 @@ pub unsafe extern "C" fn perftest_collection_slice_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -12403,8 +12492,6 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -12531,8 +12618,6 @@ pub unsafe extern "C" fn perftest_collection_text_each(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -12664,20 +12749,23 @@ pub unsafe extern "C" fn perftest_collection_try_construct_all(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in p0_w1_identities_0.iter().copied() {
-                        __prebindgen_resources.push((identity, true));
+                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
+                let _: () = {
+                    if true {
+                        for identity in p0_w1_identities_0.iter().copied() {
+                            __prebindgen_parameter_resources.push((identity, true));
+                        }
                     }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
+                    __prebindgen_parameter_resources
+                        .sort_unstable_by_key(|entry| entry.0);
+                    if __prebindgen_parameter_resources
+                        .windows(2)
+                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                    {
+                        return Err("conflicting input aliases".into());
+                    }
+                };
             };
             let _: () = {
                 ownership_accepted = true;
@@ -12795,7 +12883,6 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
             return Err("null success-output pointer".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::collection_try_make_items();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -12933,8 +13020,6 @@ pub unsafe extern "C" fn perftest_enum_names_echo(p0_w1: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = p0_w0.expect("active enum");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_names_echo(__prebindgen_argument_0);
@@ -12988,8 +13073,6 @@ pub unsafe extern "C" fn perftest_enum_payload_new(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: f64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_payload_new(__prebindgen_argument_0);
@@ -13071,8 +13154,6 @@ pub unsafe extern "C" fn perftest_enum_record_echo(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1 = p0_w1.expect("active enum");
             let p0_w3 = if p0_w4 == 1i32 {
                 let p0_w5 = p0_w5.expect("active enum");
@@ -13160,21 +13241,7 @@ pub unsafe extern "C" fn perftest_getter_child_name(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterChild = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_child_name(__prebindgen_argument_0);
@@ -13234,21 +13301,7 @@ pub unsafe extern "C" fn perftest_getter_child_number(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterChild = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_child_number(
@@ -13303,22 +13356,7 @@ pub unsafe extern "C" fn perftest_getter_child_set_number(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::GetterChild = unsafe {
                 &mut (*p0_w1_pointer)
             };
@@ -13380,7 +13418,6 @@ pub unsafe extern "C" fn perftest_getter_counts() -> __PbRows {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_counts();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -13455,7 +13492,6 @@ pub unsafe extern "C" fn perftest_getter_fields_new(
             return Err("null success output".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_fields_new();
             let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
                 Box::new(source_value),
@@ -13524,21 +13560,7 @@ pub unsafe extern "C" fn perftest_getter_leaf_id(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterLeaf = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_leaf_id(__prebindgen_argument_0);
@@ -13588,21 +13610,7 @@ pub unsafe extern "C" fn perftest_getter_owner_child(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_child(
@@ -13747,21 +13755,7 @@ pub unsafe extern "C" fn perftest_getter_owner_child_mut(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
                 &mut (*p0_w1_pointer)
             };
@@ -13814,21 +13808,7 @@ pub unsafe extern "C" fn perftest_getter_owner_id(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_id(__prebindgen_argument_0);
@@ -13886,8 +13866,6 @@ pub unsafe extern "C" fn perftest_getter_owner_new(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_new(__prebindgen_argument_0);
@@ -13977,21 +13955,7 @@ pub unsafe extern "C" fn perftest_getter_owner_optional(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_optional(
@@ -14088,21 +14052,7 @@ pub unsafe extern "C" fn perftest_getter_owner_optional_mut(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
                 &mut (*p0_w1_pointer)
             };
@@ -14167,21 +14117,7 @@ pub unsafe extern "C" fn perftest_getter_owner_optional_pointer(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_optional_pointer(
@@ -14249,21 +14185,7 @@ pub unsafe extern "C" fn perftest_getter_owner_read(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_read(__prebindgen_argument_0);
@@ -14333,22 +14255,7 @@ pub unsafe extern "C" fn perftest_getter_owner_try_child(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: bool = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -14440,22 +14347,7 @@ pub unsafe extern "C" fn perftest_getter_owner_try_child_mut(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
                 &mut (*p0_w1_pointer)
             };
@@ -14553,22 +14445,7 @@ pub unsafe extern "C" fn perftest_getter_owner_try_optional_child(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -14674,22 +14551,7 @@ pub unsafe extern "C" fn perftest_getter_owner_try_optional_mut(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::GetterOwner = unsafe {
                 &mut (*p0_w1_pointer)
             };
@@ -14791,8 +14653,6 @@ pub unsafe extern "C" fn perftest_getter_static_child(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
             let source_value = perftest_flat::getter_static_child(
                 __prebindgen_argument_0,
@@ -14840,7 +14700,6 @@ pub unsafe extern "C" fn perftest_getter_two_clones_new(
             return Err("null success output".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_two_clones_new();
             let ret_w0 = perftest_flat::getter_owner_leaf(&source_value);
             let ret_w1: *mut perftest_flat::GetterLeaf = Box::into_raw(
@@ -14914,23 +14773,7 @@ pub unsafe extern "C" fn perftest_niche_choice_id(
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
-                    for identity in ::core::iter::once(
-                        (p0_w10_pointer.addr()) as usize,
-                    ) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -15014,8 +14857,6 @@ pub unsafe extern "C" fn perftest_niche_choice_new(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: char = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -15077,8 +14918,6 @@ pub unsafe extern "C" fn perftest_option_bool(
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: bool = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -15151,8 +14990,6 @@ pub unsafe extern "C" fn perftest_option_bytes(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: Vec<u8> = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -15238,8 +15075,6 @@ pub unsafe extern "C" fn perftest_option_char(p0_w3: u32) -> u32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: char = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -15320,21 +15155,7 @@ pub unsafe extern "C" fn perftest_option_choice_id(
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -15425,21 +15246,7 @@ pub unsafe extern "C" fn perftest_option_ctor_id(
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -15513,8 +15320,6 @@ pub unsafe extern "C" fn perftest_option_ctor_new(
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: i64 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -15576,8 +15381,6 @@ pub unsafe extern "C" fn perftest_option_i64(
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: i64 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -15650,8 +15453,6 @@ pub unsafe extern "C" fn perftest_option_i64_ref(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(p0_w2.as_ref().expect("active value"))
             } else {
@@ -15730,8 +15531,6 @@ pub unsafe extern "C" fn perftest_option_nested(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4: i64 = ::core::convert::Into::into(
@@ -15820,8 +15619,6 @@ pub unsafe extern "C" fn perftest_option_nested_char(p0_w5: u32) -> u32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4: char = ::core::convert::Into::into(
@@ -15919,21 +15716,7 @@ pub unsafe extern "C" fn perftest_option_nested_resource(
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
-                    for identity in ::core::iter::once((p0_w5_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -16054,8 +15837,6 @@ pub unsafe extern "C" fn perftest_option_nested_u32(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4: u32 = ::core::convert::Into::into(
@@ -16154,22 +15935,7 @@ pub unsafe extern "C" fn perftest_option_resource_echo(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -16258,21 +16024,7 @@ pub unsafe extern "C" fn perftest_option_resource_id(
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &perftest_flat::OwnedResource = unsafe { &(*p0_w3_pointer) };
                 Some(p0_w2)
@@ -16322,8 +16074,6 @@ pub unsafe extern "C" fn perftest_option_resource_new(
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_resource_new(
@@ -16519,8 +16269,6 @@ pub unsafe extern "C" fn perftest_option_slice_echo(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -16619,8 +16367,6 @@ pub unsafe extern "C" fn perftest_option_slice_len(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -16697,8 +16443,6 @@ pub unsafe extern "C" fn perftest_option_str_echo(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -16798,8 +16542,6 @@ pub unsafe extern "C" fn perftest_option_str_len(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(
                     ::core::convert::AsRef::<
@@ -16882,8 +16624,6 @@ pub unsafe extern "C" fn perftest_option_string_len(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 Some(p0_w2.as_ref().expect("active value"))
             } else {
@@ -16956,8 +16696,6 @@ pub unsafe extern "C" fn perftest_option_text(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: String = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -17049,8 +16787,6 @@ pub unsafe extern "C" fn perftest_option_u8(
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: u8 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -17110,8 +16846,6 @@ pub unsafe extern "C" fn perftest_option_unit(p0_w1: i32) -> i32 {
             if p0_w1 != 0 && p0_w1 != 1 {
                 return Err("invalid option presence".into());
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 { Some(()) } else { None };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_unit(__prebindgen_argument_0);
@@ -17212,8 +16946,6 @@ pub unsafe extern "C" fn perftest_optional_fields_echo(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w3 = if (p0_w1 == 1i32) && (p0_w4 == 1i32) {
                     let p0_w5: i64 = ::core::convert::Into::into(
@@ -17400,7 +17132,6 @@ pub unsafe extern "C" fn perftest_owned_resource_drops() -> usize {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::owned_resource_drops();
             let ret_w0 = source_value;
             let result = perftest_owned_resource_drops_result {
@@ -17455,8 +17186,6 @@ pub unsafe extern "C" fn perftest_owner_view_checked(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_checked(
@@ -17568,8 +17297,6 @@ pub unsafe extern "C" fn perftest_owner_view_from_temporary(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
             let source_value = perftest_flat::owner_view_from_temporary(
                 __prebindgen_argument_0,
@@ -17628,8 +17355,6 @@ pub unsafe extern "C" fn perftest_owner_view_maybe(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_maybe(__prebindgen_argument_0);
@@ -17703,8 +17428,6 @@ pub unsafe extern "C" fn perftest_owner_view_mutable(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_mutable(
@@ -17766,8 +17489,6 @@ pub unsafe extern "C" fn perftest_owner_view_optional(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_optional(
@@ -17836,8 +17557,6 @@ pub unsafe extern "C" fn perftest_owner_view_optional_mut(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_optional_mut(
@@ -17908,8 +17627,6 @@ pub unsafe extern "C" fn perftest_owner_view_reordered(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_reordered(
@@ -17976,7 +17693,6 @@ pub unsafe extern "C" fn perftest_owner_view_rollback(
             return Err("null success-output pointer".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::owner_view_rollback();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -18088,8 +17804,6 @@ pub unsafe extern "C" fn perftest_owner_view_shared(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::owner_view_shared(__prebindgen_argument_0);
@@ -18161,11 +17875,6 @@ pub unsafe extern "C" fn perftest_payload_new(
             let p1_w0 = if true { Some(p1_w1) } else { None };
             let p2_w0 = if true { Some(p2_w1) } else { None };
             let p3_w0 = if true { Some(p3_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -18241,21 +17950,7 @@ pub unsafe extern "C" fn perftest_payload_priority(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::PayloadHandle = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::payload_priority(__prebindgen_argument_0);
@@ -18316,8 +18011,6 @@ pub unsafe extern "C" fn perftest_plain_note_echo(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: String = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -18398,8 +18091,6 @@ pub unsafe extern "C" fn perftest_primitive_bool(p0_w1: u8) -> u8 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_bool(__prebindgen_argument_0);
@@ -18442,8 +18133,6 @@ pub unsafe extern "C" fn perftest_primitive_char(p0_w1: u32) -> u32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: char = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_char(__prebindgen_argument_0);
@@ -18482,8 +18171,6 @@ pub unsafe extern "C" fn perftest_primitive_f32(p0_w1: f32) -> f32 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: f32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_f32(__prebindgen_argument_0);
@@ -18522,8 +18209,6 @@ pub unsafe extern "C" fn perftest_primitive_f64(p0_w1: f64) -> f64 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: f64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_f64(__prebindgen_argument_0);
@@ -18566,8 +18251,6 @@ pub unsafe extern "C" fn perftest_primitive_i128(p0_w1: __Pb128) -> __Pb128 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i128 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i128(__prebindgen_argument_0);
@@ -18612,8 +18295,6 @@ pub unsafe extern "C" fn perftest_primitive_i16(p0_w1: i16) -> i16 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i16 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i16(__prebindgen_argument_0);
@@ -18652,8 +18333,6 @@ pub unsafe extern "C" fn perftest_primitive_i32(p0_w1: i32) -> i32 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i32(__prebindgen_argument_0);
@@ -18692,8 +18371,6 @@ pub unsafe extern "C" fn perftest_primitive_i64(p0_w1: i64) -> i64 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i64(__prebindgen_argument_0);
@@ -18732,8 +18409,6 @@ pub unsafe extern "C" fn perftest_primitive_i8(p0_w1: i8) -> i8 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i8 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_i8(__prebindgen_argument_0);
@@ -18772,8 +18447,6 @@ pub unsafe extern "C" fn perftest_primitive_isize(p0_w1: isize) -> isize {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: isize = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_isize(__prebindgen_argument_0);
@@ -18816,8 +18489,6 @@ pub unsafe extern "C" fn perftest_primitive_u128(p0_w1: __Pb128) -> __Pb128 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u128 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u128(__prebindgen_argument_0);
@@ -18862,8 +18533,6 @@ pub unsafe extern "C" fn perftest_primitive_u16(p0_w1: u16) -> u16 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u16 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u16(__prebindgen_argument_0);
@@ -18902,8 +18571,6 @@ pub unsafe extern "C" fn perftest_primitive_u32(p0_w1: u32) -> u32 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u32(__prebindgen_argument_0);
@@ -18942,8 +18609,6 @@ pub unsafe extern "C" fn perftest_primitive_u64(p0_w1: u64) -> u64 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u64(__prebindgen_argument_0);
@@ -18982,8 +18647,6 @@ pub unsafe extern "C" fn perftest_primitive_u8(p0_w1: u8) -> u8 {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: u8 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_u8(__prebindgen_argument_0);
@@ -19021,7 +18684,6 @@ pub unsafe extern "C" fn perftest_primitive_unit() {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::primitive_unit();
             let result = perftest_primitive_unit_result {
                 unused: 0,
@@ -19055,8 +18717,6 @@ pub unsafe extern "C" fn perftest_primitive_usize(p0_w1: usize) -> usize {
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: usize = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::primitive_usize(__prebindgen_argument_0);
@@ -19119,9 +18779,6 @@ pub unsafe extern "C" fn perftest_priority_or(p0_w3: i32, p1_w1: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = p0_w2.expect("active enum");
                 Some(p0_w2)
@@ -19185,8 +18842,6 @@ pub unsafe extern "C" fn perftest_priority_weight(p0_w1: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = p0_w0.expect("active enum");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::priority_weight(__prebindgen_argument_0);
@@ -19253,21 +18908,7 @@ pub unsafe extern "C" fn perftest_report_into_struct(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 0i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -19371,21 +19012,7 @@ pub unsafe extern "C" fn perftest_report_label(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w2 == 1i32 {
-                    for identity in ::core::iter::once((p0_w9_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -19504,10 +19131,6 @@ pub unsafe extern "C" fn perftest_report_new(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: f64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -19605,21 +19228,7 @@ pub unsafe extern "C" fn perftest_resource_choice_id(
                 ::prebindgen_runtime::validate_pointer(p0_w4_pointer)?;
             }
             let p0_w5 = if p0_w1 == 1i32 { Some(p0_w6) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w4_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -19682,7 +19291,6 @@ pub unsafe extern "C" fn perftest_result_error_drops() -> usize {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::result_error_drops();
             let ret_w0 = source_value;
             let result = perftest_result_error_drops_result {
@@ -19725,8 +19333,6 @@ pub unsafe extern "C" fn perftest_result_optional(
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_optional(__prebindgen_argument_0);
@@ -19822,8 +19428,6 @@ pub unsafe extern "C" fn perftest_result_other(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_other(__prebindgen_argument_0);
@@ -19918,23 +19522,7 @@ pub unsafe extern "C" fn perftest_result_owned(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
-            let _: () = {};
+            let _: () = ();
             let _: () = {
                 ownership_accepted = true;
             };
@@ -20047,8 +19635,6 @@ pub unsafe extern "C" fn perftest_result_record(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_record(__prebindgen_argument_0);
@@ -20154,8 +19740,6 @@ pub unsafe extern "C" fn perftest_result_scalar(
         }
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_scalar(__prebindgen_argument_0);
@@ -20235,8 +19819,6 @@ pub unsafe extern "C" fn perftest_result_text(
         }
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_text(__prebindgen_argument_0);
@@ -20329,8 +19911,6 @@ pub unsafe extern "C" fn perftest_result_unit(
     let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::result_unit(__prebindgen_argument_0);
@@ -20415,7 +19995,6 @@ pub unsafe extern "C" fn perftest_sequence_late_drop_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::sequence_late_drop();
             let ret_w0 = match source_value {
                 ::core::result::Result::Ok(value) => value,
@@ -20523,8 +20102,6 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
         }
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0: i32 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::sequence_parts(__prebindgen_argument_0);
@@ -20648,7 +20225,6 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
             return Err("null sequence callback".into());
         }
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::sequence_scalars();
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
@@ -20783,8 +20359,6 @@ pub unsafe extern "C" fn perftest_sparse_borrowed(p0_w1: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active enum");
             let source_value = perftest_flat::sparse_borrowed(__prebindgen_argument_0);
             let ret_w0: i32 = match &(source_value) {
@@ -20845,8 +20419,6 @@ pub unsafe extern "C" fn perftest_sparse_echo(p0_w1: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = p0_w0.expect("active enum");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::sparse_echo(__prebindgen_argument_0);
@@ -20910,8 +20482,6 @@ pub unsafe extern "C" fn perftest_sparse_nested(p0_w5: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                     let p0_w4 = p0_w4.expect("active enum");
@@ -21008,8 +20578,6 @@ pub unsafe extern "C" fn perftest_sparse_optional(p0_w3: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2 = p0_w2.expect("active enum");
                 Some(p0_w2)
@@ -21086,8 +20654,6 @@ pub unsafe extern "C" fn perftest_sparse_ref(p0_w1: i32) -> i32 {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active enum");
             let source_value = perftest_flat::sparse_ref(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -21134,9 +20700,6 @@ pub unsafe extern "C" fn perftest_stamp_new(
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -21198,22 +20761,7 @@ pub unsafe extern "C" fn perftest_storage_contains(
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -21286,21 +20834,7 @@ pub unsafe extern "C" fn perftest_storage_get(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
@@ -21407,21 +20941,7 @@ pub unsafe extern "C" fn perftest_storage_get_vec(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
@@ -21548,21 +21068,7 @@ pub unsafe extern "C" fn perftest_storage_get_vec_each(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
@@ -21651,21 +21157,7 @@ pub unsafe extern "C" fn perftest_storage_len(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_len(__prebindgen_argument_0);
@@ -21703,7 +21195,6 @@ pub unsafe extern "C" fn perftest_storage_new() -> *mut perftest_flat::Storage {
     let output = storage.as_mut_ptr();
     if let Err(error) = ::prebindgen_runtime::boundary(|| {
         {
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::storage_new();
             let ret_w0: *mut perftest_flat::Storage = Box::into_raw(
                 Box::new(source_value),
@@ -21764,22 +21255,7 @@ pub unsafe extern "C" fn perftest_storage_put_by_take(
             let p1_w3 = if true { Some(p1_w4) } else { None };
             let p1_w5 = if true { Some(p1_w6) } else { None };
             let p1_w7 = if true { Some(p1_w8 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe { &mut (*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w1: i64 = ::core::convert::Into::into(p1_w1.expect("active value"));
@@ -21850,22 +21326,7 @@ pub unsafe extern "C" fn perftest_storage_put_opt(
             let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
             let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
             let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe { &mut (*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0 = if p1_w1 == 1i32 {
@@ -22013,22 +21474,7 @@ pub unsafe extern "C" fn perftest_storage_put_slice(
                         });
                 }
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {};
+            let _: () = ();
             let p1_w1_acquired: Vec<_> = p1_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -22087,21 +21533,7 @@ pub unsafe extern "C" fn perftest_storage_summary_handle(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_summary_handle(
@@ -22280,8 +21712,6 @@ pub unsafe extern "C" fn perftest_storage_try_with_label(
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = ::core::convert::AsRef::<
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
@@ -22371,8 +21801,6 @@ pub unsafe extern "C" fn perftest_storage_with_payload(
             let p0_w3 = if true { Some(p0_w4) } else { None };
             let p0_w5 = if true { Some(p0_w6) } else { None };
             let p0_w7 = if true { Some(p0_w8 != 0) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w1: i64 = ::core::convert::Into::into(p0_w1.expect("active value"));
             let p0_w3: i32 = ::core::convert::Into::into(p0_w3.expect("active value"));
             let p0_w5: f64 = ::core::convert::Into::into(p0_w5.expect("active value"));
@@ -22438,8 +21866,6 @@ pub unsafe extern "C" fn perftest_string_len(p0_w1: __PbBuffer) -> usize {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
             let source_value = perftest_flat::string_len(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -22484,8 +21910,6 @@ pub unsafe extern "C" fn perftest_string_new(p0_w1: __PbBuffer) -> __PbBuffer {
             } else {
                 None
             };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let __prebindgen_argument_0 = ::core::convert::AsRef::<
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
@@ -22711,9 +22135,6 @@ pub unsafe extern "C" fn perftest_summary_new(
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
             let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: f64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -22771,21 +22192,7 @@ pub unsafe extern "C" fn perftest_summary_total(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Summary = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::summary_total(__prebindgen_argument_0);
@@ -22843,21 +22250,7 @@ pub unsafe extern "C" fn perftest_summary_total_raw(
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let _: () = {
                 _ownership_accepted = true;
             };
@@ -22940,21 +22333,7 @@ pub unsafe extern "C" fn perftest_unsigned_data_maybe(
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
+            let _: () = ();
             let p0_w0: &perftest_flat::Unsigned = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::unsigned_data_maybe(
@@ -23020,8 +22399,6 @@ pub unsafe extern "C" fn perftest_unsigned_optional(
                 return Err("invalid option presence".into());
             }
             let p0_w2 = if p0_w1 == 1i32 { Some(p0_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: u64 = ::core::convert::Into::into(
                     p0_w2.expect("active value"),
@@ -23095,12 +22472,6 @@ pub unsafe extern "C" fn perftest_unsigned_round_trip(
                 return Err("invalid option presence".into());
             }
             let p4_w2 = if p4_w1 == 1i32 { Some(p4_w3) } else { None };
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
-            let _: () = {};
             let p0_w0: u8 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: u16 = ::core::convert::Into::into(p1_w0.expect("active value"));

@@ -126,9 +126,22 @@ The same declaration works as a type-wide default or a per-function replacement:
 
 `Projection` is available from `prebindgen_declarations` and `prebindgen_jni`.
 Modes propagate recursively unless explicitly overridden; they never depend on
-record contents. Legacy `field_self()` and unexpanded data-class outputs retain
-a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
+record contents. Unexpanded data-class outputs and `field_self()` follow the
+source occurrence: owned records move their fields, while borrowed records observe
+them. `field_self_into()` explicitly requires an owned occurrence;
+`field_self_ref()` explicitly requests observing/copying the fields. If a record
+implements `Drop`, Rust may reject moving its fields; select an explicit copy
+projection instead of relying on an implicit cloning fallback. For a nested
+`Drop`-bearing field, put the borrowed override on the containing record; a child
+type's default does not rewrite a data-class property. Multiple owning
+views are rejected: combinations that previously copied through `field_self()`
+should select `field_self_ref()` for each intended copy alongside one owning view.
 Type-wide expansions of field types do not rewrite a data class's properties.
+
+Owned `String` and `Vec<u8>` identities also transfer their storage when combined
+with getter views. Getters run before that move, regardless of output order.
+Multiple independent owning identities require explicit copies with
+`field_self_ref()`; adding a getter does not authorize a hidden buffer clone.
 
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.
 `.fields_into(fields!(consuming_accessor))` requires an accessor taking `T`
@@ -454,7 +467,7 @@ projections or constructions itself. Wrapper writers never interpret these paths
 `Function::input_conversions()` preserves slot grouping; the adapters match named prepared output expressions to their destination fields.
 
 The optional staged plans describe allocation participation using emitted Rust
-boolean expressions. Their assembly helper checks allocation aliases. JNI slots
+boolean expressions. Their assembly helper checks allocation aliases. It omits alias bookkeeping when only one parameter supplies a single address or shared-only accesses; dynamic exclusive sets still check internal aliases. JNI slots
 also emit Kotlin conversion, conditional locking, ownership updates and output
 rollback through `KotlinInputConversion` and `KotlinOutputConversion`. The Kotlin
 writer routes carriers and orders these operations without inspecting their meaning.
