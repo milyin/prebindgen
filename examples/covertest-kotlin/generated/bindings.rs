@@ -1660,7 +1660,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_id(__prebindgen_argument_0);
@@ -1734,7 +1733,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::GetterLeaf = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_leaf_id(__prebindgen_argument_0);
@@ -1878,7 +1876,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1gette
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::GetterOwner = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_read(__prebindgen_argument_0);
@@ -2706,7 +2703,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackBoundaryHandler = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -7493,29 +7489,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             }
                                         }
                                         let _: () = {
-                                            let mut __prebindgen_parameter_resources: Vec<
-                                                (usize, bool),
-                                            > = Vec::new();
-                                            let _: () = {
-                                                if true {
-                                                    for identity in callback_return_w1_identities_0
-                                                        .iter()
-                                                        .copied()
-                                                    {
-                                                        __prebindgen_parameter_resources.push((identity, true));
-                                                    }
-                                                }
-                                                __prebindgen_parameter_resources
-                                                    .sort_unstable_by_key(|entry| entry.0);
-                                                if __prebindgen_parameter_resources
-                                                    .windows(2)
-                                                    .any(|pair| {
-                                                        pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                                    })
+                                            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                                            if true {
+                                                for identity in callback_return_w1_identities_0
+                                                    .iter()
+                                                    .copied()
                                                 {
-                                                    return Err("conflicting input aliases".into());
+                                                    __prebindgen_resources.push((identity, true));
                                                 }
-                                            };
+                                            }
+                                            __prebindgen_resources.sort_unstable();
+                                            if __prebindgen_resources
+                                                .windows(2)
+                                                .any(|pair| {
+                                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
+                                                })
+                                            {
+                                                return Err("conflicting input aliases".into());
+                                            }
                                         };
                                         callback_return_owners.commit();
                                         let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
@@ -7736,7 +7727,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -7974,7 +7964,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReturnHandler = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -8577,29 +8566,24 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             }
                                         }
                                         let _: () = {
-                                            let mut __prebindgen_parameter_resources: Vec<
-                                                (usize, bool),
-                                            > = Vec::new();
-                                            let _: () = {
-                                                if true {
-                                                    for identity in callback_return_w1_identities_0
-                                                        .iter()
-                                                        .copied()
-                                                    {
-                                                        __prebindgen_parameter_resources.push((identity, true));
-                                                    }
-                                                }
-                                                __prebindgen_parameter_resources
-                                                    .sort_unstable_by_key(|entry| entry.0);
-                                                if __prebindgen_parameter_resources
-                                                    .windows(2)
-                                                    .any(|pair| {
-                                                        pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
-                                                    })
+                                            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                                            if true {
+                                                for identity in callback_return_w1_identities_0
+                                                    .iter()
+                                                    .copied()
                                                 {
-                                                    return Err("conflicting input aliases".into());
+                                                    __prebindgen_resources.push((identity, true));
                                                 }
-                                            };
+                                            }
+                                            __prebindgen_resources.sort_unstable();
+                                            if __prebindgen_resources
+                                                .windows(2)
+                                                .any(|pair| {
+                                                    pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1)
+                                                })
+                                            {
+                                                return Err("conflicting input aliases".into());
+                                            }
                                         };
                                         callback_return_owners.commit();
                                         let callback_return_w1_acquired: Vec<_> = callback_return_w1_staged
@@ -9304,7 +9288,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackUniqueResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -9752,7 +9735,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackRowResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -9955,7 +9937,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackRowResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -12808,7 +12789,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackJob = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::callback_row_job_finished(
@@ -12960,7 +12940,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13040,7 +13019,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let p0_w0: &mut perftest_flat::CallbackReentry = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -13108,7 +13086,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -13209,7 +13186,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13313,7 +13289,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let p0_w0: &mut perftest_flat::CallbackReentry = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -13418,7 +13393,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -13550,35 +13524,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p1_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13699,31 +13644,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p1_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                let __prebindgen_alias_0 = if true {
+                    Some((p0_w1_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                let __prebindgen_alias_1 = if true {
+                    Some((p1_w1_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                if __prebindgen_alias_0.is_some()
+                    && __prebindgen_alias_0 == __prebindgen_alias_1
                 {
                     return Err("conflicting input aliases".into());
                 }
@@ -13836,7 +13769,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -13933,7 +13865,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -14019,7 +13950,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &perftest_flat::CallbackReentry = unsafe {
                     &(*p0_w3_pointer).value
@@ -14128,7 +14058,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let p0_w1: &perftest_flat::CallbackReentry = unsafe {
                 &(*p0_w2_pointer).value
             };
@@ -15073,7 +15002,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -15173,7 +15101,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w6_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -15790,7 +15717,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackSet = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -15857,7 +15783,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackSet = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -15948,7 +15873,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -16102,7 +16026,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackOwned = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16332,7 +16255,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "(J)V",
                 "io.prebindgen.covertest.callbacks.CallbackOwnedCallback",
             )?;
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackOwned = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16431,7 +16353,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackTransferred = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16790,7 +16711,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::CallbackProjected = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -16876,7 +16796,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                 "()V",
                 "io.prebindgen.covertest.VoidCallback",
             )?;
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -18415,22 +18334,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -18807,22 +18723,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if p0_w1 == 1i32 {
-                        for identity in p0_w3_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if p0_w1 == 1i32 {
+                    for identity in p0_w3_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -19097,22 +19010,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -19450,7 +19360,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                         });
                 }
             }
-            let _: () = ();
             let p0_w1_acquired: Vec<_> = p0_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -21650,22 +21559,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             };
             let p2_w0 = if true { Some(p2_w1) } else { None };
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -21890,28 +21796,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             if true {
                 ::prebindgen_runtime::validate_pointer(p1_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
                 if true {
                     for identity in p0_w1_identities_0.iter().copied() {
                         __prebindgen_resources.push((identity, true));
                     }
                 }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
                 if true {
                     for identity in ::core::iter::once((p1_w1_pointer.addr()) as usize) {
                         __prebindgen_resources.push((identity, false));
                     }
                 }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
+                __prebindgen_resources.sort_unstable();
                 if __prebindgen_resources
                     .windows(2)
                     .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
@@ -22300,22 +22197,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -22600,7 +22494,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                         });
                 }
             }
-            let _: () = ();
             let p1_w1_acquired: Vec<_> = p1_w1_staged
                 .into_iter()
                 .map(|acquire| acquire())
@@ -22672,7 +22565,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);
@@ -23653,7 +23545,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -24224,7 +24115,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1paylo
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::PayloadHandle = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -25299,7 +25189,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1niche
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w10_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -26285,7 +26174,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1neste
             if ((p0_w1 == 1i32) && (p0_w3 == 1i32)) && (p0_w5 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w12_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -26664,7 +26552,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -26782,7 +26669,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w5_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -26952,7 +26838,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if (p0_w1 == 1i32) && (p0_w3 == 1i32) {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -27658,31 +27543,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p1_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p1_w3_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if p1_w1 == 1i32 {
-                    for identity in ::core::iter::once((p1_w3_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                let __prebindgen_alias_0 = if p0_w1 == 1i32 {
+                    Some((p0_w3_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                let __prebindgen_alias_1 = if p1_w1 == 1i32 {
+                    Some((p1_w3_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                if __prebindgen_alias_0.is_some()
+                    && __prebindgen_alias_0 == __prebindgen_alias_1
                 {
                     return Err("conflicting input aliases".into());
                 }
@@ -27804,7 +27677,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resou
                 ::prebindgen_runtime::validate_pointer(p0_w4_pointer)?;
             }
             let p0_w5 = if p0_w1 == 1i32 { Some(p0_w6) } else { None };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -28258,7 +28130,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
             }
-            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &mut perftest_flat::OwnedResource = unsafe {
                     &mut (*p0_w3_pointer).value
@@ -28343,7 +28214,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1 != 0) } else { None };
-            let _: () = ();
             let p0_w0: &perftest_flat::ProjectionHandle = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -29410,7 +29280,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -29540,7 +29409,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w3_pointer)?;
             }
-            let _: () = ();
             let p0_w0 = if p0_w1 == 1i32 {
                 let p0_w2: &perftest_flat::OwnedResource = unsafe {
                     &(*p0_w3_pointer).value
@@ -31058,31 +30926,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
             if p1_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p1_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if p1_w1 == 1i32 {
-                    for identity in ::core::iter::once((p1_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                let __prebindgen_alias_0 = if true {
+                    Some((p0_w1_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                let __prebindgen_alias_1 = if p1_w1 == 1i32 {
+                    Some((p1_w8_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                if __prebindgen_alias_0.is_some()
+                    && __prebindgen_alias_0 == __prebindgen_alias_1
                 {
                     return Err("conflicting input aliases".into());
                 }
@@ -31188,7 +31044,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1archi
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Archive = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::archive_latest(__prebindgen_argument_0);
@@ -31357,7 +31212,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
@@ -31528,7 +31382,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
             let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
             let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
-            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -32144,7 +31997,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -32584,7 +32436,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
             if p0_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p0_w8_pointer)?;
             }
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -33793,7 +33644,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -33911,7 +33761,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1repor
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -34090,7 +33939,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_len(__prebindgen_argument_0);
@@ -34164,7 +34012,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: i64 = ::core::convert::Into::into(p1_w0.expect("active value"));
@@ -34261,49 +34108,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p2_w1_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p1_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if true {
-                    for identity in ::core::iter::once((p2_w1_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, false));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let p1_w0: &perftest_flat::Storage = unsafe { &(*p1_w1_pointer).value };
@@ -34314,6 +34118,245 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
+            );
+            let ret_w0 = source_value;
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w0)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1storage_1accumulate_1lengths_1422059e479322e31<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: i64,
+    p1_w1: i64,
+    p2_w1: i64,
+    p3_w1: i64,
+    p4_w1: i64,
+    p5_w1: i64,
+    p6_w1: i64,
+    p7_w1: i64,
+    p8_w3: i64,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w1_pointer = if true {
+                p0_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
+            }
+            let p1_w1_pointer = if true {
+                p1_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p1_w1_pointer)?;
+            }
+            let p2_w1_pointer = if true {
+                p2_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p2_w1_pointer)?;
+            }
+            let p3_w1_pointer = if true {
+                p3_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p3_w1_pointer)?;
+            }
+            let p4_w1_pointer = if true {
+                p4_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p4_w1_pointer)?;
+            }
+            let p5_w1_pointer = if true {
+                p5_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p5_w1_pointer)?;
+            }
+            let p6_w1_pointer = if true {
+                p6_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p6_w1_pointer)?;
+            }
+            let p7_w1_pointer = if true {
+                p7_w1
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if true {
+                ::prebindgen_runtime::validate_pointer(p7_w1_pointer)?;
+            }
+            let p8_w1: i32 = i32::from((p8_w3 as usize) != 0);
+            let p8_w3_pointer = if p8_w1 == 1i32 {
+                p8_w3
+                    as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
+            } else {
+                ::core::ptr::null_mut()
+            };
+            if p8_w1 == 1i32 {
+                ::prebindgen_runtime::validate_pointer(p8_w3_pointer)?;
+            }
+            let _: () = {
+                let mut __prebindgen_resources = [
+                    (
+                        if true { Some((p0_w1_pointer.addr()) as usize) } else { None },
+                        true,
+                    ),
+                    (
+                        if true { Some((p1_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if true { Some((p2_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if true { Some((p3_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if true { Some((p4_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if true { Some((p5_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if true { Some((p6_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if true { Some((p7_w1_pointer.addr()) as usize) } else { None },
+                        false,
+                    ),
+                    (
+                        if p8_w1 == 1i32 {
+                            Some((p8_w3_pointer.addr()) as usize)
+                        } else {
+                            None
+                        },
+                        false,
+                    ),
+                ];
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| {
+                        pair[0].0.is_some() && pair[0].0 == pair[1].0
+                            && (pair[0].1 || pair[1].1)
+                    })
+                {
+                    return Err("conflicting input aliases".into());
+                }
+            };
+            let p0_w0: &mut perftest_flat::Storage = unsafe {
+                &mut (*p0_w1_pointer).value
+            };
+            let __prebindgen_argument_0 = p0_w0;
+            let p1_w0: &perftest_flat::Storage = unsafe { &(*p1_w1_pointer).value };
+            let __prebindgen_argument_1 = p1_w0;
+            let p2_w0: &perftest_flat::Storage = unsafe { &(*p2_w1_pointer).value };
+            let __prebindgen_argument_2 = p2_w0;
+            let p3_w0: &perftest_flat::Storage = unsafe { &(*p3_w1_pointer).value };
+            let __prebindgen_argument_3 = p3_w0;
+            let p4_w0: &perftest_flat::Storage = unsafe { &(*p4_w1_pointer).value };
+            let __prebindgen_argument_4 = p4_w0;
+            let p5_w0: &perftest_flat::Storage = unsafe { &(*p5_w1_pointer).value };
+            let __prebindgen_argument_5 = p5_w0;
+            let p6_w0: &perftest_flat::Storage = unsafe { &(*p6_w1_pointer).value };
+            let __prebindgen_argument_6 = p6_w0;
+            let p7_w0: &perftest_flat::Storage = unsafe { &(*p7_w1_pointer).value };
+            let __prebindgen_argument_7 = p7_w0;
+            let p8_w0 = if p8_w1 == 1i32 {
+                let p8_w2: &perftest_flat::Storage = unsafe { &(*p8_w3_pointer).value };
+                Some(p8_w2)
+            } else {
+                None
+            };
+            let __prebindgen_argument_8 = p8_w0;
+            let source_value = perftest_flat::storage_accumulate_lengths(
+                __prebindgen_argument_0,
+                __prebindgen_argument_1,
+                __prebindgen_argument_2,
+                __prebindgen_argument_3,
+                __prebindgen_argument_4,
+                __prebindgen_argument_5,
+                __prebindgen_argument_6,
+                __prebindgen_argument_7,
+                __prebindgen_argument_8,
             );
             let ret_w0 = source_value;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
@@ -34391,7 +34434,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             let p1_w3 = if true { Some(p1_w4) } else { None };
             let p1_w5 = if true { Some(p1_w6) } else { None };
             let p1_w7 = if true { Some(p1_w8 != 0) } else { None };
-            let _: () = ();
             let p0_w0: &mut perftest_flat::Storage = unsafe {
                 &mut (*p0_w1_pointer).value
             };
@@ -34492,31 +34534,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1summa
             if p1_w1 == 1i32 {
                 ::prebindgen_runtime::validate_pointer(p1_w8_pointer)?;
             }
-            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let _: () = {
-                if p0_w1 == 1i32 {
-                    for identity in ::core::iter::once((p0_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                {
-                    return Err("conflicting input aliases".into());
-                }
-            };
-            let _: () = {
-                if p1_w1 == 1i32 {
-                    for identity in ::core::iter::once((p1_w8_pointer.addr()) as usize) {
-                        __prebindgen_resources.push((identity, true));
-                    }
-                }
-                __prebindgen_resources.sort_unstable_by_key(|entry| entry.0);
-                if __prebindgen_resources
-                    .windows(2)
-                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                let __prebindgen_alias_0 = if p0_w1 == 1i32 {
+                    Some((p0_w8_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                let __prebindgen_alias_1 = if p1_w1 == 1i32 {
+                    Some((p1_w8_pointer.addr()) as usize)
+                } else {
+                    None
+                };
+                if __prebindgen_alias_0.is_some()
+                    && __prebindgen_alias_0 == __prebindgen_alias_1
                 {
                     return Err("conflicting input aliases".into());
                 }
@@ -34676,7 +34706,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_summary_handle(
@@ -36078,7 +36107,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1owned
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::OwnedResource = unsafe {
                 &(*p0_w1_pointer).value
             };
@@ -37599,7 +37627,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             } else {
                 None
             };
-            let _: () = ();
             let _: () = {
                 if jni_environment
                     .get_array_length(&ownership_accepted)
@@ -39328,22 +39355,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if p0_w1 == 1i32 {
-                        for identity in p0_w3_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if p0_w1 == 1i32 {
+                    for identity in p0_w3_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -39631,22 +39655,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 }
             }
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -41866,22 +41887,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             };
             let p2_w0 = if true { Some(p2_w1) } else { None };
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -42297,22 +42315,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
             }
             let p1_w0 = if true { Some(p1_w1) } else { None };
             let _: () = {
-                let mut __prebindgen_parameter_resources: Vec<(usize, bool)> = Vec::new();
-                let _: () = {
-                    if true {
-                        for identity in p0_w1_identities_0.iter().copied() {
-                            __prebindgen_parameter_resources.push((identity, true));
-                        }
+                let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+                if true {
+                    for identity in p0_w1_identities_0.iter().copied() {
+                        __prebindgen_resources.push((identity, true));
                     }
-                    __prebindgen_parameter_resources
-                        .sort_unstable_by_key(|entry| entry.0);
-                    if __prebindgen_parameter_resources
-                        .windows(2)
-                        .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
-                    {
-                        return Err("conflicting input aliases".into());
-                    }
-                };
+                }
+                __prebindgen_resources.sort_unstable();
+                if __prebindgen_resources
+                    .windows(2)
+                    .any(|pair| pair[0].0 == pair[1].0 && (pair[0].1 || pair[1].1))
+                {
+                    return Err("conflicting input aliases".into());
+                }
             };
             let _: () = {
                 if jni_environment
@@ -42956,7 +42971,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1stora
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let _: () = ();
             let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::storage_get_vec(__prebindgen_argument_0);

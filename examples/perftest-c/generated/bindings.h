@@ -1292,6 +1292,8 @@ perftest_code perftest_sparse_nested(perftest_code p0_w5);
 perftest_code perftest_sparse_optional(perftest_code p0_w3);
 int32_t perftest_sparse_ref(perftest_code p0_w1);
 int64_t perftest_stamp_new(int64_t p0_w1, int64_t p1_w1, int64_t *out1);
+/* Option option0: p8_w3 == NULL means None; non-null means Some. */
+int64_t perftest_storage_accumulate_lengths(perftest_storage * p0_w1, const perftest_storage * p1_w1, const perftest_storage * p2_w1, const perftest_storage * p3_w1, const perftest_storage * p4_w1, const perftest_storage * p5_w1, const perftest_storage * p6_w1, const perftest_storage * p7_w1, const perftest_storage * p8_w3);
 uint8_t perftest_storage_contains(const perftest_storage * p0_w1, int64_t p1_w1);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
 /* Field return.id: *out1. */

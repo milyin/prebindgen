@@ -302,6 +302,7 @@ internal object JNINative {
     @JvmStatic external fun call_storage_len_f00c3742e1e3063f(p0_w1: Long): Array<Any?>
     @JvmStatic external fun call_storage_contains_8645f2f664fd853c(p0_w1: Long, p1_w1: Long): Array<Any?>
     @JvmStatic external fun call_storage_total_len_1b16bba6fbe4c9d3(p0_w1: Long, p1_w1: Long, p2_w1: Long): Array<Any?>
+    @JvmStatic external fun call_storage_accumulate_lengths_422059e479322e31(p0_w1: Long, p1_w1: Long, p2_w1: Long, p3_w1: Long, p4_w1: Long, p5_w1: Long, p6_w1: Long, p7_w1: Long, p8_w3: Long): Array<Any?>
     @JvmStatic external fun call_storage_put_by_take_6be9a8d4b7a5eb93(p0_w1: Long, p1_w2: Long, p1_w4: Int, p1_w6: Double, p1_w8: Boolean): Array<Any?>
     @JvmStatic external fun call_summary_merge_ac6a9002e0a4eec5(p0_w1: Int, p0_w4: Long, p0_w6: Double, p0_w8: Long, p1_w1: Int, p1_w4: Long, p1_w6: Double, p1_w8: Long, ownership: BooleanArray): Array<Any?>
     @JvmStatic external fun call_storage_summary_handle_7c23e0abb4322c29(p0_w1: Long): Array<Any?>
