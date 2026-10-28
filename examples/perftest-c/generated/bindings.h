@@ -1158,6 +1158,31 @@ int32_t perftest_option_unit(int32_t p0_w1);
 /* Option option7: *out4 == 1114112 means None; other values encode Some and must be valid payloads; only when option4 is present. */
 int32_t perftest_optional_fields_echo(int32_t p0_w4, int64_t p0_w6, int32_t p0_w8, perftest_buffer p0_w10, uint32_t p0_w14, int64_t *out1, int32_t *out2, perftest_buffer *out3, uint32_t *out4);
 uintptr_t perftest_owned_resource_drops(void);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Result: success field v0 is returned directly; NULL means failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+perftest_getter_owner * perftest_owner_view_checked(uint8_t p0_w1, const perftest_getter_child * *out1, int64_t *out2, char * *error);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_getter_owner * perftest_owner_view_from_temporary(perftest_buffer p0_w1, const perftest_getter_child * *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: return value == NULL means None; non-null means Some. */
+perftest_getter_owner * perftest_owner_view_maybe(uint8_t p0_w1, const perftest_getter_child * *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_getter_owner * perftest_owner_view_mutable(uint8_t p0_w1, perftest_getter_child * *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: *out1 == NULL means None; non-null means Some. */
+perftest_getter_owner * perftest_owner_view_optional(uint8_t p0_w1, const perftest_getter_child * *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: *out1 == NULL means None; non-null means Some. */
+perftest_getter_owner * perftest_owner_view_optional_mut(uint8_t p0_w1, perftest_getter_child * *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+const perftest_getter_child * perftest_owner_view_reordered(uint8_t p0_w1, perftest_getter_owner * *out1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Result: success field v0 is returned directly; NULL means failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+perftest_getter_owner * perftest_owner_view_rollback(const perftest_getter_child * *out1, perftest_owned_resource * *out2, char * *error);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_getter_owner * perftest_owner_view_shared(uint8_t p0_w1, const perftest_getter_child * *out1);
 /* Field return.id: return value. */
 /* Field return.seq: *out1. */
 /* Field return.value: *out2. */

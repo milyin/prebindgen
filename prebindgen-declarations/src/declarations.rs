@@ -776,6 +776,9 @@ impl Declarations {
                 let f = flat.function(function)?;
                 let expected = if matches!(tree, Output::Into { .. }) {
                     ty.clone()
+                } else if matches!(f.params.first().map(|p| &p.ty.ty), Some(syn::Type::Reference(r)) if r.mutability.is_some())
+                {
+                    syn::parse_quote!(&mut #ty)
                 } else {
                     syn::parse_quote!(&#ty)
                 };
@@ -785,9 +788,8 @@ impl Declarations {
                         type_key(&expected)
                     ));
                 }
-                if matches!(&f.ret.ty, syn::Type::Reference(r) if r.mutability.is_some()) {
-                    return Err("mutable-reference getter results are unsupported".into());
-                }
+                // Mutable getters require a retained owner. Compilation decides
+                // this once all sibling output views and the codec are known.
                 let output =
                     Box::new(self.output(flat, codec, &f.ret.ty, output, extra, stack, true)?);
                 Ok(if matches!(tree, Output::Into { .. }) {

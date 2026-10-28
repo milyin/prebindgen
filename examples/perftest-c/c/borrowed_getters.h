@@ -1,4 +1,4 @@
-/* Borrowed output views must finish before the non-Clone owner is moved. */
+/* Ordinary value projections and explicitly requested owning copies. */
 static void check_borrowed_getters(void) {
     int64_t field_number = 0;
     perftest_buffer field_text = {0};
@@ -160,4 +160,25 @@ static void check_mutable_borrowed_pointers(void) {
         perftest_getter_counts_ret_w0_rows_free(after);
     }
     puts("C mutable borrows PASS: original-object mutation, optional/Result loans and owner-only destruction");
+}
+
+static void check_owner_backed_views(void) {
+    const perftest_getter_child *child = NULL;
+    perftest_getter_owner *owner = perftest_owner_view_shared(1, &child);
+    assert(child == perftest_getter_owner_child(owner));
+    assert(perftest_getter_child_number(child) == 71);
+    perftest_drop_getter_owner(owner); // There is no independently owned child.
+
+    owner = NULL;
+    child = perftest_owner_view_reordered(0, &owner);
+    assert(child == perftest_getter_owner_child(owner));
+    perftest_drop_getter_owner(owner);
+
+    perftest_getter_child *mutable_child = NULL;
+    owner = perftest_owner_view_mutable(0, &mutable_child);
+    perftest_getter_child_set_number(mutable_child, 99);
+    mutable_child = NULL; // End the loan before accessing its owner.
+    assert(perftest_getter_owner_id(owner) == 99);
+    perftest_drop_getter_owner(owner);
+    puts("C owner-backed views PASS: exact child address, output order and original-object mutation");
 }

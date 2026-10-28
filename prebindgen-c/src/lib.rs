@@ -361,21 +361,24 @@ impl Codec for CCodec {
                 )?;
                 out.fallible = false;
                 let buffer_type = prebindgen_conversions::template_parameter("buffer_type");
+                let guard = format_ident!("{w}_owner");
+                out.statements
+                    .extend(quote!(let #w = Box::into_raw(#w); let #guard = __PbOutputOwner(#w);));
                 out.values = vec![(
                     w.clone(),
-                    quote!(#buffer_type {data: #w.as_ptr(), len: #w.len()}),
+                    quote!(#buffer_type {data: #w as *const u8, len: #w.len()}),
                 )];
-                out.commit = quote!(let _ = Box::into_raw(#w););
+                out.commit = quote!(::core::mem::forget(#guard););
                 Ok(out)
             }
-            None => prebindgen_conversions::boxed::output(
-                &prebindgen_conversions::boxed::Storage::Direct,
-                ty,
-                w,
-                v,
-                borrowed,
-                |b| CWire::pointer(b.into()),
-            ),
+            None => {
+                let value = if borrowed {
+                    quote!(::core::clone::Clone::clone(#v))
+                } else {
+                    v
+                };
+                Ok(owned_pointer_output(ty, w, value).0)
+            }
         }
     }
 
@@ -430,6 +433,46 @@ impl Codec for CCodec {
         }))
     }
 
+    fn output_owner(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        wire: syn::Ident,
+        value: TokenStream,
+    ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+        if !flat
+            .type_info(ty)
+            .ok()
+            .is_some_and(|t| t.metadata.pointer.is_some() && t.metadata.enumeration.is_none())
+        {
+            return Ok(None);
+        }
+        Ok(Some(owned_pointer_output(ty, wire, value)))
+    }
+
+    fn validate_getter_output(
+        &self,
+        ty: &syn::Type,
+        plan: &OutputPlan<CWire>,
+        _: &(),
+    ) -> Result<()> {
+        let fields = crate::group::result_packet_fields(&plan.outcomes.success).collect::<Vec<_>>();
+        let mut reference_type = ty;
+        while let Some(inner) = prebindgen_flat::option_inner(reference_type) {
+            reference_type = inner;
+        }
+        if matches!(reference_type,syn::Type::Reference(r) if r.lifetime.as_ref().is_some_and(|l| l.ident=="static"))
+        {
+            return Ok(());
+        }
+        if fields.iter().any(|w| matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access != Access::Move))
+            && !fields.iter().any(|w| matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access == Access::Move && pointer_owns_value(&pointer.ty, ty))) {
+            return Err("a borrowed opaque getter output requires its opaque owner to be returned with field_self_into(); otherwise select an explicit owning conversion if a copy is intended".into());
+        }
+        Ok(())
+    }
+
     fn optional_niche(
         &self,
         payload: &prebindgen_flat::WireNode<Self::Wire, Self::Chain, Self::Branch>,
@@ -480,6 +523,38 @@ impl Codec for CCodec {
         crate::group::result_packet(&plan.outcomes.success, &plan.values)?;
         Ok(())
     }
+}
+// Every C opaque allocation has the direct Box<T> layout. Keep ownership in a
+// raw-pointer guard so packet delivery and commit never retag a live Box after
+// its address (or an interior address) has been placed in a result packet.
+fn owned_pointer_output(
+    ty: &syn::Type,
+    wire: syn::Ident,
+    value: TokenStream,
+) -> (OutputPlan<CWire>, TokenStream) {
+    let guard = format_ident!("{wire}_owner");
+    (
+        OutputPlan {
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            outcomes: prebindgen_flat::Outcomes {
+                success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                    name: wire.clone(),
+                    kind: CWire::pointer(CPointer {
+                        ty: ty.clone(),
+                        access: Access::Move,
+                    }),
+                }]),
+                source_error: None,
+                binding_failure: None,
+            },
+            statements: quote!(let #wire: *mut #ty = Box::into_raw(Box::new(#value)); let #guard = __PbOutputOwner(#wire);),
+            values: vec![(wire.clone(), quote!(#wire))],
+            commit: quote!(::core::mem::forget(#guard);),
+        },
+        quote!(#wire),
+    )
 }
 fn decode_scalar(p: Primitive, w: &syn::Ident) -> TokenStream {
     let ty = p.rust_type();
@@ -1222,6 +1297,12 @@ where
         calls.push((f, body, context));
     }
     let mut tokens = quote! {
+       // Raw ownership preserves the allocation address and provenance while
+       // views are derived. Forgetting this guard commits the existing allocation.
+       #[allow(dead_code)] struct __PbOutputOwner<T: ?Sized>(*mut T);
+       impl<T: ?Sized> Drop for __PbOutputOwner<T> {
+           fn drop(&mut self) { unsafe { drop(Box::from_raw(self.0)); } }
+       }
        #[repr(C)] #[derive(Clone,Copy)] pub struct __Pb128 {pub hi:u64,pub lo:u64}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbRows {pub data:*const ::core::ffi::c_void,pub len:usize}
        #[repr(C)] #[derive(Clone,Copy)] pub struct __PbBuffer {pub data:*const u8,pub len:usize}
@@ -1592,6 +1673,16 @@ The pointer must be null or a live allocation of the declared type returned by t
 
 // A Rust reference may refer to a wrapper-reconstructed input, rather than C's
 // persistent allocation. Such a pointer must not escape the generated call.
+fn pointer_owns_value(pointer: &syn::Type, returned: &syn::Type) -> bool {
+    let mut ty = prebindgen_flat::result_parts(returned).map_or(returned, |(ok, _)| ok);
+    while let Some(inner) = prebindgen_flat::option_inner(ty) {
+        ty = inner;
+    }
+    // Flat currently permits only nongeneric named owners. Do not silently
+    // extend this proof to future lifetime-bearing owner types.
+    matches!(ty, syn::Type::Path(p) if p.qself.is_none() && p.path.segments.iter().all(|s| matches!(s.arguments,syn::PathArguments::None)))
+        && prebindgen_flat::same_type(pointer, ty)
+}
 fn validate_return_loans<I, O, M>(
     function: &prebindgen_flat::Function<I, O, M>,
     output: &prebindgen_flat::WireNode<CWire, CChain, CBranch>,
@@ -1602,6 +1693,14 @@ where
     if !crate::group::result_packet_fields(output)
         .any(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move))
     {
+        return Ok(());
+    }
+    // Owner-backed combinations create their loans only after this allocation
+    // has reached its final address. Temporary source inputs cannot own it.
+    // Getters take only the owner, and other non-static getter loans are rejected
+    // by validate_getter_output; both restrictions are required for this bypass.
+    if crate::group::result_packet_fields(output).any(|w| matches!(&w.kind,
+        CWire::Pointer {pointer,..} if pointer.access == Access::Move && pointer_owns_value(&pointer.ty, &function.ret.ty))) {
         return Ok(());
     }
     fn reference(ty: &syn::Type) -> Option<&syn::TypeReference> {
@@ -1915,7 +2014,7 @@ mod generation_tests {
         use prebindgen_declarations::{expand_return, fun};
         let error = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&mut Child{}"))
             .opaque_ptr("child_t",syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).field(fun!(child))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::Output::getter("child",prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())))))
             .build().err().unwrap();
         assert!(
             error.contains("mutable-reference getter results are unsupported"),
@@ -1924,12 +2023,100 @@ mod generation_tests {
     }
 
     #[test]
+    fn owner_backed_getters_borrow_final_storage_and_keep_wire_order() {
+        use prebindgen_declarations::{expand_return, fun, Output};
+        for mutable in [false, true] {
+            let qualifier = if mutable { "mut " } else { "" };
+            let source=format!("pub type Owner=String;pub type Child=String;pub fn make()->Owner{{}}pub fn child(o:&{qualifier}Owner)->&{qualifier}Child{{}}");
+            for reversed in [false, true] {
+                let getter = Output::getter("child", Output::Leaf);
+                let expansion = if reversed {
+                    expand_return!(Owner).view(getter).field_self_into()
+                } else {
+                    expand_return!(Owner).field_self_into().view(getter)
+                };
+                let flat = Cbindgen::new(error_model(&source))
+                    .opaque_ptr("owner_t", syn::parse_quote!(Owner))
+                    .opaque_ptr("child_t", syn::parse_quote!(Child))
+                    .function(fun!(make).expand_return(expansion))
+                    .prepare()
+                    .unwrap();
+                let output = flat.function("make").unwrap().ret.slot.as_ref().unwrap();
+                let code = output.statements.to_string();
+                assert!(!code.contains("Clone"));
+                assert!(
+                    code.find("Box :: into_raw").unwrap() < code.find("crate :: child").unwrap()
+                );
+                let access = crate::group::result_packet_fields(&output.outcomes.success)
+                    .map(|w| match &w.kind {
+                        CWire::Pointer { pointer, .. } => pointer.access,
+                        _ => panic!(),
+                    })
+                    .collect::<Vec<_>>();
+                let loan = if mutable {
+                    Access::Exclusive
+                } else {
+                    Access::Shared
+                };
+                assert_eq!(
+                    access,
+                    if reversed {
+                        vec![loan, Access::Move]
+                    } else {
+                        vec![Access::Move, loan]
+                    }
+                );
+                generate(&flat).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn owner_view_near_misses_are_diagnostics_not_implicit_clones() {
+        use prebindgen_declarations::{expand_return, fun, Output};
+        let source="pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(o:&Owner)->&Child{}pub fn mutate(o:&mut Owner)->&mut Child{}";
+        let model = || {
+            Cbindgen::new(error_model(source))
+                .opaque_ptr("owner_t", syn::parse_quote!(Owner))
+                .opaque_ptr("child_t", syn::parse_quote!(Child))
+        };
+        let cases = [
+            (
+                expand_return!(Owner).field(fun!(child)),
+                "requires its opaque owner",
+            ),
+            (
+                expand_return!(Owner)
+                    .field_self_into()
+                    .field(fun!(child))
+                    .view(Output::Discard),
+                "supports only",
+            ),
+            (
+                expand_return!(Owner)
+                    .field_self_into()
+                    .view(Output::getter("mutate", Output::Leaf))
+                    .field(fun!(child)),
+                "only getter view",
+            ),
+        ];
+        for (expansion, message) in cases {
+            let error = model()
+                .function(fun!(make).expand_return(expansion))
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains(message), "{error}");
+        }
+    }
+
+    #[test]
     fn getter_expansions_and_explicit_projections_keep_owned_clones() {
         use prebindgen_declarations::{expand_return, fun};
         let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&Child{}"))
             .opaque_ptr("owner", syn::parse_quote!(Owner))
             .opaque_ptr("child", syn::parse_quote!(Child))
-            .function(fun!(make).expand_return(expand_return!(Owner).field(fun!(child))))
+            .function(fun!(make).expand_return(expand_return!(Owner).view(prebindgen_declarations::Output::getter("child",prebindgen_declarations::Output::Projected(prebindgen_declarations::Projection::borrowed())))))
             .function(fun!(child).expand_return(expand_return!(Child).field_self_ref()))
             .panic()
             .prepare().unwrap();

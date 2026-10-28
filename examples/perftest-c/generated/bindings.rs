@@ -1,3 +1,12 @@
+#[allow(dead_code)]
+struct __PbOutputOwner<T: ?Sized>(*mut T);
+impl<T: ?Sized> Drop for __PbOutputOwner<T> {
+    fn drop(&mut self) {
+        unsafe {
+            drop(Box::from_raw(self.0));
+        }
+    }
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __Pb128 {
@@ -657,15 +666,17 @@ unsafe fn __pb_report_result_error(
         let ret_w1 = ret_w0.code;
         let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w0.message)
             .into_boxed_slice();
+        let ret_w2 = Box::into_raw(ret_w2);
+        let ret_w2_owner = __PbOutputOwner(ret_w2);
         let result = __PbError_result_error {
             v0: ret_w1,
             v1: __PbBuffer {
-                data: ret_w2.as_ptr(),
+                data: ret_w2 as *const u8,
                 len: ret_w2.len(),
             },
         };
         std::ptr::write(error_output, result);
-        let _ = Box::into_raw(ret_w2);
+        ::core::mem::forget(ret_w2_owner);
         *reported = true;
         Ok(())
     }
@@ -721,14 +732,16 @@ unsafe fn __pb_report_panic_error(
         let ret_w0 = source_error;
         let ret_w1 = ::core::convert::Into::<Vec<u8>>::into(ret_w0.message)
             .into_boxed_slice();
+        let ret_w1 = Box::into_raw(ret_w1);
+        let ret_w1_owner = __PbOutputOwner(ret_w1);
         let result = __PbError_panic_error {
             v0: __PbBuffer {
-                data: ret_w1.as_ptr(),
+                data: ret_w1 as *const u8,
                 len: ret_w1.len(),
             },
         };
         std::ptr::write(error_output, result);
-        let _ = Box::into_raw(ret_w1);
+        ::core::mem::forget(ret_w1_owner);
         *reported = true;
         Ok(())
     }
@@ -798,9 +811,11 @@ unsafe fn __pb_report_rich_error(
         {
             let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w3)
                 .into_boxed_slice();
+            let ret_w4 = Box::into_raw(ret_w4);
+            let ret_w4_owner = __PbOutputOwner(ret_w4);
             let ret_w2_values = (
                 __PbBuffer {
-                    data: ret_w4.as_ptr(),
+                    data: ret_w4 as *const u8,
                     len: ret_w4.len(),
                 },
             );
@@ -808,7 +823,7 @@ unsafe fn __pb_report_rich_error(
                 1i32,
                 ret_w2_values,
                 Some(move || {
-                    let _ = Box::into_raw(ret_w4);
+                    ::core::mem::forget(ret_w4_owner);
                 }),
             )
         } else {
@@ -886,12 +901,11 @@ unsafe fn __pb_report_drop_error(
     {
         let ret_w0 = source_error;
         let ret_w1 = perftest_flat::c_panic_output_value(&ret_w0.resource);
-        let mut ret_w2 = Box::new(ret_w1);
-        let result = __PbError_drop_error {
-            v0: (&mut *ret_w2) as *mut perftest_flat::OwnedResource,
-        };
+        let ret_w2: *mut perftest_flat::OwnedResource = Box::into_raw(Box::new(ret_w1));
+        let ret_w2_owner = __PbOutputOwner(ret_w2);
+        let result = __PbError_drop_error { v0: ret_w2 };
         std::ptr::write(error_output, result);
-        let _ = Box::into_raw(ret_w2);
+        ::core::mem::forget(ret_w2_owner);
         *reported = true;
         Ok(())
     }
@@ -933,19 +947,24 @@ unsafe fn __pb_report_resource_error(
     }
     {
         let ret_w0 = source_error;
-        let mut ret_w1 = Box::new(ret_w0.resource);
+        let ret_w1: *mut perftest_flat::OwnedResource = Box::into_raw(
+            Box::new(ret_w0.resource),
+        );
+        let ret_w1_owner = __PbOutputOwner(ret_w1);
         let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w0.message)
             .into_boxed_slice();
+        let ret_w2 = Box::into_raw(ret_w2);
+        let ret_w2_owner = __PbOutputOwner(ret_w2);
         let result = __PbError_resource_error {
-            v0: (&mut *ret_w1) as *mut perftest_flat::OwnedResource,
+            v0: ret_w1,
             v1: __PbBuffer {
-                data: ret_w2.as_ptr(),
+                data: ret_w2 as *const u8,
                 len: ret_w2.len(),
             },
         };
         std::ptr::write(error_output, result);
-        let _ = Box::into_raw(ret_w1);
-        let _ = Box::into_raw(ret_w2);
+        ::core::mem::forget(ret_w1_owner);
+        ::core::mem::forget(ret_w2_owner);
         *reported = true;
         Ok(())
     }
@@ -1079,14 +1098,17 @@ unsafe fn __pb_report_collection_error(
             ret_w3,
         );
         for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
-            let mut ret_w5 = Box::new(ret_w2);
+            let ret_w5: *mut perftest_flat::OwnedResource = Box::into_raw(
+                Box::new(ret_w2),
+            );
+            let ret_w5_owner = __PbOutputOwner(ret_w5);
             ret_w1
                 .push(__PbRow_error_collection_error_ret_w1 {
-                    v0: (&mut *ret_w5) as *mut perftest_flat::OwnedResource,
+                    v0: ret_w5,
                 });
             ret_w1_commits
                 .push(move || {
-                    let _ = Box::into_raw(ret_w5);
+                    ::core::mem::forget(ret_w5_owner);
                 });
         }
         let ret_w1 = ret_w1.into_boxed_slice();
@@ -1359,13 +1381,16 @@ pub unsafe extern "C" fn perftest_archive_new() -> *mut perftest_flat::Archive {
         {
             let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::archive_new();
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::Archive = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_archive_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::Archive,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -1554,13 +1579,16 @@ pub unsafe extern "C" fn perftest_blob_value_echo(
             let p0_w0: perftest_flat::BlobValue = *p0_w0.expect("active allocation");
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::blob_value_echo(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::BlobValue = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_blob_value_echo_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::BlobValue,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -1608,13 +1636,16 @@ pub unsafe extern "C" fn perftest_blob_value_new(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::BlobValue = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_blob_value_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::BlobValue,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -1648,13 +1679,16 @@ pub unsafe extern "C" fn perftest_c_panic_output_new() -> *mut perftest_flat::CP
         {
             let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::c_panic_output_new();
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::CPanicOutput = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_c_panic_output_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::CPanicOutput,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -1829,13 +1863,16 @@ pub unsafe extern "C" fn perftest_c_result_drop_panic(
                 }
             };
             let ret_w2 = perftest_flat::c_panic_output_value(&ret_w0);
-            let mut ret_w3 = Box::new(ret_w2);
+            let ret_w3: *mut perftest_flat::OwnedResource = Box::into_raw(
+                Box::new(ret_w2),
+            );
+            let ret_w3_owner = __PbOutputOwner(ret_w3);
             let result = perftest_c_result_drop_panic_result {
-                v0: (&mut *ret_w3) as *mut perftest_flat::OwnedResource,
+                v0: ret_w3,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w3);
+                ::core::mem::forget(ret_w3_owner);
                 success_committed = true;
             };
             Ok(())
@@ -2105,15 +2142,16 @@ pub unsafe extern "C" fn perftest_c_result_optional_handle(
                 }
             };
             let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0 {
-                let mut ret_w4 = Box::new(ret_w3);
-                let ret_w2_values = (
-                    (&mut *ret_w4) as *mut perftest_flat::OwnedResource,
+                let ret_w4: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w3),
                 );
+                let ret_w4_owner = __PbOutputOwner(ret_w4);
+                let ret_w2_values = (ret_w4,);
                 (
                     1i32,
                     ret_w2_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w4);
+                        ::core::mem::forget(ret_w4_owner);
                     }),
                 )
             } else {
@@ -2799,12 +2837,14 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
                         Vec<u8>,
                     >::into(callback_source_0)
                         .into_boxed_slice();
+                    let callback_arg_0_w0 = Box::into_raw(callback_arg_0_w0);
+                    let callback_arg_0_w0_owner = __PbOutputOwner(callback_arg_0_w0);
                     let callback_argument_0 = __PbBuffer {
-                        data: callback_arg_0_w0.as_ptr(),
+                        data: callback_arg_0_w0 as *const u8,
                         len: callback_arg_0_w0.len(),
                     };
                     {
-                        let _ = Box::into_raw(callback_arg_0_w0);
+                        ::core::mem::forget(callback_arg_0_w0_owner);
                     }
                     let raw_result = unsafe {
                         p0_callback_run(p0_callback_owner.context(), callback_argument_0)
@@ -2843,15 +2883,17 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
             );
             let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
                 .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_callback_return_bytes_result {
                 v0: __PbBuffer {
-                    data: ret_w0.as_ptr(),
+                    data: ret_w0 as *const u8,
                     len: ret_w0.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -3861,13 +3903,16 @@ pub unsafe extern "C" fn perftest_callback_return_handler_new(
                     });
                 }
             };
-            let mut ret_w2 = Box::new(ret_w0);
+            let ret_w2: *mut perftest_flat::CallbackReturnHandler = Box::into_raw(
+                Box::new(ret_w0),
+            );
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
             let result = perftest_callback_return_handler_new_result {
-                v0: (&mut *ret_w2) as *mut perftest_flat::CallbackReturnHandler,
+                v0: ret_w2,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
+                ::core::mem::forget(ret_w2_owner);
                 success_committed = true;
             };
             Ok(())
@@ -5310,13 +5355,15 @@ pub unsafe extern "C" fn perftest_callback_return_record(
                         Vec<u8>,
                     >::into(callback_arg_0_w1.label)
                         .into_boxed_slice();
+                    let callback_arg_0_w3 = Box::into_raw(callback_arg_0_w3);
+                    let callback_arg_0_w3_owner = __PbOutputOwner(callback_arg_0_w3);
                     let callback_argument_0 = callback_arg_0_w2;
                     let callback_argument_1 = __PbBuffer {
-                        data: callback_arg_0_w3.as_ptr(),
+                        data: callback_arg_0_w3 as *const u8,
                         len: callback_arg_0_w3.len(),
                     };
                     {
-                        let _ = Box::into_raw(callback_arg_0_w3);
+                        ::core::mem::forget(callback_arg_0_w3_owner);
                     }
                     let raw_result = unsafe {
                         p0_callback_run(
@@ -5527,13 +5574,16 @@ pub unsafe extern "C" fn perftest_callback_return_resource_new(
             let source_value = perftest_flat::callback_return_resource_new(
                 __prebindgen_argument_0,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::CallbackReturnResource = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_callback_return_resource_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::CallbackReturnResource,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -5619,13 +5669,16 @@ pub unsafe extern "C" fn perftest_callback_return_spawn(
             let source_value = perftest_flat::callback_return_spawn(
                 __prebindgen_argument_0,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::CallbackReturnJob = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_callback_return_spawn_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::CallbackReturnJob,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -5684,12 +5737,14 @@ pub unsafe extern "C" fn perftest_callback_return_text(
                         Vec<u8>,
                     >::into(callback_source_0)
                         .into_boxed_slice();
+                    let callback_arg_0_w0 = Box::into_raw(callback_arg_0_w0);
+                    let callback_arg_0_w0_owner = __PbOutputOwner(callback_arg_0_w0);
                     let callback_argument_0 = __PbBuffer {
-                        data: callback_arg_0_w0.as_ptr(),
+                        data: callback_arg_0_w0 as *const u8,
                         len: callback_arg_0_w0.len(),
                     };
                     {
-                        let _ = Box::into_raw(callback_arg_0_w0);
+                        ::core::mem::forget(callback_arg_0_w0_owner);
                     }
                     let raw_result = unsafe {
                         p0_callback_run(p0_callback_owner.context(), callback_argument_0)
@@ -5733,15 +5788,17 @@ pub unsafe extern "C" fn perftest_callback_return_text(
             );
             let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
                 .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_callback_return_text_result {
                 v0: __PbBuffer {
-                    data: ret_w0.as_ptr(),
+                    data: ret_w0 as *const u8,
                     len: ret_w0.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -6847,14 +6904,17 @@ pub unsafe extern "C" fn perftest_collection_bundle(out1: *mut i64) -> __PbRows 
                 ret_w4,
             );
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
-                let mut ret_w6 = Box::new(ret_w3);
+                let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w3),
+                );
+                let ret_w6_owner = __PbOutputOwner(ret_w6);
                 ret_w2
                     .push(__PbRow_collection_bundle_ret_w2 {
-                        v0: (&mut *ret_w6) as *mut perftest_flat::OwnedResource,
+                        v0: ret_w6,
                     });
                 ret_w2_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w6);
+                        ::core::mem::forget(ret_w6_owner);
                     });
             }
             let ret_w2 = ret_w2.into_boxed_slice();
@@ -6984,16 +7044,18 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w4 = Box::into_raw(ret_w4);
+                let ret_w4_owner = __PbOutputOwner(ret_w4);
                 ret_w0
                     .push(__PbRow_collection_bytes_ret_w0 {
                         v0: __PbBuffer {
-                            data: ret_w4.as_ptr(),
+                            data: ret_w4 as *const u8,
                             len: ret_w4.len(),
                         },
                     });
                 ret_w0_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w4);
+                        ::core::mem::forget(ret_w4_owner);
                     });
             }
             let ret_w0 = ret_w0.into_boxed_slice();
@@ -7103,11 +7165,13 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w4 = Box::into_raw(ret_w4);
+                let ret_w4_owner = __PbOutputOwner(ret_w4);
                 let __pb_callback_value_0 = __PbBuffer {
-                    data: ret_w4.as_ptr(),
+                    data: ret_w4 as *const u8,
                     len: ret_w4.len(),
                 };
-                let _ = Box::into_raw(ret_w4);
+                ::core::mem::forget(ret_w4_owner);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -7771,14 +7835,17 @@ pub unsafe extern "C" fn perftest_collection_handles(
                 ret_w4,
             );
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
-                let mut ret_w6 = Box::new(ret_w3);
+                let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w3),
+                );
+                let ret_w6_owner = __PbOutputOwner(ret_w6);
                 ret_w2
                     .push(__PbRow_collection_handles_ret_w2 {
-                        v0: (&mut *ret_w6) as *mut perftest_flat::OwnedResource,
+                        v0: ret_w6,
                     });
                 ret_w2_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w6);
+                        ::core::mem::forget(ret_w6_owner);
                     });
             }
             let ret_w2 = ret_w2.into_boxed_slice();
@@ -7999,10 +8066,12 @@ pub unsafe extern "C" fn perftest_collection_handles_each(
             let ret_w2_source = ret_w0;
             let ret_w4 = ret_w2_source.len();
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
-                let mut ret_w6 = Box::new(ret_w3);
-                let __pb_callback_value_0 = (&mut *ret_w6)
-                    as *mut perftest_flat::OwnedResource;
-                let _ = Box::into_raw(ret_w6);
+                let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w3),
+                );
+                let ret_w6_owner = __PbOutputOwner(ret_w6);
+                let __pb_callback_value_0 = ret_w6;
+                ::core::mem::forget(ret_w6_owner);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -8360,14 +8429,17 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
                     ret_w9,
                 );
                 for (ret_w10, ret_w8) in ret_w7_source.into_iter().enumerate() {
-                    let mut ret_w11 = Box::new(ret_w8);
+                    let ret_w11: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w8),
+                    );
+                    let ret_w11_owner = __PbOutputOwner(ret_w11);
                     ret_w7
                         .push(__PbRow_collection_late_drop_ret_w7 {
-                            v0: (&mut *ret_w11) as *mut perftest_flat::OwnedResource,
+                            v0: ret_w11,
                         });
                     ret_w7_commits
                         .push(move || {
-                            let _ = Box::into_raw(ret_w11);
+                            ::core::mem::forget(ret_w11_owner);
                         });
                 }
                 let ret_w7 = ret_w7.into_boxed_slice();
@@ -8523,14 +8595,17 @@ pub unsafe extern "C" fn perftest_collection_make_items() -> __PbRows {
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = perftest_flat::collection_item_into(ret_w1);
                 let ret_w5 = ret_w4;
-                let mut ret_w6 = Box::new(ret_w5.resource);
+                let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w5.resource),
+                );
+                let ret_w6_owner = __PbOutputOwner(ret_w6);
                 ret_w0
                     .push(__PbRow_collection_make_items_ret_w0 {
-                        v0: (&mut *ret_w6) as *mut perftest_flat::OwnedResource,
+                        v0: ret_w6,
                     });
                 ret_w0_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w6);
+                        ::core::mem::forget(ret_w6_owner);
                     });
             }
             let ret_w0 = ret_w0.into_boxed_slice();
@@ -9151,14 +9226,17 @@ pub unsafe extern "C" fn perftest_collection_nested_handles(
                     ret_w6,
                 );
                 for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
-                    let mut ret_w8 = Box::new(ret_w5);
+                    let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w5),
+                    );
+                    let ret_w8_owner = __PbOutputOwner(ret_w8);
                     ret_w4
                         .push(__PbRow_collection_nested_handles_ret_w4 {
-                            v0: (&mut *ret_w8) as *mut perftest_flat::OwnedResource,
+                            v0: ret_w8,
                         });
                     ret_w4_commits
                         .push(move || {
-                            let _ = Box::into_raw(ret_w8);
+                            ::core::mem::forget(ret_w8_owner);
                         });
                 }
                 let ret_w4 = ret_w4.into_boxed_slice();
@@ -9392,14 +9470,17 @@ pub unsafe extern "C" fn perftest_collection_nested_handles_each(
                     ret_w6,
                 );
                 for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
-                    let mut ret_w8 = Box::new(ret_w5);
+                    let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w5),
+                    );
+                    let ret_w8_owner = __PbOutputOwner(ret_w8);
                     ret_w4
                         .push(__PbRow_collection_nested_handles_each_ret_w4 {
-                            v0: (&mut *ret_w8) as *mut perftest_flat::OwnedResource,
+                            v0: ret_w8,
                         });
                     ret_w4_commits
                         .push(move || {
-                            let _ = Box::into_raw(ret_w8);
+                            ::core::mem::forget(ret_w8_owner);
                         });
                 }
                 let ret_w4 = ret_w4.into_boxed_slice();
@@ -9973,14 +10054,17 @@ pub unsafe extern "C" fn perftest_collection_optional_handles(
                     ret_w4,
                 );
                 for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
-                    let mut ret_w6 = Box::new(ret_w3);
+                    let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w3),
+                    );
+                    let ret_w6_owner = __PbOutputOwner(ret_w6);
                     ret_w2
                         .push(__PbRow_collection_optional_handles_ret_w2 {
-                            v0: (&mut *ret_w6) as *mut perftest_flat::OwnedResource,
+                            v0: ret_w6,
                         });
                     ret_w2_commits
                         .push(move || {
-                            let _ = Box::into_raw(ret_w6);
+                            ::core::mem::forget(ret_w6_owner);
                         });
                 }
                 let ret_w2 = ret_w2.into_boxed_slice();
@@ -10164,10 +10248,12 @@ pub unsafe extern "C" fn perftest_collection_optional_handles_each(
                 let ret_w2_source = ret_w1;
                 let ret_w4 = ret_w2_source.len();
                 for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
-                    let mut ret_w6 = Box::new(ret_w3);
-                    let __pb_callback_value_0 = (&mut *ret_w6)
-                        as *mut perftest_flat::OwnedResource;
-                    let _ = Box::into_raw(ret_w6);
+                    let ret_w6: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w3),
+                    );
+                    let ret_w6_owner = __PbOutputOwner(ret_w6);
+                    let __pb_callback_value_0 = ret_w6;
+                    ::core::mem::forget(ret_w6_owner);
                     unsafe {
                         __pb_callback
                             .expect(
@@ -11190,13 +11276,16 @@ pub unsafe extern "C" fn perftest_collection_resource_new(
             let source_value = perftest_flat::collection_resource_new(
                 __prebindgen_argument_0,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::OwnedResource = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_collection_resource_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::OwnedResource,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -11706,14 +11795,17 @@ pub unsafe extern "C" fn perftest_collection_result_optional(
                     ret_w6,
                 );
                 for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
-                    let mut ret_w8 = Box::new(ret_w5);
+                    let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w5),
+                    );
+                    let ret_w8_owner = __PbOutputOwner(ret_w8);
                     ret_w4
                         .push(__PbRow_collection_result_optional_ret_w4 {
-                            v0: (&mut *ret_w8) as *mut perftest_flat::OwnedResource,
+                            v0: ret_w8,
                         });
                     ret_w4_commits
                         .push(move || {
-                            let _ = Box::into_raw(ret_w8);
+                            ::core::mem::forget(ret_w8_owner);
                         });
                 }
                 let ret_w4 = ret_w4.into_boxed_slice();
@@ -11958,10 +12050,12 @@ pub unsafe extern "C" fn perftest_collection_result_optional_each(
                 let ret_w4_source = ret_w3;
                 let ret_w6 = ret_w4_source.len();
                 for (ret_w7, ret_w5) in ret_w4_source.into_iter().enumerate() {
-                    let mut ret_w8 = Box::new(ret_w5);
-                    let __pb_callback_value_0 = (&mut *ret_w8)
-                        as *mut perftest_flat::OwnedResource;
-                    let _ = Box::into_raw(ret_w8);
+                    let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w5),
+                    );
+                    let ret_w8_owner = __PbOutputOwner(ret_w8);
+                    let __pb_callback_value_0 = ret_w8;
+                    ::core::mem::forget(ret_w8_owner);
                     unsafe {
                         __pb_callback
                             .expect(
@@ -12330,16 +12424,18 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w4 = Box::into_raw(ret_w4);
+                let ret_w4_owner = __PbOutputOwner(ret_w4);
                 ret_w0
                     .push(__PbRow_collection_text_ret_w0 {
                         v0: __PbBuffer {
-                            data: ret_w4.as_ptr(),
+                            data: ret_w4 as *const u8,
                             len: ret_w4.len(),
                         },
                     });
                 ret_w0_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w4);
+                        ::core::mem::forget(ret_w4_owner);
                     });
             }
             let ret_w0 = ret_w0.into_boxed_slice();
@@ -12452,11 +12548,13 @@ pub unsafe extern "C" fn perftest_collection_text_each(
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
                 let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w4 = Box::into_raw(ret_w4);
+                let ret_w4_owner = __PbOutputOwner(ret_w4);
                 let __pb_callback_value_0 = __PbBuffer {
-                    data: ret_w4.as_ptr(),
+                    data: ret_w4 as *const u8,
                     len: ret_w4.len(),
                 };
-                let _ = Box::into_raw(ret_w4);
+                ::core::mem::forget(ret_w4_owner);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -12725,14 +12823,17 @@ pub unsafe extern "C" fn perftest_collection_try_make_items(
             for (ret_w5, ret_w3) in ret_w2_source.into_iter().enumerate() {
                 let ret_w6 = perftest_flat::collection_item_into(ret_w3);
                 let ret_w7 = ret_w6;
-                let mut ret_w8 = Box::new(ret_w7.resource);
+                let ret_w8: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w7.resource),
+                );
+                let ret_w8_owner = __PbOutputOwner(ret_w8);
                 ret_w2
                     .push(__PbRow_collection_try_make_items_ret_w2 {
-                        v0: (&mut *ret_w8) as *mut perftest_flat::OwnedResource,
+                        v0: ret_w8,
                     });
                 ret_w2_commits
                     .push(move || {
-                        let _ = Box::into_raw(ret_w8);
+                        ::core::mem::forget(ret_w8_owner);
                     });
             }
             let ret_w2 = ret_w2.into_boxed_slice();
@@ -12892,13 +12993,16 @@ pub unsafe extern "C" fn perftest_enum_payload_new(
             let p0_w0: f64 = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_payload_new(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::PayloadHandle = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_enum_payload_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::PayloadHandle,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -13078,15 +13182,17 @@ pub unsafe extern "C" fn perftest_getter_child_name(
                 Vec<u8>,
             >::into((source_value).to_string())
                 .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_getter_child_name_result {
                 v0: __PbBuffer {
-                    data: ret_w0.as_ptr(),
+                    data: ret_w0 as *const u8,
                     len: ret_w0.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -13351,7 +13457,11 @@ pub unsafe extern "C" fn perftest_getter_fields_new(
         {
             let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_fields_new();
-            let ret_w1 = perftest_flat::getter_owner_details(&source_value);
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_details(unsafe { &*(ret_w0) });
             let ret_w2 = &(ret_w1);
             let ret_w3: &i64 = &ret_w2.number;
             let ret_w3 = *ret_w3;
@@ -13359,19 +13469,20 @@ pub unsafe extern "C" fn perftest_getter_fields_new(
                 Vec<u8>,
             >::into(::core::clone::Clone::clone(&ret_w2.text))
                 .into_boxed_slice();
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w4 = Box::into_raw(ret_w4);
+            let ret_w4_owner = __PbOutputOwner(ret_w4);
             let result = perftest_getter_fields_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::GetterOwner,
+                v0: ret_w0,
                 v1: ret_w3,
                 v2: __PbBuffer {
-                    data: ret_w4.as_ptr(),
+                    data: ret_w4 as *const u8,
                     len: ret_w4.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                let _ = Box::into_raw(ret_w4);
+                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w4_owner);
             };
             Ok(())
         }
@@ -13780,30 +13891,38 @@ pub unsafe extern "C" fn perftest_getter_owner_new(
             let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_owner_new(__prebindgen_argument_0);
-            let ret_w1 = perftest_flat::getter_owner_child(&source_value);
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_child(unsafe { &*(ret_w0) });
             let ret_w2 = perftest_flat::getter_child_number(ret_w1);
             let ret_w3: &i64 = ret_w2;
             let ret_w3 = *ret_w3;
             let ret_w4 = perftest_flat::getter_child_name(ret_w1);
             let ret_w5 = ::core::convert::Into::<Vec<u8>>::into((ret_w4).to_string())
                 .into_boxed_slice();
-            let ret_w6 = perftest_flat::getter_owner_leaf(&source_value);
-            let mut ret_w7 = Box::new(::core::clone::Clone::clone(ret_w6));
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w5 = Box::into_raw(ret_w5);
+            let ret_w5_owner = __PbOutputOwner(ret_w5);
+            let ret_w6 = perftest_flat::getter_owner_leaf(unsafe { &*(ret_w0) });
+            let ret_w7: *mut perftest_flat::GetterLeaf = Box::into_raw(
+                Box::new(::core::clone::Clone::clone(ret_w6)),
+            );
+            let ret_w7_owner = __PbOutputOwner(ret_w7);
             let result = perftest_getter_owner_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::GetterOwner,
+                v0: ret_w0,
                 v1: ret_w3,
                 v2: __PbBuffer {
-                    data: ret_w5.as_ptr(),
+                    data: ret_w5 as *const u8,
                     len: ret_w5.len(),
                 },
-                v3: (&mut *ret_w7) as *mut perftest_flat::GetterLeaf,
+                v3: ret_w7,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
-                let _ = Box::into_raw(ret_w5);
-                let _ = Box::into_raw(ret_w7);
+                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w5_owner);
+                ::core::mem::forget(ret_w7_owner);
             };
             Ok(())
         }
@@ -13887,10 +14006,12 @@ pub unsafe extern "C" fn perftest_getter_owner_optional(
                 let ret_w4 = perftest_flat::getter_child_name(ret_w1);
                 let ret_w5 = ::core::convert::Into::<Vec<u8>>::into((ret_w4).to_string())
                     .into_boxed_slice();
+                let ret_w5 = Box::into_raw(ret_w5);
+                let ret_w5_owner = __PbOutputOwner(ret_w5);
                 let ret_w0_values = (
                     ret_w3,
                     __PbBuffer {
-                        data: ret_w5.as_ptr(),
+                        data: ret_w5 as *const u8,
                         len: ret_w5.len(),
                     },
                 );
@@ -13898,7 +14019,7 @@ pub unsafe extern "C" fn perftest_getter_owner_optional(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w5);
+                        ::core::mem::forget(ret_w5_owner);
                     }),
                 )
             } else {
@@ -14152,16 +14273,18 @@ pub unsafe extern "C" fn perftest_getter_owner_read(
             let ret_w2 = perftest_flat::getter_child_name(source_value);
             let ret_w3 = ::core::convert::Into::<Vec<u8>>::into((ret_w2).to_string())
                 .into_boxed_slice();
+            let ret_w3 = Box::into_raw(ret_w3);
+            let ret_w3_owner = __PbOutputOwner(ret_w3);
             let result = perftest_getter_owner_read_result {
                 v0: ret_w1,
                 v1: __PbBuffer {
-                    data: ret_w3.as_ptr(),
+                    data: ret_w3 as *const u8,
                     len: ret_w3.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w3);
+                ::core::mem::forget(ret_w3_owner);
             };
             Ok(())
         }
@@ -14720,16 +14843,22 @@ pub unsafe extern "C" fn perftest_getter_two_clones_new(
             let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::getter_two_clones_new();
             let ret_w0 = perftest_flat::getter_owner_leaf(&source_value);
-            let mut ret_w1 = Box::new(::core::clone::Clone::clone(ret_w0));
-            let mut ret_w2 = Box::new(::core::clone::Clone::clone(ret_w0));
+            let ret_w1: *mut perftest_flat::GetterLeaf = Box::into_raw(
+                Box::new(::core::clone::Clone::clone(ret_w0)),
+            );
+            let ret_w1_owner = __PbOutputOwner(ret_w1);
+            let ret_w2: *mut perftest_flat::GetterLeaf = Box::into_raw(
+                Box::new(::core::clone::Clone::clone(ret_w0)),
+            );
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
             let result = perftest_getter_two_clones_new_result {
-                v0: (&mut *ret_w1) as *mut perftest_flat::GetterLeaf,
-                v1: (&mut *ret_w2) as *mut perftest_flat::GetterLeaf,
+                v0: ret_w1,
+                v1: ret_w2,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w1);
-                let _ = Box::into_raw(ret_w2);
+                ::core::mem::forget(ret_w1_owner);
+                ::core::mem::forget(ret_w2_owner);
             };
             Ok(())
         }
@@ -14897,13 +15026,16 @@ pub unsafe extern "C" fn perftest_niche_choice_new(
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::niche_choice_new(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::NicheChoiceHandle = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_niche_choice_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::NicheChoiceHandle,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -15034,9 +15166,11 @@ pub unsafe extern "C" fn perftest_option_bytes(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
                 let ret_w0_values = (
                     __PbBuffer {
-                        data: ret_w2.as_ptr(),
+                        data: ret_w2 as *const u8,
                         len: ret_w2.len(),
                     },
                 );
@@ -15044,7 +15178,7 @@ pub unsafe extern "C" fn perftest_option_bytes(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -15391,13 +15525,16 @@ pub unsafe extern "C" fn perftest_option_ctor_new(
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_ctor_new(__prebindgen_argument_0);
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::OptionCtor = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_option_ctor_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::OptionCtor,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -15823,15 +15960,16 @@ pub unsafe extern "C" fn perftest_option_nested_resource(
             );
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
-                    let mut ret_w4 = Box::new(ret_w3);
-                    let ret_w2_values = (
-                        (&mut *ret_w4) as *mut perftest_flat::OwnedResource,
+                    let ret_w4: *mut perftest_flat::OwnedResource = Box::into_raw(
+                        Box::new(ret_w3),
                     );
+                    let ret_w4_owner = __PbOutputOwner(ret_w4);
+                    let ret_w2_values = (ret_w4,);
                     (
                         1i32,
                         ret_w2_values,
                         Some(move || {
-                            let _ = Box::into_raw(ret_w4);
+                            ::core::mem::forget(ret_w4_owner);
                         }),
                     )
                 } else {
@@ -16055,15 +16193,16 @@ pub unsafe extern "C" fn perftest_option_resource_echo(
                 __prebindgen_argument_1,
             );
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let mut ret_w2 = Box::new(ret_w1);
-                let ret_w0_values = (
-                    (&mut *ret_w2) as *mut perftest_flat::OwnedResource,
+                let ret_w2: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w1),
                 );
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w0_values = (ret_w2,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -16191,15 +16330,16 @@ pub unsafe extern "C" fn perftest_option_resource_new(
                 __prebindgen_argument_0,
             );
             let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let mut ret_w2 = Box::new(ret_w1);
-                let ret_w0_values = (
-                    (&mut *ret_w2) as *mut perftest_flat::OwnedResource,
+                let ret_w2: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w1),
                 );
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w0_values = (ret_w2,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -16395,9 +16535,11 @@ pub unsafe extern "C" fn perftest_option_slice_echo(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2 = ::core::convert::Into::<Vec<u8>>::into((ret_w1).to_vec())
                     .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
                 let ret_w0_values = (
                     __PbBuffer {
-                        data: ret_w2.as_ptr(),
+                        data: ret_w2 as *const u8,
                         len: ret_w2.len(),
                     },
                 );
@@ -16405,7 +16547,7 @@ pub unsafe extern "C" fn perftest_option_slice_echo(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -16571,9 +16713,11 @@ pub unsafe extern "C" fn perftest_option_str_echo(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2 = ::core::convert::Into::<Vec<u8>>::into((ret_w1).to_string())
                     .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
                 let ret_w0_values = (
                     __PbBuffer {
-                        data: ret_w2.as_ptr(),
+                        data: ret_w2 as *const u8,
                         len: ret_w2.len(),
                     },
                 );
@@ -16581,7 +16725,7 @@ pub unsafe extern "C" fn perftest_option_str_echo(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -16827,9 +16971,11 @@ pub unsafe extern "C" fn perftest_option_text(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
                 let ret_w0_values = (
                     __PbBuffer {
-                        data: ret_w2.as_ptr(),
+                        data: ret_w2 as *const u8,
                         len: ret_w2.len(),
                     },
                 );
@@ -16837,7 +16983,7 @@ pub unsafe extern "C" fn perftest_option_text(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -17133,9 +17279,11 @@ pub unsafe extern "C" fn perftest_optional_fields_echo(
                 {
                     let ret_w9 = ::core::convert::Into::<Vec<u8>>::into(ret_w8)
                         .into_boxed_slice();
+                    let ret_w9 = Box::into_raw(ret_w9);
+                    let ret_w9_owner = __PbOutputOwner(ret_w9);
                     let ret_w7_values = (
                         __PbBuffer {
-                            data: ret_w9.as_ptr(),
+                            data: ret_w9 as *const u8,
                             len: ret_w9.len(),
                         },
                     );
@@ -17143,7 +17291,7 @@ pub unsafe extern "C" fn perftest_optional_fields_echo(
                         1i32,
                         ret_w7_values,
                         Some(move || {
-                            let _ = Box::into_raw(ret_w9);
+                            ::core::mem::forget(ret_w9_owner);
                         }),
                     )
                 } else {
@@ -17266,6 +17414,707 @@ pub unsafe extern "C" fn perftest_owned_resource_drops() -> usize {
         panic!("C binding failed: {}", error);
     }
     let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_checked_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *const perftest_flat::GetterChild,
+    pub v2: i64,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_checked(
+    p0_w1: u8,
+    out1: *mut *const perftest_flat::GetterChild,
+    out2: *mut i64,
+    error: *mut *mut std::ffi::c_char,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut ownership_accepted = false;
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_checked_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        if out2.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_checked(
+                __prebindgen_argument_0,
+            );
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(ret_w0),
+            );
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
+            let ret_w3 = perftest_flat::getter_owner_child(unsafe { &*(ret_w2) });
+            let ret_w4: *const perftest_flat::GetterChild = ret_w3
+                as *const perftest_flat::GetterChild;
+            let ret_w5 = perftest_flat::owner_view_check(unsafe { &*(ret_w2) });
+            let ret_w6 = ret_w5;
+            let result = perftest_owner_view_checked_result {
+                v0: ret_w2,
+                v1: ret_w4,
+                v2: ret_w6,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w2_owner);
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out1, value.v1);
+            std::ptr::write(out2, value.v2);
+            value.v0
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+                if !(value.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw((value.v0) as *mut perftest_flat::GetterOwner),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_owner_view_from_temporary_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *const perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_from_temporary(
+    p0_w1: __PbBuffer,
+    out1: *mut *const perftest_flat::GetterChild,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_from_temporary_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true {
+                Some(
+                    ::core::convert::Into::<
+                        String,
+                    >::into(
+                        std::str::from_utf8(unsafe { __pb_read(p0_w1)? })
+                            .map_err(|_| "invalid UTF-8")?,
+                    ),
+                )
+            } else {
+                None
+            };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let __prebindgen_argument_0 = p0_w0.as_ref().expect("active value");
+            let source_value = perftest_flat::owner_view_from_temporary(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_child(unsafe { &*(ret_w0) });
+            let ret_w2: *const perftest_flat::GetterChild = ret_w1
+                as *const perftest_flat::GetterChild;
+            let result = perftest_owner_view_from_temporary_result {
+                v0: ret_w0,
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_maybe_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *const perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_maybe(
+    p0_w1: u8,
+    out1: *mut *const perftest_flat::GetterChild,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_maybe_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_maybe(__prebindgen_argument_0);
+            let (_, (ret_w0_value0, ret_w0_value1), ret_w0_commit) = if let Some(
+                ret_w1,
+            ) = source_value {
+                let ret_w2: *mut perftest_flat::GetterOwner = Box::into_raw(
+                    Box::new(ret_w1),
+                );
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w3 = perftest_flat::getter_owner_child(unsafe { &*(ret_w2) });
+                let ret_w4: *const perftest_flat::GetterChild = ret_w3
+                    as *const perftest_flat::GetterChild;
+                let ret_w0_values = (ret_w2, ret_w4);
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        ::core::mem::forget(ret_w2_owner);
+                    }),
+                )
+            } else {
+                (0i32, (std::ptr::null_mut(), std::ptr::null()), None)
+            };
+            let result = perftest_owner_view_maybe_result {
+                v0: ret_w0_value0,
+                v1: ret_w0_value1,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_mutable_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *mut perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_mutable(
+    p0_w1: u8,
+    out1: *mut *mut perftest_flat::GetterChild,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_mutable_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_mutable(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_child_mut(unsafe {
+                &mut *(ret_w0)
+            });
+            let ret_w2: *mut perftest_flat::GetterChild = ret_w1
+                as *mut perftest_flat::GetterChild;
+            let result = perftest_owner_view_mutable_result {
+                v0: ret_w0,
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_optional_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *const perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_optional(
+    p0_w1: u8,
+    out1: *mut *const perftest_flat::GetterChild,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_optional_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_optional(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_optional(unsafe { &*(ret_w0) });
+            let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
+                let ret_w4: *const perftest_flat::GetterChild = ret_w3
+                    as *const perftest_flat::GetterChild;
+                let ret_w2_values = (ret_w4,);
+                (1i32, ret_w2_values, Some(move || {}))
+            } else {
+                (0i32, (std::ptr::null(),), None)
+            };
+            let result = perftest_owner_view_optional_result {
+                v0: ret_w0,
+                v1: ret_w2_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+                if let Some(ret_w2_action) = ret_w2_commit {
+                    ret_w2_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_optional_mut_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *mut perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_optional_mut(
+    p0_w1: u8,
+    out1: *mut *mut perftest_flat::GetterChild,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_optional_mut_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_optional_mut(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_optional_mut(unsafe {
+                &mut *(ret_w0)
+            });
+            let (_, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w1 {
+                let ret_w4: *mut perftest_flat::GetterChild = ret_w3
+                    as *mut perftest_flat::GetterChild;
+                let ret_w2_values = (ret_w4,);
+                (1i32, ret_w2_values, Some(move || {}))
+            } else {
+                (0i32, (std::ptr::null_mut(),), None)
+            };
+            let result = perftest_owner_view_optional_mut_result {
+                v0: ret_w0,
+                v1: ret_w2_value0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+                if let Some(ret_w2_action) = ret_w2_commit {
+                    ret_w2_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_reordered_result {
+    pub v0: *const perftest_flat::GetterChild,
+    pub v1: *mut perftest_flat::GetterOwner,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_reordered(
+    p0_w1: u8,
+    out1: *mut *mut perftest_flat::GetterOwner,
+) -> *const perftest_flat::GetterChild {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_reordered_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_reordered(
+                __prebindgen_argument_0,
+            );
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_child(unsafe { &*(ret_w0) });
+            let ret_w2: *const perftest_flat::GetterChild = ret_w1
+                as *const perftest_flat::GetterChild;
+            let result = perftest_owner_view_reordered_result {
+                v0: ret_w2,
+                v1: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_owner_view_rollback_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *const perftest_flat::GetterChild,
+    pub v2: *mut perftest_flat::OwnedResource,
+}
+/**# Safety
+Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_rollback(
+    out1: *mut *const perftest_flat::GetterChild,
+    out2: *mut *mut perftest_flat::OwnedResource,
+    error: *mut *mut std::ffi::c_char,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut ownership_accepted = false;
+    #[allow(unused_mut)]
+    let mut error_reported = false;
+    let mut success_committed = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_rollback_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    let outcome = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        if out2.is_null() {
+            return Err("null success-output pointer".into());
+        }
+        {
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let source_value = perftest_flat::owner_view_rollback();
+            let ret_w0 = match source_value {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(ret_w1) => {
+                    return Err({
+                        if !error.is_null() {
+                            unsafe {
+                                __pb_report_message(
+                                    perftest_flat::callback_return_error_message(&ret_w1),
+                                    error,
+                                )
+                            };
+                        }
+                        error_reported = true;
+                        String::new()
+                    });
+                }
+            };
+            let ret_w2: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(ret_w0),
+            );
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
+            let ret_w3 = perftest_flat::getter_owner_child(unsafe { &*(ret_w2) });
+            let ret_w4: *const perftest_flat::GetterChild = ret_w3
+                as *const perftest_flat::GetterChild;
+            let ret_w5 = perftest_flat::owner_view_late(unsafe { &*(ret_w2) });
+            let ret_w6 = perftest_flat::c_panic_output_value(&ret_w5);
+            let ret_w7: *mut perftest_flat::OwnedResource = Box::into_raw(
+                Box::new(ret_w6),
+            );
+            let ret_w7_owner = __PbOutputOwner(ret_w7);
+            let result = perftest_owner_view_rollback_result {
+                v0: ret_w2,
+                v1: ret_w4,
+                v2: ret_w7,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w2_owner);
+                ::core::mem::forget(ret_w7_owner);
+                success_committed = true;
+            };
+            Ok(())
+        }
+    });
+    match outcome {
+        Ok(()) => {
+            let value = storage.assume_init();
+            std::ptr::write(out1, value.v1);
+            std::ptr::write(out2, value.v2);
+            value.v0
+        }
+        Err(message) => {
+            if success_committed {
+                let value = storage.assume_init();
+                if !(value.v0).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw((value.v0) as *mut perftest_flat::GetterOwner),
+                        );
+                        Ok(())
+                    });
+                }
+                if !(value.v2).is_null() {
+                    let _ = ::prebindgen_runtime::boundary(|| {
+                        drop(
+                            Box::from_raw(
+                                (value.v2) as *mut perftest_flat::OwnedResource,
+                            ),
+                        );
+                        Ok(())
+                    });
+                }
+            }
+            if !error_reported && !error.is_null() {
+                unsafe { __pb_report_message(message, error) };
+            }
+            std::ptr::null_mut()
+        }
+    }
+}
+#[repr(C)]
+pub struct perftest_owner_view_shared_result {
+    pub v0: *mut perftest_flat::GetterOwner,
+    pub v1: *const perftest_flat::GetterChild,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owner_view_shared(
+    p0_w1: u8,
+    out1: *mut *const perftest_flat::GetterChild,
+) -> *mut perftest_flat::GetterOwner {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_owner_view_shared_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
+            let _: () = {};
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::owner_view_shared(__prebindgen_argument_0);
+            let ret_w0: *mut perftest_flat::GetterOwner = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::getter_owner_child(unsafe { &*(ret_w0) });
+            let ret_w2: *const perftest_flat::GetterChild = ret_w1
+                as *const perftest_flat::GetterChild;
+            let result = perftest_owner_view_shared_result {
+                v0: ret_w0,
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
     value.v0
 }
 #[repr(C)]
@@ -17482,9 +18331,11 @@ pub unsafe extern "C" fn perftest_plain_note_echo(
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
                 let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
                     .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
                 let ret_w0_values = (
                     __PbBuffer {
-                        data: ret_w2.as_ptr(),
+                        data: ret_w2 as *const u8,
                         len: ret_w2.len(),
                     },
                 );
@@ -17492,7 +18343,7 @@ pub unsafe extern "C" fn perftest_plain_note_echo(
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        let _ = Box::into_raw(ret_w2);
+                        ::core::mem::forget(ret_w2_owner);
                     }),
                 )
             } else {
@@ -18454,13 +19305,16 @@ pub unsafe extern "C" fn perftest_report_into_struct(
             let source_value = perftest_flat::report_into_struct(
                 __prebindgen_argument_0,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::ReportStruct = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_report_into_struct_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::ReportStruct,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -18571,15 +19425,17 @@ pub unsafe extern "C" fn perftest_report_label(
             let source_value = perftest_flat::report_label(__prebindgen_argument_0);
             let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
                 .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_report_label_result {
                 v0: __PbBuffer {
-                    data: ret_w0.as_ptr(),
+                    data: ret_w0 as *const u8,
                     len: ret_w0.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -18665,36 +19521,41 @@ pub unsafe extern "C" fn perftest_report_new(
                 __prebindgen_argument_1,
                 __prebindgen_argument_2,
             );
-            let ret_w0 = perftest_flat::report_to_struct(&source_value);
-            let ret_w1 = &(ret_w0);
-            let ret_w2 = perftest_flat::summary_count(&ret_w1.summary);
-            let ret_w3 = ret_w2;
-            let ret_w4 = perftest_flat::summary_total(&ret_w1.summary);
-            let ret_w5 = ret_w4;
-            let ret_w6 = perftest_flat::stamp_secs(&ret_w1.origin);
-            let ret_w7 = ret_w6;
-            let ret_w8 = perftest_flat::stamp_nanos(&ret_w1.origin);
-            let ret_w9 = ret_w8;
-            let ret_w10 = ::core::convert::Into::<
+            let ret_w0: *mut perftest_flat::Report = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w1 = perftest_flat::report_to_struct(unsafe { &*(ret_w0) });
+            let ret_w2 = &(ret_w1);
+            let ret_w3 = perftest_flat::summary_count(&ret_w2.summary);
+            let ret_w4 = ret_w3;
+            let ret_w5 = perftest_flat::summary_total(&ret_w2.summary);
+            let ret_w6 = ret_w5;
+            let ret_w7 = perftest_flat::stamp_secs(&ret_w2.origin);
+            let ret_w8 = ret_w7;
+            let ret_w9 = perftest_flat::stamp_nanos(&ret_w2.origin);
+            let ret_w10 = ret_w9;
+            let ret_w11 = ::core::convert::Into::<
                 Vec<u8>,
-            >::into(::core::clone::Clone::clone(&ret_w1.label))
+            >::into(::core::clone::Clone::clone(&ret_w2.label))
                 .into_boxed_slice();
-            let mut ret_w11 = Box::new(source_value);
+            let ret_w11 = Box::into_raw(ret_w11);
+            let ret_w11_owner = __PbOutputOwner(ret_w11);
             let result = perftest_report_new_result {
-                v0: ret_w3,
-                v1: ret_w5,
-                v2: ret_w7,
-                v3: ret_w9,
+                v0: ret_w4,
+                v1: ret_w6,
+                v2: ret_w8,
+                v3: ret_w10,
                 v4: __PbBuffer {
-                    data: ret_w10.as_ptr(),
-                    len: ret_w10.len(),
+                    data: ret_w11 as *const u8,
+                    len: ret_w11.len(),
                 },
-                v5: (&mut *ret_w11) as *mut perftest_flat::Report,
+                v5: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w10);
-                let _ = Box::into_raw(ret_w11);
+                ::core::mem::forget(ret_w11_owner);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -19110,13 +19971,16 @@ pub unsafe extern "C" fn perftest_result_owned(
                     });
                 }
             };
-            let mut ret_w2 = Box::new(ret_w0);
+            let ret_w2: *mut perftest_flat::OwnedResource = Box::into_raw(
+                Box::new(ret_w0),
+            );
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
             let result = perftest_result_owned_result {
-                v0: (&mut *ret_w2) as *mut perftest_flat::OwnedResource,
+                v0: ret_w2,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
+                ::core::mem::forget(ret_w2_owner);
                 success_committed = true;
             };
             Ok(())
@@ -19395,15 +20259,17 @@ pub unsafe extern "C" fn perftest_result_text(
             };
             let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w0)
                 .into_boxed_slice();
+            let ret_w2 = Box::into_raw(ret_w2);
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
             let result = perftest_result_text_result {
                 v0: __PbBuffer {
-                    data: ret_w2.as_ptr(),
+                    data: ret_w2 as *const u8,
                     len: ret_w2.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
+                ::core::mem::forget(ret_w2_owner);
                 success_committed = true;
             };
             Ok(())
@@ -19572,10 +20438,12 @@ pub unsafe extern "C" fn perftest_sequence_late_drop_each(
             let ret_w3_source = ret_w2;
             let ret_w5 = ret_w3_source.len();
             for (ret_w6, ret_w4) in ret_w3_source.into_iter().enumerate() {
-                let mut ret_w7 = Box::new(ret_w4);
-                let __pb_callback_value_0 = (&mut *ret_w7)
-                    as *mut perftest_flat::OwnedResource;
-                let _ = Box::into_raw(ret_w7);
+                let ret_w7: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w4),
+                );
+                let ret_w7_owner = __PbOutputOwner(ret_w7);
+                let __pb_callback_value_0 = ret_w7;
+                ::core::mem::forget(ret_w7_owner);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -19685,16 +20553,20 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
                 let ret_w8 = ret_w7.number;
                 let ret_w9 = ::core::convert::Into::<Vec<u8>>::into(ret_w7.text)
                     .into_boxed_slice();
-                let mut ret_w10 = Box::new(ret_w7.resource);
+                let ret_w9 = Box::into_raw(ret_w9);
+                let ret_w9_owner = __PbOutputOwner(ret_w9);
+                let ret_w10: *mut perftest_flat::OwnedResource = Box::into_raw(
+                    Box::new(ret_w7.resource),
+                );
+                let ret_w10_owner = __PbOutputOwner(ret_w10);
                 let __pb_callback_value_0 = ret_w8;
                 let __pb_callback_value_1 = __PbBuffer {
-                    data: ret_w9.as_ptr(),
+                    data: ret_w9 as *const u8,
                     len: ret_w9.len(),
                 };
-                let __pb_callback_value_2 = (&mut *ret_w10)
-                    as *mut perftest_flat::OwnedResource;
-                let _ = Box::into_raw(ret_w9);
-                let _ = Box::into_raw(ret_w10);
+                let __pb_callback_value_2 = ret_w10;
+                ::core::mem::forget(ret_w9_owner);
+                ::core::mem::forget(ret_w10_owner);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -19803,9 +20675,11 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
                 {
                     let ret_w16 = ::core::convert::Into::<Vec<u8>>::into(ret_w15)
                         .into_boxed_slice();
+                    let ret_w16 = Box::into_raw(ret_w16);
+                    let ret_w16_owner = __PbOutputOwner(ret_w16);
                     let ret_w14_values = (
                         __PbBuffer {
-                            data: ret_w16.as_ptr(),
+                            data: ret_w16 as *const u8,
                             len: ret_w16.len(),
                         },
                     );
@@ -19813,7 +20687,7 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
                         1i32,
                         ret_w14_values,
                         Some(move || {
-                            let _ = Box::into_raw(ret_w16);
+                            ::core::mem::forget(ret_w16_owner);
                         }),
                     )
                 } else {
@@ -20831,13 +21705,16 @@ pub unsafe extern "C" fn perftest_storage_new() -> *mut perftest_flat::Storage {
         {
             let mut __prebindgen_resources: Vec<(usize, bool)> = Vec::new();
             let source_value = perftest_flat::storage_new();
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::Storage = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_storage_new_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::Storage,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -21230,13 +22107,16 @@ pub unsafe extern "C" fn perftest_storage_summary_handle(
             let source_value = perftest_flat::storage_summary_handle(
                 __prebindgen_argument_0,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::Summary = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_storage_summary_handle_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::Summary,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -21425,13 +22305,14 @@ pub unsafe extern "C" fn perftest_storage_try_with_label(
                     });
                 }
             };
-            let mut ret_w2 = Box::new(ret_w0);
+            let ret_w2: *mut perftest_flat::Storage = Box::into_raw(Box::new(ret_w0));
+            let ret_w2_owner = __PbOutputOwner(ret_w2);
             let result = perftest_storage_try_with_label_result {
-                v0: (&mut *ret_w2) as *mut perftest_flat::Storage,
+                v0: ret_w2,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w2);
+                ::core::mem::forget(ret_w2_owner);
                 success_committed = true;
             };
             Ok(())
@@ -21506,13 +22387,16 @@ pub unsafe extern "C" fn perftest_storage_with_payload(
             let source_value = perftest_flat::storage_with_payload(
                 __prebindgen_argument_0,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::Storage = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_storage_with_payload_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::Storage,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -21608,15 +22492,17 @@ pub unsafe extern "C" fn perftest_string_new(p0_w1: __PbBuffer) -> __PbBuffer {
             let source_value = perftest_flat::string_new(__prebindgen_argument_0);
             let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
                 .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_string_new_result {
                 v0: __PbBuffer {
-                    data: ret_w0.as_ptr(),
+                    data: ret_w0 as *const u8,
                     len: ret_w0.len(),
                 },
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }
@@ -22239,13 +23125,16 @@ pub unsafe extern "C" fn perftest_unsigned_round_trip(
                 __prebindgen_argument_3,
                 __prebindgen_argument_4,
             );
-            let mut ret_w0 = Box::new(source_value);
+            let ret_w0: *mut perftest_flat::Unsigned = Box::into_raw(
+                Box::new(source_value),
+            );
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_unsigned_round_trip_result {
-                v0: (&mut *ret_w0) as *mut perftest_flat::Unsigned,
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                let _ = Box::into_raw(ret_w0);
+                ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
         }

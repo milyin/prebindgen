@@ -143,10 +143,13 @@ Getters used by output expansions may return shared values such as `&Child`,
 `&str`, `&[Row]`, `Option<&Child>` or `&Option<Child>`. A borrowed getter result
 uses the referent's output defaults, so nested getters and record projections
 work without cloning the owner or an intermediate object. Text and fields are
-copied as required by the foreign representation; a handle leaf clones its
-referent into an independent owning allocation and requires `Clone`. Borrowed
+copied as required by the foreign representation. JNI handle leaves clone their
+referents into independent owning allocations and require `Clone`. C opaque
+reference leaves are loans: a getter expansion must retain its owner as described
+below, or explicitly request an independent owning copy. Borrowed
 results cannot satisfy an owned projection. Each getter runs once per configured
-view, and its output conversion finishes before another view moves the owner.
+view. Ordinary conversions finish observations before consuming the owner;
+C owner-backed views first place the owner in its final allocation.
 These rules also apply to output projections of callback arguments.
 
 Plain reference returns use the adapter's direct representation unless an
@@ -160,10 +163,9 @@ pass a borrowed pointer to a consuming function. JNI still
 clones opaque references into independent owning handles.
 For example, a function returning `&Child` can
 use `.expand_return(expand_return!(Child).field(fun!(child_name)))` to deliver a
-name instead of a child pointer/handle. Getter expansions and explicit borrowed
-projections still follow their existing ownership policy: their owner may be
-temporary and cannot lend pointers past the call. Mutable getter projections,
-mutable callback arguments, and mutable value/collection conversions requiring
+name instead of a child pointer/handle. Explicit borrowed projections select
+independent owning copies for opaque leaves. Mutable callback arguments and
+mutable value/collection conversions requiring
 copying or write-back remain unsupported. JNI rejects mutable reference returns
 instead of replacing them with independently owned copies.
 For direct loans, reference inputs must use persistent opaque pointers or borrowed
@@ -183,9 +185,44 @@ move and exclusive access use mutable C pointers, but only move outputs transfer
 ownership and participate in allocation cleanup. This is generation metadata;
 the emitted C pointers have no extra wrapper, ownership flag or runtime tracking.
 
+For C, an owning identity plus getter views returns the original owner and
+borrowed pointers into that owner, without cloning the children:
+
+```rust,ignore
+.function(fun!(owner_new).expand_return(expand_return!(Owner)
+    .field_self_into()
+    .field(fun!(owner_child))))
+```
+
+With opaque `Owner`/`Child` declarations and `owner_child(&Owner) -> &Child`, the
+C signature is `owner *owner_new(..., const child **out_child)`. The generated
+wrapper places the owner in its final allocation before invoking the getters.
+Declaring the getter before `.field_self_into()` changes the C output order, not
+that placement order. `Option` and `Result` wrappers preserve these relationships.
+A mutable getter taking `&mut Owner` and returning `&mut Child` produces `child *`;
+it must be the only getter view, because later owner borrows could invalidate it.
+Multiple shared getter views are supported. Nested/other sibling view operations
+are diagnosed rather than falling back to implicit child copies.
+
+A borrowed opaque getter output without a retained owner is rejected unless its
+source reference is `'static`. Use an explicit owning conversion such as
+`.view(Output::getter("owner_child", Output::Projected(Projection::borrowed())))`
+if an independent copy is intended. Direct pointer outputs of references supplied
+by a Rust function keep the existing borrow contract. Expanding those references
+with getters also requires an explicit owning conversion for opaque children;
+this includes type-wide expansion defaults and callback argument expansions. JNI retains
+its owning-handle conversion and does not implement these C owner-backed loans.
+
+Only the owner is destroyed or consumed by C; every borrowed child becomes invalid
+when its owner is destroyed, moved or otherwise invalidates that child. Mutable
+loans require exclusive access. The normal owner allocation has a Rust cleanup
+guard until ownership transfer; children add no allocation, clone, reference count,
+runtime lifetime registry or C wrapper object. Failure before or after commit
+reclaims owning allocations and never destroys borrowed children separately.
+
 A borrowed occurrence cannot satisfy an owned projection. Unknown field overrides
-and duplicate consuming views are rejected. Observing getters run before consuming
-views regardless of declaration order. Rust checks `Clone` requirements and rejects
+and duplicate consuming views are rejected. Without a retained output allocation,
+observing getters run before consuming views regardless of declaration order. Rust checks `Clone` requirements and rejects
 field moves from records implementing `Drop`. Native conversion or delivery failure
 drops unpublished resources; Kotlin delivery failure closes transferred handles,
 including nested members. Handle-containing records remain unsupported as inputs.

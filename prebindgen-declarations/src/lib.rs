@@ -428,8 +428,9 @@ impl<P> Output<P> {
     }
     /// Observe a value through a source getter and convert the getter's result.
     ///
-    /// The getter must take exactly `&T` for the current type `T`, and return an
-    /// owned value. Binding rejects mismatched signatures.
+    /// The getter takes `&T` for the current type `T`; adapters retaining a final
+    /// output owner may also support `&mut T`. Its result uses the selected
+    /// output conversion, including supported reference results.
     ///
     /// # Arguments
     ///
@@ -445,7 +446,8 @@ impl<P> Output<P> {
     ///
     /// `parts` holds one recipe per view of the value; their wires appear in this
     /// order. Binding rejects an empty list or more than one consuming part. The
-    /// framework uses [`Codec::consumes`] to order observations before a move.
+    /// framework uses [`Codec::consumes`] to order observations before a move,
+    /// unless [`Codec::output_owner`] first retains the final output allocation.
     pub fn combine(parts: impl IntoIterator<Item = Output<P>>) -> Self {
         Self::Combine(parts.into_iter().collect())
     }
@@ -1052,6 +1054,33 @@ pub trait Codec {
         _value: TokenStream,
     ) -> Result<Option<CodecOutput<Self>>> {
         Ok(None)
+    }
+    /// Place an owned value in its final foreign allocation before getter views.
+    ///
+    /// Returns its owning output conversion and a Rust `*mut ty` expression from
+    /// which getter receivers can be borrowed. That address must remain valid
+    /// across conversion, delivery and ownership commit. Until commit, the plan
+    /// must reclaim the allocation on failure. The default keeps ordinary output
+    /// conversion and observation-before-move ordering.
+    fn output_owner(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+    ) -> Result<Option<(CodecOutput<Self>, TokenStream)>> {
+        Ok(None)
+    }
+    /// Check whether a getter's converted outputs can outlive its temporary owner.
+    /// Owner-backed views are compiled separately and already retain their owner.
+    fn validate_getter_output(
+        &self,
+        _ty: &Type,
+        _plan: &CodecOutput<Self>,
+        _extra: &Self::Extra,
+    ) -> Result<()> {
+        Ok(())
     }
 }
 /// A flat model whose slots contain only conversion data for wrapper emission.
@@ -1680,8 +1709,8 @@ impl<'a, C: Codec> Compiler<'a, C> {
             self.output(ty, recipe, extra, value, borrowed)
         }
     }
-    // Only references supplied by the source return may escape as loans. Getter
-    // expansions use output() below: their owner may be a generated temporary.
+    // Preserve reference semantics for source returns and getter results.
+    // The codec checks whether a getter's owner survives the generated call.
     fn output_return(
         &self,
         ty: &Type,
@@ -1691,6 +1720,42 @@ impl<'a, C: Codec> Compiler<'a, C> {
         borrowed: bool,
     ) -> Result<CodecOutput<C>> {
         if !borrowed {
+            if matches!(ty, Type::Reference(_)) {
+                if let Output::Combine(parts) = recipe {
+                    if parts.is_empty() {
+                        return Err("an output combination needs at least one part".into());
+                    }
+                    if mutable_reference(ty) && parts.len() > 1 {
+                        return Err(
+                            "a mutable reference cannot supply multiple output views".into()
+                        );
+                    }
+                    let mut result = OutputPlan {
+                        fallible: false,
+                        context: Default::default(),
+                        delivery: Default::default(),
+                        commit: TokenStream::new(),
+                        statements: TokenStream::new(),
+                        values: vec![],
+                        outcomes: prebindgen_flat::Outcomes {
+                            success: WireNode::Branch {
+                                controls: vec![],
+                                children: vec![],
+                                meta: self.codec.group_metadata(),
+                            },
+                            source_error: None,
+                            binding_failure: None,
+                        },
+                    };
+                    for (index, part) in parts.iter().enumerate() {
+                        let mut child =
+                            self.output_return(ty, part, extra, value.clone(), false)?;
+                        self.prefix(&mut child.outcomes.success, ComponentSegment::View(index));
+                        append(&mut result, child)?;
+                    }
+                    return Ok(result);
+                }
+            }
             if let (Type::Reference(reference), Output::Leaf) = (ty, recipe) {
                 let wire = self.name();
                 if let Some(plan) = self.codec.output_return_reference(
@@ -1949,7 +2014,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     quote!(&#value)
                 };
                 out.statements = quote!(let #v=#path(#arg););
-                let mut child = self.output(&f.ret.ty, output, extra, quote!(#v), false)?;
+                let mut child = self.output_return(&f.ret.ty, output, extra, quote!(#v), false)?;
+                self.codec
+                    .validate_getter_output(&f.ret.ty, &child, extra)?;
                 self.prefix(
                     &mut child.outcomes.success,
                     ComponentSegment::Getter(function.clone()),
@@ -1967,6 +2034,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     > 1
                 {
                     return Err("a combination cannot consume the same value twice".into());
+                }
+                if !borrowed {
+                    if let Some(plan) = self.output_owner_views(ty, parts, extra, value.clone())? {
+                        return Ok(plan);
+                    }
                 }
                 let mut bodies = Vec::new();
                 for (index, child) in parts.iter().enumerate() {
@@ -1991,6 +2063,122 @@ impl<'a, C: Codec> Compiler<'a, C> {
 
         Ok(out)
     }
+
+    fn output_owner_views(
+        &self,
+        ty: &Type,
+        parts: &[Output],
+        extra: &C::Extra,
+        value: TokenStream,
+    ) -> Result<Option<CodecOutput<C>>> {
+        let owner = parts.iter().position(|part| {
+            matches!(part,
+            Output::Projected(p) if p.mode == ProjectionMode::Owned && p.fields.is_empty())
+                || matches!(part, Output::Leaf) && self.codec.consumes(self.flat, ty, extra)
+        });
+        let Some(owner) = owner else {
+            return Ok(None);
+        };
+        if parts.len() < 2 {
+            return Ok(None);
+        }
+        // Reserve the same owner wire that the ordinary consuming leaf uses.
+        let next = self.next.get();
+        let wire = self.name();
+        let Some((mut owned, pointer)) =
+            self.codec.output_owner(self.flat, ty, extra, wire, value)?
+        else {
+            self.next.set(next);
+            return Ok(None);
+        };
+        if parts
+            .iter()
+            .enumerate()
+            .any(|(i, part)| i != owner && !matches!(part, Output::Getter { .. }))
+        {
+            return Err("an owner-backed output combination supports only the owning identity and getter views".into());
+        }
+        let prepare_owner = std::mem::take(&mut owned.statements);
+        let mut result = OutputPlan {
+            fallible: false,
+            context: Default::default(),
+            delivery: Default::default(),
+            commit: TokenStream::new(),
+            statements: TokenStream::new(),
+            values: vec![],
+            outcomes: prebindgen_flat::Outcomes {
+                success: WireNode::Branch {
+                    controls: vec![],
+                    children: vec![],
+                    meta: self.codec.group_metadata(),
+                },
+                source_error: None,
+                binding_failure: None,
+            },
+        };
+        let mut owner_plan = Some(owned);
+        for (index, part) in parts.iter().enumerate() {
+            let mut plan = if index == owner {
+                owner_plan.take().unwrap()
+            } else {
+                let Output::Getter { function, output } = part else {
+                    unreachable!()
+                };
+                let f = self.flat.function(function)?;
+                if f.params.len() != 1 {
+                    return Err(format!(
+                        "getter `{function}` must borrow its returned owner"
+                    ));
+                }
+                let receiver = &f.params[0].ty.ty;
+                let mutable_receiver =
+                    matches!(receiver, Type::Reference(r) if r.mutability.is_some());
+                let mutable = mutable_receiver || mutable_reference(&f.ret.ty);
+                if mutable && parts.len() != 2 {
+                    return Err("a mutable owner getter must be the only getter view; simultaneous owner borrows could invalidate earlier views".into());
+                }
+                let expected: Type = if mutable_receiver {
+                    syn::parse_quote!(&mut #ty)
+                } else {
+                    syn::parse_quote!(&#ty)
+                };
+                if !same_type(receiver, &expected) {
+                    return Err(format!(
+                        "getter `{function}` must borrow its returned owner"
+                    ));
+                }
+                let source = self.name();
+                let path = &f.path;
+                let argument = if mutable_receiver {
+                    quote!(unsafe { &mut *(#pointer) })
+                } else {
+                    quote!(unsafe { &*(#pointer) })
+                };
+                let mut plan =
+                    self.output_return(&f.ret.ty, output, extra, quote!(#source), false)?;
+                plan.statements = {
+                    let body = plan.statements;
+                    quote!(let #source = #path(#argument); #body)
+                };
+                self.prefix(
+                    &mut plan.outcomes.success,
+                    ComponentSegment::Getter(function.clone()),
+                );
+                plan
+            };
+            self.prefix(&mut plan.outcomes.success, ComponentSegment::View(index));
+            append(&mut result, plan)?;
+        }
+        result.statements = {
+            let views = result.statements;
+            quote!(#prepare_owner #views)
+        };
+        Ok(Some(result))
+    }
+}
+fn mutable_reference(ty: &Type) -> bool {
+    matches!(ty, Type::Reference(r) if r.mutability.is_some())
+        || option_inner(ty).is_some_and(mutable_reference)
 }
 fn validate_nested_output<W: prebindgen_flat::WireKind, C, N, B>(
     plan: &OutputPlan<W, C, N, B>,

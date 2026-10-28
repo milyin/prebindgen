@@ -9,6 +9,95 @@ fn main() {
         .opaque_ptr("getter_owner", pq!(GetterOwner))
         .opaque_ptr("getter_child", pq!(GetterChild))
         .opaque_ptr("getter_leaf", pq!(GetterLeaf))
+        // This fixture intentionally requests independently owned leaf copies.
+        .expand(expand_return!(GetterLeaf).field_self_ref())
+        .function(fun!(owner_view_shared).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(
+            fun!(owner_view_reordered).expand_return(
+                expand_return!(GetterOwner)
+                    .view(prebindgen_declarations::Output::getter(
+                        "getter_owner_child",
+                        prebindgen_declarations::Output::Leaf,
+                    ))
+                    .field_self_into(),
+            ),
+        )
+        .panic()
+        .function(fun!(owner_view_mutable).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child_mut",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_optional).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_optional",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_optional_mut).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_optional_mut",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_maybe).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(fun!(owner_view_from_temporary).expand_return(
+            expand_return!(GetterOwner).field_self_into().view(
+                prebindgen_declarations::Output::getter(
+                    "getter_owner_child",
+                    prebindgen_declarations::Output::Leaf,
+                ),
+            ),
+        ))
+        .panic()
+        .function(
+            fun!(owner_view_checked).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .view(prebindgen_declarations::Output::getter(
+                        "getter_owner_child",
+                        prebindgen_declarations::Output::Leaf,
+                    ))
+                    .field(fun!(owner_view_check)),
+            ),
+        )
+        .function(
+            fun!(owner_view_rollback).expand_return(
+                expand_return!(GetterOwner)
+                    .field_self_into()
+                    .view(prebindgen_declarations::Output::getter(
+                        "getter_owner_child",
+                        prebindgen_declarations::Output::Leaf,
+                    ))
+                    .field(fun!(owner_view_late)),
+            ),
+        )
         .expand(
             expand_return!(GetterChild)
                 .field(fun!(getter_child_number))
@@ -72,8 +161,12 @@ fn main() {
                 prebindgen_declarations::Output::getter(
                     "getter_owner_leaf",
                     prebindgen_declarations::Output::combine([
-                        prebindgen_declarations::Output::Leaf,
-                        prebindgen_declarations::Output::Leaf,
+                        prebindgen_declarations::Output::Projected(
+                            prebindgen_declarations::Projection::borrowed(),
+                        ),
+                        prebindgen_declarations::Output::Projected(
+                            prebindgen_declarations::Projection::borrowed(),
+                        ),
                     ]),
                 ),
             )),
