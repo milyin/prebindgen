@@ -396,7 +396,7 @@ void perftest_drop_collection_error(perftest_collection_error *error);
 /* Field return.omitted_opt: no boundary values. */
 /* Field return.omitted_vec: no boundary values. */
 int64_t perftest_api_record_new(void);
-/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 /* Option option0: return value == NULL means None; non-null means Some. */
 const perftest_summary * perftest_archive_latest(const perftest_archive * p0_w1);
 perftest_archive * perftest_archive_new(void);
@@ -1015,6 +1015,7 @@ perftest_enum_payload * perftest_enum_payload_new(double p0_w1);
 perftest_priority perftest_enum_record_echo(perftest_priority p0_w2, perftest_code p0_w6, perftest_code *out1);
 perftest_buffer perftest_getter_child_name(const perftest_getter_child * p0_w1);
 int64_t perftest_getter_child_number(const perftest_getter_child * p0_w1);
+void perftest_getter_child_set_number(perftest_getter_child * p0_w1, int64_t p1_w1);
 typedef struct {
     uintptr_t v0;
 } perftest_getter_counts_ret_w0_row;
@@ -1027,27 +1028,41 @@ perftest_getter_counts_ret_w0_rows perftest_getter_counts(void);
 /* Field return.text: *out2. */
 perftest_getter_owner * perftest_getter_fields_new(int64_t *out1, perftest_buffer *out2);
 int64_t perftest_getter_leaf_id(const perftest_getter_leaf * p0_w1);
-/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 const perftest_getter_child * perftest_getter_owner_child(const perftest_getter_owner * p0_w1);
 uint8_t perftest_getter_owner_child_matches(const perftest_getter_owner * p0_w1, const perftest_getter_child * p1_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+perftest_getter_child * perftest_getter_owner_child_mut(perftest_getter_owner * p0_w1);
 int64_t perftest_getter_owner_id(const perftest_getter_owner * p0_w1);
 perftest_getter_owner * perftest_getter_owner_new(uint8_t p0_w1, int64_t *out1, perftest_buffer *out2, perftest_getter_leaf * *out3);
 /* Option option0: return value: 0 = None, 1 = Some; other active flags are errors. */
 int32_t perftest_getter_owner_optional(const perftest_getter_owner * p0_w1, int64_t *out1, perftest_buffer *out2);
-/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: return value == NULL means None; non-null means Some. */
+perftest_getter_child * perftest_getter_owner_optional_mut(perftest_getter_owner * p0_w1);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 /* Option option0: return value == NULL means None; non-null means Some. */
 const perftest_getter_child * perftest_getter_owner_optional_pointer(const perftest_getter_owner * p0_w1);
 int64_t perftest_getter_owner_read(const perftest_getter_owner * p0_w1, perftest_buffer *out1);
-/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 /* Result: success field v0 is returned directly; NULL means failure. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 const perftest_getter_child * perftest_getter_owner_try_child(const perftest_getter_owner * p0_w1, uint8_t p1_w1, char * *error);
-/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Result: success field v0 is returned directly; NULL means failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+perftest_getter_child * perftest_getter_owner_try_child_mut(perftest_getter_owner * p0_w1, uint8_t p1_w1, char * *error);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 /* Option option0: *out0 == NULL means None; non-null means Some. */
 /* Result: true = success; false = failure. Success outputs are unchanged on failure. */
 /* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
 bool perftest_getter_owner_try_optional_child(const perftest_getter_owner * p0_w1, int32_t p1_w1, const perftest_getter_child * *out0, char * *error);
-/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
+/* Option option0: *out0 == NULL means None; non-null means Some. */
+/* Result: true = success; false = failure. Success outputs are unchanged on failure. */
+/* error may be NULL to discard details. Failure initializes nonnull error with caller-owned data (or an empty record if error conversion fails). Success leaves error unchanged. Free a prior error before reusing its storage. All output/ownership/error storage must be disjoint. */
+bool perftest_getter_owner_try_optional_mut(perftest_getter_owner * p0_w1, int32_t p1_w1, perftest_getter_child * *out0, char * *error);
+/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */
 const perftest_getter_child * perftest_getter_static_child(perftest_buffer p0_w1);
 perftest_getter_leaf * perftest_getter_two_clones_new(perftest_getter_leaf * *out1);
 /* Option option0: p0_w1: 0 = None, 1 = Some; other active flags are errors. */
