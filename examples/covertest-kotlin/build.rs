@@ -211,9 +211,10 @@ fn main() {
             .fun(fun!(callback_config_ordinary)))
         .expand(expand_param!(CallbackConstructor).variant(fun!(callback_constructor_from)))
         .expand(expand_param!(CallbackConstructorEnvelope).variant(fun!(callback_constructor_wrap)))
+        // Clone-failure coverage explicitly opts these row fields into copying.
+        .expand(expand_return!(CallbackRow).field_self_ref())
         .expand(expand_return!(CallbackTransferred).field_self_into())
         .expand(expand_return!(Vec<CallbackTransferredRow>).field_self_into())
-        .expand(expand_return!(CallbackUniqueRow).field_self_into())
         .expand(expand_return!(Vec<CallbackObservedRow>).field_self_ref())
         .expand(expand_return!(CallbackProjected).field(fun!(callback_projected_id).name("id")).field_self_into())
         .error_mapper(syn::parse_quote!(String),fun!(callback_return_error_message))
@@ -401,7 +402,7 @@ fn main() {
             .fun(fun!(option_resource_new)).fun(fun!(option_resource_echo).expand_param("value",expand_param!(OwnedResource).variant_self())).fun(fun!(option_resource_id))
             .fun(fun!(optional_fields_echo))
             .fun(fun!(optional_field_new).expand_return(expand_return!(OptionalField).fields(fields!(optional_field_fields))))
-            .fun(fun!(optional_resource_new).expand_return(expand_return!(Option<OptionalResource>).field_self_into())))
+            .fun(fun!(optional_resource_new)))
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         /* Unsupported: multiple source streams.
 .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
@@ -1427,16 +1428,14 @@ fn main() {
             .fun(fun!(storage_len)).fun(fun!(storage_contains)).fun(fun!(storage_total_len))
             .fun(fun!(storage_put_by_take)).fun(fun!(summary_merge))
             .fun(fun!(storage_summary_handle).expand_return(expand_return!(Summary).field_self())))
-        .expand(expand_return!(ProjectionPair).field_self_ref())
         .package(package!("resources")
             .class(data_class!(ProjectionPair)).class(ptr_class!(ProjectionHandle))
-            .fun(fun!(projection_pair_borrowed))
-            .fun(fun!(projection_pair_owned).expand_return(expand_return!(ProjectionPair).field_self_into()))
+            .fun(fun!(projection_pair_borrowed).expand_return(expand_return!(ProjectionPair).field_self_ref()))
+            .fun(fun!(projection_pair_owned)).fun(fun!(projection_pair_callback))
             .fun(fun!(projection_pair_mixed).expand_return(expand_return!(ProjectionPair).project_self(
                 prebindgen_jni::Projection::owned().field("first", prebindgen_jni::Projection::borrowed()))))
             .fun(fun!(projection_pair_views).expand_return(expand_return!(ProjectionPair).field_self_into().field_self_ref()))
             .fun(fun!(projection_clones)).fun(fun!(projection_drops)))
-        .expand(expand_return!(ResourceBundle).field_self_into())
         .package(package!("resources")
             .class(data_class!(ResourceBundle))
             .class(data_class!(ResourcePair))
@@ -1478,7 +1477,7 @@ fn main() {
             .fun(fun!(blob_value_selected).expand_param("value",
                 expand_param!(BlobValue).variant_self().variant(fun!(blob_value_new))))
             .fun(fun!(blob_value_views).expand_return(
-                expand_return!(BlobValue).field_self().field_self().field(fun!(blob_value_copy)))))
+                expand_return!(BlobValue).field_self_ref().field_self().field(fun!(blob_value_copy)))))
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

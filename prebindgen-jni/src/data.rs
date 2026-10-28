@@ -463,15 +463,15 @@ impl Codec for DataCodec<'_> {
         _: &(),
     ) -> Result<Option<Output<OutputRequest>>> {
         let policy = match tree {
-            Output::Leaf => Projection::borrowed(),
-            Output::Projected(p) => p.clone(),
+            Output::Leaf => None,
+            Output::Projected(p) => Some(p.clone()),
             _ => return Ok(None),
         };
         let Some(record) = Self::source_record(flat, ty)? else {
             return Ok(None);
         };
         let fields = &flat.record(ty)?.fields;
-        for name in policy.fields.keys() {
+        for name in policy.iter().flat_map(|p| p.fields.keys()) {
             if !fields
                 .iter()
                 .any(|f| f.name.to_string().trim_start_matches("r#") == name)
@@ -482,10 +482,11 @@ impl Codec for DataCodec<'_> {
                 ));
             }
         }
-        let inherited = policy.inherited();
+        let inherited = policy.as_ref().map(Projection::inherited);
         let children = fields.iter().map(|field| {
             let name = field.name.to_string();
-            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(&inherited);
+            let Some(policy) = &policy else { return Ok(Output::Leaf); };
+            let child = policy.fields.get(name.trim_start_matches("r#")).unwrap_or(inherited.as_ref().unwrap());
             if policy.mode == ProjectionMode::Borrowed && child.mode == ProjectionMode::Owned {
                 return Err(format!("data class `{}` field `{name}`: owned projection cannot consume a shared-reference occurrence", record.fqn()));
             }
@@ -493,7 +494,7 @@ impl Codec for DataCodec<'_> {
         }).collect::<Result<Vec<_>>>()?;
         Ok(Some(Output::Record {
             fields: children,
-            mode: policy.mode,
+            mode: policy.map(|p| p.mode),
         }))
     }
     fn input_record_metadata(
@@ -975,7 +976,7 @@ mod group_tests {
             )
             .unwrap();
         assert!(
-            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:ProjectionMode::Owned,fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
+            matches!(&resolved,Output::Sequence{element,..} if matches!(element.as_ref(),Output::Record {mode:Some(ProjectionMode::Owned),fields} if matches!(fields.as_slice(),[Output::Projected(_)])))
         );
         let round_trip = defaults
             .resolve_output(

@@ -126,8 +126,14 @@ The same declaration works as a type-wide default or a per-function replacement:
 
 `Projection` is available from `prebindgen_declarations` and `prebindgen_jni`.
 Modes propagate recursively unless explicitly overridden; they never depend on
-record contents. Legacy `field_self()` and unexpanded data-class outputs retain
-a fixed borrowed policy. Use `field_self_into()` for non-cloneable handle fields.
+record contents. Unexpanded data-class outputs and `field_self()` follow the
+source occurrence: owned records move their fields, while borrowed records observe
+them. `field_self_into()` explicitly requires an owned occurrence;
+`field_self_ref()` explicitly requests observing/copying the fields. If a record
+implements `Drop`, Rust may reject moving its fields; select an explicit copy
+projection instead of relying on an implicit cloning fallback. Multiple owning
+views are rejected: combinations that previously copied through `field_self()`
+should select `field_self_ref()` for each intended copy alongside one owning view.
 Type-wide expansions of field types do not rewrite a data class's properties.
 
 For separate field outputs, `.fields(fields!(borrowed_getter))` remains available.

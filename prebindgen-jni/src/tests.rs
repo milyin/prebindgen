@@ -472,7 +472,6 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
         JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
-            .expand(expand_return!(Bundle).field_self_into())
             .package(
                 package!()
                     .class(data_class!(Bundle))
@@ -491,11 +490,11 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
     )))
     .contains("consume the same value twice"));
     assert!(fail(
-        base().package(
-            package!().fun(
+        base()
+            .expand(expand_return!(Bundle).field_self_into())
+            .package(package!().fun(
                 fun!(outer).expand_return(expand_return!(Outer).fields(fields!(outer_fields)))
-            )
-        )
+            ))
     )
     .contains("shared-reference occurrence"));
 }
@@ -1941,4 +1940,76 @@ fn generic_error_types_get_distinct_readable_handlers() {
         .kotlin
         .keys()
         .any(|name| name.starts_with("test/ErrorHandler_Vec_String_typed_")));
+}
+
+#[test]
+fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
+    let records="pub struct Handle {pub id:i64}pub struct Inner {pub handle:Handle}pub struct Bundle {pub inner:Inner,pub text:String,pub bytes:Vec<u8>,pub maybe:Option<Handle>}";
+    let classes = || {
+        package!()
+            .class(data_class!(Bundle))
+            .class(data_class!(Inner))
+            .class(ptr_class!(Handle))
+    };
+    for returned in [
+        "Bundle",
+        "Option<Bundle>",
+        "Vec<Bundle>",
+        "Result<Bundle,i64>",
+    ] {
+        let source = format!("{records}pub fn make()->{returned}{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(classes().fun(fun!(make)))
+            .build()
+            .unwrap();
+        assert!(
+            !generated.rust.contains("Clone::clone"),
+            "{returned}: {}",
+            generated.rust
+        );
+    }
+    let source = format!("{records}pub fn make()->Bundle{{}}");
+    for local in [0, 1, 2] {
+        let function = match local {
+            1 => fun!(make).expand_return(expand_return!(Bundle).field_self_into()),
+            2 => fun!(make).expand_return(expand_return!(Bundle).field_self()),
+            _ => fun!(make),
+        };
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .expand(expand_return!(Bundle).field_self_ref())
+            .package(classes().fun(function))
+            .build()
+            .unwrap();
+        assert_eq!(generated.rust.contains("Clone::clone"), local == 0);
+    }
+    let error = fail(
+        JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(classes().fun(
+                fun!(make).expand_return(expand_return!(Bundle).field_self().field_self_into()),
+            )),
+    );
+    assert!(error.contains("field_self_ref()"));
+    // Two views of optional references are observations, never two moves.
+    let source =
+        format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
+    let view = prebindgen_declarations::Output::Optional(Box::new(
+        prebindgen_declarations::Output::Record {
+            mode: None,
+            fields: vec![prebindgen_declarations::Output::Leaf; 4],
+        },
+    ));
+    JniGen::builder()
+        .flat(flat(&source))
+        .set_package_prefix("test")
+        .package(classes().class(ptr_class!(Owner)).fun(fun!(maybe).output(
+            prebindgen_declarations::Output::combine([view.clone(), view]),
+        )))
+        .build()
+        .unwrap();
 }

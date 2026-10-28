@@ -36,6 +36,17 @@ fun checkOwnedRecords() {
     check(projectionClones() == cloneStart + 5uL)
     check(projectionDrops() == dropStart + 13uL)
 
+    // Default owned callback records move their handle fields without cloning.
+    val callbackClones = projectionClones()
+    val callbackDrops = projectionDrops()
+    var callbackCalls = 0
+    projectionPairCallback({ pair ->
+        callbackCalls++
+        check(!pair.first.isClosed && !pair.second.isClosed)
+    })
+    check(callbackCalls == 1 && projectionClones() == callbackClones)
+    check(projectionDrops() == callbackDrops + 2uL)
+
     // A production-style empty field override omits and drops a Rust-owned member.
     val omittedBefore = ownedResourceDrops()
     check(apiRecordNew() == 7L)

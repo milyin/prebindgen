@@ -256,8 +256,9 @@ pub enum Output<P = std::convert::Infallible> {
     Record {
         /// Explicit source-field conversions in declaration order.
         fields: Vec<Output<P>>,
-        /// Ownership of the foreign-record projection.
-        mode: ProjectionMode,
+        /// `None` follows the occurrence: move owned fields and observe borrowed
+        /// fields. `Some` explicitly selects and checks a projection policy.
+        mode: Option<ProjectionMode>,
     },
     /// Convert collection elements using ordinary or explicitly selected ownership.
     Sequence {
@@ -478,7 +479,10 @@ impl Output {
             }
             Self::Projected(p) => p.mode == ProjectionMode::Owned,
             Self::OwnedFields(_) | Self::Into { .. } | Self::Result { .. } => true,
-            Self::Record { mode, .. } => *mode == ProjectionMode::Owned,
+            Self::Record { mode, .. } => mode
+                .map_or(!borrowed && output_referent(ty).is_none(), |m| {
+                    m == ProjectionMode::Owned
+                }),
             Self::Request(never) => match *never {},
             Self::Combine(p) => p
                 .iter()
@@ -1922,14 +1926,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
             } => {
                 let grouped = matches!(recipe, Output::Record { .. });
                 let wire = grouped.then(|| wire_name.cloned().unwrap_or_else(|| self.name()));
-                let owned = matches!(
-                    recipe,
-                    Output::OwnedFields(_)
-                        | Output::Record {
-                            mode: ProjectionMode::Owned,
-                            ..
-                        }
-                );
+                let owned = match recipe {
+                    Output::OwnedFields(_) => true,
+                    Output::Record { mode, .. } => {
+                        mode.map_or(!borrowed, |m| m == ProjectionMode::Owned)
+                    }
+                    _ => false,
+                };
                 if owned && borrowed {
                     return Err("owned fields cannot consume a shared-reference occurrence".into());
                 }
@@ -2033,7 +2036,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     .count()
                     > 1
                 {
-                    return Err("a combination cannot consume the same value twice".into());
+                    return Err("a combination cannot consume the same value twice; use field_self_ref() for an explicit copy view".into());
                 }
                 if !borrowed {
                     if let Some(plan) = self.output_owner_views(ty, parts, extra, value.clone())? {
