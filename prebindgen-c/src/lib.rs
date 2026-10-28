@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 use prebindgen_conversions::value::Value;
+pub use prebindgen_conversions::Access;
 use prebindgen_flat::{
     Conversion, Flat, InputConversion, OutputConversion, Primitive, Result, WireKind,
 };
@@ -10,19 +11,19 @@ mod callback;
 pub use callback::CCallback;
 mod wire;
 pub use wire::CWire;
-/// Pointee type and mutability of a C boundary pointer.
+/// Pointee type and Rust ownership/access mode of a C boundary pointer.
 #[derive(Clone, Debug)]
 pub struct CPointer {
     /// Rust pointee type used in the ABI and the opaque C type declaration.
     pub ty: syn::Type,
-    /// Whether this carrier is a mutable pointer.
-    pub mutable: bool,
+    /// Move transfers ownership; shared/exclusive access carries a non-owning borrow.
+    pub access: Access,
 }
 impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     fn from(value: prebindgen_conversions::boxed::BoxedWire) -> Self {
         Self {
             ty: value.ty,
-            mutable: value.access != prebindgen_conversions::Access::Shared,
+            access: value.access,
         }
     }
 }
@@ -214,7 +215,9 @@ impl Codec for CCodec {
         let wide = prebindgen_conversions::template_parameter("wide_integer_type");
         Ok(match wire {
             CWire::Callback { callback } => callback.absent_value(),
-            CWire::Pointer { pointer, .. } if !pointer.mutable => quote!(std::ptr::null()),
+            CWire::Pointer { pointer, .. } if pointer.access == Access::Shared => {
+                quote!(std::ptr::null())
+            }
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
             CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
             CWire::Rows => quote!(__PbRows {
@@ -379,11 +382,12 @@ impl Codec for CCodec {
     fn output_return_reference(
         &self,
         flat: &Bindings,
-        ty: &syn::Type,
+        reference: &syn::TypeReference,
         _: &(),
         wire: syn::Ident,
         value: TokenStream,
     ) -> Result<Option<OutputPlan<CWire>>> {
+        let ty = &*reference.elem;
         // Scalars, enums and buffers retain their value conversions. Only an
         // opaque source type has an address-preserving C representation.
         if !matches!(ty, syn::Type::Path(_))
@@ -398,6 +402,16 @@ impl Codec for CCodec {
         {
             return Ok(None);
         }
+        let access = if reference.mutability.is_some() {
+            Access::Exclusive
+        } else {
+            Access::Shared
+        };
+        let kind = CWire::pointer(CPointer {
+            ty: ty.clone(),
+            access,
+        });
+        let pointer_type = kind.rust_type();
         Ok(Some(OutputPlan {
             fallible: false,
             context: Default::default(),
@@ -406,15 +420,12 @@ impl Codec for CCodec {
             outcomes: prebindgen_flat::Outcomes {
                 success: prebindgen_flat::WireNode::Leaf(vec![Wire {
                     name: wire.clone(),
-                    kind: CWire::pointer(CPointer {
-                        ty: ty.clone(),
-                        mutable: false,
-                    }),
+                    kind,
                 }]),
                 source_error: None,
                 binding_failure: None,
             },
-            statements: quote!(let #wire: *const #ty = #value as *const #ty;),
+            statements: quote!(let #wire: #pointer_type = #value as #pointer_type;),
             values: vec![(wire.clone(), quote!(#wire))],
         }))
     }
@@ -531,10 +542,12 @@ fn encode_scalar(p: Primitive, v: TokenStream) -> TokenStream {
 /// Unit success needs no output pointer. Consuming Result calls additionally
 /// require a bool ownership output, indicating transfer even on failure.
 /// Owned returned pointers, buffers and errors require their matching destructors.
-/// Direct shared-reference returns of opaque types use non-owning `const` pointers
-/// (nullable for `Option<&T>`). Never destroy or consume these pointers; keep their
+/// Direct reference returns of opaque types use non-owning pointers: `const` for
+/// shared references and mutable for exclusive references. Options use null for absence.
+/// Never destroy or consume these pointers; keep their
 /// source storage alive and at a stable address, respecting Rust's aliasing rules.
-/// Getter expansions continue to copy borrowed leaves into owned outputs.
+/// Mutable loans require exclusive access while in use. Getter expansions retain
+/// their existing ownership policy; mutable getter results remain unsupported.
 pub struct Cbindgen {
     flat: Option<Bindings>,
     source: Option<std::path::PathBuf>,
@@ -939,7 +952,11 @@ fn c_ty(
                 .find(|t| prebindgen_flat::same_type(&t.ty, &p.ty))
                 .and_then(|t| t.metadata.pointer.as_ref())
                 .expect("validated pointer declaration");
-            let qualifier = if !p.mutable { "const " } else { "" };
+            let qualifier = if p.access == Access::Shared {
+                "const "
+            } else {
+                ""
+            };
             format!("{qualifier}{prefix}_{name} *")
         }
         CWire::Buffer => format!("{prefix}_buffer"),
@@ -1388,11 +1405,10 @@ The pointer must be null or a live allocation of the declared type returned by t
         let outputs =
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .collect::<Vec<_>>();
-        if outputs
-            .iter()
-            .any(|w| matches!(&w.kind, CWire::Pointer { pointer, .. } if !pointer.mutable))
-        {
-            header.push_str("/* Const opaque outputs are borrowed: never free or consume them. Keep their source storage alive and at a stable address; obey Rust aliasing rules. */\n");
+        if outputs.iter().any(
+            |w| matches!(&w.kind, CWire::Pointer { pointer, .. } if pointer.access != Access::Move),
+        ) {
+            header.push_str("/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */\n");
         }
         let mut next_option_label = 0;
         for param in &f.params {
@@ -1584,7 +1600,7 @@ where
     I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
 {
     if !crate::group::result_packet_fields(output)
-        .any(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if !pointer.mutable))
+        .any(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move))
     {
         return Ok(());
     }
@@ -1817,7 +1833,7 @@ mod generation_tests {
                 })
                 .collect::<Vec<_>>();
             assert_eq!(pointers.len(), 1);
-            assert!(!pointers[0].mutable);
+            assert_eq!(pointers[0].access, Access::Shared);
         }
         assert_eq!(
             crate::group::result_packet_fields(
@@ -1840,8 +1856,71 @@ mod generation_tests {
         assert!(generated.header.contains("const pb_child_t * pb_fallible("));
         assert!(generated.header.contains("bool pb_optional("));
         assert!(generated.header.contains("const pb_child_t * *out0"));
-        assert!(generated.header.contains("never free or consume"));
+        assert!(generated.header.contains("never be freed or consumed"));
         syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn mutable_returns_preserve_exclusive_access_without_ownership_or_copying() {
+        use prebindgen_declarations::fun;
+        let flat = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn child(owner:&mut Owner)->&mut Child{}pub fn maybe(owner:&mut Owner)->Option<&mut Child>{}pub fn fallible(owner:&mut Owner)->Result<&mut Child,String>{}pub fn optional(owner:&mut Owner)->Result<Option<&mut Child>,String>{}pub fn message(error:&String)->String{}"))
+            .opaque_ptr("owner",syn::parse_quote!(Owner)).opaque_ptr("child_t",syn::parse_quote!(Child))
+            .opaque_error(syn::parse_quote!(String),fun!(message))
+            .function(fun!(child)).panic().function(fun!(maybe)).panic()
+            .function(fun!(fallible)).function(fun!(optional)).prepare().unwrap();
+        for name in ["child", "maybe", "fallible", "optional"] {
+            let function = flat.function(name).unwrap();
+            let output = function.ret.slot.as_ref().unwrap();
+            assert!(!output.statements.to_string().contains("Clone"));
+            assert!(!output.statements.to_string().contains("Box"));
+            assert!(crate::group::result_packet_fields(&output.outcomes.success)
+                .all(|w| matches!(&w.kind,CWire::Pointer {pointer,..} if pointer.access==Access::Exclusive)));
+        }
+        let generated = generate(&flat).unwrap();
+        assert!(generated
+            .header
+            .contains("pb_child_t * pb_child(pb_owner *"));
+        assert!(generated
+            .header
+            .contains("pb_child_t * pb_maybe(pb_owner *"));
+        assert!(generated
+            .header
+            .contains("pb_child_t * pb_fallible(pb_owner *"));
+        assert!(generated.header.contains("pb_child_t * *out0"));
+        assert!(generated
+            .header
+            .contains("mutable borrows require exclusive access"));
+        syn::parse_file(&generated.rust).unwrap();
+    }
+
+    #[test]
+    fn mutable_value_and_collection_outputs_have_no_copying_fallback() {
+        use prebindgen_declarations::fun;
+        for returned in ["&mut i64", "&mut String", "&mut [u8]", "&mut Vec<i64>"] {
+            let source =
+                format!("pub type Owner=String;pub fn value(owner:&mut Owner)->{returned}{{}}");
+            let error = Cbindgen::new(error_model(&source))
+                .opaque_ptr("owner", syn::parse_quote!(Owner))
+                .function(fun!(value))
+                .panic()
+                .build()
+                .err()
+                .unwrap();
+            assert!(error.contains("mutable"), "{returned}: {error}");
+        }
+    }
+
+    #[test]
+    fn mutable_getter_expansions_are_rejected_instead_of_copied() {
+        use prebindgen_declarations::{expand_return, fun};
+        let error = Cbindgen::new(error_model("pub type Owner=String;pub type Child=String;pub fn make()->Owner{}pub fn child(owner:&Owner)->&mut Child{}"))
+            .opaque_ptr("child_t",syn::parse_quote!(Child))
+            .function(fun!(make).expand_return(expand_return!(Owner).field(fun!(child))))
+            .build().err().unwrap();
+        assert!(
+            error.contains("mutable-reference getter results are unsupported"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -1862,7 +1941,7 @@ mod generation_tests {
                 output.statements
             );
             assert!(crate::group::result_packet_fields(&output.outcomes.success)
-                .all(|w| matches!(&w.kind,CWire::Pointer { pointer,..} if pointer.mutable)));
+                .all(|w| matches!(&w.kind,CWire::Pointer { pointer,..} if pointer.access == Access::Move)));
         }
     }
 
@@ -1928,8 +2007,11 @@ mod generation_tests {
         )
         .unwrap();
         assert!(output.statements.to_string().contains("Clone"));
-        assert!(crate::group::result_packet_fields(&output.outcomes.success)
-            .all(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.mutable)));
+        assert!(
+            crate::group::result_packet_fields(&output.outcomes.success).all(
+                |w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access == Access::Move)
+            )
+        );
     }
 
     #[test]
@@ -1946,37 +2028,39 @@ mod generation_tests {
             wide_integer_type: syn::parse_quote!(Wide),
             read_buffer: syn::parse_quote!(read),
         };
-        let plan = CCodec
-            .output_return_reference(
-                &error_model("pub type Child=String;"),
-                &syn::parse_quote!(Child),
-                &(),
-                syn::parse_quote!(child),
-                quote!(source),
+        for reference in [syn::parse_quote!(&Child), syn::parse_quote!(&mut Child)] {
+            let plan = CCodec
+                .output_return_reference(
+                    &error_model("pub type Child=String;"),
+                    &reference,
+                    &(),
+                    syn::parse_quote!(child),
+                    quote!(source),
+                )
+                .unwrap()
+                .unwrap();
+            let wire = crate::group::result_packet_fields(&plan.outcomes.success)
+                .next()
+                .unwrap();
+            let release = sequence::release(
+                &plan.outcomes.success,
+                &[(wire, quote!(child))],
+                &context,
+                false,
+            );
+            assert!(release.is_empty());
+            let mut owned = wire.clone();
+            if let CWire::Pointer { pointer, .. } = &mut owned.kind {
+                pointer.access = Access::Move;
+            }
+            assert!(!sequence::release(
+                &plan.outcomes.success,
+                &[(&owned, quote!(child))],
+                &context,
+                false
             )
-            .unwrap()
-            .unwrap();
-        let wire = crate::group::result_packet_fields(&plan.outcomes.success)
-            .next()
-            .unwrap();
-        let release = sequence::release(
-            &plan.outcomes.success,
-            &[(wire, quote!(child))],
-            &context,
-            false,
-        );
-        assert!(release.is_empty());
-        let mut owned = wire.clone();
-        if let CWire::Pointer { pointer, .. } = &mut owned.kind {
-            pointer.mutable = true;
+            .is_empty());
         }
-        assert!(!sequence::release(
-            &plan.outcomes.success,
-            &[(&owned, quote!(child))],
-            &context,
-            false
-        )
-        .is_empty());
     }
     #[test]
     fn opaque_declarations_reject_unregistered_builtin_and_composite_types() {

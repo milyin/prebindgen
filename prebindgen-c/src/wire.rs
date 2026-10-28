@@ -36,8 +36,8 @@ pub enum CWire {
     /// A null pointer with zero length is a valid empty value, so no null niche
     /// is available for this representation.
     Buffer,
-    /// A typed opaque pointer. Mutable outputs own a boxed source value;
-    /// const outputs are non-owning references into caller-preserved storage.
+    /// A typed opaque pointer with independent move/shared/exclusive access.
+    /// Only move outputs transfer allocation ownership.
     Pointer {
         /// Pointee type and mutability.
         pointer: Box<CPointer>,
@@ -198,7 +198,7 @@ impl WireKind for CWire {
             },
             CWire::Pointer { pointer: p, .. } => {
                 let ty = &p.ty;
-                if !p.mutable {
+                if p.access == Access::Shared {
                     syn::parse_quote!(*const #ty)
                 } else {
                     syn::parse_quote!(*mut #ty)
@@ -214,10 +214,10 @@ impl WireKind for CWire {
 mod tests {
     use super::*;
 
-    fn pointer(mutable: bool) -> CWire {
+    fn pointer(access: Access) -> CWire {
         CWire::pointer(CPointer {
             ty: syn::parse_quote!(Widget),
-            mutable,
+            access,
         })
     }
     fn enumeration() -> CWire {
@@ -270,7 +270,10 @@ mod tests {
         }
         buffer.set_niche(None).unwrap();
         assert_eq!(buffer.available_niche(), None);
-        assert_eq!(pointer(false).available_niche(), Some(CNiche::Null));
+        assert_eq!(
+            pointer(Access::Shared).available_niche(),
+            Some(CNiche::Null)
+        );
         assert_eq!(enumeration().available_niche(), Some(CNiche::Integer(-2)));
     }
     #[test]
@@ -340,8 +343,8 @@ mod tests {
     }
     #[test]
     fn pointers_keep_their_abi_after_consuming_null() {
-        for mutable in [false, true] {
-            let mut wire = pointer(mutable);
+        for access in [Access::Shared, Access::Exclusive, Access::Move] {
+            let mut wire = pointer(access);
             let before = wire.rust_type();
             assert!(wire.set_niche(Some(CNiche::Integer(0))).is_err());
             assert_eq!(wire.available_niche(), Some(CNiche::Null));
@@ -354,7 +357,7 @@ mod tests {
             let CWire::Pointer { pointer, .. } = &wire else {
                 panic!()
             };
-            assert_eq!(pointer.mutable, mutable);
+            assert_eq!(pointer.access, access);
             assert!(prebindgen_flat::same_type(
                 &pointer.ty,
                 &syn::parse_quote!(Widget)

@@ -98,3 +98,66 @@ static void check_borrowed_pointers(void) {
     }
     puts("C borrowed pointers PASS: address identity, non-Clone children, optional and Result loans");
 }
+
+static void check_mutable_borrowed_pointers(void) {
+    for (uint8_t present = 0; present <= 1; ++present) {
+        perftest_getter_counts_ret_w0_rows before = perftest_getter_counts();
+        int64_t number = 0;
+        perftest_buffer name = {0};
+        perftest_getter_leaf *leaf = NULL;
+        perftest_getter_owner *owner = perftest_getter_owner_new(present, &number, &name, &leaf);
+        perftest_free_buffer(name);
+        uintptr_t address = (uintptr_t)perftest_getter_owner_child(owner);
+        // Each new owner borrow ends the previous child loan. Retain only its
+        // numeric address for comparisons, and obtain a fresh loan before writing.
+        perftest_getter_child *child = perftest_getter_owner_child_mut(owner);
+        assert((uintptr_t)child == address);
+        perftest_getter_child_set_number(child, 88);
+        child = NULL;
+        assert(perftest_getter_owner_id(owner) == 88);
+        perftest_getter_child *optional = perftest_getter_owner_optional_mut(owner);
+        assert((uintptr_t)optional == (present ? address : 0));
+        if (present) perftest_getter_child_set_number(optional, 89);
+        optional = NULL;
+        number = present ? 89 : 88;
+        assert(perftest_getter_owner_id(owner) == number);
+        char *error = NULL;
+        child = perftest_getter_owner_try_child_mut(owner, 0, &error);
+        assert((uintptr_t)child == address && error == NULL);
+        perftest_getter_child_set_number(child, 90);
+        child = NULL;
+        assert(perftest_getter_owner_id(owner) == 90);
+        assert(perftest_getter_owner_try_child_mut(owner, 1, &error) == NULL && error != NULL);
+        perftest_free_error(error);
+        number = 90;
+        for (int32_t mode = 0; mode <= 2; ++mode) {
+            error = NULL;
+            optional = NULL;
+            assert(perftest_getter_owner_try_optional_mut(owner, mode, &optional, &error) == (mode < 2));
+            assert((uintptr_t)optional == (mode == 1 ? address : 0));
+            assert((error != NULL) == (mode == 2));
+            if (mode == 1) { perftest_getter_child_set_number(optional, 91); number = 91; }
+            optional = NULL;
+            perftest_free_error(error);
+            assert(perftest_getter_owner_id(owner) == number);
+        }
+        error = NULL;
+        assert(!perftest_getter_owner_try_optional_mut(owner, 1, NULL, &error) && error != NULL);
+        perftest_free_error(error);
+        // Failures preserve the owning object; mutation uses a fresh child loan.
+        child = perftest_getter_owner_child_mut(owner);
+        assert((uintptr_t)child == address);
+        perftest_getter_child_set_number(child, 99);
+        child = NULL;
+        assert(perftest_getter_owner_id(owner) == 99);
+        perftest_drop_getter_owner(owner);
+        perftest_drop_getter_leaf(leaf);
+        perftest_getter_counts_ret_w0_rows after = perftest_getter_counts();
+        assert(after.data[0].v0 == before.data[0].v0 + 1);
+        assert(after.data[1].v0 == before.data[1].v0 + 1); // Only the explicit owned leaf projection clones.
+        assert(after.data[2].v0 == before.data[2].v0 + 2);
+        perftest_getter_counts_ret_w0_rows_free(before);
+        perftest_getter_counts_ret_w0_rows_free(after);
+    }
+    puts("C mutable borrows PASS: original-object mutation, optional/Result loans and owner-only destruction");
+}

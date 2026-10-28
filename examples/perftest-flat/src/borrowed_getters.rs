@@ -95,6 +95,40 @@ pub fn getter_owner_child_matches(owner: &GetterOwner, child: &GetterChild) -> b
     std::ptr::eq(&owner.child, child)
 }
 #[prebindgen]
+pub fn getter_owner_child_mut(owner: &mut GetterOwner) -> &mut GetterChild {
+    &mut owner.child
+}
+#[prebindgen]
+pub fn getter_owner_optional_mut(owner: &mut GetterOwner) -> Option<&mut GetterChild> {
+    owner.present.then_some(&mut owner.child)
+}
+#[prebindgen]
+pub fn getter_owner_try_child_mut(
+    owner: &mut GetterOwner,
+    fail: bool,
+) -> Result<&mut GetterChild, String> {
+    if fail {
+        Err("mutable child error".into())
+    } else {
+        Ok(&mut owner.child)
+    }
+}
+#[prebindgen]
+pub fn getter_owner_try_optional_mut(
+    owner: &mut GetterOwner,
+    mode: i32,
+) -> Result<Option<&mut GetterChild>, String> {
+    match mode {
+        0 => Ok(None),
+        1 => Ok(Some(&mut owner.child)),
+        _ => Err("optional mutable child error".into()),
+    }
+}
+#[prebindgen]
+pub fn getter_child_set_number(child: &mut GetterChild, number: i64) {
+    child.number = number;
+}
+#[prebindgen]
 pub fn getter_owner_try_child(value: &GetterOwner, fail: bool) -> Result<&GetterChild, String> {
     if fail {
         Err("borrowed child error".into())
