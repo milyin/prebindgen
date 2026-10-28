@@ -31,6 +31,10 @@ internal object JNINative {
     @JvmStatic external fun drop_ReportStruct_2659d7dec79ecce0(id: Long)
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
+    @JvmStatic external fun call_buffer_views_optional_text_2e5df9089cef5211(p0_w1: Boolean): Array<Any?>
+    @JvmStatic external fun call_buffer_views_optional_bytes_f3f56b8a8b1996c2(p0_w1: Boolean): Array<Any?>
+    @JvmStatic external fun call_buffer_views_text_d3011d2eb33189c1(): Array<Any?>
+    @JvmStatic external fun call_buffer_views_bytes_491539966ab74896(): Array<Any?>
     @JvmStatic external fun call_getter_owner_new_9b3691104cf4f094(p0_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_getter_owner_failure_983fd2bf1ecc08ff(): Array<Any?>
     @JvmStatic external fun call_getter_owner_id_6e5c79e15f3c8ecb(p0_w1: Long): Array<Any?>
