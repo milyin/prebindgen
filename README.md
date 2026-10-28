@@ -131,7 +131,9 @@ source occurrence: owned records move their fields, while borrowed records obser
 them. `field_self_into()` explicitly requires an owned occurrence;
 `field_self_ref()` explicitly requests observing/copying the fields. If a record
 implements `Drop`, Rust may reject moving its fields; select an explicit copy
-projection instead of relying on an implicit cloning fallback. Multiple owning
+projection instead of relying on an implicit cloning fallback. For a nested
+`Drop`-bearing field, put the borrowed override on the containing record; a child
+type's default does not rewrite a data-class property. Multiple owning
 views are rejected: combinations that previously copied through `field_self()`
 should select `field_self_ref()` for each intended copy alongside one owning view.
 Type-wide expansions of field types do not rewrite a data class's properties.
