@@ -472,7 +472,6 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
         JniGen::builder()
             .flat(flat(source))
             .set_package_prefix("test")
-            .expand(expand_return!(Bundle).field_self_into())
             .package(
                 package!()
                     .class(data_class!(Bundle))
@@ -491,11 +490,11 @@ fn handle_records_require_owned_returns_and_reject_duplicate_consumption() {
     )))
     .contains("consume the same value twice"));
     assert!(fail(
-        base().package(
-            package!().fun(
+        base()
+            .expand(expand_return!(Bundle).field_self_into())
+            .package(package!().fun(
                 fun!(outer).expand_return(expand_return!(Outer).fields(fields!(outer_fields)))
-            )
-        )
+            ))
     )
     .contains("shared-reference occurrence"));
 }
@@ -1941,4 +1940,206 @@ fn generic_error_types_get_distinct_readable_handlers() {
         .kotlin
         .keys()
         .any(|name| name.starts_with("test/ErrorHandler_Vec_String_typed_")));
+}
+
+#[test]
+fn default_record_outputs_follow_source_ownership_and_allow_copy_overrides() {
+    let records="pub struct Handle {pub id:i64}pub struct Inner {pub handle:Handle}pub struct Bundle {pub inner:Inner,pub text:String,pub bytes:Vec<u8>,pub maybe:Option<Handle>}";
+    let classes = || {
+        package!()
+            .class(data_class!(Bundle))
+            .class(data_class!(Inner))
+            .class(ptr_class!(Handle))
+    };
+    for returned in [
+        "Bundle",
+        "Option<Bundle>",
+        "Vec<Bundle>",
+        "Result<Bundle,i64>",
+    ] {
+        let source = format!("{records}pub fn make()->{returned}{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(classes().fun(fun!(make)))
+            .build()
+            .unwrap();
+        assert!(
+            !generated.rust.contains("Clone::clone"),
+            "{returned}: {}",
+            generated.rust
+        );
+    }
+    let source = format!("{records}pub fn make()->Bundle{{}}");
+    for local in [0, 1, 2] {
+        let function = match local {
+            1 => fun!(make).expand_return(expand_return!(Bundle).field_self_into()),
+            2 => fun!(make).expand_return(expand_return!(Bundle).field_self()),
+            _ => fun!(make),
+        };
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .expand(expand_return!(Bundle).field_self_ref())
+            .package(classes().fun(function))
+            .build()
+            .unwrap();
+        assert_eq!(generated.rust.contains("Clone::clone"), local == 0);
+    }
+    let error = fail(
+        JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(classes().fun(
+                fun!(make).expand_return(expand_return!(Bundle).field_self().field_self_into()),
+            )),
+    );
+    assert!(error.contains("field_self_ref()"));
+    // Two views of optional references are observations, never two moves.
+    let source =
+        format!("{records}pub type Owner=String;pub fn maybe(owner:&Owner)->Option<&Bundle>{{}}");
+    let view = prebindgen_declarations::Output::Optional(Box::new(
+        prebindgen_declarations::Output::Record {
+            mode: None,
+            fields: vec![prebindgen_declarations::Output::Leaf; 4],
+        },
+    ));
+    JniGen::builder()
+        .flat(flat(&source))
+        .set_package_prefix("test")
+        .package(classes().class(ptr_class!(Owner)).fun(fun!(maybe).output(
+            prebindgen_declarations::Output::combine([view.clone(), view]),
+        )))
+        .build()
+        .unwrap();
+}
+
+#[test]
+fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
+    for bytes in [false, true] {
+        let ty = if bytes { "Vec<u8>" } else { "String" };
+        let source = format!("pub fn make()->{ty}{{}}pub fn observe(value:&{ty})->usize{{}}");
+        for copy in [false, true] {
+            let expansion = match (bytes, copy) {
+                (false, false) => expand_return!(String).field_self().field(fun!(observe)),
+                (true, false) => expand_return!(Vec<u8>).field_self().field(fun!(observe)),
+                (false, true) => expand_return!(String).field_self_ref().field_self(),
+                (true, true) => expand_return!(Vec<u8>).field_self_ref().field_self(),
+            };
+            let jni = JniGen::builder()
+                .flat(flat(&source))
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(make).expand_return(expansion.clone())))
+                .build()
+                .unwrap();
+            let c = prebindgen_c::Cbindgen::new(
+                prebindgen_flat::Flat::parse(
+                    syn::parse_file(&source)
+                        .unwrap()
+                        .items
+                        .into_iter()
+                        .map(|i| (i, Default::default())),
+                )
+                .unwrap(),
+            )
+            .function(fun!(make).expand_return(expansion))
+            .panic()
+            .build()
+            .unwrap();
+            assert_eq!(jni.rust.contains("Clone::clone"), copy, "JNI {ty}");
+            assert_eq!(c.rust.contains("Clone::clone"), copy, "C {ty}");
+            let declaration = c
+                .header
+                .lines()
+                .find(|line| line.contains("_make("))
+                .unwrap();
+            assert!(declaration.contains("_buffer "), "{declaration}");
+        }
+        for mixed in [false, true] {
+            let expansion = match (bytes, mixed) {
+                (false, false) => expand_return!(String).field_self().field_self(),
+                (true, false) => expand_return!(Vec<u8>).field_self().field_self(),
+                (false, true) => expand_return!(String).field_self().field_self_into(),
+                (true, true) => expand_return!(Vec<u8>).field_self().field_self_into(),
+            };
+            let error = fail(
+                JniGen::builder()
+                    .flat(flat(&source))
+                    .set_package_prefix("test")
+                    .package(package!().fun(fun!(make).expand_return(expansion.clone()))),
+            );
+            assert!(error.contains("field_self_ref()"), "{error}");
+            let c = prebindgen_c::Cbindgen::new(
+                prebindgen_flat::Flat::parse(
+                    syn::parse_file(&source)
+                        .unwrap()
+                        .items
+                        .into_iter()
+                        .map(|i| (i, Default::default())),
+                )
+                .unwrap(),
+            )
+            .function(fun!(make).expand_return(expansion))
+            .panic()
+            .build()
+            .err()
+            .unwrap();
+            assert!(c.contains("field_self_ref()"), "{c}");
+        }
+        let source = format!(
+            "pub fn make()->Option<{ty}>{{}}pub fn observe(value:&Option<{ty}>)->usize{{}}"
+        );
+        let expansion = if bytes {
+            expand_return!(Option<Vec<u8>>)
+                .field_self()
+                .field(fun!(observe))
+        } else {
+            expand_return!(Option<String>)
+                .field_self()
+                .field(fun!(observe))
+        };
+        let jni = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(make).expand_return(expansion.clone())))
+            .build()
+            .unwrap();
+        let c = prebindgen_c::Cbindgen::new(
+            prebindgen_flat::Flat::parse(
+                syn::parse_file(&source)
+                    .unwrap()
+                    .items
+                    .into_iter()
+                    .map(|i| (i, Default::default())),
+            )
+            .unwrap(),
+        )
+        .function(fun!(make).expand_return(expansion))
+        .panic()
+        .build()
+        .unwrap();
+        assert!(!jni.rust.contains("Clone::clone"));
+        assert!(!c.rust.contains("Clone::clone"));
+    }
+}
+
+#[test]
+fn callback_return_handles_use_direct_locks_and_collections_keep_dynamic_locks() {
+    for returned in ["Handle", "Option<Handle>", "Vec<Handle>"] {
+        let source=format!("pub struct Handle {{pub n:i64}}pub fn call(callback:impl Fn()->{returned}+Send+Sync+'static)->i64{{}}");
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().class(ptr_class!(Handle)).fun(fun!(call)))
+            .build()
+            .unwrap();
+        let wrapper = &generated.kotlin["test/Functions.kt"];
+        assert!(wrapper.contains("test.withHandleLocks("));
+        if returned == "Vec<Handle>" {
+            assert!(wrapper.contains("flatMap"));
+        } else {
+            assert!(!wrapper.contains("listOfNotNull"), "{returned}: {wrapper}");
+            assert!(!wrapper.contains("emptyList"), "{returned}: {wrapper}");
+        }
+    }
 }

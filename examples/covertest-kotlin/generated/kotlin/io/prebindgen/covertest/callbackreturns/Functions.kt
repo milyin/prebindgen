@@ -615,7 +615,7 @@ public fun `callbackReturnOwned`(p0_callback: io.prebindgen.covertest.VoidToCall
         }
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w1) { "null handle" } else null)) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
+ try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
 if (true) callback_return_w1!!.markConsumed()
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
     }
@@ -660,7 +660,7 @@ var callbackReturnReady = false
             }
         } } catch (failure: Throwable) { if (callbackReturnReady) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callbackReturned) }; throw failure }
 return kotlin.run { val callback_return_w1 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w1) { "null handle" } else null)) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
+ try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
 if (true) callback_return_w1!!.markConsumed()
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
     }
@@ -686,7 +686,7 @@ public fun `callbackReturnOwnedOptional`(p0_callback: io.prebindgen.covertest.Vo
         }
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w3 = callbackReturned
- try {  io.prebindgen.covertest.withHandleLocks(kotlin.collections.listOfNotNull(if (callback_return_w3 != null) if (true) requireNotNull(requireNotNull(callback_return_w3)) { "null handle" } else null else null)) { val callbackReturnWire = if (callback_return_w3 != null) requireNotNull(callback_return_w3).raw else 0L
+ try {  io.prebindgen.covertest.withHandleLocks(if (callback_return_w3 != null) if (true) requireNotNull(requireNotNull(callback_return_w3)) { "null handle" } else null else null) { val callbackReturnWire = if (callback_return_w3 != null) requireNotNull(callback_return_w3).raw else 0L
 if (callback_return_w3 != null) { if (true) requireNotNull(callback_return_w3).markConsumed() }
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w3); throw failure } }
     }

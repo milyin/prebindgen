@@ -31,6 +31,10 @@ internal object JNINative {
     @JvmStatic external fun drop_ReportStruct_2659d7dec79ecce0(id: Long)
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
+    @JvmStatic external fun call_buffer_views_optional_text_2e5df9089cef5211(p0_w1: Boolean): Array<Any?>
+    @JvmStatic external fun call_buffer_views_optional_bytes_f3f56b8a8b1996c2(p0_w1: Boolean): Array<Any?>
+    @JvmStatic external fun call_buffer_views_text_d3011d2eb33189c1(): Array<Any?>
+    @JvmStatic external fun call_buffer_views_bytes_491539966ab74896(): Array<Any?>
     @JvmStatic external fun call_getter_owner_new_9b3691104cf4f094(p0_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_getter_owner_failure_983fd2bf1ecc08ff(): Array<Any?>
     @JvmStatic external fun call_getter_owner_id_6e5c79e15f3c8ecb(p0_w1: Long): Array<Any?>
@@ -303,6 +307,7 @@ internal object JNINative {
     @JvmStatic external fun call_storage_summary_handle_7c23e0abb4322c29(p0_w1: Long): Array<Any?>
     @JvmStatic external fun call_projection_pair_borrowed_bc9032fce77ca56f(): Array<Any?>
     @JvmStatic external fun call_projection_pair_owned_eda94d58bc123b34(): Array<Any?>
+    @JvmStatic external fun call_projection_pair_callback_7a64636be1de6f9f(p0_callback: Any?): Array<Any?>
     @JvmStatic external fun call_projection_pair_mixed_833184fb3cea18c0(): Array<Any?>
     @JvmStatic external fun call_projection_pair_views_05197d1569e216c6(): Array<Any?>
     @JvmStatic external fun call_projection_clones_4cb30df2ddad16fb(): Array<Any?>

@@ -1623,6 +1623,335 @@ pub unsafe extern "C" fn perftest_blob_value_new(
     value.v0
 }
 #[repr(C)]
+pub struct perftest_buffer_views_address_result {
+    pub v0: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_address() -> usize {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_address_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_views_address();
+            let ret_w0 = source_value;
+            let result = perftest_buffer_views_address_result {
+                v0: ret_w0,
+            };
+            std::ptr::write(output, result);
+            let _: () = {};
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_bytes_result {
+    pub v0: __PbBuffer,
+    pub v1: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_bytes(out1: *mut usize) -> __PbBuffer {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_bytes_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let source_value = perftest_flat::buffer_views_bytes();
+            let ret_w1 = perftest_flat::buffer_views_bytes_len(&source_value);
+            let ret_w2 = ret_w1;
+            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
+                .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_buffer_views_bytes_result {
+                v0: __PbBuffer {
+                    data: ret_w0 as *const u8,
+                    len: ret_w0.len(),
+                },
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_optional_bytes_result {
+    pub v0: i32,
+    pub v1: __PbBuffer,
+    pub v2: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_optional_bytes(
+    p0_w1: u8,
+    out1: *mut __PbBuffer,
+    out2: *mut usize,
+) -> i32 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_optional_bytes_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        if out2.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_bytes(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_bytes_len(&source_value);
+            let ret_w4 = ret_w3;
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
+                    .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w0_values = (
+                    __PbBuffer {
+                        data: ret_w2 as *const u8,
+                        len: ret_w2.len(),
+                    },
+                );
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        ::core::mem::forget(ret_w2_owner);
+                    }),
+                )
+            } else {
+                (
+                    0i32,
+                    (
+                        __PbBuffer {
+                            data: std::ptr::null(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_buffer_views_optional_bytes_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+                v2: ret_w4,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    std::ptr::write(out2, value.v2);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_optional_text_result {
+    pub v0: i32,
+    pub v1: __PbBuffer,
+    pub v2: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_optional_text(
+    p0_w1: u8,
+    out1: *mut __PbBuffer,
+    out2: *mut usize,
+) -> i32 {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_optional_text_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        if out2.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_text(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_text_len(&source_value);
+            let ret_w4 = ret_w3;
+            let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
+                    .into_boxed_slice();
+                let ret_w2 = Box::into_raw(ret_w2);
+                let ret_w2_owner = __PbOutputOwner(ret_w2);
+                let ret_w0_values = (
+                    __PbBuffer {
+                        data: ret_w2 as *const u8,
+                        len: ret_w2.len(),
+                    },
+                );
+                (
+                    1i32,
+                    ret_w0_values,
+                    Some(move || {
+                        ::core::mem::forget(ret_w2_owner);
+                    }),
+                )
+            } else {
+                (
+                    0i32,
+                    (
+                        __PbBuffer {
+                            data: std::ptr::null(),
+                            len: 0,
+                        },
+                    ),
+                    None,
+                )
+            };
+            let result = perftest_buffer_views_optional_text_result {
+                v0: ret_w0,
+                v1: ret_w0_value0,
+                v2: ret_w4,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    std::ptr::write(out2, value.v2);
+    value.v0
+}
+#[repr(C)]
+pub struct perftest_buffer_views_text_result {
+    pub v0: __PbBuffer,
+    pub v1: usize,
+}
+/**# Safety
+Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
+#[allow(
+    clippy::needless_borrow,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+#[no_mangle]
+pub unsafe extern "C" fn perftest_buffer_views_text(out1: *mut usize) -> __PbBuffer {
+    #[allow(unused_mut)]
+    let mut _ownership_accepted = false;
+    let mut storage = std::mem::MaybeUninit::<
+        perftest_buffer_views_text_result,
+    >::uninit();
+    let output = storage.as_mut_ptr();
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if out1.is_null() {
+            return Err("null success output".into());
+        }
+        {
+            let source_value = perftest_flat::buffer_views_text();
+            let ret_w1 = perftest_flat::buffer_views_text_len(&source_value);
+            let ret_w2 = ret_w1;
+            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
+                .into_boxed_slice();
+            let ret_w0 = Box::into_raw(ret_w0);
+            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let result = perftest_buffer_views_text_result {
+                v0: __PbBuffer {
+                    data: ret_w0 as *const u8,
+                    len: ret_w0.len(),
+                },
+                v1: ret_w2,
+            };
+            std::ptr::write(output, result);
+            let _: () = {
+                ::core::mem::forget(ret_w0_owner);
+            };
+            Ok(())
+        }
+    }) {
+        panic!("C binding failed: {}", error);
+    }
+    let value = storage.assume_init();
+    std::ptr::write(out1, value.v1);
+    value.v0
+}
+#[repr(C)]
 pub struct perftest_c_panic_output_new_result {
     pub v0: *mut perftest_flat::CPanicOutput,
 }

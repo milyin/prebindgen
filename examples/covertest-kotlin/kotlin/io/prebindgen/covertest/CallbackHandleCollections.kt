@@ -112,8 +112,8 @@ fun checkCallbackHandleCollections() {
     } })
     check(conversionCalls == 1 && callbackRowResourceLive() == 0L)
 
-    // Element expansion moves non-Clone resources but leaves the enclosing
-    // collection scoped unless that collection itself has an output expansion.
+    // Owned rows move non-Clone resources by default. The enclosing collection
+    // stays scoped unless that collection itself has an output expansion.
     var uniqueRows: List<CallbackUniqueRow> = emptyList()
     var uniqueOwner: CallbackUniqueResource? = null
     var uniqueCalls = 0

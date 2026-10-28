@@ -916,6 +916,322 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_drop_1Summa
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1optional_1text_12e5df9089cef5211<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: u8,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_text(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_text_len(&source_value);
+            let ret_w4 = (ret_w3) as i64;
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = Some(ret_w1);
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (None,), None)
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0_value0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w4)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1optional_1bytes_1f3f56b8a8b1996c2<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_w1: u8,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_w0 = if true { Some(p0_w1 != 0) } else { None };
+            let p0_w0: bool = ::core::convert::Into::into(p0_w0.expect("active value"));
+            let __prebindgen_argument_0 = p0_w0;
+            let source_value = perftest_flat::buffer_views_optional_bytes(
+                __prebindgen_argument_0,
+            );
+            let ret_w3 = perftest_flat::buffer_views_optional_bytes_len(&source_value);
+            let ret_w4 = (ret_w3) as i64;
+            let (_, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
+                let ret_w2 = Some(ret_w1);
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
+            } else {
+                (0i32, (None,), None)
+            };
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0_value0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w4)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {
+                if let Some(ret_w0_action) = ret_w0_commit {
+                    ret_w0_action();
+                }
+            };
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1text_1d3011d2eb33189c1<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_views_text();
+            let ret_w1 = perftest_flat::buffer_views_text_len(&source_value);
+            let ret_w2 = (ret_w1) as i64;
+            let ret_w0 = Some(source_value);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::text_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1buffer_1views_1bytes_1491539966ab74896<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let source_value = perftest_flat::buffer_views_bytes();
+            let ret_w1 = perftest_flat::buffer_views_bytes_len(&source_value);
+            let ret_w2 = (ret_w1) as i64;
+            let ret_w0 = Some(source_value);
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 3usize)?;
+            let object = match (ret_w0).as_ref() {
+                Some(value) => {
+                    ::prebindgen_jni_runtime::bytes_object(&mut jni_environment, value)?
+                }
+                None => ::prebindgen_jni_runtime::jni::objects::JObject::null(),
+            };
+            jni_environment
+                .set_object_array_element(&result, 1i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let object = jni_environment
+                .call_static_method(
+                    "java/lang/Long",
+                    "valueOf",
+                    "(J)Ljava/lang/Long;",
+                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
+                )
+                .and_then(|v| v.l())
+                .map_err(|e| e.to_string())?;
+            jni_environment
+                .set_object_array_element(&result, 2i32, &object)
+                .map_err(|e| e.to_string())?;
+            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1getter_1owner_1new_19b3691104cf4f094<
     'local,
 >(
@@ -6185,12 +6501,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let mut callback_environment = callback_environment;
                             let callback_value_0 = callback_source_0;
                             {
-                                let callback_arg_0_w0_record = &(callback_value_0);
-                                let callback_arg_0_w0_f0: &i64 = &callback_arg_0_w0_record
-                                    .number;
-                                let callback_arg_0_w0_f0 = *callback_arg_0_w0_f0;
+                                let callback_arg_0_w0_record = callback_value_0;
+                                let callback_arg_0_w0_f0 = callback_arg_0_w0_record.number;
                                 let callback_arg_0_w0_f1 = Some(
-                                    ::core::clone::Clone::clone(&callback_arg_0_w0_record.label),
+                                    callback_arg_0_w0_record.label,
                                 );
                                 let callback_java_0_1 = match (callback_arg_0_w0_f1)
                                     .as_ref()
@@ -10515,23 +10829,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             ),
                                             callback_arg_0_w8_commit,
                                         ) = if let Some(callback_arg_0_w9) = callback_arg_0_w5 {
-                                            let callback_arg_0_w10_record = &(callback_arg_0_w9);
-                                            let callback_arg_0_w10_f0_record = &(&callback_arg_0_w10_record
-                                                .row);
+                                            let callback_arg_0_w10_record = callback_arg_0_w9;
+                                            let callback_arg_0_w10_f0_record = callback_arg_0_w10_record
+                                                .row;
                                             let mut callback_arg_0_w10_f0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                                value: ::core::clone::Clone::clone(
-                                                    &callback_arg_0_w10_f0_record.first,
-                                                ),
+                                                value: callback_arg_0_w10_f0_record.first,
                                             });
                                             let callback_arg_0_w10_f0_f1 = Some(
-                                                ::core::clone::Clone::clone(
-                                                    &callback_arg_0_w10_f0_record.label,
-                                                ),
+                                                callback_arg_0_w10_f0_record.label,
                                             );
                                             let mut callback_arg_0_w10_f0_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                                value: ::core::clone::Clone::clone(
-                                                    &callback_arg_0_w10_f0_record.second,
-                                                ),
+                                                value: callback_arg_0_w10_f0_record.second,
                                             });
                                             let (
                                                 callback_arg_0_w10_f1_present,
@@ -10540,23 +10848,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     callback_arg_0_w10_f1_present_value1,
                                                 ),
                                                 callback_arg_0_w10_f1_present_commit,
-                                            ) = if let Some(callback_arg_0_w10_f1_payload) = (&callback_arg_0_w10_record
-                                                .detail)
-                                                .as_ref()
+                                            ) = if let Some(callback_arg_0_w10_f1_payload) = callback_arg_0_w10_record
+                                                .detail
                                             {
-                                                let callback_arg_0_w10_f1_some_record = &(callback_arg_0_w10_f1_payload);
+                                                let callback_arg_0_w10_f1_some_record = callback_arg_0_w10_f1_payload;
                                                 let (
                                                     _,
                                                     (callback_arg_0_w10_f1_some_f0_present_value0,),
                                                     callback_arg_0_w10_f1_some_f0_present_commit,
-                                                ) = if let Some(callback_arg_0_w10_f1_some_f0_payload) = (&callback_arg_0_w10_f1_some_record
-                                                    .resource)
-                                                    .as_ref()
+                                                ) = if let Some(callback_arg_0_w10_f1_some_f0_payload) = callback_arg_0_w10_f1_some_record
+                                                    .resource
                                                 {
                                                     let mut callback_arg_0_w10_f1_some_f0_some = Box::new(::prebindgen_jni_runtime::Allocation {
-                                                        value: ::core::clone::Clone::clone(
-                                                            callback_arg_0_w10_f1_some_f0_payload,
-                                                        ),
+                                                        value: callback_arg_0_w10_f1_some_f0_payload,
                                                     });
                                                     let callback_arg_0_w10_f1_some_f0_present_values = (
                                                         (&mut *callback_arg_0_w10_f1_some_f0_some)
@@ -10575,9 +10879,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                                     (0i32, (std::ptr::null_mut(),), None)
                                                 };
                                                 let callback_arg_0_w10_f1_some_f1 = Some(
-                                                    ::core::clone::Clone::clone(
-                                                        &callback_arg_0_w10_f1_some_record.note,
-                                                    ),
+                                                    callback_arg_0_w10_f1_some_record.note,
                                                 );
                                                 let callback_arg_0_w10_f1_present_values = (
                                                     callback_arg_0_w10_f1_some_f0_present_value0,
@@ -11488,19 +11790,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             11i32,
                                         )
                                     }?;
-                                    let callback_arg_0_w4_record = &(callback_arg_0_w1);
+                                    let callback_arg_0_w4_record = callback_arg_0_w1;
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.first,
-                                        ),
+                                        value: callback_arg_0_w4_record.first,
                                     });
                                     let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
+                                        callback_arg_0_w4_record.label,
                                     );
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.second,
-                                        ),
+                                        value: callback_arg_0_w4_record.second,
                                     });
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
@@ -11709,19 +12007,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                                             11i32,
                                         )
                                     }?;
-                                    let callback_arg_0_w4_record = &(callback_arg_0_w1);
+                                    let callback_arg_0_w4_record = callback_arg_0_w1;
                                     let mut callback_arg_0_w4_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.first,
-                                        ),
+                                        value: callback_arg_0_w4_record.first,
                                     });
                                     let callback_arg_0_w4_f1 = Some(
-                                        ::core::clone::Clone::clone(&callback_arg_0_w4_record.label),
+                                        callback_arg_0_w4_record.label,
                                     );
                                     let mut callback_arg_0_w4_f2 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                        value: ::core::clone::Clone::clone(
-                                            &callback_arg_0_w4_record.second,
-                                        ),
+                                        value: callback_arg_0_w4_record.second,
                                     });
                                     let callback_arg_0_w0_row = ::prebindgen_jni_runtime::array(
                                         &mut callback_environment,
@@ -17074,14 +17368,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1callb
                             let mut callback_environment = callback_environment;
                             let callback_value_0 = callback_source_0;
                             {
-                                let callback_arg_0_w0_record = &(callback_value_0);
+                                let callback_arg_0_w0_record = callback_value_0;
                                 let mut callback_arg_0_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
-                                    value: ::core::clone::Clone::clone(
-                                        &callback_arg_0_w0_record.handle,
-                                    ),
+                                    value: callback_arg_0_w0_record.handle,
                                 });
                                 let callback_arg_0_w0_f1 = Some(
-                                    ::core::clone::Clone::clone(&callback_arg_0_w0_record.label),
+                                    callback_arg_0_w0_record.label,
                                 );
                                 let callback_java_0_1 = match (callback_arg_0_w0_f1)
                                     .as_ref()
@@ -17676,30 +17968,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 17i32)
                 }?;
-                let ret_w4_record = &(ret_w1);
-                let ret_w4_f0: &bool = &ret_w4_record.flag;
-                let ret_w4_f0 = u8::from(*ret_w4_f0);
-                let ret_w4_f1: &i8 = &ret_w4_record.byte;
-                let ret_w4_f1 = *ret_w4_f1;
-                let ret_w4_f2: &i16 = &ret_w4_record.short;
-                let ret_w4_f2 = *ret_w4_f2;
-                let ret_w4_f3: &i32 = &ret_w4_record.number;
-                let ret_w4_f3 = *ret_w4_f3;
-                let ret_w4_f4: &i64 = &ret_w4_record.long;
-                let ret_w4_f4 = *ret_w4_f4;
-                let ret_w4_f5: &f32 = &ret_w4_record.float;
-                let ret_w4_f5 = *ret_w4_f5;
-                let ret_w4_f6: &f64 = &ret_w4_record.double;
-                let ret_w4_f6 = *ret_w4_f6;
-                let ret_w4_f7: &i128 = &ret_w4_record.wide;
-                let ret_w4_f7 = (*ret_w4_f7).to_be_bytes();
+                let ret_w4_record = ret_w1;
+                let ret_w4_f0 = u8::from(ret_w4_record.flag);
+                let ret_w4_f1 = ret_w4_record.byte;
+                let ret_w4_f2 = ret_w4_record.short;
+                let ret_w4_f3 = ret_w4_record.number;
+                let ret_w4_f4 = ret_w4_record.long;
+                let ret_w4_f5 = ret_w4_record.float;
+                let ret_w4_f6 = ret_w4_record.double;
+                let ret_w4_f7 = (ret_w4_record.wide).to_be_bytes();
                 let (_, (ret_w4_f8_present_value0,), ret_w4_f8_present_commit) = if let Some(
                     ret_w4_f8_payload,
-                ) = (&ret_w4_record.text).as_ref()
+                ) = ret_w4_record.text
                 {
-                    let ret_w4_f8_some = Some(
-                        ::core::clone::Clone::clone(ret_w4_f8_payload),
-                    );
+                    let ret_w4_f8_some = Some(ret_w4_f8_payload);
                     let ret_w4_f8_present_values = (ret_w4_f8_some,);
                     (1i32, ret_w4_f8_present_values, Some(move || {}))
                 } else {
@@ -23243,15 +23525,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1resul
                     });
                 }
             };
-            let ret_w2_record = &(ret_w0);
-            let ret_w2_f0: i32 = match &(&ret_w2_record.priority) {
+            let ret_w2_record = ret_w0;
+            let ret_w2_f0: i32 = match &(ret_w2_record.priority) {
                 perftest_flat::Priority::Low => 0i32,
                 perftest_flat::Priority::Normal => 1i32,
                 perftest_flat::Priority::High => 2i32,
             };
             let (_, (ret_w2_f1_present_value0,), ret_w2_f1_present_commit) = if let Some(
                 ret_w2_f1_payload,
-            ) = (&ret_w2_record.code).as_ref()
+            ) = ret_w2_record.code
             {
                 let ret_w2_f1_some: i32 = match &(ret_w2_f1_payload) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
@@ -24702,15 +24984,15 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1enum_
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::enum_record_echo(__prebindgen_argument_0);
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: i32 = match &(&ret_w0_record.priority) {
+            let ret_w0_record = source_value;
+            let ret_w0_f0: i32 = match &(ret_w0_record.priority) {
                 perftest_flat::Priority::Low => 0i32,
                 perftest_flat::Priority::Normal => 1i32,
                 perftest_flat::Priority::High => 2i32,
             };
             let (_, (ret_w0_f1_present_value0,), ret_w0_f1_present_commit) = if let Some(
                 ret_w0_f1_payload,
-            ) = (&ret_w0_record.code).as_ref()
+            ) = ret_w0_record.code
             {
                 let ret_w0_f1_some: i32 = match &(ret_w0_f1_payload) {
                     perftest_flat::SparseCode::Bottom => -2147483648i32,
@@ -27894,14 +28176,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
             let source_value = perftest_flat::optional_bytes_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
+            let ret_w0_record = source_value;
             let (_, (ret_w0_f0_present_value0,), ret_w0_f0_present_commit) = if let Some(
                 ret_w0_f0_payload,
-            ) = (&ret_w0_record.data).as_ref()
+            ) = ret_w0_record.data
             {
-                let ret_w0_f0_some = Some(
-                    ::core::clone::Clone::clone(ret_w0_f0_payload),
-                );
+                let ret_w0_f0_some = Some(ret_w0_f0_payload);
                 let ret_w0_f0_present_values = (ret_w0_f0_some,);
                 (1i32, ret_w0_f0_present_values, Some(move || {}))
             } else {
@@ -29409,14 +29689,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 (ret_w0_value0, ret_w0_value1, ret_w0_value2, ret_w0_value3),
                 ret_w0_commit,
             ) = if let Some(ret_w1) = source_value {
-                let ret_w2_record = &(ret_w1);
+                let ret_w2_record = ret_w1;
                 let (
                     ret_w2_f0_present,
                     (ret_w2_f0_present_value0,),
                     ret_w2_f0_present_commit,
-                ) = if let Some(ret_w2_f0_payload) = (&ret_w2_record.count).as_ref() {
-                    let ret_w2_f0_some: &i64 = ret_w2_f0_payload;
-                    let ret_w2_f0_some = *ret_w2_f0_some;
+                ) = if let Some(ret_w2_f0_payload) = ret_w2_record.count {
+                    let ret_w2_f0_some = ret_w2_f0_payload;
                     let ret_w2_f0_present_values = (ret_w2_f0_some,);
                     (1i32, ret_w2_f0_present_values, Some(move || {}))
                 } else {
@@ -29424,11 +29703,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 let (_, (ret_w2_f1_present_value0,), ret_w2_f1_present_commit) = if let Some(
                     ret_w2_f1_payload,
-                ) = (&ret_w2_record.text).as_ref()
+                ) = ret_w2_record.text
                 {
-                    let ret_w2_f1_some = Some(
-                        ::core::clone::Clone::clone(ret_w2_f1_payload),
-                    );
+                    let ret_w2_f1_some = Some(ret_w2_f1_payload);
                     let ret_w2_f1_present_values = (ret_w2_f1_some,);
                     (1i32, ret_w2_f1_present_values, Some(move || {}))
                 } else {
@@ -29436,10 +29713,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1optio
                 };
                 let (_, (ret_w2_f2_present_value0,), ret_w2_f2_present_commit) = if let Some(
                     ret_w2_f2_payload,
-                ) = (&ret_w2_record.letter).as_ref()
+                ) = ret_w2_record.letter
                 {
-                    let ret_w2_f2_some: &char = ret_w2_f2_payload;
-                    let ret_w2_f2_some = (*ret_w2_f2_some) as i32;
+                    let ret_w2_f2_some = (ret_w2_f2_payload) as i32;
                     let ret_w2_f2_present_values = (ret_w2_f2_some,);
                     (1i32, ret_w2_f2_present_values, Some(move || {}))
                 } else {
@@ -30215,22 +30491,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1unsig
                 __prebindgen_argument_3,
                 __prebindgen_argument_4,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: &u8 = &ret_w0_record.byte;
-            let ret_w0_f0 = (*ret_w0_f0) as i32;
-            let ret_w0_f1: &u16 = &ret_w0_record.short;
-            let ret_w0_f1 = (*ret_w0_f1) as i32;
-            let ret_w0_f2: &u32 = &ret_w0_record.int;
-            let ret_w0_f2 = (*ret_w0_f2) as i64;
-            let ret_w0_f3: &u64 = &ret_w0_record.long;
-            let ret_w0_f3 = (*ret_w0_f3) as i64;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = (ret_w0_record.byte) as i32;
+            let ret_w0_f1 = (ret_w0_record.short) as i32;
+            let ret_w0_f2 = (ret_w0_record.int) as i64;
+            let ret_w0_f3 = (ret_w0_record.long) as i64;
             let (
                 ret_w0_f4_present,
                 (ret_w0_f4_present_value0,),
                 ret_w0_f4_present_commit,
-            ) = if let Some(ret_w0_f4_payload) = (&ret_w0_record.maybe_long).as_ref() {
-                let ret_w0_f4_some: &u64 = ret_w0_f4_payload;
-                let ret_w0_f4_some = (*ret_w0_f4_some) as i64;
+            ) = if let Some(ret_w0_f4_payload) = ret_w0_record.maybe_long {
+                let ret_w0_f4_some = (ret_w0_f4_payload) as i64;
                 let ret_w0_f4_present_values = (ret_w0_f4_some,);
                 (1i32, ret_w0_f4_present_values, Some(move || {}))
             } else {
@@ -30489,13 +30760,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0_record = &(&ret_w0_record.stamp);
-            let ret_w0_f0_f0: &i64 = &ret_w0_f0_record.secs;
-            let ret_w0_f0_f0 = *ret_w0_f0_f0;
-            let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
-            let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_record = source_value;
+            let ret_w0_f0_record = ret_w0_record.stamp;
+            let ret_w0_f0_f0 = ret_w0_f0_record.secs;
+            let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
+            let ret_w0_f1 = Some(ret_w0_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -30605,13 +30874,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::blob_value_echo(__prebindgen_argument_0);
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0_record = &(&ret_w0_record.stamp);
-            let ret_w0_f0_f0: &i64 = &ret_w0_f0_record.secs;
-            let ret_w0_f0_f0 = *ret_w0_f0_f0;
-            let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
-            let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_record = source_value;
+            let ret_w0_f0_record = ret_w0_record.stamp;
+            let ret_w0_f0_f0 = ret_w0_f0_record.secs;
+            let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
+            let ret_w0_f1 = Some(ret_w0_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -34664,6 +34931,105 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1proje
 /**# Safety
 Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
 #[no_mangle]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1callback_17a64636be1de6f9f<
+    'local,
+>(
+    mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
+    p0_callback: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    #[allow(unused_mut)]
+    let mut domain_output = None;
+    match ::prebindgen_runtime::boundary(|| {
+        {
+            let p0_callback_retained = ::prebindgen_jni_runtime::Callback::new_named(
+                &mut jni_environment,
+                &p0_callback,
+                "(JJ)V",
+                "io.prebindgen.covertest.resources.ProjectionPairCallback",
+            )?;
+            #[allow(unused_mut)]
+            let p0_callback_value = move |
+                callback_source_0: perftest_flat::ProjectionPair|
+            {
+                p0_callback_retained
+                    .with_env(
+                        18i32,
+                        |callback_environment| {
+                            let mut callback_environment = callback_environment;
+                            let callback_value_0 = callback_source_0;
+                            {
+                                let callback_arg_0_w0_record = callback_value_0;
+                                let mut callback_arg_0_w0_f0 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                    value: callback_arg_0_w0_record.first,
+                                });
+                                let mut callback_arg_0_w0_f1 = Box::new(::prebindgen_jni_runtime::Allocation {
+                                    value: callback_arg_0_w0_record.second,
+                                });
+                                let arguments = [
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *callback_arg_0_w0_f0)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                perftest_flat::ProjectionHandle,
+                                            >) as i64,
+                                    },
+                                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                        j: ((&mut *callback_arg_0_w0_f1)
+                                            as *mut ::prebindgen_jni_runtime::Allocation<
+                                                perftest_flat::ProjectionHandle,
+                                            >) as i64,
+                                    },
+                                ];
+                                {
+                                    let _ = Box::into_raw(callback_arg_0_w0_f0);
+                                    let _ = Box::into_raw(callback_arg_0_w0_f1);
+                                }
+                                unsafe {
+                                    p0_callback_retained
+                                        .invoke(callback_environment, &arguments)
+                                }
+                            }
+                        },
+                    );
+            };
+            let __prebindgen_argument_0 = p0_callback_value;
+            let source_value = perftest_flat::projection_pair_callback(
+                __prebindgen_argument_0,
+            );
+            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 1usize)?;
+            let _: () = {};
+            Ok(result.into_raw())
+        }
+    }) {
+        Ok(result) => result,
+        Err(e) => {
+            if let Some(result) = domain_output {
+                result
+            } else {
+                match ::prebindgen_jni_runtime::binding_packet(
+                    &mut jni_environment,
+                    &e,
+                ) {
+                    Ok(result) => result.into_raw(),
+                    Err(message) => {
+                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
+                        std::ptr::null_mut()
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(
+    clippy::needless_borrow,
+    clippy::borrow_deref_ref,
+    clippy::let_unit_value,
+    clippy::unnecessary_cast,
+    clippy::useless_conversion
+)]
+/**# Safety
+Only generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types.*/
+#[no_mangle]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1projection_1pair_1mixed_1833184fb3cea18c0<
     'local,
 >(
@@ -36196,39 +36562,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let source_value = perftest_flat::data_primitives_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: &i8 = &ret_w0_record.i8v;
-            let ret_w0_f0 = *ret_w0_f0;
-            let ret_w0_f1: &i16 = &ret_w0_record.i16v;
-            let ret_w0_f1 = *ret_w0_f1;
-            let ret_w0_f2: &i32 = &ret_w0_record.i32v;
-            let ret_w0_f2 = *ret_w0_f2;
-            let ret_w0_f3: &i64 = &ret_w0_record.i64v;
-            let ret_w0_f3 = *ret_w0_f3;
-            let ret_w0_f4: &i128 = &ret_w0_record.i128v;
-            let ret_w0_f4 = (*ret_w0_f4).to_be_bytes();
-            let ret_w0_f5: &isize = &ret_w0_record.isizev;
-            let ret_w0_f5 = (*ret_w0_f5) as i64;
-            let ret_w0_f6: &u8 = &ret_w0_record.u8v;
-            let ret_w0_f6 = (*ret_w0_f6) as i32;
-            let ret_w0_f7: &u16 = &ret_w0_record.u16v;
-            let ret_w0_f7 = (*ret_w0_f7) as i32;
-            let ret_w0_f8: &u32 = &ret_w0_record.u32v;
-            let ret_w0_f8 = (*ret_w0_f8) as i64;
-            let ret_w0_f9: &u64 = &ret_w0_record.u64v;
-            let ret_w0_f9 = (*ret_w0_f9) as i64;
-            let ret_w0_f10: &u128 = &ret_w0_record.u128v;
-            let ret_w0_f10 = (*ret_w0_f10).to_be_bytes();
-            let ret_w0_f11: &usize = &ret_w0_record.usizev;
-            let ret_w0_f11 = (*ret_w0_f11) as i64;
-            let ret_w0_f12: &f32 = &ret_w0_record.f32v;
-            let ret_w0_f12 = *ret_w0_f12;
-            let ret_w0_f13: &f64 = &ret_w0_record.f64v;
-            let ret_w0_f13 = *ret_w0_f13;
-            let ret_w0_f14: &bool = &ret_w0_record.boolv;
-            let ret_w0_f14 = u8::from(*ret_w0_f14);
-            let ret_w0_f15: &char = &ret_w0_record.charv;
-            let ret_w0_f15 = (*ret_w0_f15) as i32;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = ret_w0_record.i8v;
+            let ret_w0_f1 = ret_w0_record.i16v;
+            let ret_w0_f2 = ret_w0_record.i32v;
+            let ret_w0_f3 = ret_w0_record.i64v;
+            let ret_w0_f4 = (ret_w0_record.i128v).to_be_bytes();
+            let ret_w0_f5 = (ret_w0_record.isizev) as i64;
+            let ret_w0_f6 = (ret_w0_record.u8v) as i32;
+            let ret_w0_f7 = (ret_w0_record.u16v) as i32;
+            let ret_w0_f8 = (ret_w0_record.u32v) as i64;
+            let ret_w0_f9 = (ret_w0_record.u64v) as i64;
+            let ret_w0_f10 = (ret_w0_record.u128v).to_be_bytes();
+            let ret_w0_f11 = (ret_w0_record.usizev) as i64;
+            let ret_w0_f12 = ret_w0_record.f32v;
+            let ret_w0_f13 = ret_w0_record.f64v;
+            let ret_w0_f14 = u8::from(ret_w0_record.boolv);
+            let ret_w0_f15 = (ret_w0_record.charv) as i32;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 17usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -36472,39 +36822,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
     match ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::data_primitives_zero();
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0: &i8 = &ret_w0_record.i8v;
-            let ret_w0_f0 = *ret_w0_f0;
-            let ret_w0_f1: &i16 = &ret_w0_record.i16v;
-            let ret_w0_f1 = *ret_w0_f1;
-            let ret_w0_f2: &i32 = &ret_w0_record.i32v;
-            let ret_w0_f2 = *ret_w0_f2;
-            let ret_w0_f3: &i64 = &ret_w0_record.i64v;
-            let ret_w0_f3 = *ret_w0_f3;
-            let ret_w0_f4: &i128 = &ret_w0_record.i128v;
-            let ret_w0_f4 = (*ret_w0_f4).to_be_bytes();
-            let ret_w0_f5: &isize = &ret_w0_record.isizev;
-            let ret_w0_f5 = (*ret_w0_f5) as i64;
-            let ret_w0_f6: &u8 = &ret_w0_record.u8v;
-            let ret_w0_f6 = (*ret_w0_f6) as i32;
-            let ret_w0_f7: &u16 = &ret_w0_record.u16v;
-            let ret_w0_f7 = (*ret_w0_f7) as i32;
-            let ret_w0_f8: &u32 = &ret_w0_record.u32v;
-            let ret_w0_f8 = (*ret_w0_f8) as i64;
-            let ret_w0_f9: &u64 = &ret_w0_record.u64v;
-            let ret_w0_f9 = (*ret_w0_f9) as i64;
-            let ret_w0_f10: &u128 = &ret_w0_record.u128v;
-            let ret_w0_f10 = (*ret_w0_f10).to_be_bytes();
-            let ret_w0_f11: &usize = &ret_w0_record.usizev;
-            let ret_w0_f11 = (*ret_w0_f11) as i64;
-            let ret_w0_f12: &f32 = &ret_w0_record.f32v;
-            let ret_w0_f12 = *ret_w0_f12;
-            let ret_w0_f13: &f64 = &ret_w0_record.f64v;
-            let ret_w0_f13 = *ret_w0_f13;
-            let ret_w0_f14: &bool = &ret_w0_record.boolv;
-            let ret_w0_f14 = u8::from(*ret_w0_f14);
-            let ret_w0_f15: &char = &ret_w0_record.charv;
-            let ret_w0_f15 = (*ret_w0_f15) as i32;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = ret_w0_record.i8v;
+            let ret_w0_f1 = ret_w0_record.i16v;
+            let ret_w0_f2 = ret_w0_record.i32v;
+            let ret_w0_f3 = ret_w0_record.i64v;
+            let ret_w0_f4 = (ret_w0_record.i128v).to_be_bytes();
+            let ret_w0_f5 = (ret_w0_record.isizev) as i64;
+            let ret_w0_f6 = (ret_w0_record.u8v) as i32;
+            let ret_w0_f7 = (ret_w0_record.u16v) as i32;
+            let ret_w0_f8 = (ret_w0_record.u32v) as i64;
+            let ret_w0_f9 = (ret_w0_record.u64v) as i64;
+            let ret_w0_f10 = (ret_w0_record.u128v).to_be_bytes();
+            let ret_w0_f11 = (ret_w0_record.usizev) as i64;
+            let ret_w0_f12 = ret_w0_record.f32v;
+            let ret_w0_f13 = ret_w0_record.f64v;
+            let ret_w0_f14 = u8::from(ret_w0_record.boolv);
+            let ret_w0_f15 = (ret_w0_record.charv) as i32;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 17usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -36908,46 +37242,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let source_value = perftest_flat::data_envelope_echo(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0 = Some(::core::clone::Clone::clone(&ret_w0_record.label));
-            let ret_w0_f1_record = &(&ret_w0_record.blob);
-            let ret_w0_f1_f0_record = &(&ret_w0_f1_record.stamp);
-            let ret_w0_f1_f0_f0: &i64 = &ret_w0_f1_f0_record.secs;
-            let ret_w0_f1_f0_f0 = *ret_w0_f1_f0_f0;
-            let ret_w0_f1_f0_f1: &i64 = &ret_w0_f1_f0_record.nanos;
-            let ret_w0_f1_f0_f1 = *ret_w0_f1_f0_f1;
-            let ret_w0_f1_f1 = Some(::core::clone::Clone::clone(&ret_w0_f1_record.id));
-            let ret_w0_f2_record = &(&ret_w0_record.unsigned);
-            let ret_w0_f2_f0: &u8 = &ret_w0_f2_record.byte;
-            let ret_w0_f2_f0 = (*ret_w0_f2_f0) as i32;
-            let ret_w0_f2_f1: &u16 = &ret_w0_f2_record.short;
-            let ret_w0_f2_f1 = (*ret_w0_f2_f1) as i32;
-            let ret_w0_f2_f2: &u32 = &ret_w0_f2_record.int;
-            let ret_w0_f2_f2 = (*ret_w0_f2_f2) as i64;
-            let ret_w0_f2_f3: &u64 = &ret_w0_f2_record.long;
-            let ret_w0_f2_f3 = (*ret_w0_f2_f3) as i64;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f1_record = ret_w0_record.blob;
+            let ret_w0_f1_f0_record = ret_w0_f1_record.stamp;
+            let ret_w0_f1_f0_f0 = ret_w0_f1_f0_record.secs;
+            let ret_w0_f1_f0_f1 = ret_w0_f1_f0_record.nanos;
+            let ret_w0_f1_f1 = Some(ret_w0_f1_record.id);
+            let ret_w0_f2_record = ret_w0_record.unsigned;
+            let ret_w0_f2_f0 = (ret_w0_f2_record.byte) as i32;
+            let ret_w0_f2_f1 = (ret_w0_f2_record.short) as i32;
+            let ret_w0_f2_f2 = (ret_w0_f2_record.int) as i64;
+            let ret_w0_f2_f3 = (ret_w0_f2_record.long) as i64;
             let (
                 ret_w0_f2_f4_present,
                 (ret_w0_f2_f4_present_value0,),
                 ret_w0_f2_f4_present_commit,
-            ) = if let Some(ret_w0_f2_f4_payload) = (&ret_w0_f2_record.maybe_long)
-                .as_ref()
-            {
-                let ret_w0_f2_f4_some: &u64 = ret_w0_f2_f4_payload;
-                let ret_w0_f2_f4_some = (*ret_w0_f2_f4_some) as i64;
+            ) = if let Some(ret_w0_f2_f4_payload) = ret_w0_f2_record.maybe_long {
+                let ret_w0_f2_f4_some = (ret_w0_f2_f4_payload) as i64;
                 let ret_w0_f2_f4_present_values = (ret_w0_f2_f4_some,);
                 (1i32, ret_w0_f2_f4_present_values, Some(move || {}))
             } else {
                 (0i32, (0,), None)
             };
-            let ret_w0_f3: &bool = &ret_w0_record.enabled;
-            let ret_w0_f3 = u8::from(*ret_w0_f3);
-            let ret_w0_f4: &char = &ret_w0_record.code;
-            let ret_w0_f4 = (*ret_w0_f4) as i32;
-            let ret_w0_f5: &i128 = &ret_w0_record.signed;
-            let ret_w0_f5 = (*ret_w0_f5).to_be_bytes();
-            let ret_w0_f6: &u128 = &ret_w0_record.wide;
-            let ret_w0_f6 = (*ret_w0_f6).to_be_bytes();
+            let ret_w0_f3 = u8::from(ret_w0_record.enabled);
+            let ret_w0_f4 = (ret_w0_record.code) as i32;
+            let ret_w0_f5 = (ret_w0_record.signed).to_be_bytes();
+            let ret_w0_f6 = (ret_w0_record.wide).to_be_bytes();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 15usize)?;
             let object = match (ret_w0_f0).as_ref() {
                 Some(value) => {
@@ -37473,46 +37794,33 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             let source_value = perftest_flat::data_envelope_constructed(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0 = Some(::core::clone::Clone::clone(&ret_w0_record.label));
-            let ret_w0_f1_record = &(&ret_w0_record.blob);
-            let ret_w0_f1_f0_record = &(&ret_w0_f1_record.stamp);
-            let ret_w0_f1_f0_f0: &i64 = &ret_w0_f1_f0_record.secs;
-            let ret_w0_f1_f0_f0 = *ret_w0_f1_f0_f0;
-            let ret_w0_f1_f0_f1: &i64 = &ret_w0_f1_f0_record.nanos;
-            let ret_w0_f1_f0_f1 = *ret_w0_f1_f0_f1;
-            let ret_w0_f1_f1 = Some(::core::clone::Clone::clone(&ret_w0_f1_record.id));
-            let ret_w0_f2_record = &(&ret_w0_record.unsigned);
-            let ret_w0_f2_f0: &u8 = &ret_w0_f2_record.byte;
-            let ret_w0_f2_f0 = (*ret_w0_f2_f0) as i32;
-            let ret_w0_f2_f1: &u16 = &ret_w0_f2_record.short;
-            let ret_w0_f2_f1 = (*ret_w0_f2_f1) as i32;
-            let ret_w0_f2_f2: &u32 = &ret_w0_f2_record.int;
-            let ret_w0_f2_f2 = (*ret_w0_f2_f2) as i64;
-            let ret_w0_f2_f3: &u64 = &ret_w0_f2_record.long;
-            let ret_w0_f2_f3 = (*ret_w0_f2_f3) as i64;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = Some(ret_w0_record.label);
+            let ret_w0_f1_record = ret_w0_record.blob;
+            let ret_w0_f1_f0_record = ret_w0_f1_record.stamp;
+            let ret_w0_f1_f0_f0 = ret_w0_f1_f0_record.secs;
+            let ret_w0_f1_f0_f1 = ret_w0_f1_f0_record.nanos;
+            let ret_w0_f1_f1 = Some(ret_w0_f1_record.id);
+            let ret_w0_f2_record = ret_w0_record.unsigned;
+            let ret_w0_f2_f0 = (ret_w0_f2_record.byte) as i32;
+            let ret_w0_f2_f1 = (ret_w0_f2_record.short) as i32;
+            let ret_w0_f2_f2 = (ret_w0_f2_record.int) as i64;
+            let ret_w0_f2_f3 = (ret_w0_f2_record.long) as i64;
             let (
                 ret_w0_f2_f4_present,
                 (ret_w0_f2_f4_present_value0,),
                 ret_w0_f2_f4_present_commit,
-            ) = if let Some(ret_w0_f2_f4_payload) = (&ret_w0_f2_record.maybe_long)
-                .as_ref()
-            {
-                let ret_w0_f2_f4_some: &u64 = ret_w0_f2_f4_payload;
-                let ret_w0_f2_f4_some = (*ret_w0_f2_f4_some) as i64;
+            ) = if let Some(ret_w0_f2_f4_payload) = ret_w0_f2_record.maybe_long {
+                let ret_w0_f2_f4_some = (ret_w0_f2_f4_payload) as i64;
                 let ret_w0_f2_f4_present_values = (ret_w0_f2_f4_some,);
                 (1i32, ret_w0_f2_f4_present_values, Some(move || {}))
             } else {
                 (0i32, (0,), None)
             };
-            let ret_w0_f3: &bool = &ret_w0_record.enabled;
-            let ret_w0_f3 = u8::from(*ret_w0_f3);
-            let ret_w0_f4: &char = &ret_w0_record.code;
-            let ret_w0_f4 = (*ret_w0_f4) as i32;
-            let ret_w0_f5: &i128 = &ret_w0_record.signed;
-            let ret_w0_f5 = (*ret_w0_f5).to_be_bytes();
-            let ret_w0_f6: &u128 = &ret_w0_record.wide;
-            let ret_w0_f6 = (*ret_w0_f6).to_be_bytes();
+            let ret_w0_f3 = u8::from(ret_w0_record.enabled);
+            let ret_w0_f4 = (ret_w0_record.code) as i32;
+            let ret_w0_f5 = (ret_w0_record.signed).to_be_bytes();
+            let ret_w0_f6 = (ret_w0_record.wide).to_be_bytes();
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 15usize)?;
             let object = match (ret_w0_f0).as_ref() {
                 Some(value) => {
@@ -37769,12 +38077,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1data_
             };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::data_floats_echo(__prebindgen_argument_0);
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0 = Some(::core::clone::Clone::clone(&ret_w0_record.bytes));
-            let ret_w0_f1: &f32 = &ret_w0_record.f;
-            let ret_w0_f1 = *ret_w0_f1;
-            let ret_w0_f2: &f64 = &ret_w0_record.d;
-            let ret_w0_f2 = *ret_w0_f2;
+            let ret_w0_record = source_value;
+            let ret_w0_f0 = Some(ret_w0_record.bytes);
+            let ret_w0_f1 = ret_w0_record.f;
+            let ret_w0_f2 = ret_w0_record.d;
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = match (ret_w0_f0).as_ref() {
                 Some(value) => {
@@ -37917,13 +38223,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let source_value = perftest_flat::blob_value_selected(
                 __prebindgen_argument_0,
             );
-            let ret_w0_record = &(source_value);
-            let ret_w0_f0_record = &(&ret_w0_record.stamp);
-            let ret_w0_f0_f0: &i64 = &ret_w0_f0_record.secs;
-            let ret_w0_f0_f0 = *ret_w0_f0_f0;
-            let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
-            let ret_w0_f0_f1 = *ret_w0_f0_f1;
-            let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
+            let ret_w0_record = source_value;
+            let ret_w0_f0_record = ret_w0_record.stamp;
+            let ret_w0_f0_f0 = ret_w0_f0_record.secs;
+            let ret_w0_f0_f1 = ret_w0_f0_record.nanos;
+            let ret_w0_f1 = Some(ret_w0_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 4usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -38040,21 +38344,17 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1blob_
             let ret_w0_f0_f1: &i64 = &ret_w0_f0_record.nanos;
             let ret_w0_f0_f1 = *ret_w0_f0_f1;
             let ret_w0_f1 = Some(::core::clone::Clone::clone(&ret_w0_record.id));
-            let ret_w1_record = &(&source_value);
-            let ret_w1_f0_record = &(&ret_w1_record.stamp);
-            let ret_w1_f0_f0: &i64 = &ret_w1_f0_record.secs;
-            let ret_w1_f0_f0 = *ret_w1_f0_f0;
-            let ret_w1_f0_f1: &i64 = &ret_w1_f0_record.nanos;
-            let ret_w1_f0_f1 = *ret_w1_f0_f1;
-            let ret_w1_f1 = Some(::core::clone::Clone::clone(&ret_w1_record.id));
             let ret_w2 = perftest_flat::blob_value_copy(&source_value);
-            let ret_w3_record = &(ret_w2);
-            let ret_w3_f0_record = &(&ret_w3_record.stamp);
-            let ret_w3_f0_f0: &i64 = &ret_w3_f0_record.secs;
-            let ret_w3_f0_f0 = *ret_w3_f0_f0;
-            let ret_w3_f0_f1: &i64 = &ret_w3_f0_record.nanos;
-            let ret_w3_f0_f1 = *ret_w3_f0_f1;
-            let ret_w3_f1 = Some(::core::clone::Clone::clone(&ret_w3_record.id));
+            let ret_w3_record = ret_w2;
+            let ret_w3_f0_record = ret_w3_record.stamp;
+            let ret_w3_f0_f0 = ret_w3_f0_record.secs;
+            let ret_w3_f0_f1 = ret_w3_f0_record.nanos;
+            let ret_w3_f1 = Some(ret_w3_record.id);
+            let ret_w1_record = source_value;
+            let ret_w1_f0_record = ret_w1_record.stamp;
+            let ret_w1_f0_f0 = ret_w1_f0_record.secs;
+            let ret_w1_f0_f1 = ret_w1_f0_record.nanos;
+            let ret_w1_f1 = Some(ret_w1_record.id);
             let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 10usize)?;
             let object = jni_environment
                 .call_static_method(
@@ -38631,30 +38931,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1colle
                 let ret_w0_callback_frame = unsafe {
                     ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 17i32)
                 }?;
-                let ret_w4_record = &(ret_w1);
-                let ret_w4_f0: &bool = &ret_w4_record.flag;
-                let ret_w4_f0 = u8::from(*ret_w4_f0);
-                let ret_w4_f1: &i8 = &ret_w4_record.byte;
-                let ret_w4_f1 = *ret_w4_f1;
-                let ret_w4_f2: &i16 = &ret_w4_record.short;
-                let ret_w4_f2 = *ret_w4_f2;
-                let ret_w4_f3: &i32 = &ret_w4_record.number;
-                let ret_w4_f3 = *ret_w4_f3;
-                let ret_w4_f4: &i64 = &ret_w4_record.long;
-                let ret_w4_f4 = *ret_w4_f4;
-                let ret_w4_f5: &f32 = &ret_w4_record.float;
-                let ret_w4_f5 = *ret_w4_f5;
-                let ret_w4_f6: &f64 = &ret_w4_record.double;
-                let ret_w4_f6 = *ret_w4_f6;
-                let ret_w4_f7: &i128 = &ret_w4_record.wide;
-                let ret_w4_f7 = (*ret_w4_f7).to_be_bytes();
+                let ret_w4_record = ret_w1;
+                let ret_w4_f0 = u8::from(ret_w4_record.flag);
+                let ret_w4_f1 = ret_w4_record.byte;
+                let ret_w4_f2 = ret_w4_record.short;
+                let ret_w4_f3 = ret_w4_record.number;
+                let ret_w4_f4 = ret_w4_record.long;
+                let ret_w4_f5 = ret_w4_record.float;
+                let ret_w4_f6 = ret_w4_record.double;
+                let ret_w4_f7 = (ret_w4_record.wide).to_be_bytes();
                 let (_, (ret_w4_f8_present_value0,), ret_w4_f8_present_commit) = if let Some(
                     ret_w4_f8_payload,
-                ) = (&ret_w4_record.text).as_ref()
+                ) = ret_w4_record.text
                 {
-                    let ret_w4_f8_some = Some(
-                        ::core::clone::Clone::clone(ret_w4_f8_payload),
-                    );
+                    let ret_w4_f8_some = Some(ret_w4_f8_payload);
                     let ret_w4_f8_present_values = (ret_w4_f8_some,);
                     (1i32, ret_w4_f8_present_values, Some(move || {}))
                 } else {

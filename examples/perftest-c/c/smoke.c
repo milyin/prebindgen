@@ -7,6 +7,7 @@
 #include <limits.h>
 #include "callback_returns.h"
 #include "borrowed_getters.h"
+#include "runtime_costs.h"
 
 struct sequence_acc { size_t calls; int64_t total; };
 static void sequence_number(void *context, int64_t value) {
@@ -574,6 +575,7 @@ int main(void) {
     check_borrowed_pointers();
     check_mutable_borrowed_pointers();
     check_owner_backed_views();
+    check_buffer_identity_views();
     check_callback_returns();
     /* Empty typed field overrides omit plain, optional and vector resources. */
     size_t omitted_before = perftest_owned_resource_drops();

@@ -3696,3 +3696,8 @@ pub fn result_unit_error(fail: bool) -> Result<i64, ()> {
         Ok(42)
     }
 }
+
+#[prebindgen]
+pub fn projection_pair_callback(callback: impl Fn(ProjectionPair) + Send + Sync + 'static) {
+    callback(projection_pair_owned());
+}
