@@ -1,3 +1,11 @@
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_string_len(value: &String) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_string_view(value: &String) -> &[u8] {
+    value.as_bytes()
+}
 #[allow(dead_code)]
 struct __PbOutputOwner<T: ?Sized>(*mut T);
 impl<T: ?Sized> Drop for __PbOutputOwner<T> {
@@ -60,6 +68,13 @@ pub unsafe extern "C" fn example_free_buffer(b: __PbBuffer) {
         );
     }
 }
+const _: () = {
+    assert!(
+        cfg!(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux",
+        target_env = "gnu")) && usize::BITS == 64u32,
+        "C binding target differs from the Rust compilation target"
+    );
+};
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]

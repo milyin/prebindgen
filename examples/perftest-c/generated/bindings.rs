@@ -1,3 +1,109 @@
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_string_len(value: &String) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_string_view(value: &String) -> &[u8] {
+    value.as_bytes()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_option_i64_33d2f0297e3115f7_len(
+    value: &Vec<Option<i64>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_string_3292bf5148c953ec_len(value: &Vec<String>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_i64_44fcce9e083e0432_len(value: &Vec<Vec<i64>>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad_len(
+    value: &Vec<Vec<perftest_flat::OwnedResource>>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_vec_u8_3f5fd420367502d4_len(value: &Vec<Vec<u8>>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_char_ae6d41c8646359d5_len(value: &Vec<char>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_i64_8f793c725f29723e_len(value: &Vec<i64>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d_len(
+    value: &Vec<perftest_flat::CPanicOutput>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb_len(
+    value: &Vec<perftest_flat::CallbackReturnHandler>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301_len(
+    value: &Vec<perftest_flat::CallbackReturnResource>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853_len(
+    value: &Vec<perftest_flat::CollectionItem>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5_len(
+    value: &Vec<perftest_flat::OwnedResource>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_payload_202b6819d69c8cb6_len(
+    value: &Vec<perftest_flat::Payload>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78_len(
+    value: &Vec<perftest_flat::SequencePart>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a_len(
+    value: &Vec<perftest_flat::SequenceScalars>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_perftest_flat_sparsecode_634596980e0ca051_len(
+    value: &Vec<perftest_flat::SparseCode>,
+) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_len(value: &Vec<u8>) -> usize {
+    value.len()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_u8_672e72343c1b4cb4_view(value: &Vec<u8>) -> &[u8] {
+    value.as_slice()
+}
+#[allow(dead_code, clippy::ptr_arg)]
+fn __pb_owned_owned_vec_usize_4efcb9bb80acdd15_len(value: &Vec<usize>) -> usize {
+    value.len()
+}
 #[allow(dead_code)]
 struct __PbOutputOwner<T: ?Sized>(*mut T);
 impl<T: ?Sized> Drop for __PbOutputOwner<T> {
@@ -60,6 +166,13 @@ pub unsafe extern "C" fn perftest_free_buffer(b: __PbBuffer) {
         );
     }
 }
+const _: () = {
+    assert!(
+        cfg!(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux",
+        target_env = "gnu")) && usize::BITS == 64u32,
+        "C binding target differs from the Rust compilation target"
+    );
+};
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -329,6 +442,193 @@ pub unsafe extern "C" fn perftest_drop_option_choice(
         panic!("C destructor failed: {}", error);
     }
 }
+#[allow(non_camel_case_types)]
+#[repr(C, align(8))]
+#[derive(Clone, Copy)]
+pub struct __PbOwned_owned_string {
+    storage: ::core::mem::MaybeUninit<[u8; 24usize]>,
+}
+const _: () = {
+    assert!(
+        ::core::mem::size_of:: < __PbOwned_owned_string > () == ::core::mem::size_of:: <
+        String > (), "opaque owner size differs from its Rust type"
+    );
+    assert!(
+        ::core::mem::align_of:: < __PbOwned_owned_string > () == ::core::mem::align_of::
+        < String > (), "opaque owner alignment differs from its Rust type"
+    );
+};
+#[allow(non_camel_case_types)]
+struct __PbOwnedGuard_owned_string(__PbOwned_owned_string);
+impl Drop for __PbOwnedGuard_owned_string {
+    fn drop(&mut self) {
+        unsafe {
+            ::core::ptr::drop_in_place(
+                &mut self.0 as *mut __PbOwned_owned_string as *mut String,
+            );
+        }
+    }
+}
+#[allow(dead_code)]
+impl __PbOwned_owned_string {
+    fn from_rust(value: String) -> Self {
+        let mut storage = ::core::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::core::ptr::write(storage.as_mut_ptr().cast::<String>(), value);
+            storage.assume_init()
+        }
+    }
+    fn guard(value: String) -> __PbOwnedGuard_owned_string {
+        __PbOwnedGuard_owned_string(Self::from_rust(value))
+    }
+    unsafe fn as_rust(&self) -> &String {
+        &*(self as *const Self as *const String)
+    }
+    unsafe fn as_rust_mut(&mut self) -> &mut String {
+        &mut *(self as *mut Self as *mut String)
+    }
+    unsafe fn into_rust(self) -> String {
+        ::core::ptr::read(&self as *const Self as *const String)
+    }
+    fn empty() -> Self {
+        Self::from_rust(<String as ::core::default::Default>::default())
+    }
+}
+/**# Safety
+The pointer must be null or point to one live owner of this exact type. The owner is replaced by its empty value; previous views become invalid.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_owned_string(value: *mut __PbOwned_owned_string) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !value.is_null() {
+            drop(
+                ::core::ptr::replace(
+                    value as *mut String,
+                    <String as ::core::default::Default>::default(),
+                ),
+            );
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
+/**# Safety
+The owner must be live, aligned, and of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owned_string_len(
+    value: *const __PbOwned_owned_string,
+) -> usize {
+    (*value).as_rust().len()
+}
+/**# Safety
+The owner must remain live and unmodified while its returned view is used.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owned_string_view(
+    value: *const __PbOwned_owned_string,
+) -> __PbBuffer {
+    let bytes = __pb_owned_owned_string_view((*value).as_rust());
+    __PbBuffer {
+        data: bytes.as_ptr(),
+        len: bytes.len(),
+    }
+}
+#[allow(non_camel_case_types)]
+#[repr(C, align(8))]
+#[derive(Clone, Copy)]
+pub struct __PbOwned_owned_vec_u8_672e72343c1b4cb4 {
+    storage: ::core::mem::MaybeUninit<[u8; 24usize]>,
+}
+const _: () = {
+    assert!(
+        ::core::mem::size_of:: < __PbOwned_owned_vec_u8_672e72343c1b4cb4 > () ==
+        ::core::mem::size_of:: < Vec < u8 > > (),
+        "opaque owner size differs from its Rust type"
+    );
+    assert!(
+        ::core::mem::align_of:: < __PbOwned_owned_vec_u8_672e72343c1b4cb4 > () ==
+        ::core::mem::align_of:: < Vec < u8 > > (),
+        "opaque owner alignment differs from its Rust type"
+    );
+};
+#[allow(non_camel_case_types)]
+struct __PbOwnedGuard_owned_vec_u8_672e72343c1b4cb4(
+    __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+);
+impl Drop for __PbOwnedGuard_owned_vec_u8_672e72343c1b4cb4 {
+    fn drop(&mut self) {
+        unsafe {
+            ::core::ptr::drop_in_place(
+                &mut self.0 as *mut __PbOwned_owned_vec_u8_672e72343c1b4cb4
+                    as *mut Vec<u8>,
+            );
+        }
+    }
+}
+#[allow(dead_code)]
+impl __PbOwned_owned_vec_u8_672e72343c1b4cb4 {
+    fn from_rust(value: Vec<u8>) -> Self {
+        let mut storage = ::core::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::core::ptr::write(storage.as_mut_ptr().cast::<Vec<u8>>(), value);
+            storage.assume_init()
+        }
+    }
+    fn guard(value: Vec<u8>) -> __PbOwnedGuard_owned_vec_u8_672e72343c1b4cb4 {
+        __PbOwnedGuard_owned_vec_u8_672e72343c1b4cb4(Self::from_rust(value))
+    }
+    unsafe fn as_rust(&self) -> &Vec<u8> {
+        &*(self as *const Self as *const Vec<u8>)
+    }
+    unsafe fn as_rust_mut(&mut self) -> &mut Vec<u8> {
+        &mut *(self as *mut Self as *mut Vec<u8>)
+    }
+    unsafe fn into_rust(self) -> Vec<u8> {
+        ::core::ptr::read(&self as *const Self as *const Vec<u8>)
+    }
+    fn empty() -> Self {
+        Self::from_rust(<Vec<u8> as ::core::default::Default>::default())
+    }
+}
+/**# Safety
+The pointer must be null or point to one live owner of this exact type. The owner is replaced by its empty value; previous views become invalid.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_drop_owned_vec_u8_672e72343c1b4cb4(
+    value: *mut __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+) {
+    if let Err(error) = ::prebindgen_runtime::boundary(|| {
+        if !value.is_null() {
+            drop(
+                ::core::ptr::replace(
+                    value as *mut Vec<u8>,
+                    <Vec<u8> as ::core::default::Default>::default(),
+                ),
+            );
+        }
+        Ok(())
+    }) {
+        panic!("C destructor failed: {}", error);
+    }
+}
+/**# Safety
+The owner must be live, aligned, and of this exact type.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_len(
+    value: *const __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+) -> usize {
+    (*value).as_rust().len()
+}
+/**# Safety
+The owner must remain live and unmodified while its returned view is used.*/
+#[no_mangle]
+pub unsafe extern "C" fn perftest_owned_vec_u8_672e72343c1b4cb4_view(
+    value: *const __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+) -> __PbBuffer {
+    let bytes = __pb_owned_owned_vec_u8_672e72343c1b4cb4_view((*value).as_rust());
+    __PbBuffer {
+        data: bytes.as_ptr(),
+        len: bytes.len(),
+    }
+}
 struct __PbCallbackResult<T: Copy> {
     value: T,
     context: *mut ::core::ffi::c_void,
@@ -427,7 +727,7 @@ pub struct perftest_callback_589eef1af0230719 {
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
             i64,
-            __PbBuffer,
+            __PbOwned_owned_string,
         ) -> perftest_callback_589eef1af0230719_result,
     >,
     pub context: *mut ::core::ffi::c_void,
@@ -582,7 +882,10 @@ pub struct perftest_callback_de793b4a6fb814fd {
 #[derive(Clone, Copy)]
 pub struct perftest_callback_df547e71faee3c03 {
     pub run: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbBuffer) -> __PbBuffer,
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+        ) -> __PbBuffer,
     >,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
@@ -627,7 +930,10 @@ pub struct perftest_callback_ea6b56ec3d11492d {
 #[derive(Clone, Copy)]
 pub struct perftest_callback_efc3c673f144160f {
     pub run: Option<
-        unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbBuffer) -> __PbBuffer,
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            __PbOwned_owned_string,
+        ) -> __PbBuffer,
     >,
     pub context: *mut ::core::ffi::c_void,
     pub drop: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
@@ -645,7 +951,7 @@ pub struct perftest_callback_f5f6b40488a06bd3 {
 #[repr(C)]
 pub struct __PbError_result_error {
     pub v0: i64,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_string,
 }
 #[allow(
     clippy::needless_borrow,
@@ -664,19 +970,13 @@ unsafe fn __pb_report_result_error(
     {
         let ret_w0 = source_error;
         let ret_w1 = ret_w0.code;
-        let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w0.message)
-            .into_boxed_slice();
-        let ret_w2 = Box::into_raw(ret_w2);
-        let ret_w2_owner = __PbOutputOwner(ret_w2);
+        let ret_w2 = __PbOwned_owned_string::guard(ret_w0.message);
         let result = __PbError_result_error {
             v0: ret_w1,
-            v1: __PbBuffer {
-                data: ret_w2 as *const u8,
-                len: ret_w2.len(),
-            },
+            v1: ret_w2.0,
         };
         std::ptr::write(error_output, result);
-        ::core::mem::forget(ret_w2_owner);
+        ::core::mem::forget(ret_w2);
         *reported = true;
         Ok(())
     }
@@ -689,21 +989,9 @@ pub unsafe extern "C" fn perftest_drop_result_error(error: *mut __PbError_result
         if !error.is_null() {
             let owned_1 = std::mem::replace(
                 &mut (*error).v1,
-                __PbBuffer {
-                    data: std::ptr::null(),
-                    len: 0,
-                },
+                __PbOwned_owned_string::empty(),
             );
-            if !(owned_1).data.is_null() {
-                drop(
-                    Box::from_raw(
-                        std::ptr::slice_from_raw_parts_mut(
-                            (owned_1).data as *mut u8,
-                            (owned_1).len,
-                        ),
-                    ),
-                );
-            }
+            drop((owned_1).into_rust());
         }
         Ok(())
     }) {
@@ -712,7 +1000,7 @@ pub unsafe extern "C" fn perftest_drop_result_error(error: *mut __PbError_result
 }
 #[repr(C)]
 pub struct __PbError_panic_error {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
 }
 #[allow(
     clippy::needless_borrow,
@@ -730,18 +1018,12 @@ unsafe fn __pb_report_panic_error(
     }
     {
         let ret_w0 = source_error;
-        let ret_w1 = ::core::convert::Into::<Vec<u8>>::into(ret_w0.message)
-            .into_boxed_slice();
-        let ret_w1 = Box::into_raw(ret_w1);
-        let ret_w1_owner = __PbOutputOwner(ret_w1);
+        let ret_w1 = __PbOwned_owned_string::guard(ret_w0.message);
         let result = __PbError_panic_error {
-            v0: __PbBuffer {
-                data: ret_w1 as *const u8,
-                len: ret_w1.len(),
-            },
+            v0: ret_w1.0,
         };
         std::ptr::write(error_output, result);
-        ::core::mem::forget(ret_w1_owner);
+        ::core::mem::forget(ret_w1);
         *reported = true;
         Ok(())
     }
@@ -754,21 +1036,9 @@ pub unsafe extern "C" fn perftest_drop_panic_error(error: *mut __PbError_panic_e
         if !error.is_null() {
             let owned_0 = std::mem::replace(
                 &mut (*error).v0,
-                __PbBuffer {
-                    data: std::ptr::null(),
-                    len: 0,
-                },
+                __PbOwned_owned_string::empty(),
             );
-            if !(owned_0).data.is_null() {
-                drop(
-                    Box::from_raw(
-                        std::ptr::slice_from_raw_parts_mut(
-                            (owned_0).data as *mut u8,
-                            (owned_0).len,
-                        ),
-                    ),
-                );
-            }
+            drop((owned_0).into_rust());
         }
         Ok(())
     }) {
@@ -779,7 +1049,7 @@ pub unsafe extern "C" fn perftest_drop_panic_error(error: *mut __PbError_panic_e
 pub struct __PbError_rich_error {
     pub v0: i32,
     pub v1: i32,
-    pub v2: __PbBuffer,
+    pub v2: __PbOwned_owned_string,
 }
 #[allow(
     clippy::needless_borrow,
@@ -809,34 +1079,17 @@ unsafe fn __pb_report_rich_error(
         let (ret_w2, (ret_w2_value0,), ret_w2_commit) = if let Some(ret_w3) = ret_w0
             .message
         {
-            let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w3)
-                .into_boxed_slice();
-            let ret_w4 = Box::into_raw(ret_w4);
-            let ret_w4_owner = __PbOutputOwner(ret_w4);
-            let ret_w2_values = (
-                __PbBuffer {
-                    data: ret_w4 as *const u8,
-                    len: ret_w4.len(),
-                },
-            );
+            let ret_w4 = __PbOwned_owned_string::guard(ret_w3);
+            let ret_w2_values = (ret_w4.0,);
             (
                 1i32,
                 ret_w2_values,
                 Some(move || {
-                    ::core::mem::forget(ret_w4_owner);
+                    ::core::mem::forget(ret_w4);
                 }),
             )
         } else {
-            (
-                0i32,
-                (
-                    __PbBuffer {
-                        data: std::ptr::null(),
-                        len: 0,
-                    },
-                ),
-                None,
-            )
+            (0i32, (__PbOwned_owned_string::empty(),), None)
         };
         let result = __PbError_rich_error {
             v0: ret_w1,
@@ -859,21 +1112,9 @@ pub unsafe extern "C" fn perftest_drop_rich_error(error: *mut __PbError_rich_err
         if !error.is_null() {
             let owned_2 = std::mem::replace(
                 &mut (*error).v2,
-                __PbBuffer {
-                    data: std::ptr::null(),
-                    len: 0,
-                },
+                __PbOwned_owned_string::empty(),
             );
-            if !(owned_2).data.is_null() {
-                drop(
-                    Box::from_raw(
-                        std::ptr::slice_from_raw_parts_mut(
-                            (owned_2).data as *mut u8,
-                            (owned_2).len,
-                        ),
-                    ),
-                );
-            }
+            drop((owned_2).into_rust());
         }
         Ok(())
     }) {
@@ -929,7 +1170,7 @@ pub unsafe extern "C" fn perftest_drop_drop_error(error: *mut __PbError_drop_err
 #[repr(C)]
 pub struct __PbError_resource_error {
     pub v0: *mut perftest_flat::OwnedResource,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_string,
 }
 #[allow(
     clippy::needless_borrow,
@@ -951,20 +1192,14 @@ unsafe fn __pb_report_resource_error(
             Box::new(ret_w0.resource),
         );
         let ret_w1_owner = __PbOutputOwner(ret_w1);
-        let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w0.message)
-            .into_boxed_slice();
-        let ret_w2 = Box::into_raw(ret_w2);
-        let ret_w2_owner = __PbOutputOwner(ret_w2);
+        let ret_w2 = __PbOwned_owned_string::guard(ret_w0.message);
         let result = __PbError_resource_error {
             v0: ret_w1,
-            v1: __PbBuffer {
-                data: ret_w2 as *const u8,
-                len: ret_w2.len(),
-            },
+            v1: ret_w2.0,
         };
         std::ptr::write(error_output, result);
         ::core::mem::forget(ret_w1_owner);
-        ::core::mem::forget(ret_w2_owner);
+        ::core::mem::forget(ret_w2);
         *reported = true;
         Ok(())
     }
@@ -980,24 +1215,12 @@ pub unsafe extern "C" fn perftest_drop_resource_error(
             let owned_0 = std::mem::replace(&mut (*error).v0, std::ptr::null_mut());
             let owned_1 = std::mem::replace(
                 &mut (*error).v1,
-                __PbBuffer {
-                    data: std::ptr::null(),
-                    len: 0,
-                },
+                __PbOwned_owned_string::empty(),
             );
             if !(owned_0).is_null() {
                 drop(Box::from_raw((owned_0) as *mut perftest_flat::OwnedResource));
             }
-            if !(owned_1).data.is_null() {
-                drop(
-                    Box::from_raw(
-                        std::ptr::slice_from_raw_parts_mut(
-                            (owned_1).data as *mut u8,
-                            (owned_1).len,
-                        ),
-                    ),
-                );
-            }
+            drop((owned_1).into_rust());
         }
         Ok(())
     }) {
@@ -1647,7 +1870,7 @@ pub unsafe extern "C" fn perftest_buffer_views_address() -> usize {
 }
 #[repr(C)]
 pub struct perftest_buffer_views_bytes_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
     pub v1: usize,
 }
 /**# Safety
@@ -1659,7 +1882,9 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_buffer_views_bytes(out1: *mut usize) -> __PbBuffer {
+pub unsafe extern "C" fn perftest_buffer_views_bytes(
+    out1: *mut usize,
+) -> __PbOwned_owned_vec_u8_672e72343c1b4cb4 {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
     let mut storage = std::mem::MaybeUninit::<
@@ -1672,22 +1897,20 @@ pub unsafe extern "C" fn perftest_buffer_views_bytes(out1: *mut usize) -> __PbBu
         }
         {
             let source_value = perftest_flat::buffer_views_bytes();
-            let ret_w1 = perftest_flat::buffer_views_bytes_len(&source_value);
+            let mut ret_w0 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                source_value,
+            );
+            let ret_w1 = perftest_flat::buffer_views_bytes_len(unsafe {
+                &*(::core::ptr::addr_of_mut!(ret_w0.0).cast::<Vec<u8>>())
+            });
             let ret_w2 = ret_w1;
-            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_buffer_views_bytes_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0.0,
                 v1: ret_w2,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w0);
             };
             Ok(())
         }
@@ -1701,7 +1924,7 @@ pub unsafe extern "C" fn perftest_buffer_views_bytes(out1: *mut usize) -> __PbBu
 #[repr(C)]
 pub struct perftest_buffer_views_optional_bytes_result {
     pub v0: i32,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
     pub v2: usize,
 }
 /**# Safety
@@ -1715,7 +1938,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_buffer_views_optional_bytes(
     p0_w1: u8,
-    out1: *mut __PbBuffer,
+    out1: *mut __PbOwned_owned_vec_u8_672e72343c1b4cb4,
     out2: *mut usize,
 ) -> i32 {
     #[allow(unused_mut)]
@@ -1741,34 +1964,17 @@ pub unsafe extern "C" fn perftest_buffer_views_optional_bytes(
             let ret_w3 = perftest_flat::buffer_views_optional_bytes_len(&source_value);
             let ret_w4 = ret_w3;
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
+                let ret_w2 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
+                let ret_w0_values = (ret_w2.0,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
+                        ::core::mem::forget(ret_w2);
                     }),
                 )
             } else {
-                (
-                    0i32,
-                    (
-                        __PbBuffer {
-                            data: std::ptr::null(),
-                            len: 0,
-                        },
-                    ),
-                    None,
-                )
+                (0i32, (__PbOwned_owned_vec_u8_672e72343c1b4cb4::empty(),), None)
             };
             let result = perftest_buffer_views_optional_bytes_result {
                 v0: ret_w0,
@@ -1794,7 +2000,7 @@ pub unsafe extern "C" fn perftest_buffer_views_optional_bytes(
 #[repr(C)]
 pub struct perftest_buffer_views_optional_text_result {
     pub v0: i32,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_string,
     pub v2: usize,
 }
 /**# Safety
@@ -1808,7 +2014,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_buffer_views_optional_text(
     p0_w1: u8,
-    out1: *mut __PbBuffer,
+    out1: *mut __PbOwned_owned_string,
     out2: *mut usize,
 ) -> i32 {
     #[allow(unused_mut)]
@@ -1834,34 +2040,17 @@ pub unsafe extern "C" fn perftest_buffer_views_optional_text(
             let ret_w3 = perftest_flat::buffer_views_optional_text_len(&source_value);
             let ret_w4 = ret_w3;
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
+                let ret_w2 = __PbOwned_owned_string::guard(ret_w1);
+                let ret_w0_values = (ret_w2.0,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
+                        ::core::mem::forget(ret_w2);
                     }),
                 )
             } else {
-                (
-                    0i32,
-                    (
-                        __PbBuffer {
-                            data: std::ptr::null(),
-                            len: 0,
-                        },
-                    ),
-                    None,
-                )
+                (0i32, (__PbOwned_owned_string::empty(),), None)
             };
             let result = perftest_buffer_views_optional_text_result {
                 v0: ret_w0,
@@ -1886,7 +2075,7 @@ pub unsafe extern "C" fn perftest_buffer_views_optional_text(
 }
 #[repr(C)]
 pub struct perftest_buffer_views_text_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
     pub v1: usize,
 }
 /**# Safety
@@ -1898,7 +2087,9 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_buffer_views_text(out1: *mut usize) -> __PbBuffer {
+pub unsafe extern "C" fn perftest_buffer_views_text(
+    out1: *mut usize,
+) -> __PbOwned_owned_string {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
     let mut storage = std::mem::MaybeUninit::<
@@ -1911,22 +2102,18 @@ pub unsafe extern "C" fn perftest_buffer_views_text(out1: *mut usize) -> __PbBuf
         }
         {
             let source_value = perftest_flat::buffer_views_text();
-            let ret_w1 = perftest_flat::buffer_views_text_len(&source_value);
+            let mut ret_w0 = __PbOwned_owned_string::guard(source_value);
+            let ret_w1 = perftest_flat::buffer_views_text_len(unsafe {
+                &*(::core::ptr::addr_of_mut!(ret_w0.0).cast::<String>())
+            });
             let ret_w2 = ret_w1;
-            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
             let result = perftest_buffer_views_text_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0.0,
                 v1: ret_w2,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w0);
             };
             Ok(())
         }
@@ -2092,7 +2279,13 @@ pub unsafe extern "C" fn perftest_c_result_bool(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_result_error {
+                            v0: 0,
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -2185,7 +2378,13 @@ pub unsafe extern "C" fn perftest_c_result_drop_panic(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_result_error {
+                            v0: 0,
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             std::ptr::null_mut()
@@ -2262,7 +2461,12 @@ pub unsafe extern "C" fn perftest_c_result_error_drop(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_drop_error {
+                            v0: std::ptr::null_mut(),
+                        },
+                    );
                 }
             }
             false
@@ -2356,7 +2560,13 @@ pub unsafe extern "C" fn perftest_c_result_late_niche(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_result_error {
+                            v0: 0,
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             1114112
@@ -2473,7 +2683,13 @@ pub unsafe extern "C" fn perftest_c_result_optional_handle(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_result_error {
+                            v0: 0,
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -2550,7 +2766,12 @@ pub unsafe extern "C" fn perftest_c_result_panic_error(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_panic_error {
+                            v0: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -2639,7 +2860,13 @@ pub unsafe extern "C" fn perftest_c_result_resource_error(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_resource_error {
+                            v0: std::ptr::null_mut(),
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -2722,7 +2949,14 @@ pub unsafe extern "C" fn perftest_c_result_rich_error(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_rich_error {
+                            v0: 0,
+                            v1: 0,
+                            v2: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -2824,7 +3058,13 @@ pub unsafe extern "C" fn perftest_c_result_structured(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_result_error {
+                            v0: 0,
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -3030,7 +3270,7 @@ pub unsafe extern "C" fn perftest_callback_return_borrowed_pair_catch(
 }
 #[repr(C)]
 pub struct perftest_callback_return_bytes_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -3043,7 +3283,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_bytes(
     p0_callback: perftest_callback_df547e71faee3c03,
-) -> __PbBuffer {
+) -> __PbOwned_owned_vec_u8_672e72343c1b4cb4 {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
     let mut storage = std::mem::MaybeUninit::<
@@ -3071,18 +3311,12 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
                 .expect("validated active callback");
             let p0_callback_value = move |callback_source_0: Vec<u8>| {
                 let result = ::prebindgen_runtime::boundary(|| {
-                    let callback_arg_0_w0 = ::core::convert::Into::<
-                        Vec<u8>,
-                    >::into(callback_source_0)
-                        .into_boxed_slice();
-                    let callback_arg_0_w0 = Box::into_raw(callback_arg_0_w0);
-                    let callback_arg_0_w0_owner = __PbOutputOwner(callback_arg_0_w0);
-                    let callback_argument_0 = __PbBuffer {
-                        data: callback_arg_0_w0 as *const u8,
-                        len: callback_arg_0_w0.len(),
-                    };
+                    let callback_arg_0_w0 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(
+                        callback_source_0,
+                    );
+                    let callback_argument_0 = callback_arg_0_w0.0;
                     {
-                        ::core::mem::forget(callback_arg_0_w0_owner);
+                        ::core::mem::forget(callback_arg_0_w0);
                     }
                     let raw_result = unsafe {
                         p0_callback_run(p0_callback_owner.context(), callback_argument_0)
@@ -3119,19 +3353,13 @@ pub unsafe extern "C" fn perftest_callback_return_bytes(
             let source_value = perftest_flat::callback_return_bytes(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w0 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(source_value);
             let result = perftest_callback_return_bytes_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0.0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w0);
             };
             Ok(())
         }
@@ -5494,19 +5722,13 @@ pub unsafe extern "C" fn perftest_callback_return_record(
                     );
                     let callback_arg_0_w1 = callback_arg_0_w0;
                     let callback_arg_0_w2 = callback_arg_0_w1.number;
-                    let callback_arg_0_w3 = ::core::convert::Into::<
-                        Vec<u8>,
-                    >::into(callback_arg_0_w1.label)
-                        .into_boxed_slice();
-                    let callback_arg_0_w3 = Box::into_raw(callback_arg_0_w3);
-                    let callback_arg_0_w3_owner = __PbOutputOwner(callback_arg_0_w3);
+                    let callback_arg_0_w3 = __PbOwned_owned_string::guard(
+                        callback_arg_0_w1.label,
+                    );
                     let callback_argument_0 = callback_arg_0_w2;
-                    let callback_argument_1 = __PbBuffer {
-                        data: callback_arg_0_w3 as *const u8,
-                        len: callback_arg_0_w3.len(),
-                    };
+                    let callback_argument_1 = callback_arg_0_w3.0;
                     {
-                        ::core::mem::forget(callback_arg_0_w3_owner);
+                        ::core::mem::forget(callback_arg_0_w3);
                     }
                     let raw_result = unsafe {
                         p0_callback_run(
@@ -5813,7 +6035,7 @@ pub unsafe extern "C" fn perftest_callback_return_spawn(
 }
 #[repr(C)]
 pub struct perftest_callback_return_text_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -5826,7 +6048,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_callback_return_text(
     p0_callback: perftest_callback_efc3c673f144160f,
-) -> __PbBuffer {
+) -> __PbOwned_owned_string {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
     let mut storage = std::mem::MaybeUninit::<
@@ -5854,18 +6076,12 @@ pub unsafe extern "C" fn perftest_callback_return_text(
                 .expect("validated active callback");
             let p0_callback_value = move |callback_source_0: String| {
                 let result = ::prebindgen_runtime::boundary(|| {
-                    let callback_arg_0_w0 = ::core::convert::Into::<
-                        Vec<u8>,
-                    >::into(callback_source_0)
-                        .into_boxed_slice();
-                    let callback_arg_0_w0 = Box::into_raw(callback_arg_0_w0);
-                    let callback_arg_0_w0_owner = __PbOutputOwner(callback_arg_0_w0);
-                    let callback_argument_0 = __PbBuffer {
-                        data: callback_arg_0_w0 as *const u8,
-                        len: callback_arg_0_w0.len(),
-                    };
+                    let callback_arg_0_w0 = __PbOwned_owned_string::guard(
+                        callback_source_0,
+                    );
+                    let callback_argument_0 = callback_arg_0_w0.0;
                     {
-                        ::core::mem::forget(callback_arg_0_w0_owner);
+                        ::core::mem::forget(callback_arg_0_w0);
                     }
                     let raw_result = unsafe {
                         p0_callback_run(p0_callback_owner.context(), callback_argument_0)
@@ -5907,19 +6123,13 @@ pub unsafe extern "C" fn perftest_callback_return_text(
             let source_value = perftest_flat::callback_return_text(
                 __prebindgen_argument_0,
             );
-            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w0 = __PbOwned_owned_string::guard(source_value);
             let result = perftest_callback_return_text_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0.0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w0);
             };
             Ok(())
         }
@@ -7049,7 +7259,7 @@ pub struct __PbRow_collection_bytes_p0_w1 {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __PbRow_collection_bytes_ret_w0 {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
 }
 /**# Safety
 The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
@@ -7135,20 +7345,14 @@ pub unsafe extern "C" fn perftest_collection_bytes(p0_w1: __PbRows) -> __PbRows 
                 ret_w2,
             );
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w4 = Box::into_raw(ret_w4);
-                let ret_w4_owner = __PbOutputOwner(ret_w4);
+                let ret_w4 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
                 ret_w0
                     .push(__PbRow_collection_bytes_ret_w0 {
-                        v0: __PbBuffer {
-                            data: ret_w4 as *const u8,
-                            len: ret_w4.len(),
-                        },
+                        v0: ret_w4.0,
                     });
                 ret_w0_commits
                     .push(move || {
-                        ::core::mem::forget(ret_w4_owner);
+                        ::core::mem::forget(ret_w4);
                     });
             }
             let ret_w0 = ret_w0.into_boxed_slice();
@@ -7197,7 +7401,12 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_collection_bytes_each(
     p0_w1: __PbRows,
-    __pb_callback: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbBuffer)>,
+    __pb_callback: Option<
+        unsafe extern "C" fn(
+            *mut ::core::ffi::c_void,
+            __PbOwned_owned_vec_u8_672e72343c1b4cb4,
+        ),
+    >,
     __pb_callback_context: *mut ::core::ffi::c_void,
 ) -> usize {
     #[allow(unused_mut)]
@@ -7254,15 +7463,9 @@ pub unsafe extern "C" fn perftest_collection_bytes_each(
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w4 = Box::into_raw(ret_w4);
-                let ret_w4_owner = __PbOutputOwner(ret_w4);
-                let __pb_callback_value_0 = __PbBuffer {
-                    data: ret_w4 as *const u8,
-                    len: ret_w4.len(),
-                };
-                ::core::mem::forget(ret_w4_owner);
+                let ret_w4 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
+                let __pb_callback_value_0 = ret_w4.0;
+                ::core::mem::forget(ret_w4);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -7739,7 +7942,19 @@ pub unsafe extern "C" fn perftest_collection_fail(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_collection_error {
+                            v0: __PbRows {
+                                data: std::ptr::null(),
+                                len: 0,
+                            },
+                            v1: __PbRows {
+                                data: std::ptr::null(),
+                                len: 0,
+                            },
+                        },
+                    );
                 }
             }
             false
@@ -8610,7 +8825,13 @@ pub unsafe extern "C" fn perftest_collection_late_drop(
                     })
                     .is_err() && !delivered
                 {
-                    std::ptr::write(error, std::mem::zeroed());
+                    std::ptr::write(
+                        error,
+                        __PbError_result_error {
+                            v0: 0,
+                            v1: __PbOwned_owned_string::empty(),
+                        },
+                    );
                 }
             }
             false
@@ -12358,7 +12579,7 @@ pub struct __PbRow_collection_text_p0_w1 {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct __PbRow_collection_text_ret_w0 {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
 }
 /**# Safety
 The rows must be an unchanged allocation returned with this exact element layout. This frees only row storage, not element-owned fields.*/
@@ -12445,20 +12666,14 @@ pub unsafe extern "C" fn perftest_collection_text(p0_w1: __PbRows) -> __PbRows {
                 ret_w2,
             );
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w4 = Box::into_raw(ret_w4);
-                let ret_w4_owner = __PbOutputOwner(ret_w4);
+                let ret_w4 = __PbOwned_owned_string::guard(ret_w1);
                 ret_w0
                     .push(__PbRow_collection_text_ret_w0 {
-                        v0: __PbBuffer {
-                            data: ret_w4 as *const u8,
-                            len: ret_w4.len(),
-                        },
+                        v0: ret_w4.0,
                     });
                 ret_w0_commits
                     .push(move || {
-                        ::core::mem::forget(ret_w4_owner);
+                        ::core::mem::forget(ret_w4);
                     });
             }
             let ret_w0 = ret_w0.into_boxed_slice();
@@ -12507,7 +12722,9 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_collection_text_each(
     p0_w1: __PbRows,
-    __pb_callback: Option<unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbBuffer)>,
+    __pb_callback: Option<
+        unsafe extern "C" fn(*mut ::core::ffi::c_void, __PbOwned_owned_string),
+    >,
     __pb_callback_context: *mut ::core::ffi::c_void,
 ) -> usize {
     #[allow(unused_mut)]
@@ -12567,15 +12784,9 @@ pub unsafe extern "C" fn perftest_collection_text_each(
             let ret_w0_source = source_value;
             let ret_w2 = ret_w0_source.len();
             for (ret_w3, ret_w1) in ret_w0_source.into_iter().enumerate() {
-                let ret_w4 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w4 = Box::into_raw(ret_w4);
-                let ret_w4_owner = __PbOutputOwner(ret_w4);
-                let __pb_callback_value_0 = __PbBuffer {
-                    data: ret_w4 as *const u8,
-                    len: ret_w4.len(),
-                };
-                ::core::mem::forget(ret_w4_owner);
+                let ret_w4 = __PbOwned_owned_string::guard(ret_w1);
+                let __pb_callback_value_0 = ret_w4.0;
+                ::core::mem::forget(ret_w4);
                 unsafe {
                     __pb_callback
                         .expect(
@@ -13177,22 +13388,16 @@ pub unsafe extern "C" fn perftest_getter_child_name(
             let p0_w0: &perftest_flat::GetterChild = unsafe { &(*p0_w1_pointer) };
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::getter_child_name(__prebindgen_argument_0);
-            let ret_w0 = ::core::convert::Into::<
-                Vec<u8>,
-            >::into((source_value).to_string())
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w0 = source_value;
+            let ret_w0 = __PbBuffer {
+                data: ret_w0.as_ptr().cast::<u8>(),
+                len: ret_w0.len(),
+            };
             let result = perftest_getter_child_name_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0,
             };
             std::ptr::write(output, result);
-            let _: () = {
-                ::core::mem::forget(ret_w0_owner);
-            };
+            let _: () = {};
             Ok(())
         }
     }) {
@@ -13393,7 +13598,7 @@ pub unsafe extern "C" fn perftest_getter_counts() -> __PbRows {
 pub struct perftest_getter_fields_new_result {
     pub v0: *mut perftest_flat::GetterOwner,
     pub v1: i64,
-    pub v2: __PbBuffer,
+    pub v2: __PbOwned_owned_string,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -13406,7 +13611,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 #[no_mangle]
 pub unsafe extern "C" fn perftest_getter_fields_new(
     out1: *mut i64,
-    out2: *mut __PbBuffer,
+    out2: *mut __PbOwned_owned_string,
 ) -> *mut perftest_flat::GetterOwner {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
@@ -13431,24 +13636,18 @@ pub unsafe extern "C" fn perftest_getter_fields_new(
             let ret_w2 = &(ret_w1);
             let ret_w3: &i64 = &ret_w2.number;
             let ret_w3 = *ret_w3;
-            let ret_w4 = ::core::convert::Into::<
-                Vec<u8>,
-            >::into(::core::clone::Clone::clone(&ret_w2.text))
-                .into_boxed_slice();
-            let ret_w4 = Box::into_raw(ret_w4);
-            let ret_w4_owner = __PbOutputOwner(ret_w4);
+            let ret_w4 = __PbOwned_owned_string::guard(
+                ::core::clone::Clone::clone(&ret_w2.text),
+            );
             let result = perftest_getter_fields_new_result {
                 v0: ret_w0,
                 v1: ret_w3,
-                v2: __PbBuffer {
-                    data: ret_w4 as *const u8,
-                    len: ret_w4.len(),
-                },
+                v2: ret_w4.0,
             };
             std::ptr::write(output, result);
             let _: () = {
                 ::core::mem::forget(ret_w0_owner);
-                ::core::mem::forget(ret_w4_owner);
+                ::core::mem::forget(ret_w4);
             };
             Ok(())
         }
@@ -13775,10 +13974,11 @@ pub unsafe extern "C" fn perftest_getter_owner_new(
             let ret_w3: &i64 = ret_w2;
             let ret_w3 = *ret_w3;
             let ret_w4 = perftest_flat::getter_child_name(ret_w1);
-            let ret_w5 = ::core::convert::Into::<Vec<u8>>::into((ret_w4).to_string())
-                .into_boxed_slice();
-            let ret_w5 = Box::into_raw(ret_w5);
-            let ret_w5_owner = __PbOutputOwner(ret_w5);
+            let ret_w5 = ret_w4;
+            let ret_w5 = __PbBuffer {
+                data: ret_w5.as_ptr().cast::<u8>(),
+                len: ret_w5.len(),
+            };
             let ret_w6 = perftest_flat::getter_owner_leaf(unsafe { &*(ret_w0) });
             let ret_w7: *mut perftest_flat::GetterLeaf = Box::into_raw(
                 Box::new(::core::clone::Clone::clone(ret_w6)),
@@ -13787,16 +13987,12 @@ pub unsafe extern "C" fn perftest_getter_owner_new(
             let result = perftest_getter_owner_new_result {
                 v0: ret_w0,
                 v1: ret_w3,
-                v2: __PbBuffer {
-                    data: ret_w5 as *const u8,
-                    len: ret_w5.len(),
-                },
+                v2: ret_w5,
                 v3: ret_w7,
             };
             std::ptr::write(output, result);
             let _: () = {
                 ::core::mem::forget(ret_w0_owner);
-                ::core::mem::forget(ret_w5_owner);
                 ::core::mem::forget(ret_w7_owner);
             };
             Ok(())
@@ -13864,24 +14060,13 @@ pub unsafe extern "C" fn perftest_getter_owner_optional(
                 let ret_w3: &i64 = ret_w2;
                 let ret_w3 = *ret_w3;
                 let ret_w4 = perftest_flat::getter_child_name(ret_w1);
-                let ret_w5 = ::core::convert::Into::<Vec<u8>>::into((ret_w4).to_string())
-                    .into_boxed_slice();
-                let ret_w5 = Box::into_raw(ret_w5);
-                let ret_w5_owner = __PbOutputOwner(ret_w5);
-                let ret_w0_values = (
-                    ret_w3,
-                    __PbBuffer {
-                        data: ret_w5 as *const u8,
-                        len: ret_w5.len(),
-                    },
-                );
-                (
-                    1i32,
-                    ret_w0_values,
-                    Some(move || {
-                        ::core::mem::forget(ret_w5_owner);
-                    }),
-                )
+                let ret_w5 = ret_w4;
+                let ret_w5 = __PbBuffer {
+                    data: ret_w5.as_ptr().cast::<u8>(),
+                    len: ret_w5.len(),
+                };
+                let ret_w0_values = (ret_w3, ret_w5);
+                (1i32, ret_w0_values, Some(move || {}))
             } else {
                 (
                     0i32,
@@ -14086,21 +14271,17 @@ pub unsafe extern "C" fn perftest_getter_owner_read(
             let ret_w1: &i64 = ret_w0;
             let ret_w1 = *ret_w1;
             let ret_w2 = perftest_flat::getter_child_name(source_value);
-            let ret_w3 = ::core::convert::Into::<Vec<u8>>::into((ret_w2).to_string())
-                .into_boxed_slice();
-            let ret_w3 = Box::into_raw(ret_w3);
-            let ret_w3_owner = __PbOutputOwner(ret_w3);
+            let ret_w3 = ret_w2;
+            let ret_w3 = __PbBuffer {
+                data: ret_w3.as_ptr().cast::<u8>(),
+                len: ret_w3.len(),
+            };
             let result = perftest_getter_owner_read_result {
                 v0: ret_w1,
-                v1: __PbBuffer {
-                    data: ret_w3 as *const u8,
-                    len: ret_w3.len(),
-                },
+                v1: ret_w3,
             };
             std::ptr::write(output, result);
-            let _: () = {
-                ::core::mem::forget(ret_w3_owner);
-            };
+            let _: () = {};
             Ok(())
         }
     }) {
@@ -14845,7 +15026,7 @@ pub unsafe extern "C" fn perftest_option_bool(
 #[repr(C)]
 pub struct perftest_option_bytes_result {
     pub v0: i32,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_vec_u8_672e72343c1b4cb4,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -14859,7 +15040,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn perftest_option_bytes(
     p0_w1: i32,
     p0_w3: __PbBuffer,
-    out1: *mut __PbBuffer,
+    out1: *mut __PbOwned_owned_vec_u8_672e72343c1b4cb4,
 ) -> i32 {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
@@ -14889,34 +15070,17 @@ pub unsafe extern "C" fn perftest_option_bytes(
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_bytes(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
+                let ret_w2 = __PbOwned_owned_vec_u8_672e72343c1b4cb4::guard(ret_w1);
+                let ret_w0_values = (ret_w2.0,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
+                        ::core::mem::forget(ret_w2);
                     }),
                 )
             } else {
-                (
-                    0i32,
-                    (
-                        __PbBuffer {
-                            data: std::ptr::null(),
-                            len: 0,
-                        },
-                    ),
-                    None,
-                )
+                (0i32, (__PbOwned_owned_vec_u8_672e72343c1b4cb4::empty(),), None)
             };
             let result = perftest_option_bytes_result {
                 v0: ret_w0,
@@ -16152,23 +16316,13 @@ pub unsafe extern "C" fn perftest_option_slice_echo(
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_slice_echo(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into((ret_w1).to_vec())
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
-                (
-                    1i32,
-                    ret_w0_values,
-                    Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
-                    }),
-                )
+                let ret_w2 = ret_w1;
+                let ret_w2 = __PbBuffer {
+                    data: ret_w2.as_ptr().cast::<u8>(),
+                    len: ret_w2.len(),
+                };
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
             } else {
                 (
                     0i32,
@@ -16326,23 +16480,13 @@ pub unsafe extern "C" fn perftest_option_str_echo(
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_str_echo(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into((ret_w1).to_string())
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
-                (
-                    1i32,
-                    ret_w0_values,
-                    Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
-                    }),
-                )
+                let ret_w2 = ret_w1;
+                let ret_w2 = __PbBuffer {
+                    data: ret_w2.as_ptr().cast::<u8>(),
+                    len: ret_w2.len(),
+                };
+                let ret_w0_values = (ret_w2,);
+                (1i32, ret_w0_values, Some(move || {}))
             } else {
                 (
                     0i32,
@@ -16531,7 +16675,7 @@ pub unsafe extern "C" fn perftest_option_string_len(
 #[repr(C)]
 pub struct perftest_option_text_result {
     pub v0: i32,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_string,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -16545,7 +16689,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn perftest_option_text(
     p0_w1: i32,
     p0_w3: __PbBuffer,
-    out1: *mut __PbBuffer,
+    out1: *mut __PbOwned_owned_string,
 ) -> i32 {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
@@ -16578,34 +16722,17 @@ pub unsafe extern "C" fn perftest_option_text(
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::option_text(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
+                let ret_w2 = __PbOwned_owned_string::guard(ret_w1);
+                let ret_w0_values = (ret_w2.0,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
+                        ::core::mem::forget(ret_w2);
                     }),
                 )
             } else {
-                (
-                    0i32,
-                    (
-                        __PbBuffer {
-                            data: std::ptr::null(),
-                            len: 0,
-                        },
-                    ),
-                    None,
-                )
+                (0i32, (__PbOwned_owned_string::empty(),), None)
             };
             let result = perftest_option_text_result {
                 v0: ret_w0,
@@ -16748,7 +16875,7 @@ pub struct perftest_optional_fields_echo_result {
     pub v0: i32,
     pub v1: i64,
     pub v2: i32,
-    pub v3: __PbBuffer,
+    pub v3: __PbOwned_owned_string,
     pub v4: u32,
 }
 /**# Safety
@@ -16768,7 +16895,7 @@ pub unsafe extern "C" fn perftest_optional_fields_echo(
     p0_w14: u32,
     out1: *mut i64,
     out2: *mut i32,
-    out3: *mut __PbBuffer,
+    out3: *mut __PbOwned_owned_string,
     out4: *mut u32,
 ) -> i32 {
     #[allow(unused_mut)]
@@ -16880,34 +17007,17 @@ pub unsafe extern "C" fn perftest_optional_fields_echo(
                 let (ret_w7, (ret_w7_value0,), ret_w7_commit) = if let Some(ret_w8) = ret_w3
                     .text
                 {
-                    let ret_w9 = ::core::convert::Into::<Vec<u8>>::into(ret_w8)
-                        .into_boxed_slice();
-                    let ret_w9 = Box::into_raw(ret_w9);
-                    let ret_w9_owner = __PbOutputOwner(ret_w9);
-                    let ret_w7_values = (
-                        __PbBuffer {
-                            data: ret_w9 as *const u8,
-                            len: ret_w9.len(),
-                        },
-                    );
+                    let ret_w9 = __PbOwned_owned_string::guard(ret_w8);
+                    let ret_w7_values = (ret_w9.0,);
                     (
                         1i32,
                         ret_w7_values,
                         Some(move || {
-                            ::core::mem::forget(ret_w9_owner);
+                            ::core::mem::forget(ret_w9);
                         }),
                     )
                 } else {
-                    (
-                        0i32,
-                        (
-                            __PbBuffer {
-                                data: std::ptr::null(),
-                                len: 0,
-                            },
-                        ),
-                        None,
-                    )
+                    (0i32, (__PbOwned_owned_string::empty(),), None)
                 };
                 let (_, (ret_w10_value0,), ret_w10_commit) = if let Some(ret_w11) = ret_w3
                     .letter
@@ -16941,20 +17051,7 @@ pub unsafe extern "C" fn perftest_optional_fields_echo(
                     }),
                 )
             } else {
-                (
-                    0i32,
-                    (
-                        0,
-                        0,
-                        0,
-                        __PbBuffer {
-                            data: std::ptr::null(),
-                            len: 0,
-                        },
-                        1114113,
-                    ),
-                    None,
-                )
+                (0i32, (0, 0, 0, __PbOwned_owned_string::empty(), 1114113), None)
             };
             let result = perftest_optional_fields_echo_result {
                 v0: ret_w0_value0,
@@ -17845,7 +17942,7 @@ pub unsafe extern "C" fn perftest_payload_priority(
 #[repr(C)]
 pub struct perftest_plain_note_echo_result {
     pub v0: i32,
-    pub v1: __PbBuffer,
+    pub v1: __PbOwned_owned_string,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -17859,7 +17956,7 @@ Additional output pointers must be writable and disjoint from live inputs. Input
 pub unsafe extern "C" fn perftest_plain_note_echo(
     p0_w1: i32,
     p0_w3: __PbBuffer,
-    out1: *mut __PbBuffer,
+    out1: *mut __PbOwned_owned_string,
 ) -> i32 {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
@@ -17892,34 +17989,17 @@ pub unsafe extern "C" fn perftest_plain_note_echo(
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::plain_note_echo(__prebindgen_argument_0);
             let (ret_w0, (ret_w0_value0,), ret_w0_commit) = if let Some(ret_w1) = source_value {
-                let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w1)
-                    .into_boxed_slice();
-                let ret_w2 = Box::into_raw(ret_w2);
-                let ret_w2_owner = __PbOutputOwner(ret_w2);
-                let ret_w0_values = (
-                    __PbBuffer {
-                        data: ret_w2 as *const u8,
-                        len: ret_w2.len(),
-                    },
-                );
+                let ret_w2 = __PbOwned_owned_string::guard(ret_w1);
+                let ret_w0_values = (ret_w2.0,);
                 (
                     1i32,
                     ret_w0_values,
                     Some(move || {
-                        ::core::mem::forget(ret_w2_owner);
+                        ::core::mem::forget(ret_w2);
                     }),
                 )
             } else {
-                (
-                    0i32,
-                    (
-                        __PbBuffer {
-                            data: std::ptr::null(),
-                            len: 0,
-                        },
-                    ),
-                    None,
-                )
+                (0i32, (__PbOwned_owned_string::empty(),), None)
             };
             let result = perftest_plain_note_echo_result {
                 v0: ret_w0,
@@ -18836,7 +18916,7 @@ pub unsafe extern "C" fn perftest_report_into_struct(
 }
 #[repr(C)]
 pub struct perftest_report_label_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -18853,7 +18933,7 @@ pub unsafe extern "C" fn perftest_report_label(
     p0_w7: f64,
     p0_w9: *mut perftest_flat::Summary,
     p0_w11: __PbBuffer,
-) -> __PbBuffer {
+) -> __PbOwned_owned_string {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
     let mut storage = std::mem::MaybeUninit::<perftest_report_label_result>::uninit();
@@ -18918,19 +18998,13 @@ pub unsafe extern "C" fn perftest_report_label(
             );
             let __prebindgen_argument_0 = p0_w0;
             let source_value = perftest_flat::report_label(__prebindgen_argument_0);
-            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w0 = __PbOwned_owned_string::guard(source_value);
             let result = perftest_report_label_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0.0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w0);
             };
             Ok(())
         }
@@ -18946,7 +19020,7 @@ pub struct perftest_report_new_result {
     pub v1: f64,
     pub v2: i64,
     pub v3: i64,
-    pub v4: __PbBuffer,
+    pub v4: __PbOwned_owned_string,
     pub v5: *mut perftest_flat::Report,
 }
 /**# Safety
@@ -18965,7 +19039,7 @@ pub unsafe extern "C" fn perftest_report_new(
     out1: *mut f64,
     out2: *mut i64,
     out3: *mut i64,
-    out4: *mut __PbBuffer,
+    out4: *mut __PbOwned_owned_string,
     out5: *mut *mut perftest_flat::Report,
 ) -> i64 {
     #[allow(unused_mut)]
@@ -19026,26 +19100,20 @@ pub unsafe extern "C" fn perftest_report_new(
             let ret_w8 = ret_w7;
             let ret_w9 = perftest_flat::stamp_nanos(&ret_w2.origin);
             let ret_w10 = ret_w9;
-            let ret_w11 = ::core::convert::Into::<
-                Vec<u8>,
-            >::into(::core::clone::Clone::clone(&ret_w2.label))
-                .into_boxed_slice();
-            let ret_w11 = Box::into_raw(ret_w11);
-            let ret_w11_owner = __PbOutputOwner(ret_w11);
+            let ret_w11 = __PbOwned_owned_string::guard(
+                ::core::clone::Clone::clone(&ret_w2.label),
+            );
             let result = perftest_report_new_result {
                 v0: ret_w4,
                 v1: ret_w6,
                 v2: ret_w8,
                 v3: ret_w10,
-                v4: __PbBuffer {
-                    data: ret_w11 as *const u8,
-                    len: ret_w11.len(),
-                },
+                v4: ret_w11.0,
                 v5: ret_w0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w11_owner);
+                ::core::mem::forget(ret_w11);
                 ::core::mem::forget(ret_w0_owner);
             };
             Ok(())
@@ -19656,7 +19724,7 @@ pub unsafe extern "C" fn perftest_result_scalar(
 }
 #[repr(C)]
 pub struct perftest_result_text_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
 }
 /**# Safety
 Success, ownership and nonnull error outputs must be writable and pairwise disjoint, with no unreleased prior error. Input allocations must satisfy their declared provenance, aliasing and ownership contract.*/
@@ -19669,7 +19737,7 @@ Success, ownership and nonnull error outputs must be writable and pairwise disjo
 #[no_mangle]
 pub unsafe extern "C" fn perftest_result_text(
     p0_w1: u8,
-    out0: *mut __PbBuffer,
+    out0: *mut __PbOwned_owned_string,
     error: *mut *mut std::ffi::c_char,
 ) -> bool {
     #[allow(unused_mut)]
@@ -19705,19 +19773,13 @@ pub unsafe extern "C" fn perftest_result_text(
                     });
                 }
             };
-            let ret_w2 = ::core::convert::Into::<Vec<u8>>::into(ret_w0)
-                .into_boxed_slice();
-            let ret_w2 = Box::into_raw(ret_w2);
-            let ret_w2_owner = __PbOutputOwner(ret_w2);
+            let ret_w2 = __PbOwned_owned_string::guard(ret_w0);
             let result = perftest_result_text_result {
-                v0: __PbBuffer {
-                    data: ret_w2 as *const u8,
-                    len: ret_w2.len(),
-                },
+                v0: ret_w2.0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w2_owner);
+                ::core::mem::forget(ret_w2);
                 success_committed = true;
             };
             Ok(())
@@ -19732,16 +19794,10 @@ pub unsafe extern "C" fn perftest_result_text(
         Err(message) => {
             if success_committed {
                 let value = storage.assume_init();
-                if !(value.v0).data.is_null() {
-                    drop(
-                        Box::from_raw(
-                            std::ptr::slice_from_raw_parts_mut(
-                                (value.v0).data as *mut u8,
-                                (value.v0).len,
-                            ),
-                        ),
-                    );
-                }
+                let _ = ::prebindgen_runtime::boundary(|| {
+                    drop((value.v0).into_rust());
+                    Ok(())
+                });
             }
             if !error_reported && !error.is_null() {
                 unsafe { __pb_report_message(message, error) };
@@ -19942,7 +19998,7 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
         unsafe extern "C" fn(
             *mut ::core::ffi::c_void,
             i64,
-            __PbBuffer,
+            __PbOwned_owned_string,
             *mut perftest_flat::OwnedResource,
         ),
     >,
@@ -19994,21 +20050,15 @@ pub unsafe extern "C" fn perftest_sequence_parts_each(
                 let ret_w6 = perftest_flat::sequence_part_into(ret_w3);
                 let ret_w7 = ret_w6;
                 let ret_w8 = ret_w7.number;
-                let ret_w9 = ::core::convert::Into::<Vec<u8>>::into(ret_w7.text)
-                    .into_boxed_slice();
-                let ret_w9 = Box::into_raw(ret_w9);
-                let ret_w9_owner = __PbOutputOwner(ret_w9);
+                let ret_w9 = __PbOwned_owned_string::guard(ret_w7.text);
                 let ret_w10: *mut perftest_flat::OwnedResource = Box::into_raw(
                     Box::new(ret_w7.resource),
                 );
                 let ret_w10_owner = __PbOutputOwner(ret_w10);
                 let __pb_callback_value_0 = ret_w8;
-                let __pb_callback_value_1 = __PbBuffer {
-                    data: ret_w9 as *const u8,
-                    len: ret_w9.len(),
-                };
+                let __pb_callback_value_1 = ret_w9.0;
                 let __pb_callback_value_2 = ret_w10;
-                ::core::mem::forget(ret_w9_owner);
+                ::core::mem::forget(ret_w9);
                 ::core::mem::forget(ret_w10_owner);
                 unsafe {
                     __pb_callback
@@ -20075,7 +20125,7 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
             f64,
             __Pb128,
             i32,
-            __PbBuffer,
+            __PbOwned_owned_string,
         ),
     >,
     __pb_callback_context: *mut ::core::ffi::c_void,
@@ -20115,34 +20165,17 @@ pub unsafe extern "C" fn perftest_sequence_scalars_each(
                     ret_w15,
                 ) = ret_w5.text
                 {
-                    let ret_w16 = ::core::convert::Into::<Vec<u8>>::into(ret_w15)
-                        .into_boxed_slice();
-                    let ret_w16 = Box::into_raw(ret_w16);
-                    let ret_w16_owner = __PbOutputOwner(ret_w16);
-                    let ret_w14_values = (
-                        __PbBuffer {
-                            data: ret_w16 as *const u8,
-                            len: ret_w16.len(),
-                        },
-                    );
+                    let ret_w16 = __PbOwned_owned_string::guard(ret_w15);
+                    let ret_w14_values = (ret_w16.0,);
                     (
                         1i32,
                         ret_w14_values,
                         Some(move || {
-                            ::core::mem::forget(ret_w16_owner);
+                            ::core::mem::forget(ret_w16);
                         }),
                     )
                 } else {
-                    (
-                        0i32,
-                        (
-                            __PbBuffer {
-                                data: std::ptr::null(),
-                                len: 0,
-                            },
-                        ),
-                        None,
-                    )
+                    (0i32, (__PbOwned_owned_string::empty(),), None)
                 };
                 let __pb_callback_value_0 = ret_w6;
                 let __pb_callback_value_1 = ret_w7;
@@ -21905,7 +21938,7 @@ pub unsafe extern "C" fn perftest_string_len(p0_w1: __PbBuffer) -> usize {
 }
 #[repr(C)]
 pub struct perftest_string_new_result {
-    pub v0: __PbBuffer,
+    pub v0: __PbOwned_owned_string,
 }
 /**# Safety
 Additional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call.*/
@@ -21916,7 +21949,9 @@ Additional output pointers must be writable and disjoint from live inputs. Input
     clippy::useless_conversion
 )]
 #[no_mangle]
-pub unsafe extern "C" fn perftest_string_new(p0_w1: __PbBuffer) -> __PbBuffer {
+pub unsafe extern "C" fn perftest_string_new(
+    p0_w1: __PbBuffer,
+) -> __PbOwned_owned_string {
     #[allow(unused_mut)]
     let mut _ownership_accepted = false;
     let mut storage = std::mem::MaybeUninit::<perftest_string_new_result>::uninit();
@@ -21935,19 +21970,13 @@ pub unsafe extern "C" fn perftest_string_new(p0_w1: __PbBuffer) -> __PbBuffer {
                 str,
             >::as_ref(p0_w0.as_ref().expect("active value"));
             let source_value = perftest_flat::string_new(__prebindgen_argument_0);
-            let ret_w0 = ::core::convert::Into::<Vec<u8>>::into(source_value)
-                .into_boxed_slice();
-            let ret_w0 = Box::into_raw(ret_w0);
-            let ret_w0_owner = __PbOutputOwner(ret_w0);
+            let ret_w0 = __PbOwned_owned_string::guard(source_value);
             let result = perftest_string_new_result {
-                v0: __PbBuffer {
-                    data: ret_w0 as *const u8,
-                    len: ret_w0.len(),
-                },
+                v0: ret_w0.0,
             };
             std::ptr::write(output, result);
             let _: () = {
-                ::core::mem::forget(ret_w0_owner);
+                ::core::mem::forget(ret_w0);
             };
             Ok(())
         }

@@ -124,3 +124,49 @@ fn generated_shared_and_consuming_calls_do_not_allocate_for_alias_checks() {
         super::perftest_drop_storage(storage);
     }
 }
+
+#[test]
+fn native_vec_and_string_transfers_preserve_capacity_without_allocating() {
+    use super::inline_owners as ffi;
+    let mut bytes = Vec::with_capacity(4096);
+    bytes.extend_from_slice(b"a\0b");
+    let mut text = String::with_capacity(8192);
+    text.push_str("héllo");
+    let mut numbers = Vec::with_capacity(1024);
+    numbers.extend_from_slice(&[7, 9]);
+    let bytes_address = bytes.as_ptr();
+    let text_address = text.as_ptr();
+    perftest_flat::inline_stage(bytes, text, numbers);
+    let cost = allocations(|| unsafe {
+        let mut bytes = ffi::owner_inline_bytes();
+        let mut text = ffi::owner_inline_text();
+        let mut numbers = ffi::owner_inline_numbers();
+        assert_eq!(ffi::owner_bytes_view(&bytes).data, bytes_address);
+        assert_eq!(ffi::owner_text_view(&text).data, text_address);
+        assert_eq!(ffi::owner_inline_bytes_capacity(&bytes), 4096);
+        assert_eq!(ffi::owner_inline_text_capacity(&text), 8192);
+        assert_eq!(ffi::owner_inline_numbers_capacity(&numbers), 1024);
+        assert_eq!(ffi::owner_inline_bytes_take(&mut bytes), 4096);
+        assert_eq!(ffi::owner_inline_text_take(&mut text), 8192);
+        assert_eq!(ffi::owner_inline_numbers_take(&mut numbers), 16);
+        ffi::owner_drop_bytes(&mut bytes);
+        ffi::owner_drop_text(&mut text);
+        ffi::owner_drop_numbers(&mut numbers);
+    });
+    assert_eq!(cost,0,"native transfers, accessors, consumption and empty-owner drops must not allocate or reallocate");
+    // A reserved, empty allocation must also survive the transfer unchanged.
+    let bytes = Vec::with_capacity(4096);
+    let pointer = bytes.as_ptr();
+    perftest_flat::inline_stage(bytes, String::new(), Vec::new());
+    assert_eq!(
+        allocations(|| unsafe {
+            let mut bytes = ffi::owner_inline_bytes();
+            assert_eq!(ffi::owner_bytes_len(&bytes), 0);
+            assert_eq!(ffi::owner_bytes_view(&bytes).data, pointer);
+            assert_eq!(ffi::owner_inline_bytes_capacity(&bytes), 4096);
+            ffi::owner_drop_bytes(&mut bytes);
+            ffi::owner_drop_bytes(&mut bytes);
+        }),
+        0
+    );
+}

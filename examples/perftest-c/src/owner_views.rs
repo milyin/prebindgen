@@ -22,7 +22,6 @@ fn owner_backed_outputs_preserve_provenance_and_cleanup() {
         assert_eq!(perftest_getter_child_number(child), 71);
         let name = perftest_getter_child_name(child);
         assert!(std::slice::from_raw_parts(name.data, name.len).starts_with(b"h"));
-        perftest_free_buffer(name);
         assert_eq!(perftest_getter_owner_child_matches(owner, child), 1);
         finish(owner, &before);
 

@@ -1,13 +1,15 @@
 //! Ownership of allocations received together as a callback result.
 use crate::{boundary, validate_pointer, Result};
 
+type ReceivedAllocation = (*mut (), unsafe fn(*mut ()));
+
 /// Reclaims owned callback-result allocations if another returned value is invalid.
 ///
 /// Generated adapters use this only for composite results containing handles.
 /// Unit, scalar and single-handle results do not allocate this collection.
 #[derive(Default)]
 pub struct CallbackReturnAllocations {
-    values: Vec<(usize, unsafe fn(usize))>,
+    values: Vec<ReceivedAllocation>,
     failure: Option<String>,
 }
 impl CallbackReturnAllocations {
@@ -25,11 +27,24 @@ impl CallbackReturnAllocations {
         if let Err(error) = validate_pointer(pointer) {
             self.failure.get_or_insert(error);
         } else {
-            unsafe fn release<T>(value: usize) {
+            unsafe fn release<T>(value: *mut ()) {
                 drop(Box::from_raw(value as *mut T));
             }
-            self.values.push((pointer as usize, release::<T>));
+            self.values.push((pointer.cast::<()>(), release::<T>));
         }
+    }
+    /// Track an inline owner stored in callback-result memory until acquisition.
+    /// This does not free the foreign storage itself.
+    ///
+    /// # Safety
+    /// `pointer` must remain readable and hold a live `T` until this guard is
+    /// committed or dropped. No other owner may drop that same value.
+    pub unsafe fn receive_inline<T>(&mut self, pointer: *const T) {
+        unsafe fn release<T>(value: *mut ()) {
+            drop(core::ptr::read(value as *const T));
+        }
+        self.values
+            .push((pointer.cast_mut().cast::<()>(), release::<T>));
     }
     /// Report an invalid pointer encoding or duplicate ownership transfer.
     pub fn check(&mut self) -> Result<()> {

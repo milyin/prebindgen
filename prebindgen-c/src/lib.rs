@@ -27,6 +27,10 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
         }
     }
 }
+mod owned;
+pub use owned::COwned;
+mod layouts;
+pub use layouts::{OpaqueLayout, OpaqueLayouts};
 mod metadata;
 pub use metadata::{CEnum, CFunction, CModule, CSchema, CType};
 mod enums;
@@ -74,6 +78,12 @@ impl Codec for CCodec {
     type Niche = CNiche;
     type Chain = CChain;
     type Branch = CBranch;
+    fn input_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
+        owned::native_input(flat, ty)
+    }
+    fn output_collection_is_leaf(&self, flat: &Bindings, ty: &syn::Type, _: &()) -> bool {
+        owned::native_output(flat, ty)
+    }
     fn group_metadata(&self) -> CBranch {
         CBranch::Group(CGroup::Values)
     }
@@ -219,7 +229,20 @@ impl Codec for CCodec {
                 quote!(std::ptr::null())
             }
             CWire::Pointer { .. } => quote!(std::ptr::null_mut()),
-            CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::View | CWire::Buffer => quote!(#buffer_type {data:std::ptr::null(),len:0}),
+            CWire::Owned {
+                owner,
+                by_value: true,
+                ..
+            } => {
+                let t = owner.ident();
+                quote!(#t::empty())
+            }
+            CWire::Owned {
+                access: Access::Shared,
+                ..
+            } => quote!(::core::ptr::null()),
+            CWire::Owned { .. } => quote!(::core::ptr::null_mut()),
             CWire::Rows => quote!(__PbRows {
                 data: std::ptr::null(),
                 len: 0
@@ -251,7 +274,8 @@ impl Codec for CCodec {
         }
         // Text and bytes own their storage just like opaque objects. Treating
         // them as observations silently cloned them when another view was added.
-        !matches!(ty, syn::Type::Reference(_)) && !matches!(Value::of(ty), Some(Value::Scalar(_)))
+        !matches!(ty, syn::Type::Reference(_))
+            && (owned::native_output(_flat, ty) || !matches!(Value::of(ty), Some(Value::Scalar(_))))
     }
     fn input_leaf(
         &self,
@@ -262,11 +286,24 @@ impl Codec for CCodec {
         v: syn::Ident,
         active: &prebindgen_declarations::Condition,
     ) -> Result<InputPlan<CWire>> {
-        if prebindgen_flat::sequence_parts(ty).is_some() {
-            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
-        }
         if prebindgen_declarations::option_inner(ty).is_some() {
             return Err("resolve Optional operations before leaf compilation".into());
+        }
+        if let Some(owner) = owned::declaration(_flat, ty).filter(|o| o.explicit) {
+            return Ok(owned::input(owner, ty, w, v, active, false));
+        }
+        if owned::pointer_declared(_flat, ty) {
+            return prebindgen_conversions::boxed::input(
+                &prebindgen_conversions::boxed::Storage::Direct,
+                ty,
+                w,
+                v,
+                &active.rust(),
+                |b| CWire::pointer(b.into()),
+            );
+        }
+        if prebindgen_flat::sequence_parts(ty).is_some() {
+            return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
         let read_buffer = prebindgen_conversions::template_parameter("read_buffer");
         let (decode, kind) = match Value::of(ty) {
@@ -302,6 +339,46 @@ impl Codec for CCodec {
         v: TokenStream,
         borrowed: bool,
     ) -> Result<OutputPlan<CWire>> {
+        if let Some(owner) = owned::declaration(_flat, ty) {
+            if let syn::Type::Reference(r) = ty {
+                let access = if r.mutability.is_some() {
+                    Access::Exclusive
+                } else {
+                    Access::Shared
+                };
+                let value = if borrowed { quote!(*#v) } else { v };
+                return Ok(owned::borrowed(owner, w, value, access));
+            }
+            if borrowed {
+                // An explicit borrowed value projection requests an owning copy.
+                return Ok(owned::output(
+                    owner,
+                    w,
+                    quote!(::core::clone::Clone::clone(#v)),
+                ));
+            }
+            return Ok(owned::output(owner, w, v));
+        }
+        if owned::pointer_declared(_flat, ty) {
+            if let syn::Type::Reference(r) = ty {
+                return Ok(self
+                    .output_return_reference(_flat, r, &(), w, v)?
+                    .expect("declared opaque reference"));
+            }
+            let value = if borrowed {
+                quote!(::core::clone::Clone::clone(#v))
+            } else {
+                v
+            };
+            return Ok(owned_pointer_output(ty, w, value).0);
+        }
+        if let syn::Type::Reference(r) = ty {
+            if r.mutability.is_none()
+                && matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]")
+            {
+                return Ok(byte_view(w, v));
+            }
+        }
         if prebindgen_flat::sequence_parts(ty).is_some() {
             return Err("collections require a Sequence recipe, not an opaque leaf; use an alias for opaque storage".into());
         }
@@ -393,17 +470,35 @@ impl Codec for CCodec {
         value: TokenStream,
     ) -> Result<Option<OutputPlan<CWire>>> {
         let ty = &*reference.elem;
+        if let Some(owner) = owned::declaration(flat, ty) {
+            return Ok(Some(owned::borrowed(
+                owner,
+                wire,
+                value,
+                if reference.mutability.is_some() {
+                    Access::Exclusive
+                } else {
+                    Access::Shared
+                },
+            )));
+        }
+        if reference.mutability.is_none()
+            && matches!(prebindgen_flat::type_key(ty).as_str(), "str" | "[u8]")
+        {
+            return Ok(Some(byte_view(wire, value)));
+        }
         // Scalars, enums and buffers retain their value conversions. Only an
         // opaque source type has an address-preserving C representation.
-        if !matches!(ty, syn::Type::Path(_))
-            || prebindgen_flat::type_key(ty) == "str"
-            || Value::of(ty).is_some()
-            || prebindgen_flat::sequence_parts(ty).is_some()
-            || prebindgen_flat::option_inner(ty).is_some()
-            || flat
-                .type_info(ty)
-                .ok()
-                .is_some_and(|t| t.metadata.enumeration.is_some())
+        if !owned::pointer_declared(flat, ty)
+            && (!matches!(ty, syn::Type::Path(_))
+                || prebindgen_flat::type_key(ty) == "str"
+                || Value::of(ty).is_some()
+                || prebindgen_flat::sequence_parts(ty).is_some()
+                || prebindgen_flat::option_inner(ty).is_some()
+                || flat
+                    .type_info(ty)
+                    .ok()
+                    .is_some_and(|t| t.metadata.enumeration.is_some()))
         {
             return Ok(None);
         }
@@ -443,6 +538,13 @@ impl Codec for CCodec {
         wire: syn::Ident,
         value: TokenStream,
     ) -> Result<Option<(OutputPlan<CWire>, TokenStream)>> {
+        if let Some(owner) = owned::declaration(flat, ty).filter(|_| owned::std_owner(ty)) {
+            let ident = owner.ident();
+            let mut plan = owned::output(owner, wire.clone(), value.clone());
+            plan.statements = quote!(let mut #wire=#ident::guard(#value););
+            let pointer = quote!(::core::ptr::addr_of_mut!(#wire.0).cast::<#ty>());
+            return Ok(Some((plan, pointer)));
+        }
         if !flat
             .type_info(ty)
             .ok()
@@ -453,8 +555,35 @@ impl Codec for CCodec {
         Ok(Some(owned_pointer_output(ty, wire, value)))
     }
 
+    fn validate_owner_getter(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        getter: &str,
+        plan: &OutputPlan<CWire>,
+    ) -> Result<()> {
+        if let Some(owner) = owned::declaration(flat, ty) {
+            let has_loan = crate::group::result_packet_fields(&plan.outcomes.success).any(|w| {
+                matches!(
+                    w.kind,
+                    CWire::View
+                        | CWire::Owned {
+                            access: Access::Shared | Access::Exclusive,
+                            ..
+                        }
+                ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access!=Access::Move)
+            });
+            if has_loan && owner.helper("view") != getter {
+                return Err("inline owner getter loans require a generated heap view accessor; a reference into the movable descriptor cannot escape".into());
+            }
+        }
+        Ok(())
+    }
     fn validate_getter_output(
         &self,
+        _flat: &Bindings,
+        _receiver: &syn::Type,
+        borrowed: bool,
         ty: &syn::Type,
         plan: &OutputPlan<CWire>,
         _: &(),
@@ -468,9 +597,18 @@ impl Codec for CCodec {
         {
             return Ok(());
         }
-        if fields.iter().any(|w| matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access != Access::Move))
-            && !fields.iter().any(|w| matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access == Access::Move && pointer_owns_value(&pointer.ty, ty))) {
-            return Err("a borrowed opaque getter output requires its opaque owner to be returned with field_self_into(); otherwise select an explicit owning conversion if a copy is intended".into());
+        let loans = fields.iter().any(|w| {
+            matches!(
+                &w.kind,
+                CWire::View
+                    | CWire::Owned {
+                        access: Access::Shared | Access::Exclusive,
+                        ..
+                    }
+            ) || matches!(&w.kind,CWire::Pointer{pointer,..} if pointer.access != Access::Move)
+        });
+        if loans && !borrowed {
+            return Err("a borrowed getter output requires its opaque owner to be returned with field_self_into(); a temporary owner cannot lend output storage; use a generated heap view accessor with its inline owner, or borrow an owner already stored by C".into());
         }
         Ok(())
     }
@@ -634,6 +772,11 @@ pub struct Cbindgen {
     functions: Vec<prebindgen_declarations::FunctionDecl>,
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
+    owned: Vec<(String, syn::Type, OpaqueLayout, Option<String>)>,
+    layout_file: Option<std::path::PathBuf>,
+    layout_data: Option<OpaqueLayouts>,
+    layout_sources: Vec<prebindgen::Source>,
+    target: Option<String>,
     enums: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
     panics: std::collections::BTreeSet<String>,
@@ -650,6 +793,11 @@ impl Cbindgen {
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
+            owned: Vec::new(),
+            layout_file: None,
+            layout_data: None,
+            layout_sources: Vec::new(),
+            target: None,
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
@@ -770,6 +918,11 @@ impl Cbindgen {
             functions: Vec::new(),
             prefix: "pb".into(),
             pointers: Vec::new(),
+            owned: Vec::new(),
+            layout_file: None,
+            layout_data: None,
+            layout_sources: Vec::new(),
+            target: None,
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
@@ -782,11 +935,35 @@ impl Cbindgen {
         self.prefix = prefix.into();
         self
     }
+    /// Select the binding target outside Cargo, or override Cargo's `TARGET`.
+    /// Native measurements are used only for the generator's own platform.
+    pub fn target(mut self, target: impl Into<String>) -> Self {
+        self.target = Some(target.into());
+        self
+    }
+    /// Read external target layouts during preparation. An incomplete artifact
+    /// is an error even on native builds; no host fallback is used.
+    pub fn opaque_layouts_file(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.layout_file = Some(path.as_ref().to_owned());
+        self
+    }
+    /// Supply a parsed layout artifact instead of a file.
+    pub fn opaque_layouts(mut self, data: OpaqueLayouts) -> Self {
+        self.layout_data = Some(data);
+        self
+    }
+    /// Register a captured source for layout-artifact feature verification when
+    /// starting from a parsed Flat model. `.source(...)` registers automatically.
+    pub fn layout_source(mut self, source: prebindgen::Source) -> Self {
+        self.layout_sources.push(source);
+        self
+    }
     /// Declare an opaque C pointee and its typed destructor for a source type.
     ///
-    /// Every leaf type other than a primitive, text or bytes needs a matching
-    /// declaration. Owned values use `Box<T>` directly; they have no `Send`
-    /// requirement. This declaration alone does not export constructors.
+    /// Selects `Box<T>` storage for owned values in both directions, including
+    /// built-in and vector types that otherwise have value/collection defaults.
+    /// Named opaque types need an explicit pointer or inline-owner declaration.
+    /// There is no `Send` requirement. This alone does not export constructors.
     ///
     /// # Arguments
     ///
@@ -796,6 +973,38 @@ impl Cbindgen {
     pub fn opaque_ptr(mut self, name: &str, ty: syn::Type) -> Self {
         self.pointers.push((name.into(), ty));
         self
+    }
+    /// Declare an inline owning C value with generated target storage and drop.
+    /// `T::default()` must be a valid, resource-free empty value: the C caller
+    /// may discard it after a drop or consuming call. Use
+    /// [`Self::opaque_owned_struct_with_empty`] when another empty factory is needed.
+    /// Types without a resource-free empty state should use [`Self::opaque_ptr`].
+    pub fn opaque_owned_struct(mut self, name: &str, ty: syn::Type, layout: OpaqueLayout) -> Self {
+        self.owned.push((name.into(), ty, layout, None));
+        self
+    }
+    /// Declare an inline owner whose empty value is produced by a nullary source
+    /// function returning exactly this Rust type. The empty value must own no
+    /// resources, because callers may discard it after destruction or consumption.
+    /// This avoids a `Default` bound.
+    pub fn opaque_owned_struct_with_empty(
+        mut self,
+        name: &str,
+        ty: syn::Type,
+        layout: OpaqueLayout,
+        empty: prebindgen_declarations::FunctionDecl,
+    ) -> Self {
+        self.owned
+            .push((name.into(), ty, layout, Some(empty.source_name())));
+        self
+    }
+    /// Reference the generated length getter in an output expansion.
+    pub fn owned_len(name: &str) -> prebindgen_declarations::FunctionDecl {
+        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "len"))
+    }
+    /// Reference the generated byte-view getter for a `String` or `Vec<u8>` owner.
+    pub fn owned_view(name: &str) -> prebindgen_declarations::FunctionDecl {
+        prebindgen_declarations::FunctionDecl::new(owned::helper(name, "view"))
     }
     /// Bind a fieldless source enum as a named `int32_t` C type and constants.
     /// Source integer discriminants are preserved and checked on input. Register
@@ -811,28 +1020,63 @@ impl Cbindgen {
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn prepare(self) -> Result<Bindings> {
         prebindgen_declarations::ident(&self.prefix)?;
+        let target = self.target.unwrap_or_else(|| {
+            std::env::var("TARGET").unwrap_or_else(|_| env!("PREBINDGEN_C_GENERATOR_TARGET").into())
+        });
+        if target.trim().is_empty() {
+            return Err("binding target must not be empty".into());
+        }
+        let target_info = prebindgen::TargetTriple::parse(&target)
+            .map_err(|e| format!("invalid binding target `{target}`: {e}"))?;
+        let pointer_width = target_info
+            .pointer_width()
+            .ok_or("binding target has no pointer width")?;
+        let artifact = match (self.layout_file, self.layout_data) {
+            (Some(_), Some(_)) => {
+                return Err("supply one opaque layout artifact, as a file or parsed data".into())
+            }
+            (Some(path), None) => Some(OpaqueLayouts::read_json(path)?),
+            (None, data) => data,
+        };
+        let mut layout_sources = self.layout_sources;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
-            (None, Some(path)) => Flat::parse_selected(
-                prebindgen::Source::new(path).items_all(),
-                &prebindgen_declarations::declarations::source_functions(
-                    &self.inputs,
-                    &self.outputs,
-                    &self.error_mappers,
-                    &self.functions,
-                ),
-                &self
-                    .pointers
-                    .iter()
-                    .chain(&self.enums)
-                    .chain(&self.errors)
-                    .map(|(_, ty)| ty.clone())
-                    .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
+            (None, Some(path)) => {
+                let source = prebindgen::Source::builder(path)
+                    .enable_target_filtering(Some(&target))
+                    .build();
+                let flat = Flat::parse_selected(
+                    source.items_all(),
+                    &prebindgen_declarations::declarations::source_functions(
+                        &self.inputs,
+                        &self.outputs,
+                        &self.error_mappers,
+                        &self.functions,
+                    )
+                    .into_iter()
+                    .chain(
+                        self.owned
+                            .iter()
+                            .filter_map(|(_, _, _, empty)| empty.clone()),
+                    )
                     .collect::<Vec<_>>(),
-            )?,
+                    &self
+                        .pointers
+                        .iter()
+                        .chain(&self.enums)
+                        .chain(&self.errors)
+                        .map(|(_, ty)| ty.clone())
+                        .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
+                        .chain(self.owned.iter().map(|(_, ty, _, _)| ty.clone()))
+                        .collect::<Vec<_>>(),
+                )?;
+                layout_sources.push(source);
+                flat
+            }
             _ => return Err("supply exactly one source or flat model".into()),
         };
         flat.metadata.prefix = self.prefix;
+        flat.metadata.target = Some((target.clone(), pointer_width, target_info.to_cfg_tokens()));
         let mut enum_names = std::collections::BTreeSet::new();
         for (name, ty) in self.enums {
             prebindgen_declarations::ident(&name)?;
@@ -891,12 +1135,72 @@ impl Cbindgen {
         for (order, (name, ty)) in self.pointers.into_iter().enumerate() {
             prebindgen_declarations::ident(&name)?;
             let ty = flat.resolve_type(&ty)?;
-            let info = &mut flat.type_info_mut(&ty)?.metadata;
+            owned::validate_type(&ty)?;
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.owned.is_some() || info.enumeration.is_some() {
+                return Err(
+                    "a source type cannot be both opaque_ptr and opaque_owned_struct".into(),
+                );
+            }
             if info.pointer.replace(name).is_some() {
                 return Err("duplicate C opaque source type".into());
             }
             info.pointer_order = order;
         }
+        for (name, ty, layout, empty) in self.owned {
+            prebindgen_declarations::ident(&name)?;
+            let ty = flat.resolve_type(&ty)?;
+            owned::validate_type(&ty)?;
+            let empty = if let Some(function) = empty {
+                let f = flat.function(&function)?;
+                if !f.params.is_empty() || !prebindgen_flat::same_type(&f.ret.ty, &ty) {
+                    return Err(
+                        "an opaque owner empty factory must be nullary and return its owner type"
+                            .into(),
+                    );
+                }
+                let path = &f.path;
+                quote!(#path())
+            } else {
+                quote!(<#ty as ::core::default::Default>::default())
+            };
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.pointer.is_some() || info.owned.is_some() || info.enumeration.is_some() {
+                return Err("duplicate or conflicting C owning representation".into());
+            }
+            info.owned = Some(std::rc::Rc::new(COwned {
+                name,
+                ty,
+                layout,
+                empty,
+                explicit: true,
+            }));
+        }
+        let mut automatic = std::collections::BTreeMap::new();
+        for f in flat.functions.values() {
+            owned::collect(&f.ret.ty, &mut automatic);
+            for p in &f.params {
+                owned::collect(&p.ty.ty, &mut automatic);
+            }
+        }
+        for record in flat.records.values() {
+            for field in &record.fields {
+                owned::collect(&field.ty, &mut automatic);
+            }
+        }
+        for ty in automatic.into_values() {
+            let info = flat.type_metadata_mut(&ty)?;
+            if info.owned.is_none() && info.pointer.is_none() {
+                info.owned = Some(std::rc::Rc::new(COwned {
+                    name: owned::auto_name(&ty),
+                    ty: ty.clone(),
+                    layout: layouts::builtin(&ty),
+                    empty: quote!(<#ty as ::core::default::Default>::default()),
+                    explicit: false,
+                }));
+            }
+        }
+        owned::accessors(&mut flat)?;
         let declarations = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
@@ -923,14 +1227,14 @@ impl Cbindgen {
             declarations.fill(&mut flat, &codec, &decl, &())?;
             if decl.callback_return.is_some() {
                 let name = format!("{}_each", decl.name);
-                sequence::callback_target(
-                    &(flat.function(&decl.name)?.output_conversion()?)
-                        .output_outcomes()
-                        .success,
-                )?;
                 let variant =
                     declarations.callback_variant(&mut flat, &codec, &decl, &name, &())?;
                 declarations.fill(&mut flat, &codec, &variant, &())?;
+                sequence::callback_target(
+                    &(flat.function(&name)?.output_conversion()?)
+                        .output_outcomes()
+                        .success,
+                )?;
                 if decl.callback_return == Some(prebindgen_declarations::CallbackReturn::Only) {
                     let original = flat.functions.get_mut(&decl.name).unwrap();
                     original.ret.slot = None;
@@ -969,6 +1273,7 @@ impl Cbindgen {
                     .requires_abort = requires_abort;
             }
         }
+        layouts::prepare(&mut flat, &target, artifact.as_ref(), &layout_sources)?;
         Ok(flat)
     }
     /// Prepare a complete Flat model, then emit its C and Rust bindings.
@@ -999,6 +1304,42 @@ impl Generation {
         std::fs::write(path, &self.header).map_err(|e| e.to_string())
     }
 }
+fn byte_view(wire: syn::Ident, value: TokenStream) -> OutputPlan<CWire> {
+    let buffer = prebindgen_conversions::template_parameter("buffer_type");
+    OutputPlan {
+        fallible: false,
+        context: Default::default(),
+        delivery: Default::default(),
+        outcomes: prebindgen_flat::Outcomes {
+            success: prebindgen_flat::WireNode::Leaf(vec![Wire {
+                name: wire.clone(),
+                kind: CWire::View,
+            }]),
+            source_error: None,
+            binding_failure: None,
+        },
+        statements: quote!(let #wire = #value; let #wire = #buffer {data:#wire.as_ptr().cast::<u8>(),len:#wire.len()};),
+        values: vec![(wire.clone(), quote!(#wire))],
+        commit: quote!(),
+    }
+}
+fn c_scalar(p: Primitive, prefix: &str) -> String {
+    match p {
+        Primitive::Bool | Primitive::U8 => "uint8_t".into(),
+        Primitive::Char | Primitive::U32 => "uint32_t".into(),
+        Primitive::I8 => "int8_t".into(),
+        Primitive::I16 => "int16_t".into(),
+        Primitive::I32 => "int32_t".into(),
+        Primitive::I64 => "int64_t".into(),
+        Primitive::U16 => "uint16_t".into(),
+        Primitive::U64 => "uint64_t".into(),
+        Primitive::Isize => "intptr_t".into(),
+        Primitive::Usize => "uintptr_t".into(),
+        Primitive::F32 => "float".into(),
+        Primitive::F64 => "double".into(),
+        Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
+    }
+}
 fn c_ty(
     wire: &Wire,
     prefix: &str,
@@ -1008,21 +1349,7 @@ fn c_ty(
     match &wire.kind {
         CWire::Callback { callback } => callback.name.clone(),
         CWire::Enum { name, .. } => format!("{prefix}_{name}"),
-        CWire::Scalar { primitive: p, .. } => match p {
-            Primitive::Bool | Primitive::U8 => "uint8_t".into(),
-            Primitive::Char | Primitive::U32 => "uint32_t".into(),
-            Primitive::I8 => "int8_t".into(),
-            Primitive::I16 => "int16_t".into(),
-            Primitive::I32 => "int32_t".into(),
-            Primitive::I64 => "int64_t".into(),
-            Primitive::U16 => "uint16_t".into(),
-            Primitive::U64 => "uint64_t".into(),
-            Primitive::Isize => "intptr_t".into(),
-            Primitive::Usize => "uintptr_t".into(),
-            Primitive::F32 => "float".into(),
-            Primitive::F64 => "double".into(),
-            Primitive::I128 | Primitive::U128 => format!("{prefix}_int128"),
-        },
+        CWire::Scalar { primitive: p, .. } => c_scalar(*p, prefix),
         CWire::Pointer { pointer: p, .. } => {
             let name = pointers
                 .values()
@@ -1035,6 +1362,26 @@ fn c_ty(
                 ""
             };
             format!("{qualifier}{prefix}_{name} *")
+        }
+        CWire::View => format!("{prefix}_buffer_view"),
+        CWire::Owned {
+            owner,
+            access,
+            by_value,
+        } => {
+            if *by_value {
+                format!("{prefix}_{}", owner.name)
+            } else {
+                format!(
+                    "{}{prefix}_{} *",
+                    if *access == Access::Shared {
+                        "const "
+                    } else {
+                        ""
+                    },
+                    owner.name
+                )
+            }
         }
         CWire::Buffer => format!("{prefix}_buffer"),
         CWire::Rows => format!(
@@ -1060,6 +1407,17 @@ fn validate_wire_declaration(
                     .eq(mapping.variants.iter().map(|(n, v)| (n.to_string(), v)))
         }) {
             return Err("declare a matching C enum type for this wire".into());
+        }
+    }
+    if let CWire::Owned { owner, .. } = &wire.kind {
+        if !pointers.values().any(|t| {
+            t.metadata.owned.as_ref().is_some_and(|o| {
+                o.name == owner.name
+                    && o.layout == owner.layout
+                    && prebindgen_flat::same_type(&o.ty, &owner.ty)
+            })
+        }) {
+            return Err("declare a matching opaque_owned_struct for this wire".into());
         }
     }
     if let CWire::Pointer { pointer, .. } = &wire.kind {
@@ -1141,9 +1499,11 @@ where
     let mut symbols = std::collections::BTreeSet::from([
         free.to_string(),
         free_error.to_string(),
+        format!("{prefix}_buffer_view"),
         format!("{prefix}_buffer"),
         format!("{prefix}_int128"),
         format!("{prefix}_H"),
+        format!("{prefix}_TARGET"),
     ]);
     for (name, mapping) in &enums {
         prebindgen_declarations::ident(name)?;
@@ -1298,7 +1658,9 @@ where
         }
         calls.push((f, body, context));
     }
+    let helpers = &flat.metadata.helpers;
     let mut tokens = quote! {
+       #(#helpers)*
        // Raw ownership preserves the allocation address and provenance while
        // views are derived. Forgetting this guard commits the existing allocation.
        #[allow(dead_code)] struct __PbOutputOwner<T: ?Sized>(*mut T);
@@ -1324,6 +1686,16 @@ where
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
+    if let Some((target, width, cfg)) = &flat.metadata.target {
+        tokens.extend(quote!(
+            const _: () = {
+                assert!(cfg!(#cfg) && usize::BITS == #width,
+                "C binding target differs from the Rust compilation target");
+            };
+        ));
+        let target_literal = serde_json::to_string(target).map_err(|e| e.to_string())?;
+        header.push_str(&format!("/* Binding target identity; use the matching Rust library. */\n#define {prefix}_TARGET {target_literal}\n#ifdef __cplusplus\nstatic_assert(sizeof(void*) * 8 == {width}, \"prebindgen: header pointer width differs; regenerate for this target\");\n#else\n_Static_assert(sizeof(void*) * 8 == {width}, \"prebindgen: header pointer width differs; regenerate for this target\");\n#endif\n"));
+    }
     for (name, mapping) in &enums {
         prebindgen_declarations::ident(name)?;
         header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
@@ -1353,6 +1725,39 @@ The pointer must be null or a live allocation of the declared type returned by t
         header.push_str(&format!(
             "typedef struct {prefix}_{name} {prefix}_{name};\nvoid {drop}({prefix}_{name} *ptr);\n"
         ));
+    }
+    header.push_str(&format!(
+        "typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer_view;\n"
+    ));
+    for info in flat.types.values() {
+        if let Some(owner) = &info.metadata.owned {
+            prebindgen_declarations::ident(&owner.name)?;
+            let layout = *flat
+                .metadata
+                .opaque_layouts
+                .get(&owner.name)
+                .ok_or_else(|| {
+                    format!(
+                        "opaque owner `{}` has no prepared target layout",
+                        owner.name
+                    )
+                })?;
+            layout.validate()?;
+            if !symbols.insert(format!("{prefix}_{}", owner.name))
+                || !symbols.insert(format!("{prefix}_drop_{}", owner.name))
+            {
+                return Err("duplicate C inline owner name or destructor".into());
+            }
+            owned::emit(owner, layout, prefix, &mut tokens, &mut header);
+            owned::emit_accessors(
+                owner,
+                prefix,
+                &flat.types,
+                &mut symbols,
+                &mut tokens,
+                &mut header,
+            )?;
+        }
     }
     let mut callbacks = std::collections::BTreeMap::new();
     for f in flat.functions.values().filter(|f| f.ret.slot.is_some()) {
@@ -1488,9 +1893,17 @@ The pointer must be null or a live allocation of the declared type returned by t
         let outputs =
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .collect::<Vec<_>>();
-        if outputs.iter().any(
-            |w| matches!(&w.kind, CWire::Pointer { pointer, .. } if pointer.access != Access::Move),
-        ) {
+        if outputs.iter().any(|w| {
+            matches!(&w.kind, CWire::Pointer { pointer, .. } if pointer.access != Access::Move)
+                || matches!(
+                    w.kind,
+                    CWire::View
+                        | CWire::Owned {
+                            access: Access::Shared | Access::Exclusive,
+                            ..
+                        }
+                )
+        }) {
             header.push_str("/* Borrowed opaque outputs must never be freed or consumed. Keep their source storage alive at a stable address; mutable borrows require exclusive access. */\n");
         }
         let mut next_option_label = 0;
@@ -1692,9 +2105,17 @@ fn validate_return_loans<I, O, M>(
 where
     I: InputConversion<Wire = CWire, Chain = CChain, Branch = CBranch>,
 {
-    if !crate::group::result_packet_fields(output)
-        .any(|w| matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move))
-    {
+    if !crate::group::result_packet_fields(output).any(|w| {
+        matches!(&w.kind, CWire::Pointer {pointer,..} if pointer.access != Access::Move)
+            || matches!(
+                &w.kind,
+                CWire::View
+                    | CWire::Owned {
+                        access: Access::Shared | Access::Exclusive,
+                        ..
+                    }
+            )
+    }) {
         return Ok(());
     }
     // Owner-backed combinations create their loans only after this allocation
@@ -1739,6 +2160,7 @@ where
                 matches!(&wires[0].kind,CWire::Pointer {pointer,..} if prebindgen_flat::same_type(&pointer.ty,&r.elem))
                     || (matches!(prebindgen_flat::type_key(&r.elem).as_str(), "str" | "[u8]")
                         && matches!(wires[0].kind, CWire::Buffer))
+                    || matches!(&wires[0].kind,CWire::Owned{owner,by_value:false,..} if prebindgen_flat::same_type(&owner.ty,&r.elem))
             }
             _ => false,
         }
@@ -1997,7 +2419,7 @@ mod generation_tests {
     #[test]
     fn mutable_value_and_collection_outputs_have_no_copying_fallback() {
         use prebindgen_declarations::fun;
-        for returned in ["&mut i64", "&mut String", "&mut [u8]", "&mut Vec<i64>"] {
+        for returned in ["&mut i64", "&mut [u8]"] {
             let source =
                 format!("pub type Owner=String;pub fn value(owner:&mut Owner)->{returned}{{}}");
             let error = Cbindgen::new(error_model(&source))
@@ -2252,18 +2674,30 @@ mod generation_tests {
         }
     }
     #[test]
-    fn opaque_declarations_reject_unregistered_builtin_and_composite_types() {
-        for ty in [
-            syn::parse_quote!(String),
-            syn::parse_quote!(Option<Item>),
-            syn::parse_quote!(Vec<Item>),
-        ] {
-            let error = Cbindgen::new(error_model("pub type Item=String;"))
-                .opaque_ptr("invalid", ty)
-                .prepare()
-                .err()
+    fn opaque_declarations_override_builtin_and_collection_types() {
+        use prebindgen_declarations::fun;
+        for ty in [syn::parse_quote!(String), syn::parse_quote!(Vec<Item>)] {
+            let generated = Cbindgen::new(error_model("pub type Item=String;"))
+                .opaque_ptr("native", ty)
+                .build()
                 .unwrap();
-            assert!(error.contains("unregistered source type"), "{error}");
+            assert!(generated.header.contains("pb_native"));
+        }
+        let generated = Cbindgen::new(error_model("pub fn f()->String{}"))
+            .opaque_ptr("native", syn::parse_quote!(String))
+            .function(fun!(f))
+            .build()
+            .unwrap();
+        assert!(generated.header.contains("pb_native * pb_f("));
+        for ty in [
+            syn::parse_quote!(Option<Item>),
+            syn::parse_quote!(&Item),
+            syn::parse_quote!(Result<Item,Item>),
+        ] {
+            assert!(Cbindgen::new(error_model("pub type Item=String;"))
+                .opaque_ptr("bad", ty)
+                .prepare()
+                .is_err());
         }
     }
     #[test]
@@ -2454,7 +2888,10 @@ mod generation_tests {
             )
             .panic()
             .build();
-        assert!(result.err().unwrap().contains("additional return"));
+        assert!(result
+            .err()
+            .unwrap()
+            .contains("callback_return requires exactly one outer sequence"));
     }
 
     #[test]
@@ -2561,7 +2998,7 @@ mod generation_tests {
         .function(fun!(f))
         .build()
         .unwrap();
-        assert!(generated.header.contains("pb_buffer v0;"));
+        assert!(generated.header.contains("pb_owned_string v0;"));
         assert!(generated.header.contains("int64_t v1;"));
         assert!(!generated.header.contains("pb_buffer char;"));
     }

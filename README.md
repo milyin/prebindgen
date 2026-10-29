@@ -632,17 +632,20 @@ Consumed pointers become invalid. Destruction accepts null, but destroying a
 non-null pointer twice or using a consumed pointer is undefined behavior, as
 with ordinary owned C pointers. There is no runtime type/liveness registry.
 C imposes no `Send` bound: the LocalCounter example wraps `Rc<Cell<u64>>`.
-Both current adapters opt into `prebindgen_conversions::boxed`, which shares pointer
-validation, borrow/move acquisition, cloned observations and output commit.
-C stores objects directly in `Box<T>`; its header exposes typed opaque pointers.
+Opaque pointer declarations use `prebindgen_conversions::boxed`, which shares
+pointer validation, borrow/move acquisition, cloned observations and output commit.
+C stores these objects directly in `Box<T>`; its header exposes typed opaque pointers.
+Inline C owners, described below, store the Rust value inside the C value instead.
 Other adapters can choose different storage in their leaf conversions; there is
 no universal `Object` operation or required allocation policy.
 Thread-affine source values retain their source-side restrictions.
 
 C functions without `Result` return their first boundary value directly; any
 additional values use output pointers. Unit functions and destructors return
-`void`. Text and bytes use pointer/length buffers; `&str` and `&[u8]` inputs borrow
-that memory, while owned inputs copy it. Callers free returned buffers exactly once.
+`void`. Text and byte inputs use pointer/length buffers by default; `&str` and
+`&[u8]` borrow that memory, while owned inputs copy it. Owned `String` and `Vec<T>`
+returns use inline opaque owners. Borrowed `&str` and `&[u8]` returns use a distinct
+`buffer_view` type: keep the source alive and never free the view.
 
 A non-Result function with a fallible binding conversion must be explicitly
 declared with `.function(fun!(name)).panic()`. Without that declaration, generation
@@ -677,14 +680,165 @@ C source callback parameters, data-carrying enums, maps/sets, mutable text/byte 
 `convert!`, field renaming, local function declarations, split
 overloads and shared selector argument storage remain outside this subset.
 
+## Inline C owners
+
+`opaque_ptr("name", T)` declares a typed pointer to a Rust `Box<T>` and generates
+its destructor. It can also override the ordinary representation of a built-in
+or vector type. `opaque_owned_struct("name", T, layout)` declares a C value that
+contains the Rust value itself. Moving a vector or string into this storage
+preserves its data pointer, length and capacity. The wrapper neither compacts its
+allocation nor allocates a box for its descriptor.
+
+```rust,ignore
+use prebindgen_c::{Cbindgen, OpaqueLayout};
+use prebindgen_declarations::{expand_return, fun};
+use syn::parse_quote;
+
+let bindings = Cbindgen::builder()
+    .source(flat::PREBINDGEN_OUT_DIR)
+    .opaque_owned_struct("bytes", parse_quote!(Vec<u8>), OpaqueLayout::auto::<Vec<u8>>())
+    .function(fun!(make_bytes).expand_return(
+        expand_return!(Vec<u8>)
+            .field_self_into()
+            .field(Cbindgen::owned_view("bytes"))
+            .field(Cbindgen::owned_len("bytes"))))
+    .build()?;
+```
+
+This exports `pb_bytes pb_make_bytes(pb_buffer_view *out1, uintptr_t *out2)`.
+The returned owner and the extra view describe the same allocation:
+
+```c
+pb_buffer_view view;
+uintptr_t length;
+pb_bytes bytes = pb_make_bytes(&view, &length);
+/* Read view.data[0..length], or obtain pb_bytes_view(&bytes) later. */
+pb_drop_bytes(&bytes);
+/* All previous views are now invalid. bytes contains an empty Vec. */
+```
+
+String and vector owners get a generated `*_len` accessor. String and byte-vector
+owners also get `*_view`, returning a borrowed `{ data, len }` byte view; strings
+contain UTF-8 without an added terminator. Other vectors get `*_get(owner, index)`,
+which returns a borrowed element pointer or null for an out-of-range index.
+Primitive elements use their C scalar type; opaque elements use a declared
+`opaque_ptr` type; other elements use `const void *`. No element conversion or
+copy is performed by these accessors. Source getters remain usable in expansions
+for arbitrary owner types.
+
+Owned `String` and `Vec<T>` outputs select this storage automatically, with stable,
+readable generated type names. Explicit declarations give the types predictable
+names and also select native ownership for inputs: `T` consumes an owner through
+a mutable pointer, while `&T`/`&mut T` borrow its storage. Without an explicit
+storage declaration, input buffers and input element conversions retain their
+ordinary forms. Explicit element expansions and `Output::Sequence` still request
+row conversion; they take precedence over native collection defaults.
+
+`OpaqueLayout::auto::<T>()` measures the real Rust type available to the build
+script only for a native build. A cross build must supply an external layout
+artifact; it never falls back to host measurements. `OpaqueLayout::external()`
+requires an artifact even natively and allows types unavailable on the host.
+Custom owners use their declaration name as the artifact key; `.key("other")`
+selects a shared key. Use qualified keys when several binding modules share an
+artifact and reuse short C declaration names. Standard `Vec<T>` owners use `std.vec`, and `String` uses
+its independently measured `std.string` entry. Generic vector ownership does not
+require `Clone` or a C representation for each element. It preserves the original
+allocation and drops elements through Rust; converted element rows remain explicit.
+
+```rust,ignore
+let bindings = Cbindgen::builder()
+    .source(flat::PREBINDGEN_OUT_DIR)
+    .opaque_layouts_file("abi/layouts.json")
+    .opaque_owned_struct("packet", parse_quote!(Packet),
+        OpaqueLayout::auto::<flat::Packet>())
+    .build()?;
+```
+
+The external artifact is ordinary JSON:
+
+```json
+{
+  "format_version": 1,
+  "target": "i686-unknown-linux-gnu",
+  "sources": { "flat": { "features": ["feature_a"] } },
+  "layouts": {
+    "packet": { "size": 32, "alignment": 4 },
+    "std.vec": { "size": 12, "alignment": 4 },
+    "std.string": { "size": 12, "alignment": 4 }
+  }
+}
+```
+
+Probe generation, execution, object-file extraction and caching remain external.
+The producer records the actual source features, not just requested Cargo flags.
+Only required layouts need entries; an opaque pointer alone needs no layout.
+Supplying an artifact makes lookup strict on native builds too. Missing files,
+entries, source features, duplicate keys, invalid layouts and target mismatches
+are errors. No incomplete artifact falls back to native measurements. Watch the
+artifact in `build.rs` with `cargo:rerun-if-changed`.
+
+Cargo's `TARGET` selects the binding platform; outside Cargo it defaults to the
+generator's compiled platform. `.target("triple")` overrides it. A different
+platform always requires external inline-layout data. `.source(...)` registers
+its source for feature verification. With a pre-parsed Flat model, register each
+captured source through `.layout_source(source)`. Source keys use the name from
+`Source::crate_name()`, including dependency aliases. Unused artifact sources are
+allowed. Register sources contributing only types too; function origins are
+checked automatically, but external type paths alone cannot identify captured
+source metadata. `Source::require_features`
+checks probe features against captured declarations and retains the compile-time
+check against the target library's exported `FEATURES` constant. This is not a
+fingerprint of the entire dependency graph or compiler configuration.
+
+The generated Rust checks its compilation target against the selected binding
+target and independently asserts actual size and alignment for every
+owner, including every concrete vector type. Matching feature lists do not bypass
+these checks: a stale layout from different dependency settings still fails if
+its dimensions differ. Rust storage uses `MaybeUninit` byte arrays so padding is
+not interpreted as initialized values and embedded pointers retain provenance.
+C headers use the same measured size and alignment, with C11/C++11 declarations.
+The header records its target in `{prefix}_TARGET` and rejects a different
+pointer width at compile time. This does not distinguish every ABI or feature
+combination: distribute the header matching the Rust library's target and features.
+The header and Rust glue must be regenerated and rebuilt together.
+
+See the example [external layout artifacts](examples/perftest-c/layouts) and
+`python3 examples/check-opaque-layouts.py --target aarch64-unknown-linux-gnu
+--target i686-unknown-linux-gnu` for native, cross, feature-mismatch and stale-data
+checks. These are checked example measurements, not an integrated probe tool.
+
+The default empty value is `T::default()`.
+`opaque_owned_struct_with_empty(..., fun!(empty_factory))` instead selects a
+nullary source factory returning `T`, allowing non-Default types. Consuming inputs
+replace the caller's value with this empty value after validation. Typed drops
+also replace before dropping, so dropping an already emptied owner is valid.
+The empty value must own no resources: the caller may discard it after a drop
+or consuming call. If `T::default()` owns resources, supply a resource-free empty
+factory instead. Types without such an empty state should use `opaque_ptr`.
+Vec and String defaults satisfy this contract and allocate nothing.
+Never fabricate or zero-initialize a live owner. Assigning a C struct transfers
+ownership only if its old copy is never used or dropped again. Failed Result
+calls leave success output storage untouched, so it must not be dropped unless
+it already held a live owner.
+
+Loans into an inline object's own storage cannot accompany a newly returned owner:
+C may move that owner at any time. Such getter expansions are diagnosed. The
+generated String/Vec byte views point into heap allocations and may accompany
+`field_self_into()`. Borrowing an owner already stored by C is also supported;
+keep that storage alive and at a stable address for the duration of its loans.
+Explicit native-owner declarations also select by-value callback results.
+Owned callback arguments use their output representation; automatically selected
+owners keep the ordinary callback input buffer/row conversion for returns. They must not return a pointer to a local owner.
+
 ## Collections
 
-`Vec<T>`, `&Vec<T>` and `&[T]` use the element type's ordinary input and
-output declarations. They can contain scalars, strings, byte arrays, fieldless
+JNI collections, default C collection inputs, and explicit C element expansions
+use the element type's ordinary input and output declarations. They can contain scalars, strings, byte arrays, fieldless
 enums, options, records and owned handles; owned vectors can be nested. Options
 around a collection distinguish absence from an empty collection, and
 `Result<Vec<T>, E>` uses the declared typed error projection or message mapper.
-`Vec<u8>` and byte slices keep their existing byte-buffer transport.
+C native vector returns retain their original allocation through inline owners.
+Byte inputs and JNI byte collections retain their byte-buffer transport.
 
 Ownership remains explicit. An owned vector return moves its elements; a
 borrowed vector or slice return uses borrowed element projections. An explicit
@@ -695,7 +849,7 @@ constructor taking borrowed inputs when the source elements need cloning.
 Reference elements, mutable collection views, zero-wire elements, boxed slices,
 maps, sets and nested `Result` values are rejected.
 
-C receives one typed `{ data, len }` carrier. Each row contains the element's
+For an explicit element expansion, C receives one typed `{ data, len }` carrier. Each row contains the element's
 ordinary boundary fields, with generated row definitions and option/field
 comments in the header. Input storage remains caller-owned and must be readable
 for the call. Output row storage belongs to the caller after success. The
@@ -1056,17 +1210,20 @@ The context must stay live until then, and callback functions and context access
 must support the threads permitted by the Rust signature.
 
 Rust-to-C callback arguments use ordinary output conversions. The C callback owns
-any delivered handles, buffers and row allocations, and releases them with the
-generated typed destructors, buffer freer and row-storage freer. Values returned
+any delivered owning handles, inline owners and row allocations, and releases them
+with the generated typed destructors and row-storage freer. Borrowed byte views
+remain valid only during the callback and must never be freed. Values returned
 from C use ordinary input conversions: one native field is returned directly;
 multiple fields use a generated result structure. The header also provides
 `pb_evaluate_callback_return` and collection argument aliases where applicable.
-Owned handle results move into Rust; returned byte buffers and row storage are
-borrowed while Rust copies or converts them.
+Owned handles and inline owners move into Rust; inline callback results travel
+by value, including when ordinary function inputs use owner pointers. Returned
+input byte buffers and row storage are borrowed while Rust copies or converts them.
 
 For callbacks returning buffers or rows, an optional `release_result(context,
 result)` function runs after decoding, including on conversion failure. It can free
-storage allocated by the C callback. It must not free handles moved into Rust.
+storage allocated by the C callback. It must not drop handles or inline owners
+moved into Rust, including owners whose old descriptors remain in returned rows.
 Without this function, returned storage must remain valid throughout decoding;
 concurrent invocations must not overwrite storage another invocation is using.
 C callback return-conversion failures raise a Rust panic on the invoking thread.

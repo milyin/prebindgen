@@ -14,3 +14,6 @@ prebindgen-c.workspace = true
 prebindgen-declarations.workspace = true
 syn.workspace = true
 perftest-flat = {path = "../perftest-flat"}
+
+[features]
+layout-wide = ["perftest-flat/layout-wide"]

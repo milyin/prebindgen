@@ -1,6 +1,6 @@
 //! Explicit Result error outputs. Message buffers and structured errors are caller-owned.
 use super::*;
-use prebindgen_conversions::OutputFragment;
+use prebindgen_conversions::{OutputFragment, TemplateContext};
 use prebindgen_flat::Conversion;
 
 #[derive(Clone, Debug)]
@@ -207,11 +207,18 @@ pub(crate) fn emit(
                 let field = format_ident!("v{i}");
                 if !matches!(
                     wire.kind,
-                    CWire::Buffer | CWire::Pointer { .. } | CWire::Rows
+                    CWire::Buffer
+                        | CWire::Pointer { .. }
+                        | CWire::Rows
+                        | CWire::Owned { by_value: true, .. }
                 ) {
                     return (wire, quote!((*error).#field));
                 }
-                let empty = match wire.kind {
+                let empty = match &wire.kind {
+                    CWire::Owned { owner, .. } => {
+                        let ident = owner.ident();
+                        quote!(#ident::empty())
+                    }
                     CWire::Buffer => quote!(__PbBuffer {
                         data: std::ptr::null(),
                         len: 0
@@ -296,15 +303,25 @@ pub(crate) fn result_function(
     let (rust_error, c_error, report_binding) = if let Some(typed) = typed {
         let rust = format_ident!("__PbError_{}", typed.name);
         let report = helper(&typed.name);
+        let mut empty_fields = crate::group::result_packet_fields(&typed.plan()?.outcomes.success)
+            .enumerate()
+            .map(|(i, wire)| {
+                let field = format_ident!("v{i}");
+                let value = context.render(&CCodec.absent_value(&wire.kind, None, false)?)?;
+                Ok(quote!(#field:#value))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if empty_fields.is_empty() {
+            empty_fields.push(quote!(unused:0));
+        }
         (
             quote!(#rust),
             format!("{prefix}_{}", typed.name),
             quote! {
                 let mut delivered=false;
                 if ::prebindgen_runtime::boundary(|| unsafe {#report(<#error_ty as From<String>>::from(message),#error,&mut delivered)}).is_err() && !delivered {
-                // All CWire carriers have a valid zero representation with no
-                // owned allocations. Never expose uninitialized error storage.
-                std::ptr::write(#error,std::mem::zeroed());
+                // Native owners need real empty Rust values, not zero bytes.
+                std::ptr::write(#error,#rust{#(#empty_fields),*});
             }
             },
         )

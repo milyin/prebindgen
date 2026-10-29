@@ -2055,7 +2055,7 @@ fn owned_buffer_identity_views_move_and_independent_copies_are_explicit() {
                 .lines()
                 .find(|line| line.contains("_make("))
                 .unwrap();
-            assert!(declaration.contains("_buffer "), "{declaration}");
+            assert!(declaration.contains("_owned_"), "{declaration}");
         }
         for mixed in [false, true] {
             let expansion = match (bytes, mixed) {

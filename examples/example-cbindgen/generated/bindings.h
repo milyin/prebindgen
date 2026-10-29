@@ -10,6 +10,13 @@ typedef struct { uint64_t hi; uint64_t lo; } example_int128;
  typedef struct { const uint8_t *data; size_t len; } example_buffer;
 void example_free_buffer(example_buffer b);
 void example_free_error(char *error);
+/* Binding target identity; use the matching Rust library. */
+#define example_TARGET "x86_64-unknown-linux-gnu"
+#ifdef __cplusplus
+static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
+#else
+_Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
+#endif
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
@@ -21,6 +28,7 @@ typedef struct example_caption example_caption;
 void example_drop_caption(example_caption *ptr);
 typedef struct example_foo example_foo;
 void example_drop_foo(example_foo *ptr);
+typedef struct { const uint8_t *data; size_t len; } example_buffer_view;
 /* Non-Result calls return their first value directly; additional values use output pointers.
  * Binding failures require explicit .panic() and abort. Destructors return void. */
 example_calculator * example_calculator_new(void);

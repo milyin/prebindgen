@@ -207,6 +207,11 @@ pub(crate) fn release(
                 } else { drop };
                 code.extend(quote! { if !(#value).is_null() { #drop } });
             }
+            CWire::Owned {access:Access::Move,by_value:true,..} => {
+                let drop=quote!(drop((#value).into_rust()););
+                let drop=if catch_panics {quote!(let _=::prebindgen_runtime::boundary(||{#drop Ok(())});)} else {drop};
+                code.extend(drop);
+            }
             CWire::Rows => {
                 let row=&context.row_types[&wire.name.to_string()];
                 let element=schemas.iter().find(|(carrier,_,_)|carrier.name==wire.name).unwrap().1;

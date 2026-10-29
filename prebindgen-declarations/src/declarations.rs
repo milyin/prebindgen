@@ -137,7 +137,31 @@ impl Declarations {
             }
         }
         if select(&mut output) != 1 {
-            return Err("callback_return requires exactly one outer sequence".into());
+            fn structural(ty: &syn::Type, output: &Output) -> Option<Output<OutputRequest>> {
+                match output {
+                    Output::Leaf if prebindgen_flat::sequence_parts(ty).is_some() => {
+                        Some(Output::Sequence {
+                            element: Box::new(Output::auto()),
+                            mode: None,
+                            delivery: SequenceDelivery::Callback,
+                        })
+                    }
+                    Output::Optional(child) => Some(Output::Optional(Box::new(structural(
+                        prebindgen_flat::option_inner(ty)?,
+                        child,
+                    )?))),
+                    _ => None,
+                }
+            }
+            if decl.ret.is_none() {
+                if let Some(tree) = structural(ty, &output) {
+                    output = self.resolve_output(flat, codec, ty, &tree, extra)?;
+                } else {
+                    return Err("callback_return requires exactly one outer sequence".into());
+                }
+            } else {
+                return Err("callback_return requires exactly one outer sequence".into());
+            }
         }
         let mut function = flat.function(&decl.name)?.clone();
         function.name = crate::ident(name)?;
@@ -344,7 +368,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
+                {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
                         &Input::auto(),
@@ -386,7 +412,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.input_collection_is_leaf(flat, ty, extra))
+                {
                     return Ok(Input::Sequence(Box::new(resolve(
                         element,
                         &Input::auto(),
@@ -623,7 +651,9 @@ impl Declarations {
                         stack,
                     )?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
+                {
                     return Ok(Output::Sequence {
                         element: Box::new(resolve(element, &Output::auto(), stack)?),
                         mode: None,
@@ -669,7 +699,9 @@ impl Declarations {
                 if let Some(inner) = option_inner(ty) {
                     return Ok(Output::Optional(Box::new(resolve(inner, tree, stack)?)));
                 }
-                if let Some((element, _)) = sequence_parts(ty) {
+                if let Some((element, _)) =
+                    sequence_parts(ty).filter(|_| !codec.output_collection_is_leaf(flat, ty, extra))
+                {
                     let mode = if let Output::Projected(p) = tree {
                         if !p.fields.is_empty() {
                             return Err(

@@ -524,3 +524,6 @@ pub fn payload_to_struct(value: &Payload) -> Payload {
 
 mod callbacks;
 pub use callbacks::*;
+
+mod inline_owners;
+pub use inline_owners::*;
