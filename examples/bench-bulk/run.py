@@ -53,7 +53,7 @@ def cargo_configs(project):
     return {str(path): digest(path) for path in paths if path.is_file()}
 
 
-def build(checkout, output, kotlinc, record, check):
+def build(checkout, output, kotlinc, record, check, fetch):
     project = output / "fixture"
     (project / "flat/src").mkdir(parents=True)
     (project / "src").mkdir()
@@ -91,6 +91,8 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
     seed = FIXTURE / "Cargo.lock.snapshot"
     shutil.copyfile(seed, project / "Cargo.lock")
     env = dict(os.environ, CARGO_TARGET_DIR=str(output / "target"))
+    if fetch:
+        subprocess.run(["cargo", "fetch", "--locked"], cwd=project, env=env, check=True)
     rustc = command_version([os.environ.get("RUSTC", "rustc"), "-vV"], cwd=project)
     host = next(line.split(": ", 1)[1] for line in rustc.splitlines() if line.startswith("host: "))
     metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--offline", "--locked", "--filter-platform", host, "--format-version=1"], cwd=project, env=env))
@@ -159,6 +161,7 @@ def main():
     parser.add_argument("--record-generated", action="store_true")
     parser.add_argument("--check-generated", action="store_true")
     parser.add_argument("--build-only", action="store_true")
+    parser.add_argument("--fetch", action="store_true", help="fetch the pinned fixture dependencies before building")
     parser.add_argument("--check-jni", action="store_true", help="correctness smoke run; not suitable for timing")
     args = parser.parse_args()
     if min(args.jvms, args.warmup, args.batches, args.target_ms) < 1 or args.jvms % 2:
@@ -181,7 +184,7 @@ def main():
         parser.error("use a new empty output directory to preserve earlier results")
     output.mkdir(parents=True, exist_ok=True)
     kotlinc = os.environ.get("KOTLINC", "kotlinc")
-    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated)
+    info = json.loads((args.prepared.resolve() / "build.json").read_text()) if args.prepared else build(args.checkout.resolve(), output, kotlinc, args.record_generated, args.check_generated, args.fetch)
     jar, library = Path(info["jar"]), Path(info["library"])
     if digest(jar) != info["jar_sha256"] or digest(library) != info["native_sha256"]:
         raise RuntimeError("prepared benchmark artifact changed")

@@ -9,7 +9,8 @@ KOTLINC=/path/to/kotlinc python3 examples/bench-bulk/run.py \
   --output /tmp/bulk-bench --record-generated
 ```
 
-Use an empty output directory. Cargo builds the isolated fixture offline, then
+Use an empty output directory. Add `--fetch` if the pinned dependencies are not
+cached; downloading finishes before the native build and measurement. Cargo builds the isolated fixture offline, then
 Kotlin compiles both generated surfaces into one JAR. All builds finish before
 measurement. Four fresh JVMs per mode run in alternating plain/bulk order, with
 case order rotated/reversed across rounds. An untimed pass over all cases trains
