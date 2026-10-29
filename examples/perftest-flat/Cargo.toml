@@ -13,3 +13,6 @@ prebindgen = { workspace = true }
 
 [dev-dependencies]
 prebindgen-flat = { workspace = true }
+
+[features]
+layout-wide = []

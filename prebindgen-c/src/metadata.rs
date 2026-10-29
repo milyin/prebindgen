@@ -20,12 +20,16 @@ pub struct CModule {
     pub prefix: String,
     /// Generated source accessors callable by expansion recipes.
     pub helpers: Vec<syn::ItemFn>,
+    pub(crate) target: Option<(String, u32, TokenStream)>,
+    pub(crate) opaque_layouts: std::collections::BTreeMap<String, crate::layouts::StorageLayout>,
 }
 impl Default for CModule {
     fn default() -> Self {
         Self {
             prefix: "pb".into(),
             helpers: Vec::new(),
+            opaque_layouts: Default::default(),
+            target: None,
         }
     }
 }

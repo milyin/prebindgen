@@ -812,23 +812,24 @@ fn main() {
         ));
     }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    // InlinePacket has two three-word descriptors, one nullable Box and a byte.
-    // Supply the target layout, rather than measuring the build-script host.
-    let pointer_bytes = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap()
-        / 8;
-    let packet_layout = prebindgen_c::OpaqueLayout::new(8 * pointer_bytes, pointer_bytes);
+    let packet_layout = prebindgen_c::OpaqueLayout::auto::<perftest_flat::InlinePacket>();
     let owners = prebindgen_c::Cbindgen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .prefix("owner")
-        .opaque_owned_struct("bytes", pq!(Vec<u8>), prebindgen_c::OpaqueLayout::vector())
-        .opaque_owned_struct("text", pq!(String), prebindgen_c::OpaqueLayout::vector())
+        .opaque_owned_struct(
+            "bytes",
+            pq!(Vec<u8>),
+            prebindgen_c::OpaqueLayout::auto::<Vec<u8>>(),
+        )
+        .opaque_owned_struct(
+            "text",
+            pq!(String),
+            prebindgen_c::OpaqueLayout::auto::<String>(),
+        )
         .opaque_owned_struct(
             "numbers",
             pq!(Vec<i64>),
-            prebindgen_c::OpaqueLayout::vector(),
+            prebindgen_c::OpaqueLayout::auto::<Vec<i64>>(),
         )
         .opaque_owned_struct_with_empty(
             "packet",
@@ -911,9 +912,23 @@ fn main() {
             ),
         ]),
     ));
+    let mut owners = owners;
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        owners = owners.opaque_layouts_file(path);
+    }
+    println!("cargo:rerun-if-env-changed=PREBINDGEN_OPAQUE_LAYOUTS");
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        println!(
+            "cargo:rerun-if-changed={}",
+            std::path::Path::new(&path).display()
+        );
+    }
     let owners = owners.build().expect("native inline owner bindings");
     owners.write_rust(out.join("owners.rs")).unwrap();
     owners.write_header(out.join("owners.h")).unwrap();
+    if let Some(path) = std::env::var_os("PREBINDGEN_OPAQUE_LAYOUTS") {
+        cbindgen = cbindgen.opaque_layouts_file(path);
+    }
     let generation = cbindgen.build().expect("build supported declarations");
     generation.write_rust(out.join("bindings.rs")).unwrap();
     generation.write_header(out.join("bindings.h")).unwrap();

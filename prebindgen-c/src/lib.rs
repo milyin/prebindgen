@@ -28,7 +28,9 @@ impl From<prebindgen_conversions::boxed::BoxedWire> for CPointer {
     }
 }
 mod owned;
-pub use owned::{COwned, OpaqueLayout};
+pub use owned::COwned;
+mod layouts;
+pub use layouts::{OpaqueLayout, OpaqueLayouts};
 mod metadata;
 pub use metadata::{CEnum, CFunction, CModule, CSchema, CType};
 mod enums;
@@ -771,6 +773,10 @@ pub struct Cbindgen {
     prefix: String,
     pointers: Vec<(String, syn::Type)>,
     owned: Vec<(String, syn::Type, OpaqueLayout, Option<String>)>,
+    layout_file: Option<std::path::PathBuf>,
+    layout_data: Option<OpaqueLayouts>,
+    layout_sources: Vec<prebindgen::Source>,
+    target: Option<String>,
     enums: Vec<(String, syn::Type)>,
     errors: Vec<(String, syn::Type)>,
     panics: std::collections::BTreeSet<String>,
@@ -788,6 +794,10 @@ impl Cbindgen {
             prefix: "pb".into(),
             pointers: Vec::new(),
             owned: Vec::new(),
+            layout_file: None,
+            layout_data: None,
+            layout_sources: Vec::new(),
+            target: None,
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
@@ -909,6 +919,10 @@ impl Cbindgen {
             prefix: "pb".into(),
             pointers: Vec::new(),
             owned: Vec::new(),
+            layout_file: None,
+            layout_data: None,
+            layout_sources: Vec::new(),
+            target: None,
             enums: Vec::new(),
             errors: Vec::new(),
             panics: Default::default(),
@@ -919,6 +933,29 @@ impl Cbindgen {
     /// Defaults to `pb`. The prefix is validated as an identifier during build.
     pub fn prefix(mut self, prefix: &str) -> Self {
         self.prefix = prefix.into();
+        self
+    }
+    /// Select the binding target outside Cargo, or override Cargo's `TARGET`.
+    /// Native measurements are used only for the generator's own platform.
+    pub fn target(mut self, target: impl Into<String>) -> Self {
+        self.target = Some(target.into());
+        self
+    }
+    /// Read external target layouts during preparation. An incomplete artifact
+    /// is an error even on native builds; no host fallback is used.
+    pub fn opaque_layouts_file(mut self, path: impl AsRef<std::path::Path>) -> Self {
+        self.layout_file = Some(path.as_ref().to_owned());
+        self
+    }
+    /// Supply a parsed layout artifact instead of a file.
+    pub fn opaque_layouts(mut self, data: OpaqueLayouts) -> Self {
+        self.layout_data = Some(data);
+        self
+    }
+    /// Register a captured source for layout-artifact feature verification when
+    /// starting from a parsed Flat model. `.source(...)` registers automatically.
+    pub fn layout_source(mut self, source: prebindgen::Source) -> Self {
+        self.layout_sources.push(source);
         self
     }
     /// Declare an opaque C pointee and its typed destructor for a source type.
@@ -983,36 +1020,63 @@ impl Cbindgen {
     /// Rust layout/trait requirements are checked when the generated Rust compiles.
     pub fn prepare(self) -> Result<Bindings> {
         prebindgen_declarations::ident(&self.prefix)?;
+        let target = self.target.unwrap_or_else(|| {
+            std::env::var("TARGET").unwrap_or_else(|_| env!("PREBINDGEN_C_GENERATOR_TARGET").into())
+        });
+        if target.trim().is_empty() {
+            return Err("binding target must not be empty".into());
+        }
+        let target_info = prebindgen::TargetTriple::parse(&target)
+            .map_err(|e| format!("invalid binding target `{target}`: {e}"))?;
+        let pointer_width = target_info
+            .pointer_width()
+            .ok_or("binding target has no pointer width")?;
+        let artifact = match (self.layout_file, self.layout_data) {
+            (Some(_), Some(_)) => {
+                return Err("supply one opaque layout artifact, as a file or parsed data".into())
+            }
+            (Some(path), None) => Some(OpaqueLayouts::read_json(path)?),
+            (None, data) => data,
+        };
+        let mut layout_sources = self.layout_sources;
         let mut flat = match (self.flat, self.source) {
             (Some(flat), None) => flat,
-            (None, Some(path)) => Flat::parse_selected(
-                prebindgen::Source::new(path).items_all(),
-                &prebindgen_declarations::declarations::source_functions(
-                    &self.inputs,
-                    &self.outputs,
-                    &self.error_mappers,
-                    &self.functions,
-                )
-                .into_iter()
-                .chain(
-                    self.owned
-                        .iter()
-                        .filter_map(|(_, _, _, empty)| empty.clone()),
-                )
-                .collect::<Vec<_>>(),
-                &self
-                    .pointers
-                    .iter()
-                    .chain(&self.enums)
-                    .chain(&self.errors)
-                    .map(|(_, ty)| ty.clone())
-                    .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
-                    .chain(self.owned.iter().map(|(_, ty, _, _)| ty.clone()))
+            (None, Some(path)) => {
+                let source = prebindgen::Source::builder(path)
+                    .enable_target_filtering(Some(&target))
+                    .build();
+                let flat = Flat::parse_selected(
+                    source.items_all(),
+                    &prebindgen_declarations::declarations::source_functions(
+                        &self.inputs,
+                        &self.outputs,
+                        &self.error_mappers,
+                        &self.functions,
+                    )
+                    .into_iter()
+                    .chain(
+                        self.owned
+                            .iter()
+                            .filter_map(|(_, _, _, empty)| empty.clone()),
+                    )
                     .collect::<Vec<_>>(),
-            )?,
+                    &self
+                        .pointers
+                        .iter()
+                        .chain(&self.enums)
+                        .chain(&self.errors)
+                        .map(|(_, ty)| ty.clone())
+                        .chain(self.error_mappers.iter().map(|(ty, _)| ty.clone()))
+                        .chain(self.owned.iter().map(|(_, ty, _, _)| ty.clone()))
+                        .collect::<Vec<_>>(),
+                )?;
+                layout_sources.push(source);
+                flat
+            }
             _ => return Err("supply exactly one source or flat model".into()),
         };
         flat.metadata.prefix = self.prefix;
+        flat.metadata.target = Some((target.clone(), pointer_width, target_info.to_cfg_tokens()));
         let mut enum_names = std::collections::BTreeSet::new();
         for (name, ty) in self.enums {
             prebindgen_declarations::ident(&name)?;
@@ -1100,7 +1164,6 @@ impl Cbindgen {
             } else {
                 quote!(<#ty as ::core::default::Default>::default())
             };
-            layout.validate()?;
             let info = flat.type_metadata_mut(&ty)?;
             if info.pointer.is_some() || info.owned.is_some() || info.enumeration.is_some() {
                 return Err("duplicate or conflicting C owning representation".into());
@@ -1131,7 +1194,7 @@ impl Cbindgen {
                 info.owned = Some(std::rc::Rc::new(COwned {
                     name: owned::auto_name(&ty),
                     ty: ty.clone(),
-                    layout: OpaqueLayout::vector(),
+                    layout: layouts::builtin(&ty),
                     empty: quote!(<#ty as ::core::default::Default>::default()),
                     explicit: false,
                 }));
@@ -1210,6 +1273,7 @@ impl Cbindgen {
                     .requires_abort = requires_abort;
             }
         }
+        layouts::prepare(&mut flat, &target, artifact.as_ref(), &layout_sources)?;
         Ok(flat)
     }
     /// Prepare a complete Flat model, then emit its C and Rust bindings.
@@ -1439,6 +1503,7 @@ where
         format!("{prefix}_buffer"),
         format!("{prefix}_int128"),
         format!("{prefix}_H"),
+        format!("{prefix}_TARGET"),
     ]);
     for (name, mapping) in &enums {
         prebindgen_declarations::ident(name)?;
@@ -1621,6 +1686,16 @@ where
     #[no_mangle] pub unsafe extern "C" fn #free(b:__PbBuffer){if !b.data.is_null(){drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(b.data as *mut u8,b.len)));}}
       };
     let mut header=format!("#ifndef {prefix}_H\n#define {prefix}_H\n#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#ifdef __cplusplus\nextern \"C\" {{\n#endif\ntypedef struct {{ uint64_t hi; uint64_t lo; }} {prefix}_int128;\n typedef struct {{ const uint8_t *data; size_t len; }} {prefix}_buffer;\nvoid {free}({prefix}_buffer b);\nvoid {free_error}(char *error);\n");
+    if let Some((target, width, cfg)) = &flat.metadata.target {
+        tokens.extend(quote!(
+            const _: () = {
+                assert!(cfg!(#cfg) && usize::BITS == #width,
+                "C binding target differs from the Rust compilation target");
+            };
+        ));
+        let target_literal = serde_json::to_string(target).map_err(|e| e.to_string())?;
+        header.push_str(&format!("/* Binding target identity; use the matching Rust library. */\n#define {prefix}_TARGET {target_literal}\n#ifdef __cplusplus\nstatic_assert(sizeof(void*) * 8 == {width}, \"prebindgen: header pointer width differs; regenerate for this target\");\n#else\n_Static_assert(sizeof(void*) * 8 == {width}, \"prebindgen: header pointer width differs; regenerate for this target\");\n#endif\n"));
+    }
     for (name, mapping) in &enums {
         prebindgen_declarations::ident(name)?;
         header.push_str(&format!("typedef int32_t {prefix}_{name};\n"));
@@ -1657,13 +1732,23 @@ The pointer must be null or a live allocation of the declared type returned by t
     for info in flat.types.values() {
         if let Some(owner) = &info.metadata.owned {
             prebindgen_declarations::ident(&owner.name)?;
-            owner.layout.validate()?;
+            let layout = *flat
+                .metadata
+                .opaque_layouts
+                .get(&owner.name)
+                .ok_or_else(|| {
+                    format!(
+                        "opaque owner `{}` has no prepared target layout",
+                        owner.name
+                    )
+                })?;
+            layout.validate()?;
             if !symbols.insert(format!("{prefix}_{}", owner.name))
                 || !symbols.insert(format!("{prefix}_drop_{}", owner.name))
             {
                 return Err("duplicate C inline owner name or destructor".into());
             }
-            owned::emit(owner, prefix, &mut tokens, &mut header);
+            owned::emit(owner, layout, prefix, &mut tokens, &mut header);
             owned::emit_accessors(
                 owner,
                 prefix,

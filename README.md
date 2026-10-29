@@ -696,7 +696,7 @@ use syn::parse_quote;
 
 let bindings = Cbindgen::builder()
     .source(flat::PREBINDGEN_OUT_DIR)
-    .opaque_owned_struct("bytes", parse_quote!(Vec<u8>), OpaqueLayout::vector())
+    .opaque_owned_struct("bytes", parse_quote!(Vec<u8>), OpaqueLayout::auto::<Vec<u8>>())
     .function(fun!(make_bytes).expand_return(
         expand_return!(Vec<u8>)
             .field_self_into()
@@ -734,16 +734,78 @@ storage declaration, input buffers and input element conversions retain their
 ordinary forms. Explicit element expansions and `Output::Sequence` still request
 row conversion; they take precedence over native collection defaults.
 
-For another Rust type, supply its target size and alignment with
-`OpaqueLayout::new(size, alignment)`. `OpaqueLayout::of::<T>()` measures the build
-host and is suitable when host and target layouts match; cross builds must use
-target layout information. `OpaqueLayout::vector()` uses three target-sized
-words for standard Vec/String descriptors. Generated Rust checks the size and
-alignment against the actual target. The C header and Rust glue must be generated
-and rebuilt together. Runtime ABI tests run on x86-64; generated layout checks also compile for
-AArch64 and i686. Other target ABIs, especially over-aligned values, need runtime
-validation before deployment. Rust storage uses `MaybeUninit` so padding stays uninitialized
-and embedded pointers retain their provenance.
+`OpaqueLayout::auto::<T>()` measures the real Rust type available to the build
+script only for a native build. A cross build must supply an external layout
+artifact; it never falls back to host measurements. `OpaqueLayout::external()`
+requires an artifact even natively and allows types unavailable on the host.
+Custom owners use their declaration name as the artifact key; `.key("other")`
+selects a shared key. Use qualified keys when several binding modules share an
+artifact and reuse short C declaration names. Standard `Vec<T>` owners use `std.vec`, and `String` uses
+its independently measured `std.string` entry. Generic vector ownership does not
+require `Clone` or a C representation for each element. It preserves the original
+allocation and drops elements through Rust; converted element rows remain explicit.
+
+```rust,ignore
+let bindings = Cbindgen::builder()
+    .source(flat::PREBINDGEN_OUT_DIR)
+    .opaque_layouts_file("abi/layouts.json")
+    .opaque_owned_struct("packet", parse_quote!(Packet),
+        OpaqueLayout::auto::<flat::Packet>())
+    .build()?;
+```
+
+The external artifact is ordinary JSON:
+
+```json
+{
+  "format_version": 1,
+  "target": "i686-unknown-linux-gnu",
+  "sources": { "flat": { "features": ["feature_a"] } },
+  "layouts": {
+    "packet": { "size": 32, "alignment": 4 },
+    "std.vec": { "size": 12, "alignment": 4 },
+    "std.string": { "size": 12, "alignment": 4 }
+  }
+}
+```
+
+Probe generation, execution, object-file extraction and caching remain external.
+The producer records the actual source features, not just requested Cargo flags.
+Only required layouts need entries; an opaque pointer alone needs no layout.
+Supplying an artifact makes lookup strict on native builds too. Missing files,
+entries, source features, duplicate keys, invalid layouts and target mismatches
+are errors. No incomplete artifact falls back to native measurements. Watch the
+artifact in `build.rs` with `cargo:rerun-if-changed`.
+
+Cargo's `TARGET` selects the binding platform; outside Cargo it defaults to the
+generator's compiled platform. `.target("triple")` overrides it. A different
+platform always requires external inline-layout data. `.source(...)` registers
+its source for feature verification. With a pre-parsed Flat model, register each
+captured source through `.layout_source(source)`. Source keys use the name from
+`Source::crate_name()`, including dependency aliases. Unused artifact sources are
+allowed. Register sources contributing only types too; function origins are
+checked automatically, but external type paths alone cannot identify captured
+source metadata. `Source::require_features`
+checks probe features against captured declarations and retains the compile-time
+check against the target library's exported `FEATURES` constant. This is not a
+fingerprint of the entire dependency graph or compiler configuration.
+
+The generated Rust checks its compilation target against the selected binding
+target and independently asserts actual size and alignment for every
+owner, including every concrete vector type. Matching feature lists do not bypass
+these checks: a stale layout from different dependency settings still fails if
+its dimensions differ. Rust storage uses `MaybeUninit` byte arrays so padding is
+not interpreted as initialized values and embedded pointers retain provenance.
+C headers use the same measured size and alignment, with C11/C++11 declarations.
+The header records its target in `{prefix}_TARGET` and rejects a different
+pointer width at compile time. This does not distinguish every ABI or feature
+combination: distribute the header matching the Rust library's target and features.
+The header and Rust glue must be regenerated and rebuilt together.
+
+See the example [external layout artifacts](examples/perftest-c/layouts) and
+`python3 examples/check-opaque-layouts.py --target aarch64-unknown-linux-gnu
+--target i686-unknown-linux-gnu` for native, cross, feature-mismatch and stale-data
+checks. These are checked example measurements, not an integrated probe tool.
 
 The default empty value is `T::default()`.
 `opaque_owned_struct_with_empty(..., fun!(empty_factory))` instead selects a

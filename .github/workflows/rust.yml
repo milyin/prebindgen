@@ -46,3 +46,14 @@ jobs:
         env:
           KOTLINC: /tmp/kotlin/kotlinc/bin/kotlinc
           SANITIZE: "1"
+
+  opaque-layouts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu,i686-unknown-linux-gnu
+      - run: sudo apt-get update && sudo apt-get install -y clang
+      - run: cargo fetch
+      - run: python3 examples/check-opaque-layouts.py --target aarch64-unknown-linux-gnu --target i686-unknown-linux-gnu
