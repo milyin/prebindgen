@@ -11,9 +11,12 @@ pub struct JniContext {
     pub environment: syn::Ident,
     /// Boolean-array parameter acknowledging ownership transfer.
     pub acknowledgement: syn::Ident,
-    /// Local retaining a committed domain-error packet across Rust unwinding.
+    /// Local retaining a committed domain-error packet or delivery marker across Rust unwinding.
     pub domain_output: syn::Ident,
-    /// Whether delivery marks the packet as a typed domain error.
+    /// Borrowed synchronous function-return capture. None preserves custom
+    /// packet delivery and source-callback argument conversion.
+    pub return_sink: Option<syn::Ident>,
+    /// Whether this delivery belongs to the typed domain-error channel.
     pub is_domain_error: bool,
     /// Infallible statements recording completed output ownership transfer.
     pub output_committed: TokenStream,
@@ -24,6 +27,10 @@ impl TemplateContext for JniContext {
             "environment" => Ok(self.environment.to_token_stream()),
             "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),
             "domain_output" => Ok(self.domain_output.to_token_stream()),
+            "return_sink" => Ok(self
+                .return_sink
+                .as_ref()
+                .map_or_else(|| quote::quote!(None), |sink| quote::quote!(Some(&#sink)))),
             "mark_output" => {
                 let env = &self.environment;
                 Ok(if self.is_domain_error {

@@ -76,11 +76,11 @@ fun checkOptions() {
     // by signature keeps the check independent of generated call numbering.
     for (referenceType in listOf(String::class.java, ByteArray::class.java)) {
         val native = JNINative::class.java.declaredMethods.single {
-            it.name.startsWith("call") && it.parameterTypes.contentEquals(arrayOf(Int::class.javaPrimitiveType, referenceType))
+            it.name.startsWith("call") && it.parameterTypes.dropLast(1).toTypedArray().contentEquals(arrayOf(Int::class.javaPrimitiveType, referenceType))
         }
         val empty: Any = if (referenceType == String::class.java) "" else byteArrayOf()
         for ((tag, payload) in listOf(-1 to empty, 0 to empty, 1 to null, 1 to empty)) {
-            val packet = native.invoke(null, tag, payload) as Array<*>
+            val packet = native.invokePacket(tag, payload)
             check(packet[0] == null)
             val result = packet.drop(1)
             check(result.size == 2 && result[0] == tag)
@@ -89,7 +89,7 @@ fun checkOptions() {
             else check((result[1] as ByteArray).isEmpty())
         }
         for (tag in listOf(-2, Int.MIN_VALUE, 2, Int.MAX_VALUE)) {
-            val packet = native.invoke(null, tag, empty) as Array<*>
+            val packet = native.invokePacket(tag, empty)
             check(packet[0] is String)
         }
     }

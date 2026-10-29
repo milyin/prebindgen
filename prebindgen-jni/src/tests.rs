@@ -581,8 +581,8 @@ fn optional_niches_and_nested_presence_preserve_distinct_states() {
     ));
     assert!(kt.contains("build: (Boolean, test.Handle?) -> R"));
     assert!(kt.contains("invalid option payload"));
-    assert!(kt.contains("if (result[1] != 0L)"));
-    assert!(kt.contains("if (result[1] == 1)"));
+    assert!(kt.contains("if (nativeResult != 0L)"));
+    assert!(kt.contains("if (returnCapture.s0 == 1)"));
     // Validate raw widths independently from the Kotlin nullable surface.
     let mut flat=flat("pub type Handle=String;pub fn h(x:Option<Handle>)->Option<Handle>{}pub fn n(x:Option<Option<Handle>>)->Option<Option<Handle>>{}pub fn ch2(x:Option<Option<char>>)->Option<Option<char>>{}pub fn u2(x:Option<Option<u32>>)->Option<Option<u32>>{}");
     let d = prebindgen_declarations::Declarations::new(&flat, vec![], vec![], vec![]).unwrap();

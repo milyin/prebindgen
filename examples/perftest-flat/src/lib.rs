@@ -43,6 +43,8 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // both the perf surface and the coverage surface.
 mod borrowed_getters;
 mod jni_buffers;
+mod return_results;
+pub use return_results::*;
 mod runtime_costs;
 pub use jni_buffers::*;
 pub use runtime_costs::*;

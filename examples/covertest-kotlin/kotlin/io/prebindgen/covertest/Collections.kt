@@ -186,12 +186,12 @@ fun checkCollections() {
     // Exercise raw JNI validation, including an invalid but inactive payload.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
     val rawScalars = native.declaredMethods.single {
-        it.parameterTypes.toList() == listOf(Array<Any?>::class.java, Double::class.javaPrimitiveType)
+        it.parameterTypes.dropLast(1) == listOf(Array<Any?>::class.java, Double::class.javaPrimitiveType)
     }.also { it.isAccessible = true }
     val validRow = arrayOf<Any?>(true, 1.toByte(), 2.toShort(), 3, 4L, 5.0f, 6.0,
         byteArrayOf(7), "text")
     for (row in listOf(validRow, validRow.copyOf().also { it[8] = null })) {
-        val packet = rawScalars.invoke(null, arrayOf<Any?>(row), 0.0) as Array<*>
+        val packet = rawScalars.invokePacket(arrayOf<Any?>(row), 0.0)
         check(packet[0] == null && (packet[1] as Array<*>).size == 1)
     }
     // Reject every wrong boxed class, and null for each non-reference field.
@@ -201,18 +201,18 @@ fun checkCollections() {
         for (bad in listOf<Any?>(Any(), null)) {
             if (index == 8 && bad == null) continue
             val row = validRow.copyOf().also { it[index] = bad }
-            val packet = rawScalars.invoke(null, arrayOf<Any?>(row), 0.0) as Array<*>
+            val packet = rawScalars.invokePacket(arrayOf<Any?>(row), 0.0)
             check(packet[0] is String) { "invalid raw field $index was accepted" }
         }
     }
     fun method(second: Class<*>) = native.declaredMethods.single {
-        it.parameterTypes.toList() == listOf(Array<Any?>::class.java, second)
+        it.parameterTypes.dropLast(1) == listOf(Array<Any?>::class.java, second)
     }.also { it.isAccessible = true }
     val probe = method(String::class.java)
     for (bad in listOf(null, arrayOf<Any?>(), arrayOf<Any?>(null), arrayOf<Any?>("bad"), arrayOf<Any?>(0xd800))) {
         collectionInvalid {
             try {
-                val packet = probe.invoke(null, arrayOf<Any?>(bad), "") as Array<*>
+                val packet = probe.invokePacket(arrayOf<Any?>(bad), "")
                 check(packet[0] is String)
                 throw IllegalArgumentException(packet[0] as String)
             }
@@ -220,10 +220,10 @@ fun checkCollections() {
         }
     }
     val optional = method(Short::class.javaPrimitiveType!!)
-    optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(0, "ignored")), 0.toShort())
+    optional.invokePacket( arrayOf<Any?>(arrayOf<Any?>(0, "ignored")), 0.toShort())
     collectionInvalid {
         try {
-            val packet = optional.invoke(null, arrayOf<Any?>(arrayOf<Any?>(1, "invalid active")), 0.toShort()) as Array<*>
+            val packet = optional.invokePacket(arrayOf<Any?>(arrayOf<Any?>(1, "invalid active")), 0.toShort())
             check(packet[0] is String)
             throw IllegalArgumentException(packet[0] as String)
         }

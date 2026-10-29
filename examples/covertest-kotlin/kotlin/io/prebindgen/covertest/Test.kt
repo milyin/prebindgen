@@ -87,6 +87,7 @@ fun main() {
     check(summaryTotalRaw(0, 42, -1.25, null) == -1.25)
     checkOwnership()
     checkPrimitives()
+    checkReturnTransport()
     checkDataClasses()
     checkOwnedRecords()
     checkRuntimeCosts()

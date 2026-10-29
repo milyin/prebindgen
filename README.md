@@ -972,6 +972,53 @@ Retained source callbacks, including buffered sequence arguments, are described
 below. Byte-buffer returns keep their existing transport and are not selected as
 element-wise sequences by these declarations.
 
+## JNI function returns
+
+Ordinary JNI functions return a single wire directly in its JVM primitive or
+reference type; zero-wire results return `void`. Multiple wires travel as typed
+arguments to a synchronous generated success callback. Binding failures and typed
+source errors use separate methods on the same generated capture. There is no
+intermediate `Object[]` result packet or primitive boxing at this transport
+boundary. Collection row arrays remain part of their selected representation.
+
+Kotlin reconstructs public results and invokes `build`, domain-error handlers and
+binding-error handlers after JNI returns and handle locks are released. Native
+output ownership commits only after callback delivery succeeds. If later Rust
+cleanup panics, Kotlin reclaims committed success outputs before invoking the
+binding-error handler. Typed errors retain their scoped handle cleanup and
+`take()` ownership rules.
+
+Captures are shared by their JVM argument signatures and pooled per calling
+thread and nesting depth. First use of a signature or a deeper nested call can
+allocate a capture; warmed calls reuse it. `finally` releases each frame and
+clears reference fields. Nested calls from source callbacks, destructors and user
+handlers retain independent results. No native-thrown exception is used as the
+ordinary error channel; pending JVM exceptions preserve their original identity.
+
+Very wide callback payloads split into JVM-valid chunks before ownership commits.
+A native signature already using all 255 parameter slots keeps its packet
+transport, as do custom delivery plans that declare their own protocol. The
+internal native signatures change with this transport: regenerate and rebuild
+Rust and Kotlin together.
+
+The public generic `build` function type can still box its logical arguments.
+Handle wrappers, collection snapshots/rows, input ownership acknowledgements and
+representation-required string/byte encoding retain their existing costs. This
+optimization does not make every binding allocation-free.
+
+For a release-library comparison with a checkout of an earlier generator, run:
+
+```sh
+KOTLINC=/path/to/kotlinc python3 examples/bench-jni-returns.py \
+  --baseline /path/to/baseline-checkout --target-dir /tmp/jni-return-bench
+```
+
+The benchmark uses separate Cargo outputs and JVM processes, measures warmed
+scalar, unit, expanded and handle-return calls, and reports JVM bytes/call with
+HotSpot's `ThreadMXBean` alongside median latency. It excludes native Rust
+allocations from the byte count. Scalar/unit probes assert negligible JVM
+allocation after warmup; latency is a local microbenchmark, not packet throughput.
+
 ## Retained JNI source callbacks
 
 JNI binds direct function parameters of the form

@@ -21,6 +21,7 @@ mod sequence_callback;
 pub use callback::JniCallback;
 pub use optional::JniNiche;
 mod group;
+mod returns;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataGroup, JniField};
 pub use group::{JniBranch, JniChain, JniGroup, JniOptional};
@@ -731,23 +732,11 @@ impl Codec for JniCodec {
     fn finish_output(&self, plan: &mut OutputPlan<JniWire>, _: &()) -> Result<()> {
         plan.fallible = true;
         group::validate_layout(&plan.outcomes.success)?;
-        let env = prebindgen_conversions::template_parameter("environment");
-        let count = crate::group::result_packet_fields(&plan.outcomes.success).len() + 1;
-        let encode = encode_array(
-            crate::group::result_packet(&plan.outcomes.success, &plan.values)?,
-            &syn::parse_quote!(result),
-            1,
-        );
-        let mark = prebindgen_conversions::template_parameter("mark_output");
         plan.commit
             .extend(prebindgen_conversions::template_parameter(
                 "output_committed",
             ));
-        plan.delivery = prebindgen_conversions::Delivery {
-            statements: quote!(let result = ::prebindgen_jni_runtime::array(&mut #env, #count)?; #encode
-                #mark),
-            result: quote!(result.into_raw()),
-        };
+        plan.delivery = returns::packet_delivery(plan)?;
         Ok(())
     }
     fn sequence_input(
@@ -1275,6 +1264,26 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let error = errors.get(&source);
         let outcomes = f.output_conversion()?.output_outcomes();
         let logical = &outcomes.success;
+        let input_slots: usize = crate::group::function_parameters(f)?
+            .map(|w| w.kind.parameter_slots())
+            .sum();
+        let acknowledgement = usize::from(
+            f.input_conversions()?
+                .iter()
+                .any(|i| i.rust.acknowledgement.is_some()),
+        );
+        // Keep the packet protocol when the extra capture would exceed the
+        // existing native parameter limit; previously valid signatures stay valid.
+        let native_return = f
+            .output_conversion()?
+            .native_return()
+            .filter(|_| input_slots + acknowledgement + 2 * usize::from(callback) < 255)
+            .filter(|_| error.is_none_or(|e| e.output.native_return().is_some()));
+        let native_result_type = native_return.as_ref().map_or_else(
+            || syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
+            returns::NativeReturn::rust_type,
+        );
+        let return_sink = format_ident!("__pb_return");
         for node in std::iter::once(logical)
             .chain(outcomes.source_error.iter())
             .chain(outcomes.binding_failure.iter())
@@ -1313,8 +1322,17 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             environment: env.clone(),
             acknowledgement: ownership.clone(),
             domain_output: format_ident!("domain_output"),
+            return_sink: native_return.as_ref().map(|_| return_sink.clone()),
             is_domain_error: false,
-            output_committed: quote!(),
+            output_committed: if native_return.is_some() {
+                if matches!(native_return, Some(returns::NativeReturn::Direct(_))) {
+                    quote!(direct_output = __pb_direct_result; success_transferred = true;)
+                } else {
+                    quote!(success_transferred = true;)
+                }
+            } else {
+                quote!()
+            },
         };
         let source = format_ident!("source_value");
         let method = names.name(
@@ -1322,6 +1340,60 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             &f.name.to_string(),
             &[&names::path_identity(&f.path), &f.name.to_string()],
         )?;
+        let capture_name = if let Some(kind) = &native_return {
+            let success = if matches!(kind, returns::NativeReturn::Callback) {
+                crate::group::result_packet_fields(logical).collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            let domain = outcomes
+                .source_error
+                .as_ref()
+                .map(|node| crate::group::result_packet_fields(node).collect::<Vec<_>>())
+                .unwrap_or_default();
+            let signature = |fields: &[&prebindgen_flat::Wire<JniWire>]| {
+                fields
+                    .iter()
+                    .map(|w| w.kind.jvm_descriptor())
+                    .collect::<String>()
+            };
+            let label = |fields: &[&prebindgen_flat::Wire<JniWire>]| {
+                if fields.is_empty() {
+                    "Empty".into()
+                } else {
+                    format!(
+                        "{}{}",
+                        fields
+                            .iter()
+                            .take(3)
+                            .map(|w| w.kind.kotlin_type().trim_end_matches('?'))
+                            .collect::<Vec<_>>()
+                            .join("_"),
+                        fields.len()
+                    )
+                }
+            };
+            let short = names.name(
+                "Return",
+                &format!("{}_Error{}", label(&success), label(&domain)),
+                &[&signature(&success), &signature(&domain)],
+            )?;
+            let content = format!(
+                "package {prefix}\n\n{}",
+                returns::capture(&short, &success, &domain)
+            );
+            if let Some(previous) = files.insert(
+                format!("{}/{}.kt", prefix.replace('.', "/"), short),
+                content.clone(),
+            ) {
+                if previous != content {
+                    return Err("return capture class collision".into());
+                }
+            }
+            Some(short)
+        } else {
+            None
+        };
         let sym = symbol(prefix, &method);
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
@@ -1414,7 +1486,15 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             setup.push_str("val __pb_outputAccepted = BooleanArray(1)\n");
             kt_args.push("__pb_outputAccepted".into());
         }
+        if let Some(name) = &capture_name {
+            params.push(
+                quote!(#return_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'local>),
+            );
+            raw_params.push(format!("returns: {name}"));
+            kt_args.push("returnCapture".into());
+        }
         let slots: usize = usize::from(has_consumes)
+            + usize::from(native_return.is_some())
             + 2 * usize::from(callback)
             + crate::group::function_parameters(f)?
                 .map(|w| w.kind.parameter_slots())
@@ -1449,7 +1529,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             f,
             &context,
             &source,
-            &syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobjectArray),
+            &native_result_type,
             &crate::group::function_parameters(f)?
                 .map(|w| w.name.clone())
                 .collect::<Vec<_>>(),
@@ -1482,6 +1562,27 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             crate::group::result_packet_fields(&f.output_conversion()?.output_outcomes().success)
                 .len(),
         );
+        let success_fields = crate::group::result_packet_fields(logical).collect::<Vec<_>>();
+        if let Some(kind) = &native_return {
+            let values = success_fields
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    if matches!(kind, returns::NativeReturn::Direct(_)) {
+                        "nativeResult".into()
+                    } else {
+                        format!("returnCapture.s{i}")
+                    }
+                })
+                .collect::<Vec<_>>();
+            returns::remap(
+                &mut kotlin_output,
+                kotlin_context.result,
+                &success_fields,
+                1,
+                &values,
+            );
+        }
         let build_parameters = kotlin_output.callback_type_parameters()?;
         let KotlinOutput {
             delivered,
@@ -1494,28 +1595,60 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         if delivered.len() != result_types.len() {
             return Err("Kotlin output expression/type count differs".into());
         }
+        let failure = if let Some(kind) = &native_return {
+            returns::binding_failure(&env, &return_sink, kind)
+        } else {
+            quote! {
+                if let Some(result) = domain_output { result } else {
+                    match ::prebindgen_jni_runtime::binding_packet(&mut #env, &e) {
+                        Ok(result) => result.into_raw(),
+                        Err(message) => { ::prebindgen_jni_runtime::fail(&mut #env, &message); std::ptr::null_mut() }
+                    }
+                }
+            }
+        };
+        let native_signature_return = if matches!(
+            native_return,
+            Some(returns::NativeReturn::Unit | returns::NativeReturn::Callback)
+        ) {
+            TokenStream::new()
+        } else {
+            quote!(-> #native_result_type)
+        };
+        let success_tracking = native_return.as_ref().map(|kind| {
+            let direct = if let returns::NativeReturn::Direct(wire) = kind {
+                let empty = if wire.is_reference() {
+                    quote!(std::ptr::null_mut())
+                } else {
+                    quote!(Default::default())
+                };
+                Some(quote!(let mut direct_output: #native_result_type = #empty;))
+            } else {
+                None
+            };
+            quote!(let mut success_transferred = false; #direct)
+        });
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
-#[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*)->::prebindgen_jni_runtime::jni::sys::jobjectArray{
+#[no_mangle]pub unsafe extern "system" fn #sym<'local>(mut #env: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,_class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,#(#params),*) #native_signature_return {
     #[allow(unused_mut)]
-    let mut domain_output = None;
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    #success_tracking
     match ::prebindgen_runtime::boundary(||{
      #reserve_outputs
      #body
     }){Ok(result)=>result,Err(e)=>{
-        if let Some(result) = domain_output { result } else {
-            match ::prebindgen_jni_runtime::binding_packet(&mut #env, &e) {
-                Ok(result) => result.into_raw(),
-                Err(message) => { ::prebindgen_jni_runtime::fail(&mut #env, &message); std::ptr::null_mut() }
-            }
-        }
+        #failure
     }}
    }
   });
         native.push_str(&format!(
-            "    @JvmStatic external fun {method}({}): Array<Any?>\n",
-            raw_params.join(", ")
+            "    @JvmStatic external fun {method}({}): {}\n",
+            raw_params.join(", "),
+            native_return
+                .as_ref()
+                .map_or("Array<Any?>", returns::NativeReturn::kotlin_type)
         ));
         let (mut generic, ret, end) = match delivered.len() {
             0 => ("", "Unit".into(), "Unit".into()),
@@ -1535,6 +1668,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         }
         let failure = kotlin_context.failure;
         let result = kotlin_context.result;
+        let discard_success = if cleanup.is_empty() || callback {
+            String::new()
+        } else {
+            format!("if (returnCapture.discardSuccess) {{ val {failure} = IllegalArgumentException(returnCapture.message); {output_locals} {cleanup} }}")
+        };
         let end = if cleanup.is_empty() {
             end
         } else {
@@ -1608,8 +1746,20 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         // exceptions and exceptions from user callbacks must retain their original identity.
         let call = format!("try {{ {call} }} catch (failure: {prefix}.HandleValidationFailure) {{ return@run {binding_name}.run(failure.message) }}");
         let domain = if let Some(error) = error {
-            let delivery = errors::delivery(error, &kotlin_context)?;
-            format!("true -> {{ {delivery} }}")
+            let mut delivery = errors::delivery(error, &kotlin_context)?;
+            if native_return.is_some() {
+                let fields =
+                    crate::group::result_packet_fields(&error.output.output_outcomes().success)
+                        .collect::<Vec<_>>();
+                let values = (0..fields.len())
+                    .map(|i| format!("returnCapture.d{i}"))
+                    .collect::<Vec<_>>();
+                delivery =
+                    returns::remap_text(&delivery, kotlin_context.result, &fields, 1, &values);
+                format!("if (returnCapture.status == 3) return@run run {{ {delivery} }}")
+            } else {
+                format!("true -> {{ {delivery} }}")
+            }
         } else {
             String::new()
         };
@@ -1618,7 +1768,26 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         } else {
             String::new()
         };
-        let native_call = format!("val {result} = {call}\n    when ({result}[0]) {{\n        null -> {{ {end} }}\n        {domain}\n        is String -> {{ {callback_failure}{binding_name}.run({result}[0] as String) }}\n        else -> error(\"invalid native result channel\")\n    }}");
+        let native_call = if native_return.is_some() {
+            let callback_discard = if callback {
+                "if (__pb_outputAccepted[0]) __pb_discard(IllegalArgumentException(returnCapture.message));"
+            } else {
+                ""
+            };
+            format!("val nativeResult = {call}\n    if (returnCapture.status == 2) {{ {callback_discard}{discard_success}\n        return@run {binding_name}.run(returnCapture.message) }}\n    {domain}\n    {end}")
+        } else {
+            format!("val {result} = {call}\n    when ({result}[0]) {{\n        null -> {{ {end} }}\n        {domain}\n        is String -> {{ {callback_failure}{binding_name}.run({result}[0] as String) }}\n        else -> error(\"invalid native result channel\")\n    }}")
+        };
+        let native_call = if let Some(name) = &capture_name {
+            format!("val returnCapture = {prefix}.{name}.acquire()\n    try {{\n{native_call}\n    }} finally {{ returnCapture.release() }}")
+        } else {
+            native_call
+        };
+        let native_call = native_call
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n");
         let text = packages.entry(pkg.clone()).or_default();
         text.push_str(&format!(
             "{throws}public fun {generic}`{name}`({}): {ret} = run {{\n    {setup}{native_call}\n}}\n\n",
@@ -1628,11 +1797,12 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     native.push_str("}\n");
     files.insert(format!("{}/JNINative.kt", prefix.replace('.', "/")), native);
     for (pkg, body) in packages {
+        let body = body.trim_end();
         let path = format!("{}/Functions.kt", pkg.replace('.', "/"));
         if files
             .insert(
                 path,
-                format!("@file:Suppress(\"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\")\npackage {pkg}\n\n{body}"),
+                format!("@file:Suppress(\"UNUSED_VARIABLE\", \"UNCHECKED_CAST\", \"UNNECESSARY_NOT_NULL_ASSERTION\")\npackage {pkg}\n\n{body}\n"),
             )
             .is_some()
         {
