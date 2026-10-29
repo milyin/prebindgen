@@ -1,0 +1,2 @@
+# Preserve the standard CSV CRLF bytes used by the recorded sample hash.
+samples.csv -text whitespace=cr-at-eol

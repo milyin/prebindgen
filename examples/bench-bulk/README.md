@@ -5,10 +5,12 @@ This fixture binds the same Rust functions twice in one release native library:
 relevant expansion. There are no generator/runtime changes in this benchmark.
 
 ```sh
-KOTLINC=/path/to/kotlinc python3 examples/bench-bulk/run.py \
+KOTLINC=/path/to/kotlinc taskset -c 0,1 python3 examples/bench-bulk/run.py \
   --output /tmp/bulk-bench --check-generated --warmup 10
 ```
 
+The command above uses Linux `taskset` to match the recorded CPU affinity; choose
+a permitted CPU pair if CPUs 0–1 are unavailable, or omit `taskset` on other systems.
 Use an empty output directory. Add `--fetch` if the pinned dependencies are not
 cached; downloading finishes before the native build and measurement. Cargo builds the isolated fixture offline, then
 Kotlin compiles both generated surfaces into one JAR. All builds finish before
@@ -89,14 +91,16 @@ KOTLINC=/path/to/kotlinc python3 examples/bench-bulk/run.py \
 Measured on 2026-10-30 (Europe/Paris), Linux x86-64, AMD EPYC 7713, with CPU
 affinity restricted to CPUs 0–1, Temurin OpenJDK 11.0.29, Kotlin 2.4.21 and Rust
 1.98.0. The measured source is commit `24d19c9185bc58a6c4eee0e882090b2641dc4731`;
-the final documentation/results commit does not alter the measured fixture or
-generated wrappers. The cdylib was verified at optimization level 3 with debug
+later commits add results/documentation and fix snapshot recording, without
+changing the timed Kotlin/native fixture or generated wrappers. The cdylib was verified at optimization level 3 with debug
 assertions disabled. Four JVMs per mode each used ten warmup and nine measured
 batches. No extra JVM option environment variables were set.
 
 The [full report](results.json) contains all 35 cases and every per-JVM median.
 [Raw samples](samples.csv) contain all 2,520 measured batches; the report records
-their SHA-256. To reproduce this configuration, use the first command above.
+their SHA-256. Build and measurement inherited that affinity from the execution environment.
+To reproduce the affinity explicitly on Linux, use the first command above;
+`ActiveProcessorCount=2` alone does not restrict CPU placement.
 These are single-host measurements of the current generated wrappers, not a
 platform-independent speedup guarantee or end-to-end network throughput.
 
@@ -110,8 +114,11 @@ For these nonempty collection paths, ordinary JNI uses object arrays and boxed
 values. The generated ordinary Rust output, for example, calls `Long.valueOf`
 and sets an object-array slot for each field of every row. Bulk moves the
 expanded fields in one frame and builds the destination objects in Kotlin.
-The large ratios below describe those particular implementations; caching JNI
-lookups or adding other optimized transports could change the comparison.
+Those calls use the checked JNI API with class/method lookup, rather than cached
+method IDs. The ordinary converter costs roughly 9–11 µs per row in this run;
+boxing alone should not be read as the explanation for that cost. The large ratios
+below compare bulk against this specific list converter. Caching JNI lookups or
+adding other optimized transports could change the comparison.
 
 | Case / elements | Ordinary µs [range] | Bulk µs [range] | Ordinary / bulk | JVM B/call |
 | --- | ---: | ---: | ---: | ---: |
@@ -157,7 +164,8 @@ empty output/callback cases have different costs and favor bulk in this run.
 
 This comparison changes the delivery contract: `callback_return_only()` streams
 rows to a fold; bulk returns a materialized list. The ordinary materialized-list
-result is included to show how much the fold already avoids.
+result (from `records_output`) is included to show how much the fold already
+avoids. That case calls `checksumPlain`; the bulk fold case uses an inline loop.
 
 | Elements | Ordinary list µs | Ordinary fold µs | Bulk list µs | Fold / bulk list | JVM B/call: list / fold / bulk |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -174,4 +182,6 @@ packet input spans 1.70–3.09 µs. Their ranges remain slower than ordinary, bu
 exact slowdown should not be treated as a constant. Large ordinary collection
 calls hit the minimum batch size of 16 operations: the 512-row round trip had a
 median batch duration of 166 ms rather than the 30 ms target. The report preserves
-actual durations and ranges; no sample was discarded for being slow.
+actual durations and ranges; no sample was discarded for being slow. Some bulk
+JVMs also overshot the target after warmup (scalar 49.7 ms; single-record input
+38.1 ms), so warmup did not eliminate every timing phase change.

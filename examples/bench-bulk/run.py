@@ -118,15 +118,6 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
             existing={path.relative_to(destination) for path in destination.rglob("*") if path.is_file()}
             if existing != files.keys() or any((destination / path).read_bytes() != data for path,data in files.items()):
                 raise RuntimeError("generated files differ; rebuild with --record-generated")
-        if record and destination.exists():
-            for stale in destination.rglob("*"):
-                if stale.is_file() and stale.relative_to(destination) not in files:
-                    stale.unlink()
-        if record:
-            for relative, content in files.items():
-                target = destination / relative
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(content)
     shutil.copyfile(project / "Cargo.lock", output / "Cargo.lock.snapshot")
     if source_revisions(metadata, project) != revisions:
         raise RuntimeError("path dependency revisions changed during build")
@@ -148,6 +139,16 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "jar_sha256": digest(jar), "native_sha256": digest(library),
     }
     (output / "build.json").write_text(json.dumps(build_info, indent=2) + "\n")
+    # Snapshot writes are intentional mutations, after all build-source checks.
+    if record and destination.exists():
+        for stale in destination.rglob("*"):
+            if stale.is_file() and stale.relative_to(destination) not in files:
+                stale.unlink()
+    if record:
+        for relative, content in files.items():
+            target = destination / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
     return build_info
 
 
