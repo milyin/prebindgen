@@ -10,6 +10,13 @@ typedef struct { uint64_t hi; uint64_t lo; } perftest_int128;
  typedef struct { const uint8_t *data; size_t len; } perftest_buffer;
 void perftest_free_buffer(perftest_buffer b);
 void perftest_free_error(char *error);
+/* Binding target identity; use the matching Rust library. */
+#define perftest_TARGET "x86_64-unknown-linux-gnu"
+#ifdef __cplusplus
+static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
+#else
+_Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
+#endif
 typedef int32_t perftest_callback_return_choice;
 #define perftest_callback_return_choice_First ((perftest_callback_return_choice)(0))
 #define perftest_callback_return_choice_Second ((perftest_callback_return_choice)(1))
@@ -78,120 +85,32 @@ void perftest_drop_option_ctor(perftest_option_ctor *ptr);
 typedef struct perftest_option_choice perftest_option_choice;
 void perftest_drop_option_choice(perftest_option_choice *ptr);
 typedef struct { const uint8_t *data; size_t len; } perftest_buffer_view;
-typedef struct { uintptr_t _storage[3]; } perftest_owned_string;
+typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[24];
+} perftest_owned_string;
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void perftest_drop_owned_string(perftest_owned_string *value);
 size_t perftest_owned_string_len(const perftest_owned_string *value);
 /* Borrowed view; never free it. The owner retains the allocation. */
 perftest_buffer_view perftest_owned_string_view(const perftest_owned_string *value);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_option_i64_33d2f0297e3115f7;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_option_i64_33d2f0297e3115f7(perftest_owned_vec_option_i64_33d2f0297e3115f7 *value);
-size_t perftest_owned_vec_option_i64_33d2f0297e3115f7_len(const perftest_owned_vec_option_i64_33d2f0297e3115f7 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_option_i64_33d2f0297e3115f7_get(const perftest_owned_vec_option_i64_33d2f0297e3115f7 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_string_3292bf5148c953ec;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_string_3292bf5148c953ec(perftest_owned_vec_string_3292bf5148c953ec *value);
-size_t perftest_owned_vec_string_3292bf5148c953ec_len(const perftest_owned_vec_string_3292bf5148c953ec *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_string_3292bf5148c953ec_get(const perftest_owned_vec_string_3292bf5148c953ec *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_vec_i64_44fcce9e083e0432;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_vec_i64_44fcce9e083e0432(perftest_owned_vec_vec_i64_44fcce9e083e0432 *value);
-size_t perftest_owned_vec_vec_i64_44fcce9e083e0432_len(const perftest_owned_vec_vec_i64_44fcce9e083e0432 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_vec_i64_44fcce9e083e0432_get(const perftest_owned_vec_vec_i64_44fcce9e083e0432 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad(perftest_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad *value);
-size_t perftest_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad_len(const perftest_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad_get(const perftest_owned_vec_vec_perftest_flat_ownedresource_bc62184754e77cad *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_vec_u8_3f5fd420367502d4;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_vec_u8_3f5fd420367502d4(perftest_owned_vec_vec_u8_3f5fd420367502d4 *value);
-size_t perftest_owned_vec_vec_u8_3f5fd420367502d4_len(const perftest_owned_vec_vec_u8_3f5fd420367502d4 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_vec_u8_3f5fd420367502d4_get(const perftest_owned_vec_vec_u8_3f5fd420367502d4 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_char_ae6d41c8646359d5;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_char_ae6d41c8646359d5(perftest_owned_vec_char_ae6d41c8646359d5 *value);
-size_t perftest_owned_vec_char_ae6d41c8646359d5_len(const perftest_owned_vec_char_ae6d41c8646359d5 *value);
-/* Borrowed element; null for an out-of-range index. */
-const uint32_t *perftest_owned_vec_char_ae6d41c8646359d5_get(const perftest_owned_vec_char_ae6d41c8646359d5 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_i64_8f793c725f29723e;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_i64_8f793c725f29723e(perftest_owned_vec_i64_8f793c725f29723e *value);
-size_t perftest_owned_vec_i64_8f793c725f29723e_len(const perftest_owned_vec_i64_8f793c725f29723e *value);
-/* Borrowed element; null for an out-of-range index. */
-const int64_t *perftest_owned_vec_i64_8f793c725f29723e_get(const perftest_owned_vec_i64_8f793c725f29723e *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d(perftest_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d *value);
-size_t perftest_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d_len(const perftest_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d *value);
-/* Borrowed element; null for an out-of-range index. */
-const perftest_panic_output *perftest_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d_get(const perftest_owned_vec_perftest_flat_cpanicoutput_9ef10ee1d35ade9d *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb(perftest_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb *value);
-size_t perftest_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb_len(const perftest_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb *value);
-/* Borrowed element; null for an out-of-range index. */
-const perftest_callback_return_handler *perftest_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb_get(const perftest_owned_vec_perftest_flat_callbackreturnhandler_1c2fa4fb2e0789fb *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301(perftest_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301 *value);
-size_t perftest_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301_len(const perftest_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301 *value);
-/* Borrowed element; null for an out-of-range index. */
-const perftest_callback_return_resource *perftest_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301_get(const perftest_owned_vec_perftest_flat_callbackreturnresource_c1962273e6227301 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853(perftest_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853 *value);
-size_t perftest_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853_len(const perftest_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853_get(const perftest_owned_vec_perftest_flat_collectionitem_4a0f28a20d000853 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5(perftest_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5 *value);
-size_t perftest_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5_len(const perftest_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5 *value);
-/* Borrowed element; null for an out-of-range index. */
-const perftest_owned_resource *perftest_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5_get(const perftest_owned_vec_perftest_flat_ownedresource_0e74a0b28242dcd5 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_payload_202b6819d69c8cb6;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_payload_202b6819d69c8cb6(perftest_owned_vec_perftest_flat_payload_202b6819d69c8cb6 *value);
-size_t perftest_owned_vec_perftest_flat_payload_202b6819d69c8cb6_len(const perftest_owned_vec_perftest_flat_payload_202b6819d69c8cb6 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_perftest_flat_payload_202b6819d69c8cb6_get(const perftest_owned_vec_perftest_flat_payload_202b6819d69c8cb6 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78(perftest_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78 *value);
-size_t perftest_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78_len(const perftest_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78_get(const perftest_owned_vec_perftest_flat_sequencepart_d650ac2fb196fd78 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a(perftest_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a *value);
-size_t perftest_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a_len(const perftest_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a_get(const perftest_owned_vec_perftest_flat_sequencescalars_8c1e211dc96d345a *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_perftest_flat_sparsecode_634596980e0ca051;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_perftest_flat_sparsecode_634596980e0ca051(perftest_owned_vec_perftest_flat_sparsecode_634596980e0ca051 *value);
-size_t perftest_owned_vec_perftest_flat_sparsecode_634596980e0ca051_len(const perftest_owned_vec_perftest_flat_sparsecode_634596980e0ca051 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *perftest_owned_vec_perftest_flat_sparsecode_634596980e0ca051_get(const perftest_owned_vec_perftest_flat_sparsecode_634596980e0ca051 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_u8_672e72343c1b4cb4;
+typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[24];
+} perftest_owned_vec_u8_672e72343c1b4cb4;
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void perftest_drop_owned_vec_u8_672e72343c1b4cb4(perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 size_t perftest_owned_vec_u8_672e72343c1b4cb4_len(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
 /* Borrowed view; never free it. The owner retains the allocation. */
 perftest_buffer_view perftest_owned_vec_u8_672e72343c1b4cb4_view(const perftest_owned_vec_u8_672e72343c1b4cb4 *value);
-typedef struct { uintptr_t _storage[3]; } perftest_owned_vec_usize_4efcb9bb80acdd15;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void perftest_drop_owned_vec_usize_4efcb9bb80acdd15(perftest_owned_vec_usize_4efcb9bb80acdd15 *value);
-size_t perftest_owned_vec_usize_4efcb9bb80acdd15_len(const perftest_owned_vec_usize_4efcb9bb80acdd15 *value);
-/* Borrowed element; null for an out-of-range index. */
-const uintptr_t *perftest_owned_vec_usize_4efcb9bb80acdd15_get(const perftest_owned_vec_usize_4efcb9bb80acdd15 *value,size_t index);
 /* Rust signature: ()->perftest_flat :: CallbackReturnResource. The callback context transfers to Rust when input ownership is accepted; drop(context) runs once when the Rust closure is released. run must support the source's thread bounds. Owning values passed to run are callback-owned; borrowed views are valid only during run. Returned buffers must remain valid until Rust finishes copying them; optional release_result runs after decoding (also on failure) and frees only returned buffer/row storage, never moved handles or inline owners (including owners left in returned rows). */
 typedef struct {
     perftest_callback_return_resource * (*run)(void *context);

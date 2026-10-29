@@ -10,6 +10,13 @@ typedef struct { uint64_t hi; uint64_t lo; } owner_int128;
  typedef struct { const uint8_t *data; size_t len; } owner_buffer;
 void owner_free_buffer(owner_buffer b);
 void owner_free_error(char *error);
+/* Binding target identity; use the matching Rust library. */
+#define owner_TARGET "x86_64-unknown-linux-gnu"
+#ifdef __cplusplus
+static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
+#else
+_Static_assert(sizeof(void*) * 8 == 64, "prebindgen: header pointer width differs; regenerate for this target");
+#endif
 /* Field paths below start at a source parameter or return and list their ABI values.
  * Optional groups below name their discriminator. Rules apply only in active
  * selector arms and present enclosing groups. Absent payload wires are ignored. */
@@ -28,31 +35,40 @@ typedef struct {
 } owner_packet;
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_packet(owner_packet *value);
-typedef struct { uintptr_t _storage[3]; } owner_text;
+typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[24];
+} owner_text;
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_text(owner_text *value);
 size_t owner_text_len(const owner_text *value);
 /* Borrowed view; never free it. The owner retains the allocation. */
 owner_buffer_view owner_text_view(const owner_text *value);
-typedef struct { uintptr_t _storage[3]; } owner_numbers;
+typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[24];
+} owner_numbers;
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_numbers(owner_numbers *value);
 size_t owner_numbers_len(const owner_numbers *value);
 /* Borrowed element; null for an out-of-range index. */
 const int64_t *owner_numbers_get(const owner_numbers *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void owner_drop_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1(owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 *value);
-size_t owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1_len(const owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1_get(const owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f;
-/* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
-void owner_drop_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f(owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f *value);
-size_t owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f_len(const owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f *value);
-/* Borrowed element; null for an out-of-range index. */
-const void *owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f_get(const owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f *value,size_t index);
-typedef struct { uintptr_t _storage[3]; } owner_bytes;
+typedef struct {
+#ifdef __cplusplus
+    alignas(8)
+#else
+    _Alignas(8)
+#endif
+    unsigned char _storage[24];
+} owner_bytes;
 /* Owning value: move, never duplicate ownership. Drop after the last use of its views; consumption replaces it with an empty value. */
 void owner_drop_bytes(owner_bytes *value);
 size_t owner_bytes_len(const owner_bytes *value);

@@ -171,6 +171,14 @@ fn has_reference(ty: &syn::Type) -> bool {
         || prebindgen_flat::sequence_parts(ty).is_some_and(|(ty, _)| has_reference(ty))
 }
 impl CCallback {
+    pub(crate) fn layout_names(&self, names: &mut BTreeSet<String>) {
+        for argument in &self.arguments {
+            crate::layouts::output_names(&argument.output, names);
+        }
+        if let Some((_, plan)) = &self.returned {
+            crate::layouts::input_names(plan, names);
+        }
+    }
     fn has_release(&self) -> bool {
         self.return_fields()
             .iter()

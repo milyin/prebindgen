@@ -2,7 +2,7 @@
 fn __pb_owned_text_len(value: &String) -> usize {
     value.len()
 }
-#[allow(clippy::ptr_arg)]
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_text_view(value: &String) -> &[u8] {
     value.as_bytes()
 }
@@ -26,7 +26,7 @@ fn __pb_owned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f_len(
 fn __pb_owned_bytes_len(value: &Vec<u8>) -> usize {
     value.len()
 }
-#[allow(clippy::ptr_arg)]
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_bytes_view(value: &Vec<u8>) -> &[u8] {
     value.as_slice()
 }
@@ -92,6 +92,13 @@ pub unsafe extern "C" fn owner_free_buffer(b: __PbBuffer) {
         );
     }
 }
+const _: () = {
+    assert!(
+        cfg!(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux",
+        target_env = "gnu")) && usize::BITS == 64u32,
+        "C binding target differs from the Rust compilation target"
+    );
+};
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -193,10 +200,10 @@ pub unsafe extern "C" fn owner_drop_packet(value: *mut __PbOwned_packet) {
     }
 }
 #[allow(non_camel_case_types)]
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Clone, Copy)]
 pub struct __PbOwned_text {
-    storage: ::core::mem::MaybeUninit<[usize; 3]>,
+    storage: ::core::mem::MaybeUninit<[u8; 24usize]>,
 }
 const _: () = {
     assert!(
@@ -279,10 +286,10 @@ pub unsafe extern "C" fn owner_text_view(value: *const __PbOwned_text) -> __PbBu
     }
 }
 #[allow(non_camel_case_types)]
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Clone, Copy)]
 pub struct __PbOwned_numbers {
-    storage: ::core::mem::MaybeUninit<[usize; 3]>,
+    storage: ::core::mem::MaybeUninit<[u8; 24usize]>,
 }
 const _: () = {
     assert!(
@@ -367,242 +374,10 @@ pub unsafe extern "C" fn owner_numbers_get(
         .map_or(::core::ptr::null(), |element| element as *const i64)
 }
 #[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 {
-    storage: ::core::mem::MaybeUninit<[usize; 3]>,
-}
-const _: () = {
-    assert!(
-        ::core::mem::size_of:: <
-        __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 > () ==
-        ::core::mem::size_of:: < Vec < perftest_flat::InlinePacket > > (),
-        "opaque owner size differs from its Rust type"
-    );
-    assert!(
-        ::core::mem::align_of:: <
-        __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 > () ==
-        ::core::mem::align_of:: < Vec < perftest_flat::InlinePacket > > (),
-        "opaque owner alignment differs from its Rust type"
-    );
-};
-#[allow(non_camel_case_types)]
-struct __PbOwnedGuard_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1(
-    __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1,
-);
-impl Drop for __PbOwnedGuard_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 {
-    fn drop(&mut self) {
-        unsafe {
-            ::core::ptr::drop_in_place(
-                &mut self.0
-                    as *mut __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1
-                    as *mut Vec<perftest_flat::InlinePacket>,
-            );
-        }
-    }
-}
-#[allow(dead_code)]
-impl __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 {
-    fn from_rust(value: Vec<perftest_flat::InlinePacket>) -> Self {
-        let mut storage = ::core::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::core::ptr::write(
-                storage.as_mut_ptr().cast::<Vec<perftest_flat::InlinePacket>>(),
-                value,
-            );
-            storage.assume_init()
-        }
-    }
-    fn guard(
-        value: Vec<perftest_flat::InlinePacket>,
-    ) -> __PbOwnedGuard_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1 {
-        __PbOwnedGuard_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1(
-            Self::from_rust(value),
-        )
-    }
-    unsafe fn as_rust(&self) -> &Vec<perftest_flat::InlinePacket> {
-        &*(self as *const Self as *const Vec<perftest_flat::InlinePacket>)
-    }
-    unsafe fn as_rust_mut(&mut self) -> &mut Vec<perftest_flat::InlinePacket> {
-        &mut *(self as *mut Self as *mut Vec<perftest_flat::InlinePacket>)
-    }
-    unsafe fn into_rust(self) -> Vec<perftest_flat::InlinePacket> {
-        ::core::ptr::read(
-            &self as *const Self as *const Vec<perftest_flat::InlinePacket>,
-        )
-    }
-    fn empty() -> Self {
-        Self::from_rust(
-            <Vec<perftest_flat::InlinePacket> as ::core::default::Default>::default(),
-        )
-    }
-}
-/**# Safety
-The pointer must be null or point to one live owner of this exact type. The owner is replaced by its empty value; previous views become invalid.*/
-#[no_mangle]
-pub unsafe extern "C" fn owner_drop_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1(
-    value: *mut __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1,
-) {
-    if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if !value.is_null() {
-            drop(
-                ::core::ptr::replace(
-                    value as *mut Vec<perftest_flat::InlinePacket>,
-                    <Vec<
-                        perftest_flat::InlinePacket,
-                    > as ::core::default::Default>::default(),
-                ),
-            );
-        }
-        Ok(())
-    }) {
-        panic!("C destructor failed: {}", error);
-    }
-}
-/**# Safety
-The owner must be live, aligned, and of this exact type.*/
-#[no_mangle]
-pub unsafe extern "C" fn owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1_len(
-    value: *const __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1,
-) -> usize {
-    (*value).as_rust().len()
-}
-/**# Safety
-The owner must remain live and unmodified while an element pointer is used.*/
-#[no_mangle]
-pub unsafe extern "C" fn owner_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1_get(
-    value: *const __PbOwned_owned_vec_perftest_flat_inlinepacket_d1b07be462875ea1,
-    index: usize,
-) -> *const perftest_flat::InlinePacket {
-    (*value)
-        .as_rust()
-        .get(index)
-        .map_or(
-            ::core::ptr::null(),
-            |element| element as *const perftest_flat::InlinePacket,
-        )
-}
-#[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f {
-    storage: ::core::mem::MaybeUninit<[usize; 3]>,
-}
-const _: () = {
-    assert!(
-        ::core::mem::size_of:: <
-        __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f > () ==
-        ::core::mem::size_of:: < Vec < perftest_flat::InlineReturn > > (),
-        "opaque owner size differs from its Rust type"
-    );
-    assert!(
-        ::core::mem::align_of:: <
-        __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f > () ==
-        ::core::mem::align_of:: < Vec < perftest_flat::InlineReturn > > (),
-        "opaque owner alignment differs from its Rust type"
-    );
-};
-#[allow(non_camel_case_types)]
-struct __PbOwnedGuard_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f(
-    __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f,
-);
-impl Drop for __PbOwnedGuard_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f {
-    fn drop(&mut self) {
-        unsafe {
-            ::core::ptr::drop_in_place(
-                &mut self.0
-                    as *mut __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f
-                    as *mut Vec<perftest_flat::InlineReturn>,
-            );
-        }
-    }
-}
-#[allow(dead_code)]
-impl __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f {
-    fn from_rust(value: Vec<perftest_flat::InlineReturn>) -> Self {
-        let mut storage = ::core::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::core::ptr::write(
-                storage.as_mut_ptr().cast::<Vec<perftest_flat::InlineReturn>>(),
-                value,
-            );
-            storage.assume_init()
-        }
-    }
-    fn guard(
-        value: Vec<perftest_flat::InlineReturn>,
-    ) -> __PbOwnedGuard_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f {
-        __PbOwnedGuard_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f(
-            Self::from_rust(value),
-        )
-    }
-    unsafe fn as_rust(&self) -> &Vec<perftest_flat::InlineReturn> {
-        &*(self as *const Self as *const Vec<perftest_flat::InlineReturn>)
-    }
-    unsafe fn as_rust_mut(&mut self) -> &mut Vec<perftest_flat::InlineReturn> {
-        &mut *(self as *mut Self as *mut Vec<perftest_flat::InlineReturn>)
-    }
-    unsafe fn into_rust(self) -> Vec<perftest_flat::InlineReturn> {
-        ::core::ptr::read(
-            &self as *const Self as *const Vec<perftest_flat::InlineReturn>,
-        )
-    }
-    fn empty() -> Self {
-        Self::from_rust(
-            <Vec<perftest_flat::InlineReturn> as ::core::default::Default>::default(),
-        )
-    }
-}
-/**# Safety
-The pointer must be null or point to one live owner of this exact type. The owner is replaced by its empty value; previous views become invalid.*/
-#[no_mangle]
-pub unsafe extern "C" fn owner_drop_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f(
-    value: *mut __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f,
-) {
-    if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if !value.is_null() {
-            drop(
-                ::core::ptr::replace(
-                    value as *mut Vec<perftest_flat::InlineReturn>,
-                    <Vec<
-                        perftest_flat::InlineReturn,
-                    > as ::core::default::Default>::default(),
-                ),
-            );
-        }
-        Ok(())
-    }) {
-        panic!("C destructor failed: {}", error);
-    }
-}
-/**# Safety
-The owner must be live, aligned, and of this exact type.*/
-#[no_mangle]
-pub unsafe extern "C" fn owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f_len(
-    value: *const __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f,
-) -> usize {
-    (*value).as_rust().len()
-}
-/**# Safety
-The owner must remain live and unmodified while an element pointer is used.*/
-#[no_mangle]
-pub unsafe extern "C" fn owner_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f_get(
-    value: *const __PbOwned_owned_vec_perftest_flat_inlinereturn_08baa299e0e43a9f,
-    index: usize,
-) -> *const perftest_flat::InlineReturn {
-    (*value)
-        .as_rust()
-        .get(index)
-        .map_or(
-            ::core::ptr::null(),
-            |element| element as *const perftest_flat::InlineReturn,
-        )
-}
-#[allow(non_camel_case_types)]
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Clone, Copy)]
 pub struct __PbOwned_bytes {
-    storage: ::core::mem::MaybeUninit<[usize; 3]>,
+    storage: ::core::mem::MaybeUninit<[u8; 24usize]>,
 }
 const _: () = {
     assert!(

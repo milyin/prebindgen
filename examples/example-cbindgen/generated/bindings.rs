@@ -2,7 +2,7 @@
 fn __pb_owned_owned_string_len(value: &String) -> usize {
     value.len()
 }
-#[allow(clippy::ptr_arg)]
+#[allow(dead_code, clippy::ptr_arg)]
 fn __pb_owned_owned_string_view(value: &String) -> &[u8] {
     value.as_bytes()
 }
@@ -68,6 +68,13 @@ pub unsafe extern "C" fn example_free_buffer(b: __PbBuffer) {
         );
     }
 }
+const _: () = {
+    assert!(
+        cfg!(all(target_arch = "x86_64", target_vendor = "unknown", target_os = "linux",
+        target_env = "gnu")) && usize::BITS == 64u32,
+        "C binding target differs from the Rust compilation target"
+    );
+};
 /**# Safety
 The pointer must be null or a live allocation of the declared type returned by this library. It must not be used again after this call.*/
 #[no_mangle]
@@ -120,96 +127,6 @@ pub unsafe extern "C" fn example_drop_foo(ptr: *mut example_flat::Foo) {
         Ok(())
     }) {
         panic!("C destructor failed: {}", error);
-    }
-}
-#[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct __PbOwned_owned_string {
-    storage: ::core::mem::MaybeUninit<[usize; 3]>,
-}
-const _: () = {
-    assert!(
-        ::core::mem::size_of:: < __PbOwned_owned_string > () == ::core::mem::size_of:: <
-        String > (), "opaque owner size differs from its Rust type"
-    );
-    assert!(
-        ::core::mem::align_of:: < __PbOwned_owned_string > () == ::core::mem::align_of::
-        < String > (), "opaque owner alignment differs from its Rust type"
-    );
-};
-#[allow(non_camel_case_types)]
-struct __PbOwnedGuard_owned_string(__PbOwned_owned_string);
-impl Drop for __PbOwnedGuard_owned_string {
-    fn drop(&mut self) {
-        unsafe {
-            ::core::ptr::drop_in_place(
-                &mut self.0 as *mut __PbOwned_owned_string as *mut String,
-            );
-        }
-    }
-}
-#[allow(dead_code)]
-impl __PbOwned_owned_string {
-    fn from_rust(value: String) -> Self {
-        let mut storage = ::core::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::core::ptr::write(storage.as_mut_ptr().cast::<String>(), value);
-            storage.assume_init()
-        }
-    }
-    fn guard(value: String) -> __PbOwnedGuard_owned_string {
-        __PbOwnedGuard_owned_string(Self::from_rust(value))
-    }
-    unsafe fn as_rust(&self) -> &String {
-        &*(self as *const Self as *const String)
-    }
-    unsafe fn as_rust_mut(&mut self) -> &mut String {
-        &mut *(self as *mut Self as *mut String)
-    }
-    unsafe fn into_rust(self) -> String {
-        ::core::ptr::read(&self as *const Self as *const String)
-    }
-    fn empty() -> Self {
-        Self::from_rust(<String as ::core::default::Default>::default())
-    }
-}
-/**# Safety
-The pointer must be null or point to one live owner of this exact type. The owner is replaced by its empty value; previous views become invalid.*/
-#[no_mangle]
-pub unsafe extern "C" fn example_drop_owned_string(value: *mut __PbOwned_owned_string) {
-    if let Err(error) = ::prebindgen_runtime::boundary(|| {
-        if !value.is_null() {
-            drop(
-                ::core::ptr::replace(
-                    value as *mut String,
-                    <String as ::core::default::Default>::default(),
-                ),
-            );
-        }
-        Ok(())
-    }) {
-        panic!("C destructor failed: {}", error);
-    }
-}
-/**# Safety
-The owner must be live, aligned, and of this exact type.*/
-#[no_mangle]
-pub unsafe extern "C" fn example_owned_string_len(
-    value: *const __PbOwned_owned_string,
-) -> usize {
-    (*value).as_rust().len()
-}
-/**# Safety
-The owner must remain live and unmodified while its returned view is used.*/
-#[no_mangle]
-pub unsafe extern "C" fn example_owned_string_view(
-    value: *const __PbOwned_owned_string,
-) -> __PbBuffer {
-    let bytes = __pb_owned_owned_string_view((*value).as_rust());
-    __PbBuffer {
-        data: bytes.as_ptr(),
-        len: bytes.len(),
     }
 }
 #[repr(C)]

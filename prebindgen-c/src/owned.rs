@@ -3,49 +3,6 @@ use super::*;
 use prebindgen_declarations::Condition;
 use std::rc::Rc;
 
-/// Target layout of the Rust value stored inside an opaque C owner.
-/// Layout is checked again by the generated Rust compilation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct OpaqueLayout {
-    bytes: usize,
-    alignment: usize,
-    words: bool,
-}
-impl OpaqueLayout {
-    /// Use an explicit target byte size and alignment. Both must be nonzero;
-    /// alignment must be a power of two and size a multiple of alignment.
-    pub const fn new(bytes: usize, alignment: usize) -> Self {
-        Self {
-            bytes,
-            alignment,
-            words: false,
-        }
-    }
-    /// Measure a type in the build-script process. For cross compilation,
-    /// provide the target layout with [`Self::new`] instead of a host layout.
-    pub const fn of<T>() -> Self {
-        Self::new(std::mem::size_of::<T>(), std::mem::align_of::<T>())
-    }
-    /// Three target-sized words, for the standard Vec/String descriptor.
-    /// Size/alignment assertions reject a target with an incompatible layout.
-    pub const fn vector() -> Self {
-        Self {
-            bytes: 3,
-            alignment: 0,
-            words: true,
-        }
-    }
-    pub(crate) fn validate(self) -> Result<()> {
-        if !self.words
-            && (self.bytes == 0
-                || !self.alignment.is_power_of_two()
-                || self.bytes % self.alignment != 0)
-        {
-            return Err("opaque layout requires nonzero size, power-of-two alignment, and size divisible by alignment".into());
-        }
-        Ok(())
-    }
-}
 /// The native Rust value and target storage of one inline C owner.
 #[derive(Clone, Debug)]
 pub struct COwned {
@@ -290,20 +247,18 @@ pub(crate) fn collect(ty: &syn::Type, types: &mut std::collections::BTreeMap<Str
     }
 }
 
-pub(crate) fn emit(owner: &COwned, prefix: &str, tokens: &mut TokenStream, header: &mut String) {
+pub(crate) fn emit(
+    owner: &COwned,
+    layout: crate::layouts::StorageLayout,
+    prefix: &str,
+    tokens: &mut TokenStream,
+    header: &mut String,
+) {
     let ident = owner.ident();
     let native = &owner.ty;
-    let (definition, c) = if owner.layout.words {
-        (
-            quote!(#[allow(non_camel_case_types)] #[repr(C)] #[derive(Clone,Copy)] pub struct #ident { storage: ::core::mem::MaybeUninit<[usize;3]> }),
-            format!(
-                "typedef struct {{ uintptr_t _storage[3]; }} {prefix}_{};\n",
-                owner.name
-            ),
-        )
-    } else {
-        let size = owner.layout.bytes;
-        let align = owner.layout.alignment;
+    let (definition, c) = {
+        let size = layout.size;
+        let align = layout.alignment;
         let a = syn::LitInt::new(&align.to_string(), proc_macro2::Span::call_site());
         (quote!(#[allow(non_camel_case_types)] #[repr(C, align(#a))] #[derive(Clone,Copy)] pub struct #ident { storage: ::core::mem::MaybeUninit<[u8;#size]> }),format!("typedef struct {{\n#ifdef __cplusplus\n    alignas({align})\n#else\n    _Alignas({align})\n#endif\n    unsigned char _storage[{size}];\n}} {prefix}_{};\n",owner.name))
     };
@@ -358,7 +313,7 @@ pub(crate) fn accessors(flat: &mut Bindings) -> Result<()> {
             } else {
                 quote!(value.as_slice())
             };
-            functions.push(syn::parse_quote!(#[allow(clippy::ptr_arg)] fn #view(value: &#ty) -> &[u8] {#expression}));
+            functions.push(syn::parse_quote!(#[allow(dead_code,clippy::ptr_arg)] fn #view(value: &#ty) -> &[u8] {#expression}));
         }
         for function in functions {
             let name = function.sig.ident.clone();
@@ -431,17 +386,23 @@ pub(crate) fn emit_accessors(
         if !symbols.insert(get.to_string()) {
             return Err("generated owner element accessor collides with a C symbol".into());
         }
-        let c_element = if let Some(Value::Scalar(primitive)) = Value::of(element)
+        let declared = types
+            .values()
+            .find(|t| prebindgen_flat::same_type(&t.ty, element))
+            .and_then(|t| {
+                t.metadata
+                    .pointer
+                    .as_ref()
+                    .or_else(|| t.metadata.owned.as_ref().map(|o| &o.name))
+            });
+        let c_element = if let Some(name) = declared {
+            format!("{prefix}_{name}")
+        } else if let Some(Value::Scalar(primitive)) = Value::of(element)
             .filter(|v| !matches!(v, Value::Scalar(Primitive::I128 | Primitive::U128)))
         {
             c_scalar(primitive, prefix)
         } else {
-            types
-                .values()
-                .find(|t| prebindgen_flat::same_type(&t.ty, element))
-                .and_then(|t| t.metadata.pointer.as_ref())
-                .map(|n| format!("{prefix}_{n}"))
-                .unwrap_or_else(|| "void".into())
+            "void".into()
         };
         tokens.extend(quote!(#[doc="# Safety\nThe owner must remain live and unmodified while an element pointer is used."] #[no_mangle] pub unsafe extern "C" fn #get(value:*const #carrier,index:usize)->*const #element {(*value).as_rust().get(index).map_or(::core::ptr::null(), |element|element as *const #element)}));
         header.push_str(&format!("/* Borrowed element; null for an out-of-range index. */\nconst {c_element} *{get}(const {prefix}_{} *value,size_t index);\n",owner.name));
@@ -495,7 +456,11 @@ mod tests {
     fn inline_getter_loans_are_diagnosed_instead_of_dangling_or_cloning() {
         let source="pub struct Owner{pub child:Child} pub struct Child{pub n:i64} pub fn make()->Owner{} pub fn child(v:&Owner)->&Child{}";
         let error = Cbindgen::new(flat(source))
-            .opaque_owned_struct("owner", syn::parse_quote!(Owner), OpaqueLayout::new(8, 8))
+            .opaque_owned_struct(
+                "owner",
+                syn::parse_quote!(Owner),
+                OpaqueLayout::auto::<i64>(),
+            )
             .opaque_ptr("child", syn::parse_quote!(Child))
             .function(
                 fun!(make)
@@ -544,7 +509,7 @@ mod tests {
             .opaque_owned_struct(
                 "borrowed",
                 syn::parse_quote!(Vec<&'static str>),
-                OpaqueLayout::vector()
+                OpaqueLayout::auto::<Vec<u8>>()
             )
             .build()
             .is_err());
@@ -592,36 +557,38 @@ mod tests {
     }
     #[test]
     fn layouts_conflicts_and_empty_factories_are_checked() {
-        for layout in [
-            OpaqueLayout::new(0, 8),
-            OpaqueLayout::new(9, 8),
-            OpaqueLayout::new(16, 3),
-        ] {
-            assert!(Cbindgen::new(flat("pub struct Owner{pub n:i64}"))
-                .opaque_owned_struct("owner", syn::parse_quote!(Owner), layout)
-                .prepare()
-                .is_err());
-        }
+        assert!(Cbindgen::new(flat("pub struct Owner{pub n:i64}"))
+            .opaque_owned_struct(
+                "owner",
+                syn::parse_quote!(Owner),
+                OpaqueLayout::auto::<()>()
+            )
+            .prepare()
+            .is_err());
         let source="pub struct Owner{pub n:i64} pub fn empty()->Owner{} pub fn wrong()->i64{} pub fn make()->Owner{}";
         assert!(Cbindgen::new(flat(source))
             .opaque_owned_struct_with_empty(
                 "owner",
                 syn::parse_quote!(Owner),
-                OpaqueLayout::new(8, 8),
+                OpaqueLayout::auto::<i64>(),
                 fun!(wrong)
             )
             .prepare()
             .is_err());
         assert!(Cbindgen::new(flat(source))
             .opaque_ptr("ptr", syn::parse_quote!(Owner))
-            .opaque_owned_struct("owner", syn::parse_quote!(Owner), OpaqueLayout::new(8, 8))
+            .opaque_owned_struct(
+                "owner",
+                syn::parse_quote!(Owner),
+                OpaqueLayout::auto::<i64>()
+            )
             .prepare()
             .is_err());
         let generated = Cbindgen::new(flat(source))
             .opaque_owned_struct_with_empty(
                 "owner",
                 syn::parse_quote!(Owner),
-                OpaqueLayout::new(8, 8),
+                OpaqueLayout::auto::<i64>(),
                 fun!(empty),
             )
             .function(fun!(make))

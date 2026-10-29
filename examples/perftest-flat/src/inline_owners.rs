@@ -18,6 +18,8 @@ pub type InlineChildBox = Option<Box<InlineChild>>;
 #[prebindgen]
 pub struct InlinePacket {
     pub tag: u8,
+    #[cfg(feature = "layout-wide")]
+    pub wide: usize,
     pub bytes: Vec<u8>,
     pub text: String,
     pub child: InlineChildBox,
@@ -97,6 +99,8 @@ pub fn inline_bytes_alias(value: Vec<u8>, borrow: &Vec<u8>) -> Result<usize, Str
 pub fn inline_packet_new() -> InlinePacket {
     InlinePacket {
         tag: 1,
+        #[cfg(feature = "layout-wide")]
+        wide: 0,
         bytes: inline_bytes_new(),
         text: inline_text_new(),
         child: Some(Box::new(InlineChild { id: 42 })),
@@ -168,6 +172,8 @@ pub fn inline_rows_catch(callback: impl Fn() -> Vec<InlineReturn>) -> bool {
 pub fn inline_packet_empty() -> InlinePacket {
     InlinePacket {
         tag: 0,
+        #[cfg(feature = "layout-wide")]
+        wide: 0,
         bytes: Vec::new(),
         text: String::new(),
         child: None,
