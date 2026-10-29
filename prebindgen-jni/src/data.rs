@@ -122,7 +122,6 @@ pub struct DataGroup {
     pub(crate) root: String,
     pub(crate) class_name: String,
     pub(crate) condition: String,
-    pub(crate) native: Option<std::rc::Rc<prebindgen_reprc::NativeRecord>>,
 }
 
 /// JNI conversions consult the declarations attached to Flat.
@@ -407,7 +406,6 @@ impl Class {
         layout: &mut prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
         root: String,
         condition: String,
-        native: Option<std::rc::Rc<prebindgen_reprc::NativeRecord>>,
     ) -> Result<()> {
         JniCodec.retire_niches(layout, None)?;
         let mut nodes = std::mem::take(layout);
@@ -425,7 +423,6 @@ impl Class {
             root,
             class_name: self.fqn(),
             condition,
-            native,
         }));
         *layout = nodes;
         Ok(())
@@ -589,12 +586,7 @@ impl Codec for DataCodec<'_> {
     ) -> Result<()> {
         Self::source_record(flat, ty)?
             .ok_or("missing data-class representation")?
-            .mark(
-                &mut plan.node,
-                wire.to_string(),
-                kotlin_condition(active),
-                native_record(flat, ty)?,
-            )
+            .mark(&mut plan.node, wire.to_string(), kotlin_condition(active))
     }
     fn output_record_metadata(
         &self,
@@ -606,12 +598,7 @@ impl Codec for DataCodec<'_> {
     ) -> Result<()> {
         Self::source_record(flat, ty)?
             .ok_or("missing data-class representation")?
-            .mark(
-                &mut plan.outcomes.success,
-                wire.to_string(),
-                "true".into(),
-                native_record(flat, ty)?,
-            )
+            .mark(&mut plan.outcomes.success, wire.to_string(), "true".into())
     }
     type Niche = crate::optional::JniNiche;
     type Chain = JniChain;
@@ -987,31 +974,6 @@ pub(crate) fn output_kotlin(
     Ok(c)
 }
 
-fn native_record(
-    flat: &Bindings,
-    ty: &syn::Type,
-) -> Result<Option<std::rc::Rc<prebindgen_reprc::NativeRecord>>> {
-    let record = flat.record(ty)?;
-    let mut repr_c = false;
-    for attribute in &record.repr {
-        let metas = attribute
-            .parse_args_with(
-                syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
-            )
-            .map_err(|e| e.to_string())?;
-        repr_c |= metas
-            .iter()
-            .any(|meta| matches!(meta,syn::Meta::Path(path) if path.is_ident("C")));
-    }
-    if !repr_c || record.fields.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(std::rc::Rc::new(prebindgen_reprc::NativeRecord::new(
-        record.ty.clone(),
-        record.fields.iter().map(|f| (f.name.clone(), f.ty.clone())),
-    )?)))
-}
-
 #[cfg(test)]
 mod group_tests {
     use super::*;
@@ -1121,7 +1083,6 @@ mod group_tests {
             meta: JniBranch::Group(JniGroup::Fields(Some(DataGroup {
                 root: root.into(),
                 class_name: "example.Empty".into(),
-                native: None,
                 condition: "true".into(),
             }))),
             children: Vec::new(),
@@ -1181,7 +1142,6 @@ mod group_tests {
                 root: "point".into(),
                 class_name: "example.Point".into(),
                 condition: "true".into(),
-                native: None,
             }))),
             children: vec![std::mem::take(&mut field)],
         };

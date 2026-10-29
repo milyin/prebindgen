@@ -52,8 +52,9 @@ fun checkBulk() {
 
     check(bulkNative(listOf(BulkNative(1, Long.MIN_VALUE, ULong.MAX_VALUE), BulkNative(-7, Long.MAX_VALUE, 1uL))) == listOf(BulkNative(1, Long.MIN_VALUE, ULong.MAX_VALUE), BulkNative(-7, Long.MAX_VALUE, 1uL)))
     check(bulkExpanded(7, "世界") { number, text -> number == 7L && text == "世界" })
-    val expanded = bulkExpandedRows(listOf(BulkArgs_Long_String_48cff4776a2f7bd0(7, "a"), BulkArgs_Long_String_48cff4776a2f7bd0(9, "世界")))
-    check(expanded == listOf(BulkValue_Long_String_71d293c742f10421(7, "a"), BulkValue_Long_String_71d293c742f10421(9, "世界")))
+    val expanded = bulkExpandedRows(listOf(BulkExpanded(7, "a"), BulkExpanded(9, "世界")))
+    check(expanded == listOf(BulkExpanded(7, "a"), BulkExpanded(9, "世界")))
+    check(bulkExpandedRows(expanded) == expanded)
     check(bulkResult(7, "ok", true, onError = BulkFailureHandler { false }) { n, text -> n == 7L && text == "ok" })
     check(bulkResult(7, "error", false, onError = BulkFailureHandler { code -> code == 17L }) { _, _ -> false })
     val minWide = java.math.BigInteger.ONE.shiftLeft(127).negate()

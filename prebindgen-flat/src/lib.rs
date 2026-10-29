@@ -100,8 +100,6 @@ pub struct Function<I, O, M = ()> {
 /// A named-field record available for field construction and projection.
 #[derive(Clone, Debug)]
 pub struct Record<M = ()> {
-    /// Source representation attributes, retained for native layout selection.
-    pub repr: Vec<syn::Attribute>,
     /// Qualified record type.
     pub ty: Type,
     /// Public fields in declaration order.
@@ -416,12 +414,6 @@ impl<M: Schema> Flat<M> {
                     );
                 }
                 syn::Item::Struct(s) => {
-                    let repr = s
-                        .attrs
-                        .iter()
-                        .filter(|a| a.path().is_ident("repr"))
-                        .cloned()
-                        .collect();
                     if !s.generics.params.is_empty() || s.generics.where_clause.is_some() {
                         return Err("generic records are unsupported".into());
                     }
@@ -444,14 +436,8 @@ impl<M: Schema> Flat<M> {
                             ty: flat.resolve_type(&field.ty)?,
                         });
                     }
-                    flat.records.insert(
-                        type_key(&ty),
-                        Record {
-                            ty,
-                            fields: out,
-                            repr,
-                        },
-                    );
+                    flat.records
+                        .insert(type_key(&ty), Record { ty, fields: out });
                 }
                 syn::Item::Enum(e) => {
                     if e.attrs.iter().any(|a| {

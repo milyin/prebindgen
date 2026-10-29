@@ -15,7 +15,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Type;
 mod builders;
-pub use prebindgen_reprc::Record as CReprRecord;
 mod callback;
 pub use callback::{CallbackDecl, CallbackInput};
 mod request_conversion;

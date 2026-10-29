@@ -937,35 +937,34 @@ A per-function expansion replaces the type default, including its bulk setting:
 ```
 
 Callback declarations use the same modifier on their argument/result expansions.
-Nested bulk scopes merge into their enclosing frame. Collections whose expansion
-exposes multiple Kotlin values receive generated `BulkArgs_<types>_<hash>` input
-rows and `BulkValue_<types>_<hash>` result rows. Single-value rows keep their
-existing Kotlin type. Bulk transport and per-row `.callback_return()` are
+Nested bulk scopes merge into their enclosing frame. Collection elements retain
+their existing public Kotlin type. As with ordinary collection transport, each
+element must expose one Kotlin value. Use a declared data class and a direct
+representation override for collection occurrences when a type-wide expansion
+exposes multiple values.
+Individual multi-value argument/result expansions retain their flattened public
+parameters and result build lambda. Bulk transport and per-row `.callback_return()` are
 alternative collection delivery policies; combining them is diagnosed. Callback
 objects themselves cannot be stored in a bulk record.
 
-`prebindgen-reprc` supplies shared generated `Record` schemas, `NativeRecord`
-measurements of existing records, and strict external `LayoutArtifact` JSON.
-`prebindgen-declarations` reexports `Record` as `CReprRecord`. C uses these records
+`prebindgen-reprc` supplies shared generated `Record` schemas and strict external
+`LayoutArtifact` JSON for opaque storage dimensions. C uses these records directly
 for its collection rows, structured errors and result carriers, and shares the
-layout artifact parser. JNI consumes the target-evaluated record measurements.
-C's existing transport is retained;
-`.bulk()` currently selects the JNI transport.
+layout artifact parser. JNI consumes the target-evaluated wire-record measurements.
+C's existing transport is retained; `.bulk()` currently selects the JNI transport.
 
 Every generated native library evaluates `size_of`, `align_of` and `offset_of!`
 for its target. On first use, Kotlin fetches all required layouts with one native
 query and caches them in `BulkLayouts`. Protocol/schema identity, dimensions and
 field extents are checked at initialization. No host offsets are baked into
 Kotlin, so the same Kotlin artifact can accompany different target libraries.
-Compatible flat `#[repr(C)]` data records reuse their actual source layout;
-expanded or incompatible fields receive generated wire records instead.
+The measured layout describes the expanded wire fields, independently of the
+source record's Rust representation. Rust constructs source values through the
+existing conversion plans.
 
-External opaque C layouts continue accepting version 1 JSON. Version 2 additionally
-allows a `fields` object mapping field names to byte offsets. A `NativeRecord`
-can emit assertions checking an external measurement against the compiled type;
-missing fields fail generation and stale offsets fail compilation. Target and
-captured source-feature guards remain enforced by the C adapter. Probe execution
-remains external to prebindgen.
+External opaque C layouts retain their version 1 JSON format for size/alignment.
+Target and captured source-feature guards remain enforced by the C adapter.
+Probe execution remains external to prebindgen.
 
 Frames contain offsets and lengths rather than process pointers to strings or
 nested rows. Rust accesses individual padding-free carriers with checked,

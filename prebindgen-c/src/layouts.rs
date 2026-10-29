@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn malformed_artifacts_are_diagnostics() {
         for json in [
-            r#"{"format_version":3,"target":"x","sources":{},"layouts":{}}"#,
+            r#"{"format_version":2,"target":"x","sources":{},"layouts":{}}"#,
             r#"{"format_version":1,"target":"x","sources":{},"layouts":{"x":{"size":0,"alignment":8}}}"#,
             r#"{"format_version":1,"target":"x","sources":{},"layouts":{"x":{"size":8,"alignment":3}}}"#,
             r#"{"format_version":1,"target":"x","sources":{},"layouts":{"x":{"size":9,"alignment":8}}}"#,

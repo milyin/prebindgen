@@ -2249,11 +2249,7 @@ fn bulk_expansions_share_target_layouts_and_local_overrides_replace_defaults() {
         .package(package!().class(data_class!(Row)).fun(fun!(bulk)).fun(fun!(plain).expand_param("value",expand_param!(Row).variant_self()).expand_return(expand_return!(Row).field_self_into())))
         .build().unwrap();
     syn::parse_file(&generated.rust).unwrap();
-    assert!(generated
-        .rust
-        .split_whitespace()
-        .collect::<String>()
-        .contains("offset_of!(crate::Row,"));
+    assert!(generated.rust.contains("offset_of!(__PbBulk_"));
     assert!(!generated.rust.contains("get_object_array_element"));
     assert!(!generated.rust.contains("new_object_array"));
     assert!(generated.kotlin["test/BulkLayouts.kt"].contains("JNINative.bulkLayouts()"));
@@ -2331,30 +2327,101 @@ fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
 }
 
 #[test]
-fn bulk_native_records_require_target_independent_matching_carriers() {
-    for ty in [
-        "usize", "isize", "bool", "u8", "u16", "u32", "i8", "i16", "i32", "i64", "u64", "f32",
-        "f64", "char",
+fn bulk_runtime_filename_is_reserved_for_all_class_kinds() {
+    for class in [
+        ClassDecl::from(data_class!(Row).name("BulkRuntime")),
+        ClassDecl::from(ptr_class!(Row).name("BulkRuntime")),
+        ClassDecl::from(enum_class!(Kind).name("BulkRuntime")),
+        ClassDecl::from(callback!(impl Fn(i64)).name("BulkRuntime")),
     ] {
-        let generated = JniGen::builder()
-            .flat(flat(&format!(
-                "#[repr(C)] pub struct Row{{pub value:{ty}}} pub fn call(value:Row)->Row{{}}"
-            )))
+        let error = JniGen::builder()
+            .flat(flat(
+                "pub struct Row{pub number:i64} pub enum Kind{A,B} pub fn call(value:Row)->Row{} pub fn install(value:impl Fn(i64)){}",
+            ))
             .set_package_prefix("test")
-            .expand(expand_param!(Row).variant_self().bulk())
-            .expand(expand_return!(Row).field_self_into().bulk())
-            .package(package!().class(data_class!(Row)).fun(fun!(call)))
+            .package(
+                package!().class(class).fun(fun!(install)).fun(
+                    fun!(call)
+                        .expand_param("value", expand_param!(Row).variant_self().bulk())
+                        .expand_return(expand_return!(Row).field_self_into().bulk()),
+                ),
+            )
             .build()
+            .err()
             .unwrap();
-        let native = generated
-            .rust
-            .split_whitespace()
-            .collect::<String>()
-            .contains("=crate::Row;");
-        assert_eq!(
-            native,
-            !matches!(ty, "usize" | "isize" | "bool" | "u8" | "u16" | "u32"),
-            "{ty}"
-        );
+        assert!(error.contains("reserved generated class name"), "{error}");
+    }
+}
+
+#[test]
+fn bulk_collections_require_the_same_single_value_elements_as_ordinary_collections() {
+    for bulk in [false, true] {
+        for input in [false, true] {
+            let mut model=String::from("pub struct Row{pub number:i64,pub text:String} pub fn from(number:i64,text:String)->Row{} pub fn number(value:&Row)->i64{} pub fn text(value:&Row)->&str{}");
+            model.push_str(if input {
+                "pub fn call(value:Vec<Row>){}"
+            } else {
+                "pub fn call()->Vec<Row>{}"
+            });
+            let mut builder = JniGen::builder()
+                .flat(flat(&model))
+                .set_package_prefix("test");
+            if input {
+                let mut expansion = expand_param!(Row).variant(fun!(from));
+                if bulk {
+                    expansion = expansion.bulk();
+                }
+                builder = builder.expand(expansion);
+            } else {
+                let mut expansion = expand_return!(Row).field(fun!(number)).field(fun!(text));
+                if bulk {
+                    expansion = expansion.bulk();
+                }
+                builder = builder.expand(expansion);
+            }
+            let error = builder
+                .package(package!().fun(fun!(call)))
+                .build()
+                .err()
+                .unwrap();
+            assert!(
+                error.contains("declare a data class"),
+                "bulk={bulk}, input={input}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn type_derived_bulk_runtime_names_are_also_reserved() {
+    for (source, class) in [
+        (
+            "pub struct BulkRuntime{pub value:i64}",
+            ClassDecl::from(data_class!(BulkRuntime)),
+        ),
+        (
+            "pub struct BulkRuntime{pub value:i64}",
+            ClassDecl::from(ptr_class!(BulkRuntime)),
+        ),
+        (
+            "pub enum BulkRuntime{A,B}",
+            ClassDecl::from(enum_class!(BulkRuntime)),
+        ),
+    ] {
+        let source = format!("{source} pub fn call(value:i64)->i64{{}}");
+        let error = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(
+                package!().class(class).fun(
+                    fun!(call)
+                        .expand_param("value", expand_param!(i64).variant_self().bulk())
+                        .expand_return(expand_return!(i64).field_self().bulk()),
+                ),
+            )
+            .build()
+            .err()
+            .unwrap();
+        assert!(error.contains("reserved generated class name"), "{error}");
     }
 }

@@ -11,8 +11,6 @@ pub struct BulkRecord {
     pub(crate) name: syn::Ident,
     pub(crate) definition: prebindgen_reprc::Record,
     pub(crate) key: String,
-    native: Option<std::rc::Rc<prebindgen_reprc::NativeRecord>>,
-    members: Vec<syn::Ident>,
     widths: Vec<usize>,
     active: Condition,
 }
@@ -23,25 +21,6 @@ fn field_type(w: &JniWire) -> Result<syn::Type> {
         JniWire::Scalar{primitive:Primitive::I128|Primitive::U128,..}|JniWire::Text{..}|JniWire::Bytes{..}|JniWire::Rows{..}|JniWire::BulkBuffer{..}|JniWire::Callback{..}=>return Err("bulk fields require native scalar/buffer/row encodings; callback objects cannot be packed".into()),
         _=>w.rust_type(),
     })
-}
-// Native source fields must have the same fixed width as their JVM carrier.
-// This permits typed per-field reads only, never casting frame bytes to source records.
-// In particular, usize/isize never qualify, even on a 64-bit generator host.
-fn native_field_compatible(source: &syn::Type, wire: &JniWire) -> bool {
-    let Some(primitive) = Primitive::from_type(source) else {
-        return false;
-    };
-    matches!(
-        primitive,
-        Primitive::I8
-            | Primitive::I16
-            | Primitive::I32
-            | Primitive::I64
-            | Primitive::U64
-            | Primitive::F32
-            | Primitive::F64
-            | Primitive::Char
-    ) && matches!(wire,JniWire::Scalar{primitive:carrier,..} if *carrier==primitive)
 }
 fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
     let fields = crate::group::row_fields(node)
@@ -65,50 +44,13 @@ fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
     } else {
         fields
     };
-    let mut native = match node {
-        WireNode::Branch {
-            meta: JniBranch::Group(JniGroup::Fields(Some(data))),
-            ..
-        } => data.native.clone(),
-        _ => None,
-    };
-    if let Some(source) = &native {
-        let source_fields = source.fields().collect::<Vec<_>>();
-        let wires = crate::group::row_fields(node).collect::<Vec<_>>();
-        if source_fields.len() != wires.len()
-            || !source_fields
-                .iter()
-                .zip(&wires)
-                .all(|((_, ty), wire)| native_field_compatible(ty, &wire.kind))
-        {
-            native = None;
-        }
-    }
-    let mut key = if empty { "empty".into() } else { schema(node)? };
-    let members = if let Some(native) = &native {
-        key = format!(
-            "native:{}:{}:{key}",
-            crate::names::type_identity(native.rust_type()),
-            native
-                .fields()
-                .map(|(field, ty)| format!("{}:{}", field, crate::names::type_identity(ty)))
-                .collect::<Vec<_>>()
-                .join(";")
-        );
-        native.fields().map(|(field, _)| field.clone()).collect()
-    } else {
-        fields.iter().map(|(n, _)| n.clone()).collect()
-    };
-    let label = if let Some(native) = &native {
-        crate::names::type_label(native.rust_type())
-    } else {
-        fields
-            .iter()
-            .take(2)
-            .map(|(_, ty)| crate::names::type_label(ty))
-            .collect::<Vec<_>>()
-            .join("_")
-    };
+    let key = if empty { "empty".into() } else { schema(node)? };
+    let label = fields
+        .iter()
+        .take(2)
+        .map(|(_, ty)| crate::names::type_label(ty))
+        .collect::<Vec<_>>()
+        .join("_");
     let label = label.trim_start_matches("r#");
     let name = format_ident!(
         "__PbBulk_{}_{:016x}",
@@ -120,8 +62,6 @@ fn record(node: &JniNode) -> Result<Rc<BulkRecord>> {
         name,
         definition,
         key,
-        native,
-        members,
         widths,
         active: Condition::default(),
     }))
@@ -146,7 +86,7 @@ fn native_read(
 ) -> Result<TokenStream> {
     let reader = parameter("bulk_reader");
     let row = &record.name;
-    let field = &record.members[i];
+    let field = format_ident!("v{i}");
     let field_offset = quote!(::core::mem::offset_of!(#row,#field));
     let offset = if base.to_string() == "0usize" {
         field_offset
@@ -171,7 +111,7 @@ fn native_store(
 ) -> Result<TokenStream> {
     let writer = parameter("bulk_writer");
     let row = &record.name;
-    let field = &record.members[i];
+    let field = format_ident!("v{i}");
     let field_offset = quote!(::core::mem::offset_of!(#row,#field));
     let offset = if base.to_string() == "0usize" {
         field_offset
@@ -507,7 +447,7 @@ fn pack(
                     sequence_child(node, &w.name).ok_or("missing bulk collection element")?;
                 let child_layout = record(child)?;
                 let child_layout = kt_layout(&child_layout, context);
-                let input = row_input(child, context)?.0;
+                let input = row_input(child, context)?;
                 if input.parameters.len() != 1 {
                     return Err("bulk collection elements must expose one Kotlin value; declare a data class".into());
                 }
@@ -559,7 +499,7 @@ pub(crate) fn input_list(
     element: &JniNode,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
-    let input = row_input(element, context)?.0;
+    let input = row_input(element, context)?;
     if input.parameters.len() != 1 {
         return Err(
             "bulk collection elements must expose one Kotlin value; declare a data class".into(),
@@ -763,7 +703,7 @@ pub(crate) fn output_list(element: &JniNode, context: &KotlinContext<'_>) -> Res
         cleanup_failure: Some(&failure),
         ..*context
     };
-    let mut child = row_output(element, &child_context)?.0;
+    let mut child = row_output(element, &child_context)?;
     if child.delivered.len() != 1 {
         return Err(
             "bulk collection outputs must expose one Kotlin value; declare a data class".into(),
@@ -868,25 +808,16 @@ fn records(node: &JniNode, out: &mut BTreeMap<String, Rc<BulkRecord>>) -> Result
 /// Emit all target measurements in one bootstrap query, before any Kotlin packing.
 pub(crate) fn emit(
     flat: &Bindings,
-    classes: &BTreeMap<String, crate::kotlin::KotlinClass>,
     rust: &mut TokenStream,
     native: &mut String,
     files: &mut BTreeMap<String, String>,
 ) -> Result<()> {
     let mut catalogue = BTreeMap::new();
-    let context = KotlinContext {
-        package: &flat.metadata.package,
-        classes,
-        result: "row",
-        failure: "failure",
-        cleanup_failure: None,
-        output_prefix: "output",
-    };
     let mut nodes = Vec::new();
     for f in flat.functions.values() {
         for p in &f.params {
             if let Some(plan) = &p.ty.slot {
-                nodes.push((plan.input_node(), true));
+                nodes.push(plan.input_node());
             }
         }
         if let Some(plan) = &f.ret.slot {
@@ -894,19 +825,17 @@ pub(crate) fn emit(
             nodes.extend(
                 std::iter::once(&outcomes.success)
                     .chain(outcomes.source_error.iter())
-                    .chain(outcomes.binding_failure.iter())
-                    .map(|node| (node, false)),
+                    .chain(outcomes.binding_failure.iter()),
             );
         }
         if let Some(error) = f.metadata.as_ref().and_then(|m| m.error.as_deref()) {
-            nodes.push((&error.output.output_outcomes().success, false));
+            nodes.push(&error.output.output_outcomes().success);
         }
     }
     for input in &flat.metadata.callbacks {
-        nodes.push((input.input_node(), true));
+        nodes.push(input.input_node());
     }
-    for (node, input) in nodes {
-        emit_rows(node, input, &context, files)?;
+    for node in nodes {
         records(node, &mut catalogue)?;
     }
     if catalogue.is_empty() {
@@ -923,16 +852,9 @@ pub(crate) fn emit(
     let mut kotlin=format!("package {prefix}\n\ninternal object BulkLayouts {{\nprivate val data = JNINative.bulkLayouts()\ninit {{ require(data.size == {} && data[0] == 1L && data[1] == {hash}L && data[2] in 0L..1L && (data[3] == 4L || data[3] == 8L)) {{ \"incompatible bulk layout catalogue\" }} }}\nval byteOrder = if(data[2] == 0L) java.nio.ByteOrder.LITTLE_ENDIAN else java.nio.ByteOrder.BIG_ENDIAN\n",4+catalogue.values().map(|r|r.definition.fields().len()+2).sum::<usize>());
     let mut offset = 4;
     for r in catalogue.values() {
-        let layout = if let Some(native) = &r.native {
-            let name = &r.name;
-            let ty = native.rust_type();
-            rust.extend(quote!(#[allow(non_camel_case_types,dead_code)] type #name=#ty;));
-            native.layout()
-        } else {
-            let definition = r.definition.definition();
-            rust.extend(quote!(#[allow(non_camel_case_types,dead_code)] #definition));
-            r.definition.layout()
-        };
+        let definition = r.definition.definition();
+        rust.extend(quote!(#[allow(non_camel_case_types,dead_code)] #definition));
+        let layout = r.definition.layout();
         measurements.extend(quote!(data.extend((#layout).into_iter().map(|v|v as i64));));
         let widths = r
             .widths
@@ -968,160 +890,21 @@ pub(crate) fn emit(
     Ok(())
 }
 
-fn row_class(
-    direction: &str,
-    types: &[String],
-    names: &[String],
-    context: &KotlinContext<'_>,
-) -> (String, String) {
-    let identity = format!(
-        "{direction}:{}",
-        types
-            .iter()
-            .zip(names)
-            .map(|(ty, name)| format!("{name}:{ty}"))
-            .collect::<Vec<_>>()
-            .join(";")
-    );
-    let label = types
-        .iter()
-        .take(2)
-        .map(|t| {
-            t.rsplit('.')
-                .next()
-                .unwrap_or(t)
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric())
-                .take(18)
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("_");
-    let name = format!(
-        "Bulk{direction}_{label}_{:016x}",
-        prebindgen_reprc::schema_id(&identity)
-    );
-    let fqn = format!("{}.{name}", context.package);
-    let fields = types
-        .iter()
-        .zip(names)
-        .map(|(ty, n)| format!("val `{n}`: {ty}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    (
-        fqn,
-        format!(
-            "package {}\n\npublic data class {name}({fields})\n",
-            context.package
-        ),
-    )
-}
-fn row_input(
-    node: &JniNode,
-    context: &KotlinContext<'_>,
-) -> Result<(KotlinInput, Option<(String, String)>)> {
+fn row_input(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
     let mut input = crate::kotlin::input_kotlin(node, context)?;
     if input.parameters.is_empty() {
         input.parameters.push("bulkUnit: kotlin.Unit".into());
     }
-    if input.parameters.len() <= 1 {
-        return Ok((input, None));
-    }
-    let parameters = input
-        .parameters
-        .iter()
-        .map(|p| p.split_once(": ").ok_or("invalid bulk row parameter"))
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let types = parameters
-        .iter()
-        .map(|(_, ty)| (*ty).to_owned())
-        .collect::<Vec<_>>();
-    let names = (0..types.len())
-        .map(|i| format!("v{i}"))
-        .collect::<Vec<_>>();
-    let class = row_class("Args", &types, &names, context);
-    let name = format!("bulkElement_{:016x}", prebindgen_reprc::schema_id(&class.0));
-    for (i, (old, _)) in parameters.iter().enumerate() {
-        for code in input
-            .arguments
-            .iter_mut()
-            .chain(input.locks.iter_mut())
-            .chain(input.lock_groups.iter_mut())
-            .chain(input.consumed.iter_mut())
-            .chain(input.setup.iter_mut().map(|b| &mut b.expression))
-        {
-            *code = crate::optional::replace(code, old, &format!("{name}.v{i}"));
-        }
-    }
-    input.parameters = vec![format!("{name}: {}", class.0)];
-    Ok((input, Some(class)))
+    Ok(input)
 }
-fn row_output(
-    node: &JniNode,
-    context: &KotlinContext<'_>,
-) -> Result<(KotlinOutput, Option<(String, String)>)> {
+fn row_output(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
     let mut output = crate::kotlin::output_kotlin(node, context)?;
     if output.delivered.is_empty() {
         output.delivered.push("kotlin.Unit".into());
         output.result_types.push("kotlin.Unit".into());
         output.result_names.push(None);
     }
-    if output.delivered.len() <= 1 {
-        return Ok((output, None));
-    }
-    let names = output.checked_names()?;
-    let class = row_class("Value", &output.result_types, &names, context);
-    output.delivered = vec![format!("{}({})", class.0, output.delivered.join(", "))];
-    output.result_types = vec![class.0.clone()];
-    output.result_names = vec![None];
-    Ok((output, Some(class)))
-}
-fn emit_rows(
-    node: &JniNode,
-    input: bool,
-    context: &KotlinContext<'_>,
-    files: &mut BTreeMap<String, String>,
-) -> Result<()> {
-    match node {
-        WireNode::Chain {
-            meta: JniChain::Sequence(JniSequence::Bulk),
-            child,
-            ..
-        } => {
-            let class = if input {
-                row_input(child, context)?.1
-            } else {
-                row_output(child, context)?.1
-            };
-            if let Some((fqn, text)) = class {
-                let path = format!("{}.kt", fqn.replace('.', "/"));
-                if let Some(previous) = files.get(&path) {
-                    if previous != &text {
-                        return Err("bulk row class name collision".into());
-                    }
-                } else {
-                    files.insert(path, text);
-                }
-            }
-            emit_rows(child, input, context, files)?;
-        }
-        WireNode::Chain { child, .. } => emit_rows(child, input, context, files)?,
-        WireNode::Branch { children, .. } => {
-            for child in children {
-                emit_rows(child, input, context, files)?;
-            }
-        }
-        WireNode::Leaf(wires) => {
-            for wire in wires {
-                if let JniWire::Callback { callback } = &wire.kind {
-                    for (input, node) in callback.bulk_nodes() {
-                        emit_rows(node, input, context, files)?;
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
+    Ok(output)
 }
 
 fn schema(node: &JniNode) -> Result<String> {

@@ -4399,14 +4399,17 @@ pub struct __PbBulk_Range_1800d3dd3eceec6d {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
-type __PbBulk_BulkNative_2e52c284cedcf03b = perftest_flat::BulkNative;
+#[repr(C)]
+pub struct __PbBulk_i32_i64_220da08e0b780b69 {
+    pub v0: i32,
+    pub v1: i64,
+    pub v2: i64,
+}
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
 pub struct __PbBulk_Range_31d2b5a17a152d89 {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
-#[allow(non_camel_case_types, dead_code)]
-type __PbBulk_BulkPoint_33b4624b2e00df69 = perftest_flat::BulkPoint;
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
 pub struct __PbBulk_i64_3711b7e845f5d8b9 {
@@ -4420,11 +4423,6 @@ pub struct __PbBulk_i64_Range_37f6d28aa836bfb7 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
-pub struct __PbBulk_Range_4150f1547bfdf599 {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
 pub struct __PbBulk_Range_42eab86179b36709 {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
@@ -4432,6 +4430,18 @@ pub struct __PbBulk_Range_42eab86179b36709 {
 #[repr(C)]
 pub struct __PbBulk_Range_49be3e7148c9ff8f {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_i64_Range_535f9e324da6eaa9 {
+    pub v0: i64,
+    pub v1: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
+pub struct __PbBulk_i64_f64_554fa1d6f8692db9 {
+    pub v0: i64,
+    pub v1: f64,
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
@@ -4493,6 +4503,11 @@ pub struct __PbBulk_Array_98c254983b527011 {
 }
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
+pub struct __PbBulk_Range_a5f90e11a63369ed {
+    pub v0: ::prebindgen_jni_runtime::bulk::Range,
+}
+#[allow(non_camel_case_types, dead_code)]
+#[repr(C)]
 pub struct __PbBulk_i64_a60d3960993b9a77 {
     pub v0: i64,
 }
@@ -4504,11 +4519,6 @@ pub struct __PbBulk_Range_a8ec97310260b4fd {
 #[allow(non_camel_case_types, dead_code)]
 #[repr(C)]
 pub struct __PbBulk_Range_ba88ec47a5d9bc85 {
-    pub v0: ::prebindgen_jni_runtime::bulk::Range,
-}
-#[allow(non_camel_case_types, dead_code)]
-#[repr(C)]
-pub struct __PbBulk_Range_c6e95999fb2d0e31 {
     pub v0: ::prebindgen_jni_runtime::bulk::Range,
 }
 #[allow(non_camel_case_types, dead_code)]
@@ -4589,7 +4599,7 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
 ) -> ::prebindgen_jni_runtime::jni::sys::jlongArray {
     let result = (|| -> Result<_, String> {
         let mut data = vec![
-            1i64, - 945885725041795339i64, if cfg!(target_endian = "big") { 1 } else { 0
+            1i64, 4179160881830042015i64, if cfg!(target_endian = "big") { 1 } else { 0
             }, ::core::mem::size_of:: < usize > () as i64
         ];
         data.extend(
@@ -4631,11 +4641,11 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
         );
         data.extend(
             ([
-                ::core::mem::size_of::<perftest_flat::BulkNative>(),
-                ::core::mem::align_of::<perftest_flat::BulkNative>(),
-                ::core::mem::offset_of!(perftest_flat::BulkNative, prefix),
-                ::core::mem::offset_of!(perftest_flat::BulkNative, number),
-                ::core::mem::offset_of!(perftest_flat::BulkNative, unsigned),
+                ::core::mem::size_of::<__PbBulk_i32_i64_220da08e0b780b69>(),
+                ::core::mem::align_of::<__PbBulk_i32_i64_220da08e0b780b69>(),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_220da08e0b780b69, v0),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_220da08e0b780b69, v1),
+                ::core::mem::offset_of!(__PbBulk_i32_i64_220da08e0b780b69, v2),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -4645,16 +4655,6 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_Range_31d2b5a17a152d89>(),
                 ::core::mem::align_of::<__PbBulk_Range_31d2b5a17a152d89>(),
                 ::core::mem::offset_of!(__PbBulk_Range_31d2b5a17a152d89, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<perftest_flat::BulkPoint>(),
-                ::core::mem::align_of::<perftest_flat::BulkPoint>(),
-                ::core::mem::offset_of!(perftest_flat::BulkPoint, x),
-                ::core::mem::offset_of!(perftest_flat::BulkPoint, y),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -4680,15 +4680,6 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
         );
         data.extend(
             ([
-                ::core::mem::size_of::<__PbBulk_Range_4150f1547bfdf599>(),
-                ::core::mem::align_of::<__PbBulk_Range_4150f1547bfdf599>(),
-                ::core::mem::offset_of!(__PbBulk_Range_4150f1547bfdf599, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
                 ::core::mem::size_of::<__PbBulk_Range_42eab86179b36709>(),
                 ::core::mem::align_of::<__PbBulk_Range_42eab86179b36709>(),
                 ::core::mem::offset_of!(__PbBulk_Range_42eab86179b36709, v0),
@@ -4701,6 +4692,26 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_Range_49be3e7148c9ff8f>(),
                 ::core::mem::align_of::<__PbBulk_Range_49be3e7148c9ff8f>(),
                 ::core::mem::offset_of!(__PbBulk_Range_49be3e7148c9ff8f, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i64_Range_535f9e324da6eaa9>(),
+                ::core::mem::align_of::<__PbBulk_i64_Range_535f9e324da6eaa9>(),
+                ::core::mem::offset_of!(__PbBulk_i64_Range_535f9e324da6eaa9, v0),
+                ::core::mem::offset_of!(__PbBulk_i64_Range_535f9e324da6eaa9, v1),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
+                ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
+                ::core::mem::align_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
+                ::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v0),
+                ::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v1),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -4805,6 +4816,15 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
         );
         data.extend(
             ([
+                ::core::mem::size_of::<__PbBulk_Range_a5f90e11a63369ed>(),
+                ::core::mem::align_of::<__PbBulk_Range_a5f90e11a63369ed>(),
+                ::core::mem::offset_of!(__PbBulk_Range_a5f90e11a63369ed, v0),
+            ])
+                .into_iter()
+                .map(|v| v as i64),
+        );
+        data.extend(
+            ([
                 ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                 ::core::mem::align_of::<__PbBulk_i64_a60d3960993b9a77>(),
                 ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
@@ -4826,15 +4846,6 @@ pub extern "system" fn Java_io_prebindgen_covertest_JNINative_bulkLayouts(
                 ::core::mem::size_of::<__PbBulk_Range_ba88ec47a5d9bc85>(),
                 ::core::mem::align_of::<__PbBulk_Range_ba88ec47a5d9bc85>(),
                 ::core::mem::offset_of!(__PbBulk_Range_ba88ec47a5d9bc85, v0),
-            ])
-                .into_iter()
-                .map(|v| v as i64),
-        );
-        data.extend(
-            ([
-                ::core::mem::size_of::<__PbBulk_Range_c6e95999fb2d0e31>(),
-                ::core::mem::align_of::<__PbBulk_Range_c6e95999fb2d0e31>(),
-                ::core::mem::offset_of!(__PbBulk_Range_c6e95999fb2d0e31, v0),
             ])
                 .into_iter()
                 .map(|v| v as i64),
@@ -6557,7 +6568,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 let (p0_w3_start, p0_w4) = p0_w1_reader
                     .rows(
                         p0_w3,
-                        ::core::mem::size_of::<__PbBulk_BulkNative_2e52c284cedcf03b>(),
+                        ::core::mem::size_of::<__PbBulk_i32_i64_220da08e0b780b69>(),
                     )?;
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
@@ -6567,10 +6578,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkNative_2e52c284cedcf03b,
+                                        __PbBulk_i32_i64_220da08e0b780b69,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkNative_2e52c284cedcf03b, prefix
+                                    __PbBulk_i32_i64_220da08e0b780b69, v0
                                 ),
                         )?;
                     let p0_w8_f1 = p0_w1_reader
@@ -6580,10 +6591,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkNative_2e52c284cedcf03b,
+                                        __PbBulk_i32_i64_220da08e0b780b69,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkNative_2e52c284cedcf03b, number
+                                    __PbBulk_i32_i64_220da08e0b780b69, v1
                                 ),
                         )?;
                     let p0_w8_f2 = p0_w1_reader
@@ -6593,10 +6604,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkNative_2e52c284cedcf03b,
+                                        __PbBulk_i32_i64_220da08e0b780b69,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkNative_2e52c284cedcf03b, unsigned
+                                    __PbBulk_i32_i64_220da08e0b780b69, v2
                                 ),
                         )?;
                     let p0_w7_f0 = if true { Some(p0_w8_f0) } else { None };
@@ -6647,8 +6658,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
-                    ::core::mem::size_of::<__PbBulk_BulkNative_2e52c284cedcf03b>(),
-                    ::core::mem::align_of::<__PbBulk_BulkNative_2e52c284cedcf03b>(),
+                    ::core::mem::size_of::<__PbBulk_i32_i64_220da08e0b780b69>(),
+                    ::core::mem::align_of::<__PbBulk_i32_i64_220da08e0b780b69>(),
                 )?;
             for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
                 let ret_w5_record = ret_w2;
@@ -6660,10 +6671,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkNative_2e52c284cedcf03b,
+                                    __PbBulk_i32_i64_220da08e0b780b69,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkNative_2e52c284cedcf03b, prefix
+                                __PbBulk_i32_i64_220da08e0b780b69, v0
                             ),
                         ret_w5_f0,
                     )?;
@@ -6672,10 +6683,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkNative_2e52c284cedcf03b,
+                                    __PbBulk_i32_i64_220da08e0b780b69,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkNative_2e52c284cedcf03b, number
+                                __PbBulk_i32_i64_220da08e0b780b69, v1
                             ),
                         ret_w5_f1,
                     )?;
@@ -6684,10 +6695,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkNative_2e52c284cedcf03b,
+                                    __PbBulk_i32_i64_220da08e0b780b69,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkNative_2e52c284cedcf03b, unsigned
+                                __PbBulk_i32_i64_220da08e0b780b69, v2
                             ),
                         ret_w5_f2,
                     )?;
@@ -6943,13 +6954,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             };
             let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
             if p0_w1_bytes.len()
-                < ::core::mem::size_of::<__PbBulk_Range_4150f1547bfdf599>()
+                < ::core::mem::size_of::<__PbBulk_Range_a5f90e11a63369ed>()
             {
                 return Err("truncated bulk root record".into());
             }
             let p0_w3 = if true {
                 p0_w1_reader
-                    .range(::core::mem::offset_of!(__PbBulk_Range_4150f1547bfdf599, v0))?
+                    .range(::core::mem::offset_of!(__PbBulk_Range_a5f90e11a63369ed, v0))?
             } else {
                 None
             };
@@ -6958,38 +6969,40 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 let (p0_w3_start, p0_w4) = p0_w1_reader
                     .rows(
                         p0_w3,
-                        ::core::mem::size_of::<__PbBulk_i64_Range_37f6d28aa836bfb7>(),
+                        ::core::mem::size_of::<__PbBulk_i64_Range_535f9e324da6eaa9>(),
                     )?;
                 for p0_w5 in 0..p0_w4 {
-                    let p0_w9 = p0_w1_reader
+                    let p0_w8_f0 = p0_w1_reader
                         .read::<
                             i64,
                         >(
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_37f6d28aa836bfb7,
+                                        __PbBulk_i64_Range_535f9e324da6eaa9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_37f6d28aa836bfb7, v0
+                                    __PbBulk_i64_Range_535f9e324da6eaa9, v0
                                 ),
                         )?;
-                    let p0_w11 = p0_w1_reader
+                    let p0_w8_f1 = p0_w1_reader
                         .range(
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_i64_Range_37f6d28aa836bfb7,
+                                        __PbBulk_i64_Range_535f9e324da6eaa9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_i64_Range_37f6d28aa836bfb7, v1
+                                    __PbBulk_i64_Range_535f9e324da6eaa9, v1
                                 ),
                         )?;
-                    let p0_w8 = if true { Some(p0_w9) } else { None };
-                    let p0_w10 = if true {
+                    let p0_w7_f0 = if true { Some(p0_w8_f0) } else { None };
+                    let p0_w7_f1 = if true {
                         Some(
                             ::core::str::from_utf8(
-                                    p0_w1_reader.buffer_range(p0_w11)?.ok_or("null bulk text")?,
+                                    p0_w1_reader
+                                        .buffer_range(p0_w8_f1)?
+                                        .ok_or("null bulk text")?,
                                 )
                                 .map_err(|_| "invalid UTF-8 in bulk text")?,
                         )
@@ -7002,16 +7015,16 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                                 perftest_flat::BulkExpanded,
                                 String,
                             > {
-                                let p0_w8: i64 = ::core::convert::Into::into(
-                                    p0_w8.expect("active value"),
+                                let p0_w7_f0: i64 = ::core::convert::Into::into(
+                                    p0_w7_f0.expect("active value"),
                                 );
-                                let p0_w10: String = ::core::convert::Into::into(
-                                    p0_w10.expect("active value"),
+                                let p0_w7_f1: String = ::core::convert::Into::into(
+                                    p0_w7_f1.expect("active value"),
                                 );
-                                let p0_w7: perftest_flat::BulkExpanded = perftest_flat::bulk_expanded_from(
-                                    p0_w8,
-                                    p0_w10,
-                                );
+                                let p0_w7: perftest_flat::BulkExpanded = perftest_flat::BulkExpanded {
+                                    number: p0_w7_f0,
+                                    text: p0_w7_f1,
+                                };
                                 let p0_w2 = p0_w7;
                                 Ok(p0_w2)
                             }
@@ -7031,7 +7044,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 __prebindgen_argument_0,
             );
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_Range_c6e95999fb2d0e31>(),
+                ::core::mem::size_of::<__PbBulk_Range_a5f90e11a63369ed>(),
             );
             let ret_w1_source = source_value;
             let ret_w3 = ret_w1_source.len();
@@ -7039,47 +7052,46 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
-                    ::core::mem::size_of::<__PbBulk_i64_Range_0b9b7f90ad764db3>(),
-                    ::core::mem::align_of::<__PbBulk_i64_Range_0b9b7f90ad764db3>(),
+                    ::core::mem::size_of::<__PbBulk_i64_Range_535f9e324da6eaa9>(),
+                    ::core::mem::align_of::<__PbBulk_i64_Range_535f9e324da6eaa9>(),
                 )?;
             for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
-                let ret_w5 = perftest_flat::bulk_expanded_number(&ret_w2);
-                let ret_w6 = ret_w5;
-                let ret_w7 = perftest_flat::bulk_expanded_text(&ret_w2);
-                let ret_w8_source = ret_w7;
-                let ret_w8: Option<::std::borrow::Cow<'_, [u8]>> = Some(
-                    ::std::borrow::Cow::Borrowed(ret_w8_source.as_bytes()),
+                let ret_w5_record = ret_w2;
+                let ret_w5_f0 = ret_w5_record.number;
+                let ret_w5_f1_source = ret_w5_record.text;
+                let ret_w5_f1: Option<::std::borrow::Cow<'_, [u8]>> = Some(
+                    ::std::borrow::Cow::Owned(ret_w5_f1_source.into_bytes()),
                 );
                 ret_w0_writer
                     .write(
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_i64_Range_0b9b7f90ad764db3,
+                                    __PbBulk_i64_Range_535f9e324da6eaa9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_i64_Range_0b9b7f90ad764db3, v0
+                                __PbBulk_i64_Range_535f9e324da6eaa9, v0
                             ),
-                        ret_w6,
+                        ret_w5_f0,
                     )?;
                 ret_w0_writer
                     .buffer(
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_i64_Range_0b9b7f90ad764db3,
+                                    __PbBulk_i64_Range_535f9e324da6eaa9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_i64_Range_0b9b7f90ad764db3, v1
+                                __PbBulk_i64_Range_535f9e324da6eaa9, v1
                             ),
-                        (ret_w8).as_deref(),
+                        (ret_w5_f1).as_deref(),
                     )?;
                 ret_w1_commits.push(move || {});
             }
             let ret_w1 = Some(ret_w1);
             ret_w0_writer
                 .range(
-                    ::core::mem::offset_of!(__PbBulk_Range_c6e95999fb2d0e31, v0),
+                    ::core::mem::offset_of!(__PbBulk_Range_a5f90e11a63369ed, v0),
                     ret_w1,
                 )?;
             let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
@@ -9634,7 +9646,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             };
             let p0_w1_reader = ::prebindgen_jni_runtime::bulk::Reader::new(&p0_w1_bytes);
             if p0_w1_bytes.len()
-                < ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>()
+                < ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>()
             {
                 return Err("truncated bulk root record".into());
             }
@@ -9642,7 +9654,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 p0_w1_reader
                     .read::<
                         i64,
-                    >(::core::mem::offset_of!(__PbBulk_BulkPoint_33b4624b2e00df69, x))?
+                    >(::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v0))?
             } else {
                 0
             };
@@ -9650,7 +9662,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 p0_w1_reader
                     .read::<
                         f64,
-                    >(::core::mem::offset_of!(__PbBulk_BulkPoint_33b4624b2e00df69, y))?
+                    >(::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v1))?
             } else {
                 0.0
             };
@@ -9669,19 +9681,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let __prebindgen_argument_0 = p0_w2;
             let source_value = perftest_flat::bulk_point(__prebindgen_argument_0);
             let mut ret_w0_writer = ::prebindgen_jni_runtime::bulk::Writer::new(
-                ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
             );
             let ret_w1_record = source_value;
             let ret_w1_f0 = ret_w1_record.x;
             let ret_w1_f1 = ret_w1_record.y;
             ret_w0_writer
                 .write(
-                    ::core::mem::offset_of!(__PbBulk_BulkPoint_33b4624b2e00df69, x),
+                    ::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v0),
                     ret_w1_f0,
                 )?;
             ret_w0_writer
                 .write(
-                    ::core::mem::offset_of!(__PbBulk_BulkPoint_33b4624b2e00df69, y),
+                    ::core::mem::offset_of!(__PbBulk_i64_f64_554fa1d6f8692db9, v1),
                     ret_w1_f1,
                 )?;
             let ret_w0 = ::prebindgen_jni_runtime::jni::objects::JObject::from(
@@ -9789,7 +9801,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 let (p0_w3_start, p0_w4) = p0_w1_reader
                     .rows(
                         p0_w3,
-                        ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                        ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                     )?;
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
@@ -9799,10 +9811,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkPoint_33b4624b2e00df69,
+                                        __PbBulk_i64_f64_554fa1d6f8692db9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkPoint_33b4624b2e00df69, x
+                                    __PbBulk_i64_f64_554fa1d6f8692db9, v0
                                 ),
                         )?;
                     let p0_w8_f1 = p0_w1_reader
@@ -9812,10 +9824,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkPoint_33b4624b2e00df69,
+                                        __PbBulk_i64_f64_554fa1d6f8692db9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkPoint_33b4624b2e00df69, y
+                                    __PbBulk_i64_f64_554fa1d6f8692db9, v1
                                 ),
                         )?;
                     let p0_w7_f0 = if true { Some(p0_w8_f0) } else { None };
@@ -9861,8 +9873,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
-                    ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
-                    ::core::mem::align_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                    ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
+                    ::core::mem::align_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                 )?;
             for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
                 let ret_w5_record = ret_w2;
@@ -9873,10 +9885,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkPoint_33b4624b2e00df69,
+                                    __PbBulk_i64_f64_554fa1d6f8692db9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkPoint_33b4624b2e00df69, x
+                                __PbBulk_i64_f64_554fa1d6f8692db9, v0
                             ),
                         ret_w5_f0,
                     )?;
@@ -9885,10 +9897,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkPoint_33b4624b2e00df69,
+                                    __PbBulk_i64_f64_554fa1d6f8692db9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkPoint_33b4624b2e00df69, y
+                                __PbBulk_i64_f64_554fa1d6f8692db9, v1
                             ),
                         ret_w5_f1,
                     )?;
@@ -10008,7 +10020,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 let (p0_w3_start, p0_w4) = p0_w1_reader
                     .rows(
                         p0_w3,
-                        ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                        ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                     )?;
                 if p0_w4 != 2 {
                     return Err("wrong fixed array length".into());
@@ -10021,10 +10033,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkPoint_33b4624b2e00df69,
+                                        __PbBulk_i64_f64_554fa1d6f8692db9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkPoint_33b4624b2e00df69, x
+                                    __PbBulk_i64_f64_554fa1d6f8692db9, v0
                                 ),
                         )?;
                     let p0_w8_f1 = p0_w1_reader
@@ -10034,10 +10046,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkPoint_33b4624b2e00df69,
+                                        __PbBulk_i64_f64_554fa1d6f8692db9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkPoint_33b4624b2e00df69, y
+                                    __PbBulk_i64_f64_554fa1d6f8692db9, v1
                                 ),
                         )?;
                     let p0_w7_f0 = if true { Some(p0_w8_f0) } else { None };
@@ -10086,8 +10098,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
-                    ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
-                    ::core::mem::align_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                    ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
+                    ::core::mem::align_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                 )?;
             for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
                 let ret_w5_record = ret_w2;
@@ -10098,10 +10110,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkPoint_33b4624b2e00df69,
+                                    __PbBulk_i64_f64_554fa1d6f8692db9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkPoint_33b4624b2e00df69, x
+                                __PbBulk_i64_f64_554fa1d6f8692db9, v0
                             ),
                         ret_w5_f0,
                     )?;
@@ -10110,10 +10122,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkPoint_33b4624b2e00df69,
+                                    __PbBulk_i64_f64_554fa1d6f8692db9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkPoint_33b4624b2e00df69, y
+                                __PbBulk_i64_f64_554fa1d6f8692db9, v1
                             ),
                         ret_w5_f1,
                     )?;
@@ -10233,7 +10245,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                 let (p0_w3_start, p0_w4) = p0_w1_reader
                     .rows(
                         p0_w3,
-                        ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                        ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                     )?;
                 for p0_w5 in 0..p0_w4 {
                     let p0_w8_f0 = p0_w1_reader
@@ -10243,10 +10255,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkPoint_33b4624b2e00df69,
+                                        __PbBulk_i64_f64_554fa1d6f8692db9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkPoint_33b4624b2e00df69, x
+                                    __PbBulk_i64_f64_554fa1d6f8692db9, v0
                                 ),
                         )?;
                     let p0_w8_f1 = p0_w1_reader
@@ -10256,10 +10268,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                             (p0_w3_start
                                 + p0_w5
                                     * ::core::mem::size_of::<
-                                        __PbBulk_BulkPoint_33b4624b2e00df69,
+                                        __PbBulk_i64_f64_554fa1d6f8692db9,
                                     >())
                                 + ::core::mem::offset_of!(
-                                    __PbBulk_BulkPoint_33b4624b2e00df69, y
+                                    __PbBulk_i64_f64_554fa1d6f8692db9, v1
                                 ),
                         )?;
                     let p0_w7_f0 = if true { Some(p0_w8_f0) } else { None };
@@ -10305,8 +10317,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
             let ret_w1 = ret_w0_writer
                 .rows(
                     ret_w3,
-                    ::core::mem::size_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
-                    ::core::mem::align_of::<__PbBulk_BulkPoint_33b4624b2e00df69>(),
+                    ::core::mem::size_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
+                    ::core::mem::align_of::<__PbBulk_i64_f64_554fa1d6f8692db9>(),
                 )?;
             for (ret_w4, ret_w2) in ret_w1_source.into_iter().enumerate() {
                 let ret_w5_record = ret_w2;
@@ -10317,10 +10329,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkPoint_33b4624b2e00df69,
+                                    __PbBulk_i64_f64_554fa1d6f8692db9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkPoint_33b4624b2e00df69, x
+                                __PbBulk_i64_f64_554fa1d6f8692db9, v0
                             ),
                         ret_w5_f0,
                     )?;
@@ -10329,10 +10341,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_JNINative_call_1bulk_
                         (ret_w1.offset as usize
                             + ret_w4
                                 * ::core::mem::size_of::<
-                                    __PbBulk_BulkPoint_33b4624b2e00df69,
+                                    __PbBulk_i64_f64_554fa1d6f8692db9,
                                 >())
                             + ::core::mem::offset_of!(
-                                __PbBulk_BulkPoint_33b4624b2e00df69, y
+                                __PbBulk_i64_f64_554fa1d6f8692db9, v1
                             ),
                         ret_w5_f1,
                     )?;

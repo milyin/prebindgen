@@ -1983,8 +1983,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             } else {
                 fields
             };
-            let definition =
-                prebindgen_declarations::CReprRecord::new(result.clone(), fields)?.definition();
+            let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
             tokens.extend(quote!(#definition));
             let comments = describe_groups(
                 &(f.ret.slot.as_ref().unwrap()).output_outcomes().success,
@@ -2060,8 +2059,7 @@ The pointer must be null or a live allocation of the declared type returned by t
                 cparams.join(", ")
             }
         ));
-        let definition =
-            prebindgen_declarations::CReprRecord::new(result.clone(), fields)?.definition();
+        let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
         tokens.extend(quote! {
          #definition
          #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]

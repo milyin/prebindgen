@@ -8,9 +8,7 @@
 /// Binding-generation failure with a diagnostic message.
 pub type Result<T> = std::result::Result<T, String>;
 mod layout;
-pub use layout::{LayoutArtifact, MeasuredLayout, SizeAlign, SourceFeatures};
-mod native;
-pub use native::NativeRecord;
+pub use layout::{LayoutArtifact, SizeAlign, SourceFeatures};
 mod record;
 pub use record::Record;
 

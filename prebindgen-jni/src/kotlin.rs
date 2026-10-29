@@ -90,7 +90,7 @@ pub struct KotlinOutput {
     pub cleanup: String,
 }
 impl KotlinOutput {
-    pub(crate) fn checked_names(&self) -> Result<Vec<String>> {
+    fn checked_names(&self) -> Result<Vec<String>> {
         if self.result_names.len() > self.result_types.len() {
             return Err("more output names than result values".into());
         }

@@ -43,7 +43,7 @@ pub fn bulk_points(values: Vec<BulkPoint>) -> Vec<BulkPoint> {
     values
 }
 #[prebindgen]
-#[repr(C)]
+#[repr(C, align(32))]
 pub struct BulkNative {
     pub prefix: i32,
     pub number: i64,

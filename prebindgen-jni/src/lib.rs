@@ -1118,6 +1118,7 @@ fn validate_class_name(name: &str) -> Result<()> {
         "NativeHandle",
         "JniErrorHandler",
         "HandleValidationFailure",
+        "BulkRuntime",
         "BulkLayouts",
         "BulkLayout",
         "BulkRange",
@@ -1320,7 +1321,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             ))
         })
         .collect::<Result<_>>()?;
-    bulk::emit(flat, &kotlin_classes, &mut rust, &mut native, &mut files)?;
+    bulk::emit(flat, &mut rust, &mut native, &mut files)?;
     callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,

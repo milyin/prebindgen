@@ -21,37 +21,6 @@ impl SizeAlign {
         Ok(())
     }
 }
-/// A target measurement, optionally including named record field offsets.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct MeasuredLayout {
-    /// Size in bytes, including trailing padding.
-    pub size: usize,
-    /// Required alignment.
-    pub alignment: usize,
-    /// Offsets from the start of the record. Opaque storage needs no fields.
-    #[serde(default, deserialize_with = "unique_map")]
-    pub fields: BTreeMap<String, usize>,
-}
-impl MeasuredLayout {
-    /// Allocation dimensions, without record-specific information.
-    pub fn storage(&self) -> SizeAlign {
-        SizeAlign {
-            size: self.size,
-            alignment: self.alignment,
-        }
-    }
-    /// Check dimensions and field offsets; field extents are verified by the consumer.
-    pub fn validate(&self) -> Result<()> {
-        self.storage().validate()?;
-        for (name, offset) in &self.fields {
-            if name.is_empty() || *offset >= self.size {
-                return Err(format!("invalid layout field `{name}`"));
-            }
-        }
-        Ok(())
-    }
-}
 /// Actual captured features of a source crate used by an external probe.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -60,7 +29,7 @@ pub struct SourceFeatures {
     pub features: Vec<String>,
 }
 /// Measurements supplied by an external target probe. This crate never runs a probe.
-/// Version 1 contains opaque dimensions; version 2 additionally supports record fields.
+/// Version 1 contains opaque storage sizes, alignments and source feature metadata.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LayoutArtifact {
@@ -73,14 +42,14 @@ pub struct LayoutArtifact {
     pub sources: BTreeMap<String, SourceFeatures>,
     /// Measurements keyed by stable source/record identity.
     #[serde(deserialize_with = "unique_map")]
-    pub layouts: BTreeMap<String, MeasuredLayout>,
+    pub layouts: BTreeMap<String, SizeAlign>,
 }
 impl LayoutArtifact {
     /// Parse a strict layout document, rejecting incomplete or duplicate measurements.
     pub fn from_json(json: &str) -> Result<Self> {
         let data: Self =
             serde_json::from_str(json).map_err(|e| format!("invalid layout artifact: {e}"))?;
-        if !matches!(data.format_version, 1 | 2) {
+        if data.format_version != 1 {
             return Err(format!(
                 "unsupported layout format version {}",
                 data.format_version
@@ -92,9 +61,6 @@ impl LayoutArtifact {
         for (key, layout) in &data.layouts {
             if key.trim().is_empty() {
                 return Err("layout key must not be empty".into());
-            }
-            if data.format_version == 1 && !layout.fields.is_empty() {
-                return Err("record field offsets require layout format version 2".into());
             }
             layout
                 .validate()
@@ -123,17 +89,14 @@ impl LayoutArtifact {
                 .map_err(|e| format!("cannot read layouts `{}`: {e}", path.display()))?,
         )
     }
-    /// Require one complete measurement. Missing entries never fall back to host data.
-    pub fn layout(&self, key: &str) -> Result<&MeasuredLayout> {
-        self.layouts
-            .get(key)
-            .ok_or_else(|| format!("missing opaque layout `{key}` for target `{}`", self.target))
-    }
-    /// Read only the dimensions required by inline opaque storage.
+    /// Require valid opaque storage dimensions; missing entries never use host data.
     pub fn storage(&self, key: &str) -> Result<SizeAlign> {
-        let layout = self.layout(key)?;
+        let layout = *self
+            .layouts
+            .get(key)
+            .ok_or_else(|| format!("missing opaque layout `{key}` for target `{}`", self.target))?;
         layout.validate()?;
-        Ok(layout.storage())
+        Ok(layout)
     }
 }
 fn unique_map<'de, D, V>(deserializer: D) -> std::result::Result<BTreeMap<String, V>, D::Error>
@@ -173,29 +136,28 @@ mod tests {
             .replace("VERSION", &version.to_string()).replace("FIELDS", fields)
     }
     #[test]
-    fn opaque_v1_and_record_v2_share_dimensions() {
+    fn opaque_storage_requires_a_complete_version_one_measurement() {
         let opaque = LayoutArtifact::from_json(&document(1, "")).unwrap();
-        let record =
-            LayoutArtifact::from_json(&document(2, r#", "fields":{"tag":0,"value":8}"#)).unwrap();
         assert_eq!(
             opaque.storage("Row").unwrap(),
-            record.storage("Row").unwrap()
+            SizeAlign {
+                size: 16,
+                alignment: 8
+            }
         );
-        assert_eq!(record.layout("Row").unwrap().fields["value"], 8);
-        assert!(record.layout("Missing").unwrap_err().contains("Missing"));
+        assert!(opaque.storage("Missing").unwrap_err().contains("Missing"));
+        assert!(LayoutArtifact::from_json(&document(2, "")).is_err());
         assert!(LayoutArtifact::from_json(&document(1, r#", "fields":{"tag":0}"#)).is_err());
     }
     #[test]
     fn malformed_measurements_never_fall_back() {
-        let valid = document(2, r#", "fields":{"tag":0,"value":8}"#);
+        let valid = document(1, "");
         for invalid in [
             valid.replace("\"alignment\":8", "\"alignment\":3"),
             valid.replace("\"size\":16", "\"size\":0"),
-            valid.replace("\"value\":8", "\"value\":16"),
-            valid.replace("\"value\":8", "\"value\":8,\"value\":9"),
             valid.replace("\"unstable\"", "\"unstable\",\"unstable\""),
             valid.replace("\"unstable\"", "\"dep/feature\""),
-            valid.replace("\"format_version\":2", "\"format_version\":3"),
+            valid.replace("\"format_version\":1", "\"format_version\":2"),
             valid.replace("\"target\":", "\"unknown\":1,\"target\":"),
             valid.replace("aarch64-unknown-linux-gnu", ""),
         ] {

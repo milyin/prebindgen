@@ -256,12 +256,12 @@ val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e3299
 val nativeResult = try { run { val nativeArgument0 = try { run {
 val p0_w3_bulkList = p0_w3_elements
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r87bd2f61e8a69677.offsets[0]) } else {
-val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b)
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r87bd2f61e8a69677.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
 p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
-p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.size) + io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.offsets[0], p0_w8.`prefix`)
-p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.size) + io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.offsets[1], p0_w8.`number`)
-p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.size) + io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.offsets[2], p0_w8.`unsigned`.toLong())
+p0_w1_writer.int((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.size) + io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.offsets[0], p0_w8.`prefix`)
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.size) + io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.offsets[1], p0_w8.`number`)
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.size) + io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.offsets[2], p0_w8.`unsigned`.toLong())
 }
 }
 
@@ -273,13 +273,13 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.bulk.BulkNative>? = null
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r87bd2f61e8a69677.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r87bd2f61e8a69677.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
-val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.size
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.size
 
 
-outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkNative((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.offsets[0])) as Int, (requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.offsets[1])) as Long, ((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r2e52c284cedcf03b.offsets[2])) as Long).toULong()))
+outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkNative((requireNotNull(outputbulkReader).int((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.offsets[0])) as Int, (requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.offsets[1])) as Long, ((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r220da08e0b780b69.offsets[2])) as Long).toULong()))
 }
 
 requireNotNull(outputbulkList)
@@ -305,19 +305,19 @@ build((requireNotNull(outputbulkReader).long((0) + io.prebindgen.covertest.BulkL
     } finally { returnCapture.release() }
 }
 
-public fun `bulkExpandedRows`(p0_w3: kotlin.collections.List<io.prebindgen.covertest.BulkArgs_Long_String_48cff4776a2f7bd0>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.BulkValue_Long_String_71d293c742f10421>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.BulkValue_Long_String_71d293c742f10421> = run {
+public fun `bulkExpandedRows`(p0_w3: kotlin.collections.List<io.prebindgen.covertest.bulk.BulkExpanded>, onError: io.prebindgen.covertest.JniErrorHandler<kotlin.collections.List<io.prebindgen.covertest.bulk.BulkExpanded>> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): kotlin.collections.List<io.prebindgen.covertest.bulk.BulkExpanded> = run {
     val p0_w3_elements = if (true) p0_w3?.toList() else null
-val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r4150f1547bfdf599.size)
+val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.ra5f90e11a63369ed.size)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { run {
 val p0_w3_bulkList = p0_w3_elements
-if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.r4150f1547bfdf599.offsets[0]) } else {
-val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7)
-p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.r4150f1547bfdf599.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
-p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, bulkElement_5df6e3542f983dbe ->
-p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.size) + io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.offsets[0], bulkElement_5df6e3542f983dbe.v0)
-p0_w1_writer.text((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.size) + io.prebindgen.covertest.BulkLayouts.r37f6d28aa836bfb7.offsets[1], bulkElement_5df6e3542f983dbe.v1)
+if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.ra5f90e11a63369ed.offsets[0]) } else {
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9)
+p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.ra5f90e11a63369ed.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
+p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.size) + io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.offsets[0], p0_w8.`number`)
+p0_w1_writer.text((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.size) + io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.offsets[1], p0_w8.`text`)
 }
 }
 
@@ -327,15 +327,15 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 
     var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
-var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.BulkValue_Long_String_71d293c742f10421>? = null
+var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.bulk.BulkExpanded>? = null
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.rc6e95999fb2d0e31.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r0b9b7f90ad764db3.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra5f90e11a63369ed.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
-val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r0b9b7f90ad764db3.size
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.size
 
 
-outputbulkList!!.add(io.prebindgen.covertest.BulkValue_Long_String_71d293c742f10421((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r0b9b7f90ad764db3.offsets[0])) as Long, (requireNotNull(outputbulkReader).text((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r0b9b7f90ad764db3.offsets[1])) as String))
+outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkExpanded((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.offsets[0])) as Long, (requireNotNull(outputbulkReader).text((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r535f9e324da6eaa9.offsets[1])) as String))
 }
 
 requireNotNull(outputbulkList)
@@ -928,12 +928,12 @@ try {         var outputbulkItem_0: io.prebindgen.covertest.bulk.BulkHandle? = n
 }
 
 public fun `bulkPoint`(p0_w3: io.prebindgen.covertest.bulk.BulkPoint, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.bulk.BulkPoint> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): io.prebindgen.covertest.bulk.BulkPoint = run {
-    val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size)
+    val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size)
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { run {
-p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0], p0_w3.`x`)
-p0_w1_writer.double((0) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1], p0_w3.`y`)
+p0_w1_writer.long((0) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0], p0_w3.`x`)
+p0_w1_writer.double((0) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1], p0_w3.`y`)
 
 p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer.length } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_bulk_point_e770ca9da9c12852(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
@@ -942,7 +942,7 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
     var outputbulkReader: io.prebindgen.covertest.BulkReader? = null
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
 
-io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((0) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1])) as Double)
+io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((0) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((0) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1])) as Double)
     } finally { returnCapture.release() }
 }
 
@@ -954,11 +954,11 @@ val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e3299
 val nativeResult = try { run { val nativeArgument0 = try { run {
 val p0_w3_bulkList = p0_w3_elements
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0]) } else {
-val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69)
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
 p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
-p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0], p0_w8.`x`)
-p0_w1_writer.double((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1], p0_w8.`y`)
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0], p0_w8.`x`)
+p0_w1_writer.double((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1], p0_w8.`y`)
 }
 }
 
@@ -970,13 +970,13 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.bulk.BulkPoint>? = null
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
-val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size
 
 
-outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1])) as Double))
+outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1])) as Double))
 }
 
 requireNotNull(outputbulkList)
@@ -991,11 +991,11 @@ val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e3299
 val nativeResult = try { run { val nativeArgument0 = try { run {
 val p0_w3_bulkList = p0_w3_elements
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0]) } else {
-val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69)
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
 p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
-p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0], p0_w8.`x`)
-p0_w1_writer.double((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1], p0_w8.`y`)
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0], p0_w8.`x`)
+p0_w1_writer.double((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1], p0_w8.`y`)
 }
 }
 
@@ -1007,13 +1007,13 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.bulk.BulkPoint>? = null
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
-val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size
 
 
-outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1])) as Double))
+outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1])) as Double))
 }
 
 requireNotNull(outputbulkList)
@@ -1028,11 +1028,11 @@ val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e3299
 val nativeResult = try { run { val nativeArgument0 = try { run {
 val p0_w3_bulkList = p0_w3_elements
 if (p0_w3_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0]) } else {
-val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69)
+val p0_w3_bulkStart = p0_w1_writer.rows(p0_w3_bulkList.size, io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9)
 p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0], p0_w3_bulkStart, p0_w3_bulkList.size)
 p0_w3_bulkList.forEachIndexed { p0_w3_bulkIndex, p0_w8 ->
-p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0], p0_w8.`x`)
-p0_w1_writer.double((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1], p0_w8.`y`)
+p0_w1_writer.long((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0], p0_w8.`x`)
+p0_w1_writer.double((p0_w3_bulkStart + p0_w3_bulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1], p0_w8.`y`)
 }
 }
 
@@ -1044,13 +1044,13 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 var outputbulkRange: io.prebindgen.covertest.BulkRange? = null
 var outputbulkList: kotlin.collections.MutableList<io.prebindgen.covertest.bulk.BulkPoint>? = null
 outputbulkReader = io.prebindgen.covertest.BulkReader(nativeResult as ByteArray)
-outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size)
+outputbulkRange = requireNotNull(outputbulkReader).rows(((requireNotNull(outputbulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.ra8ec97310260b4fd.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size)
 outputbulkList = kotlin.collections.ArrayList(outputbulkRange!!.length)
 for (outputbulkIndex in 0 until outputbulkRange!!.length) {
-val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.size
+val outputbulkBase = outputbulkRange!!.offset + outputbulkIndex * io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.size
 
 
-outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r33b4624b2e00df69.offsets[1])) as Double))
+outputbulkList!!.add(io.prebindgen.covertest.bulk.BulkPoint((requireNotNull(outputbulkReader).long((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[0])) as Long, (requireNotNull(outputbulkReader).double((outputbulkBase) + io.prebindgen.covertest.BulkLayouts.r554fa1d6f8692db9.offsets[1])) as Double))
 }
 
 requireNotNull(outputbulkList)

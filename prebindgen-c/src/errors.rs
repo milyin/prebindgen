@@ -257,8 +257,7 @@ pub(crate) fn emit(
             comments = comments.replace(&format!("output->v{i}"), &format!("error->{field}"));
         }
         header.push_str(&comments);
-        let definition =
-            prebindgen_declarations::CReprRecord::new(rust_name.clone(), fields)?.definition();
+        let definition = prebindgen_reprc::Record::new(rust_name.clone(), fields)?.definition();
         tokens.extend(quote! {
             #definition
             #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
