@@ -27,7 +27,8 @@ def digest(path):
 
 
 def source_revisions(metadata, project):
-    repositories = {}
+    fixture_repo = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], cwd=FIXTURE, text=True).strip())
+    repositories = {fixture_repo: []}
     for package in metadata["packages"]:
         if package["source"] is not None:
             continue
@@ -41,7 +42,7 @@ def source_revisions(metadata, project):
         dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=repo, text=True)
         if dirty:
             raise RuntimeError(f"path dependency repository must be committed and clean: {repo}\n{dirty}")
-        result.append({"repository": str(repo), "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(), "packages": sorted(packages)})
+        result.append({"repository": str(repo), "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(), "packages": sorted(packages), "contains_fixture": repo == fixture_repo})
     return result
 
 
@@ -102,6 +103,9 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         subprocess.run(["cargo", "build", "--offline", "--locked", "--release", "--message-format=json"], cwd=project, env=env, stdout=log, check=True)
     messages = [json.loads(line) for line in (output / "cargo.jsonl").read_text().splitlines()]
     out = next(Path(m["out_dir"]) for m in messages if m.get("reason") == "build-script-executed" and m["package_id"] == package)
+    cdylib = next(m for m in messages if m.get("reason") == "compiler-artifact" and m["package_id"] == package and "cdylib" in m["target"]["kind"])
+    if cdylib["profile"]["opt_level"] != "3" or cdylib["profile"]["debug_assertions"]:
+        raise RuntimeError(f"unexpected native benchmark profile: {cdylib['profile']}")
     jar = output / "bench.jar"
     subprocess.run([kotlinc, *map(str, sorted((out / "kotlin").rglob("*.kt"))), str(FIXTURE / "Bench.kt"), "-nowarn", "-include-runtime", "-d", str(jar)], check=True)
     libraries = [output / "target/release" / name for name in ("libbulk_bench.so", "libbulk_bench.dylib", "bulk_bench.dll")]
@@ -137,7 +141,7 @@ mod bulk { include!(concat!(env!("OUT_DIR"),"/bulk.rs")); }
         "cargo_config_sha256": cargo_configs(project),
         "cargo": command_version(["cargo", "-V"], cwd=project),
         "dependency_lock_sha256": digest(project / "Cargo.lock"),
-        "cargo_profile": next(m["profile"] for m in messages if m.get("reason") == "compiler-artifact" and m["package_id"] == package),
+        "cargo_profile": cdylib["profile"],
         "kotlin": command_version([kotlinc, "-version"]),
         "fixture_sha256": {name: digest(FIXTURE / name) for name in ("flat.rs", "bindings.rs", "Bench.kt", "run.py", "Cargo.lock.snapshot")},
         "jar": str(jar), "library": str(library),

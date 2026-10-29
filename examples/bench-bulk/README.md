@@ -6,7 +6,7 @@ relevant expansion. There are no generator/runtime changes in this benchmark.
 
 ```sh
 KOTLINC=/path/to/kotlinc python3 examples/bench-bulk/run.py \
-  --output /tmp/bulk-bench --record-generated
+  --output /tmp/bulk-bench --check-generated
 ```
 
 Use an empty output directory. Add `--fetch` if the pinned dependencies are not
