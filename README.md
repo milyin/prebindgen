@@ -989,6 +989,9 @@ ownership bookkeeping. Buffer growth, UTF-8 encoding and ordinary source value
 allocation can still allocate; this is not a zero-copy source-vector conversion.
 For a small scalar, ordinary JNI parameters can be cheaper than a bulk frame.
 
+Bulk and ordinary transport benchmarks, including small-call and byte-payload
+counterexamples, are in [the JNI comparison fixture](examples/bench-bulk/README.md).
+
 ### Callback delivery of sequence returns
 
 Select `.callback_return()` on a function to keep its ordinary return and add
