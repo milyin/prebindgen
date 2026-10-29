@@ -27,58 +27,67 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
 >(
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
-) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
     #[allow(unused_mut)]
-    let mut domain_output = None;
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
     match ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::storage_new();
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
             });
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ((&mut *ret_w0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::Storage,
-                                >) as i64,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ((&mut *ret_w0)
+                        as *mut ::prebindgen_jni_runtime::Allocation<
+                            perftest_flat::Storage,
+                        >) as i64,
+                })
+                    .j
+            };
             let _: () = {
                 let _ = Box::into_raw(ret_w0);
+                direct_output = __pb_direct_result;
+                success_transferred = true;
             };
-            Ok(result.into_raw())
+            Ok(__pb_direct_result)
         }
     }) {
         Ok(result) => result,
         Err(e) => {
-            if let Some(result) = domain_output {
-                result
-            } else {
-                match ::prebindgen_jni_runtime::binding_packet(
-                    &mut jni_environment,
-                    &e,
-                ) {
-                    Ok(result) => result.into_raw(),
-                    Err(message) => {
-                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                        std::ptr::null_mut()
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
                     }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
                 }
             }
+            direct_output
         }
     }
 }
@@ -98,9 +107,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     mut jni_environment: ::prebindgen_jni_runtime::jni::JNIEnv<'local>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'local>,
     p0_w1: i64,
-) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
     #[allow(unused_mut)]
-    let mut domain_output = None;
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1_pointer = if true {
@@ -135,106 +146,71 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             } else {
                 (0i32, (0, 0, 0.0, 0), None)
             };
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 6usize)?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w0)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ret_w0_value0,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w0_value1)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 3i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Double",
-                    "valueOf",
-                    "(D)Ljava/lang/Double;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Double(
-                            ret_w0_value2,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 4i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Boolean",
-                    "valueOf",
-                    "(Z)Ljava/lang/Boolean;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Bool(
-                            ret_w0_value3,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 5i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            static __PB_RETURN_METHOD_0: ::prebindgen_jni_runtime::ReturnCallback = ::prebindgen_jni_runtime::ReturnCallback::new();
+            unsafe {
+                __PB_RETURN_METHOD_0
+                    .invoke(
+                        &mut jni_environment,
+                        &__pb_return,
+                        "success0",
+                        "(IJIDZ)V",
+                        &[
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                i: ret_w0,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                j: ret_w0_value0,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                i: ret_w0_value1,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                d: ret_w0_value2,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                z: ret_w0_value3,
+                            },
+                        ],
+                    )
+            }?;
             let _: () = {
                 if let Some(ret_w0_action) = ret_w0_commit {
                     ret_w0_action();
                 }
+                success_transferred = true;
             };
-            Ok(result.into_raw())
+            Ok(())
         }
     }) {
         Ok(result) => result,
         Err(e) => {
-            if let Some(result) = domain_output {
-                result
-            } else {
-                match ::prebindgen_jni_runtime::binding_packet(
-                    &mut jni_environment,
-                    &e,
-                ) {
-                    Ok(result) => result.into_raw(),
-                    Err(message) => {
-                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                        std::ptr::null_mut()
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
                     }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
                 }
             }
         }
@@ -259,9 +235,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
     p1_w1: i32,
     p2_w1: f64,
     p3_w1: u8,
-) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) {
     #[allow(unused_mut)]
-    let mut domain_output = None;
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
@@ -292,77 +270,65 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
             let ret_w4 = *ret_w4;
             let ret_w5: &bool = &ret_w1.flag;
             let ret_w5 = u8::from(*ret_w5);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 5usize)?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Long(ret_w2)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Integer",
-                    "valueOf",
-                    "(I)Ljava/lang/Integer;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Int(ret_w3)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 2i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Double",
-                    "valueOf",
-                    "(D)Ljava/lang/Double;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Double(ret_w4)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 3i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Boolean",
-                    "valueOf",
-                    "(Z)Ljava/lang/Boolean;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Bool(ret_w5)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 4i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let _: () = {};
-            Ok(result.into_raw())
+            static __PB_RETURN_METHOD_0: ::prebindgen_jni_runtime::ReturnCallback = ::prebindgen_jni_runtime::ReturnCallback::new();
+            unsafe {
+                __PB_RETURN_METHOD_0
+                    .invoke(
+                        &mut jni_environment,
+                        &__pb_return,
+                        "success0",
+                        "(JIDZ)V",
+                        &[
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                j: ret_w2,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                i: ret_w3,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                d: ret_w4,
+                            },
+                            ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                z: ret_w5,
+                            },
+                        ],
+                    )
+            }?;
+            let _: () = {
+                success_transferred = true;
+            };
+            Ok(())
         }
     }) {
         Ok(result) => result,
         Err(e) => {
-            if let Some(result) = domain_output {
-                result
-            } else {
-                match ::prebindgen_jni_runtime::binding_packet(
-                    &mut jni_environment,
-                    &e,
-                ) {
-                    Ok(result) => result.into_raw(),
-                    Err(message) => {
-                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                        std::ptr::null_mut()
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
                     }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
                 }
             }
         }
@@ -387,9 +353,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     p0_w4: i32,
     p0_w6: f64,
     p0_w8: u8,
-) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> i64 {
     #[allow(unused_mut)]
-    let mut domain_output = None;
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: i64 = Default::default();
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1 = if true { Some(p0_w2) } else { None };
@@ -413,49 +382,55 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
                 value: source_value,
             });
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Long",
-                    "valueOf",
-                    "(J)Ljava/lang/Long;",
-                    &[
-                        ::prebindgen_jni_runtime::jni::objects::JValue::Long(
-                            ((&mut *ret_w0)
-                                as *mut ::prebindgen_jni_runtime::Allocation<
-                                    perftest_flat::Storage,
-                                >) as i64,
-                        ),
-                    ],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    j: ((&mut *ret_w0)
+                        as *mut ::prebindgen_jni_runtime::Allocation<
+                            perftest_flat::Storage,
+                        >) as i64,
+                })
+                    .j
+            };
             let _: () = {
                 let _ = Box::into_raw(ret_w0);
+                direct_output = __pb_direct_result;
+                success_transferred = true;
             };
-            Ok(result.into_raw())
+            Ok(__pb_direct_result)
         }
     }) {
         Ok(result) => result,
         Err(e) => {
-            if let Some(result) = domain_output {
-                result
-            } else {
-                match ::prebindgen_jni_runtime::binding_packet(
-                    &mut jni_environment,
-                    &e,
-                ) {
-                    Ok(result) => result.into_raw(),
-                    Err(message) => {
-                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                        std::ptr::null_mut()
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
                     }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
                 }
             }
+            direct_output
         }
     }
 }
@@ -480,9 +455,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     p1_w6: i32,
     p1_w8: f64,
     p1_w10: u8,
-) -> ::prebindgen_jni_runtime::jni::sys::jobjectArray {
+    __pb_return: ::prebindgen_jni_runtime::jni::objects::JObject<'local>,
+) -> u8 {
     #[allow(unused_mut)]
-    let mut domain_output = None;
+    let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
+    let mut success_transferred = false;
+    let mut direct_output: u8 = Default::default();
     match ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1_pointer = if true {
@@ -534,40 +512,51 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
                 __prebindgen_argument_1,
             );
             let ret_w0 = u8::from(source_value);
-            let result = ::prebindgen_jni_runtime::array(&mut jni_environment, 2usize)?;
-            let object = jni_environment
-                .call_static_method(
-                    "java/lang/Boolean",
-                    "valueOf",
-                    "(Z)Ljava/lang/Boolean;",
-                    &[::prebindgen_jni_runtime::jni::objects::JValue::Bool(ret_w0)],
-                )
-                .and_then(|v| v.l())
-                .map_err(|e| e.to_string())?;
-            jni_environment
-                .set_object_array_element(&result, 1i32, &object)
-                .map_err(|e| e.to_string())?;
-            jni_environment.delete_local_ref(object).map_err(|e| e.to_string())?;
-            let _: () = {};
-            Ok(result.into_raw())
+            let __pb_direct_result = unsafe {
+                (::prebindgen_jni_runtime::jni::sys::jvalue {
+                    z: ret_w0,
+                })
+                    .z
+            };
+            let _: () = {
+                direct_output = __pb_direct_result;
+                success_transferred = true;
+            };
+            Ok(__pb_direct_result)
         }
     }) {
         Ok(result) => result,
         Err(e) => {
-            if let Some(result) = domain_output {
-                result
-            } else {
-                match ::prebindgen_jni_runtime::binding_packet(
-                    &mut jni_environment,
-                    &e,
-                ) {
-                    Ok(result) => result.into_raw(),
-                    Err(message) => {
-                        ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
-                        std::ptr::null_mut()
+            if domain_output.is_none()
+                && matches!(jni_environment.exception_check(), Ok(false))
+            {
+                let reported = ::prebindgen_runtime::boundary(|| {
+                    let message = ::prebindgen_jni_runtime::text_object(
+                        &mut jni_environment,
+                        &e,
+                    )?;
+                    unsafe {
+                        ::prebindgen_jni_runtime::invoke_error_callback(
+                            &mut jni_environment,
+                            &__pb_return,
+                            "bindingError",
+                            "(Ljava/lang/String;Z)V",
+                            &[
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    l: message.as_raw(),
+                                },
+                                ::prebindgen_jni_runtime::jni::sys::jvalue {
+                                    z: u8::from(success_transferred),
+                                },
+                            ],
+                        )
                     }
+                });
+                if let Err(message) = reported {
+                    ::prebindgen_jni_runtime::fail(&mut jni_environment, &message);
                 }
             }
+            direct_output
         }
     }
 }

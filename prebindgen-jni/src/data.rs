@@ -617,8 +617,9 @@ impl Codec for DataCodec<'_> {
             .ok_or("missing declared JNI error output")?;
         let env = prebindgen_conversions::template_parameter("environment");
         let reported = prebindgen_conversions::template_parameter("domain_output");
+        let sink = prebindgen_conversions::template_parameter("return_sink");
         let value = message.unwrap_or(value);
-        Ok(quote!({#helper(&mut #env, #value, &mut #reported)?; String::new()}))
+        Ok(quote!({#helper(&mut #env, #value, &mut #reported, #sink)?; String::new()}))
     }
     fn niche(&self, wire: &JniWire) -> Option<crate::optional::JniNiche> {
         wire.available_niche()

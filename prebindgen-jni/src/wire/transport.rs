@@ -80,6 +80,16 @@ impl JniWire {
     pub fn read_array_element(&self, array: &TokenStream, index: usize) -> TokenStream {
         self.jvm_type().read_array_element(array, index)
     }
+    pub(crate) fn native_return_type(&self) -> syn::Type {
+        if self.is_reference() {
+            syn::parse_quote!(::prebindgen_jni_runtime::jni::sys::jobject)
+        } else {
+            self.rust_type()
+        }
+    }
+    pub(crate) fn value_member(&self) -> syn::Ident {
+        format_ident!("{}", self.jvm_type().value_member())
+    }
     pub(crate) fn callback_return_type(&self) -> TokenStream {
         self.jvm_type().return_type()
     }
@@ -140,6 +150,7 @@ impl JniWire {
     ///     environment: syn::parse_quote!(env),
     ///     acknowledgement: syn::parse_quote!(accepted),
     ///     domain_output: syn::parse_quote!(domain_output),
+    ///     return_sink: None,
     ///     is_domain_error: false,
     ///     output_committed: quote!(),
     /// };

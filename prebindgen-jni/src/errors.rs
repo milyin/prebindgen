@@ -175,35 +175,51 @@ pub(crate) fn emit(errors: &BTreeMap<String, &ErrorBinding>) -> Result<TokenStre
             environment: format_ident!("env"),
             acknowledgement: format_ident!("unused_ack"),
             domain_output: format_ident!("reported"),
+            return_sink: None,
             is_domain_error: true,
             output_committed: quote!(*reported = Some(result.as_raw());),
         };
-        let commit = error.output.code_fragment_slot(
-            OutputFragment::Commit {
-                context: &context,
-                source: &source,
-            },
-            &syn::parse_quote!(()),
-        )?;
-        let body = error.output.code_fragment_slot(
-            OutputFragment::Deliver {
-                context: &context,
-                source: &source,
-                next: quote!({let _: () = #commit; Ok(())}),
-            },
-            &syn::parse_quote!(::prebindgen_runtime::Result<()>),
-        )?;
-        let body = error.output.code_fragment_slot(
-            OutputFragment::Prepare {
-                context: &context,
-                source: &source,
-                next: body,
-            },
-            &syn::parse_quote!(::prebindgen_runtime::Result<()>),
-        )?;
+        let body_for = |context: &JniContext| -> Result<TokenStream> {
+            let commit = error.output.code_fragment_slot(
+                OutputFragment::Commit {
+                    context,
+                    source: &source,
+                },
+                &syn::parse_quote!(()),
+            )?;
+            let body = error.output.code_fragment_slot(
+                OutputFragment::Deliver {
+                    context,
+                    source: &source,
+                    next: quote!({let _: () = #commit; Ok(())}),
+                },
+                &syn::parse_quote!(::prebindgen_runtime::Result<()>),
+            )?;
+            error.output.code_fragment_slot(
+                OutputFragment::Prepare {
+                    context,
+                    source: &source,
+                    next: body,
+                },
+                &syn::parse_quote!(::prebindgen_runtime::Result<()>),
+            )
+        };
+        let body = body_for(&context)?;
+        let callback_context = JniContext {
+            return_sink: Some(format_ident!("__pb_return")),
+            output_committed: quote!(*reported = Some(std::ptr::null_mut());),
+            ..context
+        };
+        let callback_body = if error.output.native_return().is_some() {
+            body_for(&callback_context)?
+        } else {
+            quote!(Err("custom error output requires packet delivery".into()))
+        };
         code.extend(quote! {
             #[allow(non_snake_case, clippy::needless_borrow, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
-            fn #helper(mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>, source: #ty, reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>) -> ::prebindgen_runtime::Result<()> { #body }
+            fn #helper(mut env: &mut ::prebindgen_jni_runtime::jni::JNIEnv<'_>, source: #ty, reported: &mut Option<::prebindgen_jni_runtime::jni::sys::jobjectArray>, return_sink: Option<&::prebindgen_jni_runtime::jni::objects::JObject<'_>>) -> ::prebindgen_runtime::Result<()> {
+                if let Some(__pb_return) = return_sink { #callback_body } else { #body }
+            }
         });
     }
     Ok(code)

@@ -11,6 +11,9 @@ use jni::{
 };
 use prebindgen_runtime::Result;
 
+mod return_callback;
+pub use return_callback::{invoke_error_callback, ReturnCallback};
+
 mod sequence;
 pub use sequence::*;
 mod callback;

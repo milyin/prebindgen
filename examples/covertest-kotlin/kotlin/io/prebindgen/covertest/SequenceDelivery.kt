@@ -121,7 +121,7 @@ fun checkSequenceDelivery() {
     // commits and the original exception must survive JNI's binding-error fallback.
     val native = Class.forName("io.prebindgen.covertest.JNINative")
     val nativeParts = native.declaredMethods.single { method ->
-        val p = method.parameterTypes
+        val p = method.parameterTypes.dropLast(1)
         p.size == 3 && p[0] == Int::class.javaPrimitiveType && p[1].simpleName.startsWith("SequenceSink") && p[2] == BooleanArray::class.java
     }.also { it.isAccessible = true }
     val sinkType = nativeParts.parameterTypes[1]
@@ -133,15 +133,15 @@ fun checkSequenceDelivery() {
     }
     val beforeCollector = ownedResourceDrops()
     val outputAccepted = BooleanArray(1)
-    try { nativeParts.invoke(null, 0, sink, outputAccepted); error("collector did not throw") }
+    try { nativeParts.invokePacket( 0, sink, outputAccepted); error("collector did not throw") }
     catch (caught: java.lang.reflect.InvocationTargetException) { check(caught.cause === original) }
     check(!outputAccepted[0] && collectorCalls == 2 && ownedResourceDrops() == beforeCollector + 3uL)
     collectorCalls = 0
-    val invalidAck = nativeParts.invoke(null, 0, sink, BooleanArray(0)) as Array<*>
+    val invalidAck = nativeParts.invokePacket(0, sink, BooleanArray(0))
     check(invalidAck[0] == "invalid sequence output acknowledgement" && collectorCalls == 0)
     check(ownedResourceDrops() == beforeCollector + 3uL)
     val nullSinkAck = BooleanArray(1)
-    val nullSink = nativeParts.invoke(null, 0, null, nullSinkAck) as Array<*>
+    val nullSink = nativeParts.invokePacket(0, null, nullSinkAck)
     check(nullSink[0] == "null sequence callback" && !nullSinkAck[0])
     check(ownedResourceDrops() == beforeCollector + 3uL)
     check(collectionI64Fold(List(20000) { it.toLong() }, 0L) { a, v -> a + v } == 199990000L)

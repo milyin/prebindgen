@@ -214,6 +214,21 @@ impl Conversion for JniOutput {
         mode: Self::SlotFragment<'_>,
         expected: &syn::Type,
     ) -> Result<TokenStream> {
+        let context = match &mode {
+            prebindgen_conversions::OutputFragment::Prepare { context, .. }
+            | prebindgen_conversions::OutputFragment::Deliver { context, .. }
+            | prebindgen_conversions::OutputFragment::Commit { context, .. }
+            | prebindgen_conversions::OutputFragment::Result { context, .. } => *context,
+        };
+        if let Some(sink) = context
+            .return_sink
+            .as_ref()
+            .filter(|_| self.native_return().is_some())
+        {
+            let mut plan = self.rust.clone();
+            plan.delivery = returns::delivery(&plan, sink, context.is_domain_error)?;
+            return plan.code_fragment_slot(mode, expected);
+        }
         self.rust.code_fragment_slot(mode, expected)
     }
 }
@@ -530,6 +545,9 @@ pub(crate) fn output_components(
 }
 
 impl JniOutput {
+    pub(crate) fn native_return(&self) -> Option<returns::NativeReturn> {
+        returns::select(&self.rust)
+    }
     /// Fields stored in the successful JNI result array, excluding status/error
     /// framing. Sequence rows and visitor arguments have their own schemas.
     pub fn result_packet_fields(&self) -> Result<std::vec::IntoIter<&Wire<JniWire>>> {

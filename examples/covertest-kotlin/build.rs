@@ -142,7 +142,18 @@ fn main() {
     let wide_buffer_views = (0..48).fold(expand_return!(JniBufferRow), |views, _| {
         views.field(fun!(jni_buffer_row_text))
     });
+    let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
     let binding = JniGen::builder()
+        .expand(expand_return!(ReturnFailure).field(fun!(return_failure_code)))
+        .package(package!("returns")
+            .class(data_class!(ReturnArgA)).class(data_class!(ReturnArgB)).class(data_class!(ReturnArgOuter))
+            .class(data_class!(ReturnWideA)).class(data_class!(ReturnWideB)).class(data_class!(ReturnWideError))
+            .fun(fun!(return_limited)).fun(fun!(return_wide_error))
+            .fun(fun!(return_ownership).expand_return(expand_return!(ReturnOwner)
+                .field(fun!(return_owner_value)).field(fun!(return_owner_resource))))
+            .fun(fun!(return_single_ownership).expand_return(expand_return!(ReturnOwner).field(fun!(return_owner_resource))))
+            .fun(fun!(return_domain)).fun(fun!(return_pair).expand_return(expand_return!(ReturnPair).field(fun!(return_pair_first)).field(fun!(return_pair_second))))
+            .fun(fun!(return_wide).expand_return(wide_return)))
         .package(package!("runtimecosts")
             .fun(fun!(buffer_views_optional_text).expand_return(expand_return!(Option<String>).field_self().field(fun!(buffer_views_optional_text_len))))
             .fun(fun!(buffer_views_optional_bytes).expand_return(expand_return!(Option<Vec<u8>>).field_self().field(fun!(buffer_views_optional_bytes_len))))
