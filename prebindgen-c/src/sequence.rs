@@ -1,6 +1,6 @@
 //! Array rows retain their element schema in a sequence chain, not in CWire.
 use super::*;
-use prebindgen_declarations::{SequenceInput, SequenceOutput};
+use prebindgen_declarations::{CReprRecord, SequenceInput, SequenceOutput};
 
 use prebindgen_flat::WireNode;
 
@@ -158,13 +158,13 @@ pub(crate) fn emit_schemas(
         }
         let fields = crate::group::row_fields(element)
             .enumerate()
-            .map(|(i, w)| {
-                let name = format_ident!("v{i}");
-                let ty = w.rust_type();
-                quote!(pub #name:#ty)
-            })
-            .collect::<Vec<_>>();
-        tokens.extend(quote!(#[repr(C)] #[derive(Clone,Copy)] pub struct #row {#(#fields),*}));
+            .map(|(i, w)| (format_ident!("v{i}"), w.rust_type()));
+        let record = CReprRecord::new(row.clone(), fields)?;
+        let mut definition = record.definition();
+        definition
+            .attrs
+            .push(syn::parse_quote!(#[derive(Clone,Copy)]));
+        tokens.extend(quote!(#definition));
         header.push_str("typedef struct {\n");
         for (i, w) in crate::group::row_fields(element).enumerate() {
             header.push_str(&format!(

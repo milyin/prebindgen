@@ -2239,3 +2239,122 @@ fn primitive_before_buffer_fields_has_capacity_for_boxing_class_and_value() {
         );
     }
 }
+
+#[test]
+fn bulk_expansions_share_target_layouts_and_local_overrides_replace_defaults() {
+    let generated=JniGen::builder().flat(flat("#[repr(C)] pub struct Row {pub tag:i32,pub number:i64} pub fn bulk(value:Vec<Row>)->Vec<Row>{} pub fn plain(value:Row)->Row{}"))
+        .set_package_prefix("test")
+        .expand(expand_param!(Row).variant_self().bulk())
+        .expand(expand_return!(Row).field_self_into().bulk())
+        .package(package!().class(data_class!(Row)).fun(fun!(bulk)).fun(fun!(plain).expand_param("value",expand_param!(Row).variant_self()).expand_return(expand_return!(Row).field_self_into())))
+        .build().unwrap();
+    syn::parse_file(&generated.rust).unwrap();
+    assert!(generated
+        .rust
+        .split_whitespace()
+        .collect::<String>()
+        .contains("offset_of!(crate::Row,"));
+    assert!(!generated.rust.contains("get_object_array_element"));
+    assert!(!generated.rust.contains("new_object_array"));
+    assert!(generated.kotlin["test/BulkLayouts.kt"].contains("JNINative.bulkLayouts()"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("List<test.Row>"));
+    let native = &generated.kotlin["test/JNINative.kt"];
+    let plain = native
+        .lines()
+        .find(|line| line.contains("call_plain_"))
+        .unwrap();
+    assert!(!plain.contains("ByteArray"), "{plain}");
+    let bulk = native
+        .lines()
+        .find(|line| line.contains("call_bulk_"))
+        .unwrap();
+    assert!(bulk.contains("ByteArray"), "{bulk}");
+}
+
+#[test]
+fn bulk_selector_and_empty_expansion_generate_valid_boundaries() {
+    for source in [
+        "pub fn identity(x:i64)->i64{} pub fn call(x:i64)->i64{}",
+        "pub fn identity(){} pub fn call(){}",
+    ] {
+        let is_unit = source.contains("identity()");
+        let mut builder = JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test");
+        let call = if is_unit {
+            fun!(call).output(Output::auto().bulk())
+        } else {
+            fun!(call)
+                .expand_param(
+                    "x",
+                    expand_param!(i64)
+                        .variant(fun!(identity))
+                        .variant_self()
+                        .bulk(),
+                )
+                .expand_return(expand_return!(i64).field_self().bulk())
+        };
+        builder = builder.package(package!().fun(call));
+        let generated = builder.build().unwrap();
+        syn::parse_file(&generated.rust).unwrap();
+        assert!(generated.kotlin.contains_key("test/BulkRuntime.kt"));
+    }
+}
+
+#[test]
+fn bulk_rejects_callback_objects_and_conflicting_collection_delivery() {
+    let callback = JniGen::builder()
+        .set_package_prefix("test")
+        .flat(flat("pub fn call(callback:impl Fn(i64)){}"))
+        .package(package!().fun(fun!(call).expand_param("callback", Input::auto().bulk())))
+        .build()
+        .err()
+        .unwrap();
+    assert!(callback.contains("callback"), "{callback}");
+    let delivery = JniGen::builder()
+        .set_package_prefix("test")
+        .flat(flat("pub fn call()->Vec<i64>{}"))
+        .package(
+            package!().fun(
+                fun!(call)
+                    .expand_return(expand_return!(i64).field_self().bulk())
+                    .callback_return(),
+            ),
+        )
+        .build()
+        .err()
+        .unwrap();
+    assert!(
+        delivery.contains("bulk") || delivery.contains("callback"),
+        "{delivery}"
+    );
+}
+
+#[test]
+fn bulk_native_records_require_target_independent_matching_carriers() {
+    for ty in [
+        "usize", "isize", "bool", "u8", "u16", "u32", "i8", "i16", "i32", "i64", "u64", "f32",
+        "f64", "char",
+    ] {
+        let generated = JniGen::builder()
+            .flat(flat(&format!(
+                "#[repr(C)] pub struct Row{{pub value:{ty}}} pub fn call(value:Row)->Row{{}}"
+            )))
+            .set_package_prefix("test")
+            .expand(expand_param!(Row).variant_self().bulk())
+            .expand(expand_return!(Row).field_self_into().bulk())
+            .package(package!().class(data_class!(Row)).fun(fun!(call)))
+            .build()
+            .unwrap();
+        let native = generated
+            .rust
+            .split_whitespace()
+            .collect::<String>()
+            .contains("=crate::Row;");
+        assert_eq!(
+            native,
+            !matches!(ty, "usize" | "isize" | "bool" | "u8" | "u16" | "u32"),
+            "{ty}"
+        );
+    }
+}

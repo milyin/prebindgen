@@ -7,7 +7,9 @@
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
+mod bulk;
 mod metadata;
+pub use bulk::BulkRecord;
 pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
@@ -666,6 +668,76 @@ fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
 /// to fill [`Bindings`] manually.
 pub struct JniCodec;
 impl Codec for JniCodec {
+    fn input_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        bulk::input_leaf(flat, ty, w, v, active)
+    }
+    fn output_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<OutputPlan<JniWire>> {
+        bulk::output_leaf(flat, ty, w, v, borrowed)
+    }
+    fn bulk_input(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: InputPlan<JniWire>,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        bulk::input(w, child, active)
+    }
+    fn bulk_output(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: OutputPlan<JniWire>,
+    ) -> Result<OutputPlan<JniWire>> {
+        bulk::output(w, child)
+    }
+    fn sequence_input_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        bulk::sequence_input(w, n, i, element, active)
+    }
+    fn sequence_output_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+        if delivery != prebindgen_declarations::SequenceDelivery::Value {
+            return Err("bulk collection delivery cannot also use per-element callbacks".into());
+        }
+        bulk::sequence_output(w, n, i, element, values)
+    }
+
     type Schema = JniSchema;
     type Niche = crate::optional::JniNiche;
     type Chain = JniChain;
@@ -1046,6 +1118,12 @@ fn validate_class_name(name: &str) -> Result<()> {
         "NativeHandle",
         "JniErrorHandler",
         "HandleValidationFailure",
+        "BulkLayouts",
+        "BulkLayout",
+        "BulkRange",
+        "BulkWriter",
+        "BulkReader",
+        "BulkInputRow",
     ]
     .contains(&name)
     {
@@ -1242,10 +1320,12 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             ))
         })
         .collect::<Result<_>>()?;
+    bulk::emit(flat, &kotlin_classes, &mut rust, &mut native, &mut files)?;
     callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,
         &KotlinContext {
+            package: prefix,
             classes: &kotlin_classes,
             result: "result",
             failure: "failure",
@@ -1398,6 +1478,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
         let kotlin_context = KotlinContext {
+            package: prefix,
             classes: &kotlin_classes,
             result: "result",
             failure: "failure",
@@ -1674,7 +1755,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             format!("if (returnCapture.discardSuccess) {{ val {failure} = IllegalArgumentException(returnCapture.message); {output_locals} {cleanup} }}")
         };
         let end = if cleanup.is_empty() {
-            end
+            if output_locals.is_empty() && materialize.is_empty() {
+                end
+            } else {
+                format!("{output_locals}{materialize}\n{end}")
+            }
         } else {
             format!("{output_locals}        try {{\n{materialize}            {end}\n        }} catch ({failure}: Throwable) {{\n{cleanup}            throw {failure}\n        }}")
         };

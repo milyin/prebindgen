@@ -3,6 +3,7 @@ package io.prebindgen.covertest
 internal object JNINative {
     init { io.prebindgen.covertest.NativeLibrary.ensureLoaded() }
     @JvmStatic external fun drop_Archive_0aa4417b9f320a03(id: Long)
+    @JvmStatic external fun drop_BulkHandle_393b82dfa5eaa2d5(id: Long)
     @JvmStatic external fun drop_CallbackBoundaryHandler_0e611baf5b66c32b(id: Long)
     @JvmStatic external fun drop_CallbackConfigHandler_67dc52e4c6670317(id: Long)
     @JvmStatic external fun drop_CallbackConstructor_65ec2182d775ceb8(id: Long)
@@ -31,6 +32,47 @@ internal object JNINative {
     @JvmStatic external fun drop_ReportStruct_2659d7dec79ecce0(id: Long)
     @JvmStatic external fun drop_Storage_9651261943550368(id: Long)
     @JvmStatic external fun drop_Summary_caa4a50522c6b815(id: Long)
+    @JvmStatic external fun bulkLayouts(): LongArray
+    @JvmStatic external fun call_bulk_select_b3dae360ea0eecfb(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_kinds_9b033197b22af4fe(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_units_1560a205c63d4c8a(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_flags_fe0ac76234b14846(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_envelope_c78cdfdfd18c33f1(p0_w1: Int, p0_w3_f0_f0: Long, p0_w3_f0_f1: Double, p0_w3_f1: Long, returns: Return_Int_Long_Double4_ErrorEmpty_4244d173b136f580): Unit
+    @JvmStatic external fun call_bulk_primitives_be9bffc80840ca87(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_optional_wide_0dbde2915189c95e(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_optional_callback_0b45be4b854f6c11(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_native_939b6cd52b96a019(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_expanded_65b04628441e244b(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_expanded_rows_8611c0e3cec0b75a(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_result_22b6c65613a56b35(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: Boolean, returns: Return_Empty_ErrorByteArray1_056b654d5078f47e): ByteArray?
+    @JvmStatic external fun call_bulk_handle_new_e5a9aa77fa861745(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_handle_value_020d7d074b3973cd(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_drops_0c93c5a0b1492a12(returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_late_051f1ea6dcd2506f(p0_w1: Boolean, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_handle_views_c1f9da5de20e3fc3(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_handles_0a30179490c49dbc(p0_w1: ByteArray?, p0_w1_length: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_borrow_588a078d0466d481(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_checked_01f9de13d8c4a8b8(p0_w1: ByteArray?, p0_w1_length: Int, p1_w1: ByteArray?, p1_w1_length: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_wide_6b955d7b4ee7dc0d(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_unsigned_wide_407b0f069bb7ed7a(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_callback_worker_4498defd15d5c1bf(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_callback_63ae4882756ac2cf(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_handle_callback_34c4be17902be9ab(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_point_e770ca9da9c12852(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_points_6101af74290565c5(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_point_array_aa3dcf2590ca3a28(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_slice_c30fbd330fdb06e6(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_point_plain_53e7bd65e4464218(p0_w1_f0: Long, p0_w1_f1: Double, returns: Return_Long_Double2_ErrorEmpty_a4ec6c8f44b5ff7d): Unit
+    @JvmStatic external fun call_bulk_optional_handles_f105b0e272c7fda2(p0_w1: ByteArray?, p0_w1_length: Int, ownership: BooleanArray, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_array_b64f34d955cfbc66(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_array_borrow_08a33cfde93f0897(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_bulk_scalar_859e15b07fe6305f(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_numbers_a3f5c3da005fa8ec(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_nested_0e44e904f1fd8209(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_text_af334975f2297859(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_strings_106737903dcecf60(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_optional_4abfbe9a71e24339(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
+    @JvmStatic external fun call_bulk_bytes_711128b36c976142(p0_w1: ByteArray?, p0_w1_length: Int, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): ByteArray?
     @JvmStatic external fun call_return_limited_54299b9182f8d252(p0_w1_f0_f0: Long, p0_w1_f0_f1: Long, p0_w1_f0_f2: Long, p0_w1_f0_f3: Long, p0_w1_f0_f4: Long, p0_w1_f0_f5: Long, p0_w1_f0_f6: Long, p0_w1_f0_f7: Long, p0_w1_f0_f8: Long, p0_w1_f0_f9: Long, p0_w1_f0_f10: Long, p0_w1_f0_f11: Long, p0_w1_f0_f12: Long, p0_w1_f0_f13: Long, p0_w1_f0_f14: Long, p0_w1_f0_f15: Long, p0_w1_f0_f16: Long, p0_w1_f0_f17: Long, p0_w1_f0_f18: Long, p0_w1_f0_f19: Long, p0_w1_f0_f20: Long, p0_w1_f0_f21: Long, p0_w1_f0_f22: Long, p0_w1_f0_f23: Long, p0_w1_f0_f24: Long, p0_w1_f0_f25: Long, p0_w1_f0_f26: Long, p0_w1_f0_f27: Long, p0_w1_f0_f28: Long, p0_w1_f0_f29: Long, p0_w1_f0_f30: Long, p0_w1_f0_f31: Long, p0_w1_f0_f32: Long, p0_w1_f0_f33: Long, p0_w1_f0_f34: Long, p0_w1_f0_f35: Long, p0_w1_f0_f36: Long, p0_w1_f0_f37: Long, p0_w1_f0_f38: Long, p0_w1_f0_f39: Long, p0_w1_f0_f40: Long, p0_w1_f0_f41: Long, p0_w1_f0_f42: Long, p0_w1_f0_f43: Long, p0_w1_f0_f44: Long, p0_w1_f0_f45: Long, p0_w1_f0_f46: Long, p0_w1_f0_f47: Long, p0_w1_f0_f48: Long, p0_w1_f0_f49: Long, p0_w1_f0_f50: Long, p0_w1_f0_f51: Long, p0_w1_f0_f52: Long, p0_w1_f0_f53: Long, p0_w1_f0_f54: Long, p0_w1_f0_f55: Long, p0_w1_f0_f56: Long, p0_w1_f0_f57: Long, p0_w1_f0_f58: Long, p0_w1_f0_f59: Long, p0_w1_f0_f60: Long, p0_w1_f0_f61: Long, p0_w1_f0_f62: Long, p0_w1_f1_f0: Long, p0_w1_f1_f1: Long, p0_w1_f1_f2: Long, p0_w1_f1_f3: Long, p0_w1_f1_f4: Long, p0_w1_f1_f5: Long, p0_w1_f1_f6: Long, p0_w1_f1_f7: Long, p0_w1_f1_f8: Long, p0_w1_f1_f9: Long, p0_w1_f1_f10: Long, p0_w1_f1_f11: Long, p0_w1_f1_f12: Long, p0_w1_f1_f13: Long, p0_w1_f1_f14: Long, p0_w1_f1_f15: Long, p0_w1_f1_f16: Long, p0_w1_f1_f17: Long, p0_w1_f1_f18: Long, p0_w1_f1_f19: Long, p0_w1_f1_f20: Long, p0_w1_f1_f21: Long, p0_w1_f1_f22: Long, p0_w1_f1_f23: Long, p0_w1_f1_f24: Long, p0_w1_f1_f25: Long, p0_w1_f1_f26: Long, p0_w1_f1_f27: Long, p0_w1_f1_f28: Long, p0_w1_f1_f29: Long, p0_w1_f1_f30: Long, p0_w1_f1_f31: Long, p0_w1_f1_f32: Long, p0_w1_f1_f33: Long, p0_w1_f1_f34: Long, p0_w1_f1_f35: Long, p0_w1_f1_f36: Long, p0_w1_f1_f37: Long, p0_w1_f1_f38: Long, p0_w1_f1_f39: Long, p0_w1_f1_f40: Long, p0_w1_f1_f41: Long, p0_w1_f1_f42: Long, p0_w1_f1_f43: Long, p0_w1_f1_f44: Long, p0_w1_f1_f45: Long, p0_w1_f1_f46: Long, p0_w1_f1_f47: Long, p0_w1_f1_f48: Long, p0_w1_f1_f49: Long, p0_w1_f1_f50: Long, p0_w1_f1_f51: Long, p0_w1_f1_f52: Long, p0_w1_f1_f53: Long, p0_w1_f1_f54: Long, p0_w1_f1_f55: Long, p0_w1_f1_f56: Long, p0_w1_f1_f57: Long, p0_w1_f1_f58: Long, p0_w1_f1_f59: Long, p0_w1_f1_f60: Long, p0_w1_f1_f61: Long, p0_w1_f1_f62: Long, p0_w1_f1_f63: Long, p1_w1: Boolean): Array<Any?>
     @JvmStatic external fun call_return_wide_error_6801c788d55410a5(returns: Return_Empty_ErrorLong_Long_Long130_414eccc9f9c1f833): Unit
     @JvmStatic external fun call_return_ownership_e57618289bd585e0(p0_w1: Long, p1_w1: Boolean, p2_callback: Any?, returns: Return_Long_Long2_ErrorEmpty_951bc171243c8a73): Unit

@@ -19,6 +19,11 @@ pub struct JniArgument {
 impl JniWire {
     fn jvm_type(&self) -> JvmType {
         match self {
+            Self::BulkBuffer { .. }
+            | Self::NativeBuffer { text: false }
+            | Self::Native128 { .. } => JvmType::Bytes,
+            Self::NativeBuffer { text: true } => JvmType::Text,
+            Self::NativeRows { .. } => JvmType::Rows,
             Self::Scalar { primitive, .. } => match primitive {
                 Primitive::Bool => JvmType::Boolean,
                 Primitive::I8 => JvmType::Byte,
@@ -40,6 +45,17 @@ impl JniWire {
             Self::Rows { .. } => JvmType::Rows,
             Self::Callback { .. } => JvmType::Object,
         }
+    }
+    pub(crate) fn bulk_scalar_access(&self) -> Result<(&'static str, usize)> {
+        Ok(match self.jvm_type() {
+            JvmType::Boolean | JvmType::Byte => ("byte", 1),
+            JvmType::Short => ("short", 2),
+            JvmType::Int => ("int", 4),
+            JvmType::Long => ("long", 8),
+            JvmType::Float => ("float", 4),
+            JvmType::Double => ("double", 8),
+            _ => return Err("bulk scalar requires a primitive JVM carrier".into()),
+        })
     }
     /// JVM field descriptor used in method signatures, independent of Kotlin spelling.
     pub fn jvm_descriptor(&self) -> &'static str {
@@ -125,7 +141,7 @@ impl JniWire {
             _ => unreachable!("JVM primitives use their declared boxing conversion"),
         }
     }
-    fn output_scalar(&self, value: &TokenStream) -> TokenStream {
+    pub(crate) fn output_scalar(&self, value: &TokenStream) -> TokenStream {
         if matches!(self, Self::Handle { .. }) {
             quote!((#value) as i64)
         } else {
@@ -179,6 +195,15 @@ impl JniWire {
 }
 impl WireKind for JniWire {
     fn rust_type(&self) -> syn::Type {
-        self.jvm_type().rust_type()
+        match self {
+            Self::NativeBuffer { .. } => {
+                syn::parse_quote!(Option<::prebindgen_jni_runtime::bulk::Range>)
+            }
+            Self::NativeRows { .. } => {
+                syn::parse_quote!(Option<::prebindgen_jni_runtime::bulk::Range>)
+            }
+            Self::Native128 { .. } => syn::parse_quote!([u8; 16]),
+            _ => self.jvm_type().rust_type(),
+        }
     }
 }

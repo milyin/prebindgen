@@ -100,6 +100,8 @@ pub struct Function<I, O, M = ()> {
 /// A named-field record available for field construction and projection.
 #[derive(Clone, Debug)]
 pub struct Record<M = ()> {
+    /// Source representation attributes, retained for native layout selection.
+    pub repr: Vec<syn::Attribute>,
     /// Qualified record type.
     pub ty: Type,
     /// Public fields in declaration order.
@@ -414,6 +416,12 @@ impl<M: Schema> Flat<M> {
                     );
                 }
                 syn::Item::Struct(s) => {
+                    let repr = s
+                        .attrs
+                        .iter()
+                        .filter(|a| a.path().is_ident("repr"))
+                        .cloned()
+                        .collect();
                     if !s.generics.params.is_empty() || s.generics.where_clause.is_some() {
                         return Err("generic records are unsupported".into());
                     }
@@ -436,8 +444,14 @@ impl<M: Schema> Flat<M> {
                             ty: flat.resolve_type(&field.ty)?,
                         });
                     }
-                    flat.records
-                        .insert(type_key(&ty), Record { ty, fields: out });
+                    flat.records.insert(
+                        type_key(&ty),
+                        Record {
+                            ty,
+                            fields: out,
+                            repr,
+                        },
+                    );
                 }
                 syn::Item::Enum(e) => {
                     if e.attrs.iter().any(|a| {
@@ -669,6 +683,7 @@ impl<M: Schema> Flat<M> {
                 self.validate_type(&r.elem)
             }
             Type::Slice(s) => self.validate_type(&s.elem),
+            Type::Array(a) => self.validate_type(&a.elem),
             Type::Path(_)
                 if matches!(
                     type_key(ty).as_str(),
@@ -878,6 +893,10 @@ pub fn vec_inner(ty: &Type) -> Option<&Type> {
 pub enum SequenceView {
     /// An owned Vec, whose elements may be transferred.
     Owned,
+    /// An owned fixed-size array.
+    Array,
+    /// A shared fixed-size array reference.
+    ArrayReference,
     /// A shared Vec reference.
     Vector,
     /// A shared slice reference.
@@ -885,12 +904,28 @@ pub enum SequenceView {
     /// A mutable collection view, requiring unsupported write-back semantics.
     Mutable,
 }
+impl SequenceView {
+    /// Whether conversion owns and may move the elements.
+    pub fn is_owned(self) -> bool {
+        matches!(self, Self::Owned | Self::Array)
+    }
+}
 /// Source collection shape, excluding byte vectors/slices which retain byte transport.
 pub fn sequence_parts(ty: &Type) -> Option<(&Type, SequenceView)> {
     let (inner, reference) = match ty {
         Type::Reference(r) => (r.elem.as_ref(), Some(r)),
         _ => (ty, None),
     };
+    if let Type::Array(array) = inner {
+        return Some((
+            &array.elem,
+            match reference {
+                Some(r) if r.mutability.is_some() => SequenceView::Mutable,
+                Some(_) => SequenceView::ArrayReference,
+                None => SequenceView::Array,
+            },
+        ));
+    }
     let (element, slice) = if let Some(element) = vec_inner(inner) {
         (element, false)
     } else if let Type::Slice(s) = inner {

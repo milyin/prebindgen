@@ -146,6 +146,7 @@ pub(crate) fn input<C: Codec>(
     index: syn::Ident,
     active: &Condition,
     child: CodecInput<C>,
+    bulk: bool,
 ) -> Result<CodecInput<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
@@ -156,7 +157,7 @@ pub(crate) fn input<C: Codec>(
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
     codec.validate_input(&child)?;
-    if view != SequenceView::Owned
+    if !view.is_owned()
         && child
             .resources
             .iter()
@@ -167,15 +168,26 @@ pub(crate) fn input<C: Codec>(
     if child.acknowledgement.is_some() {
         return Err("collection element acknowledgement belongs to the whole call".into());
     }
-    let transport = codec.sequence_input(
-        extra,
-        wire.clone(),
-        length.clone(),
-        index.clone(),
-        &child.node,
-        active,
-    )?;
-    if transport.validation_values.is_empty() {
+    let transport = if bulk {
+        codec.sequence_input_bulk(
+            extra,
+            wire.clone(),
+            length.clone(),
+            index.clone(),
+            &child.node,
+            active,
+        )
+    } else {
+        codec.sequence_input(
+            extra,
+            wire.clone(),
+            length.clone(),
+            index.clone(),
+            &child.node,
+            active,
+        )
+    }?;
+    if transport.validation_values.is_empty() && !bulk {
         return Err("collection elements must have at least one input binding".into());
     }
     prebindgen_conversions::validate_value_bindings(&transport.validation_values)?;
@@ -228,8 +240,26 @@ pub(crate) fn input<C: Codec>(
     let bind = transport.bind;
     let release = transport.release;
     let condition = active.rust();
+    let array = match ty {
+        syn::Type::Reference(r) => r.elem.as_ref(),
+        _ => ty,
+    };
+    let length_check = if let syn::Type::Array(array) = array {
+        let expected = &array.len;
+        quote!(if #length != #expected { return Err("wrong fixed array length".into()); })
+    } else {
+        TokenStream::new()
+    };
+    let to_array = if view == SequenceView::Array {
+        quote!(let #var: #ty = #var.try_into().map_err(|_|"wrong fixed array length".to_string())?;)
+    } else {
+        TokenStream::new()
+    };
     let value = match view {
-        SequenceView::Owned => quote!(#var),
+        SequenceView::Owned | SequenceView::Array => quote!(#var),
+        SequenceView::ArrayReference => {
+            quote!(<#ty>::try_from(#var.as_slice()).map_err(|_|"wrong fixed array length".to_string())?)
+        }
         SequenceView::Vector => quote!(&#var),
         SequenceView::Slice => quote!(#var.as_slice()),
         SequenceView::Mutable => unreachable!(),
@@ -246,13 +276,13 @@ pub(crate) fn input<C: Codec>(
         validation: quote! {
             #declarations
             let mut #staged=Vec::new();
-            if #condition { #open for #index in 0..#length {
+            if #condition { #open #length_check for #index in 0..#length {
                 #bind #validation #collect #release
                 #staged.push(move || { #acquire move || -> ::core::result::Result<#element,String> { #statements #argument Ok(#var) } });
             }}
         },
         acquire: quote!(let #acquired:Vec<_>=#staged.into_iter().map(|acquire|acquire()).collect();),
-        statements: quote!(let #var:Vec<#element>=#acquired.into_iter().map(|construct|construct()).collect::<::core::result::Result<_,String>>()?;),
+        statements: quote!(let #var:Vec<#element>=#acquired.into_iter().map(|construct|construct()).collect::<::core::result::Result<_,String>>()?; #to_array),
         argument: value,
         resources,
     })
@@ -272,6 +302,7 @@ pub(crate) fn output<C: Codec>(
     mode: ProjectionMode,
     child: CodecOutput<C>,
     delivery: crate::SequenceDelivery,
+    bulk: bool,
 ) -> Result<CodecOutput<C>> {
     let (element_type, view) =
         prebindgen_flat::sequence_parts(ty).ok_or("sequence recipe requires a collection")?;
@@ -281,26 +312,38 @@ pub(crate) fn output<C: Codec>(
     if view == SequenceView::Mutable {
         return Err("mutable collection outputs are unsupported".into());
     }
-    if mode == ProjectionMode::Owned && (borrowed || view != SequenceView::Owned) {
+    if mode == ProjectionMode::Owned && (borrowed || !view.is_owned()) {
         return Err("owned collection projection cannot consume a borrowed collection".into());
     }
     validate_nested_output(&child)?;
     codec.validate_output(&child)?;
-    if child.values.is_empty() {
+    if child.values.is_empty() && !bulk {
         return Err("collection elements must have at least one wire".into());
     }
     if !child.delivery.statements.is_empty() {
         return Err("collection element delivery belongs to the outer slot".into());
     }
-    let transport = codec.sequence_output(
-        extra,
-        wire.clone(),
-        length.clone(),
-        index.clone(),
-        &child.outcomes.success,
-        &child.values,
-        delivery,
-    )?;
+    let transport = if bulk {
+        codec.sequence_output_bulk(
+            extra,
+            wire.clone(),
+            length.clone(),
+            index.clone(),
+            &child.outcomes.success,
+            &child.values,
+            delivery,
+        )
+    } else {
+        codec.sequence_output(
+            extra,
+            wire.clone(),
+            length.clone(),
+            index.clone(),
+            &child.outcomes.success,
+            &child.values,
+            delivery,
+        )
+    }?;
     let owner = format_ident!("{wire}_source");
     let commits = format_ident!("{wire}_commits");
     let (binding, iterator) = if mode == ProjectionMode::Owned {

@@ -5,6 +5,7 @@
 //! return are local references in that environment.
 #![warn(missing_docs)]
 pub use jni;
+pub mod bulk;
 use jni::{
     objects::{JByteArray, JObject, JObjectArray, JString, JValue},
     JNIEnv,

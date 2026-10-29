@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+prebindgen-reprc.workspace = true
 prebindgen-flat.workspace = true
 syn.workspace = true
 quote.workspace = true

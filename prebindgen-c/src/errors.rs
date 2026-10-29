@@ -187,7 +187,7 @@ pub(crate) fn emit(
         for (i, wire) in crate::group::result_packet_fields(&plan.outcomes.success).enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
-            fields.push(quote!(pub #field:#ty));
+            fields.push((field, ty));
             let c_field = if error.fields.len()
                 == crate::group::result_packet_fields(&plan.outcomes.success).len()
             {
@@ -242,7 +242,7 @@ pub(crate) fn emit(
             false,
         ));
         if fields.is_empty() {
-            fields.push(quote!(pub unused:u8));
+            fields.push((syn::parse_quote!(unused), syn::parse_quote!(u8)));
             header.push_str("    uint8_t unused;\n");
         }
         header.push_str(&format!("}} {c_name};\n/* Frees owned error fields and clears them; repeated calls are harmless. */\nvoid {drop_name}({c_name} *error);\n"));
@@ -257,8 +257,10 @@ pub(crate) fn emit(
             comments = comments.replace(&format!("output->v{i}"), &format!("error->{field}"));
         }
         header.push_str(&comments);
+        let definition =
+            prebindgen_declarations::CReprRecord::new(rust_name.clone(), fields)?.definition();
         tokens.extend(quote! {
-            #[repr(C)] pub struct #rust_name {#(#fields),*}
+            #definition
             #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
             unsafe fn #helper(#input:#source_ty,error_output:*mut #rust_name,reported:&mut bool)->Result<(),String>{
                 if error_output.is_null(){return Ok(());}
