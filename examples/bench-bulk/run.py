@@ -14,6 +14,7 @@ import tempfile
 
 FIXTURE = Path(__file__).resolve().parent
 MODES = ("plain", "bulk")
+SINGLE_CASES = ("scalar", "record_input", "record_return", "wide_record_input", "wide_record_return", "callback_record_return", "callback_wide_record_return")
 KINDS = ("numbers_input", "records_input", "records_output", "records_roundtrip", "callback_records", "records_reduce")
 
 
@@ -163,6 +164,7 @@ def main():
     parser.add_argument("--target-ms", type=int, default=30, help="calibrated batch target duration")
     parser.add_argument("--sizes", default="0,1,8,64,512")
     parser.add_argument("--payloads", default="64,4096,65536", help="byte payload sizes for packet inputs")
+    parser.add_argument("--cases", help="comma-separated case names; default runs all cases")
     parser.add_argument("--record-generated", action="store_true")
     parser.add_argument("--check-generated", action="store_true")
     parser.add_argument("--build-only", action="store_true")
@@ -184,6 +186,10 @@ def main():
         parser.error("choose --record-generated or --check-generated")
     if args.prepared and (args.record_generated or args.check_generated):
         parser.error("generated-file checks/recording require a fresh build")
+    available = (*SINGLE_CASES, *KINDS, "packet_input")
+    selected = args.cases.split(',') if args.cases else list(available)
+    if not selected or len(set(selected)) != len(selected) or set(selected) - set(available):
+        parser.error("cases must be unique names from " + ','.join(available))
     output = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="bulk-bench-"))
     if output.exists() and any(output.iterdir()):
         parser.error("use a new empty output directory to preserve earlier results")
@@ -196,7 +202,8 @@ def main():
     if args.build_only:
         print(f"Release build ready: {output}")
         return
-    keys = [("scalar", 1), ("record_input", 1)] + [(kind, n) for n in sizes for kind in KINDS] + [("packet_input", n) for n in payloads]
+    keys = [(kind, 1) for kind in SINGLE_CASES] + [(kind, n) for n in sizes for kind in KINDS] + [("packet_input", n) for n in payloads]
+    keys = [(kind, n) for kind, n in keys if kind in selected]
     medians = {mode: {f"{kind}/{n}": [] for kind, n in keys} for mode in MODES}
     runs = []
     jvm_args = ["-Xms256m", "-Xmx256m", "-XX:+UseG1GC", "-XX:ActiveProcessorCount=2", "-XX:+PrintCommandLineFlags"] + (["-Xcheck:jni"] if args.check_jni else [])
@@ -204,7 +211,7 @@ def main():
     for trial in range(args.jvms):
         for mode in (MODES if trial % 2 == 0 else MODES[::-1]):
             command = ["java", *jvm_args, f"-Djava.library.path={library.parent}", "-jar", str(jar), mode, args.sizes,
-                       str(args.warmup), str(args.batches), str(args.target_ms), str(trial), args.payloads]
+                       str(args.warmup), str(args.batches), str(args.target_ms), str(trial), args.payloads, ",".join(selected)]
             result = subprocess.run(command, text=True, capture_output=True)
             (output / f"run-{trial}-{mode}.log").write_text(result.stdout + result.stderr)
             result.check_returncode()
@@ -257,7 +264,7 @@ def main():
               "affinity_cpus": sorted(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else None,
               "cpu_quota": Path('/sys/fs/cgroup/cpu.max').read_text().strip() if Path('/sys/fs/cgroup/cpu.max').exists() else None},
               "java": command_version(["java", "-version"]), "jvm_args": jvm_args, "sizes": sizes, "payload_bytes": payloads,
-              "jvms_per_mode": args.jvms, "warmup_batches": args.warmup, "measurement_batches": args.batches,
+              "cases": selected, "jvms_per_mode": args.jvms, "warmup_batches": args.warmup, "measurement_batches": args.batches,
               "target_ms": args.target_ms, "correctness_only": args.check_jni,
               "run_order": [{"trial": r["trial"], "mode": r["mode"], "cases": r["case_order"], "effective_flags": r["effective_flags"]} for r in runs],
               "summary": summary, "jvm_medians": medians, "samples_csv": "samples.csv", "samples_sha256": digest(sample_file)}

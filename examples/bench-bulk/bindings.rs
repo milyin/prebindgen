@@ -53,6 +53,24 @@ fn main() {
                 ),
             )
         };
+        let row_make = fun!(row_make);
+        let wide_make = fun!(wide_row_make);
+        let wide_sum = fun!(wide_row_sum);
+        let row_callback =
+            callback!(impl Fn(i64) -> Row + Send + Sync + 'static).name("RowReturnCallback");
+        let wide_callback = callback!(impl Fn(i64) -> WideRow + Send + Sync + 'static)
+            .name("WideRowReturnCallback");
+        let (row_make, wide_make, wide_sum, row_callback, wide_callback) = if bulk {
+            (
+                row_make.expand_return(expand_return!(Row).field_self_into().bulk()),
+                wide_make.expand_return(expand_return!(WideRow).field_self_into().bulk()),
+                wide_sum.expand_param("value", expand_param!(WideRow).variant_self().bulk()),
+                row_callback.expand_return(expand_param!(Row).variant_self().bulk()),
+                wide_callback.expand_return(expand_param!(WideRow).variant_self().bulk()),
+            )
+        } else {
+            (row_make, wide_make, wide_sum, row_callback, wide_callback)
+        };
         let generated = JniGen::builder()
             .source(bench_flat::PREBINDGEN_OUT_DIR)
             .set_package_prefix(format!("bench.{mode}"))
@@ -60,6 +78,16 @@ fn main() {
             .package(
                 package!()
                     .class(data_class!(Row))
+                    .class(data_class!(WideRow))
+                    .class(ptr_class!(RowReturnHandler))
+                    .class(ptr_class!(WideRowReturnHandler))
+                    .fun(row_make)
+                    .fun(wide_make)
+                    .fun(wide_sum)
+                    .fun(fun!(row_return_handler_new).expand_param("callback", row_callback))
+                    .fun(fun!(wide_row_return_handler_new).expand_param("callback", wide_callback))
+                    .fun(fun!(row_return_fire))
+                    .fun(fun!(wide_row_return_fire))
                     .class(data_class!(Packet))
                     .class(ptr_class!(Handler))
                     .fun(scalar)
