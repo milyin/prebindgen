@@ -33,7 +33,9 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let source_value = perftest_flat::storage_new();
             let mut ret_w0 = Box::new(::prebindgen_jni_runtime::Allocation {
@@ -55,7 +57,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -112,8 +115,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
@@ -123,8 +130,23 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
-            let p0_w0: &perftest_flat::Storage = unsafe { &(*p0_w1_pointer).value };
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, false)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &perftest_flat::Storage = unsafe {
+                        &(*p0_w1_pointer).value
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_get(__prebindgen_argument_0);
             let (
                 ret_w0,
@@ -181,7 +203,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             };
             Ok(())
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -240,20 +263,62 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w0 = if true { Some(p0_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: i64 = ::core::convert::Into::into(
+                        p0_w0.expect("active value"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
             let p1_w0 = if true { Some(p1_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0: i32 = ::core::convert::Into::into(
+                        p1_w0.expect("active value"),
+                    );
+                    p1_w0
+                })
+            } else {
+                None
+            };
             let p2_w0 = if true { Some(p2_w1) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p2_w0_built = if true {
+                Some({
+                    let p2_w0: f64 = ::core::convert::Into::into(
+                        p2_w0.expect("active value"),
+                    );
+                    p2_w0
+                })
+            } else {
+                None
+            };
             let p3_w0 = if true { Some(p3_w1 != 0) } else { None };
-            let p0_w0: i64 = ::core::convert::Into::into(p0_w0.expect("active value"));
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0: i32 = ::core::convert::Into::into(p1_w0.expect("active value"));
-            let __prebindgen_argument_1 = p1_w0;
-            let p2_w0: f64 = ::core::convert::Into::into(p2_w0.expect("active value"));
-            let __prebindgen_argument_2 = p2_w0;
-            let p3_w0: bool = ::core::convert::Into::into(p3_w0.expect("active value"));
-            let __prebindgen_argument_3 = p3_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p3_w0_built = if true {
+                Some({
+                    let p3_w0: bool = ::core::convert::Into::into(
+                        p3_w0.expect("active value"),
+                    );
+                    p3_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
+            let __prebindgen_argument_2 = p2_w0_built.expect("active input");
+            let __prebindgen_argument_3 = p3_w0_built.expect("active input");
             let source_value = perftest_flat::payload_new(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -299,7 +364,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1payloa
             };
             Ok(())
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -359,23 +425,73 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: i64 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
             let p0_w1 = if true { Some(p0_w2) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w1_built = if true {
+                Some({
+                    let p0_w1: i64 = ::core::convert::Into::into(
+                        p0_w1.expect("active value"),
+                    );
+                    p0_w1
+                })
+            } else {
+                None
+            };
             let p0_w3 = if true { Some(p0_w4) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w3_built = if true {
+                Some({
+                    let p0_w3: i32 = ::core::convert::Into::into(
+                        p0_w3.expect("active value"),
+                    );
+                    p0_w3
+                })
+            } else {
+                None
+            };
             let p0_w5 = if true { Some(p0_w6) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w5_built = if true {
+                Some({
+                    let p0_w5: f64 = ::core::convert::Into::into(
+                        p0_w5.expect("active value"),
+                    );
+                    p0_w5
+                })
+            } else {
+                None
+            };
             let p0_w7 = if true { Some(p0_w8 != 0) } else { None };
-            let p0_w1: i64 = ::core::convert::Into::into(p0_w1.expect("active value"));
-            let p0_w3: i32 = ::core::convert::Into::into(p0_w3.expect("active value"));
-            let p0_w5: f64 = ::core::convert::Into::into(p0_w5.expect("active value"));
-            let p0_w7: bool = ::core::convert::Into::into(p0_w7.expect("active value"));
-            let p0_w0: perftest_flat::Payload = perftest_flat::payload_new(
-                p0_w1,
-                p0_w3,
-                p0_w5,
-                p0_w7,
-            );
-            let __prebindgen_argument_0 = p0_w0;
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w7_built = if true {
+                Some({
+                    let p0_w7: bool = ::core::convert::Into::into(
+                        p0_w7.expect("active value"),
+                    );
+                    p0_w7
+                })
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                Some({
+                    let p0_w0: perftest_flat::Payload = perftest_flat::payload_new(
+                        p0_w1_built.expect("active input"),
+                        p0_w3_built.expect("active input"),
+                        p0_w5_built.expect("active input"),
+                        p0_w7_built.expect("active input"),
+                    );
+                    p0_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
             let source_value = perftest_flat::storage_with_payload(
                 __prebindgen_argument_0,
             );
@@ -398,7 +514,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()
@@ -461,8 +578,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     let mut success_transferred = false;
     let mut direct_output: u8 = Default::default();
-    match ::prebindgen_runtime::boundary(|| {
+    let __pb_input_consumed = ::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid = ::core::cell::Cell::new(false);
+    let outcome = ::prebindgen_runtime::boundary(|| {
         {
+            let __prebindgen_input_consumed = &__pb_input_consumed;
+            let mut __prebindgen_input_aliases = ::prebindgen_runtime::SharedInputs;
             let p0_w1_pointer = if true {
                 p0_w1
                     as *mut ::prebindgen_jni_runtime::Allocation<perftest_flat::Storage>
@@ -472,41 +593,102 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             if true {
                 ::prebindgen_runtime::validate_pointer(p0_w1_pointer)?;
             }
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p0_w0_built = if true {
+                if true {
+                    for address in ::core::iter::once((p0_w1_pointer.addr()) as usize) {
+                        __prebindgen_input_aliases.access(address, true)?;
+                    }
+                }
+                Some({
+                    let p0_w0: &mut perftest_flat::Storage = unsafe {
+                        &mut (*p0_w1_pointer).value
+                    };
+                    p0_w0
+                })
+            } else {
+                None
+            };
             if p1_w1 != 0 && p1_w1 != 1 {
                 return Err("invalid option presence".into());
             }
             let p1_w3 = if p1_w1 == 1i32 { Some(p1_w4) } else { None };
-            let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
-            let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
-            let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
-            let p0_w0: &mut perftest_flat::Storage = unsafe {
-                &mut (*p0_w1_pointer).value
-            };
-            let __prebindgen_argument_0 = p0_w0;
-            let p1_w0 = if p1_w1 == 1i32 {
-                let p1_w3: i64 = ::core::convert::Into::into(
-                    p1_w3.expect("active value"),
-                );
-                let p1_w5: i32 = ::core::convert::Into::into(
-                    p1_w5.expect("active value"),
-                );
-                let p1_w7: f64 = ::core::convert::Into::into(
-                    p1_w7.expect("active value"),
-                );
-                let p1_w9: bool = ::core::convert::Into::into(
-                    p1_w9.expect("active value"),
-                );
-                let p1_w2: perftest_flat::Payload = perftest_flat::payload_new(
-                    p1_w3,
-                    p1_w5,
-                    p1_w7,
-                    p1_w9,
-                );
-                Some(p1_w2)
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w3_built = if p1_w1 == 1i32 {
+                Some({
+                    let p1_w3: i64 = ::core::convert::Into::into(
+                        p1_w3.expect("active value"),
+                    );
+                    p1_w3
+                })
             } else {
                 None
             };
-            let __prebindgen_argument_1 = p1_w0;
+            let p1_w5 = if p1_w1 == 1i32 { Some(p1_w6) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w5_built = if p1_w1 == 1i32 {
+                Some({
+                    let p1_w5: i32 = ::core::convert::Into::into(
+                        p1_w5.expect("active value"),
+                    );
+                    p1_w5
+                })
+            } else {
+                None
+            };
+            let p1_w7 = if p1_w1 == 1i32 { Some(p1_w8) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w7_built = if p1_w1 == 1i32 {
+                Some({
+                    let p1_w7: f64 = ::core::convert::Into::into(
+                        p1_w7.expect("active value"),
+                    );
+                    p1_w7
+                })
+            } else {
+                None
+            };
+            let p1_w9 = if p1_w1 == 1i32 { Some(p1_w10 != 0) } else { None };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w9_built = if p1_w1 == 1i32 {
+                Some({
+                    let p1_w9: bool = ::core::convert::Into::into(
+                        p1_w9.expect("active value"),
+                    );
+                    p1_w9
+                })
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w2_built = if p1_w1 == 1i32 {
+                Some({
+                    let p1_w2: perftest_flat::Payload = perftest_flat::payload_new(
+                        p1_w3_built.expect("active input"),
+                        p1_w5_built.expect("active input"),
+                        p1_w7_built.expect("active input"),
+                        p1_w9_built.expect("active input"),
+                    );
+                    p1_w2
+                })
+            } else {
+                None
+            };
+            #[allow(clippy::let_and_return, clippy::unit_arg)]
+            let p1_w0_built = if true {
+                Some({
+                    let p1_w0 = if p1_w1 == 1i32 {
+                        Some(p1_w2_built.expect("active input"))
+                    } else {
+                        None
+                    };
+                    p1_w0
+                })
+            } else {
+                None
+            };
+            let __prebindgen_argument_0 = p0_w0_built.expect("active input");
+            let __prebindgen_argument_1 = p1_w0_built.expect("active input");
             let source_value = perftest_flat::storage_put_opt(
                 __prebindgen_argument_0,
                 __prebindgen_argument_1,
@@ -524,7 +706,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_call_1storag
             };
             Ok(__pb_direct_result)
         }
-    }) {
+    });
+    match outcome {
         Ok(result) => result,
         Err(e) => {
             if domain_output.is_none()

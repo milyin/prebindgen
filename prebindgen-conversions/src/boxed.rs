@@ -148,6 +148,7 @@ pub fn input<W: prebindgen_flat::WireKind, C, N, B>(
         statements,
         argument: quote!(#var),
         resources: vec![Resource {
+            registered: false,
             identity: crate::ResourceIdentity::Single(quote!(#pointer.addr())),
             active: active.clone(),
             access,

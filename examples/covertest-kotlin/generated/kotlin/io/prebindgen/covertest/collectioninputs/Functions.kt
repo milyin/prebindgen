@@ -3,7 +3,7 @@ package io.prebindgen.covertest.collectioninputs
 
 public fun `collectionInputPlain`(p0_w1: kotlin.collections.List<Long>, p1_w1: Int, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -40,7 +40,7 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 
 public fun `collectionInputCustom`(p0_w1: kotlin.collections.List<Long>, p1_w1: Int, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w6 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w6) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w6) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -77,7 +77,7 @@ p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.preb
 
 public fun `collectionInputNarrow`(p0_w1: kotlin.collections.List<Int>, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w6 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w6) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w6) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -125,7 +125,7 @@ val nativeResult = try { run { val nativeArgument0 = try { returnCapture } catch
 
 public fun `collectionInputSlice`(p0_w1: kotlin.collections.List<Long>, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -139,11 +139,49 @@ val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map {
 
 public fun `collectionInputArray`(p0_w1: kotlin.collections.List<Long>, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_elements = if (true) p0_w1?.toList()?.map { p0_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w5) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val nativeArgument0 = try { p0_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>() } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_input_array_517465a977f1d8a5(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun `collectionInputOptionalArray`(p0_w3: kotlin.collections.List<Long>?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val p0_w3_elements = if (p0_w3 != null) (if (true) requireNotNull(p0_w3).toList()?.map { p0_w7 ->
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(p0_w7) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
+} else null) else (null)
+val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_w3 != null) requireNotNull(p0_w3_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()) { "invalid option payload" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_input_optional_array_c11bc48fb5ea6c63(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun `collectionInputOptionalArrayBulk`(p0_w5: kotlin.collections.List<Long>?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val p0_w5_elements = if (p0_w5 != null) (if (true) requireNotNull(p0_w5).toList() else null) else (null)
+val p0_w1_writer = io.prebindgen.covertest.BulkWriter(io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.size)
+val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { run {
+p0_w1_writer.int((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[0], (if (p0_w5 != null) 1 else 0))
+val p0_w5_bulkList = if (p0_w5 != null) p0_w5_elements else null
+if (p0_w5_bulkList == null) { p0_w1_writer.absent((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[1]) } else {
+val p0_w5_bulkStart = p0_w1_writer.rows(p0_w5_bulkList.size, io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77)
+p0_w1_writer.range((0) + io.prebindgen.covertest.BulkLayouts.rc2b72962102e7ef8.offsets[1], p0_w5_bulkStart, p0_w5_bulkList.size)
+p0_w5_bulkList.forEachIndexed { p0_w5_bulkIndex, p0_w9 ->
+p0_w1_writer.long((p0_w5_bulkStart + p0_w5_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0], p0_w9)
+}
+}
+
+p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer.length } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_collection_input_optional_array_bulk_c810a58a5f8b13ca(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
 

@@ -533,7 +533,8 @@ impl CallbackReturn {
             values => format!("kotlin.arrayOf<kotlin.Any?>({})", values.join(", ")),
         };
         let mut body = format!(
-            "val callbackReturnWire = {raw}\n{}\ncallbackReturnWire",
+            "val callbackReturnWire = {raw}\nval __pb_consume: ({}.NativeHandle) -> Unit = {{ it.markConsumed() }}\n{}\ncallbackReturnWire",
+            context.package,
             input.consumed.join("; ")
         );
         if !input.locks.is_empty() || !input.lock_groups.is_empty() {
@@ -583,12 +584,8 @@ impl CallbackReturn {
                     let name = &field.name;
                     let ty = &handle.ty;
                     return Ok((
-                        quote!(let callback_return_owner = if #name == 0 {None} else {
-                        let pointer=#name as *mut ::prebindgen_jni_runtime::Allocation<#ty>;
-                        ::prebindgen_runtime::validate_pointer(pointer)?;
-                        Some(unsafe {Box::from_raw(pointer)})
-                    };),
-                        quote!(let _=callback_return_owner.map(Box::into_raw);),
+                        quote!(let _callback_return_owner=unsafe {::prebindgen_runtime::TransferredBox::new(#name as *mut ::prebindgen_jni_runtime::Allocation<#ty>, __prebindgen_input_consumed)}?;),
+                        quote!(),
                     ));
                 }
             }
@@ -598,8 +595,8 @@ impl CallbackReturn {
             return Ok((quote!(), quote!()));
         }
         Ok((
-            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::default(); #scan callback_return_owners.check()?;),
-            quote!(callback_return_owners.commit();),
+            quote!(let mut callback_return_owners=::prebindgen_runtime::CallbackReturnAllocations::tracking(__prebindgen_input_consumed); #scan callback_return_owners.check()?;),
+            quote!(),
         ))
     }
     fn rust_invoke(
@@ -613,36 +610,46 @@ impl CallbackReturn {
         input.rust.validation = crate::bulk::cached_reads(&input.rust.validation)?;
         let fields = self.fields();
         let result = format_ident!("callback_result");
-        let (return_type, decode) = match fields.as_slice() {
+        let (owners, commit_owners) = self.ownership_guard(context)?;
+        let ownership_reads = quote!(#owners #cache);
+        let (return_type, decode, late_decode) = match fields.as_slice() {
             [field] => {
                 let name = &field.name;
                 let read = field.kind.read_callback_return(&result);
                 (
                     field.kind.callback_return_type(),
                     quote!(let #name = #read;),
+                    quote!(),
                 )
             }
             _ => {
-                let reads = fields.iter().enumerate().map(|(i, field)| {
+                let mut reads = Vec::new();
+                let mut late_reads = Vec::new();
+                for (i, field) in fields.iter().enumerate() {
                     let name = &field.name;
                     let read = field
                         .kind
                         .read_array_element(&quote!(callback_result_rows), i);
-                    quote!(let #name = #read?;)
-                });
+                    let code = quote!(let #name=#read?;);
+                    if mentions_value(&ownership_reads, name) {
+                        reads.push(code);
+                    } else {
+                        late_reads.push(code);
+                    }
+                }
                 (
                     quote!(::prebindgen_jni_runtime::jni::signature::ReturnType::Object),
                     quote!(
                         let callback_result_rows = ::prebindgen_jni_runtime::jni::objects::JObjectArray::from(#result.l().map_err(|e|e.to_string())?);
                         #(#reads)*
                     ),
+                    quote!(#(#late_reads)*),
                 )
             }
         };
         let target = format_ident!("callback_return_value");
         let ty = &self.source_type;
         let expected = syn::parse_quote!(::prebindgen_runtime::Result<#ty>);
-        let (owners, commit_owners) = self.ownership_guard(context)?;
         let mut body = input.code_fragment_slot(
             InputFragment::Construct {
                 context,
@@ -673,14 +680,30 @@ impl CallbackReturn {
             },
             &expected,
         )?;
+        let mut alias_check = prebindgen_conversions::staged::ParameterAliasCheck::default();
+        alias_check.include_parameter(context, &input.rust.resources)?;
+        let aliases = alias_check.initialize()?;
         context.render(&quote!({
+            let __pb_input_consumed=::core::cell::Cell::new(0usize);
+            let __prebindgen_input_consumed=&__pb_input_consumed;
+            #aliases
             let #result = unsafe { #retained.invoke_return(#env, #return_type, &arguments) }?;
             #decode
             #cache
             #owners
+            #late_decode
             #body
         }))
     }
+}
+// Only read ownership-bearing fields and their controls during the guard scan.
+// Fallible reads of ordinary fields belong after the guard has been installed.
+fn mentions_value(code: &TokenStream, name: &syn::Ident) -> bool {
+    code.clone().into_iter().any(|token| match token {
+        proc_macro2::TokenTree::Ident(value) => value == *name,
+        proc_macro2::TokenTree::Group(group) => mentions_value(&group.stream(), name),
+        _ => false,
+    })
 }
 pub(crate) fn receive_return_owners(
     node: &kotlin::JniNode,
@@ -707,7 +730,7 @@ pub(crate) fn receive_return_owners(
             if scan.is_empty(){return Ok(scan);}
             let carrier=&controls[0].name;let row=format_ident!("{carrier}_ownership_row");
             let fields=group::argument_parameters(child).collect::<Vec<_>>();let count=fields.len();let capacity=i32::try_from(count+8).map_err(|_|"too many returned fields")?;
-            let reads=fields.into_iter().enumerate().map(|(index,field)|{let name=&field.name;let read=field.kind.read_array_element(&quote!(#row),index);quote!(let #name=#read?;)});
+            let reads=fields.into_iter().enumerate().filter(|(_,field)|mentions_value(&scan,&field.name)).map(|(index,field)|{let name=&field.name;let read=field.kind.read_array_element(&quote!(#row),index);quote!(let #name=#read?;)});
             let env=&context.environment;
             let code=quote!(if !#carrier.is_null() {let length=#env.get_array_length(&#carrier).map_err(|e|e.to_string())? as usize;for index in 0..length {
                 let frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;

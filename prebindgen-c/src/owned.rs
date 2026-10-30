@@ -162,7 +162,7 @@ pub(crate) fn input(
     let prepare_empty = (access == Access::Move && !by_value)
         .then(|| quote!(let #empty_var = if #condition {Some(#empty)} else {None};));
     let acquire = if access == Access::Move && by_value {
-        quote!(let #var=if #condition {Some(unsafe {::core::ptr::read(#pointer)})} else {None};)
+        quote!(let #var=if #condition {let value=unsafe {::core::ptr::read(#pointer)}; __prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+1); Some(value)} else {None};)
     } else if access == Access::Move {
         quote!(let #var = if #condition {Some(unsafe {::core::ptr::replace(#pointer, #empty_var.expect("prepared empty owner"))})} else {None};)
     } else {
@@ -196,6 +196,7 @@ pub(crate) fn input(
         statements,
         argument,
         resources: vec![prebindgen_conversions::Resource {
+            registered: by_value,
             identity: prebindgen_conversions::ResourceIdentity::Single(quote!(#pointer.addr())),
             active: condition,
             access,

@@ -122,8 +122,7 @@ impl PointerLenAbi {
 struct CodecImpl {
     bad_sequence: bool,
     reverse_values: bool,
-    unknown_prepared_read: bool,
-    pure_primitives: bool,
+    unknown_validation_read: bool,
     row_only_leaf: bool,
 }
 impl Codec for CodecImpl {
@@ -131,9 +130,7 @@ impl Codec for CodecImpl {
     type Wire = Type;
     type Chain = PacketChain;
     type Branch = Metadata;
-    fn input_leaf_construction_is_pure(&self, _: &Flat<Self::Schema>, ty: &Type, _: &()) -> bool {
-        self.pure_primitives && prebindgen_flat::Primitive::from_type(ty).is_some()
-    }
+
     fn group_metadata(&self) -> Metadata {
         Metadata::Components
     }
@@ -273,18 +270,13 @@ impl Codec for CodecImpl {
             metadata: PacketChain::Sequence,
             open: quote!(if #length>0 && #wire.is_null(){return Err("null sequence".into());}),
             bind: quote!(let #field=unsafe{*#wire.add(#index)};),
-            validation_values: vec![(field.clone(), quote!(#field))],
-            prepared_values: vec![(
-                if self.unknown_prepared_read {
+            validation_values: vec![(
+                if self.unknown_validation_read {
                     syn::parse_quote!(unknown)
                 } else {
                     field.clone()
                 },
-                if self.row_only_leaf {
-                    None
-                } else {
-                    Some(quote!(#field))
-                },
+                quote!(#field),
             )],
             release: quote!(),
         })
@@ -360,14 +352,12 @@ impl Codec for CodecImpl {
 #[test]
 fn optional_sequences_with_two_outer_values_compile_and_execute() {
     for reverse in [false, true] {
-        for pure in [false, true] {
-            for row_only in [false, true] {
-                pointer_length_round_trip(reverse, pure, row_only);
-            }
+        for row_only in [false, true] {
+            pointer_length_round_trip(reverse, row_only);
         }
     }
 }
-fn pointer_length_round_trip(reverse: bool, pure: bool, row_only: bool) {
+fn pointer_length_round_trip(reverse: bool, row_only: bool) {
     use prebindgen_conversions::staged::emit_call;
     let source =
         syn::parse_file("pub fn echo(values:Option<Vec<i32>>)->Option<Vec<i32>>{} ").unwrap();
@@ -380,19 +370,12 @@ fn pointer_length_round_trip(reverse: bool, pure: bool, row_only: bool) {
         &mut flat,
         &CodecImpl {
             reverse_values: reverse,
-            pure_primitives: pure,
             row_only_leaf: row_only,
             ..Default::default()
         },
         &fun!(echo),
         &(),
     );
-    if row_only && !pure {
-        assert!(filled
-            .unwrap_err()
-            .contains("cannot be read after row validation"));
-        return;
-    }
     filled.unwrap();
     let f = flat.function("echo").unwrap();
     assert_eq!(
@@ -484,7 +467,7 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
     assert!(error.contains("missing output binding"), "{error}");
     assert!(flat.function("output").unwrap().ret.slot.is_none());
     let bad = CodecImpl {
-        unknown_prepared_read: true,
+        unknown_validation_read: true,
         ..Default::default()
     };
     let error = bind_input(
@@ -496,6 +479,9 @@ fn malformed_nested_sequence_bindings_are_rejected_before_installation() {
         &(),
     )
     .unwrap_err();
-    assert!(error.contains("prepared input names differ"), "{error}");
+    assert!(
+        error.contains("unknown collection validation binding"),
+        "{error}"
+    );
     assert!(flat.function("input").unwrap().params[0].ty.slot.is_none());
 }

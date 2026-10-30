@@ -27,9 +27,10 @@ fun checkDataClasses() {
     val min128 = BigInteger.ONE.shiftLeft(127).negate()
     val max128 = BigInteger.ONE.shiftLeft(128).subtract(BigInteger.ONE)
     val envelope = Envelope("héllo\u0000世界", blob, unsigned, true, 0x10ffff, min128, max128)
+    val invalidStorage = io.prebindgen.covertest.storage.storageNew()
+    invalidData { dataWithStorage(invalidStorage, envelope.copy(code = 0xd800)) }
+    check(invalidStorage.isClosed)
     val storage = io.prebindgen.covertest.storage.storageNew()
-    invalidData { dataWithStorage(storage, envelope.copy(code = 0xd800)) }
-    check(!storage.isClosed) // data validation must precede native handle transfer
     dataWithStorage(storage, envelope).close()
     check(storage.isClosed)
     val constructed = dataEnvelopeConstructed(blob)

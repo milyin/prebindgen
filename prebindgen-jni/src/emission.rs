@@ -9,7 +9,7 @@ use quote::ToTokens;
 pub struct JniContext {
     /// Mutable JNI environment parameter.
     pub environment: syn::Ident,
-    /// Boolean-array parameter acknowledging ownership transfer.
+    /// Long-array parameter recording completed input transfers.
     pub acknowledgement: syn::Ident,
     /// Local retaining a committed domain-error packet or delivery marker across Rust unwinding.
     pub domain_output: syn::Ident,
@@ -24,6 +24,7 @@ pub struct JniContext {
 impl TemplateContext for JniContext {
     fn render(&self, code: &TokenStream) -> Result<TokenStream> {
         render_template(code, &|name| match name {
+            "input_consumed" => Ok(quote::quote!(&__pb_input_consumed)),
             "environment" => Ok(self.environment.to_token_stream()),
             "acknowledgement" => Ok(self.acknowledgement.to_token_stream()),
             "domain_output" => Ok(self.domain_output.to_token_stream()),

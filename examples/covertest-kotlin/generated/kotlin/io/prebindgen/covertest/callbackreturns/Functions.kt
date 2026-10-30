@@ -1,6 +1,65 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package io.prebindgen.covertest.callbackreturns
 
+public fun `callbackReturnWireRowsCatch`(p0_callback: io.prebindgen.covertest.VoidToCallbackWireRowVecCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?>? {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: kotlin.collections.List<io.prebindgen.covertest.callbackreturns.CallbackWireRow>
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = p0_callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5.`resource`?.raw ?: 0L, callback_return_w5.`character`) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5.`resource`) { "null handle" } else null) }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> if (true) __pb_consume(callback_return_w5.`resource`!!); kotlin.Unit })
+} else null
+ io.prebindgen.covertest.withHandleLocks((kotlin.collections.emptyList<Nothing>() + (callback_return_w1_elements.orEmpty().flatMap { it.second() }))) { val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements.orEmpty().forEach { it.third(__pb_consume) }
+callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_wire_rows_catch_3a87146de894db6b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun `callbackReturnWireRowCatch`(p0_callback: io.prebindgen.covertest.VoidToCallbackWireRowCallback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(): Array<Any?> {
+        var callbackCleanupFailure: Throwable? = null
+        lateinit var callbackReturned: io.prebindgen.covertest.callbackreturns.CallbackWireRow
+        try {
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = p0_callback.run()
+return kotlin.run { val callback_return_w1 = callbackReturned
+ try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1.`resource`) { "null handle" } else null) { val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.`resource`?.raw ?: 0L, callback_return_w1.`character`)
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+if (true) __pb_consume(callback_return_w1.`resource`!!)
+callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
+    }
+} } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_wire_row_catch_0168544f852714f4(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
 public fun `callbackReturnI64`(p0_callback: io.prebindgen.covertest.i64Toi64Callback?, onError: io.prebindgen.covertest.JniErrorHandler<Long> = io.prebindgen.covertest.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -19,6 +78,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -48,6 +108,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -77,6 +138,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -106,6 +168,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -135,6 +198,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1?.toByteArray()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -162,6 +226,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -191,6 +256,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -220,6 +286,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -249,6 +316,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -278,6 +346,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1.toLong()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -307,6 +376,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1?.toByteArray()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -336,6 +406,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -365,6 +436,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -412,6 +484,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         }
 return kotlin.run { val callback_return_w3 = callbackReturned
   val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>((if (callback_return_w3 != null) 1 else 0), if (callback_return_w3 != null) requireNotNull(callback_return_w3) else 0L)
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -463,9 +536,10 @@ callbackOutput0_bulkList!!.add((requireNotNull(callbackOutput0_bulkReader).long(
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
  val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
  val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -508,6 +582,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(callback_return_w1.`number`, callback_return_w1.`label`)
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -537,6 +612,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1.wireValue
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -595,7 +671,8 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
-if (true) callback_return_w1!!.markConsumed()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+if (true) __pb_consume(callback_return_w1!!)
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_856115d8ce303838(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -641,7 +718,8 @@ var callbackReturnReady = false
         } } catch (failure: Throwable) { if (callbackReturnReady) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callbackReturned) }; throw failure }
 return kotlin.run { val callback_return_w1 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (true) requireNotNull(callback_return_w1) { "null handle" } else null) { val callbackReturnWire = callback_return_w1?.raw ?: 0L
-if (true) callback_return_w1!!.markConsumed()
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+if (true) __pb_consume(callback_return_w1!!)
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_take_affc1f4d290ade63(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -668,7 +746,8 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w3 = callbackReturned
  try {  io.prebindgen.covertest.withHandleLocks(if (callback_return_w3 != null) if (true) requireNotNull(requireNotNull(callback_return_w3)) { "null handle" } else null else null) { val callbackReturnWire = if (callback_return_w3 != null) requireNotNull(callback_return_w3).raw else 0L
-if (callback_return_w3 != null) { if (true) requireNotNull(callback_return_w3).markConsumed() }
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+if (callback_return_w3 != null) { if (true) __pb_consume(requireNotNull(callback_return_w3)) }
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w3); throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_optional_29ef924759d7e5bc(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -705,10 +784,11 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
  try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5?.raw ?: 0L) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5) { "null handle" } else null) }, { if (true) callback_return_w5!!.markConsumed(); kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5?.raw ?: 0L) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5) { "null handle" } else null) }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> if (true) __pb_consume(callback_return_w5!!); kotlin.Unit })
 } else null
  io.prebindgen.covertest.withHandleLocks((kotlin.collections.emptyList<Nothing>() + (callback_return_w1_elements.orEmpty().flatMap { it.second() }))) { val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
-callback_return_w1_elements.orEmpty().forEach { it.third() }
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements.orEmpty().forEach { it.third(__pb_consume) }
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_vector_3ee929da6cb7571b(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -737,6 +817,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -761,8 +842,8 @@ public fun `callbackReturnJoin`(p0_w1: io.prebindgen.covertest.callbackreturns.C
     val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
 val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid handle") }; io.prebindgen.covertest.withHandleLocks(handle0) {
-        val ownership = BooleanArray(1)
-        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_join_64d9e75305501c53(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0]) { if (true) p0_w1!!.markConsumed() } }
+        val ownership = LongArray(1) { -1L }
+        try { run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { ownership } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_join_64d9e75305501c53(nativeArgument0, nativeArgument1, nativeArgument2) } } finally { if (ownership[0] >= 0L) { val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }; if (true) __pb_consume(p0_w1!!) } else { var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { handle -> if (remaining > 0L) { taken.add(handle.address); handle.markConsumed(); remaining-- } else if (handle.address in taken) handle.markConsumed() }; if (true) __pb_consume(p0_w1!!); handle0?.let { if (it.address in taken) it.markConsumed() } } }
     } } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
     if (returnCapture.status == 2) {
         return@run onError.run(returnCapture.message) }
@@ -789,6 +870,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -841,6 +923,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -869,10 +952,11 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(if (p0_w6 == null) null else object 
         callbackReturned = p0_w6.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
-}) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+}) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -900,6 +984,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -927,10 +1012,11 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run()
 return kotlin.run { val callback_return_w1 = callbackReturned
  try { val callback_return_w1_elements = if (true) callback_return_w1?.toList()?.map { callback_return_w5 ->
-kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5?.raw ?: 0L) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5) { "null handle" } else null) }, { if (true) callback_return_w5!!.markConsumed(); kotlin.Unit })
+kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(callback_return_w5?.raw ?: 0L) }, { kotlin.collections.listOfNotNull(if (true) requireNotNull(callback_return_w5) { "null handle" } else null) }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> if (true) __pb_consume(callback_return_w5!!); kotlin.Unit })
 } else null
  io.prebindgen.covertest.withHandleLocks((kotlin.collections.emptyList<Nothing>() + (callback_return_w1_elements.orEmpty().flatMap { it.second() }))) { val callbackReturnWire = callback_return_w1_elements?.map { it.first() }?.toTypedArray<kotlin.Any?>()
-callback_return_w1_elements.orEmpty().forEach { it.third() }
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
+callback_return_w1_elements.orEmpty().forEach { it.third(__pb_consume) }
 callbackReturnWire } } catch (failure: Throwable) { fun releaseReturned(value: Any?) { when (value) { is io.prebindgen.covertest.NativeHandle -> try { value.close() } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }; is Iterable<*> -> value.forEach { releaseReturned(it) } } }; releaseReturned(callback_return_w1); throw failure } }
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_return_owned_vector_catch_0161633ca648736c(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }
@@ -984,6 +1070,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_w2 == null) nu
         callbackReturned = p0_w2.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }

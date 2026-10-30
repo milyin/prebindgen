@@ -1,9 +1,11 @@
 //! Panic containment and pointer validation for foreign adapters.
 #![warn(missing_docs)]
+mod input;
+pub use input::{DynamicInputs, FixedInputs, SharedInputs};
 mod callback;
 #[cfg(test)]
 mod diagnostics_tests;
-pub use callback::CallbackReturnAllocations;
+pub use callback::{CallbackReturnAllocations, TransferredBox, TransferredOwner};
 
 /// Runtime failure represented as a message for the adapter's error channel.
 pub type Result<T> = std::result::Result<T, String>;

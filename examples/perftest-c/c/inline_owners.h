@@ -27,10 +27,13 @@ static void check_inline_owners(void) {
     assert(len==3 && view.len==3 && memcmp(view.data,"a\0b",3)==0);
     assert(view.data==owner_bytes_view(&bytes).data);
     assert(owner_inline_bytes_capacity(&bytes)==4096);
-    bool accepted=true;uintptr_t output=123;char *error=NULL;
+    size_t accepted=1;uintptr_t output=123;char *error=NULL;
     assert(!owner_inline_bytes_alias(&bytes,&bytes,&output,&accepted,&error));
-    assert(!accepted && output==123 && error!=NULL);
+    assert(accepted==1 && output==123 && error!=NULL);
     owner_free_error(error);
+    assert(owner_bytes_len(&bytes)==0);
+    owner_drop_bytes(&bytes);
+    bytes=owner_inline_bytes_new(&view,&len);
     assert(owner_inline_bytes_take(&bytes)==4096);
     assert(owner_bytes_len(&bytes)==0);
     owner_drop_bytes(&bytes);owner_drop_bytes(&bytes);

@@ -763,20 +763,6 @@ pub trait Codec {
     ) -> bool {
         false
     }
-    /// Whether constructing a primitive leaf and evaluating its argument can run
-    /// during validation, even if another argument subsequently fails validation.
-    /// Construction must be infallible and have no observable side effects,
-    /// and must accept the transport's validation-time row values.
-    /// Applies to both ordinary and bulk leaf conversions. Custom codecs retain
-    /// deferred construction by default. Resource acquisition is never moved.
-    fn input_leaf_construction_is_pure(
-        &self,
-        _flat: &Flat<Self::Schema>,
-        _ty: &Type,
-        _extra: &Self::Extra,
-    ) -> bool {
-        false
-    }
     /// Keep a collection occurrence in one native input leaf instead of
     /// decomposing it into element rows. Explicit `Input::Sequence` overrides
     /// this preference; input defaults and whole-collection identities use it.
@@ -961,8 +947,7 @@ pub trait Codec {
     /// `index`. Raw reads may defer errors until the active conversion.
     ///
     /// Choose additional names fresh against the element and outer boundary
-    /// values. The shared helper reserves `{wire}_staged`, `{wire}_acquired` and
-    /// `{wire}_identities_N` (for each resource index N) for its own locals.
+    /// values. The shared helper reserves `{wire}_element_built` for its row result.
     fn sequence_input(
         &self,
         _extra: &Self::Extra,
@@ -1596,6 +1581,57 @@ impl<'a, C: Codec> Compiler<'a, C> {
         active: &Condition,
         names: Option<(&syn::Ident, &syn::Ident)>,
     ) -> Result<CodecInput<C>> {
+        let ready = names
+            .map(|(_, var)| format_ident!("{var}_built"))
+            .unwrap_or_else(|| format_ident!("{}_w{}_built", self.prefix, self.next.get()));
+        let mut plan = self.input_unprepared_named(ty, recipe, extra, active, names)?;
+        let mut register = TokenStream::new();
+        let mut transferred = TokenStream::new();
+        for (index, resource) in plan.resources.iter_mut().enumerate() {
+            if resource.registered {
+                continue;
+            }
+            let condition = &resource.active;
+            let exclusive = resource.access != prebindgen_conversions::Access::Shared;
+            let count = format_ident!("{ready}_transferred_{index}");
+            let addresses = match &resource.identity {
+                prebindgen_conversions::ResourceIdentity::Single(value) => {
+                    quote!(::core::iter::once((#value) as usize))
+                }
+                prebindgen_conversions::ResourceIdentity::Many(value) => quote!(#value),
+            };
+            if resource.access == prebindgen_conversions::Access::Move {
+                register.extend(quote!(let mut #count=0usize; if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?; #count+=1;}}));
+                transferred.extend(quote!(__prebindgen_input_consumed.set(__prebindgen_input_consumed.get()+#count);));
+            } else {
+                register.extend(quote!(if #condition {for address in #addresses {__prebindgen_input_aliases.access(address,#exclusive)?;}}));
+            }
+            resource.registered = true;
+        }
+        let validation = plan.validation;
+        let acquire = plan.acquire;
+        let statements = plan.statements;
+        let argument = plan.argument;
+        let condition = active.rust();
+        let built = if statements.is_empty() {
+            quote!(Some(#argument))
+        } else {
+            quote!(Some({#statements #argument}))
+        };
+        plan.validation = quote!(#validation #[allow(clippy::let_and_return,clippy::unit_arg)] let #ready = if #condition { #register #acquire #transferred #built } else {None};);
+        plan.acquire = quote!();
+        plan.statements = quote!();
+        plan.argument = quote!(#ready.expect("active input"));
+        Ok(plan)
+    }
+    fn input_unprepared_named(
+        &self,
+        ty: &Type,
+        recipe: &Input,
+        extra: &C::Extra,
+        active: &Condition,
+        names: Option<(&syn::Ident, &syn::Ident)>,
+    ) -> Result<CodecInput<C>> {
         if prebindgen_flat::callback_signature(ty)?.is_some()
             && !matches!(recipe, Input::Leaf | Input::Callback(_))
         {
@@ -1670,11 +1706,6 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     active,
                     child,
                     self.bulk.get(),
-                    matches!(element_recipe.as_ref(), Input::Leaf)
-                        && prebindgen_flat::Primitive::from_type(element).is_some()
-                        && self
-                            .codec
-                            .input_leaf_construction_is_pure(self.flat, element, extra),
                 );
             }
             Input::Optional(inner) => {

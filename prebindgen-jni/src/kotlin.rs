@@ -70,7 +70,9 @@ pub struct KotlinInput {
     pub arguments: Vec<String>,
     /// Handle expressions to lock for the duration of the native call.
     pub locks: Vec<String>,
-    /// Statements run after native ownership acknowledgement, including on failure.
+    /// Statements visiting owned handles in native acquisition order. Use
+    /// `__pb_consume(handle)` so the writer can invalidate either all owners
+    /// on success or only the consumed prefix and its aliases on failure.
     pub consumed: Vec<String>,
 }
 /// Kotlin result conversion and rollback code owned by the result slot.
@@ -273,7 +275,7 @@ pub(crate) fn input_leaves(
                     "if ({condition}) requireNotNull({n}) {{ \"null handle\" }} else null"
                 ));
                 if handle.access == Access::Move {
-                    consumed.push(format!("if ({condition}) {n}!!.markConsumed()"));
+                    consumed.push(format!("if ({condition}) __pb_consume({n}!!)"));
                 }
                 (
                     format!("{}?", context.class_name(&handle.ty)?),
@@ -673,7 +675,7 @@ mod tests {
         assert_eq!(emitted.locks, ["if (isEnabled() && count > 3) requireNotNull(incoming) { \"null handle\" } else null"]);
         assert_eq!(
             emitted.consumed,
-            ["if (isEnabled() && count > 3) incoming!!.markConsumed()"]
+            ["if (isEnabled() && count > 3) __pb_consume(incoming!!)"]
         );
 
         let plan = JniCodec

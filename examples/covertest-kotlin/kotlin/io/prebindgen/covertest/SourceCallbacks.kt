@@ -256,7 +256,7 @@ fun checkSourceCallbacks() {
     val beforeRejected = callbackOwnedDrops()
     try { callbackPreflight(original, null); error("expected null callback rejection") }
     catch (_: IllegalArgumentException) { }
-    verify(!original.isClosed && callbackOwnedDrops() == beforeRejected)
+    verify(original.isClosed && callbackOwnedDrops() == beforeRejected + 1uL)
     original.close()
 
     var first: CallbackTransferred? = null

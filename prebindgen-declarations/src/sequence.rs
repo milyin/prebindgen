@@ -1,4 +1,4 @@
-//! Lift one element recipe into a runtime-sized collection without changing phases.
+//! Decode and construct collection elements directly into their final storage.
 use super::*;
 
 use prebindgen_conversions::{Resource, ResourceIdentity};
@@ -19,11 +19,8 @@ pub struct SequenceInput<W: prebindgen_flat::WireKind, G> {
     pub bind: TokenStream,
     /// Raw element expressions keyed by binding name, used during validation.
     pub validation_values: Vec<(syn::Ident, TokenStream)>,
-    /// Reads valid after `release`, used by acquisition/construction and identities.
-    /// `None` forbids reading that raw wire after validation (for example a JNI
-    /// reference deleted with its row frame). The compiler rejects such reads.
-    pub prepared_values: Vec<(syn::Ident, Option<TokenStream>)>,
-    /// Per-row cleanup after validation, before deferred closures are retained.
+    /// Per-row cleanup after construction. Generated code runs this before
+    /// propagating an ordinary conversion error from the row.
     pub release: TokenStream,
 }
 /// Adapter-supplied array output transport. Owners are committed only after delivery.
@@ -111,30 +108,6 @@ fn replace(code: &TokenStream, values: &[(syn::Ident, TokenStream)]) -> Result<T
         .collect())
 }
 
-fn prepared(
-    code: &TokenStream,
-    values: &[(syn::Ident, Option<TokenStream>)],
-) -> Result<TokenStream> {
-    fn mentions(code: TokenStream, name: &syn::Ident) -> bool {
-        code.into_iter().any(|token| match token {
-            proc_macro2::TokenTree::Ident(id) => id == *name,
-            proc_macro2::TokenTree::Group(group) => mentions(group.stream(), name),
-            _ => false,
-        })
-    }
-    let mut reads = Vec::new();
-    for (name, value) in values {
-        if value.is_none() && mentions(code.clone(), name) {
-            return Err(format!(
-                "collection wire `{}` cannot be read after row validation",
-                name
-            ));
-        }
-        reads.push((name.clone(), value.clone().unwrap_or_else(|| quote!(#name))));
-    }
-    replace(code, &reads)
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn input<C: Codec>(
     codec: &C,
@@ -147,7 +120,6 @@ pub(crate) fn input<C: Codec>(
     active: &Condition,
     child: CodecInput<C>,
     bulk: bool,
-    pure_primitive: bool,
 ) -> Result<CodecInput<C>> {
     let (element, view) = prebindgen_flat::sequence_parts(ty)
         .ok_or("sequence recipe requires Vec<T>, &[T] or &Vec<T>")?;
@@ -158,6 +130,11 @@ pub(crate) fn input<C: Codec>(
         return Err("collection reference elements are unsupported; use owned elements".into());
     }
     codec.validate_input(&child)?;
+    if !child.acquire.is_empty() || child.resources.iter().any(|resource| !resource.registered) {
+        return Err(
+            "collection elements must be prepared eagerly before selecting their transport".into(),
+        );
+    }
     if !view.is_owned()
         && child
             .resources
@@ -192,56 +169,36 @@ pub(crate) fn input<C: Codec>(
         return Err("collection elements must have at least one input binding".into());
     }
     prebindgen_conversions::validate_value_bindings(&transport.validation_values)?;
-    let names = transport
-        .validation_values
-        .iter()
-        .map(|(n, _)| n.to_string())
-        .collect::<std::collections::BTreeSet<_>>();
-    let prepared_names = transport
-        .prepared_values
-        .iter()
-        .map(|(n, _)| n.to_string())
-        .collect::<std::collections::BTreeSet<_>>();
-    if names != prepared_names || prepared_names.len() != transport.prepared_values.len() {
-        return Err("collection prepared input names differ from validation bindings".into());
-    }
-    let pure_primitive = pure_primitive && child.resources.is_empty() && child.acquire.is_empty();
-    let validation = replace(&child.validation, &transport.validation_values)?;
-    let acquire = prepared(&child.acquire, &transport.prepared_values)?;
-    let construction = |code: &TokenStream| {
-        if pure_primitive {
-            replace(code, &transport.validation_values)
-        } else {
-            prepared(code, &transport.prepared_values)
+    for (name, _) in &transport.validation_values {
+        if !prebindgen_flat::wire_definitions(std::iter::once(&child.node))
+            .any(|wire| wire.name == *name)
+        {
+            return Err(format!("unknown collection validation binding `{name}`"));
         }
-    };
-    let statements = construction(&child.statements)?;
-    // Wrap expressions as a local initializer so the syntax visitor can replace paths.
+    }
+    let validation = replace(&child.validation, &transport.validation_values)?;
+    let statements = replace(&child.statements, &transport.validation_values)?;
     let child_argument = &child.argument;
-    let argument = construction(&quote!(let #var = #child_argument;))?;
-    let mut resources = Vec::new();
-    let mut declarations = TokenStream::new();
-    let mut collect = TokenStream::new();
-    for (position, resource) in child.resources.into_iter().enumerate() {
-        let ids = format_ident!("{wire}_identities_{position}");
-        declarations.extend(quote!(let mut #ids:Vec<usize>=Vec::new();));
-        let condition = &resource.active;
-        let identity = match resource.identity {
-            ResourceIdentity::Single(code) => quote!(#ids.push((#code) as usize);),
-            ResourceIdentity::Many(code) => quote!(#ids.extend(#code);),
-        };
-        collect.extend(prepared(
-            &quote!(if #condition {#identity}),
-            &transport.prepared_values,
-        )?);
-        resources.push(Resource {
-            identity: ResourceIdentity::Many(quote!(#ids.iter().copied())),
+    let argument = replace(
+        &quote!(let #var = #child_argument;),
+        &transport.validation_values,
+    )?;
+    let resource_count = child.resources.len();
+    let resource_reserve = (!child.resources.is_empty()).then(
+        || quote!(__prebindgen_input_aliases.reserve(#length.saturating_mul(#resource_count));),
+    );
+    let resources = child
+        .resources
+        .into_iter()
+        .map(|resource| Resource {
+            registered: true,
+            // Runtime addresses are checked while each row is alive. This descriptor
+            // retains dynamic cardinality for choosing the enclosing call's history.
+            identity: ResourceIdentity::Many(quote!(::core::iter::empty::<usize>())),
             active: active.rust(),
             access: resource.access,
-        });
-    }
-    let staged = format_ident!("{wire}_staged");
-    let acquired = format_ident!("{wire}_acquired");
+        })
+        .collect();
     let open = transport.open;
     let bind = transport.bind;
     let release = transport.release;
@@ -270,40 +227,7 @@ pub(crate) fn input<C: Codec>(
         SequenceView::Slice => quote!(#var.as_slice()),
         SequenceView::Mutable => unreachable!(),
     };
-    // Only adapter-confirmed primitive leaves may move construction earlier.
-    // Source constructors and all resource-bearing conversions retain the phases.
-    if pure_primitive {
-        let element_value = format_ident!("{wire}_element_built");
-        return Ok(InputPlan {
-            fallible: true,
-            context: Default::default(),
-            acknowledgement: None,
-            node: WireNode::Chain {
-                controls: transport.controls,
-                child: Box::new(child.node),
-                meta: transport.metadata,
-            },
-            validation: quote! {
-                let mut #var:Vec<#element>=Vec::new();
-                if #condition { #open #length_check
-                    #var.reserve_exact(#length);
-                    for #index in 0..#length {
-                        #bind #validation
-                        #[allow(clippy::redundant_closure_call)]
-                        let #element_value=(|| -> ::core::result::Result<#element,String> {
-                            #statements #argument Ok(#var)
-                        })();
-                        #release
-                        #var.push(#element_value?);
-                    }
-                }
-            },
-            acquire: quote!(),
-            statements: to_array,
-            argument: value,
-            resources,
-        });
-    }
+    let element_value = format_ident!("{wire}_element_built");
     Ok(InputPlan {
         fallible: true,
         context: Default::default(),
@@ -314,15 +238,23 @@ pub(crate) fn input<C: Codec>(
             meta: transport.metadata,
         },
         validation: quote! {
-            #declarations
-            let mut #staged=Vec::new();
-            if #condition { #open #length_check #staged.reserve_exact(#length); for #index in 0..#length {
-                #bind #validation #collect #release
-                #staged.push(move || { #acquire move || -> ::core::result::Result<#element,String> { #statements #argument Ok(#var) } });
-            }}
+            let mut #var:Vec<#element>=Vec::new();
+            if #condition { #open #length_check
+                #var.reserve_exact(#length);
+                #resource_reserve
+                for #index in 0..#length {
+                    #bind
+                    #[allow(clippy::redundant_closure_call)]
+                    let #element_value=(|| -> ::core::result::Result<#element,String> {
+                        #validation #statements #argument Ok(#var)
+                    })();
+                    #release
+                    #var.push(#element_value?);
+                }
+            }
         },
-        acquire: quote!(let #acquired:Vec<_>=#staged.into_iter().map(|acquire|acquire()).collect();),
-        statements: quote!(let #var:Vec<#element>=#acquired.into_iter().map(|construct|construct()).collect::<::core::result::Result<_,String>>()?; #to_array),
+        acquire: quote!(),
+        statements: to_array,
         argument: value,
         resources,
     })
@@ -470,23 +402,5 @@ mod tests {
         .unwrap();
         assert!(code.to_string().contains(&quote!(&(*pointer)).to_string()));
         assert!(code.to_string().contains("consume (cached , value)"));
-    }
-    #[test]
-    fn deleted_row_references_cannot_escape_into_deferred_phases() {
-        assert!(
-            prepared(&quote!(decode(raw);), &[(syn::parse_quote!(raw), None)])
-                .unwrap_err()
-                .contains("after row validation")
-        );
-        assert!(prepared(
-            &quote!(decode_macro!(raw);),
-            &[(syn::parse_quote!(raw), None)]
-        )
-        .is_err());
-        assert!(prepared(
-            &quote!(decode(already_validated);),
-            &[(syn::parse_quote!(raw), None)]
-        )
-        .is_ok());
     }
 }

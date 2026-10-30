@@ -169,17 +169,18 @@ fun checkOptions() {
     try {optionProjectionViews(true) { _, _ -> error("delivery") }} catch (e: IllegalStateException) {check(e.message == "delivery");check(e.suppressed.isEmpty())}
     check(io.prebindgen.covertest.resources.projectionDrops() == viewDrops + 2uL)
     check(optionResourcePair(null, null) == 0L)
-    // A later closed input must not consume an earlier valid move input.
+    // A closed first value leaves later owners unread; reversing them consumes the prefix.
     val livePair = checkNotNull(optionResourceNew(true))
     val closedPair = checkNotNull(optionResourceNew(true))
     closedPair.close()
     val beforeClosedPair = ownedResourceDrops()
-    for ((first, second) in listOf(livePair to closedPair, closedPair to livePair)) {
-        try { optionResourcePair(first, second); error("closed owner accepted") }
-        catch (_: IllegalArgumentException) { }
-        check(!livePair.isClosed && optionResourceId(livePair) == 77L)
-        check(ownedResourceDrops() == beforeClosedPair)
-    }
+    try { optionResourcePair(closedPair, livePair); error("closed owner accepted") }
+    catch (_: IllegalArgumentException) { }
+    check(!livePair.isClosed && optionResourceId(livePair) == 77L)
+    check(ownedResourceDrops() == beforeClosedPair)
+    try { optionResourcePair(livePair, closedPair); error("closed owner accepted") }
+    catch (_: IllegalArgumentException) { }
+    check(livePair.isClosed && ownedResourceDrops() == beforeClosedPair + 1uL)
     livePair.close()
     check(optionCtorId(0,null,null) == -10L)
     check(optionCtorId(0,7,null) == 7L)
@@ -201,27 +202,29 @@ fun checkOptions() {
     check(optionResourceEcho(null, 65) == null)
     check(optionResourceId(null) == -1L)
     check(ownedResourceDrops() == start)
+    val alias = optionResourceNew(true)!!
+    try {optionResourcePair(alias, alias); error("aliased optional owners accepted")} catch (_: IllegalArgumentException) {}
+    check(alias.isClosed)
+    val invalid = optionResourceNew(true)!!
+    try { optionResourceEcho(invalid, 0xd800); error("invalid scalar accepted") } catch (_: IllegalArgumentException) {}
+    check(invalid.isClosed)
     val handle = optionResourceNew(true)!!
     check(optionResourceId(handle) == 77L)
-    try {optionResourcePair(handle, handle); error("aliased optional owners accepted")} catch (_: IllegalArgumentException) {}
-    check(!handle.isClosed)
-    try { optionResourceEcho(handle, 0xd800); error("invalid scalar accepted") } catch (_: IllegalArgumentException) {}
-    check(!handle.isClosed)
     val returned = optionResourceEcho(handle, 65)!!
     check(handle.isClosed)
     check(optionResourceId(returned) == 77L)
     check(optionResourceMut(null) == -1L)
     check(optionResourceMut(returned) == 78L)
     returned.close()
-    check(ownedResourceDrops() == start + 1uL)
+    check(ownedResourceDrops() == start + 3uL)
     try {optionResourceId(returned); error("closed optional handle accepted")} catch (_: IllegalArgumentException) {}
     val none = optionalResourceNew(false)!!
     check(none.resource == null && none.details == null)
     val record = optionalResourceNew(true)!!
     check(record.details == OptionalFields(9, null, 233))
     record.resource!!.close()
-    check(ownedResourceDrops() == start + 2uL)
+    check(ownedResourceDrops() == start + 4uL)
     try { optionalPairNew { absent, present -> check(absent == null && present != null); error("mixed delivery") } }
     catch (e: IllegalStateException) {check(e.message == "mixed delivery");check(e.suppressed.isEmpty())}
-    check(ownedResourceDrops() == start + 3uL)
+    check(ownedResourceDrops() == start + 5uL)
 }

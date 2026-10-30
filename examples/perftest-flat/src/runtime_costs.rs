@@ -105,3 +105,12 @@ pub fn collection_input_narrow_bulk(values: Vec<i64>) -> i64 {
 pub fn collection_input_narrow_value(value: u8) -> i64 {
     collection_input_value(i64::from(value))
 }
+
+#[prebindgen]
+pub fn collection_input_optional_array(values: Option<[i64; 4]>) -> i64 {
+    values.map(|values| values.into_iter().sum()).unwrap_or(-1)
+}
+#[prebindgen]
+pub fn collection_input_optional_array_bulk(values: Option<[i64; 4]>) -> i64 {
+    collection_input_optional_array(values)
+}

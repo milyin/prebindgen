@@ -21,6 +21,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -50,6 +51,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0)
 return kotlin.run { val callback_return_w1 = callbackReturned
   val callbackReturnWire = callback_return_w1
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -81,6 +83,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -112,6 +115,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -143,6 +147,7 @@ val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == nu
         callbackReturned = p0_callback.run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -163,6 +168,7 @@ callbackReturnWire }
         callbackReturned = p1_callback.run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
@@ -193,10 +199,11 @@ kotlin.Triple({ kotlin.arrayOf<kotlin.Any?>(if (p0_w6 == null) null else object 
         callbackReturned = p0_w6.run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }
-}) }, { kotlin.collections.emptyList<Nothing>() }, { ; kotlin.Unit })
+}) }, { kotlin.collections.emptyList<Nothing>() }, { __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit -> ; kotlin.Unit })
 } else null
 val returnCapture = io.prebindgen.covertest.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
     try {
@@ -228,6 +235,7 @@ val nativeResult = try { run { val nativeArgument0 = try { (if (p0_w4 != null) 1
         callbackReturned = requireNotNull(p0_w4).run(callbackArgument0_0, callbackArgument1_0)
 return kotlin.run { val callback_return_w2 = callbackReturned
   val callbackReturnWire = callback_return_w2
+val __pb_consume: (io.prebindgen.covertest.NativeHandle) -> Unit = { it.markConsumed() }
 
 callbackReturnWire }
     }

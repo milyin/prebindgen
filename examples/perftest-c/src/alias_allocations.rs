@@ -225,10 +225,7 @@ fn generated_collection_inputs_allocate_once_without_growth() {
             size * std::mem::size_of::<i64>()
         );
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
-        // Constructor overrides keep deferred staging, with its length reserved.
-        // This i64 case permits in-place collection between stages. Leave the
-        // allocation count portable across standard-library implementations;
-        // other constructor layouts are not covered by this allocation budget.
+        // Custom constructors use the same final vector allocation as primitives.
         let custom_cost = allocations(|| unsafe {
             assert_eq!(
                 super::perftest_collection_input_custom(
@@ -241,7 +238,41 @@ fn generated_collection_inputs_allocate_once_without_growth() {
                 expected + 7
             );
         });
-        assert!(custom_cost <= 3 * usize::from(size != 0));
+        assert_eq!(custom_cost, usize::from(size != 0));
+        assert_eq!(ALLOCATED_BYTES.with(Cell::get), size * 8);
         assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+    }
+}
+
+#[test]
+fn consuming_collection_inputs_keep_only_final_values_and_alias_history() {
+    for size in [0usize, 1, 8, 64, 512, 4096] {
+        let rows: Vec<_> = (0..size)
+            .map(|index| super::__PbRow_collection_try_construct_all_p0_w1 {
+                v0: unsafe { super::perftest_collection_resource_new(index as i64 + 100) },
+            })
+            .collect();
+        let mut output = -1;
+        let mut consumed = usize::MAX;
+        let mut error = std::ptr::null_mut();
+        let cost = allocations(|| unsafe {
+            assert!(super::perftest_collection_try_construct_all(
+                super::__PbRows {
+                    data: rows.as_ptr().cast(),
+                    len: size
+                },
+                &mut output,
+                &mut consumed,
+                &mut error,
+            ));
+        });
+        assert_eq!(cost, 2 * usize::from(size != 0));
+        assert_eq!(REALLOCATIONS.with(Cell::get), 0);
+        assert_eq!(consumed, size);
+        assert_eq!(
+            output,
+            (size * 100 + size * size.saturating_sub(1) / 2) as i64
+        );
+        assert!(error.is_null());
     }
 }

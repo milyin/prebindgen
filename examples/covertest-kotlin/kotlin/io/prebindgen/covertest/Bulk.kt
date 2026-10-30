@@ -77,27 +77,35 @@ fun checkBulk() {
     check(bulkHandleValue(returned[0]) == 4L && bulkHandleValue(returned[1]) == 8L)
     returned.forEach { it.close() }
     check(bulkDrops() == drops + 2uL)
+    val same = bulkHandleNew(21)
+    val alias = BulkHandle(same.raw)
+    val unread = bulkHandleNew(22)
+    var aliasFailed = false
+    check(bulkHandles(listOf(same, alias, unread), JniErrorHandler { aliasFailed = true; emptyList() }).isEmpty())
+    check(aliasFailed && same.isClosed && alias.isClosed && !unread.isClosed)
+    check(bulkHandleValue(unread) == 22L)
+    unread.close()
     val live = bulkHandleNew(17)
     var bindingFailed = false
     val recovered = bulkChecked(live, 300, JniErrorHandler { bindingFailed = true; live })
-    check(bindingFailed && recovered === live && bulkBorrow(live) == 17L)
+    check(bindingFailed && recovered === live && live.isClosed)
     live.close()
     var callbackInputs: List<BulkHandle> = emptyList()
     val callbackReturned = bulkHandleCallback(BulkHandlesCallback { values -> callbackInputs = values; values })
     check(callbackReturned.map { bulkHandleValue(it) } == listOf(6L, 9L))
     check(callbackInputs.all { it.isClosed })
     callbackReturned.forEach { it.close() }
-    check(bulkDrops() == drops + 5uL)
+    check(bulkDrops() == drops + 7uL)
     var buildFailed = false
     try { bulkHandleViews(19) { handle, number -> check(bulkHandleValue(handle) == number); throw java.io.IOException("bulk build") } }
     catch (_: java.io.IOException) { buildFailed = true }
-    check(buildFailed && bulkDrops() == drops + 6uL)
+    check(buildFailed && bulkDrops() == drops + 8uL)
     val recovery = bulkHandleNew(91)
     var lateFailed = false
     val late = bulkLate(true, JniErrorHandler { lateFailed = true; recovery })
-    check(lateFailed && late === recovery && bulkDrops() == drops + 7uL)
+    check(lateFailed && late === recovery && bulkDrops() == drops + 9uL)
     recovery.close()
-    check(bulkDrops() == drops + 8uL)
+    check(bulkDrops() == drops + 10uL)
     check(bulkOptionalHandles(null) == null)
     check(bulkOptionalHandles(emptyList())!!.isEmpty())
     val optionalOwned = bulkHandleNew(53)
@@ -105,7 +113,7 @@ fun checkBulk() {
     check(optionalOwned.isClosed && optionalResult[0] == null && optionalResult[2] == null)
     check(bulkHandleValue(optionalResult[1]!!) == 53L)
     optionalResult[1]!!.close()
-    check(bulkDrops() == drops + 9uL)
+    check(bulkDrops() == drops + 11uL)
 }
 
 private fun checkBulkMalformed() {
@@ -129,8 +137,10 @@ private fun checkBulkMalformed() {
     reject("bulk_text", listOf(invalidText, invalidText.size), "UTF-8")
     val handle = bulkHandleNew(71)
     val frame = java.nio.ByteBuffer.allocate(8).order(BulkLayouts.byteOrder).putLong(handle.raw).array()
-    val ownership = BooleanArray(1)
+    val ownership = LongArray(1) { -1L }
     reject("bulk_checked", listOf(frame, frame.size, byteArrayOf(), 0, ownership), "truncated bulk root")
-    check(!ownership[0] && bulkHandleValue(handle) == 71L)
+    check(ownership[0] == -2L && handle.isClosed.not())
+    // The first argument was consumed before the invalid following bulk frame.
+    handle.markConsumed()
     handle.close()
 }

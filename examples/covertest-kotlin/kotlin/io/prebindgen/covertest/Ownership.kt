@@ -9,9 +9,10 @@ private fun rejected(action: () -> Unit) {
 }
 
 fun checkOwnership() {
+    val invalidReport = reportNew(1, 2.0, "original") { _, _, _, _, handle -> handle }
+    rejected { reportRelabel(invalidReport, null) { _, _, _, _, handle -> handle.close() } }
+    check(invalidReport.isClosed)
     val report = reportNew(1, 2.0, "original") { _, _, _, _, handle -> handle }
-    rejected { reportRelabel(report, null) { _, _, _, _, handle -> handle.close() } }
-    check(!report.isClosed)
     reportRelabel(report, "changed") { _, _, _, label, handle ->
         check(label == "changed" && report.isClosed)
         handle.close()
@@ -25,7 +26,7 @@ fun checkOwnership() {
     check(storageContains(c, 9) && !c.isClosed)
     // Repeated shared borrows are legal. All monitors use one ordering.
     check(storageTotalLen(a, a, a) == 3L)
-    // Nine fixed accesses exercise stack sorting and optional inactive storage.
+    // Nine fixed accesses exercise a stack hash table and optional inactive storage.
     val target = storageWithPayload(0, 0, 0.0, false)
     check(storageAccumulateLengths(target, a, a, a, a, a, a, a, null) == 7L)
     check(storageAccumulateLengths(target, a, a, a, a, a, a, a, a) == 15L)
@@ -48,21 +49,22 @@ fun checkOwnership() {
     readers.forEach { it.join(10000); check(!it.isAlive) { "handle lock deadlock" } }
     failure.get()?.let { throw it }
 
-    val nested: io.prebindgen.covertest.analytics.SummaryValue = storageSummaryHandle(a)
-    rejected { reportLabel(1, 0, 0.0, nested, null) }
-    check(!nested.isClosed)
+    val invalidNested = storageSummaryHandle(a)
+    rejected { reportLabel(1, 0, 0.0, invalidNested, null) }
+    check(invalidNested.isClosed)
+    val nested = storageSummaryHandle(a)
     check(reportLabel(1, 0, 0.0, nested, "nested") == "nested")
     check(nested.isClosed)
-    nested.close()
-    val first = storageSummaryHandle(a)
+    val invalidFirst = storageSummaryHandle(a)
     val second = storageSummaryHandle(b)
-    // The second selector/null input fails before the first object is consumed.
-    rejected { summaryMerge(1, 0, 0.0, first, 2, 0, 0.0, second) { _, _ -> } }
-    check(!first.isClosed && !second.isClosed)
-    rejected { summaryMerge(1, 0, 0.0, first, 1, 0, 0.0, null) { _, _ -> } }
-    check(!first.isClosed)
-    rejected { summaryMerge(1, 0, 0.0, first, 1, 0, 0.0, first) { _, _ -> } }
-    check(!first.isClosed)
+    rejected { summaryMerge(1, 0, 0.0, invalidFirst, 2, 0, 0.0, second) { _, _ -> } }
+    check(invalidFirst.isClosed && !second.isClosed)
+    val alias = storageSummaryHandle(a)
+    rejected { summaryMerge(1, 0, 0.0, alias, 1, 0, 0.0, null) { _, _ -> } }
+    check(!alias.isClosed) // Kotlin rejects a required null before entering JNI.
+    rejected { summaryMerge(1, 0, 0.0, alias, 1, 0, 0.0, alias) { _, _ -> } }
+    check(alias.isClosed)
+    val first = storageSummaryHandle(a)
     summaryMerge(1, 0, 0.0, first, 1, 0, 0.0, second) { count, total ->
         check(count == 2L && total == 6.5)
         check(first.isClosed && second.isClosed)

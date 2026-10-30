@@ -17,6 +17,8 @@ fn main() {
         .panic()
         .function(fun!(collection_input_array))
         .panic()
+        .function(fun!(collection_input_optional_array))
+        .panic()
         .function(fun!(collection_input_optional))
         .panic()
         .function(

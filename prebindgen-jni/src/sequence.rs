@@ -30,7 +30,6 @@ pub(crate) fn input(
     let frame = format_ident!("{wire}_frame");
     let mut bind = quote! {let #frame=unsafe {::prebindgen_jni_runtime::LocalFrame::new(&#env,#capacity)}?;let #row=::prebindgen_jni_runtime::row(&mut #env,&#wire,#index,#count)?;};
     let mut validation_values = Vec::new();
-    let mut prepared_values = Vec::new();
     for (position, field) in crate::group::row_fields(element).enumerate() {
         let name = &field.name;
         let read = field.kind.read_array_element(&quote!(#row), position);
@@ -42,14 +41,6 @@ pub(crate) fn input(
         validation_values.push((
             field.name.clone(),
             quote!(#borrow #name.as_ref().map_err(|e|e.clone())?),
-        ));
-        prepared_values.push((
-            field.name.clone(),
-            if field.kind.is_reference() {
-                None
-            } else {
-                Some(quote!(#borrow #name.as_ref().expect("validated collection field")))
-            },
         ));
     }
     Ok(SequenceInput {
@@ -64,7 +55,6 @@ pub(crate) fn input(
         open: quote! {if #wire.is_null(){return Err("null collection".into());}let #length=#env.get_array_length(&#wire).map_err(|e|e.to_string())? as usize;},
         bind,
         validation_values,
-        prepared_values,
         release: quote!(drop(#frame);),
     })
 }
@@ -146,7 +136,7 @@ pub(crate) fn input_list(
     for group in &child.lock_groups {
         locks = format!("({locks} + ({group}))");
     }
-    let expression=format!("if ({condition}) {name}?.toList()?.map {{ {parameter} ->\n{code}kotlin.Triple({{ kotlin.arrayOf<kotlin.Any?>({}) }}, {{ {locks} }}, {{ {}; kotlin.Unit }})\n}} else null",child.arguments.join(", "),child.consumed.join("; "));
+    let expression=format!("if ({condition}) {name}?.toList()?.map {{ {parameter} ->\n{code}kotlin.Triple({{ kotlin.arrayOf<kotlin.Any?>({}) }}, {{ {locks} }}, {{ __pb_consume: ({}.NativeHandle) -> Unit -> {}; kotlin.Unit }})\n}} else null",child.arguments.join(", "),context.package,child.consumed.join("; "));
     Ok(KotlinInput {
         parameters: vec![format!(
             "{name}: kotlin.collections.List<{ty}>{}",
@@ -169,7 +159,9 @@ pub(crate) fn input_list(
         consumed: if child.consumed.is_empty() {
             vec![]
         } else {
-            vec![format!("{state}.orEmpty().forEach {{ it.third() }}")]
+            vec![format!(
+                "{state}.orEmpty().forEach {{ it.third(__pb_consume) }}"
+            )]
         },
     })
 }

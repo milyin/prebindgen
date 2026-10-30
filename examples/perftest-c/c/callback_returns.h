@@ -114,7 +114,7 @@ static void check_callback_returns(void) {
     struct returned_callback_state worker = {0};
     perftest_callback_return_job *job = perftest_callback_return_spawn((perftest_callback_return_spawn_callback){.run=returned_number,.context=&worker,.drop=returned_context_drop});
     assert(perftest_callback_return_join(job) == 19800 && worker.calls == 200 && worker.drops == 1);
-    struct returned_callback_state retained = {0}; bool accepted = false; char *error = NULL;
+    struct returned_callback_state retained = {0}; size_t accepted = 0; char *error = NULL;
     perftest_callback_return_handler_new_callback callback = {.run=returned_number,.context=&retained,.drop=returned_context_drop};
     perftest_callback_return_handler *handler = perftest_callback_return_handler_new(callback,0,&accepted,&error);
     assert(handler && accepted && !error && retained.drops == 0);

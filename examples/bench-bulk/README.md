@@ -111,8 +111,9 @@ first command above with `--warmup 10`. The current fixture includes six additio
 cases (41 total); the focused run below measures the added cases and two controls.
 `ActiveProcessorCount=2` alone does not restrict CPU placement.
 The recorded reports describe their pinned source revisions. Current generation
-also preallocates collection input staging and directly builds primitive inputs;
-the recorded timings do not measure that optimization.
+also preallocates final collection storage and directly constructs every input
+element, including custom constructors and handles; the recorded timings do
+not measure that optimization.
 These are single-host measurements, not a
 platform-independent speedup guarantee or end-to-end network throughput.
 

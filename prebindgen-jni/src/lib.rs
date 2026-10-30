@@ -809,7 +809,7 @@ impl Codec for JniCodec {
                 if #env.get_array_length(&#ownership).map_err(|e|e.to_string())? != 1 {
                     return Err("invalid ownership acknowledgement".into());
                 }
-                #env.set_boolean_array_region(&#ownership, 0, &[1]).map_err(|e|e.to_string())?;
+                __pb_receipt_valid.set(true);
             ));
         }
         Ok(())
@@ -824,10 +824,7 @@ impl Codec for JniCodec {
         plan.delivery = returns::packet_delivery(plan)?;
         Ok(())
     }
-    fn input_leaf_construction_is_pure(&self, _: &Bindings, ty: &syn::Type, _: &()) -> bool {
-        // Source converters resolve to Constructor recipes; these are builtin value leaves.
-        Primitive::from_type(ty).is_some()
-    }
+
     fn default_output_sequence_is_bulk(&self, flat: &Bindings, _: &()) -> bool {
         flat.metadata.bulk_collection_outputs
     }
@@ -1552,9 +1549,9 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         }
         if has_consumes {
             params.push(
-                quote!(#ownership: ::prebindgen_jni_runtime::jni::objects::JBooleanArray<'local>),
+                quote!(#ownership: ::prebindgen_jni_runtime::jni::objects::JLongArray<'local>),
             );
-            raw_params.push("ownership: BooleanArray".into());
+            raw_params.push("ownership: LongArray".into());
             kt_args.push("ownership".into());
         }
         if callback {
@@ -1731,6 +1728,13 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             };
             quote!(let mut success_transferred = false; #direct)
         });
+        let receipt = has_consumes.then(|| quote!(
+            if __pb_receipt_valid.get() {
+                let count=__pb_input_consumed.get() as i64;
+                let value=if outcome.is_ok() {count} else {-1-count};
+                ::prebindgen_jni_runtime::write_input_receipt(&mut #env, &#ownership, value, outcome.is_err());
+            }
+        ));
         rust.extend(quote!{
    #[allow(clippy::needless_borrow, clippy::borrow_deref_ref, clippy::let_unit_value, clippy::unnecessary_cast, clippy::useless_conversion)]
    #[doc = "# Safety\nOnly generated Kotlin wrappers may call this native entry point, with their handle locks held and live pointers of the declared types."]
@@ -1738,10 +1742,14 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
     #[allow(unused_mut)]
     let mut domain_output: Option<::prebindgen_jni_runtime::jni::sys::jobjectArray> = None;
     #success_tracking
-    match ::prebindgen_runtime::boundary(||{
+    let __pb_input_consumed=::core::cell::Cell::new(0usize);
+    let __pb_receipt_valid=::core::cell::Cell::new(false);
+    let outcome=::prebindgen_runtime::boundary(||{
      #reserve_outputs
      #body
-    }){Ok(result)=>result,Err(e)=>{
+    });
+    #receipt
+    match outcome {Ok(result)=>result,Err(e)=>{
         #failure
     }}
    }
@@ -1793,7 +1801,22 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let call =
             format!("run {{ {argument_locals}; {prefix}.JNINative.{method}({argument_names}) }}");
         let call = if has_consumes {
-            format!("val ownership = BooleanArray(1)\n        try {{ {call} }} finally {{ if (ownership[0]) {{ {} }} }}", consumed.join("; "))
+            {
+                let consume = consumed.join("; ");
+                let alias_cleanup = if lock_groups.is_empty() && locks.len() <= 3 {
+                    (0..locks.len())
+                        .map(|i| {
+                            format!(
+                                "handle{i}?.let {{ if (it.address in taken) it.markConsumed() }}"
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                } else {
+                    "handles.forEach { if (it.address in taken) it.markConsumed() }".into()
+                };
+                format!("val ownership = LongArray(1) {{ -1L }}\n        try {{ {call} }} finally {{ if (ownership[0] >= 0L) {{ val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ it.markConsumed() }}; {consume} }} else {{ var remaining = -1L - ownership[0]; val taken = kotlin.collections.HashSet<Long>(); val __pb_consume: ({prefix}.NativeHandle) -> Unit = {{ handle -> if (remaining > 0L) {{ taken.add(handle.address); handle.markConsumed(); remaining-- }} else if (handle.address in taken) handle.markConsumed() }}; {consume}; {} }} }}", alias_cleanup)
+            }
         } else {
             call
         };

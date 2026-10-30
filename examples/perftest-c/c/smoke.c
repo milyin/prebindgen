@@ -129,7 +129,7 @@ static void check_sequence_delivery(void) {
     perftest_free_error(error); error = NULL;
     assert(perftest_owned_resource_drops() == start + 6);
     perftest_collection_handles_each_p0_w1_row owned[] = {{perftest_collection_resource_new(42)}};
-    bool accepted = true;
+    size_t accepted = 1;
     assert(!perftest_collection_handles_each((perftest_collection_handles_each_p0_w1_rows){owned,1},65,0,NULL,&acc,&count,&accepted,&error));
     assert(!accepted && count == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
@@ -160,6 +160,9 @@ static void check_sequence_delivery(void) {
 }
 
 static void check_collections(void) {
+    assert(perftest_collection_input_optional_array(0, (perftest_collection_input_optional_array_p0_w3_rows){NULL, SIZE_MAX}) == -1);
+    perftest_collection_input_optional_array_p0_w3_row fixed[] = {{1}, {2}, {3}, {4}};
+    assert(perftest_collection_input_optional_array(1, (perftest_collection_input_optional_array_p0_w3_rows){fixed, 4}) == 10);
     int64_t tag = 0;
     perftest_collection_numbers_ret_w2_rows observed = perftest_collection_numbers(&tag);
     assert(tag == 42 && observed.len == 2 && observed.data[1].v0 == 9);
@@ -202,16 +205,17 @@ static void check_collections(void) {
     perftest_owned_resource *a = perftest_collection_resource_new(1), *b = perftest_collection_resource_new(2);
     perftest_collection_handles_p0_w1_row handles[] = {{a}, {b}};
     perftest_collection_handles_ret_w2_rows moved = {NULL, 12345};
-    bool ownership = true;
+    size_t ownership = 1;
     char *error = NULL;
     assert(!perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 0xd800, 0, &moved, &ownership, &error));
-    assert(!ownership && moved.len == 12345 && error != NULL);
+    assert(ownership == 2 && moved.len == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
-    handles[1].v0 = a;
+    a = perftest_collection_resource_new(1); b = perftest_collection_resource_new(2);
+    handles[0].v0 = a; handles[1].v0 = a;
     assert(!perftest_collection_handles((perftest_collection_handles_p0_w1_rows){handles, 2}, 65, 0, &moved, &ownership, &error));
-    assert(!ownership && moved.len == 12345 && error != NULL);
+    assert(ownership == 1 && moved.len == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
-    handles[1].v0 = b;
+    a = perftest_collection_resource_new(1); handles[0].v0 = a; handles[1].v0 = b;
     perftest_collection_alias_p0_w1_row aliases[] = {{a}};
     EXPECT_ABORT(perftest_collection_alias(((perftest_collection_alias_p0_w1_rows){aliases, 1}), a));
     perftest_collection_resource_ids_p0_w1_row shared[] = {{a}, {a}};
@@ -229,19 +233,20 @@ static void check_collections(void) {
         assert(ownership && moved.len == 12345 && error != NULL);
         perftest_free_error(error); error = NULL;
     }
-    assert(perftest_owned_resource_drops() == start + 8);
+    assert(perftest_owned_resource_drops() == start + 11);
     perftest_collection_try_construct_all_p0_w1_row pending[3];
     for (size_t i = 0; i < 3; ++i) pending[i].v0 = perftest_collection_resource_new((int64_t)i + 1);
     int64_t constructed = 12345;
     assert(!perftest_collection_try_construct_all((perftest_collection_try_construct_all_p0_w1_rows){pending, 3}, &constructed, &ownership, &error));
-    assert(ownership && constructed == 12345 && error != NULL);
+    assert(ownership == 2 && constructed == 12345 && error != NULL);
+    perftest_drop_owned_resource(pending[2].v0);
     perftest_free_error(error); error = NULL;
-    assert(perftest_owned_resource_drops() == start + 11);
+    assert(perftest_owned_resource_drops() == start + 14);
     perftest_collection_try_make_items_ret_w2_rows projected = {NULL, 12345};
     assert(!perftest_collection_try_make_items(&projected, &error));
     assert(projected.len == 12345 && error != NULL);
     perftest_free_error(error); error = NULL;
-    assert(perftest_owned_resource_drops() == start + 14);
+    assert(perftest_owned_resource_drops() == start + 17);
     perftest_collection_optional_handles_ret_w2_rows maybe_handles = {0};
     assert(perftest_collection_optional_handles(0, (perftest_collection_optional_handles_p0_w3_rows){NULL, 0}, &maybe_handles) == 0);
     perftest_collection_optional_handles_p0_w3_row maybe_input[] = {{perftest_collection_resource_new(5)}};
@@ -259,7 +264,7 @@ static void check_collections(void) {
     assert(bundle.len == 3 && tag == 42);
     for (size_t i = 0; i < 3; ++i) perftest_drop_owned_resource(bundle.data[i].v0);
     perftest_collection_bundle_ret_w2_rows_free(bundle);
-    assert(perftest_owned_resource_drops() == start + 19);
+    assert(perftest_owned_resource_drops() == start + 22);
 
     perftest_storage *storage = perftest_storage_new();
     perftest_storage_get_vec_ret_w2_rows stored = {0};
@@ -277,14 +282,14 @@ static void check_collections(void) {
     perftest_drop_collection_error(&typed);
     assert(typed.resources.data == NULL && typed.codes.data == NULL);
     perftest_drop_collection_error(&typed);
-    assert(perftest_owned_resource_drops() == start + 21);
+    assert(perftest_owned_resource_drops() == start + 24);
     assert(!perftest_collection_fail(NULL));
-    assert(perftest_owned_resource_drops() == start + 23);
+    assert(perftest_owned_resource_drops() == start + 26);
     perftest_collection_late_drop_ret_w3_rows unpublished = {NULL, 12345};
     perftest_result_error late_error;
     assert(!perftest_collection_late_drop(&unpublished, &late_error));
     assert(unpublished.len == 12345);
-    assert(perftest_owned_resource_drops() == start + 25);
+    assert(perftest_owned_resource_drops() == start + 28);
     perftest_drop_result_error(&late_error);
 }
 
@@ -477,12 +482,13 @@ static void check_results(void) {
     for (int32_t mode = 0; mode <= 3; ++mode) {
         perftest_owned_resource * resource = {NULL};
         resource = perftest_option_resource_new(1);
-        bool consumed = true;
+        size_t consumed = 1;
         assert(perftest_result_owned(resource, mode, 65, NULL, &error) == NULL);
         assert(strcmp(error, "null ownership-output pointer") == 0);
         perftest_free_error(error); error = NULL;
-        assert(perftest_result_owned(resource, mode, 0xd800, &consumed, &error) == NULL && !consumed);
+        assert(perftest_result_owned(resource, mode, 0xd800, &consumed, &error) == NULL && consumed == 1);
         perftest_free_error(error); error = NULL;
+        resource = perftest_option_resource_new(1);
         int64_t id = {0};
         id = perftest_option_resource_id(resource); assert(id == 77);
         perftest_owned_resource *moved = perftest_result_owned(resource, mode, 65, &consumed, &error);
@@ -496,7 +502,7 @@ static void check_results(void) {
             perftest_free_error(error); error = NULL;
         }
     }
-    drops = perftest_owned_resource_drops(); assert(drops == start + 4);
+    drops = perftest_owned_resource_drops(); assert(drops == start + 8);
     errors = perftest_result_error_drops(); assert(errors == error_start + 8);
     // Structured errors preserve fields and embedded NUL bytes in their buffer.
     perftest_result_error structured = {0};
