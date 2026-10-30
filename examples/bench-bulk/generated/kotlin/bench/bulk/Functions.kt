@@ -1,6 +1,228 @@
 @file:Suppress("UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION")
 package bench.bulk
 
+public fun `rowMake`(p0_w1: Long, onError: bench.bulk.JniErrorHandler<bench.bulk.Row> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.Row = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_row_make_bcd43e7b136151dd(nativeArgument0, nativeArgument1) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: bench.bulk.BulkReader? = null
+outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+
+bench.bulk.Row((requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[0])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[1])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[2])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[3])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[4])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[5])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[6])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[7])) as Long)
+    } finally { returnCapture.release() }
+}
+
+public fun `wideRowMake`(p0_w1: Long, onError: bench.bulk.JniErrorHandler<bench.bulk.WideRow> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.WideRow = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { p0_w1 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_wide_row_make_1dbd8ca2fd4616ac(nativeArgument0, nativeArgument1) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    var outputbulkReader: bench.bulk.BulkReader? = null
+outputbulkReader = bench.bulk.BulkReader(nativeResult as ByteArray)
+
+bench.bulk.WideRow((requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[0])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[1])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[2])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[3])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[4])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[5])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[6])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[7])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[8])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[9])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[10])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[11])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[12])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[13])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[14])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[15])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[16])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[17])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[18])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[19])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[20])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[21])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[22])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[23])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[24])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[25])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[26])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[27])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[28])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[29])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[30])) as Long, (requireNotNull(outputbulkReader).long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[31])) as Long)
+    } finally { returnCapture.release() }
+}
+
+public fun `wideRowSum`(p0_w3: bench.bulk.WideRow, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val p0_w1_writer = bench.bulk.BulkWriter(bench.bulk.BulkLayouts.r633c6cf82d3acfc1.size)
+val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { run {
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[0], p0_w3.`f0`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[1], p0_w3.`f1`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[2], p0_w3.`f2`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[3], p0_w3.`f3`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[4], p0_w3.`f4`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[5], p0_w3.`f5`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[6], p0_w3.`f6`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[7], p0_w3.`f7`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[8], p0_w3.`f8`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[9], p0_w3.`f9`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[10], p0_w3.`f10`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[11], p0_w3.`f11`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[12], p0_w3.`f12`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[13], p0_w3.`f13`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[14], p0_w3.`f14`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[15], p0_w3.`f15`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[16], p0_w3.`f16`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[17], p0_w3.`f17`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[18], p0_w3.`f18`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[19], p0_w3.`f19`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[20], p0_w3.`f20`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[21], p0_w3.`f21`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[22], p0_w3.`f22`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[23], p0_w3.`f23`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[24], p0_w3.`f24`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[25], p0_w3.`f25`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[26], p0_w3.`f26`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[27], p0_w3.`f27`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[28], p0_w3.`f28`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[29], p0_w3.`f29`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[30], p0_w3.`f30`)
+p0_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[31], p0_w3.`f31`)
+
+p0_w1_writer.array } } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p0_w1_writer.length } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_wide_row_sum_861bdfef124a25ad(nativeArgument0, nativeArgument1, nativeArgument2) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun `rowReturnHandlerNew`(p0_callback: bench.bulk.RowReturnCallback?, onError: bench.bulk.JniErrorHandler<bench.bulk.RowReturnHandler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.RowReturnHandler = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long): Array<Any?> {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        lateinit var callbackReturned: bench.bulk.Row
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = p0_callback.run(callbackArgument0_0)
+return kotlin.run { val callback_return_w3 = callbackReturned
+ val callback_return_w1_writer = bench.bulk.BulkWriter(bench.bulk.BulkLayouts.r789cd54eb117685f.size)
+ val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(run {
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[0], callback_return_w3.`a`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[1], callback_return_w3.`b`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[2], callback_return_w3.`c`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[3], callback_return_w3.`d`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[4], callback_return_w3.`e`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[5], callback_return_w3.`f`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[6], callback_return_w3.`g`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r789cd54eb117685f.offsets[7], callback_return_w3.`h`)
+
+callback_return_w1_writer.array }, callback_return_w1_writer.length)
+
+callbackReturnWire }
+    }
+} } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_row_return_handler_new_9a8fcadcab7b9640(nativeArgument0, nativeArgument1) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);         var output0: bench.bulk.RowReturnHandler? = null
+             try { val owner = output0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_RowReturnHandler_0972ff7cb1556afa(nativeResult) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+ }
+        return@run onError.run(returnCapture.message) }
+
+            var output0: bench.bulk.RowReturnHandler? = null
+        try {
+            output0 = bench.bulk.RowReturnHandler(nativeResult)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_RowReturnHandler_0972ff7cb1556afa(nativeResult) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun `wideRowReturnHandlerNew`(p0_callback: bench.bulk.WideRowReturnCallback?, onError: bench.bulk.JniErrorHandler<bench.bulk.WideRowReturnHandler> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): bench.bulk.WideRowReturnHandler = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
+    @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
+    fun run(raw0: Long): Array<Any?> {
+        var callbackCleanupFailure: Throwable? = null
+        var callbackArgument0_0: Long = 0L
+        lateinit var callbackReturned: bench.bulk.WideRow
+        try {
+            callbackArgument0_0 = raw0 as Long
+        } catch (failure: Throwable) {
+            callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
+            throw failure
+        }
+        callbackReturned = p0_callback.run(callbackArgument0_0)
+return kotlin.run { val callback_return_w3 = callbackReturned
+ val callback_return_w1_writer = bench.bulk.BulkWriter(bench.bulk.BulkLayouts.r633c6cf82d3acfc1.size)
+ val callbackReturnWire = kotlin.arrayOf<kotlin.Any?>(run {
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[0], callback_return_w3.`f0`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[1], callback_return_w3.`f1`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[2], callback_return_w3.`f2`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[3], callback_return_w3.`f3`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[4], callback_return_w3.`f4`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[5], callback_return_w3.`f5`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[6], callback_return_w3.`f6`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[7], callback_return_w3.`f7`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[8], callback_return_w3.`f8`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[9], callback_return_w3.`f9`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[10], callback_return_w3.`f10`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[11], callback_return_w3.`f11`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[12], callback_return_w3.`f12`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[13], callback_return_w3.`f13`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[14], callback_return_w3.`f14`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[15], callback_return_w3.`f15`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[16], callback_return_w3.`f16`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[17], callback_return_w3.`f17`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[18], callback_return_w3.`f18`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[19], callback_return_w3.`f19`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[20], callback_return_w3.`f20`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[21], callback_return_w3.`f21`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[22], callback_return_w3.`f22`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[23], callback_return_w3.`f23`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[24], callback_return_w3.`f24`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[25], callback_return_w3.`f25`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[26], callback_return_w3.`f26`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[27], callback_return_w3.`f27`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[28], callback_return_w3.`f28`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[29], callback_return_w3.`f29`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[30], callback_return_w3.`f30`)
+callback_return_w1_writer.long((0) + bench.bulk.BulkLayouts.r633c6cf82d3acfc1.offsets[31], callback_return_w3.`f31`)
+
+callback_return_w1_writer.array }, callback_return_w1_writer.length)
+
+callbackReturnWire }
+    }
+} } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_wide_row_return_handler_new_67f38d7168020371(nativeArgument0, nativeArgument1) } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) { if (returnCapture.discardSuccess) { val failure = IllegalArgumentException(returnCapture.message);         var output0: bench.bulk.WideRowReturnHandler? = null
+             try { val owner = output0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_WideRowReturnHandler_ed750f04931eb9ca(nativeResult) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+ }
+        return@run onError.run(returnCapture.message) }
+
+            var output0: bench.bulk.WideRowReturnHandler? = null
+        try {
+            output0 = bench.bulk.WideRowReturnHandler(nativeResult)
+            requireNotNull(output0)
+        } catch (failure: Throwable) {
+            try { val owner = output0; if (owner != null) owner.close() else bench.bulk.JNINative.drop_WideRowReturnHandler_ed750f04931eb9ca(nativeResult) } catch (cleanup: Throwable) { if (failure !== cleanup) failure.addSuppressed(cleanup) }
+            throw failure
+        }
+    } finally { returnCapture.release() }
+}
+
+public fun `rowReturnFire`(p0_w1: bench.bulk.RowReturnHandler?, p1_w1: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_row_return_fire_7c8a1183dcdd277c(nativeArgument0, nativeArgument1, nativeArgument2) }
+    } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
+public fun `wideRowReturnFire`(p0_w1: bench.bulk.WideRowReturnHandler?, p1_w1: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
+    val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
+    try {
+val nativeResult = try { run { val handle0 = try { if (true) requireNotNull(p0_w1) { "null handle" } else null } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid handle") }; bench.bulk.withHandleLocks(handle0) {
+        run { val nativeArgument0 = try { p0_w1?.raw ?: 0L } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { p1_w1 } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument2 = try { returnCapture } catch (failure: IllegalArgumentException) { throw bench.bulk.HandleValidationFailure(failure.message ?: "invalid input") }; bench.bulk.JNINative.call_wide_row_return_fire_88ad5bbf9c8c73e2(nativeArgument0, nativeArgument1, nativeArgument2) }
+    } } } catch (failure: bench.bulk.HandleValidationFailure) { return@run onError.run(failure.message) }
+    if (returnCapture.status == 2) {
+        return@run onError.run(returnCapture.message) }
+
+    nativeResult
+    } finally { returnCapture.release() }
+}
+
 public fun `scalar`(p0_w3: Long, onError: bench.bulk.JniErrorHandler<Long> = bench.bulk.JniErrorHandler { message -> throw IllegalArgumentException(message) }): Long = run {
     val p0_w1_writer = bench.bulk.BulkWriter(bench.bulk.BulkLayouts.ra60d3960993b9a77.size)
 val returnCapture = bench.bulk.Return_Empty_ErrorEmpty_a7ee757e32992e01.acquire()
