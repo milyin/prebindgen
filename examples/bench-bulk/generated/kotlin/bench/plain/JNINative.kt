@@ -12,6 +12,7 @@ internal object JNINative {
     @JvmStatic external fun call_wide_row_return_handler_new_67f38d7168020371(p0_callback: Any?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_row_return_fire_7c8a1183dcdd277c(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_wide_row_return_fire_88ad5bbf9c8c73e2(p0_w1: Long, p1_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
+    @JvmStatic external fun call_control_b0073ee32096caea(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_scalar_a4a5da3f79ebbcaf(p0_w1: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_row_sum_db65517187cece4c(p0_w1_f0: Long, p0_w1_f1: Long, p0_w1_f2: Long, p0_w1_f3: Long, p0_w1_f4: Long, p0_w1_f5: Long, p0_w1_f6: Long, p0_w1_f7: Long, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
     @JvmStatic external fun call_numbers_sum_47543406a5cdf588(p0_w1: Array<Any?>?, returns: Return_Empty_ErrorEmpty_a7ee757e32992e01): Long
