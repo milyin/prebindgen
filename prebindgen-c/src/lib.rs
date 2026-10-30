@@ -182,7 +182,8 @@ impl Codec for CCodec {
         delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<CWire, crate::CChain>> {
         match delivery {
-            prebindgen_declarations::SequenceDelivery::Value => {
+            prebindgen_declarations::SequenceDelivery::Auto
+            | prebindgen_declarations::SequenceDelivery::Value => {
                 sequence::output(wire, length, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {
@@ -1976,18 +1977,15 @@ The pointer must be null or a live allocation of the declared type returned by t
             let fields = outputs
                 .iter()
                 .enumerate()
-                .map(|(i, wire)| {
-                    let field = format_ident!("v{i}");
-                    let ty = wire.rust_type();
-                    quote!(pub #field:#ty)
-                })
+                .map(|(i, wire)| (format_ident!("v{i}"), wire.rust_type()))
                 .collect::<Vec<_>>();
             let fields = if fields.is_empty() {
-                vec![quote!(pub unused:u8)]
+                vec![(syn::parse_quote!(unused), syn::parse_quote!(u8))]
             } else {
                 fields
             };
-            tokens.extend(quote!(#[repr(C)]pub struct #result {#(#fields),*}));
+            let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
+            tokens.extend(quote!(#definition));
             let comments = describe_groups(
                 &(f.ret.slot.as_ref().unwrap()).output_outcomes().success,
                 &outputs,
@@ -2021,7 +2019,7 @@ The pointer must be null or a live allocation of the declared type returned by t
         for (i, wire) in outputs.iter().enumerate() {
             let field = format_ident!("v{i}");
             let ty = wire.rust_type();
-            fields.push(quote!(pub #field:#ty));
+            fields.push((field.clone(), ty.clone()));
             if i > 0 {
                 let pointer = format_ident!("out{i}");
                 params.push(quote!(#pointer:*mut #ty));
@@ -2036,7 +2034,7 @@ The pointer must be null or a live allocation of the declared type returned by t
             }
         }
         if fields.is_empty() {
-            fields.push(quote!(pub unused:u8));
+            fields.push((syn::parse_quote!(unused), syn::parse_quote!(u8)));
         }
         let (return_type, c_return, returned) = match outputs.first() {
             Some(wire) => {
@@ -2062,8 +2060,9 @@ The pointer must be null or a live allocation of the declared type returned by t
                 cparams.join(", ")
             }
         ));
+        let definition = prebindgen_reprc::Record::new(result.clone(), fields)?.definition();
         tokens.extend(quote! {
-         #[repr(C)] pub struct #result {#(#fields),*}
+         #definition
          #[doc = "# Safety\nAdditional output pointers must be writable and disjoint from live inputs. Input buffers must be readable for their lengths. Opaque pointers must be live allocations of the declared type. Owned inputs transfer to Rust; borrowed inputs obey Rust aliasing rules. Binding errors and Rust panics abort this non-Result call."]
          #[allow(clippy::needless_borrow,clippy::let_unit_value,clippy::unnecessary_cast,clippy::useless_conversion)]
          #[no_mangle] pub unsafe extern "C" fn #name(#(#params),*) #return_type {

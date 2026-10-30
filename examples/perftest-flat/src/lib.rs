@@ -41,6 +41,8 @@ use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 // generator features (see [`ext`]); not used by the `perftest-*` benchmarks.
 // Re-exported at the crate root so one `source_module = perftest_flat` reaches
 // both the perf surface and the coverage surface.
+mod bulk;
+pub use bulk::*;
 mod borrowed_getters;
 mod jni_buffers;
 mod return_results;

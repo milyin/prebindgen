@@ -14,6 +14,8 @@ pub struct KotlinClass {
 }
 /// Names and class settings supplied by the Kotlin wrapper writer.
 pub struct KotlinContext<'a> {
+    /// Root package of this binding module and its bulk runtime.
+    pub package: &'a str,
     /// Configured classes indexed by [`prebindgen_flat::type_key`].
     pub classes: &'a BTreeMap<String, KotlinClass>,
     /// Variable holding the native output array.
@@ -240,7 +242,10 @@ impl KotlinInputConversion for JniInput {
         input_kotlin(self.input_node(), context)
     }
 }
-fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinInput> {
+pub(crate) fn input_leaves(
+    wires: &[&Wire<JniWire>],
+    context: &KotlinContext<'_>,
+) -> Result<KotlinInput> {
     let mut kt_params = Vec::new();
     let mut kt_args = Vec::new();
     let mut locks = Vec::new();
@@ -251,6 +256,10 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
             JniWire::Callback { callback } => (
                 format!("{}?", callback.fqn()),
                 callback.adapter(&n.to_string(), context)?,
+            ),
+            JniWire::Native128 { primitive: p, condition } => (
+                format!("{}?", scalar::kotlin(*p)),
+                format!("if ({condition}) requireNotNull({n}) {{ \"null 128-bit integer\" }}.toByteArray() else null"),
             ),
             JniWire::Scalar { primitive: p, .. } => scalar::input(*p, &n.to_string()),
             JniWire::Enum { enum_type, .. } => (
@@ -271,7 +280,13 @@ fn input_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result
                     format!("{n}?.raw ?: 0L"),
                 )
             }
-            JniWire::Rows { .. } => return Err("array carrier requires a sequence node".into()),
+            JniWire::NativeRows { .. } | JniWire::Rows { .. } => {
+                return Err("array carrier requires a sequence node".into())
+            }
+            JniWire::NativeBuffer { text, .. } => (
+                if *text { "String?" } else { "ByteArray?" }.into(),
+                n.to_string(),
+            ),
             _ => (w.kind.kotlin_type().into(), n.to_string()),
         };
         kt_params.push(format!("{n}: {kt}"));
@@ -292,7 +307,10 @@ impl KotlinOutputConversion for JniOutput {
         output_kotlin(&self.output_outcomes().success, context)
     }
 }
-fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Result<KotlinOutput> {
+pub(crate) fn output_leaves(
+    wires: &[&Wire<JniWire>],
+    context: &KotlinContext<'_>,
+) -> Result<KotlinOutput> {
     let result = context.result;
     let suppress_cleanup = record_cleanup_failure(context, "cleanup");
     let output = context.output_prefix;
@@ -301,14 +319,22 @@ fn output_leaves(wires: &[&Wire<JniWire>], context: &KotlinContext<'_>) -> Resul
     for (i, w) in wires.iter().enumerate() {
         let (kt, decode) = match &w.kind {
             JniWire::Callback { .. } => return Err("callback objects are input-only".into()),
-            JniWire::Scalar { primitive: p, .. } => scalar::output_kotlin(*p, i, result),
+            JniWire::Native128 { primitive: p, .. } | JniWire::Scalar { primitive: p, .. } => {
+                scalar::output_kotlin(*p, i, result)
+            }
             JniWire::Handle { handle, .. } => {
                 let c = context.class_name(&handle.ty)?;
                 (c.clone(), format!("{c}({result}[{i}] as Long)"))
             }
-            JniWire::Text { .. } => ("String".into(), format!("{result}[{i}] as String")),
-            JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
-            JniWire::Rows { .. } => return Err("array carrier requires a sequence node".into()),
+            JniWire::NativeBuffer { text: true } | JniWire::Text { .. } => {
+                ("String".into(), format!("{result}[{i}] as String"))
+            }
+            JniWire::NativeBuffer { text: false }
+            | JniWire::BulkBuffer { .. }
+            | JniWire::Bytes { .. } => ("ByteArray".into(), format!("{result}[{i}] as ByteArray")),
+            JniWire::NativeRows { .. } | JniWire::Rows { .. } => {
+                return Err("array carrier requires a sequence node".into())
+            }
             JniWire::Selector { .. } => ("Int".into(), format!("{result}[{i}] as Int")),
             JniWire::Enum { enum_type, .. } => (
                 enum_type.class_name.clone(),
@@ -363,7 +389,7 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
     match node {
         JniNode::Leaf(_)
         | JniNode::Chain {
-            meta: JniChain::Sequence(_),
+            meta: JniChain::Sequence(_) | JniChain::Bulk(_),
             ..
         } => false,
         JniNode::Chain {
@@ -389,6 +415,11 @@ pub(crate) fn has_optional(node: &JniNode) -> bool {
 pub(crate) fn input_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinInput> {
     match node {
         JniNode::Leaf(wires) => input_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Chain {
+            meta: JniChain::Bulk(record),
+            controls,
+            child,
+        } => crate::bulk::input_kotlin(record, controls, child, context),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             children: elements,
@@ -469,6 +500,11 @@ pub(crate) fn remap_output(
 pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Result<KotlinOutput> {
     match node {
         JniNode::Leaf(wires) => output_leaves(&wires.iter().collect::<Vec<_>>(), context),
+        JniNode::Chain {
+            meta: JniChain::Bulk(record),
+            child,
+            ..
+        } => crate::bulk::output_kotlin(record, child, context),
         JniNode::Branch {
             meta: JniBranch::Alternatives,
             ..
@@ -479,6 +515,7 @@ pub(crate) fn output_kotlin(node: &JniNode, context: &KotlinContext<'_>) -> Resu
             ..
         } => match metadata {
             JniSequence::Buffered => crate::sequence::output_list(element, context),
+            JniSequence::Bulk => crate::bulk::output_list(element, context),
             JniSequence::Callback => {
                 Err("callback sequence requires function-level callback delivery".into())
             }
@@ -583,6 +620,7 @@ mod tests {
             },
         )]);
         let context = KotlinContext {
+            package: "example",
             classes: &classes,
             result: "native_values",
             failure: "delivery_error",

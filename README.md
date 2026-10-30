@@ -247,7 +247,7 @@ value types; type-wide expansions apply to boundary occurrences, not to the
 properties inside a data class. Borrowed projections clone strings and byte
 vectors; owned projections move them. The shared helpers `record_output` and
 `record_output_owned` implement the respective access modes. `Option` fields are
-supported; fixed-size arrays remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
+supported; fixed-size array fields remain unsupported. The low-level `JniCodec` does not know data-class declarations: it binds records
 as handles. Using it in `configure()` for a type declared only as a data class
 therefore fails with a missing handle-class error unless an explicit expansion
 replaces that slot. Use data-class declarations for automatic value-record conversion.
@@ -905,6 +905,125 @@ views of that tree, with explicit scope boundaries chosen by the adapter. These
 adapters retain their existing ABI and conversion behavior.
 Custom codecs can implement `sequence_input` and `sequence_output` to reuse the
 shared validation, acquisition, construction and output-ownership phases.
+
+### Bulk C-representation expansions
+
+JNI uses bulk by default for materialized collection outputs: vectors, slices
+and fixed arrays, including rows containing text, bytes and handles. Nested
+collections share one enclosing frame. This also applies to Rust-to-Kotlin
+callback arguments and automatic collection components of expanded results.
+The choice is made when the existing conversion compiler lowers a collection;
+there is no source-wide inference or speculative conversion pass.
+
+Direct byte buffers keep their existing byte-array representation. Inputs and
+scalar returns keep ordinary transport unless an expansion selects bulk. A single
+record keeps ordinary fields while automatic collection components of an expanded
+result each use bulk. Explicit ordinary collection expansions keep nested automatic
+rows ordinary;
+explicit bulk modifiers and callback/fold delivery retain their own behavior.
+Unsupported conversions report the normal generation diagnostic.
+
+Disable automatic selection project-wide with
+`JniGen::builder().set_bulk_collection_outputs(false)`. Explicit type-wide collection
+expansions and local overrides take precedence. For example, keep one result
+ordinary with:
+
+```rust,ignore
+.fun(fun!(rows).expand_return(expand_return!(Vec<Row>).field_self()))
+```
+
+Register the same expansion through `.expand(...)` to keep that collection type
+ordinary project-wide. Explicit `.bulk()` continues to work with automatic
+selection disabled. Generated public Kotlin types remain the same, but the native
+carrier signatures change; regenerate Kotlin and native bindings together.
+
+Add `.bulk()` to an existing JNI expansion to select bulk transport explicitly:
+
+```rust,ignore
+JniGen::builder()
+    .expand(expand_param!(Packet).variant(fun!(packet_from)).bulk())
+    .expand(expand_return!(Packet)
+        .field(fun!(packet_sequence))
+        .field(fun!(packet_payload))
+        .bulk());
+```
+
+The constructors, getters, conversions and ownership rules remain those of the
+expansion. Kotlin packs the resulting primitive fields and buffer descriptors
+into one byte frame; Rust decodes that frame without inspecting Java objects per
+field or row. Return values use the same frame format in the other direction.
+An ordinary value retains its existing public Kotlin parameters and result build
+lambda. `Vec<T>`, shared slices, shared vectors and fixed-size arrays pack rows
+contiguously; nested sequences and optional values are supported. A bulk element
+default lifts the enclosing collection into the same frame. Fixed arrays reject
+a wrong length before acquiring or consuming any handles.
+
+A per-function expansion replaces the type default, including its bulk setting:
+
+```rust,ignore
+.fun(fun!(send_packet)
+    .expand_param("packet", expand_param!(Packet).variant_self()))
+```
+
+Callback declarations use the same modifier on their argument/result expansions.
+Nested bulk scopes merge into their enclosing frame. Collection elements retain
+their existing public Kotlin type. As with ordinary collection transport, each
+element must expose one Kotlin value. Use a declared data class and a direct
+representation override for collection occurrences when a type-wide expansion
+exposes multiple values.
+Individual multi-value argument/result expansions retain their flattened public
+parameters and result build lambda. `.callback_return()` and
+`.callback_return_only()` remain available: their fold variants use the existing
+per-row callback protocol even when the ordinary materialized return selects bulk
+by default. Explicitly combining `.bulk()` and per-row callback delivery in one
+return recipe is still diagnosed. Callback
+objects themselves cannot be stored in a bulk record.
+
+`prebindgen-reprc` supplies shared generated `Record` schemas and strict external
+`LayoutArtifact` JSON for opaque storage dimensions. C uses these records directly
+for its collection rows, structured errors and result carriers, and shares the
+layout artifact parser. JNI consumes the target-evaluated wire-record measurements.
+C's existing transport is retained; `.bulk()` currently selects the JNI transport.
+
+Every generated native library evaluates `size_of`, `align_of` and `offset_of!`
+for its target. On first use, Kotlin fetches all required layouts with one native
+query and caches them in `BulkLayouts`. Protocol/schema identity, dimensions and
+field extents are checked at initialization. No host offsets are baked into
+Kotlin, so the same Kotlin artifact can accompany different target libraries.
+The measured layout describes the expanded wire fields, independently of the
+source record's Rust representation. Rust constructs source values through the
+existing conversion plans.
+
+External opaque C layouts retain their version 1 JSON format for size/alignment.
+Target and captured source-feature guards remain enforced by the C adapter.
+Probe execution remains external to prebindgen.
+
+Frames contain offsets and lengths rather than process pointers to strings or
+nested rows. Rust accesses individual padding-free carriers with checked,
+unaligned reads and writes; padding in generated frames is initialized to zero.
+No arbitrary bytes are cast into a source struct. Existing primitive/enum/UTF-8
+validation and handle ownership phases still run. Failed input validation leaves
+owned Kotlin handles live; failed output delivery reclaims native allocations.
+
+Bulk text uses UTF-8 and rejects malformed UTF-16 input rather than replacing it.
+128-bit integers use an explicit 16-byte big-endian wire field, preserving the
+existing BigInteger conversion. Other scalar carriers use target byte order.
+
+Outside collection-output defaults, bulk transport is opt-in.
+Kotlin snapshots bulk input collections, allocates a frame,
+and encodes its payloads; the JNI boundary copies the initialized bytes once per
+frame. Rust still constructs the requested source values. Native results allocate
+a frame and one Java byte array; Kotlin constructs the requested result objects.
+The native transport creates no per-element Java object arrays or boxed primitive
+objects and makes no per-element JNI calls. Kotlin public lists still box
+primitive elements when their declared collection type requires it.
+Handles retain the existing locking/acknowledgement policy and require Kotlin
+ownership bookkeeping. Buffer growth, UTF-8 encoding and ordinary source value
+allocation can still allocate; this is not a zero-copy source-vector conversion.
+For a small scalar, ordinary JNI parameters can be cheaper than a bulk frame.
+
+Bulk and ordinary transport benchmarks, including small-call and byte-payload
+counterexamples, are in [the JNI comparison fixture](examples/bench-bulk/README.md).
 
 ### Callback delivery of sequence returns
 

@@ -1,0 +1,22 @@
+name: Bulk benchmark smoke
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  generated-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: |
+          curl -fsSL https://github.com/JetBrains/kotlin/releases/download/v2.1.0/kotlin-compiler-2.1.0.zip -o /tmp/kotlin.zip
+          unzip -q /tmp/kotlin.zip -d /tmp/kotlin
+      - run: python3 examples/bench-bulk/run.py --output /tmp/bulk-smoke --fetch --check-generated --check-jni --jvms 2 --warmup 1 --batches 1 --target-ms 2
+        env:
+          KOTLINC: /tmp/kotlin/kotlinc/bin/kotlinc

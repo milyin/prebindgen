@@ -1,8 +1,6 @@
 //! Build-time selection of native or externally measured opaque storage.
 use super::*;
-use serde::{Deserialize, Deserializer};
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::collections::BTreeSet;
 
 /// How to obtain an inline owner's size and alignment.
 /// Native builds can measure a Rust type available to the build script; cross
@@ -37,133 +35,9 @@ impl OpaqueLayout {
         self
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct StorageLayout {
-    pub(crate) size: usize,
-    pub(crate) alignment: usize,
-}
-impl StorageLayout {
-    pub(crate) fn validate(self) -> Result<()> {
-        if self.size == 0 || !self.alignment.is_power_of_two() || self.size % self.alignment != 0 {
-            return Err("opaque layout requires nonzero size, power-of-two alignment, and size divisible by alignment".into());
-        }
-        Ok(())
-    }
-}
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Features {
-    features: Vec<String>,
-}
-/// Target size/alignment measurements produced by an external tool.
-/// JSON contains `format_version:1`, a `target` triple, `sources` mapping source
-/// crate names to `{features:[...]}`, and `layouts` mapping keys to
-/// `{size:...,alignment:...}`. No probe tool is invoked by this library.
-#[derive(Clone, Debug)]
-pub struct OpaqueLayouts {
-    format_version: u32,
-    target: String,
-    sources: BTreeMap<String, Features>,
-    layouts: BTreeMap<String, StorageLayout>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct LayoutDocument {
-    format_version: u32,
-    target: String,
-    #[serde(deserialize_with = "unique_map")]
-    sources: BTreeMap<String, Features>,
-    #[serde(deserialize_with = "unique_map")]
-    layouts: BTreeMap<String, StorageLayout>,
-}
-fn unique_map<'de, D, V>(deserializer: D) -> std::result::Result<BTreeMap<String, V>, D::Error>
-where
-    D: Deserializer<'de>,
-    V: Deserialize<'de>,
-{
-    struct Entries<V>(std::marker::PhantomData<V>);
-    impl<'de, V: Deserialize<'de>> serde::de::Visitor<'de> for Entries<V> {
-        type Value = BTreeMap<String, V>;
-        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("an object with unique keys")
-        }
-        fn visit_map<A: serde::de::MapAccess<'de>>(
-            self,
-            mut input: A,
-        ) -> std::result::Result<Self::Value, A::Error> {
-            let mut map = BTreeMap::new();
-            while let Some((key, value)) = input.next_entry::<String, V>()? {
-                if map.insert(key.clone(), value).is_some() {
-                    return Err(serde::de::Error::custom(format!(
-                        "duplicate opaque layout artifact key `{key}`"
-                    )));
-                }
-            }
-            Ok(map)
-        }
-    }
-    deserializer.deserialize_map(Entries(std::marker::PhantomData))
-}
-impl OpaqueLayouts {
-    /// Parse an external artifact; reject malformed/unknown/duplicate fields.
-    /// Its target and source features are checked when the binding is prepared.
-    pub fn from_json(json: &str) -> Result<Self> {
-        let raw: LayoutDocument = serde_json::from_str(json)
-            .map_err(|e| format!("invalid opaque layout artifact: {e}"))?;
-        let data = Self {
-            format_version: raw.format_version,
-            target: raw.target,
-            sources: raw.sources,
-            layouts: raw.layouts,
-        };
-        if data.format_version != 1 {
-            return Err(format!(
-                "unsupported opaque layout format version {}",
-                data.format_version
-            ));
-        }
-        if data.target.trim().is_empty() {
-            return Err("opaque layout artifact requires a target".into());
-        }
-        for (key, layout) in &data.layouts {
-            if key.trim().is_empty() {
-                return Err("opaque layout key must not be empty".into());
-            }
-            layout
-                .validate()
-                .map_err(|e| format!("opaque layout `{key}`: {e}"))?;
-        }
-        for (name, source) in &data.sources {
-            if name.is_empty()
-                || source
-                    .features
-                    .iter()
-                    .any(|f| f.is_empty() || f.chars().any(char::is_whitespace) || f.contains('/'))
-            {
-                return Err(format!("invalid opaque layout feature list for `{name}`"));
-            }
-            let unique: BTreeSet<_> = source.features.iter().collect();
-            if unique.len() != source.features.len() {
-                return Err(format!("duplicate opaque layout feature for `{name}`"));
-            }
-        }
-        Ok(data)
-    }
-    /// Read an artifact without running a compiler, subprocess or probe.
-    pub fn read_json(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| format!("cannot read opaque layouts `{}`: {e}", path.display()))?;
-        Self::from_json(&json)
-    }
-    fn resolve(&self, key: &str) -> Result<StorageLayout> {
-        self.layouts
-            .get(key)
-            .copied()
-            .ok_or_else(|| format!("missing opaque layout `{key}` for target `{}`", self.target))
-    }
-}
+pub(crate) type StorageLayout = prebindgen_reprc::SizeAlign;
+/// External target measurements shared with other language generators.
+pub type OpaqueLayouts = prebindgen_reprc::LayoutArtifact;
 pub(crate) fn builtin(ty: &syn::Type) -> OpaqueLayout {
     if prebindgen_flat::type_key(ty) == "String" {
         OpaqueLayout::auto::<String>().key("std.string")
@@ -304,7 +178,7 @@ pub(crate) fn prepare(
                 ));
             }
             let layout = if let Some(data) = artifact {
-                data.resolve(&key)?
+                data.storage(&key)?
             } else if target != env!("PREBINDGEN_C_GENERATOR_TARGET") {
                 return Err(format!("cross-compilation to `{target}` requires an external opaque layout artifact (missing `{key}`); generator platform is `{}`",env!("PREBINDGEN_C_GENERATOR_TARGET")));
             } else {
@@ -436,7 +310,7 @@ mod tests {
             .prepare()
             .err()
             .unwrap()
-            .contains("cannot read opaque layouts"));
+            .contains("cannot read layouts"));
         assert!(Cbindgen::new(model("pub type Item=i64;"))
             .opaque_owned_struct("item", syn::parse_quote!(Item), OpaqueLayout::external())
             .prepare()

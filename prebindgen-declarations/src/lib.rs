@@ -73,7 +73,9 @@ pub type CodecOutput<C> = OutputPlan<
 /// How a sequence return reaches the foreign caller.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SequenceDelivery {
-    /// Return a collection value using the language adapter's array/buffer representation.
+    /// Return a collection using the adapter's default materialized transport.
+    Auto,
+    /// Explicitly return ordinary expanded rows, without applying a transport default.
     #[default]
     Value,
     /// Deliver each element through the function's sequence callback.
@@ -110,6 +112,8 @@ pub enum Input<P = std::convert::Infallible> {
     Record(Vec<Input<P>>),
     /// Construct a collection by applying one recipe to every element.
     Sequence(Box<Input<P>>),
+    /// Group the expanded fields into an adapter-selected C-representation bulk carrier.
+    Bulk(Box<Input<P>>),
     /// Convert an optional payload, gating every conversion phase.
     Optional(Box<Input<P>>),
     /// Convert the occurrence type itself with [`Codec::input_leaf`].
@@ -183,6 +187,10 @@ impl Input<InputRequest> {
     }
 }
 impl<P> Input<P> {
+    /// Group this explicit expansion into a bulk carrier.
+    pub fn bulk(self) -> Self {
+        Self::Bulk(Box::new(self))
+    }
     /// Construct a record from field recipes, or unit from an empty list.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration
@@ -242,6 +250,8 @@ impl<P> Input<P> {
 pub enum Output<P = std::convert::Infallible> {
     /// Omit this output value; source ownership still follows the enclosing operation.
     Discard,
+    /// Group the expanded fields into an adapter-selected C-representation bulk carrier.
+    Bulk(Box<Output<P>>),
     /// Give a converted view an explicit destination-language field name.
     Named {
         /// Destination name of the delivered view.
@@ -421,6 +431,10 @@ impl Output<OutputRequest> {
     }
 }
 impl<P> Output<P> {
+    /// Group this explicit expansion into a bulk carrier.
+    pub fn bulk(self) -> Self {
+        Self::Bulk(Box::new(self))
+    }
     /// Observe record fields in declaration order; use an empty list for unit.
     ///
     /// `fields` holds one recipe per field of the source record, in declaration order.
@@ -465,11 +479,9 @@ impl Output {
         match self {
             Self::Sequence { mode, .. } => match mode {
                 Some(mode) => *mode == ProjectionMode::Owned,
-                None => {
-                    !borrowed
-                        && sequence_parts(ty).is_some_and(|(_, view)| view == SequenceView::Owned)
-                }
+                None => !borrowed && sequence_parts(ty).is_some_and(|(_, view)| view.is_owned()),
             },
+            Self::Bulk(child) => child.consumes(flat, ty, extra, codec, borrowed),
             Self::Named { output: child, .. } => child.consumes(flat, ty, extra, codec, borrowed),
             Self::Optional(child) => {
                 child.consumes(flat, option_inner(ty).unwrap_or(ty), extra, codec, borrowed)
@@ -610,6 +622,105 @@ pub trait Codec {
         Input: prebindgen_flat::InputConversion + From<CodecInput<Self>>,
         Output: prebindgen_flat::OutputConversion + From<CodecOutput<Self>>,
     >;
+    /// Compile a leaf used inside a bulk record, before choosing its outer transport.
+    #[allow(clippy::too_many_arguments)]
+    fn input_bulk_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _var: syn::Ident,
+        _active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        Err("bulk inputs are unsupported by this codec".into())
+    }
+    /// Prepare a native leaf for a bulk output without per-field foreign allocations.
+    #[allow(clippy::too_many_arguments)]
+    fn output_bulk_leaf(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _value: TokenStream,
+        _borrowed: bool,
+    ) -> Result<CodecOutput<Self>> {
+        Err("bulk outputs are unsupported by this codec".into())
+    }
+    /// Prepare an explicitly projected leaf inside bulk output storage.
+    #[allow(clippy::too_many_arguments)]
+    fn output_bulk_projected(
+        &self,
+        flat: &Flat<Self::Schema>,
+        ty: &Type,
+        extra: &Self::Extra,
+        wire: syn::Ident,
+        value: TokenStream,
+        projection: &Projection,
+    ) -> Result<CodecOutput<Self>> {
+        if !projection.fields.is_empty() {
+            return Err("bulk leaf projection has field overrides".into());
+        }
+        self.output_bulk_leaf(
+            flat,
+            ty,
+            extra,
+            wire,
+            value,
+            projection.mode == ProjectionMode::Borrowed,
+        )
+    }
+    /// Group a compiled native expansion into its physical bulk input carrier.
+    fn bulk_input(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _child: CodecInput<Self>,
+        _active: &Condition,
+    ) -> Result<CodecInput<Self>> {
+        Err("bulk inputs are unsupported by this codec".into())
+    }
+    /// Group a compiled native expansion into its physical bulk output carrier.
+    fn bulk_output(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _ty: &Type,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _child: CodecOutput<Self>,
+    ) -> Result<CodecOutput<Self>> {
+        Err("bulk outputs are unsupported by this codec".into())
+    }
+    /// Read collection rows from native bulk storage.
+    #[allow(clippy::too_many_arguments)]
+    fn sequence_input_bulk(
+        &self,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _length: syn::Ident,
+        _index: syn::Ident,
+        _element: &WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        _active: &Condition,
+    ) -> Result<SequenceInput<Self::Wire, Self::Chain>> {
+        Err("bulk collections are unsupported by this codec".into())
+    }
+    /// Store collection rows in native bulk storage.
+    #[allow(clippy::too_many_arguments)]
+    fn sequence_output_bulk(
+        &self,
+        _extra: &Self::Extra,
+        _wire: syn::Ident,
+        _length: syn::Ident,
+        _index: syn::Ident,
+        _element: &WireNode<Self::Wire, Self::Chain, Self::Branch>,
+        _values: &[(syn::Ident, TokenStream)],
+        _delivery: SequenceDelivery,
+    ) -> Result<SequenceOutput<Self::Wire, Self::Chain>> {
+        Err("bulk collections are unsupported by this codec".into())
+    }
     /// Compile a callback whose two conversion directions are already resolved.
     fn callback_input(
         &self,
@@ -642,6 +753,15 @@ pub trait Codec {
         _extra: &Self::Extra,
     ) -> Result<Option<Output<OutputRequest>>> {
         Ok(None)
+    }
+    /// Select bulk for automatically materialized output sequences.
+    /// Explicit ordinary rows and per-row callbacks bypass this default.
+    fn default_output_sequence_is_bulk(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
     }
     /// Keep a collection occurrence in one native input leaf instead of
     /// decomposing it into element rows. Explicit `Input::Sequence` overrides
@@ -1399,6 +1519,8 @@ fn finalize_output_schema<C: Codec>(
 }
 
 struct Compiler<'a, C: Codec> {
+    bulk: std::cell::Cell<bool>,
+    ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
     temporary_receiver: std::cell::Cell<bool>,
     flat: &'a Flat<C::Schema>,
@@ -1409,6 +1531,8 @@ struct Compiler<'a, C: Codec> {
 impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
+            bulk: std::cell::Cell::new(false),
+            ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
             flat,
             codec,
@@ -1478,6 +1602,18 @@ impl<'a, C: Codec> Compiler<'a, C> {
         let mut statements = TokenStream::new();
         let argument = quote!(#var);
         match recipe {
+            Input::Bulk(inner) => {
+                if self.bulk.get() {
+                    return self.input_named(ty, inner, extra, active, names);
+                }
+                let wire = self.name();
+                self.bulk.set(true);
+                let child = self.input_named(ty, inner, extra, active, names);
+                self.bulk.set(false);
+                return self
+                    .codec
+                    .bulk_input(self.flat, ty, extra, wire, child?, active);
+            }
             Input::Callback(callback) => {
                 callback.validate_for(self.flat, ty)?;
                 return self.codec.callback_input(
@@ -1492,6 +1628,17 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 );
             }
             Input::Sequence(element_recipe) => {
+                if !self.bulk.get() {
+                    if let Input::Bulk(inner) = element_recipe.as_ref() {
+                        return self.input_named(
+                            ty,
+                            &Input::Bulk(Box::new(Input::Sequence(inner.clone()))),
+                            extra,
+                            active,
+                            names,
+                        );
+                    }
+                }
                 let (element, _) =
                     sequence_parts(ty).ok_or("sequence input requires Vec<T>, &[T] or &Vec<T>")?;
                 let wire = self.name();
@@ -1499,7 +1646,16 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let index = self.name();
                 let child = self.input(element, element_recipe, extra, &Condition::default())?;
                 return sequence::input(
-                    self.codec, ty, extra, wire, var, length, index, active, child,
+                    self.codec,
+                    ty,
+                    extra,
+                    wire,
+                    var,
+                    length,
+                    index,
+                    active,
+                    child,
+                    self.bulk.get(),
                 );
             }
             Input::Optional(inner) => {
@@ -1524,7 +1680,12 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let w = names
                     .map(|(wire, _)| wire.clone())
                     .unwrap_or_else(|| self.name());
-                return self.codec.input_leaf(self.flat, ty, extra, w, var, active);
+                return if self.bulk.get() {
+                    self.codec
+                        .input_bulk_leaf(self.flat, ty, extra, w, var, active)
+                } else {
+                    self.codec.input_leaf(self.flat, ty, extra, w, var, active)
+                };
             }
             Input::Request(never) => match *never {},
             Input::Fields(children) | Input::Record(children) => {
@@ -1878,6 +2039,16 @@ impl<'a, C: Codec> Compiler<'a, C> {
             values: Vec::new(),
         };
         match recipe {
+            Output::Bulk(inner) => {
+                if self.bulk.get() {
+                    return self.output_named(ty, inner, extra, value, borrowed, wire_name);
+                }
+                let wire = self.name();
+                self.bulk.set(true);
+                let child = self.output_named(ty, inner, extra, value, borrowed, wire_name);
+                self.bulk.set(false);
+                return self.codec.bulk_output(self.flat, ty, extra, wire, child?);
+            }
             Output::Discard => return Ok(out),
             Output::Named { name, output } => {
                 let mut plan = self.output_named(ty, output, extra, value, borrowed, wire_name)?;
@@ -1893,10 +2064,40 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 mode,
                 delivery,
             } => {
+                if *delivery == SequenceDelivery::Auto
+                    && !self.bulk.get()
+                    && !self.ordinary_collections.get()
+                    && self.codec.default_output_sequence_is_bulk(self.flat, extra)
+                {
+                    return self.output_named(
+                        ty,
+                        &Output::Bulk(Box::new(recipe.clone())),
+                        extra,
+                        value,
+                        borrowed,
+                        wire_name,
+                    );
+                }
+                if !self.bulk.get() {
+                    if let Output::Bulk(inner) = element.as_ref() {
+                        return self.output_named(
+                            ty,
+                            &Output::Bulk(Box::new(Output::Sequence {
+                                element: inner.clone(),
+                                mode: *mode,
+                                delivery: *delivery,
+                            })),
+                            extra,
+                            value,
+                            borrowed,
+                            wire_name,
+                        );
+                    }
+                }
                 let (element_type, _) =
                     sequence_parts(ty).ok_or("sequence output requires a collection")?;
                 let mode = mode.unwrap_or_else(|| {
-                    if borrowed || sequence_parts(ty).unwrap().1 != SequenceView::Owned {
+                    if borrowed || !sequence_parts(ty).unwrap().1.is_owned() {
                         ProjectionMode::Borrowed
                     } else {
                         ProjectionMode::Owned
@@ -1906,10 +2107,15 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let payload = self.name();
                 let length = self.name();
                 let index = self.name();
+                // An explicit ordinary collection (or a callback row) keeps
+                // nested automatic sequences ordinary. Explicit Bulk still wins.
+                let ordinary = self.ordinary_collections.replace(
+                    self.ordinary_collections.get() || *delivery != SequenceDelivery::Auto,
+                );
                 let child = self.with_temporary_receiver(
                     mode == ProjectionMode::Borrowed
                         && !borrowed
-                        && sequence_parts(ty).unwrap().1 == SequenceView::Owned,
+                        && sequence_parts(ty).unwrap().1.is_owned(),
                     || {
                         self.output(
                             element_type,
@@ -1919,10 +2125,27 @@ impl<'a, C: Codec> Compiler<'a, C> {
                             mode == ProjectionMode::Borrowed,
                         )
                     },
-                )?;
+                );
+                self.ordinary_collections.set(ordinary);
+                let child = child?;
                 return sequence::output(
-                    self.codec, ty, extra, wire, payload, length, index, value, borrowed, mode,
-                    child, *delivery,
+                    self.codec,
+                    ty,
+                    extra,
+                    wire,
+                    payload,
+                    length,
+                    index,
+                    value,
+                    borrowed,
+                    mode,
+                    child,
+                    if *delivery == SequenceDelivery::Auto {
+                        SequenceDelivery::Value
+                    } else {
+                        *delivery
+                    },
+                    self.bulk.get(),
                 );
             }
             Output::Result { .. } => {
@@ -1950,9 +2173,13 @@ impl<'a, C: Codec> Compiler<'a, C> {
             Output::Request(never) => match *never {},
             Output::Leaf => {
                 let w = wire_name.cloned().unwrap_or_else(|| self.name());
-                return self
-                    .codec
-                    .output_leaf(self.flat, ty, extra, w, value, borrowed);
+                return if self.bulk.get() {
+                    self.codec
+                        .output_bulk_leaf(self.flat, ty, extra, w, value, borrowed)
+                } else {
+                    self.codec
+                        .output_leaf(self.flat, ty, extra, w, value, borrowed)
+                };
             }
             Output::Projected(projection) => {
                 if borrowed && projection.mode == ProjectionMode::Owned {
@@ -1965,14 +2192,14 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 } else {
                     value
                 };
-                return self.codec.output_projected(
-                    self.flat,
-                    ty,
-                    extra,
-                    wire_name.cloned().unwrap_or_else(|| self.name()),
-                    value,
-                    projection,
-                );
+                let wire = wire_name.cloned().unwrap_or_else(|| self.name());
+                return if self.bulk.get() {
+                    self.codec
+                        .output_bulk_projected(self.flat, ty, extra, wire, value, projection)
+                } else {
+                    self.codec
+                        .output_projected(self.flat, ty, extra, wire, value, projection)
+                };
             }
             Output::Fields(children)
             | Output::OwnedFields(children)

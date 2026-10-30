@@ -430,6 +430,84 @@ impl Class {
 }
 
 impl Codec for DataCodec<'_> {
+    fn input_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.input_leaf(flat, ty, &(), w, v, active)
+        } else {
+            crate::bulk::input_leaf(flat, ty, w, v, active)
+        }
+    }
+    fn output_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<OutputPlan<JniWire>> {
+        if self.enum_type(flat, ty).is_some() {
+            self.output_leaf(flat, ty, &(), w, v, borrowed)
+        } else {
+            crate::bulk::output_leaf(flat, ty, w, v, borrowed)
+        }
+    }
+    fn bulk_input(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: InputPlan<JniWire>,
+        active: &Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        crate::bulk::input(w, child, active)
+    }
+    fn bulk_output(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: OutputPlan<JniWire>,
+    ) -> Result<OutputPlan<JniWire>> {
+        crate::bulk::output(w, child)
+    }
+    fn sequence_input_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        active: &Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        crate::bulk::sequence_input(w, n, i, element, active)
+    }
+    fn sequence_output_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+        if delivery != prebindgen_declarations::SequenceDelivery::Value {
+            return Err("bulk collection delivery cannot also use per-element callbacks".into());
+        }
+        crate::bulk::sequence_output(w, n, i, element, values)
+    }
+
     type Schema = JniSchema;
     fn expand_input(
         &self,
@@ -557,6 +635,9 @@ impl Codec for DataCodec<'_> {
     type Extra = ();
     type Wire = JniWire;
     type Context = JniContext;
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, extra: &()) -> bool {
+        JniCodec.default_output_sequence_is_bulk(flat, extra)
+    }
     fn sequence_input(
         &self,
         e: &(),
@@ -1070,6 +1151,7 @@ mod group_tests {
         crate::group::validate_layout(&field).unwrap();
         let classes = BTreeMap::new();
         let context = KotlinContext {
+            package: "example",
             classes: &classes,
             result: "result",
             failure: "failure",

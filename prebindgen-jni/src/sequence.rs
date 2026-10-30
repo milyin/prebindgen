@@ -10,6 +10,8 @@ use prebindgen_declarations::{Condition, SequenceInput, SequenceOutput};
 pub enum JniSequence {
     /// All rows travel in one collection carrier.
     Buffered,
+    /// Native row ranges inside an enclosing bulk frame.
+    Bulk,
     /// Each row is delivered through the function's sequence callback.
     Callback,
 }
@@ -109,6 +111,9 @@ pub(crate) fn input_list(
     element: &prebindgen_flat::WireNode<JniWire, crate::JniChain, crate::JniBranch>,
     context: &KotlinContext<'_>,
 ) -> Result<KotlinInput> {
+    if *sequence == JniSequence::Bulk {
+        return crate::bulk::input_list(carrier, element, context);
+    }
     if *sequence != JniSequence::Buffered {
         return Err(
             "callback sequence is only supported as the function's successful return".into(),
@@ -293,7 +298,7 @@ pub(crate) fn validate_buffered(
             validate_buffered(element)?;
         }
         prebindgen_flat::WireNode::Chain {
-            meta: JniChain::Optional(_),
+            meta: JniChain::Optional(_) | JniChain::Bulk(_),
             child: element,
             ..
         } => validate_buffered(element)?,
@@ -369,6 +374,9 @@ mod delivery_tests {
         element: prebindgen_flat::WireNode<JniWire, JniChain, JniBranch>,
     ) -> prebindgen_flat::WireNode<JniWire, JniChain, JniBranch> {
         let kind = match delivery {
+            JniSequence::Bulk => JniWire::NativeRows {
+                condition: "true".into(),
+            },
             JniSequence::Buffered | JniSequence::Callback => JniWire::Rows {
                 condition: "true".into(),
                 null_niche_available: true,

@@ -7,7 +7,9 @@
 use prebindgen_flat::{type_key, Conversion, Flat, OutputConversion, Result, WireKind};
 
 pub use prebindgen_declarations::{callback, CallbackDecl, Projection, ProjectionMode};
+mod bulk;
 mod metadata;
+pub use bulk::BulkRecord;
 pub use metadata::{JniFunction, JniModule, JniSchema, JniType};
 mod data;
 mod enums;
@@ -220,11 +222,23 @@ pub struct JniGenBuilder {
     init: String,
     packages: Vec<PackageDecl>,
     error_classes: Vec<(syn::Type, String)>,
+    bulk_collection_outputs: Option<bool>,
 }
 impl JniGenBuilder {
     /// Create an empty builder; equivalent to [`JniGen::builder`].
     pub fn new() -> Self {
         Self::default()
+    }
+    /// Use bulk transport by default for materialized collection outputs.
+    ///
+    /// Enabled by default for Rust-to-Kotlin collections, including callback
+    /// arguments. Direct byte buffers retain their existing representation.
+    /// Explicit ordinary collection expansions and callback/fold delivery bypass
+    /// this default; nested automatic collections inherit an ordinary choice.
+    /// Set `false` to retain ordinary defaults; explicit `.bulk()` still works.
+    pub fn set_bulk_collection_outputs(mut self, enabled: bool) -> Self {
+        self.bulk_collection_outputs = Some(enabled);
+        self
     }
     /// Adjust the selected flat model before declaration defaults are applied.
     ///
@@ -425,6 +439,7 @@ impl JniGenBuilder {
             package: self.prefix,
             native_init: self.init,
             callbacks: Vec::new(),
+            bulk_collection_outputs: self.bulk_collection_outputs.unwrap_or(true),
         };
         let mut declarations = Vec::new();
         let mut class_types = BTreeSet::new();
@@ -521,14 +536,14 @@ impl JniGenBuilder {
             }
         }
         let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
+        validate_declaration_names(&flat)?;
+        data::prepare(&mut flat)?;
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
             self.outputs,
             self.error_mappers,
         )?;
-        validate_declaration_names(&flat)?;
-        data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
         let codec = data::DataCodec {
             callback_outputs: Some(&output_defaults),
@@ -666,6 +681,76 @@ fn foreign_name_exists(flat: &Bindings, name: &str) -> bool {
 /// to fill [`Bindings`] manually.
 pub struct JniCodec;
 impl Codec for JniCodec {
+    fn input_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: syn::Ident,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        bulk::input_leaf(flat, ty, w, v, active)
+    }
+    fn output_bulk_leaf(
+        &self,
+        flat: &Bindings,
+        ty: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        v: TokenStream,
+        borrowed: bool,
+    ) -> Result<OutputPlan<JniWire>> {
+        bulk::output_leaf(flat, ty, w, v, borrowed)
+    }
+    fn bulk_input(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: InputPlan<JniWire>,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<InputPlan<JniWire>> {
+        bulk::input(w, child, active)
+    }
+    fn bulk_output(
+        &self,
+        _: &Bindings,
+        _: &syn::Type,
+        _: &(),
+        w: syn::Ident,
+        child: OutputPlan<JniWire>,
+    ) -> Result<OutputPlan<JniWire>> {
+        bulk::output(w, child)
+    }
+    fn sequence_input_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        active: &prebindgen_declarations::Condition,
+    ) -> Result<prebindgen_declarations::SequenceInput<JniWire, JniChain>> {
+        bulk::sequence_input(w, n, i, element, active)
+    }
+    fn sequence_output_bulk(
+        &self,
+        _: &(),
+        w: syn::Ident,
+        n: syn::Ident,
+        i: syn::Ident,
+        element: &kotlin::JniNode,
+        values: &[(syn::Ident, TokenStream)],
+        delivery: prebindgen_declarations::SequenceDelivery,
+    ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, JniChain>> {
+        if delivery != prebindgen_declarations::SequenceDelivery::Value {
+            return Err("bulk collection delivery cannot also use per-element callbacks".into());
+        }
+        bulk::sequence_output(w, n, i, element, values)
+    }
+
     type Schema = JniSchema;
     type Niche = crate::optional::JniNiche;
     type Chain = JniChain;
@@ -739,6 +824,9 @@ impl Codec for JniCodec {
         plan.delivery = returns::packet_delivery(plan)?;
         Ok(())
     }
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, _: &()) -> bool {
+        flat.metadata.bulk_collection_outputs
+    }
     fn sequence_input(
         &self,
         _: &(),
@@ -761,7 +849,8 @@ impl Codec for JniCodec {
         delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniChain>> {
         match delivery {
-            prebindgen_declarations::SequenceDelivery::Value => {
+            prebindgen_declarations::SequenceDelivery::Auto
+            | prebindgen_declarations::SequenceDelivery::Value => {
                 sequence::output(wire, length, index, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {
@@ -1046,6 +1135,13 @@ fn validate_class_name(name: &str) -> Result<()> {
         "NativeHandle",
         "JniErrorHandler",
         "HandleValidationFailure",
+        "BulkRuntime",
+        "BulkLayouts",
+        "BulkLayout",
+        "BulkRange",
+        "BulkWriter",
+        "BulkReader",
+        "BulkInputRow",
     ]
     .contains(&name)
     {
@@ -1242,10 +1338,12 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             ))
         })
         .collect::<Result<_>>()?;
+    bulk::emit(flat, &mut rust, &mut native, &mut files)?;
     callback::files(flat, &kotlin_classes, &mut files)?;
     errors::handler_files(
         &errors,
         &KotlinContext {
+            package: prefix,
             classes: &kotlin_classes,
             result: "result",
             failure: "failure",
@@ -1398,6 +1496,7 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
         let mut params = Vec::new();
         let mut raw_params = Vec::new();
         let kotlin_context = KotlinContext {
+            package: prefix,
             classes: &kotlin_classes,
             result: "result",
             failure: "failure",
@@ -1674,7 +1773,11 @@ pub fn generate(flat: &Bindings) -> Result<JniGen> {
             format!("if (returnCapture.discardSuccess) {{ val {failure} = IllegalArgumentException(returnCapture.message); {output_locals} {cleanup} }}")
         };
         let end = if cleanup.is_empty() {
-            end
+            if output_locals.is_empty() && materialize.is_empty() {
+                end
+            } else {
+                format!("{output_locals}{materialize}\n{end}")
+            }
         } else {
             format!("{output_locals}        try {{\n{materialize}            {end}\n        }} catch ({failure}: Throwable) {{\n{cleanup}            throw {failure}\n        }}")
         };

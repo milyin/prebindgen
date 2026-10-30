@@ -237,6 +237,18 @@ pub(crate) fn input(
     callback.input(wire, var, active)
 }
 impl JniCallback {
+    pub(crate) fn bulk_nodes(&self) -> Vec<(bool, &kotlin::JniNode)> {
+        let mut nodes = self
+            .arguments
+            .iter()
+            .map(|a| (false, &a.output.output_outcomes().success))
+            .collect::<Vec<_>>();
+        if let Some(value) = &self.return_value {
+            nodes.push((true, value.input.input_node()));
+        }
+        nodes
+    }
+
     pub(crate) fn fqn(&self) -> String {
         format!("{}.{}", self.package, self.name)
     }
@@ -372,7 +384,7 @@ impl JniCallback {
             acquire: quote!(),
             resources: vec![],
             validation: registration,
-            statements: quote!(#activate #[allow(unused_mut)] let #var = move |#(#params),*| {
+            statements: quote!(#activate # [allow(unused_mut, clippy::collapsible_if)] let #var = move |#(#params),*| {
                 #invocation
             };),
             argument: quote!(#var),
@@ -596,6 +608,9 @@ impl CallbackReturn {
         retained: &syn::Ident,
         env: &syn::Ident,
     ) -> Result<TokenStream> {
+        let mut input = self.input.clone();
+        let cache = crate::bulk::callback_cache(input.input_node(), context)?;
+        input.rust.validation = crate::bulk::cached_reads(&input.rust.validation)?;
         let fields = self.fields();
         let result = format_ident!("callback_result");
         let (return_type, decode) = match fields.as_slice() {
@@ -628,7 +643,7 @@ impl CallbackReturn {
         let ty = &self.source_type;
         let expected = syn::parse_quote!(::prebindgen_runtime::Result<#ty>);
         let (owners, commit_owners) = self.ownership_guard(context)?;
-        let mut body = self.input.code_fragment_slot(
+        let mut body = input.code_fragment_slot(
             InputFragment::Construct {
                 context,
                 target: &target,
@@ -636,7 +651,7 @@ impl CallbackReturn {
             },
             &expected,
         )?;
-        body = self.input.code_fragment_slot(
+        body = input.code_fragment_slot(
             InputFragment::Acquire {
                 context,
                 next: body,
@@ -644,14 +659,14 @@ impl CallbackReturn {
             &expected,
         )?;
         body = quote!({ #commit_owners #body });
-        let checks = self.input.code_fragment_slot(
+        let checks = input.code_fragment_slot(
             InputFragment::CheckInternalAliases { context },
             &syn::parse_quote!(()),
         )?;
         if checks.to_string() != quote!(()).to_string() {
             body = quote!({let _: () = #checks; #body});
         }
-        body = self.input.code_fragment_slot(
+        body = input.code_fragment_slot(
             InputFragment::Validate {
                 context,
                 next: body,
@@ -661,13 +676,19 @@ impl CallbackReturn {
         context.render(&quote!({
             let #result = unsafe { #retained.invoke_return(#env, #return_type, &arguments) }?;
             #decode
+            #cache
             #owners
             #body
         }))
     }
 }
-fn receive_return_owners(node: &kotlin::JniNode, context: &JniContext) -> Result<TokenStream> {
+pub(crate) fn receive_return_owners(
+    node: &kotlin::JniNode,
+    context: &JniContext,
+) -> Result<TokenStream> {
     Ok(match node {
+        WireNode::Chain {meta:JniChain::Bulk(layout),controls,child} => crate::bulk::scan_bulk(layout,controls,child,context)?,
+        WireNode::Chain {meta:JniChain::Sequence(JniSequence::Bulk),controls,child} => crate::bulk::scan_rows(controls,child,context)?,
         WireNode::Leaf(fields)=>fields.iter().filter_map(|field| {
             if let JniWire::Handle {handle,..}=&field.kind {
                 if handle.access==Access::Move {let name=&field.name;let ty=&handle.ty;return Some(quote!(unsafe {callback_return_owners.receive(#name as *mut ::prebindgen_jni_runtime::Allocation<#ty>);}));}
@@ -731,6 +752,7 @@ pub(crate) fn files(
             continue;
         };
         let context = KotlinContext {
+            package: &flat.metadata.package,
             classes,
             result: "parts",
             failure: "failure",

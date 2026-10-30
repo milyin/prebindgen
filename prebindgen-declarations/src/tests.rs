@@ -1871,6 +1871,7 @@ fn nested_output_completion_channels_are_rejected_without_losing_unit_errors() {
             ProjectionMode::Owned,
             child.clone(),
             SequenceDelivery::Value,
+            false,
         )
         .unwrap_err()
         .contains("outermost"));
