@@ -29,6 +29,16 @@ impl Row {
     fn sum(&self) -> i64 {
         self.a + self.b + self.c + self.d + self.e + self.f + self.g + self.h
     }
+    fn checksum(&self) -> i64 {
+        1 * self.a
+            + 2 * self.b
+            + 3 * self.c
+            + 4 * self.d
+            + 5 * self.e
+            + 6 * self.f
+            + 7 * self.g
+            + 8 * self.h
+    }
 }
 #[prebindgen]
 pub fn scalar(value: i64) -> i64 {
@@ -163,39 +173,39 @@ impl WideRow {
             f31: seed + 31,
         }
     }
-    fn sum(&self) -> i64 {
-        self.f0
-            + self.f1
-            + self.f2
-            + self.f3
-            + self.f4
-            + self.f5
-            + self.f6
-            + self.f7
-            + self.f8
-            + self.f9
-            + self.f10
-            + self.f11
-            + self.f12
-            + self.f13
-            + self.f14
-            + self.f15
-            + self.f16
-            + self.f17
-            + self.f18
-            + self.f19
-            + self.f20
-            + self.f21
-            + self.f22
-            + self.f23
-            + self.f24
-            + self.f25
-            + self.f26
-            + self.f27
-            + self.f28
-            + self.f29
-            + self.f30
-            + self.f31
+    fn checksum(&self) -> i64 {
+        1 * self.f0
+            + 2 * self.f1
+            + 3 * self.f2
+            + 4 * self.f3
+            + 5 * self.f4
+            + 6 * self.f5
+            + 7 * self.f6
+            + 8 * self.f7
+            + 9 * self.f8
+            + 10 * self.f9
+            + 11 * self.f10
+            + 12 * self.f11
+            + 13 * self.f12
+            + 14 * self.f13
+            + 15 * self.f14
+            + 16 * self.f15
+            + 17 * self.f16
+            + 18 * self.f17
+            + 19 * self.f18
+            + 20 * self.f19
+            + 21 * self.f20
+            + 22 * self.f21
+            + 23 * self.f22
+            + 24 * self.f23
+            + 25 * self.f24
+            + 26 * self.f25
+            + 27 * self.f26
+            + 28 * self.f27
+            + 29 * self.f28
+            + 30 * self.f29
+            + 31 * self.f30
+            + 32 * self.f31
     }
 }
 #[prebindgen]
@@ -204,7 +214,7 @@ pub fn wide_row_make(seed: i64) -> WideRow {
 }
 #[prebindgen]
 pub fn wide_row_sum(value: WideRow) -> i64 {
-    std::hint::black_box(value).sum()
+    std::hint::black_box(value).checksum()
 }
 
 #[prebindgen]
@@ -218,7 +228,7 @@ pub fn row_return_handler_new(
 }
 #[prebindgen]
 pub fn row_return_fire(handler: &RowReturnHandler, seed: i64) -> i64 {
-    std::hint::black_box((handler.0)(seed)).sum()
+    std::hint::black_box((handler.0)(seed)).checksum()
 }
 
 #[prebindgen]
@@ -232,5 +242,11 @@ pub fn wide_row_return_handler_new(
 }
 #[prebindgen]
 pub fn wide_row_return_fire(handler: &WideRowReturnHandler, seed: i64) -> i64 {
-    std::hint::black_box((handler.0)(seed)).sum()
+    std::hint::black_box((handler.0)(seed)).checksum()
+}
+
+// Identical in both bindings: a control for variation between fresh JVMs.
+#[prebindgen]
+pub fn control(value: i64) -> i64 {
+    std::hint::black_box(value) + 1
 }

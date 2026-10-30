@@ -25,9 +25,9 @@ private fun checksumPlain(rows: List<bench.plain.Row>): Long {
 private fun rowPlain(x: Long) = bench.plain.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7)
 private fun wideRowPlain(x: Long) = bench.plain.WideRow(
     x, x+1, x+2, x+3, x+4, x+5, x+6, x+7, x+8, x+9, x+10, x+11, x+12, x+13, x+14, x+15, x+16, x+17, x+18, x+19, x+20, x+21, x+22, x+23, x+24, x+25, x+26, x+27, x+28, x+29, x+30, x+31)
-private fun checksumPlain(r: bench.plain.Row) = r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h
+private fun checksumPlain(r: bench.plain.Row) = 1 * r.a + 2 * r.b + 3 * r.c + 4 * r.d + 5 * r.e + 6 * r.f + 7 * r.g + 8 * r.h
 private fun checksumPlain(r: bench.plain.WideRow) =
-    r.f0 + r.f1 + r.f2 + r.f3 + r.f4 + r.f5 + r.f6 + r.f7 + r.f8 + r.f9 + r.f10 + r.f11 + r.f12 + r.f13 + r.f14 + r.f15 + r.f16 + r.f17 + r.f18 + r.f19 + r.f20 + r.f21 + r.f22 + r.f23 + r.f24 + r.f25 + r.f26 + r.f27 + r.f28 + r.f29 + r.f30 + r.f31
+    1 * r.f0 + 2 * r.f1 + 3 * r.f2 + 4 * r.f3 + 5 * r.f4 + 6 * r.f5 + 7 * r.f6 + 8 * r.f7 + 9 * r.f8 + 10 * r.f9 + 11 * r.f10 + 12 * r.f11 + 13 * r.f12 + 14 * r.f13 + 15 * r.f14 + 16 * r.f15 + 17 * r.f16 + 18 * r.f17 + 19 * r.f18 + 20 * r.f19 + 21 * r.f20 + 22 * r.f21 + 23 * r.f22 + 24 * r.f23 + 25 * r.f24 + 26 * r.f25 + 27 * r.f26 + 28 * r.f27 + 29 * r.f28 + 30 * r.f29 + 31 * r.f30 + 32 * r.f31
 private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArray): Pair<List<Case>, AutoCloseable> {
     val handler = bench.plain.handlerNew(bench.plain.RowsCallback { rows ->
         callbacks[0]++; checksumPlain(rows)
@@ -41,13 +41,14 @@ private fun casesPlain(sizes: List<Int>, payloads: List<Int>, callbacks: LongArr
     val wide = wideRowPlain(BASE)
     val one = bench.plain.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
     val cases = mutableListOf(
+        Case("control", 1, BASE + 1, 1, Operation { i -> bench.plain.control(BASE + (i and MASK)) }),
         Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.plain.scalar(BASE + (i and MASK)) }),
         Case("record_input", 1, rowsTotal(1), 0, Operation { _ -> bench.plain.rowSum(one) }),
-        Case("record_return", 1, rowsTotal(1), 8, Operation { i -> checksumPlain(bench.plain.rowMake(BASE + (i and MASK))) }),
-        Case("wide_record_input", 1, 32 * BASE + 496, 0, Operation { _ -> bench.plain.wideRowSum(wide) }),
-        Case("wide_record_return", 1, 32 * BASE + 496, 32, Operation { i -> checksumPlain(bench.plain.wideRowMake(BASE + (i and MASK))) }),
-        Case("callback_record_return", 1, rowsTotal(1), 8, Operation { i -> bench.plain.rowReturnFire(rowReturn, BASE + (i and MASK)) }, true),
-        Case("callback_wide_record_return", 1, 32 * BASE + 496, 32, Operation { i -> bench.plain.wideRowReturnFire(wideReturn, BASE + (i and MASK)) }, true)
+        Case("record_return", 1, 36 * BASE + 168, 36, Operation { i -> checksumPlain(bench.plain.rowMake(BASE + (i and MASK))) }),
+        Case("wide_record_input", 1, 528 * BASE + 10912, 0, Operation { _ -> bench.plain.wideRowSum(wide) }),
+        Case("wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> checksumPlain(bench.plain.wideRowMake(BASE + (i and MASK))) }),
+        Case("callback_record_return", 1, 36 * BASE + 168, 36, Operation { i -> bench.plain.rowReturnFire(rowReturn, BASE + (i and MASK)) }, true),
+        Case("callback_wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> bench.plain.wideRowReturnFire(wideReturn, BASE + (i and MASK)) }, true)
     )
     for (size in sizes) {
         val numbers = List(size) { BASE + it }
@@ -93,9 +94,9 @@ private fun checksumBulk(rows: List<bench.bulk.Row>): Long {
 private fun rowBulk(x: Long) = bench.bulk.Row(x, x+1, x+2, x+3, x+4, x+5, x+6, x+7)
 private fun wideRowBulk(x: Long) = bench.bulk.WideRow(
     x, x+1, x+2, x+3, x+4, x+5, x+6, x+7, x+8, x+9, x+10, x+11, x+12, x+13, x+14, x+15, x+16, x+17, x+18, x+19, x+20, x+21, x+22, x+23, x+24, x+25, x+26, x+27, x+28, x+29, x+30, x+31)
-private fun checksumBulk(r: bench.bulk.Row) = r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h
+private fun checksumBulk(r: bench.bulk.Row) = 1 * r.a + 2 * r.b + 3 * r.c + 4 * r.d + 5 * r.e + 6 * r.f + 7 * r.g + 8 * r.h
 private fun checksumBulk(r: bench.bulk.WideRow) =
-    r.f0 + r.f1 + r.f2 + r.f3 + r.f4 + r.f5 + r.f6 + r.f7 + r.f8 + r.f9 + r.f10 + r.f11 + r.f12 + r.f13 + r.f14 + r.f15 + r.f16 + r.f17 + r.f18 + r.f19 + r.f20 + r.f21 + r.f22 + r.f23 + r.f24 + r.f25 + r.f26 + r.f27 + r.f28 + r.f29 + r.f30 + r.f31
+    1 * r.f0 + 2 * r.f1 + 3 * r.f2 + 4 * r.f3 + 5 * r.f4 + 6 * r.f5 + 7 * r.f6 + 8 * r.f7 + 9 * r.f8 + 10 * r.f9 + 11 * r.f10 + 12 * r.f11 + 13 * r.f12 + 14 * r.f13 + 15 * r.f14 + 16 * r.f15 + 17 * r.f16 + 18 * r.f17 + 19 * r.f18 + 20 * r.f19 + 21 * r.f20 + 22 * r.f21 + 23 * r.f22 + 24 * r.f23 + 25 * r.f24 + 26 * r.f25 + 27 * r.f26 + 28 * r.f27 + 29 * r.f28 + 30 * r.f29 + 31 * r.f30 + 32 * r.f31
 private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArray): Pair<List<Case>, AutoCloseable> {
     val handler = bench.bulk.handlerNew(bench.bulk.RowsCallback { rows ->
         callbacks[0]++; checksumBulk(rows)
@@ -109,13 +110,14 @@ private fun casesBulk(sizes: List<Int>, payloads: List<Int>, callbacks: LongArra
     val wide = wideRowBulk(BASE)
     val one = bench.bulk.Row(BASE, BASE + 1, BASE + 2, BASE + 3, BASE + 4, BASE + 5, BASE + 6, BASE + 7)
     val cases = mutableListOf(
+        Case("control", 1, BASE + 1, 1, Operation { i -> bench.bulk.control(BASE + (i and MASK)) }),
         Case("scalar", 1, BASE + 1, 1, Operation { i -> bench.bulk.scalar(BASE + (i and MASK)) }),
         Case("record_input", 1, rowsTotal(1), 0, Operation { _ -> bench.bulk.rowSum(one) }),
-        Case("record_return", 1, rowsTotal(1), 8, Operation { i -> checksumBulk(bench.bulk.rowMake(BASE + (i and MASK))) }),
-        Case("wide_record_input", 1, 32 * BASE + 496, 0, Operation { _ -> bench.bulk.wideRowSum(wide) }),
-        Case("wide_record_return", 1, 32 * BASE + 496, 32, Operation { i -> checksumBulk(bench.bulk.wideRowMake(BASE + (i and MASK))) }),
-        Case("callback_record_return", 1, rowsTotal(1), 8, Operation { i -> bench.bulk.rowReturnFire(rowReturn, BASE + (i and MASK)) }, true),
-        Case("callback_wide_record_return", 1, 32 * BASE + 496, 32, Operation { i -> bench.bulk.wideRowReturnFire(wideReturn, BASE + (i and MASK)) }, true)
+        Case("record_return", 1, 36 * BASE + 168, 36, Operation { i -> checksumBulk(bench.bulk.rowMake(BASE + (i and MASK))) }),
+        Case("wide_record_input", 1, 528 * BASE + 10912, 0, Operation { _ -> bench.bulk.wideRowSum(wide) }),
+        Case("wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> checksumBulk(bench.bulk.wideRowMake(BASE + (i and MASK))) }),
+        Case("callback_record_return", 1, 36 * BASE + 168, 36, Operation { i -> bench.bulk.rowReturnFire(rowReturn, BASE + (i and MASK)) }, true),
+        Case("callback_wide_record_return", 1, 528 * BASE + 10912, 528, Operation { i -> bench.bulk.wideRowReturnFire(wideReturn, BASE + (i and MASK)) }, true)
     )
     for (size in sizes) {
         val numbers = List(size) { BASE + it }
@@ -173,7 +175,7 @@ fun main(args: Array<String>) {
     val selectedCases = allCases.filter { it.name in selectedNames }
     require(selectedCases.isNotEmpty() && selectedCases.map { it.name }.toSet() == selectedNames)
     val ordered = if (trial % 2 == 0) selectedCases else selectedCases.reversed()
-    val shift = trial * 7 % ordered.size
+    val shift = (trial / 2) % ordered.size
     val cases = ordered.drop(shift) + ordered.take(shift)
     fun sample(case: Case, iterations: Int): Sample {
         val beforeCallbacks = callbacks[0]

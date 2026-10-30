@@ -90,6 +90,7 @@ fn main() {
                     .fun(fun!(wide_row_return_fire))
                     .class(data_class!(Packet))
                     .class(ptr_class!(Handler))
+                    .fun(fun!(control))
                     .fun(scalar)
                     .fun(row)
                     .fun(numbers)
