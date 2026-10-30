@@ -174,8 +174,8 @@ fun checkCallbackHandleCollections() {
     var malformedCalls = 0
     val scopedBridge = rowBridge("callbackRowsOwned", OrdinaryCallbackRowVecCallback { malformedCalls++ })
     val transferredBridge = rowBridge("callbackRowsTransferred", OrdinaryCallbackTransferredRowVecCallback { malformedCalls++ })
-    val pairBridge = rowBridge("callbackRowsPair", OrdinaryCallbackRowVecOrdinaryCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
-    val mixedBridge = rowBridge("callbackRowsTransferredPair", OrdinaryCallbackTransferredRowVecOrdinaryCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
+    val pairBridge = rowBridge("callbackRowsPair", OrdinaryCallbackRowVecCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
+    val mixedBridge = rowBridge("callbackRowsTransferredPair", OrdinaryCallbackTransferredRowVecCallbackRowVecCallback { _, _ -> malformedCalls++ }, 2)
     for ((bridge, mode, drops) in listOf(
         Triple(scopedBridge, 0, 6L), Triple(transferredBridge, 0, 6L),
         Triple(pairBridge, 1, 12L), Triple(mixedBridge, 1, 12L),
@@ -193,7 +193,7 @@ fun checkCallbackHandleCollections() {
     val validBridge = rowBridge("callbackRowsOwned", OrdinaryCallbackRowVecCallback { validCalls++ })
     check(CallbackRowsRuntimeProbe.malformed(validBridge, 4) == 0L && validCalls == 1)
     var absentCalls = 0
-    val absentBridge = rowBridge("callbackRowsOptional", OrdinaryOptionalOptionalOrdinaryCallbackRowVecCallback { rows ->
+    val absentBridge = rowBridge("callbackRowsOptional", OrdinaryOptionalOptionalCallbackRowVecCallback { rows ->
         check(rows == null)
         absentCalls++
     })

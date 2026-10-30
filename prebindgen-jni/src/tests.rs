@@ -2685,7 +2685,7 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
     }
     // This Flat API maps fixed arrays to lists, including byte arrays. The
     // legacy generator's primitive-array representation is not used here.
-    for (ty, kotlin) in [("[i64;4]", "Long"), ("[u8;16]", "Byte")] {
+    for (ty, kotlin) in [("[i64;4]", "Long"), ("[u8;16]", "Int")] {
         for enabled in [false, true] {
             let generated = JniGen::builder()
                 .flat(flat(&format!("pub fn array()->{ty}{{}}")))
