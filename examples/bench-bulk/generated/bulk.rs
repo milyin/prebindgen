@@ -2944,13 +2944,14 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1numbers_1sum_14754
             } else {
                 None
             };
-            let mut p0_w3_staged = Vec::new();
+            let mut p0_w2: Vec<i64> = Vec::new();
             if true {
                 let (p0_w3_start, p0_w4) = p0_w1_reader
                     .rows(
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_a60d3960993b9a77>(),
                     )?;
+                p0_w2.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7 = p0_w1_reader
                         .read::<
@@ -2962,26 +2963,17 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1numbers_1sum_14754
                                 + ::core::mem::offset_of!(__PbBulk_i64_a60d3960993b9a77, v0),
                         )?;
                     let p0_w6 = if true { Some(p0_w7) } else { None };
-                    p0_w3_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w6: i64 = ::core::convert::Into::into(
-                                    p0_w6.expect("active value"),
-                                );
-                                let p0_w2 = p0_w6;
-                                Ok(p0_w2)
-                            }
-                        });
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w3_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w6: i64 = ::core::convert::Into::into(
+                            p0_w6.expect("active value"),
+                        );
+                        let p0_w2 = p0_w6;
+                        Ok(p0_w2)
+                    })();
+                    p0_w2.push(p0_w3_element_built?);
                 }
             }
-            let p0_w3_acquired: Vec<_> = p0_w3_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w2: Vec<i64> = p0_w3_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w2;
             let source_value = bench_flat::numbers_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -3086,6 +3078,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1sum_1d4a5ecf
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7_f0 = p0_w1_reader
                         .read::<
@@ -3790,6 +3783,7 @@ pub unsafe extern "system" fn Java_bench_bulk_JNINative_call_1rows_1echo_15c26c8
                         p0_w3,
                         ::core::mem::size_of::<__PbBulk_i64_i64_789cd54eb117685f>(),
                     )?;
+                p0_w3_staged.reserve_exact(p0_w4);
                 for p0_w5 in 0..p0_w4 {
                     let p0_w7_f0 = p0_w1_reader
                         .read::<

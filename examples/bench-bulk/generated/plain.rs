@@ -1932,7 +1932,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
     let mut direct_output: i64 = Default::default();
     match ::prebindgen_runtime::boundary(|| {
         {
-            let mut p0_w1_staged = Vec::new();
+            let mut p0_w0: Vec<i64> = Vec::new();
             if true {
                 if p0_w1.is_null() {
                     return Err("null collection".into());
@@ -1940,6 +1940,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w0.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(&jni_environment, 9i32)
@@ -1965,27 +1966,18 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1numbers_1sum_1475
                     } else {
                         None
                     };
+                    #[allow(clippy::redundant_closure_call)]
+                    let p0_w1_element_built = (|| -> ::core::result::Result<i64, String> {
+                        let p0_w4: i64 = ::core::convert::Into::into(
+                            p0_w4.expect("active value"),
+                        );
+                        let p0_w0 = p0_w4;
+                        Ok(p0_w0)
+                    })();
                     drop(p0_w1_frame);
-                    p0_w1_staged
-                        .push(move || {
-                            move || -> ::core::result::Result<i64, String> {
-                                let p0_w4: i64 = ::core::convert::Into::into(
-                                    p0_w4.expect("active value"),
-                                );
-                                let p0_w0 = p0_w4;
-                                Ok(p0_w0)
-                            }
-                        });
+                    p0_w0.push(p0_w1_element_built?);
                 }
             }
-            let p0_w1_acquired: Vec<_> = p0_w1_staged
-                .into_iter()
-                .map(|acquire| acquire())
-                .collect();
-            let p0_w0: Vec<i64> = p0_w1_acquired
-                .into_iter()
-                .map(|construct| construct())
-                .collect::<::core::result::Result<_, String>>()?;
             let __prebindgen_argument_0 = p0_w0;
             let source_value = bench_flat::numbers_sum(__prebindgen_argument_0);
             let ret_w0 = source_value;
@@ -2069,6 +2061,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1sum_1d4a5ec
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
@@ -2593,6 +2586,7 @@ pub unsafe extern "system" fn Java_bench_plain_JNINative_call_1rows_1echo_15c26c
                 let p0_w2 = jni_environment
                     .get_array_length(&p0_w1)
                     .map_err(|e| e.to_string())? as usize;
+                p0_w1_staged.reserve_exact(p0_w2);
                 for p0_w3 in 0..p0_w2 {
                     let p0_w1_frame = unsafe {
                         ::prebindgen_jni_runtime::LocalFrame::new(
