@@ -119,8 +119,7 @@ fn native_store(
         quote!((#base)+#field_offset)
     };
     Ok(match w.kind {
-        JniWire::NativeBuffer { .. } => quote!(#writer.buffer(#offset,(#value).as_deref())?;),
-        JniWire::NativeRows { .. } => {
+        JniWire::NativeBuffer { .. } | JniWire::NativeRows { .. } => {
             quote!(#writer.range(#offset,#value)?;)
         }
         _ => {
@@ -346,21 +345,14 @@ pub(crate) fn output_leaf(
     if let Some(kind @ (Value::Text | Value::Bytes)) = Value::of(ty) {
         let owner = format_ident!("{w}_source");
         let text = kind == Value::Text;
-        let is_borrowed = borrowed || matches!(ty, syn::Type::Reference(_));
-        let bytes = if is_borrowed {
-            let bytes = if text {
-                quote!(#owner.as_bytes())
-            } else {
-                quote!(#owner.as_ref())
-            };
-            quote!(::std::borrow::Cow::Borrowed(#bytes))
-        } else if text {
-            quote!(::std::borrow::Cow::Owned(#owner.into_bytes()))
+        let bytes = if text {
+            quote!(#owner.as_bytes())
         } else {
-            quote!(::std::borrow::Cow::Owned(#owner))
+            quote!(#owner.as_ref())
         };
+        let writer = parameter("bulk_writer");
         return Ok(OutputPlan {
-            fallible: false,
+            fallible: true,
             context: Default::default(),
             delivery: Default::default(),
             outcomes: prebindgen_flat::Outcomes {
@@ -371,7 +363,7 @@ pub(crate) fn output_leaf(
                 source_error: None,
                 binding_failure: None,
             },
-            statements: quote!(let #owner=#value;let #w:Option<::std::borrow::Cow<'_,[u8]>>=Some(#bytes);),
+            statements: quote!(let #owner=#value;let #w=Some(#writer.append_buffer(#bytes)?);),
             values: vec![(w.clone(), quote!(#w))],
             commit: quote!(),
         });

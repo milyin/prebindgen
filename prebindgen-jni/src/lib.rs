@@ -23,7 +23,6 @@ mod sequence_callback;
 pub use callback::JniCallback;
 pub use optional::JniNiche;
 mod group;
-mod output_defaults;
 mod returns;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataGroup, JniField};
@@ -230,12 +229,12 @@ impl JniGenBuilder {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Use bulk transport by default for fixed-width numeric collection outputs.
+    /// Use bulk transport by default for materialized collection outputs.
     ///
-    /// Enabled by default for materialized Rust-to-Kotlin collection values,
-    /// including callback arguments. Byte payloads and rows containing strings or
-    /// handles retain ordinary transport. Explicit type-wide/local output recipes
-    /// take precedence, and callback/fold return variants remain available.
+    /// Enabled by default for Rust-to-Kotlin collections, including callback
+    /// arguments. Direct byte buffers retain their existing representation.
+    /// Explicit ordinary collection expansions and callback/fold delivery bypass
+    /// this default; nested automatic collections inherit an ordinary choice.
     /// Set `false` to retain ordinary defaults; explicit `.bulk()` still works.
     pub fn set_bulk_collection_outputs(mut self, enabled: bool) -> Self {
         self.bulk_collection_outputs = Some(enabled);
@@ -440,6 +439,7 @@ impl JniGenBuilder {
             package: self.prefix,
             native_init: self.init,
             callbacks: Vec::new(),
+            bulk_collection_outputs: self.bulk_collection_outputs.unwrap_or(true),
         };
         let mut declarations = Vec::new();
         let mut class_types = BTreeSet::new();
@@ -536,30 +536,8 @@ impl JniGenBuilder {
             }
         }
         let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
-        let explicit_defaults = prebindgen_declarations::Declarations::new(
-            &flat,
-            self.inputs.clone(),
-            self.outputs.clone(),
-            self.error_mappers.clone(),
-        )?;
         validate_declaration_names(&flat)?;
         data::prepare(&mut flat)?;
-        if self.bulk_collection_outputs.unwrap_or(true) {
-            let can_infer = output_defaults::preserve_explicit(
-                &flat,
-                &explicit_defaults,
-                &mut self.outputs,
-                &mut self.inputs,
-                &mut declarations,
-            )?;
-            if can_infer {
-                self.outputs.extend(output_defaults::infer(
-                    &flat,
-                    &explicit_defaults,
-                    &output_defaults,
-                ));
-            }
-        }
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
@@ -597,9 +575,7 @@ impl JniGenBuilder {
                         .output_outcomes()
                         .success,
                 )?;
-                // Fold rows keep the user's defaults, independent of the inferred
-                // materialized-array policy. Prepared variant trees stay explicit.
-                let variant = explicit_defaults.callback_variant(
+                let variant = defaults.callback_variant(
                     &mut flat,
                     &codec,
                     &declaration,
@@ -848,6 +824,9 @@ impl Codec for JniCodec {
         plan.delivery = returns::packet_delivery(plan)?;
         Ok(())
     }
+    fn default_output_sequence_is_bulk(&self, flat: &Bindings, _: &()) -> bool {
+        flat.metadata.bulk_collection_outputs
+    }
     fn sequence_input(
         &self,
         _: &(),
@@ -870,7 +849,8 @@ impl Codec for JniCodec {
         delivery: prebindgen_declarations::SequenceDelivery,
     ) -> Result<prebindgen_declarations::SequenceOutput<JniWire, crate::JniChain>> {
         match delivery {
-            prebindgen_declarations::SequenceDelivery::Value => {
+            prebindgen_declarations::SequenceDelivery::Auto
+            | prebindgen_declarations::SequenceDelivery::Value => {
                 sequence::output(wire, length, index, element, values)
             }
             prebindgen_declarations::SequenceDelivery::Callback => {

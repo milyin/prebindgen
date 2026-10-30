@@ -152,6 +152,10 @@ fn main() {
             .fun(fun!(default_bulk_nested))
             .fun(fun!(default_bulk_borrowed))
             .fun(fun!(default_bulk_numbers))
+            .fun(fun!(default_bulk_units))
+            .fun(fun!(default_bulk_texts))
+            .fun(fun!(default_bulk_optional_texts).expand_return(expand_return!(String).field_self_ref()))
+            .fun(fun!(default_bulk_buffers))
             .fun(fun!(default_bulk_plain).expand_return(expand_return!(Vec<DefaultBulkRow>).field_self()))
             .fun(fun!(default_bulk_callback))
             .fun(fun!(default_bulk_callback_mixed).expand_param("callback",
@@ -324,6 +328,7 @@ fn main() {
             .fun(fun!(callback_return_handler_many).expand_param("handlers",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap))))
             .fun(fun!(callback_return_char_catch)).fun(fun!(callback_return_owned_vector_catch)).fun(fun!(callback_return_unit))
             .fun(fun!(callback_return_handler_value).expand_param("handler",expand_param!(CallbackReturnHandler).variant(fun!(callback_return_handler_wrap)))))
+        // Malformed-row probes below deliberately exercise ordinary row-array ABI.
         .package(package!("callbacks")
             .class(data_class!(CallbackRecord)).class(data_class!(CallbackEnvelope))
             .class(ptr_class!(CallbackSet)).class(ptr_class!(CallbackJob))
@@ -339,10 +344,10 @@ fn main() {
             .class(data_class!(CallbackNestedRow)).class(data_class!(CallbackTransferredRow))
             .fun(fun!(callback_row_resource_id)).fun(fun!(callback_row_resource_live)).fun(fun!(callback_row_resource_drops))
             .fun(fun!(callback_row_resource_hold))
-            .fun(fun!(callback_rows_owned)).fun(fun!(callback_rows_borrowed))
-            .fun(fun!(callback_rows_optional)).fun(fun!(callback_rows_nested))
-            .fun(fun!(callback_rows_pair)).fun(fun!(callback_row_handles))
-            .fun(fun!(callback_rows_transferred)).fun(fun!(callback_rows_transferred_pair)).fun(fun!(callback_rows_conversion_failure))
+            .fun(fun!(callback_rows_owned).expand_param("callback",callback!(impl Fn(Vec<CallbackRow>)).name("OrdinaryCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackRow>).field_self()))).fun(fun!(callback_rows_borrowed))
+            .fun(fun!(callback_rows_optional).expand_param("callback",callback!(impl Fn(Option<Vec<Option<CallbackRow>>>)).name("OrdinaryOptionalOptionalCallbackRowVecCallback").expand_param(0,expand_return!(Option<Vec<Option<CallbackRow>>>).field_self()))).fun(fun!(callback_rows_nested).expand_param("callback",callback!(impl Fn(Vec<Vec<Option<CallbackNestedRow>>>)).name("OrdinaryOptionalCallbackNestedRowVecVecCallback").expand_param(0,expand_return!(Vec<Vec<Option<CallbackNestedRow>>>).field_self())))
+            .fun(fun!(callback_rows_pair).expand_param("callback",callback!(impl Fn(Vec<CallbackRow>, Vec<CallbackRow>)).name("OrdinaryCallbackRowVecCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackRow>).field_self()).expand_param(1,expand_return!(Vec<CallbackRow>).field_self()))).fun(fun!(callback_row_handles))
+            .fun(fun!(callback_rows_transferred).expand_param("callback",callback!(impl Fn(Vec<CallbackTransferredRow>)).name("OrdinaryCallbackTransferredRowVecCallback").expand_param(0,expand_return!(Vec<CallbackTransferredRow>).field_self()))).fun(fun!(callback_rows_transferred_pair).expand_param("callback",callback!(impl Fn(Vec<CallbackTransferredRow>, Vec<CallbackRow>)).name("OrdinaryCallbackTransferredRowVecCallbackRowVecCallback").expand_param(0,expand_return!(Vec<CallbackTransferredRow>).field_self()).expand_param(1,expand_return!(Vec<CallbackRow>).field_self()))).fun(fun!(callback_rows_conversion_failure))
             .fun(fun!(callback_rows_spawn)).fun(fun!(callback_row_job_finished))
             .class(ptr_class!(CallbackReentry))
             .fun(fun!(callback_reentry_new)).fun(fun!(callback_reentry_read))
@@ -377,7 +382,7 @@ fn main() {
             use prebindgen_flat::{OutputConversion, Outcomes, WireNode};
             let mut probe = flat.clone();
             let declarations = prebindgen_declarations::Declarations::new(&probe, vec![],vec![],vec![])?;
-            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe), &())?;
+            declarations.fill(&mut probe, &prebindgen_jni::JniCodec, &fun!(collection_probe).expand_return(expand_return!(Vec<char>).field_self()), &())?;
             // Observe a clone so the builder still installs its own codec.
             // Collections.kt exercises the separately generated JNI boundary.
             let output = probe.function("collection_probe")?.output_conversion()?;

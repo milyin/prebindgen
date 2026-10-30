@@ -908,15 +908,20 @@ shared validation, acquisition, construction and output-ownership phases.
 
 ### Bulk C-representation expansions
 
-JNI uses bulk by default for materialized collection outputs whose resolved rows
-contain fixed-width primitive fields: numeric vectors/slices, fixed arrays, and
-numeric data-class rows. Nested numeric collections share one enclosing frame.
-This also applies to Rust-to-Kotlin callback arguments.
-The choice follows the expanded boundary, including getters and conversions.
-Rows containing strings, byte payloads, handles or other unmeasured carriers keep
-their existing default. Ordinary inputs, scalar/single-record results and direct
-byte buffers also keep their existing transport. Explicit output trees retain their
-user-selected transport, including nested collection components.
+JNI uses bulk by default for materialized collection outputs: vectors, slices
+and fixed arrays, including rows containing text, bytes and handles. Nested
+collections share one enclosing frame. This also applies to Rust-to-Kotlin
+callback arguments and automatic collection components of expanded results.
+The choice is made when the existing conversion compiler lowers a collection;
+there is no source-wide inference or speculative conversion pass.
+
+Direct byte buffers keep their existing byte-array representation. Inputs and
+scalar returns keep ordinary transport unless an expansion selects bulk. A single
+record keeps ordinary fields while automatic collection components of an expanded
+result each use bulk. Explicit ordinary collection expansions keep nested automatic
+rows ordinary;
+explicit bulk modifiers and callback/fold delivery retain their own behavior.
+Unsupported conversions report the normal generation diagnostic.
 
 Disable automatic selection project-wide with
 `JniGen::builder().set_bulk_collection_outputs(false)`. Explicit type-wide collection
@@ -1004,7 +1009,7 @@ Bulk text uses UTF-8 and rejects malformed UTF-16 input rather than replacing it
 128-bit integers use an explicit 16-byte big-endian wire field, preserving the
 existing BigInteger conversion. Other scalar carriers use target byte order.
 
-Beyond the numeric collection-output default, bulk transport is opt-in.
+Outside collection-output defaults, bulk transport is opt-in.
 Kotlin snapshots bulk input collections, allocates a frame,
 and encodes its payloads; the JNI boundary copies the initialized bytes once per
 frame. Rust still constructs the requested source values. Native results allocate

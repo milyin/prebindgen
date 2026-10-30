@@ -73,7 +73,9 @@ pub type CodecOutput<C> = OutputPlan<
 /// How a sequence return reaches the foreign caller.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SequenceDelivery {
-    /// Return a collection value using the language adapter's array/buffer representation.
+    /// Return a collection using the adapter's default materialized transport.
+    Auto,
+    /// Explicitly return ordinary expanded rows, without applying a transport default.
     #[default]
     Value,
     /// Deliver each element through the function's sequence callback.
@@ -751,6 +753,15 @@ pub trait Codec {
         _extra: &Self::Extra,
     ) -> Result<Option<Output<OutputRequest>>> {
         Ok(None)
+    }
+    /// Select bulk for automatically materialized output sequences.
+    /// Explicit ordinary rows and per-row callbacks bypass this default.
+    fn default_output_sequence_is_bulk(
+        &self,
+        _flat: &Flat<Self::Schema>,
+        _extra: &Self::Extra,
+    ) -> bool {
+        false
     }
     /// Keep a collection occurrence in one native input leaf instead of
     /// decomposing it into element rows. Explicit `Input::Sequence` overrides
@@ -1509,6 +1520,7 @@ fn finalize_output_schema<C: Codec>(
 
 struct Compiler<'a, C: Codec> {
     bulk: std::cell::Cell<bool>,
+    ordinary_collections: std::cell::Cell<bool>,
     // A Combine observation borrows a Rust temporary, not persistent foreign storage.
     temporary_receiver: std::cell::Cell<bool>,
     flat: &'a Flat<C::Schema>,
@@ -1520,6 +1532,7 @@ impl<'a, C: Codec> Compiler<'a, C> {
     fn new(flat: &'a Flat<C::Schema>, codec: &'a C, prefix: String) -> Self {
         Self {
             bulk: std::cell::Cell::new(false),
+            ordinary_collections: std::cell::Cell::new(false),
             temporary_receiver: std::cell::Cell::new(false),
             flat,
             codec,
@@ -2051,6 +2064,20 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 mode,
                 delivery,
             } => {
+                if *delivery == SequenceDelivery::Auto
+                    && !self.bulk.get()
+                    && !self.ordinary_collections.get()
+                    && self.codec.default_output_sequence_is_bulk(self.flat, extra)
+                {
+                    return self.output_named(
+                        ty,
+                        &Output::Bulk(Box::new(recipe.clone())),
+                        extra,
+                        value,
+                        borrowed,
+                        wire_name,
+                    );
+                }
                 if !self.bulk.get() {
                     if let Output::Bulk(inner) = element.as_ref() {
                         return self.output_named(
@@ -2080,6 +2107,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                 let payload = self.name();
                 let length = self.name();
                 let index = self.name();
+                // An explicit ordinary collection (or a callback row) keeps
+                // nested automatic sequences ordinary. Explicit Bulk still wins.
+                let ordinary = self.ordinary_collections.replace(
+                    self.ordinary_collections.get() || *delivery != SequenceDelivery::Auto,
+                );
                 let child = self.with_temporary_receiver(
                     mode == ProjectionMode::Borrowed
                         && !borrowed
@@ -2093,7 +2125,9 @@ impl<'a, C: Codec> Compiler<'a, C> {
                             mode == ProjectionMode::Borrowed,
                         )
                     },
-                )?;
+                );
+                self.ordinary_collections.set(ordinary);
+                let child = child?;
                 return sequence::output(
                     self.codec,
                     ty,
@@ -2106,7 +2140,11 @@ impl<'a, C: Codec> Compiler<'a, C> {
                     borrowed,
                     mode,
                     child,
-                    *delivery,
+                    if *delivery == SequenceDelivery::Auto {
+                        SequenceDelivery::Value
+                    } else {
+                        *delivery
+                    },
                     self.bulk.get(),
                 );
             }

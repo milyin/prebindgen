@@ -15,6 +15,11 @@ fun checkBulkDefaults() {
     check(defaultBulkOptionalFold(0, 9L) { sum, row -> sum + row.number } == null)
     check(defaultBulkOptionalFold(1, 9L) { sum, row -> sum + row.number } == 9L)
     check(defaultBulkOptionalFold(2, 0L) { sum, row -> sum + row.number } == -1L)
+    check(defaultBulkUnits() == listOf(Unit, Unit))
+    check(defaultBulkTexts() == listOf("", "héllo 世界\u0000"))
+    check(defaultBulkOptionalTexts() == listOf("héllo 世界", null, ""))
+    val buffers = defaultBulkBuffers()
+    check(buffers.size == 2 && buffers[0].contentEquals(byteArrayOf(0, -1, -128)) && buffers[1].isEmpty())
     check(defaultBulkNumbers() == listOf(Long.MIN_VALUE, 0, Long.MAX_VALUE))
     check(defaultBulkPlain() == expected) // Local ordinary-output override.
     check(defaultBulkArrayFold(0L) { sum, row -> sum + row.number } == -1L)

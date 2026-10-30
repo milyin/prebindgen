@@ -852,7 +852,6 @@ fn collections_reject_unsupported_element_and_view_contracts() {
         "pub fn f(x:Vec<()>) {}",
         "pub fn f(x:Vec<Result<i64,i64>>) {}",
         "pub fn f()->Vec<Result<i64,i64>> {}",
-        "pub fn f()->Vec<()> {}",
         "pub fn f()->Vec<&i64> {}",
     ] {
         let b = JniGen::builder()
@@ -861,6 +860,13 @@ fn collections_reject_unsupported_element_and_view_contracts() {
             .package(package!().fun(fun!(f)));
         assert!(!fail(b).is_empty());
     }
+    // Unit rows have a bulk representation, but no ordinary object-array element.
+    let units = JniGen::builder()
+        .flat(flat("pub fn f()->Vec<()> {}"))
+        .set_package_prefix("test")
+        .set_bulk_collection_outputs(false)
+        .package(package!().fun(fun!(f)));
+    assert!(!fail(units).is_empty());
     let borrowed = JniGen::builder()
         .flat(flat("pub type Handle=String; pub fn f(x:&[Handle]) {}"))
         .set_package_prefix("test")
@@ -2427,23 +2433,13 @@ fn type_derived_bulk_runtime_names_are_also_reserved() {
 }
 
 fn bulk_result(model: &Bindings, name: &str) -> bool {
-    matches!(
-        &model
-            .function(name)
-            .unwrap()
-            .output_conversion()
-            .unwrap()
-            .output_outcomes()
-            .success,
-        prebindgen_flat::WireNode::Chain {
-            meta: JniChain::Bulk(_),
-            ..
-        }
-    )
+    let output = model.function(name).unwrap().output_conversion().unwrap();
+    group::result_packet_fields(&output.output_outcomes().success)
+        .any(|wire| matches!(wire.kind, JniWire::BulkBuffer { .. }))
 }
 
 #[test]
-fn automatic_bulk_collection_outputs_keep_inputs_and_buffer_payloads_ordinary() {
+fn automatic_bulk_collection_outputs_keep_inputs_and_direct_buffers_ordinary() {
     let source = "pub struct Row { pub x:i64, pub y:f64 } pub struct TextRow { pub n:i64, pub text:String } pub struct BytesRow { pub n:i64, pub bytes:Vec<u8> } pub type Handle=String; pub fn numbers()->Vec<i64>{} pub fn rows()->Vec<Row>{} pub fn optional()->Option<Vec<Row>>{} pub fn array()->[Row;2]{} pub fn single()->Row{} pub fn bytes()->Vec<u8>{} pub fn texts()->Vec<TextRow>{} pub fn payloads()->Vec<BytesRow>{} pub fn handles()->Vec<Handle>{} pub fn echo(value:Vec<Row>)->Vec<Row>{}";
     let model = JniGen::builder()
         .flat(flat(source))
@@ -2467,10 +2463,12 @@ fn automatic_bulk_collection_outputs_keep_inputs_and_buffer_payloads_ordinary() 
         )
         .prepare()
         .unwrap();
-    for name in ["numbers", "rows", "optional", "array", "echo"] {
+    for name in [
+        "numbers", "rows", "optional", "array", "echo", "texts", "payloads", "handles",
+    ] {
         assert!(bulk_result(&model, name), "{name}");
     }
-    for name in ["single", "bytes", "texts", "payloads", "handles"] {
+    for name in ["single", "bytes"] {
         assert!(!bulk_result(&model, name), "{name}");
     }
     let input = model.function("echo").unwrap().params[0]
@@ -2555,7 +2553,7 @@ fn automatic_bulk_uses_the_resolved_projection_instead_of_the_source_field_types
             .prepare()
             .unwrap()
     };
-    assert!(!bulk_result(
+    assert!(bulk_result(
         &build(expand_return!(Row).field(fun!(text))),
         "rows"
     ));
@@ -2563,6 +2561,17 @@ fn automatic_bulk_uses_the_resolved_projection_instead_of_the_source_field_types
         &build(expand_return!(Row).field(fun!(number))),
         "rows"
     ));
+    let local = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Row))
+                .fun(fun!(rows).expand_return(expand_return!(Row).field(fun!(text)))),
+        )
+        .prepare()
+        .unwrap();
+    assert!(bulk_result(&local, "rows"));
 }
 
 #[test]
@@ -2609,7 +2618,7 @@ fn default_nested_numeric_outputs_share_one_frame() {
 }
 
 #[test]
-fn explicit_mixed_result_keeps_collection_and_string_siblings_ordinary() {
+fn expanded_result_uses_bulk_for_automatic_collection_without_packing_string_sibling() {
     let model=JniGen::builder()
         .flat(flat("pub struct Outer {pub rows:Vec<i64>,pub label:String} pub fn parts(value:Outer)->Outer{} pub fn make()->Outer{}"))
         .set_package_prefix("test")
@@ -2618,7 +2627,7 @@ fn explicit_mixed_result_keeps_collection_and_string_siblings_ordinary() {
     let plan = model.function("make").unwrap().output_conversion().unwrap();
     let fields = group::result_packet_fields(&plan.output_outcomes().success).collect::<Vec<_>>();
     assert_eq!(fields.len(), 2);
-    assert!(matches!(fields[0].kind, JniWire::Rows { .. }));
+    assert!(matches!(fields[0].kind, JniWire::BulkBuffer { .. }));
     assert!(matches!(fields[1].kind, JniWire::Text { .. }));
 }
 
@@ -2674,21 +2683,21 @@ fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
             .unwrap();
         assert!(generated.kotlin["test/Functions.kt"].contains("`rowsFold`("));
     }
-    let build = |enabled| {
-        JniGen::builder()
-            .flat(flat("pub fn array()->[i64;4]{}"))
-            .set_bulk_collection_outputs(enabled)
-            .set_package_prefix("test")
-            .package(package!().fun(fun!(array)))
-            .build()
-            .unwrap()
-    };
-    // This Flat API maps fixed arrays to lists; the legacy generator's LongArray
-    // representation is not used here. Selection changes only the wire carrier.
-    for enabled in [false, true] {
-        assert!(
-            build(enabled).kotlin["test/Functions.kt"].contains(": kotlin.collections.List<Long>")
-        );
+    // This Flat API maps fixed arrays to lists, including byte arrays. The
+    // legacy generator's primitive-array representation is not used here.
+    for (ty, kotlin) in [("[i64;4]", "Long"), ("[u8;16]", "Byte")] {
+        for enabled in [false, true] {
+            let generated = JniGen::builder()
+                .flat(flat(&format!("pub fn array()->{ty}{{}}")))
+                .set_bulk_collection_outputs(enabled)
+                .set_package_prefix("test")
+                .package(package!().fun(fun!(array)))
+                .build()
+                .unwrap();
+            assert!(generated.kotlin["test/Functions.kt"]
+                .contains(&format!(": kotlin.collections.List<{kotlin}>")));
+            assert_eq!(generated.rust.contains("bulk::Writer::new"), enabled);
+        }
     }
 }
 

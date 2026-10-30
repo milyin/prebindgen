@@ -324,3 +324,22 @@ pub fn default_bulk_borrowed() -> &'static [DefaultBulkRow] {
 pub fn default_bulk_callback_mixed(callback: impl Fn(Vec<Vec<i64>>, Vec<Vec<i64>>)) {
     callback(default_bulk_nested(), default_bulk_nested());
 }
+
+#[prebindgen]
+pub fn default_bulk_units() -> Vec<()> {
+    vec![(), ()]
+}
+#[prebindgen]
+pub fn default_bulk_texts() -> Vec<String> {
+    vec![String::new(), "héllo 世界\0".into()]
+}
+#[prebindgen]
+pub fn default_bulk_buffers() -> Vec<Vec<u8>> {
+    vec![vec![0, 255, 128], Vec::new()]
+}
+
+// Borrow text from an owned optional payload: packing must finish before Some drops.
+#[prebindgen]
+pub fn default_bulk_optional_texts() -> Vec<Option<String>> {
+    vec![Some("héllo 世界".into()), None, Some(String::new())]
+}
