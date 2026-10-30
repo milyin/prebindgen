@@ -158,13 +158,13 @@
 <a href=#158 id=158 data-nosnippet>158</a>        }
 <a href=#159 id=159 data-nosnippet>159</a>        <span class="kw">let </span>fields = <span class="kw">crate</span>::group::row_fields(element)
 <a href=#160 id=160 data-nosnippet>160</a>            .enumerate()
-<a href=#161 id=161 data-nosnippet>161</a>            .map(|(i, w)| {
-<a href=#162 id=162 data-nosnippet>162</a>                <span class="kw">let </span>name = <span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>);
-<a href=#163 id=163 data-nosnippet>163</a>                <span class="kw">let </span>ty = w.rust_type();
-<a href=#164 id=164 data-nosnippet>164</a>                <span class="macro">quote!</span>(<span class="kw">pub </span>#name:#ty)
-<a href=#165 id=165 data-nosnippet>165</a>            })
-<a href=#166 id=166 data-nosnippet>166</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#167 id=167 data-nosnippet>167</a>        tokens.extend(<span class="macro">quote!</span>(<span class="attr">#[repr(C)] #[derive(Clone,Copy)] </span><span class="kw">pub struct </span>#row {#(#fields),<span class="kw-2">*</span>}));
+<a href=#161 id=161 data-nosnippet>161</a>            .map(|(i, w)| (<span class="macro">format_ident!</span>(<span class="string">"v{i}"</span>), w.rust_type()));
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>record = prebindgen_reprc::Record::new(row.clone(), fields)<span class="question-mark">?</span>;
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span><span class="kw-2">mut </span>definition = record.definition();
+<a href=#164 id=164 data-nosnippet>164</a>        definition
+<a href=#165 id=165 data-nosnippet>165</a>            .attrs
+<a href=#166 id=166 data-nosnippet>166</a>            .push(<span class="macro">syn::parse_quote!</span>(<span class="attr">#[derive(Clone,Copy)]</span>));
+<a href=#167 id=167 data-nosnippet>167</a>        tokens.extend(<span class="macro">quote!</span>(#definition));
 <a href=#168 id=168 data-nosnippet>168</a>        header.push_str(<span class="string">"typedef struct {\n"</span>);
 <a href=#169 id=169 data-nosnippet>169</a>        <span class="kw">for </span>(i, w) <span class="kw">in </span><span class="kw">crate</span>::group::row_fields(element).enumerate() {
 <a href=#170 id=170 data-nosnippet>170</a>            header.push_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(

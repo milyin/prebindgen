@@ -289,9 +289,12 @@
 <a href=#289 id=289 data-nosnippet>289</a>    );
 <a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">let </span>call = <span class="macro">format!</span>(<span class="string">"onError.run({})"</span>, output.delivered.join(<span class="string">", "</span>));
 <a href=#291 id=291 data-nosnippet>291</a>    <span class="kw">if </span>output.cleanup.is_empty() {
-<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\n{call}"</span>, output.materialize));
-<a href=#293 id=293 data-nosnippet>293</a>    }
-<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">let </span>cleanup = output.cleanup;
-<a href=#295 id=295 data-nosnippet>295</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\nvar cleanupFailure: Throwable? = null\nvar callbackFailed = false\ntry {{\n{}\n{call}\n}} catch (failure: Throwable) {{ callbackFailed = true; cleanupFailure = failure; throw failure }} finally {{\n{cleanup}\nif (!callbackFailed) cleanupFailure?.let {{ throw it }}\n}}"</span>, output.output_locals, output.materialize))
-<a href=#296 id=296 data-nosnippet>296</a>}
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="string">"{}{}\n{call}"</span>,
+<a href=#294 id=294 data-nosnippet>294</a>            output.output_locals, output.materialize
+<a href=#295 id=295 data-nosnippet>295</a>        ));
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>    <span class="kw">let </span>cleanup = output.cleanup;
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{}\nvar cleanupFailure: Throwable? = null\nvar callbackFailed = false\ntry {{\n{}\n{call}\n}} catch (failure: Throwable) {{ callbackFailed = true; cleanupFailure = failure; throw failure }} finally {{\n{cleanup}\nif (!callbackFailed) cleanupFailure?.let {{ throw it }}\n}}"</span>, output.output_locals, output.materialize))
+<a href=#299 id=299 data-nosnippet>299</a>}
 </code></pre></div></section></main></body></html>
