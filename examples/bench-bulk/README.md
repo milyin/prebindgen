@@ -3,7 +3,7 @@
 This fixture binds the same Rust functions twice in one release native library:
 `bench.plain` uses ordinary JNI conversion and `bench.bulk` adds `.bulk()` to the
 relevant expansion. Both modes disable automatic bulk-return selection with
-`set_bulk_array_returns(false)` so future defaults cannot change the ordinary
+`set_bulk_collection_outputs(false)` so future defaults cannot change the ordinary
 baseline. The comparison still uses explicit bulk overrides.
 
 ```sh

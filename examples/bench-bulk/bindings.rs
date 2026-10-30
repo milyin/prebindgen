@@ -73,7 +73,7 @@ fn main() {
         };
         let generated = JniGen::builder()
             // Freeze both baselines: this fixture compares explicit transport choices.
-            .set_bulk_array_returns(false)
+            .set_bulk_collection_outputs(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)
             .set_package_prefix(format!("bench.{mode}"))
             .set_jni_native_init(r#"System.loadLibrary("bulk_bench")"#)

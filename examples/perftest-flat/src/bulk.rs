@@ -281,8 +281,12 @@ pub fn default_bulk_array() -> [DefaultBulkRow; 2] {
     ]
 }
 #[prebindgen]
-pub fn default_bulk_optional(present: bool) -> Option<Vec<DefaultBulkRow>> {
-    present.then(|| default_bulk_array().into_iter().collect())
+pub fn default_bulk_optional(mode: i64) -> Option<Vec<DefaultBulkRow>> {
+    match mode {
+        0 => None,
+        1 => Some(Vec::new()),
+        _ => Some(default_bulk_array().into_iter().collect()),
+    }
 }
 #[prebindgen]
 pub fn default_bulk_numbers() -> Vec<i64> {
@@ -295,4 +299,28 @@ pub fn default_bulk_plain() -> Vec<DefaultBulkRow> {
 #[prebindgen]
 pub fn default_bulk_callback(callback: impl Fn(Vec<DefaultBulkRow>)) {
     callback(default_bulk_plain());
+}
+
+#[prebindgen]
+pub fn default_bulk_nested() -> Vec<Vec<i64>> {
+    vec![vec![i64::MIN, 0, i64::MAX], Vec::new()]
+}
+#[prebindgen]
+pub fn default_bulk_borrowed() -> &'static [DefaultBulkRow] {
+    static ROWS: [DefaultBulkRow; 2] = [
+        DefaultBulkRow {
+            number: i64::MIN,
+            fraction: 1.5,
+        },
+        DefaultBulkRow {
+            number: i64::MAX,
+            fraction: -2.0,
+        },
+    ];
+    &ROWS
+}
+
+#[prebindgen]
+pub fn default_bulk_callback_mixed(callback: impl Fn(Vec<Vec<i64>>, Vec<Vec<i64>>)) {
+    callback(default_bulk_nested(), default_bulk_nested());
 }

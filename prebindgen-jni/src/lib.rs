@@ -223,7 +223,7 @@ pub struct JniGenBuilder {
     init: String,
     packages: Vec<PackageDecl>,
     error_classes: Vec<(syn::Type, String)>,
-    bulk_array_returns: Option<bool>,
+    bulk_collection_outputs: Option<bool>,
 }
 impl JniGenBuilder {
     /// Create an empty builder; equivalent to [`JniGen::builder`].
@@ -237,8 +237,8 @@ impl JniGenBuilder {
     /// handles retain ordinary transport. Explicit type-wide/local output recipes
     /// take precedence, and callback/fold return variants remain available.
     /// Set `false` to retain ordinary defaults; explicit `.bulk()` still works.
-    pub fn set_bulk_array_returns(mut self, enabled: bool) -> Self {
-        self.bulk_array_returns = Some(enabled);
+    pub fn set_bulk_collection_outputs(mut self, enabled: bool) -> Self {
+        self.bulk_collection_outputs = Some(enabled);
         self
     }
     /// Adjust the selected flat model before declaration defaults are applied.
@@ -544,12 +544,21 @@ impl JniGenBuilder {
         )?;
         validate_declaration_names(&flat)?;
         data::prepare(&mut flat)?;
-        if self.bulk_array_returns.unwrap_or(true) {
-            self.outputs.extend(output_defaults::infer(
+        if self.bulk_collection_outputs.unwrap_or(true) {
+            let can_infer = output_defaults::preserve_explicit(
                 &flat,
                 &explicit_defaults,
-                &output_defaults,
-            ));
+                &mut self.outputs,
+                &mut self.inputs,
+                &mut declarations,
+            )?;
+            if can_infer {
+                self.outputs.extend(output_defaults::infer(
+                    &flat,
+                    &explicit_defaults,
+                    &output_defaults,
+                ));
+            }
         }
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
@@ -588,6 +597,8 @@ impl JniGenBuilder {
                         .output_outcomes()
                         .success,
                 )?;
+                // Fold rows keep the user's defaults, independent of the inferred
+                // materialized-array policy. Prepared variant trees stay explicit.
                 let variant = explicit_defaults.callback_variant(
                     &mut flat,
                     &codec,

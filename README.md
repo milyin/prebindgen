@@ -910,14 +910,16 @@ shared validation, acquisition, construction and output-ownership phases.
 
 JNI uses bulk by default for materialized collection outputs whose resolved rows
 contain fixed-width primitive fields: numeric vectors/slices, fixed arrays, and
-numeric data-class rows. This also applies to Rust-to-Kotlin callback arguments.
+numeric data-class rows. Nested numeric collections share one enclosing frame.
+This also applies to Rust-to-Kotlin callback arguments.
 The choice follows the expanded boundary, including getters and conversions.
 Rows containing strings, byte payloads, handles or other unmeasured carriers keep
-their existing default. Ordinary inputs, single-value results and direct byte
-buffers also keep their existing transport.
+their existing default. Ordinary inputs, scalar/single-record results and direct
+byte buffers also keep their existing transport. Explicit output trees retain their
+user-selected transport, including nested collection components.
 
 Disable automatic selection project-wide with
-`JniGen::builder().set_bulk_array_returns(false)`. Explicit type-wide collection
+`JniGen::builder().set_bulk_collection_outputs(false)`. Explicit type-wide collection
 expansions and local overrides take precedence. For example, keep one result
 ordinary with:
 

@@ -2507,7 +2507,7 @@ fn bulk_array_default_respects_project_type_and_local_transport_choices() {
     assert!(!bulk_result(&model, "plain"));
     assert!(bulk_result(&model, "explicit"));
     let model = base()
-        .set_bulk_array_returns(false)
+        .set_bulk_collection_outputs(false)
         .package(functions())
         .prepare()
         .unwrap();
@@ -2563,4 +2563,176 @@ fn automatic_bulk_uses_the_resolved_projection_instead_of_the_source_field_types
         &build(expand_return!(Row).field(fun!(number))),
         "rows"
     ));
+}
+
+#[test]
+fn automatic_bulk_canonicalizes_collection_spellings_and_preserves_explicit_defaults() {
+    let source="pub struct Row {pub x:i64} pub fn first()->Vec<Row>{} pub fn second()->std::vec::Vec<crate::Row>{} pub fn borrowed()->&'static [Row]{}";
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+    };
+    let functions = || {
+        package!()
+            .class(data_class!(Row))
+            .fun(fun!(first))
+            .fun(fun!(second))
+            .fun(fun!(borrowed))
+    };
+    let model = base().package(functions()).prepare().unwrap();
+    for name in ["first", "second", "borrowed"] {
+        assert!(bulk_result(&model, name), "{name}");
+    }
+    let model = base()
+        .expand(expand_return!(std::vec::Vec<crate::Row>).field_self())
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "first"));
+    assert!(!bulk_result(&model, "second"));
+    assert!(bulk_result(&model, "borrowed"));
+}
+
+#[test]
+fn default_nested_numeric_outputs_share_one_frame() {
+    let generated = JniGen::builder()
+        .flat(flat("pub fn nested()->Vec<Vec<i64>>{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(nested)))
+        .build()
+        .unwrap();
+    assert_eq!(generated.rust.matches("byte_array_from_slice").count(), 1);
+    assert_eq!(generated.rust.matches("bulk::Writer::new").count(), 1);
+    assert!(!generated.rust.contains("set_object_array_element"));
+    assert!(generated.kotlin["test/Functions.kt"].contains("List<kotlin.collections.List<Long>>"));
+}
+
+#[test]
+fn explicit_mixed_result_keeps_collection_and_string_siblings_ordinary() {
+    let model=JniGen::builder()
+        .flat(flat("pub struct Outer {pub rows:Vec<i64>,pub label:String} pub fn parts(value:Outer)->Outer{} pub fn make()->Outer{}"))
+        .set_package_prefix("test")
+        .package(package!().fun(fun!(make).expand_return(expand_return!(Outer).fields_into(fields!(parts)))))
+        .prepare().unwrap();
+    let plan = model.function("make").unwrap().output_conversion().unwrap();
+    let fields = group::result_packet_fields(&plan.output_outcomes().success).collect::<Vec<_>>();
+    assert_eq!(fields.len(), 2);
+    assert!(matches!(fields[0].kind, JniWire::Rows { .. }));
+    assert!(matches!(fields[1].kind, JniWire::Text { .. }));
+}
+
+#[test]
+fn nested_ordinary_overrides_do_not_inherit_implicit_inner_bulk_defaults() {
+    let source="pub fn nested()->Vec<Vec<i64>>{} pub fn numbers()->Vec<i64>{} pub fn plain()->Vec<Vec<i64>>{} pub fn receive(cb:impl Fn(Vec<Vec<i64>>,Vec<Vec<i64>>)){}";
+    let functions = || {
+        package!()
+            .fun(fun!(nested))
+            .fun(fun!(numbers))
+            .fun(fun!(plain).expand_return(expand_return!(Vec<Vec<i64>>).field_self()))
+            .fun(
+                fun!(receive).expand_param(
+                    "cb",
+                    callback!(impl Fn(Vec<Vec<i64>>, Vec<Vec<i64>>))
+                        .expand_param(0, expand_return!(Vec<Vec<i64>>).field_self()),
+                ),
+            )
+    };
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+    };
+    let model = base().package(functions()).prepare().unwrap();
+    assert!(bulk_result(&model, "nested"));
+    assert!(bulk_result(&model, "numbers"));
+    assert!(!bulk_result(&model, "plain"));
+    let kotlin = generate(&model).unwrap().kotlin;
+    assert!(kotlin["test/Functions.kt"].contains("fun run(raw0: Array<Any?>?, raw1: ByteArray?)"));
+    let model = base()
+        .expand(expand_return!(Vec<Vec<i64>>).field_self())
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "nested"));
+    assert!(bulk_result(&model, "numbers"));
+}
+
+#[test]
+fn nested_folds_remain_available_and_primitive_array_types_do_not_change() {
+    for only in [false, true] {
+        let declaration = if only {
+            fun!(rows).callback_return_only()
+        } else {
+            fun!(rows).callback_return()
+        };
+        let generated = JniGen::builder()
+            .flat(flat("pub fn rows()->Vec<Vec<i64>>{}"))
+            .set_package_prefix("test")
+            .package(package!().fun(declaration))
+            .build()
+            .unwrap();
+        assert!(generated.kotlin["test/Functions.kt"].contains("`rowsFold`("));
+    }
+    let build = |enabled| {
+        JniGen::builder()
+            .flat(flat("pub fn array()->[i64;4]{}"))
+            .set_bulk_collection_outputs(enabled)
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(array)))
+            .build()
+            .unwrap()
+    };
+    // This Flat API maps fixed arrays to lists; the legacy generator's LongArray
+    // representation is not used here. Selection changes only the wire carrier.
+    for enabled in [false, true] {
+        assert!(
+            build(enabled).kotlin["test/Functions.kt"].contains(": kotlin.collections.List<Long>")
+        );
+    }
+}
+
+#[test]
+fn explicit_nested_outputs_have_no_hidden_bulk_frames_in_rows_or_callbacks() {
+    let plain = JniGen::builder()
+        .flat(flat("pub fn plain()->Vec<Vec<i64>>{}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(fun!(plain).expand_return(expand_return!(Vec<Vec<i64>>).field_self())),
+        )
+        .build()
+        .unwrap();
+    assert!(!plain.rust.contains("byte_array_from_slice"));
+    assert!(!plain.rust.contains("bulk::Writer::new"));
+    for (argument, tree) in [
+        ("Vec<Vec<i64>>", expand_return!(Vec<Vec<i64>>).field_self()),
+        ("&Vec<Vec<i64>>", expand_return!(Vec<Vec<i64>>).field_self()),
+        ("&[Vec<i64>]", expand_return!(&[Vec<i64>]).field_self()),
+    ] {
+        let source = format!("pub fn receive(cb:impl Fn({argument})){{}}");
+        let callback = syn::parse_str::<syn::Type>(&format!("impl Fn({argument})")).unwrap();
+        let generated = JniGen::builder()
+            .flat(flat(&source))
+            .set_package_prefix("test")
+            .package(package!().fun(fun!(receive).expand_param(
+                "cb",
+                prebindgen_declarations::CallbackDecl::new(callback).expand_param(0, tree),
+            )))
+            .build()
+            .unwrap();
+        assert!(
+            !generated.rust.contains("byte_array_from_slice"),
+            "{argument}"
+        );
+        assert!(!generated.rust.contains("bulk::Writer::new"), "{argument}");
+    }
+    let fallible = JniGen::builder()
+        .flat(flat("pub fn rows()->Result<Vec<Vec<i64>>,()>{}"))
+        .set_package_prefix("test")
+        .package(
+            package!().fun(fun!(rows).expand_return(expand_return!(Vec<Vec<i64>>).field_self())),
+        )
+        .build()
+        .unwrap();
+    assert!(!fallible.rust.contains("bulk::Writer::new"));
 }
