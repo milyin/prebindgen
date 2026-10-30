@@ -21,8 +21,9 @@ batch size, warms up ten batches with the command above (five by default), and m
 contributes its median; the report summarizes the median and range of those JVM
 medians and preserves every sample. There are no performance pass/fail thresholds.
 
-The driver uses an unboxed primitive SAM interface (`run(Int): Long`), consumes all eight
-record fields, and checks closed-form batch checksums. Callback cases additionally
+The driver uses an unboxed primitive SAM interface (`run(Int): Long`), consumes every
+record field, and checks closed-form batch checksums. New single-record return cases
+use field weights to detect swapped fields as well as incorrect sums. Callback cases additionally
 check invocation counts. Inputs and callback registration are prepared before
 timing; layout lookup/class loading occur during untimed calibration. Native
 conversion, source function work, Kotlin reconstruction/consumption and normal
@@ -34,6 +35,10 @@ The matrix includes batches of 0, 1, 8, 64 and 512 elements:
 
 | Case | Timed work | Reason to compare |
 | --- | --- | --- |
+| `control` | Identical ordinary `i64` argument/result in both packages | Indicates process-to-process timing variation. |
+| `record_return` | One eight-field record returned from Rust, then a Kotlin checksum | Expanded output uses a primitive-parameter capture callback; bulk returns a frame directly. |
+| `wide_record_input` / `wide_record_return` | One record with 32 named `i64` fields | Tests wider primitive argument and return expansion without source collections. |
+| `callback_record_return` / `callback_wide_record_return` | A pre-registered Kotlin callback returns one eight-/32-field record; Rust checksums it | Compares boxed-field callback results against packing the result fields. |
 | `scalar` | One `i64` argument/result | Ordinary primitive parameters should beat allocating/copying frames. |
 | `record_input` | One eight-`i64` record to a Rust sum | Flattened primitives already avoid object access; bulk can add unnecessary work. |
 | `packet_input` | Eight-field header plus 64 B, 4 KiB or 64 KiB byte payload, to a Rust checksum | Bulk adds Kotlin-frame and native decoding copies; ordinary transport can be better for payload-heavy packets. |
@@ -86,7 +91,7 @@ KOTLINC=/path/to/kotlinc python3 examples/bench-bulk/run.py \
   --output /tmp/bulk-artifact-check --build-only --check-generated
 ```
 
-## Recorded comparison
+## Original 35-case comparison
 
 Measured on 2026-10-30 (Europe/Paris), Linux x86-64, AMD EPYC 7713, with CPU
 affinity restricted to CPUs 0–1, Temurin OpenJDK 11.0.29, Kotlin 2.4.21 and Rust
@@ -99,7 +104,9 @@ batches. No extra JVM option environment variables were set.
 The [full report](results.json) contains all 35 cases and every per-JVM median.
 [Raw samples](samples.csv) contain all 2,520 measured batches; the report records
 their SHA-256. Build and measurement inherited that affinity from the execution environment.
-To reproduce the affinity explicitly on Linux, use the first command above;
+For the exact original fixture, check out its recorded source commit and use the
+first command above with `--warmup 10`. The current fixture includes six additional
+cases (41 total); the focused run below measures the added cases and two controls.
 `ActiveProcessorCount=2` alone does not restrict CPU placement.
 These are single-host measurements of the current generated wrappers, not a
 platform-independent speedup guarantee or end-to-end network throughput.
@@ -185,3 +192,75 @@ median batch duration of 166 ms rather than the 30 ms target. The report preserv
 actual durations and ranges; no sample was discarded for being slow. Some bulk
 JVMs also overshot the target after warmup (scalar 49.7 ms; single-record input
 38.1 ms), so warmup did not eliminate every timing phase change.
+
+## Single records without source collections
+
+The [focused report](single-record-results/results.json) and
+[576 raw batches](single-record-results/samples.csv) were measured separately from
+the original run, using source commit
+`82416465ed8784b218e7f20498ef2d1a014b352c`. The build generated and compiled wrappers from that committed source;
+the resulting snapshots were committed separately.
+The source library, generator, Kotlin and dependency lock were clean and committed
+at build time, and the native library reports optimization level 3. Hardware/JVM
+settings match the original run. Eight cases ran in four fresh JVMs per mode,
+with ten warmup and nine measured batches, targeting 30 ms, pinned to CPUs 0–1.
+
+The measured value payloads are scalars or single records; there are no source
+arrays, lists or byte payloads in these cases. Callback registration and
+handle destruction remain outside timing. Callback record creation, transport,
+Rust weighted checksums and normal wrapper/handle work remain timed. For direct
+returns, Kotlin consumes a field-weighted checksum. Inputs reuse prepared records;
+return cases vary the seed over 1,024 values. The first/second JVM trials use
+forward/reverse case order; the third/fourth also rotate by one position. Each
+plain/bulk pair uses identical case order, and mode order alternates per trial.
+A separate four-JVM `-Xcheck:jni` run
+passed the same cases before timing.
+
+Times are the median of four per-JVM medians, with
+**[minimum–maximum JVM median]**, in ns. The ratio divides the
+ordinary median by the bulk median; its brackets show the minimum/maximum of the
+four paired per-trial ratios, rather than a confidence interval. JVM B/call
+excludes native allocations, as in the original report.
+
+| Case | Ordinary ns [range] | Bulk ns [range] | Ratio [paired range] | JVM B/call: ordinary / bulk |
+| --- | ---: | ---: | ---: | ---: |
+| `record_return` | 253.8 [220.5–285.2] | 181.4 [170.4–187.4] | 1.40× [1.18–1.67] | 80 / 208 |
+| `wide_record_return` | 486.7 [468.4–503.3] | 360.3 [342.4–384.8] | 1.35× [1.30–1.39] | 272 / 592 |
+| `callback_record_return` | 9335.2 [8937.0–9704.3] | 2060.4 [1996.2–2196.1] | 4.53× [4.28–4.61] | 240 / 152 |
+| `callback_wide_record_return` | 35915.7 [34621.1–36330.8] | 2374.6 [2187.9–2540.8] | 15.13× [13.63–16.24] | 912 / 360 |
+| `record_input` | 28.8 [28.5–30.2] | 155.0 [147.3–160.0] | 0.19× [0.18–0.19] | 0 / 128 |
+| `wide_record_input` | 94.8 [93.5–95.1] | 327.2 [325.9–332.4] | 0.29× [0.28–0.29] | 0 / 320 |
+| `scalar` | 13.5 [13.0–14.0] | 273.5 [249.5–285.8] | 0.05× [0.05–0.06] | 0 / 152 |
+| `control` | 14.5 [13.2–14.7] | 14.1 [13.7–14.9] | 1.03× [0.95–1.07] | 0 / 0 |
+
+Bulk wins here for single-record returns in both directions. Direct Rust returns
+avoid a native-to-JVM success capture callback, but allocate more JVM bytes:
+80 → 208 B for eight fields, and 272 → 592 B for 32 fields. Returning a record
+from Kotlin callbacks gives larger wins in this run. The ordinary adapter returns
+eight or 32 boxed fields, which Rust reads through checked JNI readers. The
+benchmark measures that complete path, including lookup and local-reference work;
+it does not isolate which part dominates its cost. The current bulk callback
+adapter still returns a two-slot object array containing the frame and its length;
+the frame replaces the eight or 32 individually boxed fields. These measurements
+include that remaining wrapper cost.
+
+Expanded primitive arguments stay faster, including the 32-field record. The
+identical ordinary `control` path is 14.5 versus 14.1 ns (1.03×); its per-JVM ranges
+overlap. The return improvements in this run have separated timing ranges and
+are larger than that control difference. These observations describe this host
+and current generated code; they do not establish a universal crossover point.
+
+Run only this comparison with:
+
+```sh
+KOTLINC=/path/to/kotlinc taskset -c 0,1 python3 examples/bench-bulk/run.py \
+  --output /tmp/bulk-single-records --check-generated --warmup 10 \
+  --jvms 4 --batches 9 --target-ms 30 \
+  --cases control,scalar,record_input,record_return,wide_record_input,wide_record_return,callback_record_return,callback_wide_record_return
+```
+
+`--cases` accepts any comma-separated subset of case names from the matrix.
+Both modes call the same Rust source functions. Plain uses the generator defaults;
+bulk uses the explicit overrides in `bindings.rs`. The generated native
+callback-fire and control wrappers are identical after normalizing package names. Generated function returns and callback adapters were
+also inspected to verify that every intended bulk override changed transport.
