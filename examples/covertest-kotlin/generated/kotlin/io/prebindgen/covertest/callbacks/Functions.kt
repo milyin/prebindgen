@@ -2435,65 +2435,32 @@ public fun `callbackTexts`(p0_callback: io.prebindgen.covertest.stru8Listi64VecC
     try {
 val nativeResult = try { run { val nativeArgument0 = try { if (p0_callback == null) null else object {
     @Suppress("UNUSED_PARAMETER", "UNUSED_VARIABLE", "UNCHECKED_CAST", "UNNECESSARY_NOT_NULL_ASSERTION", "USELESS_CAST", "VARIABLE_WITH_REDUNDANT_INITIALIZER")
-    fun run(raw0: String?, raw1: ByteArray?, raw2: Array<Any?>?) {
+    fun run(raw0: String?, raw1: ByteArray?, raw2: ByteArray?) {
         var callbackCleanupFailure: Throwable? = null
         lateinit var callbackArgument0_0: String
         lateinit var callbackArgument1_0: ByteArray
-var callbackOutput2_list: kotlin.collections.MutableList<Long>? = null
-var callbackOutput2_cleanups: kotlin.collections.MutableList<(kotlin.Throwable?) -> kotlin.Throwable?>? = null
+var callbackOutput2_bulkReader: io.prebindgen.covertest.BulkReader? = null
+var callbackOutput2_bulkRange: io.prebindgen.covertest.BulkRange? = null
+var callbackOutput2_bulkList: kotlin.collections.MutableList<Long>? = null
         lateinit var callbackArgument2_0: kotlin.collections.List<Long>
-        var callbackFailure: Throwable? = null
-        var callbackReady = false
         try {
-            try {
             callbackArgument0_0 = raw0 as String
             callbackArgument1_0 = raw1 as ByteArray
-callbackOutput2_cleanups = kotlin.collections.mutableListOf()
-callbackOutput2_list = kotlin.collections.mutableListOf()
-for (callbackOutput2_rawRow in (raw2 as kotlin.Array<*>)) {
-val callbackOutput2__row = callbackOutput2_rawRow as kotlin.Array<*>
+callbackOutput2_bulkReader = io.prebindgen.covertest.BulkReader(raw2 as ByteArray)
+callbackOutput2_bulkRange = requireNotNull(callbackOutput2_bulkReader).rows(((requireNotNull(callbackOutput2_bulkReader).range((0) + io.prebindgen.covertest.BulkLayouts.r1800d3dd3eceec6d.offsets[0])) as io.prebindgen.covertest.BulkRange?), io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size)
+callbackOutput2_bulkList = kotlin.collections.ArrayList(callbackOutput2_bulkRange!!.length)
+for (callbackOutput2_bulkIndex in 0 until callbackOutput2_bulkRange!!.length) {
+val callbackOutput2_bulkBase = callbackOutput2_bulkRange!!.offset + callbackOutput2_bulkIndex * io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.size
 
-callbackOutput2_cleanups.add { callbackOutput2_initialFailure -> var callbackOutput2_failure = callbackOutput2_initialFailure; try {  } catch (callbackOutput2_cleanupError: Throwable) { if (callbackOutput2_failure == null) callbackOutput2_failure = callbackOutput2_cleanupError else if (callbackOutput2_failure !== callbackOutput2_cleanupError) callbackOutput2_failure!!.addSuppressed(callbackOutput2_cleanupError) }; callbackOutput2_failure }
 
-callbackOutput2_list.add(callbackOutput2__row[0] as Long)
+callbackOutput2_bulkList!!.add((requireNotNull(callbackOutput2_bulkReader).long((callbackOutput2_bulkBase) + io.prebindgen.covertest.BulkLayouts.ra60d3960993b9a77.offsets[0])) as Long)
 }
-            callbackArgument2_0 = requireNotNull(callbackOutput2_list)
+            callbackArgument2_0 = requireNotNull(callbackOutput2_bulkList)
         } catch (failure: Throwable) {
-try {
-for (callbackOutput2_cleanupAction in callbackOutput2_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput2_cleanupAction(callbackCleanupFailure) } catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) } }
-for (callbackOutput2_index in (callbackOutput2_cleanups?.size ?: 0) until (raw2 as kotlin.Array<*>).size) {
-var callbackOutput2_failure: kotlin.Throwable? = callbackCleanupFailure
-try { val callbackOutput2__row = (raw2 as kotlin.Array<*>)[callbackOutput2_index] as kotlin.Array<*>
-
-
-} catch (callbackOutput2_cleanupError: Throwable) { if (callbackOutput2_failure == null) callbackOutput2_failure = callbackOutput2_cleanupError else if (callbackOutput2_failure !== callbackOutput2_cleanupError) callbackOutput2_failure!!.addSuppressed(callbackOutput2_cleanupError) }
-callbackCleanupFailure = callbackOutput2_failure
-}
-} catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) }
             callbackCleanupFailure?.let { if (failure !== it) failure.addSuppressed(it) }
             throw failure
         }
-            callbackReady = true
-            p0_callback.run(callbackArgument0_0, callbackArgument1_0, callbackArgument2_0)
-        } catch (failure: Throwable) {
-            callbackFailure = failure
-            throw failure
-        } finally {
-            if (callbackReady) {
-try {
-for (callbackOutput2_cleanupAction in callbackOutput2_cleanups.orEmpty()) { try { callbackCleanupFailure = callbackOutput2_cleanupAction(callbackCleanupFailure) } catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) } }
-for (callbackOutput2_index in (callbackOutput2_cleanups?.size ?: 0) until (raw2 as kotlin.Array<*>).size) {
-var callbackOutput2_failure: kotlin.Throwable? = callbackCleanupFailure
-try { val callbackOutput2__row = (raw2 as kotlin.Array<*>)[callbackOutput2_index] as kotlin.Array<*>
-
-
-} catch (callbackOutput2_cleanupError: Throwable) { if (callbackOutput2_failure == null) callbackOutput2_failure = callbackOutput2_cleanupError else if (callbackOutput2_failure !== callbackOutput2_cleanupError) callbackOutput2_failure!!.addSuppressed(callbackOutput2_cleanupError) }
-callbackCleanupFailure = callbackOutput2_failure
-}
-} catch (callbackOutput2_cleanupError: Throwable) { if (callbackCleanupFailure == null) callbackCleanupFailure = callbackOutput2_cleanupError else if (callbackCleanupFailure !== callbackOutput2_cleanupError) callbackCleanupFailure!!.addSuppressed(callbackOutput2_cleanupError) }
-                callbackCleanupFailure?.let { cleanup -> if (callbackFailure == null) throw cleanup else if (callbackFailure !== cleanup) callbackFailure.addSuppressed(cleanup) }
-            }
-        }
+        p0_callback.run(callbackArgument0_0, callbackArgument1_0, callbackArgument2_0)
 
     }
 } } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; val nativeArgument1 = try { returnCapture } catch (failure: IllegalArgumentException) { throw io.prebindgen.covertest.HandleValidationFailure(failure.message ?: "invalid input") }; io.prebindgen.covertest.JNINative.call_callback_texts_c776f9ba3bb1e5fa(nativeArgument0, nativeArgument1) } } catch (failure: io.prebindgen.covertest.HandleValidationFailure) { return@run onError.run(failure.message) }

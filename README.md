@@ -908,7 +908,29 @@ shared validation, acquisition, construction and output-ownership phases.
 
 ### Bulk C-representation expansions
 
-Add `.bulk()` to an existing JNI expansion to change its native transport:
+JNI uses bulk by default for materialized collection outputs whose resolved rows
+contain fixed-width primitive fields: numeric vectors/slices, fixed arrays, and
+numeric data-class rows. This also applies to Rust-to-Kotlin callback arguments.
+The choice follows the expanded boundary, including getters and conversions.
+Rows containing strings, byte payloads, handles or other unmeasured carriers keep
+their existing default. Ordinary inputs, single-value results and direct byte
+buffers also keep their existing transport.
+
+Disable automatic selection project-wide with
+`JniGen::builder().set_bulk_array_returns(false)`. Explicit type-wide collection
+expansions and local overrides take precedence. For example, keep one result
+ordinary with:
+
+```rust,ignore
+.fun(fun!(rows).expand_return(expand_return!(Vec<Row>).field_self()))
+```
+
+Register the same expansion through `.expand(...)` to keep that collection type
+ordinary project-wide. Explicit `.bulk()` continues to work with automatic
+selection disabled. Generated public Kotlin types remain the same, but the native
+carrier signatures change; regenerate Kotlin and native bindings together.
+
+Add `.bulk()` to an existing JNI expansion to select bulk transport explicitly:
 
 ```rust,ignore
 JniGen::builder()
@@ -943,8 +965,11 @@ element must expose one Kotlin value. Use a declared data class and a direct
 representation override for collection occurrences when a type-wide expansion
 exposes multiple values.
 Individual multi-value argument/result expansions retain their flattened public
-parameters and result build lambda. Bulk transport and per-row `.callback_return()` are
-alternative collection delivery policies; combining them is diagnosed. Callback
+parameters and result build lambda. `.callback_return()` and
+`.callback_return_only()` remain available: their fold variants use the existing
+per-row callback protocol even when the ordinary materialized return selects bulk
+by default. Explicitly combining `.bulk()` and per-row callback delivery in one
+return recipe is still diagnosed. Callback
 objects themselves cannot be stored in a bulk record.
 
 `prebindgen-reprc` supplies shared generated `Record` schemas and strict external
@@ -977,7 +1002,8 @@ Bulk text uses UTF-8 and rejects malformed UTF-16 input rather than replacing it
 128-bit integers use an explicit 16-byte big-endian wire field, preserving the
 existing BigInteger conversion. Other scalar carriers use target byte order.
 
-Bulk transport is opt-in. Kotlin snapshots input collections, allocates a frame,
+Beyond the numeric collection-output default, bulk transport is opt-in.
+Kotlin snapshots bulk input collections, allocates a frame,
 and encodes its payloads; the JNI boundary copies the initialized bytes once per
 frame. Rust still constructs the requested source values. Native results allocate
 a frame and one Java byte array; Kotlin constructs the requested result objects.

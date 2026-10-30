@@ -2,7 +2,9 @@
 
 This fixture binds the same Rust functions twice in one release native library:
 `bench.plain` uses ordinary JNI conversion and `bench.bulk` adds `.bulk()` to the
-relevant expansion. There are no generator/runtime changes in this benchmark.
+relevant expansion. Both modes disable automatic bulk-return selection with
+`set_bulk_array_returns(false)` so future defaults cannot change the ordinary
+baseline. The comparison still uses explicit bulk overrides.
 
 ```sh
 KOTLINC=/path/to/kotlinc taskset -c 0,1 python3 examples/bench-bulk/run.py \

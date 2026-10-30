@@ -144,6 +144,14 @@ fn main() {
     });
     let wide_return = (0..130).fold(expand_return!(i64), |views, _| views.field_self_ref());
     let binding = JniGen::builder()
+        .package(package!("defaults")
+            .class(data_class!(DefaultBulkRow))
+            .fun(fun!(default_bulk_echo))
+            .fun(fun!(default_bulk_array).callback_return())
+            .fun(fun!(default_bulk_optional))
+            .fun(fun!(default_bulk_numbers))
+            .fun(fun!(default_bulk_plain).expand_return(expand_return!(Vec<DefaultBulkRow>).field_self()))
+            .fun(fun!(default_bulk_callback)))
         .expand(expand_param!(BulkPrimitives).variant_self().bulk())
         .expand(expand_return!(BulkPrimitives).field_self_into().bulk())
         .expand(expand_param!(BulkNative).variant_self().bulk())

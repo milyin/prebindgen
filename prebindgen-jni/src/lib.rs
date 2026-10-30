@@ -23,6 +23,7 @@ mod sequence_callback;
 pub use callback::JniCallback;
 pub use optional::JniNiche;
 mod group;
+mod output_defaults;
 mod returns;
 mod scalar;
 pub use data::{ClassDecl, DataClassDecl, DataGroup, JniField};
@@ -222,11 +223,23 @@ pub struct JniGenBuilder {
     init: String,
     packages: Vec<PackageDecl>,
     error_classes: Vec<(syn::Type, String)>,
+    bulk_array_returns: Option<bool>,
 }
 impl JniGenBuilder {
     /// Create an empty builder; equivalent to [`JniGen::builder`].
     pub fn new() -> Self {
         Self::default()
+    }
+    /// Use bulk transport by default for fixed-width numeric collection outputs.
+    ///
+    /// Enabled by default for materialized Rust-to-Kotlin collection values,
+    /// including callback arguments. Byte payloads and rows containing strings or
+    /// handles retain ordinary transport. Explicit type-wide/local output recipes
+    /// take precedence, and callback/fold return variants remain available.
+    /// Set `false` to retain ordinary defaults; explicit `.bulk()` still works.
+    pub fn set_bulk_array_returns(mut self, enabled: bool) -> Self {
+        self.bulk_array_returns = Some(enabled);
+        self
     }
     /// Adjust the selected flat model before declaration defaults are applied.
     ///
@@ -523,14 +536,27 @@ impl JniGenBuilder {
             }
         }
         let output_defaults = callback::declared_outputs(&flat, &self.outputs)?;
+        let explicit_defaults = prebindgen_declarations::Declarations::new(
+            &flat,
+            self.inputs.clone(),
+            self.outputs.clone(),
+            self.error_mappers.clone(),
+        )?;
+        validate_declaration_names(&flat)?;
+        data::prepare(&mut flat)?;
+        if self.bulk_array_returns.unwrap_or(true) {
+            self.outputs.extend(output_defaults::infer(
+                &flat,
+                &explicit_defaults,
+                &output_defaults,
+            ));
+        }
         let defaults = prebindgen_declarations::Declarations::new(
             &flat,
             self.inputs,
             self.outputs,
             self.error_mappers,
         )?;
-        validate_declaration_names(&flat)?;
-        data::prepare(&mut flat)?;
         errors::prepare(&mut flat, &codec, &defaults, &declarations)?;
         let codec = data::DataCodec {
             callback_outputs: Some(&output_defaults),
@@ -562,7 +588,7 @@ impl JniGenBuilder {
                         .output_outcomes()
                         .success,
                 )?;
-                let variant = defaults.callback_variant(
+                let variant = explicit_defaults.callback_variant(
                     &mut flat,
                     &codec,
                     &declaration,

@@ -256,3 +256,43 @@ pub fn bulk_callback_worker(value: impl Fn(Vec<i64>) -> Vec<i64> + Send + 'stati
         .join()
         .unwrap()
 }
+
+// No explicit bulk expansion: the JNI adapter chooses the measured array default.
+#[prebindgen]
+pub struct DefaultBulkRow {
+    pub number: i64,
+    pub fraction: f64,
+}
+#[prebindgen]
+pub fn default_bulk_echo(values: Vec<DefaultBulkRow>) -> Vec<DefaultBulkRow> {
+    values
+}
+#[prebindgen]
+pub fn default_bulk_array() -> [DefaultBulkRow; 2] {
+    [
+        DefaultBulkRow {
+            number: i64::MIN,
+            fraction: 1.5,
+        },
+        DefaultBulkRow {
+            number: i64::MAX,
+            fraction: -2.0,
+        },
+    ]
+}
+#[prebindgen]
+pub fn default_bulk_optional(present: bool) -> Option<Vec<DefaultBulkRow>> {
+    present.then(|| default_bulk_array().into_iter().collect())
+}
+#[prebindgen]
+pub fn default_bulk_numbers() -> Vec<i64> {
+    vec![i64::MIN, 0, i64::MAX]
+}
+#[prebindgen]
+pub fn default_bulk_plain() -> Vec<DefaultBulkRow> {
+    default_bulk_array().into_iter().collect()
+}
+#[prebindgen]
+pub fn default_bulk_callback(callback: impl Fn(Vec<DefaultBulkRow>)) {
+    callback(default_bulk_plain());
+}

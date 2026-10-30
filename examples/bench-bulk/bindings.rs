@@ -72,6 +72,8 @@ fn main() {
             (row_make, wide_make, wide_sum, row_callback, wide_callback)
         };
         let generated = JniGen::builder()
+            // Freeze both baselines: this fixture compares explicit transport choices.
+            .set_bulk_array_returns(false)
             .source(bench_flat::PREBINDGEN_OUT_DIR)
             .set_package_prefix(format!("bench.{mode}"))
             .set_jni_native_init(r#"System.loadLibrary("bulk_bench")"#)

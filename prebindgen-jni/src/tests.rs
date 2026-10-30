@@ -2425,3 +2425,142 @@ fn type_derived_bulk_runtime_names_are_also_reserved() {
         assert!(error.contains("reserved generated class name"), "{error}");
     }
 }
+
+fn bulk_result(model: &Bindings, name: &str) -> bool {
+    matches!(
+        &model
+            .function(name)
+            .unwrap()
+            .output_conversion()
+            .unwrap()
+            .output_outcomes()
+            .success,
+        prebindgen_flat::WireNode::Chain {
+            meta: JniChain::Bulk(_),
+            ..
+        }
+    )
+}
+
+#[test]
+fn automatic_bulk_collection_outputs_keep_inputs_and_buffer_payloads_ordinary() {
+    let source = "pub struct Row { pub x:i64, pub y:f64 } pub struct TextRow { pub n:i64, pub text:String } pub struct BytesRow { pub n:i64, pub bytes:Vec<u8> } pub type Handle=String; pub fn numbers()->Vec<i64>{} pub fn rows()->Vec<Row>{} pub fn optional()->Option<Vec<Row>>{} pub fn array()->[Row;2]{} pub fn single()->Row{} pub fn bytes()->Vec<u8>{} pub fn texts()->Vec<TextRow>{} pub fn payloads()->Vec<BytesRow>{} pub fn handles()->Vec<Handle>{} pub fn echo(value:Vec<Row>)->Vec<Row>{}";
+    let model = JniGen::builder()
+        .flat(flat(source))
+        .set_package_prefix("test")
+        .package(
+            package!()
+                .class(data_class!(Row))
+                .class(data_class!(TextRow))
+                .class(data_class!(BytesRow))
+                .class(ptr_class!(Handle))
+                .fun(fun!(numbers))
+                .fun(fun!(rows))
+                .fun(fun!(optional))
+                .fun(fun!(array))
+                .fun(fun!(single))
+                .fun(fun!(bytes))
+                .fun(fun!(texts))
+                .fun(fun!(payloads))
+                .fun(fun!(handles))
+                .fun(fun!(echo)),
+        )
+        .prepare()
+        .unwrap();
+    for name in ["numbers", "rows", "optional", "array", "echo"] {
+        assert!(bulk_result(&model, name), "{name}");
+    }
+    for name in ["single", "bytes", "texts", "payloads", "handles"] {
+        assert!(!bulk_result(&model, name), "{name}");
+    }
+    let input = model.function("echo").unwrap().params[0]
+        .ty
+        .slot
+        .as_ref()
+        .unwrap();
+    assert!(matches!(
+        input.input_node(),
+        prebindgen_flat::WireNode::Chain {
+            meta: JniChain::Sequence(JniSequence::Buffered),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn bulk_array_default_respects_project_type_and_local_transport_choices() {
+    let source = "pub struct Row { pub x:i64 } pub fn rows()->Vec<Row>{} pub fn plain()->Vec<Row>{} pub fn explicit()->Vec<Row>{}";
+    let base = || {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+    };
+    let functions = || {
+        package!()
+            .class(data_class!(Row))
+            .fun(fun!(rows))
+            .fun(fun!(plain).expand_return(expand_return!(Vec<Row>).field_self()))
+            .fun(fun!(explicit).expand_return(expand_return!(Vec<Row>).field_self().bulk()))
+    };
+    let model = base().package(functions()).prepare().unwrap();
+    assert!(bulk_result(&model, "rows"));
+    assert!(!bulk_result(&model, "plain"));
+    assert!(bulk_result(&model, "explicit"));
+    let model = base()
+        .set_bulk_array_returns(false)
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "rows"));
+    assert!(!bulk_result(&model, "plain"));
+    assert!(bulk_result(&model, "explicit"));
+    let model = base()
+        .expand(expand_return!(Vec<Row>).field_self())
+        .package(functions())
+        .prepare()
+        .unwrap();
+    assert!(!bulk_result(&model, "rows"));
+    assert!(bulk_result(&model, "explicit"));
+}
+
+#[test]
+fn automatic_bulk_collections_preserve_fold_and_callback_local_overrides() {
+    let generated=JniGen::builder().flat(flat("pub struct Row {pub x:i64} pub fn rows()->Vec<Row>{} pub fn only()->Vec<Row>{} pub fn receive(cb:impl Fn(Vec<Row>)){} pub fn receive_plain(cb:impl Fn(Vec<Row>)){}"))
+        .set_package_prefix("test")
+        .package(package!().class(data_class!(Row))
+            .fun(fun!(rows).callback_return()).fun(fun!(only).callback_return_only())
+            .fun(fun!(receive).expand_param("cb",callback!(impl Fn(Vec<Row>)).name("PackedRows")))
+            .fun(fun!(receive_plain).expand_param("cb",callback!(impl Fn(Vec<Row>)).name("PlainRows")
+                .expand_param(0,expand_return!(Vec<Row>).field_self()))))
+        .build().unwrap();
+    let kotlin = &generated.kotlin["test/Functions.kt"];
+    assert!(kotlin.contains("`rows`("));
+    assert!(kotlin.contains("`rowsFold`("));
+    assert!(kotlin.contains("`onlyFold`("));
+    assert!(!kotlin.contains("`only`("));
+    assert!(kotlin.contains("fun run(raw0: ByteArray?)"));
+    assert!(kotlin.contains("fun run(raw0: Array<Any?>?)"), "{kotlin}");
+    assert!(kotlin.contains("SequenceSink_rows_fold_"));
+}
+
+#[test]
+fn automatic_bulk_uses_the_resolved_projection_instead_of_the_source_field_types() {
+    let source="pub struct Row {pub x:i64} pub fn text(row:&Row)->String{} pub fn number(row:&Row)->i64{} pub fn rows()->Vec<Row>{}";
+    let build = |projection: ExpandReturnDecl| {
+        JniGen::builder()
+            .flat(flat(source))
+            .set_package_prefix("test")
+            .expand(projection)
+            .package(package!().class(data_class!(Row)).fun(fun!(rows)))
+            .prepare()
+            .unwrap()
+    };
+    assert!(!bulk_result(
+        &build(expand_return!(Row).field(fun!(text))),
+        "rows"
+    ));
+    assert!(bulk_result(
+        &build(expand_return!(Row).field(fun!(number))),
+        "rows"
+    ));
+}
